@@ -1,0 +1,36 @@
+{
+    "name": "@microsoft/vscode-azure-utils",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Utils for Azure for Visual Studio Code",
+    "homepage": "https://github.com/microsoft/vscode-azure#readme",
+    "bugs": {
+        "url": "https://github.com/microsoft/vscode-azure/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/microsoft/vscode-azure.git"
+    },
+    "license": "MIT",
+    "author": "Microsoft Corporation",
+    "type": "module",
+    "module": "dist/esm/src/index.js",
+    "types": "dist/esm/src/index.d.ts",
+    "scripts": {
+        "lint": "eslint --max-warnings 0",
+        "build": "tsc",
+        "package": "npm pack",
+        "test": "mocha"
+    },
+    "dependencies": {
+        "@vscode/extension-telemetry": "^1.5.0"
+    },
+    "mocha": {
+        "node-option": [
+            "import=tsx"
+        ],
+        "spec": [
+            "test/**/*.test.ts"
+        ]
+    }
+}

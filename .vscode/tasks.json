@@ -1,0 +1,72 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Extension: ESBuild+Watch",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "--workspace=extensions/vscode-azure",
+                "build:esbuild",
+                "--",
+                "--watch"
+            ],
+            "problemMatcher": "$esbuild-watch",
+            "presentation": {
+                "reveal": "silent",
+            },
+            "group": {
+                "kind": "build",
+            },
+            "isBackground": true,
+            "dependsOn": [
+                "utils: Build+Watch"
+            ]
+        },
+        {
+            "label": "Extension: Check+Watch",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "--workspace=extensions/vscode-azure",
+                "build:check",
+                "--",
+                "--watch"
+            ],
+            "problemMatcher": "$tsc-watch",
+            "presentation": {
+                "revealProblems": "onProblem",
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true,
+            },
+            "isBackground": true,
+            "dependsOn": [
+                "utils: Build+Watch"
+            ]
+        },
+        {
+            "label": "utils: Build+Watch",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "--workspace=packages/utils",
+                "build",
+                "--",
+                "--watch",
+            ],
+            "group": {
+                "kind": "build"
+            },
+            "isBackground": true,
+            "presentation": {
+                "revealProblems": "onProblem"
+            },
+            "problemMatcher": "$tsc-watch",
+        },
+    ]
+}

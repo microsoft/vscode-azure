@@ -1,0 +1,53 @@
+// A launch configuration that compiles the extension and then opens it inside a new window
+// Use IntelliSense to learn about possible attributes.
+// Hover to view descriptions of existing attributes.
+// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Extension: Run",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-azure",
+            ],
+            "env": {
+                "DEBUGTELEMETRY": "1",
+            },
+            "outFiles": [
+                "${workspaceFolder}/extensions/vscode-azure/dist/**/*.{js,mjs,cjs}",
+            ],
+            "preLaunchTask": "Extension: ESBuild+Watch",
+        },
+        {
+            "name": "Extension: Run Tests",
+            "type": "extensionHost",
+            "request": "launch",
+            "testConfiguration": "${workspaceFolder}/extensions/vscode-azure/.vscode-test.mjs",
+            "env": {
+                "DEBUGTELEMETRY": "1",
+            },
+            "outFiles": [
+                "${workspaceFolder}/extensions/vscode-azure/dist/**/*.{js,mjs,cjs}",
+                "${workspaceFolder}/extensions/vscode-azure/src/**/*.{ts,mts,cts}", // We are using TSX so out files *are* the source files
+                "${workspaceFolder}/extensions/vscode-azure/test/**/*.{ts,mts,cts}", // We are using TSX so out files *are* the source files
+            ],
+            "preLaunchTask": "Extension: ESBuild+Watch",
+        },
+        {
+            "name": "utils: Run Tests",
+            "request": "launch",
+            "runtimeArgs": [
+                "run",
+                "--workspace=packages/utils",
+                "test"
+            ],
+            "runtimeExecutable": "npm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node"
+        },
+    ],
+}

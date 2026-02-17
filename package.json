@@ -1,0 +1,34 @@
+{
+    "name": "@microsoft/vscode-azure-monorepo",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Azure for Visual Studio Code",
+    "homepage": "https://github.com/microsoft/vscode-azure#readme",
+    "bugs": {
+        "url": "https://github.com/microsoft/vscode-azure/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/microsoft/vscode-azure.git"
+    },
+    "license": "MIT",
+    "author": "Microsoft Corporation",
+    "scripts": {
+        "lint": "npm run --workspaces lint",
+        "build": "npm run --workspaces build",
+        "package": "npm run --workspaces package",
+        "test": "npm run --workspaces test"
+    },
+    "workspaces": [
+        "packages/utils",
+        "extensions/vscode-azure"
+    ],
+    "engines": {
+        "vscode": "^1.105.0"
+    },
+    "devDependencies": {
+        "@microsoft/vscode-azext-eng": "^1.0.0-alpha.12",
+        "@types/node": "^22.19.11",
+        "@types/vscode": "1.105.0"
+    }
+}
