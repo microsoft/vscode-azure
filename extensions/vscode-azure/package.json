@@ -1,0 +1,44 @@
+{
+    "name": "vscode-azure",
+    "version": "0.1.0",
+    "private": true,
+    "publisher": "ms-azuretools",
+    "displayName": "Azure for Visual Studio Code",
+    "description": "Azure for Visual Studio Code",
+    "homepage": "https://github.com/microsoft/vscode-azure#readme",
+    "bugs": {
+        "url": "https://github.com/microsoft/vscode-azure/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/microsoft/vscode-azure.git"
+    },
+    "license": "MIT",
+    "author": "Microsoft Corporation",
+    "main": "main.mjs",
+    "module": "main.mjs",
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "scripts": {
+        "lint": "eslint --max-warnings 0",
+        "build": "npm run build:esbuild & npm run build:check",
+        "build:esbuild": "node esbuild.mjs",
+        "build:check": "tsc --noEmit",
+        "package": "vsce package",
+        "test": "vscode-test"
+    },
+    "engines": {
+        "vscode": "^1.105.0"
+    },
+    "devDependencies": {
+        "@vscode/test-cli": "*",
+        "@vscode/test-electron": "*",
+        "@vscode/vsce": "*",
+        "esbuild": "*",
+        "esbuild-plugin-copy": "*"
+    },
+    "dependencies": {
+        "@microsoft/vscode-azure-utils": "*"
+    }
+}
