@@ -14,6 +14,7 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "scripts": {
+        "postinstall": "node ./scripts/postinstall.mjs",
         "lint": "npm run --workspaces lint",
         "build": "npm run --workspaces build",
         "package": "npm run --workspaces package",

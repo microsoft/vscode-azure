@@ -140,3 +140,9 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Other files copied to subdirs
+/**/LICENSE.md
+/**/NOTICE.html
+!/LICENSE.md
+!/NOTICE.html
