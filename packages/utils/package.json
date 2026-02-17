@@ -14,8 +14,8 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "type": "module",
-    "module": "dist/esm/src/index.js",
-    "types": "dist/esm/src/index.d.ts",
+    "module": "dist/esm/index.js",
+    "types": "dist/esm/index.d.ts",
     "scripts": {
         "lint": "eslint --max-warnings 0",
         "build": "tsc",
@@ -30,7 +30,7 @@
             "import=tsx"
         ],
         "spec": [
-            "test/**/*.test.ts"
+            "src/test/**/*.test.ts"
         ]
     }
 }

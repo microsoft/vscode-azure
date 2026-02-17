@@ -31,7 +31,6 @@
             "outFiles": [
                 "${workspaceFolder}/extensions/vscode-azure/dist/**/*.{js,mjs,cjs}",
                 "${workspaceFolder}/extensions/vscode-azure/src/**/*.{ts,mts,cts}", // We are using TSX so out files *are* the source files
-                "${workspaceFolder}/extensions/vscode-azure/test/**/*.{ts,mts,cts}", // We are using TSX so out files *are* the source files
             ],
             "preLaunchTask": "Extension: ESBuild+Watch",
         },
