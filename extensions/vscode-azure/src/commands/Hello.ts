@@ -5,7 +5,7 @@
 
 import { type IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { ManagedCommand } from './ManagedCommand';
+import type { ManagedCommand } from './ManagedCommand';
 
 @injectable()
 export class Hello implements ManagedCommand {
