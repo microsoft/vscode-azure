@@ -3,7 +3,22 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { azExtEslintRecommendedTypeChecked as default } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
+import { azExtEslintStrictTypeChecked } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
+import { defineConfig } from 'eslint/config';
 
-// TODO: Add a lint rule to prevent non-type imports from inversify
+export default defineConfig([
+    ...azExtEslintStrictTypeChecked,
+    {
+        rules: {
+            '@typescript-eslint/no-restricted-imports': ['error', {
+                paths: [{
+                    name: 'inversify',
+                    message: 'Only type imports of ServiceIdentifier are allowed from inversify in this package. Use: import type { ServiceIdentifier } from \'inversify\';',
+                    allowImportNames: ['ServiceIdentifier'],
+                }],
+            }],
+        },
+    },
+]);
+
 // TODO: Add lint rules to enforce lazy loading big dependencies

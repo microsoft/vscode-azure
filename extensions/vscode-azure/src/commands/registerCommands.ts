@@ -12,10 +12,10 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'azure.hello', Hello);
 }
 
-function registerManagedCommand<T extends ManagedCommand>(
+function registerManagedCommand(
     container: Container,
     commandId: string,
-    commandClass: new (...args: never[]) => T
+    commandClass: new (...args: never[]) => ManagedCommand
 ): void {
     // Bind the command class if not already bound
     if (!container.isBound(commandClass)) {

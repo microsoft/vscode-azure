@@ -3,6 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { azExtEslintRecommendedTypeChecked as default } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
+export { azExtEslintStrictTypeChecked as default } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
 
 // TODO: Add lint rules to enforce lazy loading big dependencies
