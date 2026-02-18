@@ -5,11 +5,11 @@
 
 import type { ServiceIdentifier } from 'inversify';
 import { format } from 'util';
-import { LogLevel, type LogOutputChannel } from 'vscode';
+import * as vscode from 'vscode';
 import type { IVsCode } from './IVsCode';
 
 export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('OutputChannel');
-export type IOutputChannel = LogOutputChannel; // TODO: subset to what we actually use for easier mocking?
+export type IOutputChannel = vscode.LogOutputChannel; // TODO: subset to what we actually use for easier mocking?
 
 export function createOutputChannel(
     name: string,
@@ -28,7 +28,7 @@ export function createOutputChannel(
 export class DebugOutputChannel implements IOutputChannel {
     constructor(public readonly name: string) { }
 
-    public readonly logLevel = LogLevel.Trace;
+    public readonly logLevel = vscode.LogLevel.Trace;
 
     public readonly onDidChangeLogLevel = () => { return { dispose: () => {/* noop */ } }; };
 

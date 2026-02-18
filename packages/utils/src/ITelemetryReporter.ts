@@ -8,9 +8,7 @@ import type { ServiceIdentifier } from 'inversify';
 import type { IExtensionContext } from './IExtensionContext';
 
 export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
-export interface ITelemetryReporter {
-    sendTelemetryErrorEvent(eventName: string, properties?: Record<string, string>, measurements?: Record<string, number>): void;
-}
+export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEvent'>; // Subset of what we actually use
 
 export function createTelemetryReporter(context: IExtensionContext): ITelemetryReporter {
     const debugTelemetry = process.env.DEBUGTELEMETRY?.toLowerCase() ?? process.env.VSCODE_RUNNING_TESTS?.toLowerCase();
