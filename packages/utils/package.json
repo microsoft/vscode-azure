@@ -32,5 +32,8 @@
         "spec": [
             "src/test/**/*.test.ts"
         ]
+    },
+    "devDependencies": {
+        "inversify": "^7.11.0"
     }
 }
