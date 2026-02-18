@@ -7,7 +7,7 @@ import { azExtEslintStrictTypeChecked } from '@microsoft/vscode-azext-eng/eslint
 import { defineConfig } from 'eslint/config';
 
 export default defineConfig([
-    ...azExtEslintStrictTypeChecked,
+    azExtEslintStrictTypeChecked,
     {
         rules: {
             '@typescript-eslint/no-restricted-imports': ['error', {
@@ -16,9 +16,12 @@ export default defineConfig([
                     message: 'Only type imports of ServiceIdentifier are allowed from inversify in this package. Use: import type { ServiceIdentifier } from \'inversify\';',
                     allowImportNames: ['ServiceIdentifier'],
                 }],
+                patterns: [{
+                    group: ['@azure/*', '!@azure/ms-rest-azure-env'],
+                    message: 'Please lazily import this package within the function that uses it to reduce extension activation time.',
+                    allowTypeImports: true,
+                }],
             }],
         },
     },
 ]);
-
-// TODO: Add lint rules to enforce lazy loading big dependencies
