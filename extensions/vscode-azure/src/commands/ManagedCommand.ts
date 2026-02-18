@@ -3,28 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
-import { Container } from 'inversify';
+import type { IActionContext } from '@microsoft/vscode-azure-utils';
 
 export interface ManagedCommand {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `unknown` or `Promise<unknown>` is clearer than just `unknown`
     execute(context: IActionContext, ...args: unknown[]): unknown | Promise<unknown>;
-}
-
-export function registerManagedCommand<T extends ManagedCommand>(
-    container: Container,
-    commandId: string,
-    commandClass: new (...args: any[]) => T // eslint-disable-line @typescript-eslint/no-explicit-any -- Needs to be `any` for type checking with DI to be happy
-): void {
-    // Bind the command class if not already bound
-    if (!container.isBound(commandClass)) {
-        container.bind(commandClass).toSelf();
-    }
-
-    const registry = container.get(ICommandRegistry);
-    registry.registerCommand(commandId, (context, ...args) => {
-        // Create child container for this command execution
-        const cmdContainer = new Container({ parent: container });
-        return cmdContainer.get(commandClass).execute(context, ...args);
-    });
 }

@@ -3,11 +3,21 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ActionExecutor, CommandRegistry, createOutputChannel, createTelemetryReporter, IActionExecutor, ICommandRegistry, IExtensionContext, IOutputChannel, ITelemetryReporter, IVsCode } from '@microsoft/vscode-azure-utils';
+import {
+    ActionExecutor,
+    CommandRegistry,
+    createOutputChannel,
+    createTelemetryReporter,
+    IActionExecutor,
+    ICommandRegistry,
+    IExtensionContext,
+    IOutputChannel,
+    ITelemetryReporter,
+    IVsCode,
+} from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import * as vscode from 'vscode';
-import { Hello } from './commands/Hello';
-import { registerManagedCommand } from './commands/ManagedCommand';
+import { registerCommands } from './commands/registerCommands';
 
 export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
     // These objects are the absolute bare minimum to continue with the rest of the activation function
@@ -15,10 +25,12 @@ export async function activateInternal(extensionContext: vscode.ExtensionContext
     const telemetryReporter: ITelemetryReporter = createTelemetryReporter(extensionContext);
     const executor: IActionExecutor = new ActionExecutor(telemetryReporter);
 
-    return await executor.callWithTelemetryAndErrorHandling('activate', (activateContext) => {
+    return await executor.callWithTelemetryAndErrorHandling('activate', activateContext => {
+        activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
+
         const container = setUpContainer(extensionContext, telemetryReporter, executor);
 
-        registerManagedCommand(container, 'azure.hello', Hello);
+        registerCommands(container);
     });
 }
 
@@ -35,6 +47,7 @@ function setUpContainer(extensionContext: IExtensionContext, telemetryReporter: 
     container.bind(ITelemetryReporter).toConstantValue(telemetryReporter);
     container.bind(IActionExecutor).toConstantValue(executor);
 
+    // Dynamically created and disposable objects
     container.bind(IOutputChannel).toDynamicValue((context) => {
         const outputChannel = createOutputChannel('Azure', context.get(IVsCode));
         context.get(IExtensionContext).subscriptions.push(outputChannel);
