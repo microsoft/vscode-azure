@@ -8,6 +8,7 @@ import type { ServiceIdentifier } from 'inversify';
 export const IActionContext: ServiceIdentifier<IActionContext> = Symbol.for('IActionContext');
 export interface IActionContext {
     readonly telemetry: {
+        readonly id: string;
         readonly properties: Record<string, string> & DefaultTelemetryProperties;
         readonly measurements: Record<string, number> & DefaultTelemetryMeasurements;
     };

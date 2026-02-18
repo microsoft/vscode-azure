@@ -31,6 +31,7 @@ export class ActionExecutor implements IActionExecutor {
 
         const context: IActionContext = {
             telemetry: {
+                id: telemetryId,
                 properties,
                 measurements,
             },
