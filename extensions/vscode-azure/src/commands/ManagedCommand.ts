@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export interface ManagedCommand {
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `unknown` or `Promise<unknown>` is clearer than just `unknown`
-    execute(): unknown | Promise<unknown>;
+export interface ManagedCommand<T = unknown> {
+    execute(): T | Promise<T>;
 }

@@ -15,7 +15,7 @@ export function registerCommands(container: Container): void {
 function registerManagedCommand<T extends ManagedCommand>(
     container: Container,
     commandId: string,
-    commandClass: new (...args: any[]) => T // eslint-disable-line @typescript-eslint/no-explicit-any -- Needs to be `any` for type checking with DI to be happy
+    commandClass: new (...args: never[]) => T
 ): void {
     // Bind the command class if not already bound
     if (!container.isBound(commandClass)) {
@@ -25,8 +25,9 @@ function registerManagedCommand<T extends ManagedCommand>(
     const registry = container.get(ICommandRegistry);
     registry.registerCommand(commandId, (context, ...args) => {
         // Create child container for this command execution
-        const cmdContainer = new Container({ parent: container });
-        cmdContainer.bind(IActionContext).toConstantValue(context);
-        return cmdContainer.get(commandClass).execute();
+        const executionContainer = new Container({ parent: container });
+        executionContainer.bind(IActionContext).toConstantValue(context);
+
+        return executionContainer.get(commandClass).execute();
     });
 }
