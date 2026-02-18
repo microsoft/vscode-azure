@@ -3,6 +3,8 @@
     "compilerOptions": {
         "outDir": "dist/esm",
         "rootDir": ".",
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
     },
     "references": [
         {
