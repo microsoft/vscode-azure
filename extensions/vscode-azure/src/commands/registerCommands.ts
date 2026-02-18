@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ICommandRegistry } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import { Hello } from './Hello';
 import type { ManagedCommand } from './ManagedCommand';
@@ -26,6 +26,7 @@ function registerManagedCommand<T extends ManagedCommand>(
     registry.registerCommand(commandId, (context, ...args) => {
         // Create child container for this command execution
         const cmdContainer = new Container({ parent: container });
-        return cmdContainer.get(commandClass).execute(context, ...args);
+        cmdContainer.bind(IActionContext).toConstantValue(context);
+        return cmdContainer.get(commandClass).execute();
     });
 }

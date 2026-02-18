@@ -3,6 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { ServiceIdentifier } from 'inversify';
+
+export const IActionContext: ServiceIdentifier<IActionContext> = Symbol.for('IActionContext');
 export interface IActionContext {
     readonly telemetry: {
         readonly properties: Record<string, string> & DefaultTelemetryProperties;
