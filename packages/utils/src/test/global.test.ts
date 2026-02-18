@@ -6,7 +6,7 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 
-describe('foo', () => {
+describe('foo: utils', () => {
     it('should pass', () => {
         expect(true).to.equal(true);
     });
