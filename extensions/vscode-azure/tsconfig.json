@@ -2,11 +2,11 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "outDir": "dist/esm",
-        "rootDir": ".",
-    },
-    "references": [
-        {
-            "path": "../../packages/utils"
+        "baseUrl": ".",
+        "paths": {
+            "@microsoft/vscode-azure-utils": [
+                "../../packages/utils/src/index.ts"
+            ]
         },
-    ]
+    }
 }

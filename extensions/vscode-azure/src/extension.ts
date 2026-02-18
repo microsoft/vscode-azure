@@ -9,6 +9,8 @@ import * as vscode from 'vscode';
 export async function activateInternal(ctx: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
     const foo = new Foo('hello');
     console.log(foo);
+    foo.doSomething();
+
     await Promise.resolve();
 }
 

@@ -20,9 +20,6 @@
                 "kind": "build",
             },
             "isBackground": true,
-            "dependsOn": [
-                "utils: Build+Watch"
-            ]
         },
         {
             "label": "Extension: Check+Watch",
@@ -44,9 +41,6 @@
                 "isDefault": true,
             },
             "isBackground": true,
-            "dependsOn": [
-                "utils: Build+Watch"
-            ]
         },
         {
             "label": "utils: Build+Watch",

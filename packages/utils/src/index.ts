@@ -8,4 +8,8 @@
  */
 export class Foo {
     constructor(public bar: string) { }
+
+    public doSomething(): void {
+        console.log(`Foo is doing something with ${this.bar}!`);
+    }
 }
