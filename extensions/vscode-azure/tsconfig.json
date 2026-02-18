@@ -2,13 +2,13 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "outDir": "dist/esm",
-        "rootDir": ".",
+        "baseUrl": ".",
+        "paths": {
+            "@microsoft/vscode-azure-utils": [
+                "../../packages/utils/src/index.ts"
+            ]
+        },
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
-    },
-    "references": [
-        {
-            "path": "../../packages/utils"
-        },
-    ]
+    }
 }
