@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ServiceIdentifier } from 'inversify';
-import type { DefaultTelemetryMeasurements, DefaultTelemetryProperties, IActionContext } from './IActionContext';
+import { createActionContext, type IActionContext, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 
 export const IActionExecutor: ServiceIdentifier<IActionExecutor> = Symbol.for('IActionExecutor');
@@ -26,17 +26,11 @@ export class ActionExecutor implements IActionExecutor {
         telemetryId: string,
         callback: ActionCallback<T>
     ): Promise<T | undefined> {
-        const properties: Writable<DefaultTelemetryProperties> & Record<string, string> = {};
-        const measurements: Writable<DefaultTelemetryMeasurements> & Record<string, number> = {};
+        const context = createActionContext(telemetryId);
 
-        const context: IActionContext = {
-            telemetry: {
-                id: telemetryId,
-                properties,
-                measurements,
-            },
-            errorHandling: {},
-        };
+        // Grab writable references for later
+        const properties = context.telemetry.properties as Writable<TelemetryProperties>;
+        const measurements = context.telemetry.measurements as Writable<TelemetryMeasurements>;
 
         try {
             const startTime = Date.now();

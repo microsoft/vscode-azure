@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
-import { describe, it } from 'mocha';
+import { before, it } from 'mocha';
+import * as vscode from 'vscode';
 
-describe('foo: extension', () => {
-    it('should pass', () => {
-        expect(true).to.equal(true);
+before('extension', () => {
+    it('should activate', async () => {
+        const extension = vscode.extensions.getExtension('ms-azuretools.vscode-azure');
+        await extension?.activate();
+        console.log('Extension activated successfully');
     });
 });
