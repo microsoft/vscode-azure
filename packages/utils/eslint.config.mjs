@@ -4,3 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 export { azExtEslintRecommendedTypeChecked as default } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
+
+// TODO: Add a lint rule to prevent non-type imports from inversify
+// TODO: Add lint rules to enforce lazy loading big dependencies

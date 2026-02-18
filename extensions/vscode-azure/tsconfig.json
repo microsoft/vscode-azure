@@ -8,5 +8,7 @@
                 "../../packages/utils/src/index.ts"
             ]
         },
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
     }
 }
