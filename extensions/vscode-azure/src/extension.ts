@@ -27,6 +27,7 @@ export async function activateInternal(extensionContext: vscode.ExtensionContext
 
     return await executor.callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
+        activateContext.telemetry.properties.isActivationEvent = 'true';
 
         const container = setUpContainer(extensionContext, telemetryReporter, executor);
 
