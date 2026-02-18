@@ -3,52 +3,52 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DefaultBar, DefaultFoo, IBar, IFoo } from '@microsoft/vscode-azure-utils';
-import { Container, inject, injectable } from 'inversify';
+import { ActionExecutor, CommandRegistry, createOutputChannel, createTelemetryReporter, IActionExecutor, ICommandRegistry, IExtensionContext, IOutputChannel, ITelemetryReporter, IVsCode } from '@microsoft/vscode-azure-utils';
+import { Container } from 'inversify';
 import * as vscode from 'vscode';
+import { Hello } from './commands/Hello';
+import { registerManagedCommand } from './commands/ManagedCommand';
 
-export async function activateInternal(ctx: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
-    const container = new Container();
-    container.bind(IBar).to(DefaultBar);
+export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
+    // These objects are the absolute bare minimum to continue with the rest of the activation function
+    // So they must be created before the container is set up
+    const telemetryReporter: ITelemetryReporter = createTelemetryReporter(extensionContext);
+    const executor: IActionExecutor = new ActionExecutor(telemetryReporter);
 
-    container.bind(IFoo).toDynamicValue(context => {
-        const bar = context.get(IBar);
-        return new DefaultFoo(bar);
+    return await executor.callWithTelemetryAndErrorHandling('activate', (activateContext) => {
+        const container = setUpContainer(extensionContext, telemetryReporter, executor);
+
+        registerManagedCommand(container, 'azure.hello', Hello);
     });
-
-    container.get(IFoo).doSomethingFoolish();
-
-    // Output of the above:
-    //
-    // Building a DefaultBar!
-    // Building a DefaultFoo!
-    // DefaultFoo is doing something foolish!
-    // DefaultBar is doing something barrish!
-
-    // Another way to do it: subclassing DefaultFoo and using @injectable and @inject decorators
-    container.unbindSync(IFoo);
-    container.bind(IFoo).to(InjectableFoo);
-    container.get(IFoo).doSomethingFoolish();
-
-    // Output of the above:
-    //
-    // Building a DefaultBar!
-    // Building an InjectableFoo!
-    // Building a DefaultFoo! // (due to the call to super() in InjectableFoo's constructor)
-    // InjectableFoo is doing something foolish! // (note the different class name due to using `this.constructor.name` in the log message)
-    // DefaultBar is doing something barrish!
-
-    await Promise.resolve();
 }
 
-export async function deactivateInternal(): Promise<void> {
-    await Promise.resolve();
+export function deactivateInternal(): Promise<void> {
+    return Promise.resolve();
 }
 
-@injectable()
-class InjectableFoo extends DefaultFoo {
-    constructor(@inject(IBar) bar: IBar) {
-        console.log('Building an InjectableFoo!');
-        super(bar);
-    }
+function setUpContainer(extensionContext: IExtensionContext, telemetryReporter: ITelemetryReporter, executor: IActionExecutor): Container {
+    const container = new Container();
+
+    // These four come in as constants (vscode by import, others from above)
+    container.bind(IVsCode).toConstantValue(vscode);
+    container.bind(IExtensionContext).toConstantValue(extensionContext);
+    container.bind(ITelemetryReporter).toConstantValue(telemetryReporter);
+    container.bind(IActionExecutor).toConstantValue(executor);
+
+    container.bind(IOutputChannel).toDynamicValue((context) => {
+        const outputChannel = createOutputChannel('Azure', context.get(IVsCode));
+        context.get(IExtensionContext).subscriptions.push(outputChannel);
+        return outputChannel;
+    }).inSingletonScope();
+
+    container.bind(ICommandRegistry).toDynamicValue((context) => {
+        const registry = new CommandRegistry(
+            context.get(IActionExecutor),
+            context.get(IVsCode)
+        );
+        context.get(IExtensionContext).subscriptions.push(registry);
+        return registry;
+    }).inSingletonScope();
+
+    return container;
 }

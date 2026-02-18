@@ -20,6 +20,15 @@
     "activationEvents": [
         "onStartupFinished"
     ],
+    "contributes": {
+        "commands": [
+            {
+                "command": "azure.hello",
+                "category": "Azure",
+                "title": "Hello World!"
+            }
+        ]
+    },
     "scripts": {
         "lint": "eslint --max-warnings 0",
         "build": "npm run build:esbuild & npm run build:check",
