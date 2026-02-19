@@ -5,4 +5,4 @@
 
 export * from './data/AzureResourceCache';
 export * from './models/GenericResource';
-export * from './rest/temp';
+

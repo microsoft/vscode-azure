@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export interface GenericResource {
-    readonly id: string;
-    readonly name: string;
-    readonly type: string;
-    readonly kind?: string;
-}
+import { GenericResourceExpandedOutput, ResourceGroupOutput } from '../rest/resources';
+
+export type GenericResource =
+    Required<Pick<GenericResourceExpandedOutput | ResourceGroupOutput, 'id' | 'name' | 'type' | 'location'>> & // Required properties that we expect to always be present
+    Pick<GenericResourceExpandedOutput | ResourceGroupOutput, 'tags'> &
+    Pick<GenericResourceExpandedOutput, 'kind'>; // Optional properties that may or may not be present depending on the resource
