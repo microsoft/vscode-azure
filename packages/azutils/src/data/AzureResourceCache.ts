@@ -26,14 +26,14 @@ export class AzureResourceKey implements CacheKey {
 export class AzureResourceCache<TResource extends GenericResource> extends Cache<AzureResourceKey, TResource> {
     // TODO: add some secondary indexes to speed up invalidation?
     public invalidateByAccountId(accountId: string): void {
-        this.invalidate(key => AzureResourceKey.fromString(key).accountId === accountId);
+        this.invalidate(key => key.accountId === accountId);
     }
 
     public invalidateByResourceId(resourceId: string): void {
-        this.invalidate(key => AzureResourceKey.fromString(key).resourceId === resourceId);
+        this.invalidate(key => key.resourceId === resourceId);
     }
 
     public invalidateByResourceIdPrefix(resourceIdPrefix: string): void {
-        this.invalidate(key => AzureResourceKey.fromString(key).resourceId.startsWith(resourceIdPrefix));
+        this.invalidate(key => key.resourceId.startsWith(resourceIdPrefix));
     }
 }

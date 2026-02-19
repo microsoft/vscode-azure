@@ -9,14 +9,15 @@ export interface CacheKey {
     toString(): string;
 }
 
-export interface CacheEntry<T> {
-    readonly value: T;
+export interface CacheEntry<TKey extends CacheKey, TValue> {
+    readonly key: TKey;
+    readonly value: TValue;
     readonly fetchedAt: number;
     readonly ttl: number;
 }
 
 export class Cache<TKey extends CacheKey, TValue> {
-    private readonly cache = new Map<string, CacheEntry<TValue>>();
+    private readonly cache = new Map<string, CacheEntry<TKey, TValue>>();
     private readonly inflight = new InflightMap<TValue>();
 
     public constructor(
@@ -39,19 +40,18 @@ export class Cache<TKey extends CacheKey, TValue> {
         // Cache miss or expired, fetch new value (deduped if already in-flight)
         return this.inflight.getOrRun(cacheKey, async () => {
             const value = await this.fillCache(key);
-            this.cache.set(cacheKey, { value, fetchedAt: Date.now(), ttl: this.ttl });
+            this.cache.set(cacheKey, { key, value, fetchedAt: Date.now(), ttl: this.ttl });
             return value;
         });
     }
 
     public invalidate(key: TKey): void;
-    public invalidate(selector: (stringKey: string) => boolean): void;
-    public invalidate(keyOrSelector: TKey | ((stringKey: string) => boolean)): void {
+    public invalidate(selector: (key: TKey) => boolean): void;
+    public invalidate(keyOrSelector: TKey | ((key: TKey) => boolean)): void {
         if (typeof keyOrSelector === 'function') {
-            for (const cacheKey of this.cache.keys()) {
-                const key = cacheKey;
-                if (keyOrSelector(key)) {
-                    this.cache.delete(cacheKey);
+            for (const entry of this.cache.values()) {
+                if (keyOrSelector(entry.key)) {
+                    this.cache.delete(entry.key.toString());
                 }
             }
         } else {
