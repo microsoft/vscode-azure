@@ -51,30 +51,10 @@ export class ResourceStore<TResource, TScopeKey extends CacheKey, TItemKey> {
     }
 
     /**
-     * Get a single resource by key. Always fetches fresh from the API.
-     *
-     * If a `scope` is provided and a cached list exists for that scope, the
-     * fresh item is spliced into the cached list (replacing an existing match
-     * or appending). This keeps the list cache warm without a full re-fetch.
+     * Get a single resource by key. Always fetches fresh from the API (uncached).
      */
-    public async get(key: TItemKey, scope?: TScopeKey): Promise<TResource> {
-        const resource = await this.fetcher.fetchItem(key);
-
-        if (scope) {
-            const cached = this.listCache.peek(scope);
-            if (cached) {
-                const idx = cached.value.findIndex((r) => this.fetcher.itemKeyEquals(r, key));
-                const updated = [...cached.value];
-                if (idx >= 0) {
-                    updated[idx] = resource;
-                } else {
-                    updated.push(resource);
-                }
-                this.listCache.set(scope, updated);
-            }
-        }
-
-        return resource;
+    public async get(key: TItemKey): Promise<TResource> {
+        return this.fetcher.fetchItem(key);
     }
 
     /**
