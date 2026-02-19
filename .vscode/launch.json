@@ -27,6 +27,7 @@
             "testConfiguration": "${workspaceFolder}/extensions/vscode-azure/.vscode-test.mjs",
             "env": {
                 "DEBUGTELEMETRY": "1",
+                "TSX_TSCONFIG_PATH": "${workspaceFolder}/extensions/vscode-azure/tsconfig.json", // Necessary only for F5 to get tsx to allow decorators
             },
             "outFiles": [
                 "${workspaceFolder}/extensions/vscode-azure/dist/**/*.{js,mjs,cjs}",

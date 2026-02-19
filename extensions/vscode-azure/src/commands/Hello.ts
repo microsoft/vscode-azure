@@ -16,6 +16,7 @@ export class Hello implements ManagedCommand {
 
     public async execute(): Promise<void> {
         this.context.telemetry.properties.hello = 'world';
-        await this.code.window.showInformationMessage('Hello, from the Azure extension!');
+        void this.code.window.showInformationMessage('Hello, from the Azure extension!');
+        await Promise.resolve();
     }
 }
