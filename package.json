@@ -30,6 +30,6 @@
     "devDependencies": {
         "@microsoft/vscode-azext-eng": "^1.0.0-alpha.12",
         "@types/node": "^22.19.11",
-        "@types/vscode": "1.105.0"
+        "@types/vscode": "1.109.0"
     }
 }
