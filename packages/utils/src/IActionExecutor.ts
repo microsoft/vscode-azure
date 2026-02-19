@@ -56,4 +56,8 @@ export class ActionExecutor implements IActionExecutor {
     }
 }
 
+/**
+ * Simple helper type that just takes the `readonly` off all the properties in an object.
+ * Used to allow us to have a clean public interface for {@link IActionContext} while still being able to set properties internally in {@link ActionExecutor}.
+ */
 type Writable<T> = { -readonly [K in keyof T]: T[K] };
