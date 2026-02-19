@@ -5,4 +5,9 @@
 
 export * from './data/AzureResourceCache';
 export * from './models/GenericResource';
+export * from './stores/GenericResourceFetcher';
+export * from './stores/ResourceClientResolver';
+export * from './stores/ResourceFetcher';
+export * from './stores/ResourceGroupFetcher';
+export * from './stores/ResourceStore';
 

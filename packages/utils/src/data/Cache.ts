@@ -45,6 +45,26 @@ export class Cache<TKey extends CacheKey, TValue> {
         });
     }
 
+    /**
+     * Peek at a cache entry without triggering a fetch.
+     * Returns the entry if it exists and is still valid, otherwise `undefined`.
+     */
+    public peek(key: TKey): CacheEntry<TKey, TValue> | undefined {
+        const entry = this.cache.get(key.toString());
+        if (entry && Date.now() <= entry.fetchedAt + entry.ttl) {
+            return entry;
+        }
+        return undefined;
+    }
+
+    /**
+     * Directly set a cache entry, bypassing the fill function.
+     * Useful for warming the cache with data obtained elsewhere.
+     */
+    public set(key: TKey, value: TValue): void {
+        this.cache.set(key.toString(), { key, value, fetchedAt: Date.now(), ttl: this.ttl });
+    }
+
     public invalidate(key: TKey): void;
     public invalidate(selector: (key: TKey) => boolean): void;
     public invalidate(keyOrSelector: TKey | ((key: TKey) => boolean)): void {
