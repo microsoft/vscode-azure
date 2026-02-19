@@ -3,11 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export * from './data/AzureResourceCache';
+export * from './clients/CachedResourceClient';
+export * from './clients/GenericResourcesClient';
+export * from './clients/ResourceClientResolver';
+export * from './clients/ResourceGroupsClient';
 export * from './models/GenericResource';
-export * from './stores/GenericResourceFetcher';
-export * from './stores/ResourceClientResolver';
-export * from './stores/ResourceFetcher';
-export * from './stores/ResourceGroupFetcher';
-export * from './stores/ResourceStore';
-
