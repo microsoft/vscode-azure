@@ -4,8 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
+import { InflightMap } from '@microsoft/vscode-azure-utils';
 
 /**
+ * TODO: Do we even need this, since the cache will dedupe?
+ *
  * A pipeline policy that deduplicates identical in-flight GET requests.
  * If multiple callers issue GET requests to the same URL concurrently,
  * only one HTTP request is made and the response is shared across all callers.
@@ -18,7 +21,7 @@ import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } f
  * instances of this policy.
  */
 export class DedupeRequestPipelinePolicy implements PipelinePolicy {
-    private readonly inflightRequests = new Map<string, Promise<PipelineResponse>>();
+    private readonly inflight = new InflightMap<PipelineResponse>();
 
     public readonly name = 'DedupeRequestPipelinePolicy';
 
@@ -32,19 +35,11 @@ export class DedupeRequestPipelinePolicy implements PipelinePolicy {
             return next(request);
         }
 
-        const key = request.url;
-        const inflight = this.inflightRequests.get(key);
+        const response = await this.inflight.getOrRun(request.url, () => next(request));
 
-        if (inflight) {
-            return inflight.then((response) => cloneResponse(request, response));
-        }
-
-        const promise = next(request).finally(() => {
-            this.inflightRequests.delete(key);
-        });
-
-        this.inflightRequests.set(key, promise);
-        return promise;
+        // If this caller piggybacked on another request, clone the response
+        // so each caller gets its own response object with the correct request ref
+        return response.request === request ? response : cloneResponse(request, response);
     }
 }
 

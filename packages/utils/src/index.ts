@@ -11,3 +11,4 @@ export * from './base/ITelemetryReporter';
 export * from './base/IVsCode';
 export * from './commands/ICommandRegistry';
 export * from './data/Cache';
+export * from './data/InflightMap';

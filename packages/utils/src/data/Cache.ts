@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { InflightMap } from './InflightMap';
+
 export interface CacheKey {
     toString(): string;
 }
@@ -15,7 +17,7 @@ export interface CacheEntry<T> {
 
 export class Cache<TKey extends CacheKey, TValue> {
     private readonly cache = new Map<string, CacheEntry<TValue>>();
-    private readonly inflight = new Map<string, Promise<TValue>>();
+    private readonly inflight = new InflightMap<TValue>();
 
     public constructor(
         private readonly fillCache: (key: TKey) => Promise<TValue>,
@@ -34,22 +36,12 @@ export class Cache<TKey extends CacheKey, TValue> {
             this.cache.delete(cacheKey);
         }
 
-        // If there's already an in-flight fetch for this key, piggyback on it
-        const existing = this.inflight.get(cacheKey);
-        if (existing) {
-            return existing;
-        }
-
-        // Cache miss or expired, fetch new value
-        const promise = this.fillCache(key).then(value => {
+        // Cache miss or expired, fetch new value (deduped if already in-flight)
+        return this.inflight.getOrRun(cacheKey, async () => {
+            const value = await this.fillCache(key);
             this.cache.set(cacheKey, { value, fetchedAt: Date.now(), ttl: this.ttl });
             return value;
-        }).finally(() => {
-            this.inflight.delete(cacheKey);
         });
-
-        this.inflight.set(cacheKey, promise);
-        return promise;
     }
 
     public invalidate(key: TKey): void;
