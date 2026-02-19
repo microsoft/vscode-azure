@@ -1,0 +1,12 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "outDir": "dist/esm",
+        "baseUrl": ".",
+        "paths": {
+            "@microsoft/vscode-azure-utils": [
+                "../../packages/utils/src/index.ts"
+            ],
+        },
+    },
+}

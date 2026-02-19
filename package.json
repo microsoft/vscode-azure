@@ -22,6 +22,7 @@
     },
     "workspaces": [
         "packages/utils",
+        "packages/azutils",
         "extensions/vscode-azure"
     ],
     "engines": {

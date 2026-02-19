@@ -4,9 +4,12 @@
         "outDir": "dist/esm",
         "baseUrl": ".",
         "paths": {
+            "@microsoft/vscode-azure-azutils": [
+                "../../packages/azutils/src/index.ts"
+            ],
             "@microsoft/vscode-azure-utils": [
                 "../../packages/utils/src/index.ts"
-            ]
+            ],
         },
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,

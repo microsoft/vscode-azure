@@ -12,6 +12,7 @@ const from = [
 
 const to = [
     './packages/utils',
+    './packages/azutils',
     './extensions/vscode-azure',
 ];
 
