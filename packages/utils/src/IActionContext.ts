@@ -9,8 +9,8 @@ export const IActionContext: ServiceIdentifier<IActionContext> = Symbol.for('IAc
 export interface IActionContext {
     readonly telemetry: {
         readonly id: string;
-        readonly properties: Record<string, string> & DefaultTelemetryProperties;
-        readonly measurements: Record<string, number> & DefaultTelemetryMeasurements;
+        readonly properties: TelemetryProperties;
+        readonly measurements: TelemetryMeasurements;
     };
 
     readonly errorHandling: {
@@ -20,7 +20,14 @@ export interface IActionContext {
     }
 }
 
-export interface DefaultTelemetryProperties {
+export function createActionContext(telemetryId: string): IActionContext {
+    return {
+        telemetry: { id: telemetryId, properties: {}, measurements: {}, },
+        errorHandling: {},
+    };
+}
+
+export interface TelemetryProperties extends Record<string, string | undefined> {
     // TODO All these need to match existing property names
     readonly result?: 'Succeeded' | 'Failed' | 'Canceled'; // Provisionally readonly? If we want to allow callers to set this, have to take away readonly
     isActivationEvent?: 'true' | 'false';
@@ -29,7 +36,7 @@ export interface DefaultTelemetryProperties {
     readonly stack?: string;
 }
 
-export interface DefaultTelemetryMeasurements {
+export interface TelemetryMeasurements extends Record<string, number | undefined> {
     // TODO All these need to match existing property names
     readonly duration?: number;
 }
