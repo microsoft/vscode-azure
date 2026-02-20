@@ -8,3 +8,4 @@ export * from './clients/GenericResourcesClient';
 export * from './clients/ResourceClientResolver';
 export * from './clients/ResourceGroupsClient';
 export * from './models/GenericResource';
+export * from './tree/AzureResourceBranchDataProvider';
