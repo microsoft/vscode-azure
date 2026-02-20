@@ -31,4 +31,15 @@ export interface DataProvider<TResource> {
      * @returns An array of child resources. Return an empty array or undefined for leaf nodes.
      */
     getChildren(resource?: Readonly<TResource>): ProviderResult<Readonly<TResource>[]>;
+
+    /**
+     * Enrich a resource in-place with provider-specific data.
+     *
+     * Called automatically by the tree when the resource itself is loaded,
+     * for each resource that this provider {@link canHandle handles}. The
+     * implementation should mutate the resource object directly so the
+     * tree's reference remains stable. Key properties such as `id`, `type`,
+     * etc. should not be changed, but additional fields may be added as needed.
+     */
+    enrich?(resource: TResource): Promise<void> | void;
 }
