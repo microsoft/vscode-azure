@@ -165,8 +165,7 @@ export class ResourceTree<T> implements Disposable {
         for (const resource of resources) {
             for (const { provider } of this.registrations) {
                 if (provider.canHandle(resource as Readonly<unknown>) && provider.enrich) {
-                    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-                    Promise.resolve(provider.enrich(resource))
+                    void Promise.resolve(provider.enrich(resource))
                         .then(() => { this.changeEmitter.fire(resource); });
                     break;
                 }

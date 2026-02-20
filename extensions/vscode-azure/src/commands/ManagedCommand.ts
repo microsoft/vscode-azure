@@ -4,5 +4,5 @@
  *--------------------------------------------------------------------------------------------*/
 
 export interface ManagedCommand<T = unknown> {
-    execute(): T | Promise<T>;
+    execute(...args: unknown[]): T | Promise<T>;
 }

@@ -7,8 +7,6 @@ import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } f
 import { InflightMap } from '@microsoft/vscode-azure-utils';
 
 /**
- * TODO: Do we even need this, since the cache will dedupe?
- *
  * A pipeline policy that deduplicates identical in-flight GET requests.
  * If multiple callers issue GET requests to the same URL concurrently,
  * only one HTTP request is made and the response is shared across all callers.

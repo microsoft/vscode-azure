@@ -22,7 +22,7 @@ export interface DataProvider<TResource> {
      * Test whether this provider handles the given resource.
      * Also acts as a type guard to narrow the resource to `TResource`.
      */
-    canHandle(resource: Readonly<unknown>): resource is Readonly<TResource>;
+    canHandle(resource: unknown): resource is TResource;
 
     /**
      * Get child resources for the given parent, or the top-level resources
@@ -30,7 +30,7 @@ export interface DataProvider<TResource> {
      *
      * @returns An array of child resources. Return an empty array or undefined for leaf nodes.
      */
-    getChildren(resource?: Readonly<TResource>): ProviderResult<Readonly<TResource>[]>;
+    getChildren(resource?: Readonly<TResource>): ProviderResult<TResource[]>;
 
     /**
      * Enrich a resource in-place with provider-specific data.

@@ -33,6 +33,9 @@ export async function activateInternal(extensionContext: vscode.ExtensionContext
 
         registerCommands(container);
     });
+
+    // TODO: alternatively, we could immediately begin constructing the container, and then proceed with activation after the container is ready
+    // TODO: should we declare some things (e.g. the output window, the command registry) as lazy until they are first accessed? Is that already how inversify works?
 }
 
 export function deactivateInternal(): Promise<void> {
