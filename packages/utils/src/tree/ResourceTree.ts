@@ -118,6 +118,9 @@ export class ResourceTree<T> implements Disposable {
             return node;
         });
         this.rootsStaleAt = Date.now() + this.ttl;
+
+        this.enrichAll(resources);
+
         return resources;
     }
 
@@ -148,7 +151,27 @@ export class ResourceTree<T> implements Disposable {
         node.children = children;
         node.staleAt = Date.now() + this.ttl;
 
+        this.enrichAll(children);
+
         return children;
+    }
+
+    /**
+     * For each resource, find the provider that handles it and call
+     * {@link DataProvider.enrich enrich} if present. Enrichment runs in the
+     * background - each resolved call fires {@link onDidChange} for that resource.
+     */
+    private enrichAll(resources: T[]): void {
+        for (const resource of resources) {
+            for (const { provider } of this.registrations) {
+                if (provider.canHandle(resource as Readonly<unknown>) && provider.enrich) {
+                    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                    Promise.resolve(provider.enrich(resource))
+                        .then(() => { this.changeEmitter.fire(resource); });
+                    break;
+                }
+            }
+        }
     }
 
     /**
