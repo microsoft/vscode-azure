@@ -34,6 +34,7 @@
         ]
     },
     "devDependencies": {
+        "@types/vscode": "1.105.0",
         "inversify": "^7.11.0"
     }
 }
