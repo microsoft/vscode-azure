@@ -3,17 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { BranchDataProvider } from '@microsoft/vscode-azure-utils';
+import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import type { GenericResource } from '../models/GenericResource';
 
 /**
- * Azure-specific extension of {@link BranchDataProvider} for resources in the
+ * Azure-specific extension of {@link DataProvider} for resources in the
  * Azure resource tree.
  *
  * Adds:
  * - {@link enrich} - mutates a generic resource in-place with service-specific data.
  */
-export interface AzureResourceBranchDataProvider extends BranchDataProvider<GenericResource> {
+export interface AzureResourceBranchDataProvider extends DataProvider<GenericResource> {
     /**
      * Enrich a generic resource in-place with service-specific data.
      *
