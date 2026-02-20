@@ -41,5 +41,5 @@ export interface DataProvider<TResource> {
      * tree's reference remains stable. Key properties such as `id`, `type`,
      * etc. should not be changed, but additional fields may be added as needed.
      */
-    enrich?(resource: TResource): Promise<void> | void;
+    enrich?(resource: TResource): void | Promise<void>;
 }
