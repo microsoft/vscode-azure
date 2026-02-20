@@ -12,3 +12,7 @@ export * from './base/IVsCode';
 export * from './commands/ICommandRegistry';
 export * from './data/Cache';
 export * from './data/InflightMap';
+export * from './types/AssertAssignable';
+export * from './types/AsWritable';
+export * from './types/Disposable';
+export * from './types/ProviderResult';

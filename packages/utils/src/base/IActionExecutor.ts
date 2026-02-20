@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ServiceIdentifier } from 'inversify';
+import type { AsWritable } from '../types/AsWritable';
 import { createActionContext, type IActionContext, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 
@@ -29,8 +30,8 @@ export class ActionExecutor implements IActionExecutor {
         const context = createActionContext(telemetryId);
 
         // Grab writable references for later
-        const properties = context.telemetry.properties as Writable<TelemetryProperties>;
-        const measurements = context.telemetry.measurements as Writable<TelemetryMeasurements>;
+        const properties = context.telemetry.properties as AsWritable<TelemetryProperties>;
+        const measurements = context.telemetry.measurements as AsWritable<TelemetryMeasurements>;
 
         try {
             const startTime = Date.now();
@@ -55,9 +56,3 @@ export class ActionExecutor implements IActionExecutor {
         }
     }
 }
-
-/**
- * Simple helper type that just takes the `readonly` off all the properties in an object.
- * Used to allow us to have a clean public interface for {@link IActionContext} while still being able to set properties internally in {@link ActionExecutor}.
- */
-type Writable<T> = { -readonly [K in keyof T]: T[K] };
