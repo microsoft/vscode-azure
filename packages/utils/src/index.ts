@@ -13,6 +13,7 @@ export * from './commands/ICommandRegistry';
 export * from './data/Cache';
 export * from './data/InflightMap';
 export * from './tree/DataProvider';
+export * from './tree/ResourceTree';
 export * from './tree/ViewProvider';
 export * from './types/AssertAssignable';
 export * from './types/AsWritable';
