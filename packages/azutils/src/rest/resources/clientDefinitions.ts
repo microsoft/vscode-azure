@@ -52,7 +52,7 @@ export interface ResourcesList {
     ): StreamableMethod<ResourcesList200Response | ResourcesListDefaultResponse>;
 }
 
-/** Operations on /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/resources */
+/** Operations on /subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/resources */
 export interface ResourcesListByResourceGroup {
     /** Get all the resources for a resource group. */
     get(
@@ -76,9 +76,9 @@ export interface Routes {
     /** Resource for '/subscriptions/\{subscriptionId\}/resources' has methods for the following verbs: get */
     (path: '/subscriptions/{subscriptionId}/resources', subscriptionId: string): ResourcesList;
 
-    /** Resource for '/subscriptions/\{subscriptionId\}/resourceGroups/\{resourceGroupName\}/resources' has methods for the following verbs: get */
+    /** Resource for '/subscriptions/\{subscriptionId\}/resourcegroups/\{resourceGroupName\}/resources' has methods for the following verbs: get */
     (
-        path: '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/resources',
+        path: '/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/resources',
         subscriptionId: string,
         resourceGroupName: string,
     ): ResourcesListByResourceGroup;
