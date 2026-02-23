@@ -20,45 +20,46 @@ import * as vscode from 'vscode';
 import { registerCommands } from './commands/registerCommands';
 
 export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
-    // These objects are the absolute bare minimum to continue with the rest of the activation function
-    // So they must be created before the container is set up
-    const telemetryReporter: ITelemetryReporter = createTelemetryReporter(extensionContext);
-    const executor: IActionExecutor = new ActionExecutor(telemetryReporter);
+    const container = setUpContainer(extensionContext);
 
-    return await executor.callWithTelemetryAndErrorHandling('activate', activateContext => {
+    return await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
         activateContext.telemetry.properties.isActivationEvent = 'true';
 
-        const container = setUpContainer(extensionContext, telemetryReporter, executor);
-
         registerCommands(container);
     });
-
-    // TODO: alternatively, we could immediately begin constructing the container, and then proceed with activation after the container is ready
-    // TODO: should we declare some things (e.g. the output window, the command registry) as lazy until they are first accessed? Is that already how inversify works?
 }
 
 export function deactivateInternal(): Promise<void> {
     return Promise.resolve();
 }
 
-function setUpContainer(extensionContext: IExtensionContext, telemetryReporter: ITelemetryReporter, executor: IActionExecutor): Container {
+function setUpContainer(extensionContext: IExtensionContext): Container {
     const container = new Container();
 
-    // These four come in as constants (vscode by import, others from above)
+    // These two come in as constants (vscode by import, context from above)
     container.bind(IVsCode).toConstantValue(vscode);
     container.bind(IExtensionContext).toConstantValue(extensionContext);
-    container.bind(ITelemetryReporter).toConstantValue(telemetryReporter);
-    container.bind(IActionExecutor).toConstantValue(executor);
 
-    // Dynamically created and disposable objects
-    container.bind(IOutputChannel).toDynamicValue((context) => {
+    // Dynamically created singletons
+    container.bind(IActionExecutor).toDynamicValue(context => {
+        return new ActionExecutor(context.get(ITelemetryReporter));
+    }).inSingletonScope();
+
+    // Dynamically created, disposable singletons
+    container.bind(ITelemetryReporter).toDynamicValue(context => {
+        const reporter = createTelemetryReporter(context.get(IExtensionContext));
+        context.get(IExtensionContext).subscriptions.push(reporter);
+        return reporter;
+    }).inSingletonScope();
+
+    container.bind(IOutputChannel).toDynamicValue(context => {
         const outputChannel = createOutputChannel('Azure', context.get(IVsCode));
         context.get(IExtensionContext).subscriptions.push(outputChannel);
         return outputChannel;
     }).inSingletonScope();
 
-    container.bind(ICommandRegistry).toDynamicValue((context) => {
+    container.bind(ICommandRegistry).toDynamicValue(context => {
         const registry = new CommandRegistry(
             context.get(IActionExecutor),
             context.get(IVsCode)

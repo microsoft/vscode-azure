@@ -8,9 +8,9 @@ import type { ServiceIdentifier } from 'inversify';
 import type { IExtensionContext } from './IExtensionContext';
 
 export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
-export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEvent'>; // Subset of what we actually use
+export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEvent' | 'dispose'>; // Subset of what we actually use
 
-export function createTelemetryReporter(context: IExtensionContext): ITelemetryReporter {
+export function createTelemetryReporter(context: Readonly<IExtensionContext>): ITelemetryReporter {
     const debugTelemetry = process.env.DEBUGTELEMETRY?.toLowerCase() ?? process.env.VSCODE_RUNNING_TESTS?.toLowerCase();
 
     if (!debugTelemetry || debugTelemetry === '0' || debugTelemetry === 'false') {
@@ -22,10 +22,7 @@ export function createTelemetryReporter(context: IExtensionContext): ITelemetryR
 
         // TODO extension ID that's part of event name?
         // TODO replacement options to scrub PII?
-        const reporter = new TelemetryReporter(aiKey);
-        context.subscriptions.push(reporter);
-
-        return reporter;
+        return new TelemetryReporter(aiKey);
     } else if (debugTelemetry === 'v' || debugTelemetry === 'verbose') {
         return new DebugTelemetryReporter();
     } else {
@@ -37,10 +34,18 @@ class NullTelemetryReporter implements ITelemetryReporter {
     public sendTelemetryErrorEvent(): void {
         // noop
     }
+
+    public dispose(): Promise<void> {
+        return Promise.resolve();
+    }
 }
 
 class DebugTelemetryReporter implements ITelemetryReporter {
     public sendTelemetryErrorEvent(eventName: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
         console.log(`DEBUGTELEMETRY: "${eventName}"\nProperties: ${JSON.stringify(properties)}\nMeasurements: ${JSON.stringify(measurements)}`);
+    }
+
+    public dispose(): Promise<void> {
+        return Promise.resolve();
     }
 }
