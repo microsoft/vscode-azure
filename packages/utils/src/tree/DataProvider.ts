@@ -30,7 +30,7 @@ export interface DataProvider<TResource> {
      *
      * @returns An array of child resources. Return an empty array or undefined for leaf nodes.
      */
-    getChildren(resource?: Readonly<TResource>): ProviderResult<TResource[]>;
+    getChildren(resource?: TResource): ProviderResult<TResource[]>;
 
     /**
      * Enrich a resource in-place with provider-specific data.

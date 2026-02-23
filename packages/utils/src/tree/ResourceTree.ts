@@ -12,7 +12,7 @@ import type { DataProvider } from './DataProvider';
  */
 interface TreeNode<T> {
     readonly resource: T;
-    parent: T | undefined;      // undefined = root node
+    readonly parent: T | undefined;      // undefined = root node
     children: T[] | undefined;  // undefined = not yet loaded
     staleAt: number;            // Date.now() after which children should be re-fetched
 }
@@ -38,6 +38,8 @@ export interface RegisterProviderOptions {
  * Each node's children are loaded on first access and cached until stale.
  * The tree is the single source of truth for the data layer -- the
  * `TreeDataProvider`s are view-only and read from it.
+ *
+ * TODO: add tests
  *
  * @typeParam T - The resource type stored in the tree.
  */
@@ -92,7 +94,7 @@ export class ResourceTree<T> implements Disposable {
      *
      * Results are lazily loaded and cached with TTL.
      */
-    public async getChildren(resource?: Readonly<T>): Promise<T[]> {
+    public async getChildren(resource?: T): Promise<T[]> {
         if (resource === undefined) {
             return this.getRoots();
         }
@@ -124,7 +126,7 @@ export class ResourceTree<T> implements Disposable {
         return resources;
     }
 
-    private async getBranchChildren(resource: Readonly<T>): Promise<T[]> {
+    private async getBranchChildren(resource: T): Promise<T[]> {
         const key = this.getKey(resource);
         const node = this.nodes.get(key);
 
@@ -137,7 +139,7 @@ export class ResourceTree<T> implements Disposable {
         }
 
         // Find the provider that handles this resource
-        const entry = this.registrations.find(r => r.provider.canHandle(resource as Readonly<unknown>));
+        const entry = this.registrations.find(r => r.provider.canHandle(resource));
         if (!entry) {
             return [];
         }
@@ -164,9 +166,11 @@ export class ResourceTree<T> implements Disposable {
     private enrichAll(resources: T[]): void {
         for (const resource of resources) {
             for (const { provider } of this.registrations) {
-                if (provider.canHandle(resource as Readonly<unknown>) && provider.enrich) {
-                    void Promise.resolve(provider.enrich(resource))
-                        .then(() => { this.changeEmitter.fire(resource); });
+                if (provider.canHandle(resource) && provider.enrich) {
+                    Promise
+                        .resolve(provider.enrich(resource))
+                        .then(() => { this.changeEmitter.fire(resource); })
+                        .catch(() => { /* TODO: ignore enrichment errors? */ });
                     break;
                 }
             }
