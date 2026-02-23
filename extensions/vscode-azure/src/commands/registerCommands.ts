@@ -28,6 +28,6 @@ function registerManagedCommand(
         const executionContainer = new Container({ parent: container });
         executionContainer.bind(IActionContext).toConstantValue(context);
 
-        return executionContainer.get(commandClass).execute();
+        return executionContainer.get(commandClass).execute(...args);
     });
 }

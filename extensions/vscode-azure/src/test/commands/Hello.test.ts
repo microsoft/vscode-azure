@@ -14,7 +14,7 @@ describe('Hello command', () => {
     it('(unit) should set telemetry property', async () => {
         const context = createActionContext('test');
 
-        const showInformationMessage = mock.fn<(message: string) => undefined>(() => undefined);
+        const showInformationMessage = mock.fn(_ => undefined);
         const mockVsCode = {
             window: {
                 showInformationMessage,

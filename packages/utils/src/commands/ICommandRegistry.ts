@@ -4,18 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ServiceIdentifier } from 'inversify';
-import type * as vscode from 'vscode';
 import type { IActionContext } from '../base/IActionContext';
 import type { ActionCallback, IActionExecutor } from '../base/IActionExecutor';
 import type { IVsCode } from '../base/IVsCode';
+import type { Disposable } from '../types/Disposable';
 
 export const ICommandRegistry: ServiceIdentifier<ICommandRegistry> = Symbol.for('ICommandRegistry');
-export interface ICommandRegistry extends vscode.Disposable {
+export interface ICommandRegistry extends Disposable {
     registerCommand<T = unknown>(commandId: string, callback: ActionCallback<T>): void;
 }
 
 export class CommandRegistry implements ICommandRegistry {
-    private readonly disposables: vscode.Disposable[] = [];
+    private readonly disposables: Disposable[] = [];
     public constructor(
         private readonly actionExecutor: IActionExecutor,
         private readonly code: IVsCode

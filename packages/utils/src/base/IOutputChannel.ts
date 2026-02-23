@@ -6,6 +6,7 @@
 import type { ServiceIdentifier } from 'inversify';
 import { format } from 'util';
 import * as vscode from 'vscode';
+import { Disposable } from '../types/Disposable';
 import type { IVsCode } from './IVsCode';
 
 export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('OutputChannel');
@@ -30,7 +31,7 @@ export class DebugOutputChannel implements IOutputChannel {
 
     public readonly logLevel = vscode.LogLevel.Trace;
 
-    public readonly onDidChangeLogLevel = () => { return { dispose: () => {/* noop */ } }; };
+    public readonly onDidChangeLogLevel = () => { return Disposable.None; };
 
     public trace(message: string, ...args: any[]): void {
         this.appendLine(`[TRACE] ${format(message, ...args)}`);
