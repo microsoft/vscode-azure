@@ -11,6 +11,7 @@ export * from './base/ITelemetryReporter';
 export * from './base/IVsCode';
 export * from './commands/ICommandRegistry';
 export * from './data/InflightMap';
+export * from './events/EventEmitter';
 export * from './tree/DataProvider';
 export * from './tree/ResourceTree';
 export * from './tree/ViewProvider';

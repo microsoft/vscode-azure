@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode } from '../base/IVsCode';
+import { EventEmitter } from '../events/EventEmitter';
 import type { Disposable } from '../types/Disposable';
 import type { DataProvider } from './DataProvider';
 
@@ -56,16 +56,14 @@ export class ResourceTree<T> implements Disposable {
     public readonly onDidChange;
 
     /**
-     * @param code - The VS Code API (for EventEmitter).
      * @param getKey - Extracts a unique string key from a resource.
      * @param ttl - Time-to-live in milliseconds for cached children.
      */
     public constructor(
-        code: IVsCode,
         private readonly getKey: (resource: T) => string,
         private readonly ttl: number,
     ) {
-        this.changeEmitter = new code.EventEmitter<T | undefined>();
+        this.changeEmitter = new EventEmitter<T | undefined>();
         this.onDidChange = this.changeEmitter.event;
     }
 
