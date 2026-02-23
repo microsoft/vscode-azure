@@ -27,7 +27,7 @@ export type Event<T> = (
  * as a drop-in replacement in contexts where the VS Code API is not available
  * (unit tests, shared packages, etc.).
  */
-export class EventEmitter<T> {
+export class EventEmitter<T> implements Disposable {
     private readonly emitter = new NodeEventEmitter();
 
     /**
