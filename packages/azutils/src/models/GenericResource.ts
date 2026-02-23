@@ -3,14 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AssertAssignable } from '@microsoft/vscode-azure-utils';
 import type { GenericResourceExpandedOutput, ResourceGroupOutput } from '../rest/resources';
 
 /**
- * Normalized representation of an Azure resource. Every ARM resource,
- * regardless of provider, satisfies this shape.
+ * The ARM-level properties of an Azure resource, without any additional context.
+ * Mirrors the fields returned by the Azure Resource Manager REST API.
  */
-export interface GenericResource {
+interface GenericResourceBase {
     /** The full ARM resource ID. */
     readonly id: string;
     /** The resource name. */
@@ -25,19 +26,30 @@ export interface GenericResource {
     readonly kind?: string;
 }
 
+/**
+ * Normalized representation of an Azure resource. Every ARM resource,
+ * regardless of provider, satisfies this shape. Carries a reference to the
+ * owning {@link AzureSubscription} for context (environment, credentials, etc.).
+ */
+export interface GenericResource extends GenericResourceBase {
+    /** The subscription that owns this resource. */
+    readonly subscription: AzureSubscription;
+}
+
 // ── Compile-time compatibility checks ───────────────────────────────────────────
 // If the SDK output types ever drift (rename fields, change types), these will
-// produce a compile error -- proving our GenericResource stays in sync.
+// produce a compile error -- proving our GenericResourceBase stays in sync
+// with the REST SDK output types.
 
 type GenericResourceExpandedWithRequired = Required<Pick<GenericResourceExpandedOutput, 'id' | 'name' | 'type' | 'location'>> & Pick<GenericResourceExpandedOutput, 'tags' | 'kind'>;
 type ResourceGroupOutputWithRequired = Required<Pick<ResourceGroupOutput, 'id' | 'name' | 'type' | 'location'>> & Pick<ResourceGroupOutput, 'tags'>;
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-// Forward: SDK types are assignable TO GenericResource
-type CheckExpandedOutput = AssertAssignable<GenericResource, GenericResourceExpandedWithRequired>;
-type CheckResourceGroupOutput = AssertAssignable<GenericResource, ResourceGroupOutputWithRequired>;
+// Forward: SDK types are assignable TO GenericResourceBase
+type CheckExpandedOutput = AssertAssignable<GenericResourceBase, GenericResourceExpandedWithRequired>;
+type CheckResourceGroupOutput = AssertAssignable<GenericResourceBase, ResourceGroupOutputWithRequired>;
 
-// Reverse: GenericResource is assignable TO the SDK picks (catches missing fields)
-type CheckExpandedOutputReverse = AssertAssignable<GenericResourceExpandedWithRequired, GenericResource>;
-type CheckResourceGroupOutputReverse = AssertAssignable<ResourceGroupOutputWithRequired, GenericResource>;
+// Reverse: GenericResourceBase is assignable TO the SDK picks (catches missing fields)
+type CheckExpandedOutputReverse = AssertAssignable<GenericResourceExpandedWithRequired, GenericResourceBase>;
+type CheckResourceGroupOutputReverse = AssertAssignable<ResourceGroupOutputWithRequired, GenericResourceBase>;
 /* eslint-enable @typescript-eslint/no-unused-vars */
