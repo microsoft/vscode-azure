@@ -28,7 +28,12 @@ export type Event<T> = (
  * (unit tests, shared packages, etc.).
  */
 export class EventEmitter<T> implements Disposable {
-    private readonly emitter = new NodeEventEmitter();
+    private readonly emitter: NodeEventEmitter;
+
+    public constructor() {
+        this.emitter = new NodeEventEmitter();
+        this.emitter.setMaxListeners(0);
+    }
 
     /**
      * The event that listeners subscribe to. Calling `this.event(fn)` registers
@@ -39,7 +44,7 @@ export class EventEmitter<T> implements Disposable {
         thisArgs?: unknown,
         disposables?: Disposable[],
     ): Disposable => {
-        const bound = thisArgs ? listener.bind(thisArgs) : listener;
+        const bound = (thisArgs !== undefined && thisArgs !== null) ? listener.bind(thisArgs) : listener;
         this.emitter.on(EventName, bound);
 
         const disposable: Disposable = {
