@@ -13,4 +13,4 @@ export interface Disposable {
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Disposable {
     export const None: Disposable = { dispose: () => { /* noop */ } } satisfies vscode.Disposable; // The `satisfies` also makes sure the interfaces are compatible
-};
+}
