@@ -10,7 +10,6 @@ export * from './base/IOutputChannel';
 export * from './base/ITelemetryReporter';
 export * from './base/IVsCode';
 export * from './commands/ICommandRegistry';
-export * from './data/Cache';
 export * from './data/InflightMap';
 export * from './tree/DataProvider';
 export * from './tree/ResourceTree';
