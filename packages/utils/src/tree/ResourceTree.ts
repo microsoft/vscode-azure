@@ -107,6 +107,9 @@ export class ResourceTree<T> implements Disposable {
             return this.roots.map(n => n.resource);
         }
 
+        // Clear all cached nodes when recomputing roots since the whole tree may have changed
+        this.nodes.clear();
+
         const results = await Promise.all(
             this.registrations
                 .filter(r => r.root)
@@ -141,7 +144,16 @@ export class ResourceTree<T> implements Disposable {
         // Find the provider that handles this resource
         const entry = this.registrations.find(r => r.provider.canHandle(resource));
         if (!entry) {
+            node.children = [];
+            node.staleAt = Date.now() + this.ttl;
             return [];
+        }
+
+        // Remove previously cached children that may no longer be present
+        if (node.children !== undefined) {
+            for (const child of node.children) {
+                this.nodes.delete(this.getKey(child));
+            }
         }
 
         const children = await entry.provider.getChildren(resource) ?? [];
