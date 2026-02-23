@@ -196,6 +196,8 @@ export class ResourceTree<T> implements Disposable {
      * Invalidate a specific resource's cached children, removing them from
      * the tree. They will be re-fetched on next access.
      * Fires {@link onDidChange}.
+     *
+     * TODO: invalidate all descendants, not just direct children (while only firing change emitter at root)
      */
     public invalidate(resource: T): void {
         const node = this.nodes.get(this.getKey(resource));
