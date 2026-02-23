@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DataProvider } from '@microsoft/vscode-azure-utils';
-import type { GenericResource } from '../models/GenericResource';
+import { expect } from 'chai';
+import { describe, it } from 'mocha';
 
-/**
- * Azure-specific extension of {@link DataProvider} for resources in the
- * Azure resource tree.
- */
-export type AzureResourceBranchDataProvider<T extends GenericResource> = DataProvider<T>;
+describe('foo: azureutils', () => {
+    it('should pass', () => {
+        expect(true).to.equal(true);
+    });
+});
