@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ProviderResult } from '../types/ProviderResult';
+import type { ProviderResult } from '../vscode/ProviderResult';
 
 /**
  * Data-layer provider for a resource tree.

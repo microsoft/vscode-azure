@@ -5,8 +5,8 @@
 
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { EventEmitter } from '../../events/EventEmitter';
-import type { Disposable } from '../../types/Disposable';
+import type { Disposable } from '../../vscode/Disposable';
+import { EventEmitter } from '../../vscode/EventEmitter';
 
 describe('(unit) EventEmitter', () => {
     it('should fire listener with the emitted value', () => {

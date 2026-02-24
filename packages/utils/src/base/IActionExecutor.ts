@@ -43,7 +43,7 @@ export class ActionExecutor implements IActionExecutor {
 
             return result;
         } catch (error) {
-            // TODO error/cancellation handling plus telemetry
+            // TODO: error/cancellation handling plus telemetry
             properties.result = 'Failed';
 
             if (context.errorHandling.rethrow) {

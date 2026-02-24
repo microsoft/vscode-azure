@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { EventEmitter } from '../events/EventEmitter';
-import type { Disposable } from '../types/Disposable';
+import type { Disposable } from '../vscode/Disposable';
+import { EventEmitter } from '../vscode/EventEmitter';
 import type { DataProvider } from './DataProvider';
 
 /**
@@ -28,7 +28,7 @@ interface RegisteredProvider<T> {
  */
 export interface RegisterProviderOptions {
     /** If true, this provider will be called with no argument to produce root items. */
-    root?: boolean;
+    readonly root?: boolean;
 }
 
 /**
@@ -46,14 +46,14 @@ export interface RegisterProviderOptions {
 export class ResourceTree<T> implements Disposable {
     private readonly nodes = new Map<string, TreeNode<T>>();
     private readonly registrations: RegisteredProvider<T>[] = [];
-    private readonly changeEmitter;
+    private readonly changeEmitter = new EventEmitter<T | undefined>();
 
     /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
-    private rootsStaleAt: number = 0;
+    private rootsStaleAt = 0;
 
     /** Fires when part of the tree has been invalidated. */
-    public readonly onDidChange;
+    public readonly onDidChange = this.changeEmitter.event;
 
     /**
      * @param getKey - Extracts a unique string key from a resource.
@@ -62,10 +62,7 @@ export class ResourceTree<T> implements Disposable {
     public constructor(
         private readonly getKey: (resource: T) => string,
         private readonly ttl: number,
-    ) {
-        this.changeEmitter = new EventEmitter<T | undefined>();
-        this.onDidChange = this.changeEmitter.event;
-    }
+    ) { }
 
     /**
      * Register a {@link DataProvider}. Returns a {@link Disposable} that
