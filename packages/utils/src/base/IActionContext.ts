@@ -28,8 +28,8 @@ export function createActionContext(telemetryId: string): IActionContext {
 }
 
 export interface TelemetryProperties extends Record<string, string | undefined> {
-    // TODO All these need to match existing property names
-    readonly result?: 'Succeeded' | 'Failed' | 'Canceled'; // Provisionally readonly? If we want to allow callers to set this, have to take away readonly
+    // TODO: All these need to match existing property names
+    readonly result?: 'Succeeded' | 'Failed' | 'Canceled'; // TODO: Provisionally readonly? If we want to allow callers to set this, have to take away readonly
     isActivationEvent?: 'true' | 'false';
     readonly error?: string;
     readonly errorMessage?: string;
@@ -37,6 +37,6 @@ export interface TelemetryProperties extends Record<string, string | undefined> 
 }
 
 export interface TelemetryMeasurements extends Record<string, number | undefined> {
-    // TODO All these need to match existing property names
+    // TODO: All these need to match existing property names
     readonly duration?: number;
 }

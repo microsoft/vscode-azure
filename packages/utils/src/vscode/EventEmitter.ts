@@ -6,7 +6,7 @@
 import { EventEmitter as NodeEventEmitter } from 'node:events';
 import type * as vscode from 'vscode';
 import type { AssertAssignable } from '../types/AssertAssignable';
-import type { Disposable } from '../types/Disposable';
+import type { Disposable } from './Disposable';
 
 const EventName = 'e' as const;
 
@@ -14,7 +14,7 @@ const EventName = 'e' as const;
  * A function that represents an event to which you subscribe by calling it with
  * a listener. Mirrors `vscode.Event<T>`.
  */
-export type Event<T> = (
+type Event<T> = (
     listener: (e: T) => void,
     thisArgs?: unknown,
     disposables?: Disposable[],

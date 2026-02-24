@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import type { ProviderResult } from '../types/ProviderResult';
+import type { ProviderResult } from '../vscode/ProviderResult';
 import type { DataProvider } from './DataProvider';
 
 /**

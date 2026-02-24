@@ -26,11 +26,10 @@
         "extensions/vscode-azure"
     ],
     "engines": {
-        "vscode": "^1.105.0"
+        "vscode": "^1.106.0"
     },
     "devDependencies": {
         "@microsoft/vscode-azext-eng": "^1.0.0-alpha.12",
-        "@types/node": "^22.19.11",
-        "@types/vscode": "1.105.0"
+        "@types/node": "^22.19.11"
     }
 }

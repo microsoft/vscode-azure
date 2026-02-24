@@ -6,7 +6,7 @@
 import type { ServiceIdentifier } from 'inversify';
 import { format } from 'util';
 import * as vscode from 'vscode';
-import { Disposable } from '../types/Disposable';
+import { Disposable } from './Disposable';
 import type { IVsCode } from './IVsCode';
 
 export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('OutputChannel');

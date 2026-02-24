@@ -31,7 +31,8 @@
         "@microsoft/vscode-azure-utils": "*"
     },
     "devDependencies": {
-        "@azure/core-auth": "*"
+        "@azure/core-auth": "*",
+        "@types/vscode": "1.106.0"
     },
     "mocha": {
         "node-option": [

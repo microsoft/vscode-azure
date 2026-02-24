@@ -6,8 +6,8 @@
 import type { ServiceIdentifier } from 'inversify';
 import type { IActionContext } from '../base/IActionContext';
 import type { ActionCallback, IActionExecutor } from '../base/IActionExecutor';
-import type { IVsCode } from '../base/IVsCode';
-import type { Disposable } from '../types/Disposable';
+import type { Disposable } from '../vscode/Disposable';
+import type { IVsCode } from '../vscode/IVsCode';
 
 export const ICommandRegistry: ServiceIdentifier<ICommandRegistry> = Symbol.for('ICommandRegistry');
 export interface ICommandRegistry extends Disposable {
