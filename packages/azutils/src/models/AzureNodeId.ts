@@ -97,7 +97,7 @@ export class AzureNodeId {
         }
 
         // Virtual grouping: /subscriptions/{id}/~{strategy}/{value}
-        if (armSegments.length >= 3 && armSegments[2].startsWith(virtualGroupingPrefix)) {
+        if (armSegments.length >= 4 && armSegments[2].startsWith(virtualGroupingPrefix)) {
             return new AzureNodeId({
                 kind: 'grouping',
                 accountId,
