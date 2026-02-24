@@ -37,7 +37,7 @@ type SubscriptionData = SubscriptionFields & { readonly kind: 'subscription' };
 
 type GroupingData = SubscriptionFields & { readonly kind: 'grouping'; readonly grouping: Pick<ResourceGroup | VirtualGroup, 'groupingStrategy' | 'groupingValue'> };
 type ResourceData = SubscriptionFields & { readonly kind: 'resource'; };
-type VirtualData = SubscriptionFields & { readonly kind: 'virtual'; readonly virtual: Pick<VirtualResource, 'virtualType' | 'path'> };
+type VirtualData = SubscriptionFields & { readonly kind: 'virtual'; readonly virtual: Pick<VirtualResource, 'virtualType' | 'virtualPath'> };
 
 /**
  * A fully-opaque, URI-based identifier for nodes in the Azure resource tree.
@@ -108,7 +108,7 @@ export class AzureNodeId {
         if (hash !== undefined) {
             const hashParts = hash.split('/').filter(Boolean);
             if (hashParts.length < 2) {
-                throw new Error(`Invalid ${schemePrefix} URI fragment: expected #/{virtualType}/{path}`);
+                throw new Error(`Invalid ${schemePrefix} URI fragment: expected #/{virtualType}/{virtualPath}`);
             }
 
             return new AzureNodeId({
@@ -119,7 +119,7 @@ export class AzureNodeId {
                 armResourceId,
                 virtual: {
                     virtualType: hashParts[0],
-                    path: decodeURIComponent(hashParts.slice(1).join('/')),
+                    virtualPath: decodeURIComponent(hashParts.slice(1).join('/')),
                 },
             });
         }
@@ -283,7 +283,7 @@ export class AzureNodeId {
         }
 
         if (d.kind === 'virtual') {
-            parts.push('#/', d.virtual.virtualType, '/', encodeURIComponent(d.virtual.path));
+            parts.push('#/', d.virtual.virtualType, '/', encodeURIComponent(d.virtual.virtualPath));
         }
 
         return parts.join('');

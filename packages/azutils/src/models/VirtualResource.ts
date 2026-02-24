@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { GenericResource } from './GenericResource';
+import type { GenericResource } from './GenericResource';
 
 export interface VirtualResource {
     readonly virtualType: string;
-    readonly path: string;
+    readonly virtualPath: string;
     readonly azureResource: GenericResource;
 }
