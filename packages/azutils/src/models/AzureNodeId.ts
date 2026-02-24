@@ -24,6 +24,7 @@ const virtualGroupingPrefix = '~' as const;
  *  - Resource: `azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}`
  *  - Virtual Resource: `azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}#/{virtualType}/{virtualPath}`
  */
+// TODO: add tests for this class, especially the parsing logic
 export class AzureNodeId {
     private constructor(private readonly data: AccountData | TenantData | SubscriptionData | GroupingData | ResourceData | VirtualData) { }
 

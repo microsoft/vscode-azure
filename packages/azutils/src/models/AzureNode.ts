@@ -36,5 +36,5 @@ export function isGenericResource(node: AzureNode): node is GenericResource | Re
 }
 
 export function isVirtualResource(node: AzureNode): node is VirtualResource {
-    return 'id' in node && 'name' in node && 'type' in node && 'virtualResourceType' in node;
+    return 'virtualType' in node && 'virtualPath' in node;
 }
