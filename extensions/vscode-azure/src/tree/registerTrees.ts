@@ -56,6 +56,9 @@ export function registerTrees(container: Container): void {
             canSelectMany: false,
         });
     }).inSingletonScope().onActivation(pushDisposable);
+
+    // Eagerly resolve the tree view to kick off the whole chain
+    container.get(IAzureResourceTreeView);
 }
 
 /**

@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
-import type { AzureAccount } from './AzureAccount';
+import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import type { GenericResource } from './GenericResource';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
 import type { VirtualResource } from './VirtualResource';
@@ -16,7 +15,7 @@ export function isAccount(node: AzureNode): node is AzureAccount {
 }
 
 export function isTenant(node: AzureNode): node is AzureTenant {
-    return 'tenantId' in node && 'account' in node;
+    return 'tenantId' in node && 'account' in node && !isSubscription(node);
 }
 
 export function isSubscription(node: AzureNode): node is AzureSubscription {

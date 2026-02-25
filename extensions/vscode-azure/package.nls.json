@@ -1,0 +1,5 @@
+{
+    "extension.description": "Azure for Visual Studio Code",
+    "viewContainers.azure": "Azure",
+    "views.azureResources": "Resources"
+}

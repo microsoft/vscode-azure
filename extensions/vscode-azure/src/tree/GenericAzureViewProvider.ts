@@ -63,7 +63,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         switch (true) {
             case isAccount(resource): {
-                const item = new vscode.TreeItem(resource.label, vscode.TreeItemCollapsibleState.Expanded);
+                const item = new vscode.TreeItem(resource.label, vscode.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = 'azureAccount';
                 item.iconPath = new vscode.ThemeIcon('account');
@@ -72,7 +72,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
             case isTenant(resource): {
                 const label = resource.displayName ?? resource.tenantId;
-                const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
+                const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = 'azureTenant';
                 item.iconPath = new vscode.ThemeIcon('organization');

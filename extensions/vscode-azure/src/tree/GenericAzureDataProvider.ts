@@ -30,6 +30,7 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
     }
 
     public async getChildren(resource?: AzureResourceNode): Promise<AzureResourceNode[]> {
+        await this.subscriptionProvider.signIn();
         if (!resource) {
             // Root: return all signed-in accounts
             return await this.subscriptionProvider.getAccounts() as AzureResourceNode[];

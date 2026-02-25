@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureAccount } from './AzureAccount'; // TODO: upstream the change and get rid of the unnecessary casts below
+import type { AzureAccount } from '@microsoft/vscode-azext-azureauth';
 import { type AzureNode, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, isVirtualGroup, isVirtualResource } from './AzureNode';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
 import type { VirtualResource } from './VirtualResource';
@@ -151,14 +151,14 @@ export class AzureNodeId {
                 return new AzureNodeId({
                     kind: 'tenant',
                     accountId: node.account.id,
-                    portalHost: portalHost(node.account as AzureAccount),
+                    portalHost: portalHost(node.account),
                     tenantId: node.tenantId,
                 });
             case isSubscription(node):
                 return new AzureNodeId({
                     kind: 'subscription',
                     accountId: node.account.id,
-                    portalHost: portalHost(node.account as AzureAccount),
+                    portalHost: portalHost(node.account),
                     tenantId: node.tenantId,
                     armResourceId: `/subscriptions/${node.subscriptionId}`,
                 });
@@ -166,7 +166,7 @@ export class AzureNodeId {
                 return new AzureNodeId({
                     kind: 'grouping',
                     accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account as AzureAccount),
+                    portalHost: portalHost(node.subscription.account),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                     grouping: {
@@ -178,7 +178,7 @@ export class AzureNodeId {
                 return new AzureNodeId({
                     kind: 'grouping',
                     accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account as AzureAccount),
+                    portalHost: portalHost(node.subscription.account),
                     tenantId: node.subscription.tenantId,
                     armResourceId: `/subscriptions/${node.subscription.subscriptionId}/${virtualGroupingPrefix}${node.groupingStrategy}/${encodeURIComponent(node.groupingValue)}`,
                     grouping: node,
@@ -187,7 +187,7 @@ export class AzureNodeId {
                 return new AzureNodeId({
                     kind: 'resource',
                     accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account as AzureAccount),
+                    portalHost: portalHost(node.subscription.account),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                 });
@@ -195,7 +195,7 @@ export class AzureNodeId {
                 return new AzureNodeId({
                     kind: 'virtual',
                     accountId: node.azureResource.subscription.account.id,
-                    portalHost: portalHost(node.azureResource.subscription.account as AzureAccount),
+                    portalHost: portalHost(node.azureResource.subscription.account),
                     tenantId: node.azureResource.subscription.tenantId,
                     armResourceId: node.azureResource.id,
                     virtual: node,

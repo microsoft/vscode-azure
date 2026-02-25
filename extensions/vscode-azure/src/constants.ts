@@ -3,4 +3,4 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export const AzureResourceTreeViewId = 'azureResourceTree';
+export const AzureResourceTreeViewId = 'vscode-azure/resources';
