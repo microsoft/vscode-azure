@@ -20,6 +20,7 @@ import { Container } from 'inversify';
 import * as vscode from 'vscode';
 import { registerCommands } from './commands/registerCommands';
 import { IAzureSubscriptionProvider, pushDisposable } from './services';
+import { registerTrees } from './tree/registerTrees';
 
 export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
     const container = setUpContainer(extensionContext);
@@ -29,6 +30,7 @@ export async function activateInternal(extensionContext: vscode.ExtensionContext
         activateContext.telemetry.properties.isActivationEvent = 'true';
 
         registerCommands(container);
+        registerTrees(container);
     });
 }
 

@@ -11,6 +11,8 @@
             "request": "launch",
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-azure",
+                "--disable-extension",
+                "ms-azuretools.vscode-azureresourcegroups", // This extension replaces Azure Resources, so disable it to avoid conflicts
             ],
             "env": {
                 "DEBUGTELEMETRY": "1",
@@ -24,6 +26,12 @@
             "name": "Extension: Run Tests",
             "type": "extensionHost",
             "request": "launch",
+            "args": [
+                "--disable-extension",
+                "ms-azuretools.vscode-azureresourcegroups", // This extension replaces Azure Resources, so disable it to avoid conflicts
+                "--disable-extension",
+                "github.copilot-chat", // GitHub Copilot Chat throws a lot of spurious errors when we rapidly launch then close during tests
+            ],
             "testConfiguration": "${workspaceFolder}/extensions/vscode-azure/.vscode-test.mjs",
             "env": {
                 "DEBUGTELEMETRY": "1",

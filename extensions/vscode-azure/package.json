@@ -4,7 +4,7 @@
     "private": true,
     "publisher": "ms-azuretools",
     "displayName": "Azure for Visual Studio Code",
-    "description": "Azure for Visual Studio Code",
+    "description": "%extension.description%",
     "homepage": "https://github.com/microsoft/vscode-azure#readme",
     "bugs": {
         "url": "https://github.com/microsoft/vscode-azure/issues"
@@ -26,8 +26,48 @@
                 "command": "azure.hello",
                 "category": "Azure",
                 "title": "Hello World!"
+            },
+            {
+                "command": "vscode-azure/resources/refresh",
+                "icon": "$(refresh)",
+                "title": "%commands.vscode-azure/resources/refresh%"
             }
-        ]
+        ],
+        "menus": {
+            "commandPalette": [
+                {
+                    "command": "vscode-azure/resources/refresh",
+                    "when": "false"
+                }
+            ],
+            "view/title": [
+                {
+                    "command": "vscode-azure/resources/refresh",
+                    "when": "view == vscode-azure/resources",
+                    "group": "navigation"
+                }
+            ]
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "title": "%viewContainers.vscode-azure%",
+                    "icon": "$(azure)",
+                    "id": "vscode-azure"
+                }
+            ]
+        },
+        "views": {
+            "vscode-azure": [
+                {
+                    "name": "%views.vscode-azure/resources%",
+                    "id": "vscode-azure/resources",
+                    "icon": "$(azure)",
+                    "visibility": "visible",
+                    "type": "tree"
+                }
+            ]
+        }
     },
     "scripts": {
         "lint": "eslint --max-warnings 0",
