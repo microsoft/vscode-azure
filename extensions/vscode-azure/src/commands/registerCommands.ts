@@ -7,9 +7,11 @@ import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils'
 import { Container } from 'inversify';
 import { Hello } from './Hello';
 import type { ManagedCommand } from './ManagedCommand';
+import { RefreshResourcesView } from './RefreshResourcesView';
 
 export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'azure.hello', Hello);
+    registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
 }
 
 function registerManagedCommand(
