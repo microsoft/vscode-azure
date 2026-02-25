@@ -4,16 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { Disposable, IExtensionContext, type ResourceTree } from '@microsoft/vscode-azure-utils';
+import { Disposable, IExtensionContext } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import type { AzureResourceNode } from './tree/GenericAzureDataProvider';
 
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
-
-/** Identifier for the Azure resource tree cache (representing real Azure resources) */
-export const IAzureResourceTreeCache: ServiceIdentifier<ResourceTree<AzureResourceNode>> = Symbol.for('IAzureResourceTreeCache');
 
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<vscode.TreeView<string>> = Symbol.for('IAzureResourceTreeView');
