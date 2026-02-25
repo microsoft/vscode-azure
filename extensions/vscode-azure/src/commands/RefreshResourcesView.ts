@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { inject, injectable } from 'inversify';
-import { IAzureResourceTreeCache } from 'src/services';
+import { IAzureResourceTreeCache } from '../services';
 import type { ManagedCommand } from './ManagedCommand';
 
 @injectable()
