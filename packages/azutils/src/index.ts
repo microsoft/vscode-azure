@@ -9,4 +9,5 @@ export * from './models/AzureNodeId';
 export * from './models/GenericResource';
 export * from './models/Grouping';
 export * from './models/VirtualResource';
+export * from './rest/resources';
 export * from './tree/AzureResourceDataProvider';

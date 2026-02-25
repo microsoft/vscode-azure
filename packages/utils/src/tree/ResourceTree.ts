@@ -3,32 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Disposable } from '../vscode/Disposable';
-import { EventEmitter } from '../vscode/EventEmitter';
 import type { DataProvider } from './DataProvider';
+import { NodeMap } from './NodeMap';
+import { ProviderRegistry } from './ProviderRegistry';
 
 /**
  * Internal node wrapping a resource with its cached children and staleness info.
+ * @internal
  */
 interface TreeNode<T> {
     readonly resource: T;
-    readonly parent: T | undefined;      // undefined = root node
-    children: T[] | undefined;  // undefined = not yet loaded
+    readonly parent: TreeNode<T> | undefined;      // undefined = root node
+    children: TreeNode<T>[] | undefined;  // undefined = not yet loaded
     staleAt: number;            // Date.now() after which children should be re-fetched
-}
-
-/** A registered provider with its options. */
-interface RegisteredProvider<T> {
-    readonly provider: DataProvider<T>;
-    readonly root: boolean;
-}
-
-/**
- * Options for registering a {@link DataProvider} with a {@link ResourceTree}.
- */
-export interface RegisterProviderOptions {
-    /** If true, this provider will be called with no argument to produce root items. */
-    readonly root?: boolean;
 }
 
 /**
@@ -43,16 +30,13 @@ export interface RegisterProviderOptions {
  *
  * @typeParam T - The resource type stored in the tree.
  */
-export class ResourceTree<T> implements Disposable {
-    private readonly nodes = new Map<string, TreeNode<T>>();
-    private readonly registrations: RegisteredProvider<T>[] = [];
-    private readonly changeEmitter = new EventEmitter<T | undefined>();
+export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
+    private readonly nodes = new NodeMap<TreeNode<T>>(node => this.getKey(node.resource));
 
     /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
     private rootsStaleAt = 0;
 
-    /** Fires when part of the tree has been invalidated. */
     public readonly onDidChange = this.changeEmitter.event;
 
     /**
@@ -62,25 +46,8 @@ export class ResourceTree<T> implements Disposable {
     public constructor(
         private readonly getKey: (resource: T) => string,
         private readonly ttl: number,
-    ) { }
-
-    /**
-     * Register a {@link DataProvider}. Returns a {@link Disposable} that
-     * unregisters the provider when disposed.
-     *
-     * @param options - Registration options
-     */
-    public registerProvider(provider: DataProvider<T>, options?: RegisterProviderOptions): Disposable {
-        const entry: RegisteredProvider<T> = { provider, root: !!options?.root };
-        this.registrations.push(entry);
-        return {
-            dispose: () => {
-                const idx = this.registrations.indexOf(entry);
-                if (idx !== -1) {
-                    this.registrations.splice(idx, 1);
-                }
-            },
-        };
+    ) {
+        super();
     }
 
     /**
@@ -91,24 +58,25 @@ export class ResourceTree<T> implements Disposable {
      */
     public async getChildren(resource?: T): Promise<T[]> {
         if (resource === undefined) {
-            return this.getRoots();
+            return this.getRootChildren();
         }
 
         return this.getBranchChildren(resource);
     }
 
-    private async getRoots(): Promise<T[]> {
+    private async getRootChildren(): Promise<T[]> {
         if (this.roots !== undefined && Date.now() < this.rootsStaleAt) {
             return this.roots.map(n => n.resource);
         }
 
         // Clear all cached nodes when recomputing roots since the whole tree may have changed
         this.nodes.clear();
+        this.roots = undefined;
 
+        // TODO: concurrency limits
         const results = await Promise.all(
-            this.registrations
-                .filter(r => r.root)
-                .map(r => Promise.resolve(r.provider.getChildren())),
+            this.getRootProviders()
+                .map(p => Promise.resolve(p.getChildren())),
         );
         const resources = results.flatMap((r) => r ?? []);
 
@@ -133,31 +101,27 @@ export class ResourceTree<T> implements Disposable {
         }
 
         if (node.children !== undefined && Date.now() < node.staleAt) {
-            return node.children;
+            return node.children.map(n => n.resource);
         }
 
         // Find the provider that handles this resource
-        const entry = this.registrations.find(r => r.provider.canHandle(resource));
-        if (!entry) {
+        const provider = this.findProvider(resource);
+        if (!provider) {
             node.children = [];
             node.staleAt = Date.now() + this.ttl;
             return [];
         }
 
-        // Remove previously cached children that may no longer be present
-        if (node.children !== undefined) {
-            for (const child of node.children) {
-                this.nodes.delete(this.getKey(child));
-            }
-        }
+        // Remove previously cached descendants that may no longer be present
+        this.nodes.removeSubtrees(node.children);
 
-        const children = await entry.provider.getChildren(resource) ?? [];
+        const children = await provider.getChildren(resource) ?? [];
 
-        for (const child of children) {
-            this.nodes.set(this.getKey(child), { resource: child, parent: resource, children: undefined, staleAt: 0 });
-        }
-
-        node.children = children;
+        node.children = children.map(child => {
+            const childNode: TreeNode<T> = { resource: child, parent: node, children: undefined, staleAt: 0 };
+            this.nodes.set(this.getKey(child), childNode);
+            return childNode;
+        });
         node.staleAt = Date.now() + this.ttl;
 
         this.enrichAll(children);
@@ -171,15 +135,14 @@ export class ResourceTree<T> implements Disposable {
      * background - each resolved call fires {@link onDidChange} for that resource.
      */
     private enrichAll(resources: T[]): void {
+        // TODO: concurrency limits
         for (const resource of resources) {
-            for (const { provider } of this.registrations) {
-                if (provider.canHandle(resource) && provider.enrich) {
-                    Promise
-                        .resolve(provider.enrich(resource))
-                        .then(() => { this.changeEmitter.fire(resource); })
-                        .catch(() => { /* TODO: ignore enrichment errors? */ });
-                    break;
-                }
+            const provider = this.findProvider(resource);
+            if (provider?.enrich) {
+                void Promise
+                    .resolve(provider.enrich(resource))
+                    .then(() => { this.changeEmitter.fire(resource); })
+                    .catch(() => { /* TODO: ignore enrichment errors? */ });
             }
         }
     }
@@ -196,22 +159,18 @@ export class ResourceTree<T> implements Disposable {
      * or has not yet been loaded into the tree.
      */
     public getParent(resource: T): T | undefined {
-        return this.nodes.get(this.getKey(resource))?.parent;
+        return this.nodes.get(this.getKey(resource))?.parent?.resource;
     }
 
     /**
      * Invalidate a specific resource's cached children, removing them from
      * the tree. They will be re-fetched on next access.
-     * Fires {@link onDidChange}.
-     *
-     * TODO: invalidate all descendants, not just direct children (while only firing change emitter at root)
+     * Fires {@link onDidChangeTreeData}.
      */
     public invalidate(resource: T): void {
         const node = this.nodes.get(this.getKey(resource));
-        if (node?.children) {
-            for (const child of node.children) {
-                this.nodes.delete(this.getKey(child));
-            }
+        if (node) {
+            this.nodes.removeSubtrees(node.children);
             node.children = undefined;
             node.staleAt = 0;
         }
@@ -220,19 +179,12 @@ export class ResourceTree<T> implements Disposable {
 
     /**
      * Invalidate all cached data. Clears the entire node map and root cache.
-     * Fires {@link onDidChange} once with `undefined` (full refresh).
+     * Fires {@link onDidChangeTreeData} once with `undefined` (full refresh).
      */
     public invalidateAll(): void {
         this.nodes.clear();
         this.roots = undefined;
         this.rootsStaleAt = 0;
         this.changeEmitter.fire(undefined);
-    }
-
-    /**
-     * Dispose the change-notification emitter.
-     */
-    public dispose(): void {
-        this.changeEmitter.dispose();
     }
 }

@@ -10,6 +10,7 @@ export * from './base/ITelemetryReporter';
 export * from './data/InflightMap';
 export * from './tree/DataProvider';
 export * from './tree/ResourceTree';
+export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AssertAssignable';
 export * from './types/AsWritable';
