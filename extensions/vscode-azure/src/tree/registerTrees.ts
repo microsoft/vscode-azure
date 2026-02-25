@@ -65,7 +65,8 @@ export function registerTrees(container: Container): void {
  * Identifier for the Azure view's {@link ViewItemTree}.
  * @internal - Not intended for use outside this file
  */
-const IAzureViewViewItemTree: ServiceIdentifier<ViewItemTree<string, AzureResourceNode>> = Symbol.for('IAzureViewViewItemTree');
+const IAzureViewViewItemTree: ServiceIdentifier<IAzureViewViewItemTree> = Symbol.for('IAzureViewViewItemTree');
+type IAzureViewViewItemTree = ViewItemTree<string, AzureResourceNode>;
 
 /**
  * Identifier for the Azure view's {@link DataProvider}s.

@@ -13,10 +13,12 @@ import type { AzureResourceNode } from './tree/GenericAzureDataProvider';
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
 
 /** Identifier for the Azure resource tree cache (representing real Azure resources) */
-export const IAzureResourceTreeCache: ServiceIdentifier<ResourceTree<AzureResourceNode>> = Symbol.for('IAzureResourceTreeCache');
+export const IAzureResourceTreeCache: ServiceIdentifier<IAzureResourceTreeCache> = Symbol.for('IAzureResourceTreeCache');
+export type IAzureResourceTreeCache = ResourceTree<AzureResourceNode>;
 
 /** Identifier for the Azure resource VSCode tree view */
-export const IAzureResourceTreeView: ServiceIdentifier<vscode.TreeView<string>> = Symbol.for('IAzureResourceTreeView');
+export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');
+export type IAzureResourceTreeView = vscode.TreeView<string>;
 
 /**
  * An activation callback that pushes a disposable service to the extension context's subscriptions.
