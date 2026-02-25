@@ -139,7 +139,7 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         for (const resource of resources) {
             const provider = this.findProvider(resource);
             if (provider?.enrich) {
-                Promise
+                void Promise
                     .resolve(provider.enrich(resource))
                     .then(() => { this.changeEmitter.fire(resource); })
                     .catch(() => { /* TODO: ignore enrichment errors? */ });
