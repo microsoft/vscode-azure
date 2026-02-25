@@ -65,8 +65,10 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         this.resourceTreeSubscription = resourceTree.onDidChange(resource => {
             if (resource !== undefined) {
                 const viewItem = toViewItem(resource);
-                if (this.nodes.get(this.getKey(viewItem))) {
-                    this.changeEmitter.fire(viewItem);
+                const node = this.nodes.get(this.getKey(viewItem));
+                if (node) {
+                    // Fire with the original `ViewItem`
+                    this.changeEmitter.fire(node.viewItem);
                     return;
                 }
             }

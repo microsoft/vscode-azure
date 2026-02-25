@@ -11,7 +11,7 @@ import type { ProviderResult } from '../vscode/ProviderResult';
  * Each implementation handles a specific subset of resources (identified by
  * {@link canHandle}) and knows how to fetch their children from the API.
  *
- * A provider registered with `{ root: true }` will also be called with no
+ * A provider with an `isRoot: true` property will also be called with no
  * argument to produce top-level resources for the tree.
  *
  * @typeParam TResource - The base resource type this provider operates on.

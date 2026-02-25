@@ -132,7 +132,7 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     /**
      * For each resource, find the provider that handles it and call
      * {@link DataProvider.enrich enrich} if present. Enrichment runs in the
-     * background - each resolved call fires {@link onDidChangeTreeData} for that resource.
+     * background - each resolved call fires {@link onDidChange} for that resource.
      */
     private enrichAll(resources: T[]): void {
         // TODO: concurrency limits

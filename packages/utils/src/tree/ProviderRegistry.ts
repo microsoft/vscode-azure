@@ -13,8 +13,8 @@ import type { DataProvider } from './DataProvider';
  * Manages provider registration/unregistration and fires a change event
  * when part of the tree has been invalidated.
  *
- * @typeParam TProvider - The provider interface (e.g. `DataProvider<T>` or `ViewProvider<T>`).
  * @typeParam TResource - The resource type used in the change event.
+ * @typeParam TProvider - The provider interface (e.g. `DataProvider<T>` or `ViewProvider<T>`).
  */
 export abstract class ProviderRegistry<TResource, TProvider extends DataProvider<TResource>> implements Disposable {
     protected readonly registrations: TProvider[] = [];
