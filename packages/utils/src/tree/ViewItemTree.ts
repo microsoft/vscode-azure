@@ -79,7 +79,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
     /**
      * Get children for the given resource, or root-level resources when
-     * called with `undefined` — mirroring `TreeDataProvider.getChildren`.
+     * called with `undefined` - mirroring `TreeDataProvider.getChildren`.
      *
      * Delegates to registered {@link ViewProvider}s, which may inject virtual
      * nodes, filter, reorder, or group the results as they see fit.
@@ -144,7 +144,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     public getTreeItem(viewItem: TViewItem): vscode.TreeItem | Promise<vscode.TreeItem> {
         const provider = this.findProvider(viewItem);
         if (!provider) {
-            throw new Error(`No view provider found for resource: ${this.getKey(viewItem)}`);
+            throw new Error(`No view provider found for view item: ${this.getKey(viewItem)}`);
         }
         return provider.getTreeItem(viewItem);
     }
