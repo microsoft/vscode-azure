@@ -15,7 +15,7 @@ export function registerCommands(container: Container): void {
 function registerManagedCommand(
     container: Container,
     commandId: string,
-    commandClass: new (...args: never[]) => ManagedCommand
+    commandClass: new (...ctorArgs: never[]) => ManagedCommand
 ): void {
     // Bind the command class if not already bound
     if (!container.isBound(commandClass)) {

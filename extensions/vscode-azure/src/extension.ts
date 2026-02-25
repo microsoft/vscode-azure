@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
     ActionExecutor,
     CommandRegistry,
@@ -18,6 +19,7 @@ import {
 import { Container } from 'inversify';
 import * as vscode from 'vscode';
 import { registerCommands } from './commands/registerCommands';
+import { IAzureSubscriptionProvider, pushDisposable } from './services';
 
 export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
     const container = setUpContainer(extensionContext);
@@ -41,32 +43,30 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(IVsCode).toConstantValue(vscode);
     container.bind(IExtensionContext).toConstantValue(extensionContext);
 
-    // Dynamically created singletons
+    // Dynamically created singletons, some of which are disposable, but we do
+    // `pushDisposable()` on all of them because it's smart enough to distinguish
     container.bind(IActionExecutor).toDynamicValue(context => {
         return new ActionExecutor(context.get(ITelemetryReporter));
-    }).inSingletonScope();
+    }).inSingletonScope().onActivation(pushDisposable);
 
-    // Dynamically created, disposable singletons
     container.bind(ITelemetryReporter).toDynamicValue(context => {
-        const reporter = createTelemetryReporter(context.get(IExtensionContext));
-        context.get(IExtensionContext).subscriptions.push(reporter);
-        return reporter;
-    }).inSingletonScope();
+        return createTelemetryReporter(context.get(IExtensionContext));
+    }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IOutputChannel).toDynamicValue(context => {
-        const outputChannel = createOutputChannel('Azure', context.get(IVsCode));
-        context.get(IExtensionContext).subscriptions.push(outputChannel);
-        return outputChannel;
-    }).inSingletonScope();
+        return createOutputChannel('Azure', context.get(IVsCode));
+    }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ICommandRegistry).toDynamicValue(context => {
-        const registry = new CommandRegistry(
+        return new CommandRegistry(
             context.get(IActionExecutor),
             context.get(IVsCode)
         );
-        context.get(IExtensionContext).subscriptions.push(registry);
-        return registry;
-    }).inSingletonScope();
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
+        return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
+    }).inSingletonScope().onActivation(pushDisposable);
 
     return container;
 }

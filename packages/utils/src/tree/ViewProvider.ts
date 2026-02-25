@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import type { ProviderResult } from '../vscode/ProviderResult';
 import type { DataProvider } from './DataProvider';
 
 /**
@@ -24,7 +23,7 @@ export interface ViewProvider<TResource> extends DataProvider<TResource> {
     /**
      * Get the tree item representation for the given resource.
      */
-    getTreeItem(resource: Readonly<TResource>): ProviderResult<vscode.TreeItem>;
+    getTreeItem(resource: Readonly<TResource>): vscode.TreeItem | Promise<vscode.TreeItem>;
 
     enrich?: never; // View providers are not allowed to enrich data resources
 }

@@ -42,4 +42,9 @@ export interface DataProvider<TResource> {
      * etc. should not be changed, but additional fields may be added as needed.
      */
     enrich?(resource: TResource): void | Promise<void>;
+
+    /**
+     * Whether a provider can return root-level resources (i.e. be called with `undefined`).
+     */
+    readonly isRoot?: boolean;
 }
