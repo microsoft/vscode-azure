@@ -8,6 +8,7 @@ import type { AzureNode, GenericResource, ResourceGroup, VirtualGroup, VirtualRe
 import { createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import * as util from 'util';
 import { IAzureSubscriptionProvider } from '../services';
 
 export type AzureResourceNode = Exclude<AzureNode, VirtualGroup | VirtualResource>;
@@ -50,7 +51,7 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
                 return await this.getResourcesInGroup(resource);
 
             default:
-                throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
+                throw new Error(`Unsupported resource type: ${util.inspect(resource)}`);
         }
     }
 
