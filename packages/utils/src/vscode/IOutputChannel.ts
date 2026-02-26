@@ -5,7 +5,7 @@
 
 import type { ServiceIdentifier } from 'inversify';
 import { format } from 'util';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { Disposable } from './Disposable';
 import type { IVsCode } from './IVsCode';
 
@@ -29,7 +29,7 @@ export function createOutputChannel(
 export class DebugOutputChannel implements IOutputChannel {
     constructor(public readonly name: string) { }
 
-    public readonly logLevel = vscode.LogLevel.Trace;
+    public readonly logLevel = 1; // vscode.LogLevel.Trace; // Avoiding the actual enum value to prevent a dependency on vscode, plus this is just a debug channel
 
     public readonly onDidChangeLogLevel = () => { return Disposable.None; };
 

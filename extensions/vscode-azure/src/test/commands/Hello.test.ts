@@ -21,7 +21,6 @@ describe('Hello command', () => {
             },
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         const hello = new Hello(context, mockVsCode as any);
         await hello.execute();
 
