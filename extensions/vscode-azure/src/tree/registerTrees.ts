@@ -8,6 +8,8 @@ import { type DataProvider, IVsCode, ResourceTree, ViewItemTree, type ViewProvid
 import type { Container, ServiceIdentifier } from 'inversify';
 import { AzureResourceTreeViewId } from '../constants';
 import { IAzureResourceTreeCache, IAzureResourceTreeView, pushDisposable } from '../services';
+import { AcrDataProvider } from './acr/AcrDataProvider';
+import { AcrViewProvider } from './acr/AcrViewProvider';
 import { type AzureResourceNode, GenericAzureDataProvider } from './GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './GenericAzureViewProvider';
 
@@ -74,8 +76,10 @@ type IAzureViewViewItemTree = ViewItemTree<string, AzureResourceNode>;
  */
 const IAzureViewDataProviders: ServiceIdentifier<DataProvider<AzureResourceNode>> = Symbol.for('IAzureViewDataProviders');
 function bindAzureViewDataProviders(container: Container): void {
+    // Registration order matters: specific providers first, generic fallback last.
+    // ProviderRegistry.findProvider() returns the first match.
+    container.bind(IAzureViewDataProviders).to(AcrDataProvider).onActivation(pushDisposable);
     container.bind(IAzureViewDataProviders).to(GenericAzureDataProvider).onActivation(pushDisposable);
-    // ...register other data providers here as needed, and they will automatically be included in the cache above
 }
 
 /**
@@ -84,6 +88,8 @@ function bindAzureViewDataProviders(container: Container): void {
  */
 const IAzureViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IAzureViewViewProviders');
 function bindAzureViewViewProviders(container: Container): void {
+    // Registration order matters: specific providers first, generic fallback last.
+    // ProviderRegistry.findProvider() returns the first match.
+    container.bind(IAzureViewViewProviders).to(AcrViewProvider).onActivation(pushDisposable);
     container.bind(IAzureViewViewProviders).to(GenericAzureViewProvider).onActivation(pushDisposable);
-    // ...register other view providers here as needed, and they will automatically be included in the view above
 }

@@ -23,6 +23,10 @@ export abstract class ProviderRegistry<TResource, TProvider extends DataProvider
     /**
      * Register a provider. Returns a {@link Disposable} that
      * unregisters the provider when disposed.
+     *
+     * **Registration order matters.** {@link findProvider} returns the
+     * first provider whose `canHandle` matches, so more-specific
+     * providers must be registered before broader/fallback ones.
      */
     public registerProvider(provider: TProvider): Disposable {
         this.registrations.push(provider);

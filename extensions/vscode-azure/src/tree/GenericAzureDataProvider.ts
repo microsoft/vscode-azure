@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import type { AzureNode, GenericResource, ResourceGroup, VirtualGroup, VirtualResource } from '@microsoft/vscode-azure-azutils';
+import type { AzureNode, GenericResource, ResourceGroup, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected, type ResourceClient } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import * as util from 'util';
 import { IAzureSubscriptionProvider } from '../services';
 
-export type AzureResourceNode = Exclude<AzureNode, VirtualGroup | VirtualResource>;
+export type AzureResourceNode = Exclude<AzureNode, VirtualGroup>;
 
 @injectable()
 export class GenericAzureDataProvider implements DataProvider<AzureResourceNode> {

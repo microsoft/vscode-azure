@@ -85,6 +85,7 @@
         "esbuild-plugin-copy": "*"
     },
     "dependencies": {
+        "@azure/arm-containerregistry": "12.0.0-alpha.20260224.1",
         "@microsoft/vscode-azext-azureauth": "*",
         "@microsoft/vscode-azure-azutils": "*",
         "@microsoft/vscode-azure-utils": "*",

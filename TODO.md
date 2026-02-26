@@ -1,3 +1,6 @@
-- Enforce typings only for VSCode in utils/azutils
 - JSDocs everywhere
 - ALL the test coverage
+- Create a good mock setup for VSCode (`vscode.window` especially)
+- Wizard framework?
+- Deployment story via Bicep templates
+- Deployment story via AZD

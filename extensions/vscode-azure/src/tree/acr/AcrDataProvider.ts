@@ -1,0 +1,105 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import type { ContainerRegistryManagementContext } from '@azure/arm-containerregistry/api';
+import { createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
+import { get } from '@azure/arm-containerregistry/api/registries';
+import type { GenericResource } from '@microsoft/vscode-azure-azutils';
+import type { DataProvider } from '@microsoft/vscode-azure-utils';
+import { injectable } from 'inversify';
+import type { AzureResourceNode } from '../GenericAzureDataProvider';
+import { isAcrRegistry } from './AcrRegistry';
+
+/**
+ * Data-layer provider for Azure Container Registries.
+ *
+ * - **`canHandle`**: matches `GenericResource` nodes whose ARM type is
+ *   `Microsoft.ContainerRegistry/registries`.
+ * - **`enrich`**: calls the ARM `get` operation to attach
+ *   {@link AcrRegistry}-specific properties (`loginServer`, `sku`, etc.)
+ *   to the resource in-place.
+ * - **`getChildren`**: stubbed — will return repositories and tags once
+ *   the data-plane client (`@azure/container-registry`) is integrated.
+ */
+@injectable()
+export class AcrDataProvider implements DataProvider<AzureResourceNode> {
+
+    /**
+     * Cached ARM management clients per subscription ID, so all calls for
+     * the same subscription share one client instance.
+     */
+    private readonly clientCache = new Map<string, ContainerRegistryManagementContext>();
+
+    public canHandle(resource: unknown): resource is AzureResourceNode {
+        return isAcrRegistry(resource);
+    }
+
+    /**
+     * Enrich an ACR registry resource with management-plane details.
+     *
+     * Fetches the full `Registry` via `registries.get()` and assigns
+     * `loginServer`, `sku`, and `adminUserEnabled` onto the resource
+     * so that view providers can render them without additional API calls.
+     */
+    public async enrich(resource: AzureResourceNode): Promise<void> {
+        if (!isAcrRegistry(resource)) {
+            return;
+        }
+
+        const client = this.getOrCreateClient(resource);
+        const resourceGroupName = extractResourceGroupName(resource.id);
+        const registry = await get(client, resourceGroupName, resource.name);
+
+        Object.assign(resource, {
+            loginServer: registry.loginServer ?? '',
+            sku: registry.sku,
+            adminUserEnabled: registry.adminUserEnabled ?? false,
+        });
+    }
+
+    /**
+     * Get children for an ACR registry.
+     *
+     * TODO: integrate `@azure/container-registry` data-plane client to
+     * list repositories and tags as {@link VirtualResource} nodes.
+     */
+    public getChildren(_resource?: AzureResourceNode): AzureResourceNode[] {
+        return [];
+    }
+
+    /**
+     * Get or create a cached ARM management client for the given resource's
+     * subscription.
+     */
+    private getOrCreateClient(resource: GenericResource): ContainerRegistryManagementContext {
+        const { subscription } = resource;
+        let client = this.clientCache.get(subscription.subscriptionId);
+        if (!client) {
+            client = createContainerRegistryManagement(
+                subscription.credential,
+                subscription.subscriptionId,
+            );
+            this.clientCache.set(subscription.subscriptionId, client);
+        }
+        return client;
+    }
+}
+
+/**
+ * Extract the resource group name from a full ARM resource ID.
+ *
+ * @example
+ * ```
+ * extractResourceGroupName('/subscriptions/.../resourceGroups/myRg/providers/...')
+ * // => 'myRg'
+ * ```
+ */
+function extractResourceGroupName(resourceId: string): string {
+    const match = /\/resourceGroups\/([^/]+)/i.exec(resourceId);
+    if (!match) {
+        throw new Error(`Cannot extract resource group name from resource ID: ${resourceId}`);
+    }
+    return match[1];
+}
