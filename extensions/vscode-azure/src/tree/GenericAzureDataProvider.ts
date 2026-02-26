@@ -5,7 +5,7 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, GenericResource, ResourceGroup, VirtualGroup, VirtualResource } from '@microsoft/vscode-azure-azutils';
-import { createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected } from '@microsoft/vscode-azure-azutils';
+import { createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected, type ResourceClient } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import * as util from 'util';
@@ -16,6 +16,17 @@ export type AzureResourceNode = Exclude<AzureNode, VirtualGroup | VirtualResourc
 @injectable()
 export class GenericAzureDataProvider implements DataProvider<AzureResourceNode> {
     public readonly isRoot = true;
+
+    /**
+     * Lazy sign-in: resolved on first call to {@link getChildren}, skipped thereafter.
+     */
+    private signInPromise: Promise<boolean> | undefined;
+
+    /**
+     * Cached REST clients per subscription ID, so all calls for the same
+     * subscription share one pipeline (and thus one {@link DedupeRequestPipelinePolicy}).
+     */
+    private readonly clientCache = new Map<string, ResourceClient>();
 
     public constructor(
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
@@ -31,7 +42,9 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
     }
 
     public async getChildren(resource?: AzureResourceNode): Promise<AzureResourceNode[]> {
-        await this.subscriptionProvider.signIn();
+        this.signInPromise ??= this.subscriptionProvider.signIn(); // TODO: handle sign out?
+        await this.signInPromise;
+
         if (!resource) {
             // Root: return all signed-in accounts
             return await this.subscriptionProvider.getAccounts() as AzureResourceNode[];
@@ -55,8 +68,24 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
         }
     }
 
+    /**
+     * Get or create a cached REST client for the given subscription.
+     * All callers for the same subscription share the same client and pipeline,
+     * so {@link DedupeRequestPipelinePolicy} can deduplicate concurrent requests.
+     */
+    private async getOrCreateClient(subscription: AzureSubscription): Promise<ResourceClient> {
+        let client = this.clientCache.get(subscription.subscriptionId);
+        if (!client) {
+            client = await createAzureClient(
+                opts => createClient(subscription.credential, opts),
+            );
+            this.clientCache.set(subscription.subscriptionId, client);
+        }
+        return client;
+    }
+
     private async getResourceGroups(subscription: AzureSubscription): Promise<ResourceGroup[]> {
-        const client = createClient(subscription.credential);
+        const client = await this.getOrCreateClient(subscription);
         const response = await client
             .path('/subscriptions/{subscriptionId}/resourcegroups', subscription.subscriptionId)
             .get();
@@ -70,7 +99,10 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
     }
 
     private async getResourcesInGroup(group: ResourceGroup): Promise<GenericResource[]> {
-        const client = createClient(group.subscription.credential);
+        // TODO: switch to the subscription-level `/subscriptions/{id}/resources` endpoint
+        // and use DedupeRequestPipelinePolicy to collapse parallel per-RG calls into a
+        // single HTTP request per subscription.
+        const client = await this.getOrCreateClient(group.subscription);
         const response = await client
             .path(
                 '/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/resources',

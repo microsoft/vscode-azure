@@ -1,0 +1,2 @@
+- Enforce typings only for VSCode in utils/azutils
+- JSDocs everywhere

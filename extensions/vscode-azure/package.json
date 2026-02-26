@@ -17,9 +17,6 @@
     "author": "Microsoft Corporation",
     "main": "main.mjs",
     "module": "main.mjs",
-    "activationEvents": [
-        "onStartupFinished"
-    ],
     "contributes": {
         "commands": [
             {
@@ -81,8 +78,6 @@
         "vscode": "^1.106.0"
     },
     "devDependencies": {
-        "@microsoft/vscode-azext-azureauth": "*",
-        "@types/vscode": "1.106.0",
         "@vscode/test-cli": "*",
         "@vscode/test-electron": "*",
         "@vscode/vsce": "*",
@@ -90,9 +85,9 @@
         "esbuild-plugin-copy": "*"
     },
     "dependencies": {
+        "@microsoft/vscode-azext-azureauth": "*",
         "@microsoft/vscode-azure-azutils": "*",
         "@microsoft/vscode-azure-utils": "*",
-        "inversify": "^7.11.0",
-        "reflect-metadata": "^0.2.2"
+        "inversify": "^7.11.0"
     }
 }
