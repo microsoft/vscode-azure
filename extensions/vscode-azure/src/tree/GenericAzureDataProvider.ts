@@ -26,7 +26,7 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
      * Cached REST clients per subscription ID, so all calls for the same
      * subscription share one pipeline (and thus one {@link DedupeRequestPipelinePolicy}).
      */
-    private readonly clientCache = new Map<string, ResourceClient>();
+    private readonly clientCache = new Map<string, ResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
