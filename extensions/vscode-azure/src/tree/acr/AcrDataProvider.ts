@@ -50,6 +50,10 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
 
         const client = this.getOrCreateClient(resource);
         const resourceGroupName = extractResourceGroupName(resource.id);
+
+        // TODO: remove simulated delay
+        await new Promise(resolve => setTimeout(resolve, 7500));
+
         const registry = await get(client, resourceGroupName, resource.name);
 
         Object.assign(resource, {
