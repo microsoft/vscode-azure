@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, isGenericResource, isVirtualResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, isGenericResource, isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -115,6 +115,6 @@ const categoryLabels = new Set(['Repositories', 'Webhooks']);
  * A category node is a virtual resource whose `virtualPath` is one of
  * the known category labels (e.g. "Repositories", "Webhooks").
  */
-function isCategoryNode(resource: import('@microsoft/vscode-azure-azutils').VirtualResource): boolean {
+function isCategoryNode(resource: VirtualResource): boolean {
     return categoryLabels.has(resource.virtualPath);
 }
