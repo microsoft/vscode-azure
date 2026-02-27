@@ -8,5 +8,5 @@ import { defineConfig } from 'eslint/config';
 
 export default defineConfig([
     azExtEslintStrictTypeChecked,
-    // lazyImportAzurePackages,
+    // lazyImportAzurePackages, // TODO: ignore the big packages but not the small ones?
 ]);
