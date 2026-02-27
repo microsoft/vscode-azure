@@ -4,3 +4,5 @@
 - Wizard framework?
 - Deployment story via Bicep templates (Bicep extension?)
 - Deployment story via AZD
+- Vastly more logging to the output channel (especially debug/trace)
+- Telemetry on all the things (especially tree operations)
