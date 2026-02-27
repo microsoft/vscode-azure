@@ -89,10 +89,6 @@ export class AcrViewProvider implements ViewProvider<string> {
     }
 
     /**
-     * No children yet — will return repository nodes once the data-plane
-     * integration is in place.
-     */
-    /**
      * Get children by delegating to the data-layer cache, then converting
      * the returned resources to their string keys.
      */

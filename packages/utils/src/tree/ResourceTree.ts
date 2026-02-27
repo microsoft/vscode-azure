@@ -150,11 +150,14 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         for (const resource of resources) {
             const provider = this.findProvider(resource);
             if (provider?.enrich) {
+                const key = this.getKey(resource);
                 const promise = Promise
                     .resolve(provider.enrich(resource))
-                    .then(() => { this.changeEmitter.fire(resource); })
-                    .catch(() => { /* TODO: ignore enrichment errors? */ });
-                this.enrichmentPromises.set(this.getKey(resource), promise);
+                    .then(() => {
+                        this.enrichmentPromises.delete(key);
+                        this.changeEmitter.fire(resource);
+                    });
+                this.enrichmentPromises.set(key, promise);
             }
         }
     }
@@ -177,7 +180,7 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      */
     public async whenEnriched<TEnriched extends T = T>(resource: T): Promise<TEnriched> {
         await this.enrichmentPromises.get(this.getKey(resource));
-        return resource as unknown as TEnriched;
+        return resource as TEnriched;
     }
 
     /**
