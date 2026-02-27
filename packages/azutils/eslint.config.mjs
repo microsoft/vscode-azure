@@ -11,11 +11,13 @@ export default defineConfig([
     {
         rules: {
             '@typescript-eslint/no-restricted-imports': ['error', {
-                paths: [{
-                    name: 'vscode',
-                    message: 'VSCode should only be used for typings in this package. Pass it down from the caller as IVsCode.',
-                    allowTypeImports: true,
-                }],
+                paths: [
+                    {
+                        name: 'vscode',
+                        message: 'VSCode should only be used for typings in this package. Pass it down from the caller as IVsCode.',
+                        allowTypeImports: true,
+                    },
+                ],
                 patterns: [{
                     group: ['@azure/*', '!@azure/ms-rest-azure-env'],
                     message: 'Please lazily import this package within the function that uses it to reduce extension activation time.',

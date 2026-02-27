@@ -158,6 +158,8 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                         this.changeEmitter.fire(resource);
                     });
                 this.enrichmentPromises.set(key, promise);
+                // Attach a rejection handler so background rejections are not unhandled
+                void promise.catch(() => { /* noop */ });
             }
         }
     }
@@ -168,6 +170,10 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      *
      * If no enrichment provider matched the resource (or enrichment has
      * already finished), the promise resolves immediately.
+     *
+     * If enrichment fails, the promise rejects with the error but does not
+     * retry automatically. Callers that await this method should be prepared
+     * to handle rejections.
      *
      * The optional type parameter `TEnriched` lets callers narrow the
      * return type to a branded subtype whose once-optional enrichment
