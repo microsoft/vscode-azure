@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ContainerRegistryManagementContext } from '@azure/arm-containerregistry/api';
-import { createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
+import { type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
 import { get } from '@azure/arm-containerregistry/api/registries';
-import type { GenericResource } from '@microsoft/vscode-azure-azutils';
+import { type GenericResource, isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
 import type { AzureResourceNode } from '../GenericAzureDataProvider';
@@ -33,7 +32,7 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
     private readonly clientCache = new Map<string, ContainerRegistryManagementContext>();
 
     public canHandle(resource: unknown): resource is AzureResourceNode {
-        return isAcrRegistry(resource);
+        return isAcrRegistry(resource) || isAcrVirtualResource(resource);
     }
 
     /**
@@ -64,12 +63,40 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
     }
 
     /**
-     * Get children for an ACR registry.
+     * Get children for an ACR registry or virtual sub-node.
      *
-     * TODO: integrate `@azure/container-registry` data-plane client to
-     * list repositories and tags as {@link VirtualResource} nodes.
+     * TODO: replace dummy data with real data-plane calls.
      */
-    public getChildren(_resource?: AzureResourceNode): AzureResourceNode[] {
+    public getChildren(resource?: AzureResourceNode): AzureResourceNode[] {
+        if (!resource) {
+            return [];
+        }
+
+        // Registry → category nodes (Repositories, Webhooks)
+        if (isAcrRegistry(resource)) {
+            return [
+                { virtualType: 'acr.repositories', virtualPath: 'Repositories', azureResource: resource },
+                { virtualType: 'acr.webhooks', virtualPath: 'Webhooks', azureResource: resource },
+            ];
+        }
+
+        // Category node -> dummy leaf items
+        if (isVirtualResource(resource) && resource.virtualType === 'acr.repositories') {
+            return [
+                { virtualType: resource.virtualType, virtualPath: 'repo-1', azureResource: resource.azureResource },
+                { virtualType: resource.virtualType, virtualPath: 'repo-2', azureResource: resource.azureResource },
+                { virtualType: resource.virtualType, virtualPath: 'repo-3', azureResource: resource.azureResource },
+            ];
+        }
+
+        if (isVirtualResource(resource) && resource.virtualType === 'acr.webhooks') {
+            return [
+                { virtualType: resource.virtualType, virtualPath: 'webhook-1', azureResource: resource.azureResource },
+                { virtualType: resource.virtualType, virtualPath: 'webhook-2', azureResource: resource.azureResource },
+                { virtualType: resource.virtualType, virtualPath: 'webhook-3', azureResource: resource.azureResource },
+            ];
+        }
+
         return [];
     }
 
@@ -89,6 +116,14 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
         }
         return client;
     }
+}
+
+/**
+ * Type guard for ACR-owned {@link VirtualResource} nodes.
+ */
+function isAcrVirtualResource(node: unknown): node is VirtualResource {
+    return isVirtualResource(node as VirtualResource)
+        && isAcrRegistry((node as VirtualResource).azureResource);
 }
 
 /**

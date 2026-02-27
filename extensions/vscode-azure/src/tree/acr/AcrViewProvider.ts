@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, isGenericResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, isGenericResource, isVirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import * as vscode from 'vscode';
@@ -36,17 +36,41 @@ export class AcrViewProvider implements ViewProvider<string> {
         }
 
         const node = this.cache.get(resource);
-        return !!node && isAcrRegistry(node);
+        return !!node && (isAcrRegistry(node) || (isVirtualResource(node) && isAcrRegistry(node.azureResource)));
     }
 
     public getTreeItem(key: string): vscode.TreeItem {
         const resource = this.cache.get(key);
-        if (!resource || !isGenericResource(resource)) {
+        if (!resource) {
             return new vscode.TreeItem(key);
         }
 
-        // Leaf for now; will be Collapsed once repos/tags are available
-        const item = new vscode.TreeItem(resource.name, vscode.TreeItemCollapsibleState.None);
+        // Virtual sub-nodes (categories and leaf items)
+        if (isVirtualResource(resource) && resource.virtualType.startsWith('acr.')) {
+            const label = resource.virtualPath;
+
+            // Categories share their virtualType with their children,
+            // but categories are the ones that match the category label
+            const isCategory = isCategoryNode(resource);
+            const collapsibleState = isCategory
+                ? vscode.TreeItemCollapsibleState.Collapsed
+                : vscode.TreeItemCollapsibleState.None;
+
+            const item = new vscode.TreeItem(label, collapsibleState);
+            item.id = key;
+            item.contextValue = isCategory ? 'acrCategory' : 'acrItem';
+            item.iconPath = isCategory
+                ? new vscode.ThemeIcon('folder')
+                : new vscode.ThemeIcon('symbol-misc');
+            return item;
+        }
+
+        if (!isGenericResource(resource)) {
+            return new vscode.TreeItem(key);
+        }
+
+        // Collapsed since we have children
+        const item = new vscode.TreeItem(resource.name, vscode.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = 'azureContainerRegistry';
         item.iconPath = new vscode.ThemeIcon('package');
@@ -67,9 +91,33 @@ export class AcrViewProvider implements ViewProvider<string> {
      * No children yet — will return repository nodes once the data-plane
      * integration is in place.
      */
-    public getChildren(_key?: string): string[] {
-        return [];
+    /**
+     * Get children by delegating to the data-layer cache, then converting
+     * the returned resources to their string keys.
+     */
+    public async getChildren(key?: string): Promise<string[]> {
+        if (!key) {
+            return [];
+        }
+
+        const resource = this.cache.get(key);
+        if (!resource) {
+            return [];
+        }
+
+        const children = await this.cache.getChildren(resource);
+        return children.map(child => AzureNodeId.from(child).toString());
     }
 
     // #endregion
+}
+
+const categoryLabels = new Set(['Repositories', 'Webhooks']);
+
+/**
+ * A category node is a virtual resource whose `virtualPath` is one of
+ * the known category labels (e.g. "Repositories", "Webhooks").
+ */
+function isCategoryNode(resource: import('@microsoft/vscode-azure-azutils').VirtualResource): boolean {
+    return categoryLabels.has(resource.virtualPath);
 }
