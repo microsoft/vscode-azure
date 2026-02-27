@@ -52,7 +52,12 @@ export class AcrViewProvider implements ViewProvider<string> {
         item.iconPath = new vscode.ThemeIcon('package');
 
         if (isAcrRegistry(resource)) {
-            item.description = resource.loginServer;
+            item.description = resource.type;
+
+            if (resource.adminUserEnabled === true) {
+                item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+                item.tooltip = 'Admin user is enabled. This is a security risk and is not recommended for production registries.';
+            }
         }
 
         return item;

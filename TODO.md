@@ -1,6 +1,6 @@
 - JSDocs everywhere
 - ALL the test coverage
-- Create a good mock setup for VSCode (`vscode.window` especially)
+- Create a good mock setup for VSCode (`vscode.window` and config especially)
 - Wizard framework?
-- Deployment story via Bicep templates
+- Deployment story via Bicep templates (Bicep extension?)
 - Deployment story via AZD

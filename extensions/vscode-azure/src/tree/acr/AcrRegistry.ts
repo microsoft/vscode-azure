@@ -22,10 +22,27 @@ export const AcrResourceType = 'microsoft.containerregistry/registries';
  */
 export interface AcrRegistry extends GenericResource {
     /** The URL that can be used to log into the container registry. */
-    readonly loginServer: string;
+    readonly loginServer: string | undefined;
     /** The SKU of the container registry. */
-    readonly sku: Sku;
+    readonly sku: Sku | undefined;
     /** Whether the admin user is enabled. */
+    readonly adminUserEnabled: boolean | undefined;
+}
+
+/**
+ * An {@link AcrRegistry} whose enrichment has completed, guaranteeing
+ * that all service-specific properties are populated.
+ *
+ * Obtain this type by awaiting {@link ResourceTree.whenEnriched}:
+ *
+ * ```ts
+ * const registry = await cache.whenEnriched<EnrichedAcrRegistry>(resource);
+ * registry.loginServer; // string
+ * ```
+ */
+export interface EnrichedAcrRegistry extends GenericResource {
+    readonly loginServer: string;
+    readonly sku: Sku;
     readonly adminUserEnabled: boolean;
 }
 

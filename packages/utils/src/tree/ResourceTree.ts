@@ -33,6 +33,14 @@ interface TreeNode<T> {
 export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     private readonly nodes = new NodeMap<TreeNode<T>>(node => this.getKey(node.resource));
 
+    /**
+     * Per-resource enrichment promises, keyed by resource key.
+     * Stored when {@link enrichAll} kicks off background enrichment so
+     * that callers (e.g. commands) can await completion via
+     * {@link whenEnriched}.
+     */
+    private readonly enrichmentPromises = new Map<string, Promise<void>>();
+
     /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
     private rootsStaleAt = 0;
@@ -133,18 +141,43 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * For each resource, find the provider that handles it and call
      * {@link DataProvider.enrich enrich} if present. Enrichment runs in the
      * background - each resolved call fires {@link onDidChange} for that resource.
+     *
+     * The resulting promise for each resource is stored so that callers
+     * can await enrichment completion via {@link whenEnriched}.
      */
     private enrichAll(resources: T[]): void {
         // TODO: concurrency limits
         for (const resource of resources) {
             const provider = this.findProvider(resource);
             if (provider?.enrich) {
-                void Promise
+                const promise = Promise
                     .resolve(provider.enrich(resource))
                     .then(() => { this.changeEmitter.fire(resource); })
                     .catch(() => { /* TODO: ignore enrichment errors? */ });
+                this.enrichmentPromises.set(this.getKey(resource), promise);
             }
         }
+    }
+
+    /**
+     * Returns a promise that resolves once enrichment has completed for
+     * the given resource.
+     *
+     * If no enrichment provider matched the resource (or enrichment has
+     * already finished), the promise resolves immediately.
+     *
+     * The optional type parameter `TEnriched` lets callers narrow the
+     * return type to a branded subtype whose once-optional enrichment
+     * properties are guaranteed to be populated:
+     *
+     * ```ts
+     * const registry = await cache.whenEnriched<EnrichedAcrRegistry>(resource);
+     * registry.loginServer; // string (not string | undefined)
+     * ```
+     */
+    public async whenEnriched<TEnriched extends T = T>(resource: T): Promise<TEnriched> {
+        await this.enrichmentPromises.get(this.getKey(resource));
+        return resource as unknown as TEnriched;
     }
 
     /**
@@ -183,6 +216,7 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      */
     public invalidateAll(): void {
         this.nodes.clear();
+        this.enrichmentPromises.clear();
         this.roots = undefined;
         this.rootsStaleAt = 0;
         this.changeEmitter.fire(undefined);
