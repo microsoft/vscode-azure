@@ -28,12 +28,21 @@
                 "command": "vscode-azure/resources/refresh",
                 "icon": "$(refresh)",
                 "title": "%commands.vscode-azure/resources/refresh%"
+            },
+            {
+                "command": "vscode-azure/acr/disableAdminUser",
+                "category": "Azure",
+                "title": "Disable Admin User"
             }
         ],
         "menus": {
             "commandPalette": [
                 {
                     "command": "vscode-azure/resources/refresh",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/acr/disableAdminUser",
                     "when": "false"
                 }
             ],
@@ -42,6 +51,12 @@
                     "command": "vscode-azure/resources/refresh",
                     "when": "view == vscode-azure/resources",
                     "group": "navigation"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "vscode-azure/acr/disableAdminUser",
+                    "when": "viewItem == azureContainerRegistry"
                 }
             ]
         },
@@ -85,6 +100,7 @@
         "esbuild-plugin-copy": "*"
     },
     "dependencies": {
+        "@azure/arm-containerregistry": "12.0.0-alpha.20260224.1",
         "@microsoft/vscode-azext-azureauth": "*",
         "@microsoft/vscode-azure-azutils": "*",
         "@microsoft/vscode-azure-utils": "*",

@@ -8,7 +8,7 @@ import { Environment } from '@azure/ms-rest-azure-env';
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
-export interface VsCodeExtensionCredentialOptions extends vscode.AuthenticationGetSessionOptions { // TODO: can I use `IVsCode` here?
+export interface VsCodeExtensionCredentialOptions extends vscode.AuthenticationGetSessionOptions {
     /**
      * (Required) The namespace the credential will use to access VS Code APIs. Pass in
      * `vscode.authentication` for easiest use.

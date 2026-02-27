@@ -5,6 +5,7 @@
 
 import type * as vscode from 'vscode';
 import type { Disposable } from '../vscode/Disposable';
+import type { ITreeItem } from '../vscode/IVsCode';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 import type { ResourceTree } from './ResourceTree';
@@ -141,7 +142,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * Get the VS Code tree item representation for the given resource by
      * delegating to the {@link ViewProvider} that handles it.
      */
-    public getTreeItem(viewItem: TViewItem): vscode.TreeItem | Promise<vscode.TreeItem> {
+    public getTreeItem(viewItem: TViewItem): ITreeItem | Promise<ITreeItem> {
         const provider = this.findProvider(viewItem);
         if (!provider) {
             throw new Error(`No view provider found for view item: ${this.getKey(viewItem)}`);
