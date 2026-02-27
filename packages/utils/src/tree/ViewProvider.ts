@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as vscode from 'vscode';
+import type { ITreeItem } from '../vscode/IVsCode';
 import type { DataProvider } from './DataProvider';
 
 /**
@@ -23,7 +23,7 @@ export interface ViewProvider<TResource> extends DataProvider<TResource> {
     /**
      * Get the tree item representation for the given resource.
      */
-    getTreeItem(resource: Readonly<TResource>): vscode.TreeItem | Promise<vscode.TreeItem>;
+    getTreeItem(resource: Readonly<TResource>): ITreeItem | Promise<ITreeItem>;
 
     enrich?: never; // View providers are not allowed to enrich data resources
 }

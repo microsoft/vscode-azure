@@ -5,7 +5,6 @@
 
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import * as vscode from 'vscode';
 import { IAzureResourceTreeCache } from '../services';
 import type { EnrichedAcrRegistry } from '../tree/acr/AcrRegistry';
 import { isAcrRegistry } from '../tree/acr/AcrRegistry';
@@ -25,9 +24,9 @@ export class DisableAcrAdminUser implements ManagedCommand {
             return;
         }
 
-        const registry = await vscode.window.withProgress(
+        const registry = await this.code.window.withProgress(
             {
-                location: vscode.ProgressLocation.Notification,
+                location: this.code.ProgressLocation.Notification,
                 title: `Loading details for '${resource.name}'...`,
             },
             () => this.cache.whenEnriched<EnrichedAcrRegistry>(resource),

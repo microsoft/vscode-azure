@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, isGenericResource, isVirtualResource } from '@microsoft/vscode-azure-azutils';
-import type { ViewProvider } from '@microsoft/vscode-azure-utils';
+import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import * as vscode from 'vscode';
 import { IAzureResourceTreeCache } from '../../services';
 import { isAcrRegistry } from './AcrRegistry';
 
@@ -25,6 +25,7 @@ import { isAcrRegistry } from './AcrRegistry';
 export class AcrViewProvider implements ViewProvider<string> {
 
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureResourceTreeCache) private readonly cache: IAzureResourceTreeCache,
     ) { }
 
@@ -39,10 +40,10 @@ export class AcrViewProvider implements ViewProvider<string> {
         return !!node && (isAcrRegistry(node) || (isVirtualResource(node) && isAcrRegistry(node.azureResource)));
     }
 
-    public getTreeItem(key: string): vscode.TreeItem {
+    public getTreeItem(key: string): ITreeItem {
         const resource = this.cache.get(key);
         if (!resource) {
-            return new vscode.TreeItem(key);
+            return new this.code.TreeItem(key);
         }
 
         // Virtual sub-nodes (categories and leaf items)
@@ -53,33 +54,33 @@ export class AcrViewProvider implements ViewProvider<string> {
             // but categories are the ones that match the category label
             const isCategory = isCategoryNode(resource);
             const collapsibleState = isCategory
-                ? vscode.TreeItemCollapsibleState.Collapsed
-                : vscode.TreeItemCollapsibleState.None;
+                ? this.code.TreeItemCollapsibleState.Collapsed
+                : this.code.TreeItemCollapsibleState.None;
 
-            const item = new vscode.TreeItem(label, collapsibleState);
+            const item = new this.code.TreeItem(label, collapsibleState);
             item.id = key;
             item.contextValue = isCategory ? 'acrCategory' : 'acrItem';
             item.iconPath = isCategory
-                ? new vscode.ThemeIcon('folder')
-                : new vscode.ThemeIcon('symbol-misc');
+                ? new this.code.ThemeIcon('folder')
+                : new this.code.ThemeIcon('symbol-misc');
             return item;
         }
 
         if (!isGenericResource(resource)) {
-            return new vscode.TreeItem(key);
+            return new this.code.TreeItem(key);
         }
 
         // Collapsed since we have children
-        const item = new vscode.TreeItem(resource.name, vscode.TreeItemCollapsibleState.Collapsed);
+        const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = 'azureContainerRegistry';
-        item.iconPath = new vscode.ThemeIcon('package');
+        item.iconPath = new this.code.ThemeIcon('package');
 
         if (isAcrRegistry(resource)) {
             item.description = resource.type;
 
             if (resource.adminUserEnabled === true) {
-                item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+                item.iconPath = new this.code.ThemeIcon('warning', new this.code.ThemeColor('problemsWarningIcon.foreground'));
                 item.tooltip = 'Admin user is enabled. This is a security risk and is not recommended for production registries.';
             }
         }

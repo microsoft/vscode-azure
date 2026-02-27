@@ -6,9 +6,9 @@
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, GenericResource, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
-import type { ResourceTree, ViewProvider } from '@microsoft/vscode-azure-utils';
+import type { ITreeItem, ResourceTree, ViewProvider } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import * as vscode from 'vscode';
 import { IAzureResourceTreeCache } from '../services';
 import type { AzureResourceNode } from './GenericAzureDataProvider';
 
@@ -26,6 +26,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     private readonly groupingStrategy: GroupingStrategy = 'resourceGroup';
 
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureResourceTreeCache) private readonly cache: ResourceTree<AzureResourceNode>,
     ) { }
 
@@ -44,68 +45,68 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         return this.getBranchChildren(resource);
     }
 
-    public getTreeItem(key: string): vscode.TreeItem {
+    public getTreeItem(key: string): ITreeItem {
         const nodeId = AzureNodeId.parse(key);
 
         if (nodeId.isVirtualGroupNodeId()) {
             const label = decodeGroupingValue(key);
-            const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
+            const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
             item.contextValue = 'azureVirtualGroup';
-            item.iconPath = new vscode.ThemeIcon('symbol-namespace');
+            item.iconPath = new this.code.ThemeIcon('symbol-namespace');
             return item;
         }
 
         const resource = this.cache.get(key);
         if (!resource) {
-            return new vscode.TreeItem(key); // TODO: throw?
+            return new this.code.TreeItem(key); // TODO: throw?
         }
 
         switch (true) {
             case isAccount(resource): {
-                const item = new vscode.TreeItem(resource.label, vscode.TreeItemCollapsibleState.Collapsed);
+                const item = new this.code.TreeItem(resource.label, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = 'azureAccount';
-                item.iconPath = new vscode.ThemeIcon('account');
+                item.iconPath = new this.code.ThemeIcon('account');
                 return item;
             }
 
             case isTenant(resource): {
                 const label = resource.displayName ?? resource.tenantId;
-                const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
+                const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = 'azureTenant';
-                item.iconPath = new vscode.ThemeIcon('organization');
+                item.iconPath = new this.code.ThemeIcon('organization');
                 return item;
             }
 
             case isSubscription(resource): {
-                const item = new vscode.TreeItem(resource.name, vscode.TreeItemCollapsibleState.Collapsed);
+                const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = 'azureSubscription';
-                item.iconPath = new vscode.ThemeIcon('key');
+                item.iconPath = new this.code.ThemeIcon('key');
                 return item;
             }
 
             case isResourceGroup(resource): {
-                const item = new vscode.TreeItem(resource.name, vscode.TreeItemCollapsibleState.Collapsed);
+                const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = 'azureResourceGroup';
-                item.iconPath = new vscode.ThemeIcon('archive');
+                item.iconPath = new this.code.ThemeIcon('archive');
                 return item;
             }
 
             case isGenericResource(resource): {
-                const item = new vscode.TreeItem(resource.name, vscode.TreeItemCollapsibleState.None);
+                const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.None);
                 item.id = key;
                 item.description = resource.type;
                 item.contextValue = 'azureResource';
-                item.iconPath = new vscode.ThemeIcon('symbol-misc');
+                item.iconPath = new this.code.ThemeIcon('symbol-misc');
                 return item;
             }
 
             default: {
-                return new vscode.TreeItem(key);
+                return new this.code.TreeItem(key);
             }
         }
     }

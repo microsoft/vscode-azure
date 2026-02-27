@@ -8,3 +8,5 @@ import type * as vscode from 'vscode';
 
 export const IVsCode: ServiceIdentifier<IVsCode> = Symbol.for('IVsCode');
 export type IVsCode = typeof vscode; // TODO: subset to what we actually use for easier mocking? Could use Pick<> for making that easy
+
+export type ITreeItem = InstanceType<IVsCode['TreeItem']>;
