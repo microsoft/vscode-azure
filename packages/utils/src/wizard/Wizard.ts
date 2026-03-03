@@ -70,9 +70,12 @@ export class Wizard<TContext extends object> {
 
     /**
      * Rebuild the accumulated context from the base context and all
-     * prompt result layers. Creates a new object each time to ensure immutability.
+     * prompt result layers. Creates a new top-level context object each time
+     * by shallowly merging layers, so callers always receive a fresh reference;
+     * nested objects from the base context or step results may still be shared
+     * and mutable.
      */
-    private buildContext(history: PromptRecord<TContext>[]): Readonly<TContext> {
+    private buildContext(history: PromptRecord<TContext>[]): TContext {
         const merged = Object.assign({} as TContext, this.baseContext);
         for (const record of history) {
             if (record.stepResult) {
@@ -85,8 +88,6 @@ export class Wizard<TContext extends object> {
     // ── Prompt phase ────────────────────────────────────────────
 
     private async runPromptPhase(): Promise<TContext> {
-        const steps = this.promptSteps;
-
         /** Steps that were actually prompted (not skipped), in order. */
         const history: PromptRecord<TContext>[] = [];
 
@@ -104,17 +105,17 @@ export class Wizard<TContext extends object> {
                 }
 
                 // Remove from step list
-                const stepIdx = steps.indexOf(child);
+                const stepIdx = this.promptSteps.indexOf(child);
                 if (stepIdx !== -1) {
-                    steps.splice(stepIdx, 1);
+                    this.promptSteps.splice(stepIdx, 1);
                 }
             }
         };
 
         let cursor = 0;
 
-        while (cursor < steps.length) {
-            const step = steps[cursor];
+        while (cursor < this.promptSteps.length) {
+            const step = this.promptSteps[cursor];
             const context = this.buildContext(history);
 
             // Skip steps that opt out
@@ -139,7 +140,7 @@ export class Wizard<TContext extends object> {
 
                 // Insert child prompt steps after current
                 if (record.childPrompts.length > 0) {
-                    steps.splice(cursor + 1, 0, ...record.childPrompts);
+                    this.promptSteps.splice(cursor + 1, 0, ...record.childPrompts);
                 }
 
                 history.push(record);
@@ -157,7 +158,7 @@ export class Wizard<TContext extends object> {
                     removeChildren(prevRecord);
 
                     // Move cursor back to re-prompt the previous step
-                    cursor = steps.indexOf(prevRecord.step);
+                    cursor = this.promptSteps.indexOf(prevRecord.step);
                 } else {
                     throw error;
                 }

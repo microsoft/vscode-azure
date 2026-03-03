@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProviderResult } from '../vscode/ProviderResult';
+import type { ProviderResult } from '../vscode/ProviderResult';
 
 /**
  * A single prompt step in a {@link Wizard}.
