@@ -27,6 +27,11 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      * Tracks which hierarchy level the tree roots actually start at,
      * after account/tenant skipping in {@link getRootChildren}.
      * Used by {@link getParent} to return `undefined` for effective roots.
+     *
+     * **Note:** This is only set after {@link getRootChildren} runs. If
+     * `TreeView.reveal()` is called before the tree has loaded, `getParent`
+     * will use the default `'account'` value, which may be incorrect and
+     * cause reveal to fail for nodes below skipped levels.
      */
     private rootKind: 'account' | 'tenant' | 'subscription' = 'account';
 
@@ -116,6 +121,23 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         }
     }
 
+    /**
+     * Returns the parent key for a given tree node.
+     *
+     * **Important:** This method is intended for VS Code's internal tree
+     * navigation (e.g., `TreeView.reveal()`). Application code should use
+     * {@link AzureNodeId.parentNodeId} directly, if needed.
+     *
+     * **Limitation:** Reveal is best-effort. If `TreeView.reveal()` is
+     * called before the tree has ever loaded roots (before
+     * {@link getRootChildren} runs), `rootKind` will still be `'account'`
+     * and this method may return parent keys for account/tenant nodes that
+     * are actually skipped from the visible tree. This can cause reveal to
+     * fail until the user has expanded the tree at least once.
+     *
+     * We cannot fix this without making `getParent` async to find out if we
+     * will be skipping, which would be prohibitively slow.
+     */
     public getParent(key: string): string | undefined {
         const nodeId = AzureNodeId.parse(key);
 
