@@ -136,7 +136,9 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      * fail until the user has expanded the tree at least once.
      *
      * We cannot fix this without making `getParent` async to find out if we
-     * will be skipping, which would be prohibitively slow.
+     * will be skipping, which would be prohibitively slow. If this becomes
+     * a problem, we could make this async and just call
+     * `this.getChildren(undefined)` before the rest.
      */
     public getParent(key: string): string | undefined {
         const nodeId = AzureNodeId.parse(key);
