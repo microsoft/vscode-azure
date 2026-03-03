@@ -8,9 +8,9 @@
 // A few small changes have been made
 
 interface ILimitedTaskFactory<T> {
-    factory: () => Promise<T>;
-    c: (value: T | Promise<T>) => void;
-    e: (error?: unknown) => void;
+    readonly factory: () => Promise<T>;
+    readonly c: (value: T | Promise<T>) => void;
+    readonly e: (error?: unknown) => void;
 }
 
 export class Limiter<T> {
@@ -20,6 +20,10 @@ export class Limiter<T> {
     private outstandingPromises: ILimitedTaskFactory<T>[];
 
     constructor(maxDegreeOfParallelism: number) {
+        if (maxDegreeOfParallelism < 1) {
+            throw new Error('maxDegreeOfParallelism must be at least 1');
+        }
+
         this.maxDegreeOfParallelism = maxDegreeOfParallelism;
         this.outstandingPromises = [];
         this.runningPromises = 0;
