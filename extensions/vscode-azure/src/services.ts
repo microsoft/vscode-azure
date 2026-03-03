@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { Disposable, IExtensionContext, type ResourceTree, type ViewItemTree } from '@microsoft/vscode-azure-utils';
+import { Disposable, IExtensionContext, type DataItemTree, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { AzureResourceNode } from './tree/GenericAzureDataProvider';
@@ -14,7 +14,7 @@ export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProv
 
 /** Identifier for the Azure resource tree cache (representing real Azure resources) */
 export const IAzureResourceTreeCache: ServiceIdentifier<IAzureResourceTreeCache> = Symbol.for('IAzureResourceTreeCache');
-export type IAzureResourceTreeCache = ResourceTree<AzureResourceNode>;
+export type IAzureResourceTreeCache = DataItemTree<AzureResourceNode>;
 
 /** Identifier for the Azure resource view-item tree (view layer) */
 export const IAzureViewViewItemTree: ServiceIdentifier<IAzureViewViewItemTree> = Symbol.for('IAzureViewViewItemTree');

@@ -6,7 +6,7 @@
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, GenericResource, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
-import type { ITreeItem, ResourceTree, ViewProvider } from '@microsoft/vscode-azure-utils';
+import type { DataItemTree, ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureResourceTreeCache } from '../services';
@@ -27,7 +27,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IAzureResourceTreeCache) private readonly cache: ResourceTree<AzureResourceNode>,
+        @inject(IAzureResourceTreeCache) private readonly cache: DataItemTree<AzureResourceNode>,
     ) { }
 
     // #region ViewProvider

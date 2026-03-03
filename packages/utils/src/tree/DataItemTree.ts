@@ -13,13 +13,12 @@ import { ProviderRegistry } from './ProviderRegistry';
  */
 interface TreeNode<T> {
     readonly resource: T;
-    readonly parent: TreeNode<T> | undefined;      // undefined = root node
     children: TreeNode<T>[] | undefined;  // undefined = not yet loaded
     staleAt: number;            // Date.now() after which children should be re-fetched
 }
 
 /**
- * A lazily-loaded, cached tree of resources built up piecewise by
+ * A lazily-loaded, cached tree of data items built up piecewise by
  * {@link DataProvider}s.
  *
  * Each node's children are loaded on first access and cached until stale.
@@ -28,9 +27,9 @@ interface TreeNode<T> {
  *
  * TODO: add tests
  *
- * @typeParam T - The resource type stored in the tree.
+ * @typeParam T - The data item type stored in the tree.
  */
-export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
+export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     private readonly nodes = new NodeMap<TreeNode<T>>(node => this.getKey(node.resource));
 
     /**
@@ -89,7 +88,7 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         const resources = results.flatMap((r) => r ?? []);
 
         this.roots = resources.map(resource => {
-            const node: TreeNode<T> = { resource, parent: undefined, children: undefined, staleAt: 0 };
+            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0 };
             this.nodes.set(this.getKey(resource), node);
             return node;
         });
@@ -126,7 +125,7 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         const children = await provider.getChildren(resource) ?? [];
 
         node.children = children.map(child => {
-            const childNode: TreeNode<T> = { resource: child, parent: node, children: undefined, staleAt: 0 };
+            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0 };
             this.nodes.set(this.getKey(child), childNode);
             return childNode;
         });
@@ -199,7 +198,7 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     /**
      * Invalidate a specific resource's cached children, removing them from
      * the tree. They will be re-fetched on next access.
-     * Fires {@link onDidChangeTreeData}.
+     * Fires {@link onDidChange}.
      */
     public invalidate(resource: T): void {
         const node = this.nodes.get(this.getKey(resource));
@@ -213,7 +212,7 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
     /**
      * Invalidate all cached data. Clears the entire node map and root cache.
-     * Fires {@link onDidChangeTreeData} once with `undefined` (full refresh).
+     * Fires {@link onDidChange} once with `undefined` (full refresh).
      */
     public invalidateAll(): void {
         this.nodes.clear();

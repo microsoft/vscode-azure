@@ -8,7 +8,7 @@ import type { Disposable } from '../vscode/Disposable';
 import type { ITreeItem } from '../vscode/IVsCode';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
-import type { ResourceTree } from './ResourceTree';
+import type { DataItemTree } from './DataItemTree';
 import type { ViewProvider } from './ViewProvider';
 
 /**
@@ -22,18 +22,18 @@ interface ViewNode<T> {
 }
 
 /**
- * A view-layer tree built on top of a {@link ResourceTree}.
+ * A view-layer tree built on top of a {@link DataItemTree}.
  *
  * Registered {@link ViewProvider}s control how resources are presented:
  * they may inject virtual nodes (nodes that do not exist in the underlying
- * {@link ResourceTree}), filter, group, sort, or otherwise transform the
+ * {@link DataItemTree}), filter, group, sort, or otherwise transform the
  * children returned for each resource -- without modifying the data layer.
  *
  * Parent relationships are tracked internally so that
  * {@link getParent} works for both real and virtual nodes.
  *
  * @typeParam TViewItem - The view item type stored in the tree.
- * @typeParam TResource - The resource type stored in the underlying {@link ResourceTree}.
+ * @typeParam TResource - The resource type stored in the underlying {@link DataItemTree}.
  */
 export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewItem, ViewProvider<TViewItem>> implements vscode.TreeDataProvider<TViewItem> {
     /** Map from key to node for O(1) lookup. */
@@ -42,18 +42,18 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     /** Cached root nodes. */
     private roots: ViewNode<TViewItem>[] | undefined;
 
-    /** Subscription to the underlying {@link ResourceTree}'s change event. */
-    private readonly resourceTreeSubscription: Disposable;
+    /** Subscription to the underlying {@link DataItemTree}'s change event. */
+    private readonly dataItemTreeSubscription: Disposable;
 
     public readonly onDidChangeTreeData = this.changeEmitter.event;
 
     /**
-     * @param resourceTree - The underlying data-layer tree (read-only).
+     * @param dataItemTree - The underlying data-layer tree (read-only).
      * @param toViewItem - Converts a resource to a view item.
      * @param getKey - Extracts a unique string key from a view item.
      */
     public constructor(
-        resourceTree: ResourceTree<TResource>,
+        dataItemTree: DataItemTree<TResource>,
         toViewItem: (resource: TResource) => TViewItem,
         private readonly getKey: (viewItem: TViewItem) => string
     ) {
@@ -63,7 +63,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         // If the changed resource maps to a view item that is NOT in the
         // view tree (e.g. a skipped account/tenant node), fall back to a
         // full refresh so the tree still picks up the structural change.
-        this.resourceTreeSubscription = resourceTree.onDidChange(resource => {
+        this.dataItemTreeSubscription = dataItemTree.onDidChange(resource => {
             if (resource !== undefined) {
                 const viewItem = toViewItem(resource);
                 const node = this.nodes.get(this.getKey(viewItem));
@@ -159,7 +159,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     }
 
     public override dispose(): void {
-        this.resourceTreeSubscription.dispose();
+        this.dataItemTreeSubscription.dispose();
         super.dispose();
     }
 }
