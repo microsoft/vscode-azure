@@ -40,6 +40,9 @@ interface PromptRecord<TContext> {
  *   all steps.
  */
 export class Wizard<TContext extends object> {
+    private readonly promptSteps: PromptStep<TContext>[];
+    private readonly executeSteps: ExecuteStep<TContext>[];
+
     /**
      * @param baseContext - The initial context object to build upon.
      * @param promptSteps - Prompt steps, executed in order.
@@ -48,9 +51,13 @@ export class Wizard<TContext extends object> {
      */
     public constructor(
         private readonly baseContext: TContext,
-        private readonly promptSteps: PromptStep<TContext>[],
-        private readonly executeSteps: ExecuteStep<TContext>[] = [],
-    ) { }
+        promptSteps: PromptStep<TContext>[],
+        executeSteps: ExecuteStep<TContext>[]
+    ) {
+        // Make shallow copies of step arrays
+        this.promptSteps = [...promptSteps];
+        this.executeSteps = [...executeSteps];
+    }
 
     /**
      * Run the wizard: prompt phase followed by execute phase.

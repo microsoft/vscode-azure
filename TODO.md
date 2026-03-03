@@ -1,4 +1,5 @@
 - JSDocs everywhere
+- Address all the TODOs in source
 - ALL the test coverage
 - Create a good mock setup for VSCode (`vscode.window` and config especially)
 - Deployment story via Bicep templates (Bicep extension?)

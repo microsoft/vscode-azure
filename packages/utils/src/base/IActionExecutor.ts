@@ -34,14 +34,12 @@ export class ActionExecutor implements IActionExecutor {
         const properties = context.telemetry.properties as AsWritable<TelemetryProperties>;
         const measurements = context.telemetry.measurements as AsWritable<TelemetryMeasurements>;
 
-        try {
-            const startTime = Date.now();
+        const startTime = Date.now();
 
+        try {
             const result = await callback(context);
 
             properties.result = 'Succeeded';
-            measurements.duration = (Date.now() - startTime) / 1000;
-
             return result;
         } catch (error) {
             if (CancellationError.test(error)) {
@@ -58,6 +56,7 @@ export class ActionExecutor implements IActionExecutor {
                 return undefined;
             }
         } finally {
+            measurements.duration = (Date.now() - startTime) / 1000;
             this.telemetryReporter.sendTelemetryErrorEvent(telemetryId, properties, measurements);
         }
     }
