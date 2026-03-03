@@ -5,24 +5,22 @@
 
 // This is lifted directly from https://github.com/microsoft/vscode/blob/f8e2f71c2f78ac1ce63389e761e2aefc724646fc/extensions/git/src/util.ts#L411-L454,
 // which itself looks like just a simplified version of https://github.com/microsoft/vscode/blob/f8e2f71c2f78ac1ce63389e761e2aefc724646fc/src/vs/base/common/async.ts#L696-L786
-// There have been no changes made, even to fix typos
-
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-confusing-void-expression */
+// A few small changes have been made
 
 interface ILimitedTaskFactory<T> {
     factory: () => Promise<T>;
     c: (value: T | Promise<T>) => void;
-    e: (error?: any) => void;
+    e: (error?: unknown) => void;
 }
 
 export class Limiter<T> {
 
     private runningPromises: number;
-    private maxDegreeOfParalellism: number;
+    private maxDegreeOfParallelism: number;
     private outstandingPromises: ILimitedTaskFactory<T>[];
 
-    constructor(maxDegreeOfParalellism: number) {
-        this.maxDegreeOfParalellism = maxDegreeOfParalellism;
+    constructor(maxDegreeOfParallelism: number) {
+        this.maxDegreeOfParallelism = maxDegreeOfParallelism;
         this.outstandingPromises = [];
         this.runningPromises = 0;
     }
@@ -35,13 +33,20 @@ export class Limiter<T> {
     }
 
     private consume(): void {
-        while (this.outstandingPromises.length && this.runningPromises < this.maxDegreeOfParalellism) {
+        while (this.outstandingPromises.length && this.runningPromises < this.maxDegreeOfParallelism) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const iLimitedTask = this.outstandingPromises.shift()!;
             this.runningPromises++;
 
-            const promise = iLimitedTask.factory();
+            let promise: Promise<T>;
+            try {
+                promise = iLimitedTask.factory();
+            } catch (error) {
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+                promise = Promise.reject(error);
+            }
             promise.then(iLimitedTask.c, iLimitedTask.e);
-            promise.then(() => this.consumed(), () => this.consumed());
+            promise.then(() => { this.consumed(); }, () => { this.consumed(); });
         }
     }
 
@@ -53,5 +58,3 @@ export class Limiter<T> {
         }
     }
 }
-
-/* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-confusing-void-expression */

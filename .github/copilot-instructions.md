@@ -21,7 +21,7 @@
 * Include the Microsoft copyright header on every TypeScript/JavaScript file
 * Use `void` prefix for intentionally un-awaited promises
 * Use scoped `eslint-disable` comments on specific lines, never file-wide
-* Strings that will be seen by the user must use `vscode.l10n.t()` for localization (debug and trace output to the output channel is exempt from this requirement)
+* Strings that will be seen by the user must use `IVsCode.l10n.t()` for localization (debug and trace output to the output channel is exempt from this requirement)
 
 
 ## Understanding the Data Model

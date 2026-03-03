@@ -5,7 +5,6 @@
 
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import * as vscode from 'vscode';
 import { IAzureViewDataTree } from '../services';
 import type { EnrichedAcrRegistry } from '../tree/acr/AcrRegistry';
 import { isAcrRegistry } from '../tree/acr/AcrRegistry';
@@ -28,13 +27,13 @@ export class DisableAcrAdminUser implements ManagedCommand {
         const registry = await this.code.window.withProgress(
             {
                 location: this.code.ProgressLocation.Notification,
-                title: vscode.l10n.t('Loading details for \'{0}\'...', resource.name),
+                title: this.code.l10n.t('Loading details for \'{0}\'...', resource.name),
             },
             () => this.cache.whenEnriched<EnrichedAcrRegistry>(resource),
         );
 
         void this.code.window.showInformationMessage(
-            vscode.l10n.t('If this command were real, it would disable admin user on \'{0}\' (loginServer: {1}, sku: {2}).', registry.name, registry.loginServer, registry.sku.name)
+            this.code.l10n.t('If this command were real, it would disable admin user on \'{0}\' (loginServer: {1}, sku: {2}).', registry.name, registry.loginServer, registry.sku.name)
         );
     }
 }

@@ -245,6 +245,7 @@ function groupingValue(strategy: GroupingStrategy, resource: GenericResource): s
             return resource.type;
         case 'location':
             return resource.location;
+        // TODO: armTag
         default:
             return resource.type;
     }
