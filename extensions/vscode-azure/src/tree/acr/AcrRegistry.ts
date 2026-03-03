@@ -18,7 +18,7 @@ export const AcrResourceType = 'microsoft.containerregistry/registries';
  *
  * Created by {@link AcrDataProvider.enrich} via `Object.assign`, so the
  * underlying object remains the same reference stored in the
- * {@link ResourceTree}.
+ * {@link DataItemTree}.
  */
 export interface AcrRegistry extends GenericResource {
     /** The URL that can be used to log into the container registry. */
@@ -33,7 +33,7 @@ export interface AcrRegistry extends GenericResource {
  * An {@link AcrRegistry} whose enrichment has completed, guaranteeing
  * that all service-specific properties are populated.
  *
- * Obtain this type by awaiting {@link ResourceTree.whenEnriched}:
+ * Obtain this type by awaiting {@link DataItemTree.whenEnriched}:
  *
  * ```ts
  * const registry = await cache.whenEnriched<EnrichedAcrRegistry>(resource);

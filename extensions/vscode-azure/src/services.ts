@@ -13,8 +13,8 @@ import type { AzureResourceNode } from './tree/GenericAzureDataProvider';
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
 
 /** Identifier for the Azure resource tree cache (representing real Azure resources) */
-export const IAzureResourceTreeCache: ServiceIdentifier<IAzureResourceTreeCache> = Symbol.for('IAzureResourceTreeCache');
-export type IAzureResourceTreeCache = DataItemTree<AzureResourceNode>;
+export const IAzureViewDataTree: ServiceIdentifier<IAzureViewDataTree> = Symbol.for('IAzureViewDataTree');
+export type IAzureViewDataTree = DataItemTree<AzureResourceNode>;
 
 /** Identifier for the Azure resource view-item tree (view layer) */
 export const IAzureViewViewItemTree: ServiceIdentifier<IAzureViewViewItemTree> = Symbol.for('IAzureViewViewItemTree');

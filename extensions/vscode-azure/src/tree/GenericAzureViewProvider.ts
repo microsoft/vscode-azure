@@ -9,7 +9,7 @@ import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscript
 import type { DataItemTree, ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureResourceTreeCache } from '../services';
+import { IAzureViewDataTree } from '../services';
 import type { AzureResourceNode } from './GenericAzureDataProvider';
 
 export type GroupingStrategy = 'resourceGroup' | 'resourceType' | 'location';
@@ -27,7 +27,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IAzureResourceTreeCache) private readonly cache: DataItemTree<AzureResourceNode>,
+        @inject(IAzureViewDataTree) private readonly cache: DataItemTree<AzureResourceNode>,
     ) { }
 
     // #region ViewProvider
