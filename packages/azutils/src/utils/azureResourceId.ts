@@ -106,12 +106,5 @@ export function getResourceGroupArmId(resourceId: string): string {
     if (!parsed.resourceGroup) {
         throw new Error(`ARM resource ID does not contain a resource group: ${resourceId}`);
     }
-
-    // Reconstruct case-preserving from the original ID
-    const match = /^(\/subscriptions\/[^/]+\/resourceGroups\/[^/]+)/i.exec(resourceId);
-    if (!match) {
-        throw new Error(`ARM resource ID does not contain a resource group: ${resourceId}`);
-    }
-    return match[1];
+    return `/subscriptions/${parsed.subscriptionId}/resourceGroups/${parsed.resourceGroup}`;
 }
-
