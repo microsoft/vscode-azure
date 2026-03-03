@@ -171,11 +171,9 @@ export class Wizard<TContext extends object> {
     // ── Execute phase ───────────────────────────────────────────
 
     private async runExecutePhase(context: TContext): Promise<void> {
-        const steps = [...this.executeSteps];
-
         let cursor = 0;
-        while (cursor < steps.length) {
-            const step = steps[cursor];
+        while (cursor < this.executeSteps.length) {
+            const step = this.executeSteps[cursor];
 
             if (!await step.shouldExecute(context)) {
                 cursor++;
@@ -187,7 +185,7 @@ export class Wizard<TContext extends object> {
             // Insert dynamically added sub-steps immediately after current
             const subSteps = step.getSubExecuteSteps(context);
             if (subSteps.length > 0) {
-                steps.splice(cursor + 1, 0, ...subSteps);
+                this.executeSteps.splice(cursor + 1, 0, ...subSteps);
             }
 
             cursor++;
