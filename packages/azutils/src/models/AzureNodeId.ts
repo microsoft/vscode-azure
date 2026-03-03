@@ -257,8 +257,8 @@ export class AzureNodeId {
     }
 
     /**
-     * Returns the serialized key of this node's parent in the
-     * **ARM structural hierarchy**, or `undefined` for root (account) nodes.
+     * Returns this node's parent identifier in the
+     * **ARM structural hierarchy** as an {@link AzureNodeId}, or `undefined` for root (account) nodes.
      *
      * This always reflects the ARM resource model:
      *  - Virtual resource  -> its parent generic resource
@@ -286,7 +286,7 @@ export class AzureNodeId {
                 return new AzureNodeId({ kind: 'tenant', accountId: d.accountId, portalHost: d.portalHost, tenantId: d.tenantId });
             case 'grouping':
                 // Grouping nodes (both resource group and virtual) sit under subscriptions.
-                // The subscription ARM ID is /subscriptions/{id} — the first two ARM segments.
+                // The subscription ARM ID is /subscriptions/{id} -- the first two ARM segments.
                 return new AzureNodeId({
                     kind: 'subscription',
                     accountId: d.accountId,
