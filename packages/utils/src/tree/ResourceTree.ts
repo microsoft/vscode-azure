@@ -197,14 +197,6 @@ export class ResourceTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     }
 
     /**
-     * Get the parent of a resource, or `undefined` if it is a root node
-     * or has not yet been loaded into the tree.
-     */
-    public getParent(resource: T): T | undefined {
-        return this.nodes.get(this.getKey(resource))?.parent?.resource;
-    }
-
-    /**
      * Invalidate a specific resource's cached children, removing them from
      * the tree. They will be re-fetched on next access.
      * Fires {@link onDidChangeTreeData}.

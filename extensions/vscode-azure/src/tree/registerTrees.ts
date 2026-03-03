@@ -7,7 +7,7 @@ import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { type DataProvider, IVsCode, ResourceTree, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { AzureResourceTreeViewId } from '../constants';
-import { IAzureResourceTreeCache, IAzureResourceTreeView, pushDisposable } from '../services';
+import { IAzureResourceTreeCache, IAzureResourceTreeView, IAzureViewViewItemTree, pushDisposable } from '../services';
 import { AcrDataProvider } from './acr/AcrDataProvider';
 import { AcrViewProvider } from './acr/AcrViewProvider';
 import { type AzureResourceNode, GenericAzureDataProvider } from './GenericAzureDataProvider';
@@ -18,9 +18,7 @@ export function registerTrees(container: Container): void {
     bindAzureViewDataProviders(container);
     container.bind(IAzureResourceTreeCache).toDynamicValue(context => {
         const cache = new ResourceTree<AzureResourceNode>(
-            resource => {
-                return AzureNodeId.from(resource).toString();
-            },
+            resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000, // 5 minute TTL
         );
 
@@ -36,9 +34,7 @@ export function registerTrees(container: Container): void {
     container.bind(IAzureViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, AzureResourceNode>(
             context.get(IAzureResourceTreeCache),
-            resource => {
-                return AzureNodeId.from(resource).toString();
-            },
+            resource => AzureNodeId.from(resource).toString(),
             key => key, // Identity mapping since view item is just the `AzureNodeId` string
         );
 
@@ -62,13 +58,6 @@ export function registerTrees(container: Container): void {
     // Eagerly resolve the tree view to kick off the whole chain
     container.get(IAzureResourceTreeView);
 }
-
-/**
- * Identifier for the Azure view's {@link ViewItemTree}.
- * @internal - Not intended for use outside this file
- */
-const IAzureViewViewItemTree: ServiceIdentifier<IAzureViewViewItemTree> = Symbol.for('IAzureViewViewItemTree');
-type IAzureViewViewItemTree = ViewItemTree<string, AzureResourceNode>;
 
 /**
  * Identifier for the Azure view's {@link DataProvider}s.
