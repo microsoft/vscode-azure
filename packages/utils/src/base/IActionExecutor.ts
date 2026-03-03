@@ -5,6 +5,7 @@
 
 import type { ServiceIdentifier } from 'inversify';
 import type { AsWritable } from '../types/AsWritable';
+import { CancellationError } from '../vscode/CancellationError';
 import { createActionContext, type IActionContext, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 
@@ -43,8 +44,13 @@ export class ActionExecutor implements IActionExecutor {
 
             return result;
         } catch (error) {
-            // TODO: error/cancellation handling plus telemetry
-            properties.result = 'Failed';
+            if (CancellationError.test(error)) {
+                properties.result = 'Canceled'; // TODO: Verify spelling is the same as existing
+                // TODO: cancel step
+            } else {
+                // TODO: error/cancellation handling plus telemetry
+                properties.result = 'Failed';
+            }
 
             if (context.errorHandling.rethrow) {
                 throw error;
