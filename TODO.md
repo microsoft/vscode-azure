@@ -17,3 +17,4 @@
 Before handoff:
 - Context value array and example commands
 - Quick pick walk
+- Deployment story (single and app)
