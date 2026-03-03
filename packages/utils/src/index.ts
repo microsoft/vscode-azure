@@ -8,8 +8,9 @@ export * from './base/IActionExecutor';
 export * from './base/ICommandRegistry';
 export * from './base/ITelemetryReporter';
 export * from './data/InflightMap';
-export * from './tree/DataProvider';
+export * from './data/Limiter';
 export * from './tree/DataItemTree';
+export * from './tree/DataProvider';
 export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AssertAssignable';
@@ -20,3 +21,4 @@ export * from './vscode/IExtensionContext';
 export * from './vscode/IOutputChannel';
 export * from './vscode/IVsCode';
 export * from './vscode/ProviderResult';
+

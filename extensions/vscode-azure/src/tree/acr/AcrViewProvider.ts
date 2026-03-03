@@ -81,7 +81,7 @@ export class AcrViewProvider implements ViewProvider<string> {
 
             if (resource.adminUserEnabled === true) {
                 item.iconPath = new this.code.ThemeIcon('warning', new this.code.ThemeColor('problemsWarningIcon.foreground'));
-                item.tooltip = 'Admin user is enabled. This is a security risk and is not recommended for production registries.';
+                item.tooltip = this.code.l10n.t('Admin user is enabled. This is a security risk and is not recommended for production registries.');
             }
         }
 

@@ -16,6 +16,9 @@ describe('Hello command', () => {
 
         const showInformationMessage = mock.fn(_ => undefined);
         const mockVsCode = {
+            l10n: {
+                t: (message: string) => message,
+            },
             window: {
                 showInformationMessage,
             },

@@ -6,9 +6,11 @@
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { GenericResource } from './GenericResource';
 
+export type GroupingStrategy = 'location' | 'resourceType' | 'armTag' | 'resourceGroup';
+
 interface GroupingBase {
     readonly subscription: AzureSubscription;
-    readonly groupingStrategy: string;
+    readonly groupingStrategy: GroupingStrategy;
     readonly groupingValue: string;
 }
 
