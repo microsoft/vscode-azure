@@ -7,6 +7,7 @@ import { AzureNodeId, isGenericResource, isVirtualResource, type VirtualResource
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import * as vscode from 'vscode';
 import { IAzureViewDataTree } from '../../services';
 import { isAcrRegistry } from './AcrRegistry';
 
@@ -81,7 +82,7 @@ export class AcrViewProvider implements ViewProvider<string> {
 
             if (resource.adminUserEnabled === true) {
                 item.iconPath = new this.code.ThemeIcon('warning', new this.code.ThemeColor('problemsWarningIcon.foreground'));
-                item.tooltip = 'Admin user is enabled. This is a security risk and is not recommended for production registries.';
+                item.tooltip = vscode.l10n.t('Admin user is enabled. This is a security risk and is not recommended for production registries.');
             }
         }
 

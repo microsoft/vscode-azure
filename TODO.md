@@ -13,8 +13,12 @@
 - Setting for node skipping behavior
 - Setting for grouping behavior
 - Pagination of lists or at least a user-adjustable max item limit
+- Cleanup non-ASCII characters and the odd region markers that Copilot is creating
+- Enforce using only "safe" parts of `vscode` (e.g. `l10n.t()`) (`IVsCode` should be used in most cases)
+- Fix excessive reparsing of `AzureNodeId` (e.g. could be every `canHandle()` call, no good)
 
 Before handoff:
 - Context value array and example commands
 - Quick pick walk
 - Deployment story (single and app)
+- Resource type story (to distinguish function apps from app service etc.)

@@ -4,15 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AzureNode, GenericResource, VirtualGroup } from '@microsoft/vscode-azure-azutils';
+import type { AzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
 import type { DataItemTree, ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../services';
 import type { AzureResourceNode } from './GenericAzureDataProvider';
-
-export type GroupingStrategy = 'resourceGroup' | 'resourceType' | 'location';
 
 @injectable()
 export class GenericAzureViewProvider implements ViewProvider<string> {

@@ -5,6 +5,7 @@
 
 import { IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import * as vscode from 'vscode';
 import type { ManagedCommand } from './ManagedCommand';
 
 @injectable()
@@ -16,7 +17,7 @@ export class Hello implements ManagedCommand {
 
     public async execute(): Promise<void> {
         this.context.telemetry.properties.hello = 'world';
-        void this.code.window.showInformationMessage('Hello, from the Azure extension!');
+        void this.code.window.showInformationMessage(vscode.l10n.t('Hello, from the Azure extension!'));
         await Promise.resolve();
     }
 }
