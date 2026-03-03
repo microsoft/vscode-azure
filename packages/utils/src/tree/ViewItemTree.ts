@@ -6,6 +6,7 @@
 import type * as vscode from 'vscode';
 import type { Disposable } from '../vscode/Disposable';
 import type { ITreeItem } from '../vscode/IVsCode';
+import type { ProviderResult } from '../vscode/ProviderResult';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 import type { DataItemTree } from './DataItemTree';
@@ -151,11 +152,25 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     }
 
     /**
-     * Get the parent of a view item, or `undefined` if it is a root item
-     * or has not yet been loaded into the view tree.
+     * Get the parent of a view item, or `undefined` if it is a root item.
+     *
+     * Uses the cached node map for nodes that have been loaded via
+     * {@link getChildren}. Falls back to the owning {@link ViewProvider}'s
+     * `getParent` method (if implemented) so that `TreeView.reveal()`
+     * works for nodes that have not yet been loaded.
      */
-    public getParent(viewItem: TViewItem): TViewItem | undefined {
-        return this.nodes.get(this.getKey(viewItem))?.parent?.viewItem;
+    public getParent(viewItem: TViewItem): ProviderResult<TViewItem | undefined> {
+        // Fast path: node is already in the map from a prior getChildren() call.
+        // We must distinguish "not in cache" from "in cache with no parent"
+        // (root nodes), so we check the node itself rather than its parent.
+        const node = this.nodes.get(this.getKey(viewItem));
+        if (node) {
+            return node.parent?.viewItem;
+        }
+
+        // Slow path: ask the provider to compute the parent on demand
+        const provider = this.findProvider(viewItem);
+        return provider?.getParent?.(viewItem);
     }
 
     public override dispose(): void {

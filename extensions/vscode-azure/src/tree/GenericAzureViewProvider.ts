@@ -23,6 +23,13 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      */
     private readonly groupingStrategy: GroupingStrategy = 'resourceGroup';
 
+    /**
+     * Tracks which hierarchy level the tree roots actually start at,
+     * after account/tenant skipping in {@link getRootChildren}.
+     * Used by {@link getParent} to return `undefined` for effective roots.
+     */
+    private rootKind: 'account' | 'tenant' | 'subscription' = 'account';
+
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly cache: DataItemTree<AzureResourceNode>,
@@ -109,6 +116,46 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         }
     }
 
+    public getParent(key: string): string | undefined {
+        const nodeId = AzureNodeId.parse(key);
+
+        // For generic resources under a non-resourceGroup grouping strategy,
+        // the parent is a virtual group node -- not the ARM resource group.
+        // We must construct the correct virtual group key from the resource.
+        if (nodeId.isGenericResourceNodeId() && this.groupingStrategy !== 'resourceGroup') {
+            const resource = this.cache.get(key);
+            if (resource && isGenericResource(resource)) {
+                const value = groupingValue(this.groupingStrategy, resource);
+                const group: VirtualGroup = {
+                    subscription: resource.subscription,
+                    groupingStrategy: this.groupingStrategy,
+                    groupingValue: value,
+                };
+                return toKey(group);
+            }
+        }
+
+        const parentNodeId = nodeId.parentNodeId();
+        if (parentNodeId === undefined) {
+            return undefined;
+        }
+
+        // If the parent falls above the effective root level (because
+        // account/tenant were skipped), this node is a root -- return
+        // `undefined` so VS Code knows to stop walking up.
+        if (this.rootKind === 'subscription') {
+            if (parentNodeId.isAccountNodeId() || parentNodeId.isTenantNodeId()) {
+                return undefined;
+            }
+        } else if (this.rootKind === 'tenant') {
+            if (parentNodeId.isAccountNodeId()) {
+                return undefined;
+            }
+        }
+
+        return parentNodeId.toString();
+    }
+
     // #endregion
 
     // #region Children helpers
@@ -120,13 +167,16 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      */
     private async getRootChildren(): Promise<string[]> {
         let nodes = await this.cache.getChildren(undefined);
+        this.rootKind = 'account';
 
         if (nodes.length === 1 && isAccount(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
+            this.rootKind = 'tenant';
         }
 
         if (nodes.length === 1 && isTenant(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
+            this.rootKind = 'subscription';
         }
 
         return nodes.map(toKey);
