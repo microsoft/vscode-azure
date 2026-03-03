@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode } from '../vscode/IVsCode';
-
 /**
  * A single execute step in a {@link Wizard}.
  *
@@ -12,14 +10,9 @@ import type { IVsCode } from '../vscode/IVsCode';
  * order they were registered. Dynamically added steps (via
  * {@link getSubExecuteSteps}) run immediately after their parent.
  *
- * Subclasses receive {@link code} (the VS Code API namespace) for
- * showing progress, notifications, etc.
- *
  * @typeParam TContext - The shared wizard context type.
  */
 export abstract class ExecuteStep<TContext> {
-    public constructor(protected readonly code: IVsCode) { }
-
     /**
      * Perform the operation using the fully-populated context.
      * Modifying the {@link context} is allowed.

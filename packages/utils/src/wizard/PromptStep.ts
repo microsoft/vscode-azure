@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode } from '../vscode/IVsCode';
 import { ProviderResult } from '../vscode/ProviderResult';
 
 /**
@@ -21,14 +20,9 @@ import { ProviderResult } from '../vscode/ProviderResult';
  * Steps may dynamically add further prompt steps by overriding
  * {@link getSubPromptSteps}.
  *
- * Subclasses receive {@link code} (the VS Code API namespace) for
- * creating quick picks, showing messages, etc.
- *
  * @typeParam TContext - The shared wizard context type.
  */
 export abstract class PromptStep<TContext> {
-    public constructor(protected readonly code: IVsCode) { }
-
     /**
      * Prompt the user and return the properties to merge into the
      * wizard context.

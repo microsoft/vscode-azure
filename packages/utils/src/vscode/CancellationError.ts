@@ -21,4 +21,4 @@ export class CancellationError extends Error {
     }
 }
 
-const CanceledName = 'Canceled'; // VS Code's error uses this spelling and we need to match
+const CanceledName = 'Canceled'; // VS Code's error uses this spelling and we need to match. https://github.com/microsoft/vscode/blob/ff7ffa542f145bbd0bad82c38ed1ba1c54f72ec3/src/vs/base/common/errors.ts#L196

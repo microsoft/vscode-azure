@@ -14,7 +14,7 @@ import type { PromptStep } from './PromptStep';
  */
 interface PromptRecord<TContext> {
     readonly step: PromptStep<TContext>;
-    readonly result: Partial<TContext> | undefined | null;
+    readonly stepResult: Partial<TContext> | undefined | null;
     childPrompts?: readonly PromptStep<TContext>[];
 }
 
@@ -57,6 +57,8 @@ export class Wizard<TContext extends object> {
      *
      * @throws a {@link CancellationError} if the user cancels or goes back
      *   past the first step.
+     * @returns The final accumulated context after both phases. Note that
+     *   this will be a new object, not the originally passed-in {@link baseContext}.
      */
     public async run(): Promise<TContext> {
         const context = await this.runPromptPhase();
@@ -73,8 +75,8 @@ export class Wizard<TContext extends object> {
     private buildContext(history: PromptRecord<TContext>[]): Readonly<TContext> {
         const merged = Object.assign({} as TContext, this.baseContext);
         for (const record of history) {
-            if (record.result) {
-                Object.assign(merged, record.result);
+            if (record.stepResult) {
+                Object.assign(merged, record.stepResult);
             }
         }
         return merged;
@@ -122,11 +124,11 @@ export class Wizard<TContext extends object> {
             }
 
             try {
-                const result = await step.prompt(context);
+                const stepResult = await step.prompt(context);
 
                 const record: PromptRecord<TContext> = {
                     step,
-                    result,
+                    stepResult,
                 };
 
                 // Rebuild context with this step's contribution included
@@ -182,7 +184,7 @@ export class Wizard<TContext extends object> {
             await step.execute(context);
 
             // Insert dynamically added sub-steps immediately after current
-            const subSteps = [...step.getSubExecuteSteps(context)];
+            const subSteps = step.getSubExecuteSteps(context);
             if (subSteps.length > 0) {
                 steps.splice(cursor + 1, 0, ...subSteps);
             }
