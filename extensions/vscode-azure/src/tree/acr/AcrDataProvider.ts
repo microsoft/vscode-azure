@@ -5,7 +5,7 @@
 
 import { type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
 import { get } from '@azure/arm-containerregistry/api/registries';
-import { type GenericResource, isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { type GenericResource, isVirtualResource, parseAzureResourceId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
 import type { AzureResourceNode } from '../GenericAzureDataProvider';
@@ -48,7 +48,10 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
         }
 
         const client = this.getOrCreateClient(resource);
-        const resourceGroupName = extractResourceGroupName(resource.id);
+        const { resourceGroup: resourceGroupName } = parseAzureResourceId(resource.id);
+        if (!resourceGroupName) {
+            throw new Error(`Cannot extract resource group name from resource ID: ${resource.id}`);
+        }
 
         // TODO: remove simulated delay
         await new Promise(resolve => setTimeout(resolve, 7500));
@@ -124,21 +127,4 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
 function isAcrVirtualResource(node: unknown): node is VirtualResource {
     return isVirtualResource(node as VirtualResource)
         && isAcrRegistry((node as VirtualResource).azureResource);
-}
-
-/**
- * Extract the resource group name from a full ARM resource ID.
- *
- * @example
- * ```
- * extractResourceGroupName('/subscriptions/.../resourceGroups/myRg/providers/...')
- * // => 'myRg'
- * ```
- */
-function extractResourceGroupName(resourceId: string): string {
-    const match = /\/resourceGroups\/([^/]+)/i.exec(resourceId);
-    if (!match) {
-        throw new Error(`Cannot extract resource group name from resource ID: ${resourceId}`);
-    }
-    return match[1];
 }

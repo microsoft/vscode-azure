@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureAccount } from '@microsoft/vscode-azext-azureauth';
+import { getResourceGroupArmId, getSubscriptionArmId, parseAzureResourceId } from '../utils/azureResourceId';
 import { type AzureNode, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, isVirtualGroup, isVirtualResource } from './AzureNode';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
 import type { VirtualResource } from './VirtualResource';
@@ -117,7 +118,8 @@ export class AzureNodeId {
         }
 
         // Resource group grouping: /subscriptions/{id}/resourceGroups/{name} (exactly, no providers after)
-        if (armSegments.length === 4 && armSegments[2].toLowerCase() === 'resourcegroups') {
+        const parsed = parseAzureResourceId(armResourceId);
+        if (parsed.resourceGroup && !parsed.provider) {
             return new AzureNodeId({
                 kind: 'grouping',
                 accountId,
@@ -126,7 +128,7 @@ export class AzureNodeId {
                 armResourceId,
                 grouping: {
                     groupingStrategy: 'resourceGroup' as const,
-                    groupingValue: armSegments[3],
+                    groupingValue: parsed.resourceGroup,
                 },
             });
         }
@@ -292,31 +294,28 @@ export class AzureNodeId {
                     accountId: d.accountId,
                     portalHost: d.portalHost,
                     tenantId: d.tenantId,
-                    armResourceId: d.armResourceId.replace(/\/resourceGroups\/.+$/i, '').replace(/\/~.+$/, ''),
+                    armResourceId: getSubscriptionArmId(d.armResourceId),
                 });
             case 'resource': {
                 // Resource -> resource group. Extract /subscriptions/{id}/resourceGroups/{name}
-                const rgMatch = /^(\/subscriptions\/[^/]+\/resourceGroups\/[^/]+)/i.exec(d.armResourceId);
-                if (!rgMatch) {
-                    // No resource group in the path — fall back to subscription
+                const parsedResource = parseAzureResourceId(d.armResourceId);
+                if (!parsedResource.resourceGroup) {
+                    // No resource group in the path (subscription-scoped resource) — fall back to subscription
                     return new AzureNodeId({
                         kind: 'subscription',
                         accountId: d.accountId,
                         portalHost: d.portalHost,
                         tenantId: d.tenantId,
-                        armResourceId: d.armResourceId.replace(/\/resourceGroups\/.+$/i, ''),
+                        armResourceId: getSubscriptionArmId(d.armResourceId),
                     });
                 }
-                const rgId = rgMatch[1];
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                const rgName = rgId.split('/').pop()!;
                 return new AzureNodeId({
                     kind: 'grouping',
                     accountId: d.accountId,
                     portalHost: d.portalHost,
                     tenantId: d.tenantId,
-                    armResourceId: rgId,
-                    grouping: { groupingStrategy: 'resourceGroup', groupingValue: rgName },
+                    armResourceId: getResourceGroupArmId(d.armResourceId),
+                    grouping: { groupingStrategy: 'resourceGroup', groupingValue: parsedResource.resourceGroup },
                 });
             }
             case 'virtual': {

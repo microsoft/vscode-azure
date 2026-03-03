@@ -16,7 +16,6 @@
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
 - Enforce using only "safe" imports of `vscode` (`IVsCode` should be used in most cases)
 - Fix excessive reparsing of `AzureNodeId` (e.g. could be every `canHandle()` call, no good)
-- Utility method for parsing ARM resource IDs into their parts
 - UI helpers for things like "(recently picked)", throwing cancellation/go-back etc.
 
 Before handoff:

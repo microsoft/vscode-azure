@@ -11,4 +11,5 @@ export * from './models/VirtualResource';
 export * from './rest/createAzureClient';
 export * from './rest/resources';
 export * from './tree/AzureResourceDataProvider';
+export * from './utils/azureResourceId';
 

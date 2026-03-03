@@ -41,6 +41,9 @@ export abstract class PromptStep<TContext> {
     /**
      * Return `false` to skip this step (e.g. when the context already
      * has the needed value). Defaults to `true` when not overridden.
+     * @note - Whenever possible, this should be synchronous and fast. It is better
+     *   to return `true` and let the step's {@link prompt} method noop,
+     *   if slow work is required.
      */
     public shouldPrompt(_context: Readonly<TContext>): boolean | Promise<boolean> {
         return true;
