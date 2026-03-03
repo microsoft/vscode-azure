@@ -30,10 +30,13 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      *
      * **Note:** This is only set after {@link getRootChildren} runs. If
      * `TreeView.reveal()` is called before the tree has loaded, `getParent`
-     * will use the default `'account'` value, which may be incorrect and
+     * will use the default `'subscription'` value, which may be incorrect and
      * cause reveal to fail for nodes below skipped levels.
+     *
+     * `'subscription'` is chosen as the default since the majority of users
+     * have only one account and one tenant, so skipping both levels is common
      */
-    private rootKind: 'account' | 'tenant' | 'subscription' = 'account';
+    private rootKind: 'account' | 'tenant' | 'subscription' = 'subscription';
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
