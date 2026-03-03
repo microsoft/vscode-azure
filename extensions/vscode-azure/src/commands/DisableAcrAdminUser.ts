@@ -5,7 +5,7 @@
 
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureResourceTreeCache } from '../services';
+import { IAzureViewDataTree } from '../services';
 import type { EnrichedAcrRegistry } from '../tree/acr/AcrRegistry';
 import { isAcrRegistry } from '../tree/acr/AcrRegistry';
 import type { ManagedCommand } from './ManagedCommand';
@@ -15,7 +15,7 @@ import type { ManagedCommand } from './ManagedCommand';
 export class DisableAcrAdminUser implements ManagedCommand {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IAzureResourceTreeCache) private readonly cache: IAzureResourceTreeCache,
+        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
 
     public async execute(key: string): Promise<void> {

@@ -7,7 +7,7 @@ import { AzureNodeId, isGenericResource, isVirtualResource, type VirtualResource
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureResourceTreeCache } from '../../services';
+import { IAzureViewDataTree } from '../../services';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**
@@ -26,7 +26,7 @@ export class AcrViewProvider implements ViewProvider<string> {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IAzureResourceTreeCache) private readonly cache: IAzureResourceTreeCache,
+        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
 
     // #region ViewProvider

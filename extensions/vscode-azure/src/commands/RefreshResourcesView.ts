@@ -4,13 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { inject, injectable } from 'inversify';
-import { IAzureResourceTreeCache } from '../services';
+import { IAzureViewDataTree } from '../services';
 import type { ManagedCommand } from './ManagedCommand';
 
 @injectable()
 export class RefreshResourcesView implements ManagedCommand {
     public constructor(
-        @inject(IAzureResourceTreeCache) private readonly cache: IAzureResourceTreeCache
+        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree
     ) { }
 
     public execute(): void {
