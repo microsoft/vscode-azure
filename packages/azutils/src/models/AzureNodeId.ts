@@ -300,7 +300,7 @@ export class AzureNodeId {
                 // Resource -> resource group. Extract /subscriptions/{id}/resourceGroups/{name}
                 const parsedResource = parseAzureResourceId(d.armResourceId);
                 if (!parsedResource.resourceGroup) {
-                    // No resource group in the path (subscription-scoped resource) — fall back to subscription
+                    // No resource group in the path (subscription-scoped resource) -- fall back to subscription
                     return new AzureNodeId({
                         kind: 'subscription',
                         accountId: d.accountId,

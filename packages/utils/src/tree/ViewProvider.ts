@@ -34,7 +34,7 @@ export interface ViewProvider<TResource> extends DataProvider<TResource> {
      * call this to walk up to the root, then walk back down via
      * {@link getChildren} to load real data at each level.
      */
-    getParent?(resource: TResource): ProviderResult<TResource | undefined>;
+    getParent?(resource: Readonly<TResource>): ProviderResult<TResource | undefined>;
 
     enrich?: never; // View providers are not allowed to enrich data resources
 }

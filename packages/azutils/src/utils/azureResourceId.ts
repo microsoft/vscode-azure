@@ -74,7 +74,7 @@ export function parseAzureResourceId(resourceId: string): ParsedAzureResourceId 
         provider = segments[i + 1]; // e.g. Microsoft.ContainerRegistry
         i += 2;
 
-        // Collect type/name pairs — the type path can be nested (e.g. registries/replications)
+        // Collect type/name pairs -- the type path can be nested (e.g. registries/replications)
         const typeParts: string[] = [];
         while (i + 1 < segments.length) {
             typeParts.push(segments[i]);
