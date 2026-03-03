@@ -15,10 +15,15 @@ export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AssertAssignable';
 export * from './types/AsWritable';
+export * from './vscode/CancellationError';
 export * from './vscode/Disposable';
 export * from './vscode/EventEmitter';
 export * from './vscode/IExtensionContext';
 export * from './vscode/IOutputChannel';
 export * from './vscode/IVsCode';
 export * from './vscode/ProviderResult';
+export * from './wizard/ExecuteStep';
+export * from './wizard/GoBackError';
+export * from './wizard/PromptStep';
+export * from './wizard/Wizard';
 

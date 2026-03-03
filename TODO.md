@@ -1,7 +1,7 @@
 - JSDocs everywhere
+- Address all the TODOs in source
 - ALL the test coverage
 - Create a good mock setup for VSCode (`vscode.window` and config especially)
-- Wizard framework?
 - Deployment story via Bicep templates (Bicep extension?)
 - Deployment story via AZD
 - Vastly more logging to the output channel (especially debug/trace)
@@ -16,6 +16,8 @@
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
 - Enforce using only "safe" imports of `vscode` (`IVsCode` should be used in most cases)
 - Fix excessive reparsing of `AzureNodeId` (e.g. could be every `canHandle()` call, no good)
+- Utility method for parsing ARM resource IDs into their parts
+- UI helpers for things like "(recently picked)", throwing cancellation/go-back etc.
 
 Before handoff:
 - Context value array and example commands

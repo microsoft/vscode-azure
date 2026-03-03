@@ -5,6 +5,7 @@
 
 import type { ServiceIdentifier } from 'inversify';
 import type { AsWritable } from '../types/AsWritable';
+import { CancellationError } from '../vscode/CancellationError';
 import { createActionContext, type IActionContext, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 
@@ -33,18 +34,21 @@ export class ActionExecutor implements IActionExecutor {
         const properties = context.telemetry.properties as AsWritable<TelemetryProperties>;
         const measurements = context.telemetry.measurements as AsWritable<TelemetryMeasurements>;
 
-        try {
-            const startTime = Date.now();
+        const startTime = Date.now();
 
+        try {
             const result = await callback(context);
 
             properties.result = 'Succeeded';
-            measurements.duration = (Date.now() - startTime) / 1000;
-
             return result;
         } catch (error) {
-            // TODO: error/cancellation handling plus telemetry
-            properties.result = 'Failed';
+            if (CancellationError.test(error)) {
+                properties.result = 'Canceled'; // TODO: Verify spelling is the same as existing
+                // TODO: cancel step
+            } else {
+                // TODO: error/cancellation handling plus telemetry
+                properties.result = 'Failed';
+            }
 
             if (context.errorHandling.rethrow) {
                 throw error;
@@ -52,6 +56,7 @@ export class ActionExecutor implements IActionExecutor {
                 return undefined;
             }
         } finally {
+            measurements.duration = (Date.now() - startTime) / 1000;
             this.telemetryReporter.sendTelemetryErrorEvent(telemetryId, properties, measurements);
         }
     }
