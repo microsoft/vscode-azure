@@ -23,6 +23,21 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      */
     private readonly groupingStrategy: GroupingStrategy = 'resourceGroup';
 
+    /**
+     * Tracks which hierarchy level the tree roots actually start at,
+     * after account/tenant skipping in {@link getRootChildren}.
+     * Used by {@link getParent} to return `undefined` for effective roots.
+     *
+     * **Note:** This is only set after {@link getRootChildren} runs. If
+     * `TreeView.reveal()` is called before the tree has loaded, `getParent`
+     * will use the default `'subscription'` value, which may be incorrect and
+     * cause reveal to fail for nodes below skipped levels.
+     *
+     * `'subscription'` is chosen as the default since the majority of users
+     * have only one account and one tenant, so skipping both levels is common
+     */
+    private rootKind: 'account' | 'tenant' | 'subscription' = 'subscription';
+
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly cache: DataItemTree<AzureResourceNode>,
@@ -109,6 +124,65 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         }
     }
 
+    /**
+     * Returns the parent key for a given tree node.
+     *
+     * **Important:** This method is intended for VS Code's internal tree
+     * navigation (e.g., `TreeView.reveal()`). Application code should use
+     * {@link AzureNodeId.parentNodeId} directly, if needed.
+     *
+     * **Limitation:** Reveal is best-effort. If `TreeView.reveal()` is
+     * called before the tree has ever loaded roots (before
+     * {@link getRootChildren} runs), `rootKind` will still be `'subscription'`
+     * and this method may return parent keys for account/tenant nodes that
+     * are actually skipped from the visible tree. This can cause reveal to
+     * fail until the user has expanded the tree at least once.
+     *
+     * We cannot fix this without making `getParent` async to find out if we
+     * will be skipping, which would be prohibitively slow. If this becomes
+     * a problem, we could make this async and just call
+     * `this.getChildren(undefined)` before the rest.
+     */
+    public getParent(key: string): string | undefined {
+        const nodeId = AzureNodeId.parse(key);
+
+        // For generic resources under a non-resourceGroup grouping strategy,
+        // the parent is a virtual group node -- not the ARM resource group.
+        // We must construct the correct virtual group key from the resource.
+        if (nodeId.isGenericResourceNodeId() && this.groupingStrategy !== 'resourceGroup') {
+            const resource = this.cache.get(key);
+            if (resource && isGenericResource(resource)) {
+                const value = groupingValue(this.groupingStrategy, resource);
+                const group: VirtualGroup = {
+                    subscription: resource.subscription,
+                    groupingStrategy: this.groupingStrategy,
+                    groupingValue: value,
+                };
+                return toKey(group);
+            }
+        }
+
+        const parentNodeId = nodeId.parentNodeId();
+        if (parentNodeId === undefined) {
+            return undefined;
+        }
+
+        // If the parent falls above the effective root level (because
+        // account/tenant were skipped), this node is a root -- return
+        // `undefined` so VS Code knows to stop walking up.
+        if (this.rootKind === 'subscription') {
+            if (parentNodeId.isAccountNodeId() || parentNodeId.isTenantNodeId()) {
+                return undefined;
+            }
+        } else if (this.rootKind === 'tenant') {
+            if (parentNodeId.isAccountNodeId()) {
+                return undefined;
+            }
+        }
+
+        return parentNodeId.toString();
+    }
+
     // #endregion
 
     // #region Children helpers
@@ -120,13 +194,16 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      */
     private async getRootChildren(): Promise<string[]> {
         let nodes = await this.cache.getChildren(undefined);
+        this.rootKind = 'account';
 
         if (nodes.length === 1 && isAccount(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
+            this.rootKind = 'tenant';
         }
 
         if (nodes.length === 1 && isTenant(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
+            this.rootKind = 'subscription';
         }
 
         return nodes.map(toKey);

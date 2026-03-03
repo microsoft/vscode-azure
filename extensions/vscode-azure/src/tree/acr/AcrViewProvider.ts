@@ -106,6 +106,10 @@ export class AcrViewProvider implements ViewProvider<string> {
         return children.map(child => AzureNodeId.from(child).toString());
     }
 
+    public getParent(key: string): string | undefined {
+        return AzureNodeId.parse(key).parentNodeId()?.toString();
+    }
+
     // #endregion
 }
 

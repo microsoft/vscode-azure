@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ITreeItem } from '../vscode/IVsCode';
+import type { ProviderResult } from '../vscode/ProviderResult';
 import type { DataProvider } from './DataProvider';
 
 /**
@@ -24,6 +25,16 @@ export interface ViewProvider<TResource> extends DataProvider<TResource> {
      * Get the tree item representation for the given resource.
      */
     getTreeItem(resource: Readonly<TResource>): ITreeItem | Promise<ITreeItem>;
+
+    /**
+     * Get the parent of a resource, or `undefined` if it is a root item.
+     *
+     * Implementing this method enables `TreeView.reveal()` for nodes that
+     * have not yet been loaded via {@link getChildren}. The tree will
+     * call this to walk up to the root, then walk back down via
+     * {@link getChildren} to load real data at each level.
+     */
+    getParent?(resource: Readonly<TResource>): ProviderResult<TResource | undefined>;
 
     enrich?: never; // View providers are not allowed to enrich data resources
 }
