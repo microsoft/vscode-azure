@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureAccount } from '@microsoft/vscode-azext-azureauth';
+import { getResourceGroupArmId, getSubscriptionArmId, parseAzureResourceId } from '../utils/azureResourceId';
 import { type AzureNode, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, isVirtualGroup, isVirtualResource } from './AzureNode';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
 import type { VirtualResource } from './VirtualResource';
@@ -117,7 +118,8 @@ export class AzureNodeId {
         }
 
         // Resource group grouping: /subscriptions/{id}/resourceGroups/{name} (exactly, no providers after)
-        if (armSegments.length === 4 && armSegments[2].toLowerCase() === 'resourcegroups') {
+        const parsed = parseAzureResourceId(armResourceId);
+        if (parsed.resourceGroup && !parsed.provider) {
             return new AzureNodeId({
                 kind: 'grouping',
                 accountId,
@@ -126,7 +128,7 @@ export class AzureNodeId {
                 armResourceId,
                 grouping: {
                     groupingStrategy: 'resourceGroup' as const,
-                    groupingValue: armSegments[3],
+                    groupingValue: parsed.resourceGroup,
                 },
             });
         }
@@ -253,6 +255,79 @@ export class AzureNodeId {
             case 'resource':
             case 'virtual':
                 return `https://${d.portalHost}/#@${d.tenantId}/resource${d.armResourceId}`;
+        }
+    }
+
+    /**
+     * Returns this node's parent identifier in the
+     * **ARM structural hierarchy** as an {@link AzureNodeId}, or `undefined` for root (account) nodes.
+     *
+     * This always reflects the ARM resource model:
+     *  - Virtual resource  -> its parent generic resource
+     *  - Generic resource  -> its resource group
+     *  - Resource group    -> its subscription
+     *  - Virtual grouping  -> its subscription
+     *  - Subscription      -> its tenant
+     *  - Tenant            -> its account
+     *  - Account           -> `undefined`
+     *
+     * **Note:** This does not account for view-layer grouping strategies
+     * (e.g. `resourceType`, `location`). Under those strategies a
+     * generic resource's view-layer parent is a virtual group node, not
+     * a resource group. View providers must handle that case before
+     * falling through to this method.
+     */
+    public parentNodeId(): AzureNodeId | undefined {
+        const d = this.data;
+        switch (d.kind) {
+            case 'account':
+                return undefined;
+            case 'tenant':
+                return new AzureNodeId({ kind: 'account', accountId: d.accountId, portalHost: d.portalHost });
+            case 'subscription':
+                return new AzureNodeId({ kind: 'tenant', accountId: d.accountId, portalHost: d.portalHost, tenantId: d.tenantId });
+            case 'grouping':
+                // Grouping nodes (both resource group and virtual) sit under subscriptions.
+                // The subscription ARM ID is /subscriptions/{id} -- the first two ARM segments.
+                return new AzureNodeId({
+                    kind: 'subscription',
+                    accountId: d.accountId,
+                    portalHost: d.portalHost,
+                    tenantId: d.tenantId,
+                    armResourceId: getSubscriptionArmId(d.armResourceId),
+                });
+            case 'resource': {
+                // Resource -> resource group. Extract /subscriptions/{id}/resourceGroups/{name}
+                const parsedResource = parseAzureResourceId(d.armResourceId);
+                if (!parsedResource.resourceGroup) {
+                    // No resource group in the path (subscription-scoped resource) -- fall back to subscription
+                    return new AzureNodeId({
+                        kind: 'subscription',
+                        accountId: d.accountId,
+                        portalHost: d.portalHost,
+                        tenantId: d.tenantId,
+                        armResourceId: getSubscriptionArmId(d.armResourceId),
+                    });
+                }
+                return new AzureNodeId({
+                    kind: 'grouping',
+                    accountId: d.accountId,
+                    portalHost: d.portalHost,
+                    tenantId: d.tenantId,
+                    armResourceId: getResourceGroupArmId(d.armResourceId),
+                    grouping: { groupingStrategy: 'resourceGroup', groupingValue: parsedResource.resourceGroup },
+                });
+            }
+            case 'virtual': {
+                // Virtual resource -> its parent generic resource (strip the fragment)
+                return new AzureNodeId({
+                    kind: 'resource',
+                    accountId: d.accountId,
+                    portalHost: d.portalHost,
+                    tenantId: d.tenantId,
+                    armResourceId: d.armResourceId,
+                });
+            }
         }
     }
 
