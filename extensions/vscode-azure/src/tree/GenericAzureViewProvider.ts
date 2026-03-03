@@ -133,7 +133,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      *
      * **Limitation:** Reveal is best-effort. If `TreeView.reveal()` is
      * called before the tree has ever loaded roots (before
-     * {@link getRootChildren} runs), `rootKind` will still be `'account'`
+     * {@link getRootChildren} runs), `rootKind` will still be `'subscription'`
      * and this method may return parent keys for account/tenant nodes that
      * are actually skipped from the visible tree. This can cause reveal to
      * fail until the user has expanded the tree at least once.
