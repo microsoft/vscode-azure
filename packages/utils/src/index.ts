@@ -11,6 +11,7 @@ export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './tree/DataItemTree';
 export * from './tree/DataProvider';
+export * from './tree/pickFromTree';
 export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AssertAssignable';

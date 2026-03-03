@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { IVsCode, pickFromTree } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureViewDataTree } from '../services';
+import { IAzureViewDataTree, IAzureViewViewItemTree } from '../services';
 import type { EnrichedAcrRegistry } from '../tree/acr/AcrRegistry';
 import { isAcrRegistry } from '../tree/acr/AcrRegistry';
+import { createAzurePickOptions } from '../tree/createAzurePickOptions';
 import type { ManagedCommand } from './ManagedCommand';
 
 // TODO: remove this demonstration command
@@ -16,9 +17,22 @@ export class DisableAcrAdminUser implements ManagedCommand {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(IAzureViewViewItemTree) private readonly viewTree: IAzureViewViewItemTree, // TODO: a single selector service that can accept pick options and give back the resolved resource (either from quick pick or from cache)?
     ) { }
 
-    public async execute(key: string): Promise<void> {
+    public async execute(key?: string): Promise<void> {
+        if (!key) {
+            key = await pickFromTree(this.code, this.viewTree, createAzurePickOptions(this.code, {
+                title: this.code.l10n.t('Disable ACR Admin User'),
+                terminalContextValue: 'azureContainerRegistry',
+                targetResourceType: 'Microsoft.ContainerRegistry/registries',
+            }));
+
+            if (!key) {
+                return;
+            }
+        }
+
         const resource = this.cache.get(key);
         if (!resource || !isAcrRegistry(resource)) {
             return;
