@@ -7,6 +7,8 @@ import { CancellationError } from '../vscode/CancellationError';
 import type { ITreeItem, IVsCode } from '../vscode/IVsCode';
 import type { ProviderResult } from '../vscode/ProviderResult';
 
+// TODO: reimpl based on wizard framework
+
 /**
  * Minimal tree interface required by {@link pickFromTree}.
  * Compatible with {@link ViewItemTree} but decoupled for testability.
