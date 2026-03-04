@@ -9,7 +9,7 @@ import { AzureNodeId } from '../../models/AzureNodeId';
 
 interface SubscriptionExperienceOptions extends ICodeContext {
     readonly viewItemTree: ViewItemTree<string, AzureNode>;
-};
+}
 
 export async function subscriptionExperience(options: SubscriptionExperienceOptions): Promise<string> {
     const wizard = new Wizard<PickContext<string>>(
