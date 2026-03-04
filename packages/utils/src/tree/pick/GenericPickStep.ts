@@ -21,10 +21,11 @@ export type GenericPickOptions<TItem> = ICodeContext & {
     isIntermediate(item: TItem, treeItem: ITreeItem): boolean;
     isTerminal(item: TItem, treeItem: ITreeItem): boolean;
 
-    readonly skipIfOne?: boolean;
+    shouldSkipIfOne?(item: TItem, treeItem: ITreeItem): boolean;
+
     readonly canPickMany?: boolean;
     readonly create?: CreateNewOption<TItem>;
-} & ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: never }); // TODO: make skipIfOne mutually exclusive with create? But would that make intermediate steps unskippable?
+} & ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: never });
 
 export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> = GenericPickOptions<TItem>> extends PromptStep<PickContext<TItem>> {
     public constructor(protected readonly options: TOptions) {
@@ -36,8 +37,14 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> =
         const children = await this.getPickItems(lastPick?.item);
         const picks = this.getPicks(children);
 
-        if (this.options.skipIfOne && picks.length === 1 && picks[0].data !== CreateNew) {
-            return { picks: [...context.picks, picks[0].data] };
+        if (picks.length === 1 && this.options.shouldSkipIfOne) {
+            // Skipping only makes sense if there's no create option and the only pick is an intermediate item--if it's terminal, we want to make the user be explicit about choosing it
+            const onlyPick = picks[0];
+            if (onlyPick.data !== CreateNew &&
+                onlyPick.data.isIntermediate &&
+                this.options.shouldSkipIfOne(onlyPick.data.item, onlyPick.data.treeItem)) {
+                return { picks: [...context.picks, onlyPick.data] };
+            }
         }
 
         // `canPickMany` only applies if all of the selectable items are terminal *and* there is no create option
