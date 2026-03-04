@@ -179,7 +179,7 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
 }
 
 /**
- * Shows a quick pick with the given items and options.
+ * Shows an input box with the given options.
  *
  * **Key features:**
  *   - If {@link ExtendedInputBoxOptions.validateInput} is provided, it runs on every keystroke and shows the
@@ -343,7 +343,7 @@ function quickPickRecentKey<TItem extends vscode.QuickPickItem>(items: TItem[], 
         hash.update(item.description ?? '');
         hash.update('|');
     }
-    hash.update(options?.title ?? options?.stepName ?? '');
+    hash.update(options?.stepName ?? options?.title ?? '');
     return `recentChoice:${hash.digest('hex')}`;
 }
 
