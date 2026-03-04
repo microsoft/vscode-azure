@@ -14,5 +14,5 @@ interface GroupingBase {
     readonly groupingValue: string;
 }
 
-export type VirtualGroup = GroupingBase & { readonly groupingStrategy: 'location' | 'resourceType' | 'armTag' };
+export type VirtualGroup = GroupingBase & { readonly groupingStrategy: Exclude<GroupingStrategy, 'resourceGroup'> };
 export type ResourceGroup = GroupingBase & { readonly groupingStrategy: 'resourceGroup' } & GenericResource;

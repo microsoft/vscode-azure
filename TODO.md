@@ -23,4 +23,3 @@ Before handoff:
 - Context value array and example commands
 - Quick pick walk
 - Deployment story (single and app)
-- Resource type story (to distinguish function apps from app service etc.)

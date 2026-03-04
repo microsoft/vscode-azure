@@ -22,6 +22,7 @@
 * Use `void` prefix for intentionally un-awaited promises
 * Use scoped `eslint-disable` comments on specific lines, never file-wide
 * Strings that will be seen by the user must use `IVsCode.l10n.t()` for localization (debug and trace output to the output channel is exempt from this requirement)
+* Any time ARM resource types (`GenericResource.type`) or logical types (`GenericResource.logicalType`) are checked, they should be compared **case-insensitively** to a constant (e.g., `AcrResourceType`) rather than a string literal
 
 
 ## Understanding the Data Model

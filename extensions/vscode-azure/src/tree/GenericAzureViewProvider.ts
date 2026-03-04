@@ -112,7 +112,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             case isGenericResource(resource): {
                 const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.None);
                 item.id = key;
-                item.description = resource.type;
+                item.description = resource.logicalType;
                 item.contextValue = 'azureResource';
                 item.iconPath = new this.code.ThemeIcon('symbol-misc');
                 return item;
@@ -155,7 +155,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
                 const value = groupingValue(this.groupingStrategy, resource);
                 const group: VirtualGroup = {
                     subscription: resource.subscription,
-                    groupingStrategy: this.groupingStrategy,
+                    groupingStrategy: this.groupingStrategy satisfies VirtualGroup['groupingStrategy'],
                     groupingValue: value,
                 };
                 return toKey(group);
@@ -275,7 +275,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             const value = groupingValue(this.groupingStrategy, resource);
             const group: VirtualGroup = {
                 subscription,
-                groupingStrategy: this.groupingStrategy,
+                groupingStrategy: this.groupingStrategy satisfies VirtualGroup['groupingStrategy'],
                 groupingValue: value,
             };
             const groupKey = toKey(group);
@@ -319,12 +319,12 @@ function extractSubscriptionKey(key: string): string {
 function groupingValue(strategy: GroupingStrategy, resource: GenericResource): string {
     switch (strategy) {
         case 'resourceType':
-            return resource.type;
+            return resource.logicalType;
         case 'location':
             return resource.location;
         // TODO: armTag
         default:
-            return resource.type;
+            return resource.logicalType;
     }
 }
 

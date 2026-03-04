@@ -5,7 +5,7 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, GenericResource, ResourceGroup, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected, type ResourceClient } from '@microsoft/vscode-azure-azutils';
+import { attachMetadata, createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected, type ResourceClient } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import * as util from 'util';
@@ -95,7 +95,8 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
         }
 
         return (response.body.value ?? [])
-            .map(rg => Object.assign(rg, { subscription, groupingStrategy: 'resourceGroup', groupingValue: rg.name } as ResourceGroup));
+            .map(rg => attachMetadata(rg, subscription))
+            .map(rg => Object.assign(rg, { groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'], groupingValue: rg.name })) as ResourceGroup[];
     }
 
     private async getResourcesInGroup(group: ResourceGroup): Promise<GenericResource[]> {
@@ -116,6 +117,6 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
         }
 
         return (response.body.value ?? [])
-            .map(r => Object.assign(r, { subscription: group.subscription } as GenericResource));
+            .map(r => attachMetadata(r, group.subscription));
     }
 }
