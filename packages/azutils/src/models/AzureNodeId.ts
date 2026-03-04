@@ -360,6 +360,15 @@ export class AzureNodeId {
         return this.data.kind === 'grouping' && this.data.grouping.groupingStrategy === 'resourceGroup';
     }
 
+    /**
+     * Returns the grouping strategy and value for grouping nodes
+     * (both resource groups and virtual groups), or `undefined` for
+     * non-grouping nodes.
+     */
+    public getGrouping(): Pick<ResourceGroup | VirtualGroup, 'groupingStrategy' | 'groupingValue'> | undefined {
+        return this.data.kind === 'grouping' ? this.data.grouping : undefined;
+    }
+
     /** Narrows this node ID to a {@link GenericResource} node. */
     public isGenericResourceNodeId(): boolean {
         return this.data.kind === 'resource';

@@ -15,7 +15,7 @@ type ResourceExperienceOptions = ICodeContext & {
     readonly create?: CreateNewOption<string>;
 } & (
         { readonly resourceType: string } | // Look for a specific resource type
-        { readonly isResourceMatch: (node: ConcreteAzureNode) => boolean } // Look for a resource that matches a certain condition (e.g. use for functions where type alone isn't enough)
+        { readonly isResourceMatch: (node: ConcreteAzureNode) => boolean } // Look for a resource that matches a certain condition (e.g. use for functions where type alone isn't enough) // TODO: use a logical type
     );
 
 export async function resourceExperience(options: ResourceExperienceOptions & { canPickMany?: false, create?: CreateNewOption<string> }): Promise<string>;
@@ -30,6 +30,11 @@ export async function resourceExperience(options: ResourceExperienceOptions): Pr
                 ...options,
                 isIntermediate: item => {
                     const nodeId = AzureNodeId.parse(item);
+
+                    if (nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, options)) { // TODO: logical type
+                        return true;
+                    }
+
                     return nodeId.isAccountNodeId()
                         || nodeId.isTenantNodeId()
                         || nodeId.isSubscriptionNodeId()
@@ -38,6 +43,7 @@ export async function resourceExperience(options: ResourceExperienceOptions): Pr
                 },
                 isTerminal: item => {
                     const nodeId = AzureNodeId.parse(item);
+
                     if (nodeId.isGenericResourceNodeId()) {
                         const node = options.dataItemTree.get(item) as GenericResource;
                         if ('resourceType' in options) {
@@ -46,7 +52,13 @@ export async function resourceExperience(options: ResourceExperienceOptions): Pr
                             return options.isResourceMatch(node);
                         }
                     }
+
                     return false;
+                },
+                shouldSkipIfOne: item => {
+                    // Skip intermediate if it's a virtual grouping, by resource type, and we already know the resource type we're looking for
+                    const nodeId = AzureNodeId.parse(item);
+                    return nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, options); // TODO: logical type
                 },
                 tree: options.viewItemTree,
             }),
@@ -67,4 +79,21 @@ export async function resourceExperience(options: ResourceExperienceOptions): Pr
 
         return resourcePick.item;
     }
+}
+
+/**
+ * Returns `true` when the virtual group node uses the `resourceType` strategy
+ * and its value matches the resource type the caller is looking for.
+ *
+ * When the caller uses `isResourceMatch` instead of `resourceType`, we cannot
+ * determine ahead of time which group is the right one, so this returns `false`.
+ */
+function isMatchingResourceTypeGroup(nodeId: AzureNodeId, options: ResourceExperienceOptions): boolean {
+    if (!('resourceType' in options)) {
+        return false;
+    }
+
+    const grouping = nodeId.getGrouping();
+    return grouping?.groupingStrategy === 'resourceType'
+        && grouping.groupingValue.toLowerCase() === options.resourceType.toLowerCase();
 }
