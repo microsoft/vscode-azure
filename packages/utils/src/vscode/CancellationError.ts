@@ -10,7 +10,7 @@
  * a runtime import of the `vscode` module.
  */
 export class CancellationError extends Error {
-    public constructor(message?: string, public readonly cancelStep?: string) {
+    public constructor(message?: string, public readonly stepName?: string) {
         super(message ?? CanceledName);
         this.name = CanceledName;
     }

@@ -30,6 +30,19 @@ export interface ExtendedQuickPickOptions extends vscode.QuickPickOptions, StepO
     readonly onDidTriggerItemButton?: (event: vscode.QuickPickItemButtonEvent<vscode.QuickPickItem>) => void;
 }
 
+/**
+ * Shows a quick pick with the given items and options.
+ *
+ * **Key features:**
+ *   - If {@link ExtendedQuickPickOptions.isActiveItem} is not provided, the most recently picked item (based
+ *     on `label`) will be pre-highlighted. For multi-select, recently picked items will be pre-checked.
+ *   - If {@link ExtendedQuickPickOptions.showBack} is `true`, a back button will be shown that rejects with
+ *     {@link GoBackError} when pressed.
+ *   - If the user cancels the quick pick, it rejects with {@link CancellationError}.
+ * @param injected Injected dependencies ({@link IVsCode} and {@link IExtensionContext})
+ * @param items The quick pick items to show
+ * @param options Options for the quick pick. See {@link ExtendedQuickPickOptions}.
+ */
 export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options: ExtendedQuickPickOptions & { canPickMany: true }): Promise<TItem[]>;
 export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options?: ExtendedQuickPickOptions): Promise<TItem>;
 export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options?: ExtendedQuickPickOptions): Promise<TItem | TItem[]> {
@@ -162,6 +175,24 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
     validateInputAsync?(value: string): Promise<string | vscode.InputBoxValidationMessage | undefined>;
 }
 
+/**
+ * Shows a quick pick with the given items and options.
+ *
+ * **Key features:**
+ *   - If {@link ExtendedInputBoxOptions.validateInput} is provided, it runs on every keystroke and shows the
+ *     returned `string` (or {@link vscode.InputBoxValidationMessage}) as a validation message if the input is
+ *     invalid. Because it runs on every keystroke, it needs to be very fast.
+ *   - If {@link ExtendedInputBoxOptions.validateInputAsync} is provided, it runs when the user accepts. The
+ *     input box is disabled and shows a busy indicator while the promise is pending. If the promise resolves
+ *     to a `string` (or {@link vscode.InputBoxValidationMessage}), it is shown as a validation message and the
+ *     input box is re-enabled. If the promise resolves to `undefined`, the input is accepted. If the promise
+ *     rejects, the error is propagated.
+ *   - If {@link ExtendedInputBoxOptions.showBack} is `true`, a back button will be shown that rejects with
+ *     {@link GoBackError} when pressed.
+ *   - If the user cancels the input box, it rejects with {@link CancellationError}.
+ * @param injected Injected dependencies ({@link IVsCode} and {@link IExtensionContext})
+ * @param options Options for the input box. See {@link ExtendedInputBoxOptions}.
+ */
 export function showSmartInputBox(injected: Injected, options?: ExtendedInputBoxOptions): Promise<string> {
     const showBack = options?.showBack ?? false;
     const input = injected.code.window.createInputBox();
@@ -282,9 +313,17 @@ interface Injected {
     readonly context: IExtensionContext;
 }
 
+/**
+ * Options related to quick picks / inputs with steps and back buttons
+ */
 interface StepOptions {
+    /** Optional name of the step (used in {@link CancellationError}'s `stepName`) */
     readonly stepName?: string;
+
+    /** Optional current step number */
     readonly step?: number;
+
+    /** Optional total number of steps */
     readonly totalSteps?: number;
 
     /** When `true`, shows a back button that throws {@link GoBackError} when pressed. Defaults to `false`. */
