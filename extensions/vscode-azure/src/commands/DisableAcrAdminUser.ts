@@ -29,10 +29,6 @@ export class DisableAcrAdminUser implements ManagedCommand {
                 dataItemTree: this.cache,
                 resourceType: AcrResourceType
             });
-
-            if (!key) {
-                return;
-            }
         }
 
         const resource = this.cache.get(key);
