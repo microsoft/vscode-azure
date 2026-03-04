@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getLastPick, RecursivePickStep, Wizard, type ICodeContext, type ITreeItem, type PickContext } from '@microsoft/vscode-azure-utils';
-import { isAccount, isResourceGroup, isSubscription, isTenant, type ConcreteAzureNodeTree } from '../../models/AzureNode';
+import { isAccount, isResourceGroup, isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../../models/AzureNode';
 import { AzureNodeId } from '../../models/AzureNodeId';
 
 interface ResourceGroupExperienceOptions extends ICodeContext {
@@ -48,7 +48,13 @@ class ResourceGroupViewItemTree {
     public constructor(private readonly dataItemTree: ConcreteAzureNodeTree) { }
 
     public async getChildren(key?: string): Promise<string[]> {
-        const node = key ? this.dataItemTree.get(key) : undefined;
+        let node: ConcreteAzureNode | undefined = undefined;
+        if (key) {
+            node = this.dataItemTree.get(key);
+            if (!node) {
+                throw new Error(`Could not find node for key: ${key}`);
+            }
+        }
         return (await this.dataItemTree.getChildren(node)).map(child => AzureNodeId.from(child).toString());
     }
 

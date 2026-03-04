@@ -21,7 +21,6 @@
 
 Before handoff:
 - Context value array and example commands
-- Quick pick walk
 - Deployment story (single and app)
   - Generally app deployment can be just `azd up`...probably use AZD extension in some capacity? Or absorb it into this one?
   - Single resource--can we draft a Bicep file? Use AVM? Open an editor for the Bicep with very good completions support / tab stops, to make editing many things easy?
