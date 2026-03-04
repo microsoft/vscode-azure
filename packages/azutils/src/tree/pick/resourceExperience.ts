@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getLastPick, type ICodeContext, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
+import { type CreateNewOption, getLastPick, type ICodeContext, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
 import type { AzureNode, ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
 import { AzureNodeId } from '../../models/AzureNodeId';
 import type { GenericResource } from '../../models/GenericResource';
@@ -11,12 +11,16 @@ import type { GenericResource } from '../../models/GenericResource';
 type ResourceExperienceOptions = ICodeContext & {
     readonly viewItemTree: ViewItemTree<string, AzureNode>;
     readonly dataItemTree: ConcreteAzureNodeTree;
+    readonly canPickMany?: boolean;
+    readonly create?: CreateNewOption<string>;
 } & (
         { readonly resourceType: string } | // Look for a specific resource type
         { readonly isResourceMatch: (node: ConcreteAzureNode) => boolean } // Look for a resource that matches a certain condition (e.g. use for functions where type alone isn't enough)
     );
 
-export async function resourceExperience(options: ResourceExperienceOptions): Promise<string> {
+export async function resourceExperience(options: ResourceExperienceOptions & { canPickMany?: false, create?: CreateNewOption<string> }): Promise<string>;
+export async function resourceExperience(options: ResourceExperienceOptions & { canPickMany: true, create?: never }): Promise<string[]>;
+export async function resourceExperience(options: ResourceExperienceOptions): Promise<string | string[]> {
     const wizard = new Wizard<PickContext<string>>(
         {
             picks: [],
@@ -50,12 +54,17 @@ export async function resourceExperience(options: ResourceExperienceOptions): Pr
     );
 
     const result = await wizard.run();
-    const resourcePick = getLastPick(result);
 
-    if (!resourcePick) {
-        // TODO: unexpected state
-        throw new Error('No resource was picked');
+    if (options.canPickMany) {
+        return result.selectedTerminalPicks ?? [];
+    } else {
+        const resourcePick = getLastPick(result);
+
+        if (!resourcePick) {
+            // TODO: unexpected state
+            throw new Error('No resource was picked');
+        }
+
+        return resourcePick.item;
     }
-
-    return resourcePick.item;
 }

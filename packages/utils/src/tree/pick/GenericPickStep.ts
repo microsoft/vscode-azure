@@ -3,11 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type QuickPickItemWithData, showSmartQuickPick } from '../../ui/uiHelpers';
+import type * as vscode from 'vscode';
+import { type ExtendedQuickPickOptions, type QuickPickItemWithData, showSmartQuickPick } from '../../ui/uiHelpers';
 import type { ICodeContext, ITreeItem } from '../../vscode/IVsCode';
 import type { ProviderResult } from '../../vscode/ProviderResult';
 import { PromptStep } from '../../wizard/PromptStep';
 import { getLastPick, type PickContext, type PickPair } from './PickContext';
+
+export interface CreateNewOption<TItem> {
+    readonly label: string;
+    createNewItem(): TItem | Promise<TItem>;
+}
 
 export type GenericPickOptions<TItem> = ICodeContext & {
     readonly tree: TreeLike<TItem>;
@@ -16,10 +22,9 @@ export type GenericPickOptions<TItem> = ICodeContext & {
     isTerminal(item: TItem, treeItem: ITreeItem): boolean;
 
     readonly skipIfOne?: boolean;
-
     readonly canPickMany?: boolean;
     readonly create?: CreateNewOption<TItem>;
-} & ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: undefined }); // TODO: make skipIfOne mutually exclusive with create?
+} & ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: never }); // TODO: make skipIfOne mutually exclusive with create? But would that make intermediate steps unskippable?
 
 export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> = GenericPickOptions<TItem>> extends PromptStep<PickContext<TItem>> {
     public constructor(protected readonly options: TOptions) {
@@ -35,19 +40,30 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> =
             return { picks: [...context.picks, picks[0].data] };
         }
 
-        const choice = await showSmartQuickPick(this.options, picks, {
-            canPickMany: this.options.canPickMany,
-            showBack: true,
-            matchOnDescription: true,
-            // TODO: more options, e.g. step name, etc.
-        });
+        // `canPickMany` only applies if all of the selectable items are terminal *and* there is no create option
+        const canPickMany = this.options.canPickMany && !this.options.create && children.every(c => c.isTerminal) && children.every(c => !c.isIntermediate);
 
-        if (choice.data === CreateNew) {
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            const newItem = await this.options.create!.createNewItem();
-            return { picks: [...context.picks, { item: newItem, treeItem: await this.options.tree.getTreeItem(newItem) }] };
+        if (canPickMany) {
+            const choices = await showSmartQuickPick(this.options, picks, {
+                ...DefaultQuickPickOptions,
+                canPickMany: true,
+                // TODO: more options, e.g. step name, etc.
+            }) as QuickPickItemWithData<FilteredChild<TItem>>[]; // Can't be `CreateNew` since create isn't allowed with `canPickMany`
+
+            return { selectedTerminalPicks: choices.map(c => c.data.item) };
         } else {
-            return { picks: [...context.picks, choice.data] };
+            const choice = await showSmartQuickPick(this.options, picks, {
+                ...DefaultQuickPickOptions,
+                // TODO: more options, e.g. step name, etc.
+            });
+
+            if (choice.data === CreateNew) {
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                const newItem = await this.options.create!.createNewItem();
+                return { picks: [...context.picks, { item: newItem, treeItem: await this.options.tree.getTreeItem(newItem) }] };
+            } else {
+                return { picks: [...context.picks, choice.data] };
+            }
         }
     }
 
@@ -115,9 +131,9 @@ export interface FilteredChild<TItem> extends PickPair<TItem> {
     readonly isTerminal: boolean;
 }
 
-interface CreateNewOption<TItem> {
-    readonly label: string;
-    createNewItem(): TItem | Promise<TItem>;
-}
-
 const CreateNew: unique symbol = Symbol('CreateNew');
+
+const DefaultQuickPickOptions: ExtendedQuickPickOptions<vscode.QuickPickItem> = {
+    showBack: true,
+    matchOnDescription: true,
+};

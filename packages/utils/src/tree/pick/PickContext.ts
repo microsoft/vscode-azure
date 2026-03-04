@@ -7,13 +7,13 @@ import type { ITreeItem } from '../../vscode/IVsCode';
 
 export interface PickContext<T> {
     readonly picks: PickPair<T>[];
+    readonly selectedTerminalPicks?: T[];
 }
 
 export interface PickPair<T> {
     readonly item: T;
     readonly treeItem: ITreeItem;
 }
-
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export function getLastPick<T, TPair extends PickPair<T> = PickPair<T>>(context: Readonly<PickContext<T>>): TPair | undefined {

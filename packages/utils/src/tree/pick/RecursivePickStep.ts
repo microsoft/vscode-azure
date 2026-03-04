@@ -9,8 +9,13 @@ import { getLastPick, type PickContext } from './PickContext';
 
 export class RecursivePickStep<TItem> extends GenericPickStep<TItem> {
     public override getSubPromptSteps(context: Readonly<PickContext<TItem>>): PromptStep<PickContext<TItem>>[] {
-        const lastPick = getLastPick<TItem, FilteredChild<TItem>>(context);
+        if (context.selectedTerminalPicks?.length) {
+            // If this is set, it means the user made a multi-pick selection, which can only happen if all of the items were terminal
+            // Consequently, we know we're done and don't need to show any more prompts
+            return [];
+        }
 
+        const lastPick = getLastPick<TItem, FilteredChild<TItem>>(context);
         if (!lastPick || lastPick.isTerminal) {
             return [];
         }
