@@ -15,6 +15,7 @@ export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AssertAssignable';
 export * from './types/AsWritable';
+export * from './ui/uiHelpers';
 export * from './vscode/CancellationError';
 export * from './vscode/Disposable';
 export * from './vscode/EventEmitter';
