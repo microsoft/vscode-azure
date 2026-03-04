@@ -15,7 +15,7 @@
 - Pagination of lists or at least a user-adjustable max item limit
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
 - Enforce using only "safe" imports of `vscode` (`IVsCode` should be used in most cases)
-- Fix excessive reparsing of `AzureNodeId` (e.g. could be every `canHandle()` call, no good)
+- Fix excessive reparsing of `AzureNodeId` (e.g. could be every `canHandle()` call across many providers, no good) (same issue appears for tree pick experience but to a lesser degree)
 - Tests that enforce bundle size not growing out of control
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)
 
@@ -27,3 +27,12 @@ Before handoff:
   - Single resource--can we draft a Bicep file? Use AVM? Open an editor for the Bicep with very good completions support / tab stops, to make editing many things easy?
 - Resource type story (to distinguish function apps from app service etc.)
 - Inventory of existing features and ordering their importance
+
+High level things to iron out:
+- Partner story
+  - How they contribute
+  - Who owns code long-term
+  - Rules and how we enforce them
+- User experience for migration from old extensions
+- User experience for deprecation of old extensions
+- Side-by-side? Side-by-side of the views? etc.
