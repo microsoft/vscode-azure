@@ -26,7 +26,11 @@ export async function resourceExperience(options: ResourceExperienceOptions): Pr
                 ...options,
                 isIntermediate: item => {
                     const nodeId = AzureNodeId.parse(item);
-                    return nodeId.isAccountNodeId() || nodeId.isTenantNodeId() || nodeId.isResourceGroupNodeId() || nodeId.isVirtualGroupNodeId();
+                    return nodeId.isAccountNodeId()
+                        || nodeId.isTenantNodeId()
+                        || nodeId.isSubscriptionNodeId()
+                        || nodeId.isResourceGroupNodeId()
+                        || nodeId.isVirtualGroupNodeId();
                 },
                 isTerminal: item => {
                     const nodeId = AzureNodeId.parse(item);

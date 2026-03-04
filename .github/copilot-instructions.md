@@ -8,7 +8,7 @@
 * Use `import type` for type-only imports
 * Use `import * as vscode` for the VS Code API (the only namespace import)
 * Prefer named exports; avoid default exports
-* Use the `I`-prefix for DI service identifier interfaces (e.g., `IActionContext`)
+* Use the `I`-prefix for DI service identifier interfaces (e.g., `IVsCode`)
 * Use the following interfaces in place of the built-in `vscode` types when possible:
   - `IVsCode` instead of `vscode`
   - `IExtensionContext` instead of `vscode.ExtensionContext`
@@ -19,8 +19,8 @@
 * Use PascalCase for files containing classes/interfaces, camelCase for function-oriented files
 * Label test cases with `(unit)` or `(integration)` in the root `describe` description
 * Include the Microsoft copyright header on every TypeScript/JavaScript file
-* Use `void` prefix for intentionally un-awaited promises
-* Use scoped `eslint-disable` comments on specific lines, never file-wide
+* Use `void` prefix for intentionally un-awaited promises, unless they have a `.then()` with two arguments (for resolve and reject), or a `.catch()` handler
+* Use scoped `eslint-disable` comments on specific lines, avoid file-wide unless it requires repeating the same disable many times
 * Strings that will be seen by the user must use `IVsCode.l10n.t()` for localization (debug and trace output to the output channel is exempt from this requirement)
 
 
