@@ -16,18 +16,18 @@ export interface QuickPickItemWithData<T> extends vscode.QuickPickItem {
 }
 
 /** Options for quick pick boxes that support a back button, cancellation, and preset values */
-export interface ExtendedQuickPickOptions extends vscode.QuickPickOptions, StepOptions {
+export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> extends vscode.QuickPickOptions, StepOptions {
     /** Predicate to determine which item should be pre-highlighted. The first matching item wins. */
-    readonly isActiveItem?: (item: vscode.QuickPickItem) => boolean;
+    readonly isActiveItem?: (item: TItem) => boolean;
 
     /** Predicate to determine which items are pre-selected when {@link vscode.QuickPickOptions.canPickMany} is true. */
-    readonly isSelectedItem?: (item: vscode.QuickPickItem) => boolean;
+    readonly isSelectedItem?: (item: TItem) => boolean;
 
     /** Preset filter string */
     readonly value?: string;
 
     /** Called when a button on a specific quick pick item is triggered. */
-    readonly onDidTriggerItemButton?: (event: vscode.QuickPickItemButtonEvent<vscode.QuickPickItem>) => void;
+    readonly onDidTriggerItemButton?: (event: vscode.QuickPickItemButtonEvent<TItem>) => void;
 }
 
 /**
@@ -43,11 +43,11 @@ export interface ExtendedQuickPickOptions extends vscode.QuickPickOptions, StepO
  * @param items The quick pick items to show
  * @param options Options for the quick pick. See {@link ExtendedQuickPickOptions}.
  */
-export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options: ExtendedQuickPickOptions & { canPickMany: true }): Promise<TItem[]>;
-export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options?: ExtendedQuickPickOptions): Promise<TItem>;
-export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options?: ExtendedQuickPickOptions): Promise<TItem | TItem[]> {
+export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options: ExtendedQuickPickOptions<TItem> & { canPickMany: true }): Promise<TItem[]>;
+export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options?: ExtendedQuickPickOptions<TItem>): Promise<TItem>;
+export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options?: ExtendedQuickPickOptions<TItem>): Promise<TItem | TItem[]> {
     const showBack = options?.showBack ?? false;
-    const quickPick = injected.code.window.createQuickPick<vscode.QuickPickItem>();
+    const quickPick = injected.code.window.createQuickPick<TItem>();
     const recentKey = quickPickRecentKey(items, options);
     quickPick.items = items;
 
@@ -120,15 +120,18 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected:
                     if (selected.length > 0) {
                         finish(() => {
                             void injected.context.workspaceState.update(recentKey, selected.map(s => s.label));
-                            resolve(selected as TItem[]);
+                            resolve(selected);
                         });
+                    } else {
+                        // If no items are selected, treat it as a cancellation (similar to how hitting escape with no active item doesn't select the active item)
+                        finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
                     }
                 } else {
-                    const selected = quickPick.activeItems[0] as vscode.QuickPickItem | undefined;
+                    const selected = quickPick.activeItems[0] as TItem | undefined;
                     if (selected) {
                         finish(() => {
                             void injected.context.workspaceState.update(recentKey, [selected.label]);
-                            resolve(selected as TItem);
+                            resolve(selected);
                         });
                     }
                 }
@@ -214,7 +217,7 @@ export function showSmartInputBox(injected: Injected, options?: ExtendedInputBox
     input.totalSteps = options?.totalSteps;
 
     // If the caller did not provide a default value, try to pre-fill based on recent input
-    if (recentKey && !options?.value) {
+    if (recentKey && options?.value === undefined) {
         const recentValue = injected.context.workspaceState.get<string>(recentKey);
         if (recentValue) {
             input.value = recentValue;
@@ -249,17 +252,19 @@ export function showSmartInputBox(injected: Injected, options?: ExtendedInputBox
                     input.enabled = false;
                     input.busy = true;
                     options.validateInputAsync(value).then((msg) => {
-                        input.enabled = true;
-                        input.busy = false;
-                        if (msg) {
-                            input.validationMessage = msg;
-                        } else {
-                            finish(() => {
-                                if (recentKey) {
-                                    void injected.context.workspaceState.update(recentKey, value);
-                                }
-                                resolve(value);
-                            });
+                        if (!settled) {
+                            input.enabled = true;
+                            input.busy = false;
+                            if (msg) {
+                                input.validationMessage = msg;
+                            } else {
+                                finish(() => {
+                                    if (recentKey) {
+                                        void injected.context.workspaceState.update(recentKey, value);
+                                    }
+                                    resolve(value);
+                                });
+                            }
                         }
                     }, (e: unknown) => {
                         // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
@@ -330,7 +335,7 @@ interface StepOptions {
     readonly showBack?: boolean;
 }
 
-function quickPickRecentKey(items: vscode.QuickPickItem[], options: ExtendedQuickPickOptions | undefined): string {
+function quickPickRecentKey<TItem extends vscode.QuickPickItem>(items: TItem[], options: ExtendedQuickPickOptions<TItem> | undefined): string {
     const hash = crypto.createHash('sha256');
     // Sort a copy to avoid mutating the caller's array.
     for (const item of [...items].sort((a, b) => a.label.localeCompare(b.label))) {
