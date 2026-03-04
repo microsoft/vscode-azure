@@ -22,7 +22,6 @@ export * from './ui/uiHelpers';
 export * from './vscode/CancellationError';
 export * from './vscode/Disposable';
 export * from './vscode/EventEmitter';
-export * from './vscode/IExtensionContext';
 export * from './vscode/IOutputChannel';
 export * from './vscode/IVsCode';
 export * from './vscode/ProviderResult';

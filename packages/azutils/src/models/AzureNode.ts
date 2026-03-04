@@ -4,11 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
+import type { DataItemTree } from '@microsoft/vscode-azure-utils';
 import type { GenericResource } from './GenericResource';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
 import type { VirtualResource } from './VirtualResource';
 
 export type AzureNode = AzureAccount | AzureTenant | AzureSubscription | ResourceGroup | VirtualGroup | GenericResource | VirtualResource;
+
+export type ConcreteAzureNode = Exclude<AzureNode, VirtualGroup>;
+export type ConcreteAzureNodeTree = DataItemTree<ConcreteAzureNode>;
 
 export function isAccount(node: AzureNode): node is AzureAccount {
     return 'id' in node && 'label' in node && 'environment' in node;

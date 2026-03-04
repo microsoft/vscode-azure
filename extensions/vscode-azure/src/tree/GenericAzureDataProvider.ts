@@ -4,17 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import type { AzureNode, GenericResource, ResourceGroup, VirtualGroup } from '@microsoft/vscode-azure-azutils';
+import type { ConcreteAzureNode, GenericResource, ResourceGroup } from '@microsoft/vscode-azure-azutils';
 import { createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected, type ResourceClient } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import * as util from 'util';
 import { IAzureSubscriptionProvider } from '../services';
 
-export type AzureResourceNode = Exclude<AzureNode, VirtualGroup>;
-
 @injectable()
-export class GenericAzureDataProvider implements DataProvider<AzureResourceNode> {
+export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode> {
     public readonly isRoot = true;
 
     /**
@@ -32,22 +30,22 @@ export class GenericAzureDataProvider implements DataProvider<AzureResourceNode>
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
     ) { }
 
-    public canHandle(resource: unknown): resource is AzureResourceNode {
+    public canHandle(resource: unknown): resource is ConcreteAzureNode {
         if (!resource || typeof resource !== 'object') {
             return false;
         }
 
-        const node = resource as AzureResourceNode;
+        const node = resource as ConcreteAzureNode;
         return isAccount(node) || isTenant(node) || isSubscription(node) || isResourceGroup(node);
     }
 
-    public async getChildren(resource?: AzureResourceNode): Promise<AzureResourceNode[]> {
+    public async getChildren(resource?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> {
         this.signInPromise ??= this.subscriptionProvider.signIn(); // TODO: handle sign out?
         await this.signInPromise;
 
         if (!resource) {
             // Root: return all signed-in accounts
-            return await this.subscriptionProvider.getAccounts() as AzureResourceNode[];
+            return await this.subscriptionProvider.getAccounts() as ConcreteAzureNode[];
         }
 
         switch (true) {

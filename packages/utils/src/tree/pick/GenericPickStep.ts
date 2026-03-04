@@ -3,16 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { QuickPickItemWithData, showSmartQuickPick } from '../../ui/uiHelpers';
-import { IExtensionContext } from '../../vscode/IExtensionContext';
-import type { ITreeItem, IVsCode } from '../../vscode/IVsCode';
+import { type QuickPickItemWithData, showSmartQuickPick } from '../../ui/uiHelpers';
+import type { ICodeContext, ITreeItem } from '../../vscode/IVsCode';
 import type { ProviderResult } from '../../vscode/ProviderResult';
 import { PromptStep } from '../../wizard/PromptStep';
 import { getLastPick, type PickContext, type PickPair } from './PickContext';
 
-export type GenericPickOptions<TItem> = {
-    readonly code: IVsCode;
-    readonly extensionContext: IExtensionContext;
+export type GenericPickOptions<TItem> = ICodeContext & {
     readonly tree: TreeLike<TItem>;
 
     isIntermediate(item: TItem, treeItem: ITreeItem): boolean;
@@ -38,7 +35,7 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> =
             return { picks: [...context.picks, picks[0].data] };
         }
 
-        const choice = await showSmartQuickPick({ code: this.options.code, context: this.options.extensionContext }, picks, {
+        const choice = await showSmartQuickPick(this.options, picks, {
             canPickMany: this.options.canPickMany,
             showBack: true,
             matchOnDescription: true,

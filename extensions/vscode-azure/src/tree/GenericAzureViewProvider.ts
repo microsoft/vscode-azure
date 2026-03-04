@@ -4,13 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
+import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
-import type { DataItemTree, ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
+import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../services';
-import type { AzureResourceNode } from './GenericAzureDataProvider';
 
 @injectable()
 export class GenericAzureViewProvider implements ViewProvider<string> {
@@ -40,7 +39,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IAzureViewDataTree) private readonly cache: DataItemTree<AzureResourceNode>,
+        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
 
     // #region ViewProvider
@@ -252,7 +251,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      * For other strategies the groups are virtual, keyed by grouping value.
      */
     private async groupResources(subscription: AzureSubscription): Promise<Map<string, string[]>> {
-        const resourceGroups = await this.cache.getChildren(subscription as AzureResourceNode);
+        const resourceGroups = await this.cache.getChildren(subscription as ConcreteAzureNode);
 
         // Resource group strategy: one group per RG, children resolved by
         // the cache on the next expansion -- no flattening needed.

@@ -5,10 +5,9 @@
 
 import { type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
 import { get } from '@azure/arm-containerregistry/api/registries';
-import { type GenericResource, isVirtualResource, parseAzureResourceId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { ConcreteAzureNode, type GenericResource, isVirtualResource, parseAzureResourceId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
-import type { AzureResourceNode } from '../GenericAzureDataProvider';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**
@@ -23,7 +22,7 @@ import { isAcrRegistry } from './AcrRegistry';
  *   the data-plane client (`@azure/container-registry`) is integrated.
  */
 @injectable()
-export class AcrDataProvider implements DataProvider<AzureResourceNode> {
+export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
 
     /**
      * Cached ARM management clients per subscription ID, so all calls for
@@ -31,7 +30,7 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
      */
     private readonly clientCache = new Map<string, ContainerRegistryManagementContext>();
 
-    public canHandle(resource: unknown): resource is AzureResourceNode {
+    public canHandle(resource: unknown): resource is ConcreteAzureNode {
         return isAcrRegistry(resource) || isAcrVirtualResource(resource);
     }
 
@@ -42,7 +41,7 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
      * `loginServer`, `sku`, and `adminUserEnabled` onto the resource
      * so that view providers can render them without additional API calls.
      */
-    public async enrich(resource: AzureResourceNode): Promise<void> {
+    public async enrich(resource: ConcreteAzureNode): Promise<void> {
         if (!isAcrRegistry(resource)) {
             return;
         }
@@ -70,7 +69,7 @@ export class AcrDataProvider implements DataProvider<AzureResourceNode> {
      *
      * TODO: replace dummy data with real data-plane calls.
      */
-    public getChildren(resource?: AzureResourceNode): AzureResourceNode[] {
+    public getChildren(resource?: ConcreteAzureNode): ConcreteAzureNode[] {
         if (!resource) {
             return [];
         }

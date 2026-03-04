@@ -3,30 +3,27 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DataItemTree, getLastPick, type IExtensionContext, type IVsCode, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
-import { AzureNodeId } from 'src/models/AzureNodeId';
-import { GenericResource } from 'src/models/GenericResource';
-import type { AzureNode } from '../../models/AzureNode';
+import { getLastPick, type ICodeContext, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
+import type { AzureNode, ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
+import { AzureNodeId } from '../../models/AzureNodeId';
+import type { GenericResource } from '../../models/GenericResource';
 
-type ResourceExperienceOptions = {
-    code: IVsCode;
-    extensionContext: IExtensionContext;
-    tree: ViewItemTree<string, AzureNode>;
-    dataItemTree: DataItemTree<AzureNode>;
+type ResourceExperienceOptions = ICodeContext & {
+    readonly viewItemTree: ViewItemTree<string, AzureNode>;
+    readonly dataItemTree: ConcreteAzureNodeTree;
 } & (
-        { resourceType: string } | // experience for a specific resource type
-        { isResourceMatch: (node: AzureNode) => boolean } // experience for a specific set of resources determined by a function
+        { readonly resourceType: string } | // Look for a specific resource type
+        { readonly isResourceMatch: (node: ConcreteAzureNode) => boolean } // Look for a resource that matches a certain condition (e.g. use for functions where type alone isn't enough)
     );
 
-export async function resourceExperience<TResource extends GenericResource>(options: ResourceExperienceOptions): Promise<TResource> {
+export async function resourceExperience(options: ResourceExperienceOptions): Promise<string> {
     const wizard = new Wizard<PickContext<string>>(
         {
             picks: [],
         },
         [
             new RecursivePickStep<string>({
-                code: options.code,
-                extensionContext: options.extensionContext,
+                ...options,
                 isIntermediate: item => {
                     const nodeId = AzureNodeId.parse(item);
                     return nodeId.isAccountNodeId() || nodeId.isTenantNodeId() || nodeId.isResourceGroupNodeId() || nodeId.isVirtualGroupNodeId();
@@ -35,7 +32,6 @@ export async function resourceExperience<TResource extends GenericResource>(opti
                     const nodeId = AzureNodeId.parse(item);
                     if (nodeId.isGenericResourceNodeId()) {
                         const node = options.dataItemTree.get(item) as GenericResource;
-
                         if ('resourceType' in options) {
                             return node.type.toLowerCase() === options.resourceType.toLowerCase();
                         } else if ('isResourceMatch' in options) {
@@ -44,7 +40,7 @@ export async function resourceExperience<TResource extends GenericResource>(opti
                     }
                     return false;
                 },
-                tree: options.tree,
+                tree: options.viewItemTree,
             }),
         ]
     );
@@ -57,5 +53,5 @@ export async function resourceExperience<TResource extends GenericResource>(opti
         throw new Error('No resource was picked');
     }
 
-    return options.dataItemTree.get(resourcePick.item) as TResource;
+    return resourcePick.item;
 }

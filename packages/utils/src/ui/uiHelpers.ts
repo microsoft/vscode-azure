@@ -6,8 +6,7 @@
 import * as crypto from 'crypto';
 import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
-import type { IExtensionContext } from '../vscode/IExtensionContext';
-import type { IVsCode } from '../vscode/IVsCode';
+import type { ICodeContext } from '../vscode/IVsCode';
 import { GoBackError } from '../wizard/GoBackError';
 
 /** A {@link vscode.QuickPickItem} with associated underlying data */
@@ -39,20 +38,20 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
  *   - If {@link ExtendedQuickPickOptions.showBack} is `true`, a back button will be shown that rejects with
  *     {@link GoBackError} when pressed.
  *   - If the user cancels the quick pick, it rejects with {@link CancellationError}.
- * @param injected Injected dependencies ({@link IVsCode} and {@link IExtensionContext})
+ * @param ctx Dependencies ({@link IVsCode} and {@link IExtensionContext})
  * @param items The quick pick items to show
  * @param options Options for the quick pick. See {@link ExtendedQuickPickOptions}.
  */
-export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options: ExtendedQuickPickOptions<TItem> & { canPickMany: true }): Promise<TItem[]>;
-export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options?: ExtendedQuickPickOptions<TItem>): Promise<TItem>;
-export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected: Injected, items: TItem[], options?: ExtendedQuickPickOptions<TItem>): Promise<TItem | TItem[]> {
+export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICodeContext, items: TItem[], options: ExtendedQuickPickOptions<TItem> & { canPickMany: true }): Promise<TItem[]>;
+export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICodeContext, items: TItem[], options?: ExtendedQuickPickOptions<TItem>): Promise<TItem>;
+export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICodeContext, items: TItem[], options?: ExtendedQuickPickOptions<TItem>): Promise<TItem | TItem[]> {
     const showBack = options?.showBack ?? false;
-    const quickPick = injected.code.window.createQuickPick<TItem>();
+    const quickPick = ctx.code.window.createQuickPick<TItem>();
     const recentKey = quickPickRecentKey(items, options);
     quickPick.items = items;
 
     if (showBack) {
-        quickPick.buttons = [injected.code.QuickInputButtons.Back];
+        quickPick.buttons = [ctx.code.QuickInputButtons.Back];
     }
 
     // Copy in the options
@@ -74,13 +73,13 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected:
         }
     } else if (!quickPick.canSelectMany) {
         // For single-select, try to pre-highlight a recently chosen item
-        const recentLabels = injected.context.workspaceState.get<string[]>(recentKey);
+        const recentLabels = ctx.extensionContext.workspaceState.get<string[]>(recentKey);
         if (recentLabels && recentLabels.length > 0) {
             const recentItem = items.find(item => item.label === recentLabels[0]);
             if (recentItem) {
                 recentItem.description = recentItem.description ?
-                    injected.code.l10n.t('{0} (recently selected)', recentItem.description) :
-                    injected.code.l10n.t('(recently selected)');
+                    ctx.code.l10n.t('{0} (recently selected)', recentItem.description) :
+                    ctx.code.l10n.t('(recently selected)');
                 quickPick.activeItems = [recentItem];
             }
         }
@@ -90,14 +89,14 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected:
         quickPick.selectedItems = items.filter(options.isSelectedItem);
     } else if (quickPick.canSelectMany) {
         // For multi-select, pre-check recently selected items
-        const recentLabels = injected.context.workspaceState.get<string[]>(recentKey);
+        const recentLabels = ctx.extensionContext.workspaceState.get<string[]>(recentKey);
         if (recentLabels && recentLabels.length > 0) {
             const recentSet = new Set(recentLabels);
             const recentItems = items.filter(item => recentSet.has(item.label));
             for (const item of recentItems) {
                 item.description = item.description ?
-                    injected.code.l10n.t('{0} (recently selected)', item.description) :
-                    injected.code.l10n.t('(recently selected)');
+                    ctx.code.l10n.t('{0} (recently selected)', item.description) :
+                    ctx.code.l10n.t('(recently selected)');
             }
             quickPick.selectedItems = recentItems;
         }
@@ -119,7 +118,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected:
                     const selected = [...quickPick.selectedItems];
                     if (selected.length > 0) {
                         finish(() => {
-                            void injected.context.workspaceState.update(recentKey, selected.map(s => s.label));
+                            void ctx.extensionContext.workspaceState.update(recentKey, selected.map(s => s.label));
                             resolve(selected);
                         });
                     } else {
@@ -130,7 +129,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected:
                     const selected = quickPick.activeItems[0] as TItem | undefined;
                     if (selected) {
                         finish(() => {
-                            void injected.context.workspaceState.update(recentKey, [selected.label]);
+                            void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
                             resolve(selected);
                         });
                     }
@@ -142,7 +141,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(injected:
         });
 
         quickPick.onDidTriggerButton((button) => {
-            if (button === injected.code.QuickInputButtons.Back) {
+            if (button === ctx.code.QuickInputButtons.Back) {
                 finish(() => { reject(new GoBackError()); });
             }
         });
@@ -193,16 +192,16 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
  *   - If {@link ExtendedInputBoxOptions.showBack} is `true`, a back button will be shown that rejects with
  *     {@link GoBackError} when pressed.
  *   - If the user cancels the input box, it rejects with {@link CancellationError}.
- * @param injected Injected dependencies ({@link IVsCode} and {@link IExtensionContext})
+ * @param ctx Dependencies ({@link IVsCode} and {@link IExtensionContext})
  * @param options Options for the input box. See {@link ExtendedInputBoxOptions}.
  */
-export function showSmartInputBox(injected: Injected, options?: ExtendedInputBoxOptions): Promise<string> {
+export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxOptions): Promise<string> {
     const showBack = options?.showBack ?? false;
-    const input = injected.code.window.createInputBox();
+    const input = ctx.code.window.createInputBox();
     const recentKey = options ? inputBoxRecentKey(options) : undefined;
 
     if (showBack) {
-        input.buttons = [injected.code.QuickInputButtons.Back];
+        input.buttons = [ctx.code.QuickInputButtons.Back];
     }
 
     // Copy in the options
@@ -218,7 +217,7 @@ export function showSmartInputBox(injected: Injected, options?: ExtendedInputBox
 
     // If the caller did not provide a default value, try to pre-fill based on recent input
     if (recentKey && options?.value === undefined) {
-        const recentValue = injected.context.workspaceState.get<string>(recentKey);
+        const recentValue = ctx.extensionContext.workspaceState.get<string>(recentKey);
         if (recentValue) {
             input.value = recentValue;
         }
@@ -260,7 +259,7 @@ export function showSmartInputBox(injected: Injected, options?: ExtendedInputBox
                             } else {
                                 finish(() => {
                                     if (recentKey) {
-                                        void injected.context.workspaceState.update(recentKey, value);
+                                        void ctx.extensionContext.workspaceState.update(recentKey, value);
                                     }
                                     resolve(value);
                                 });
@@ -275,7 +274,7 @@ export function showSmartInputBox(injected: Injected, options?: ExtendedInputBox
 
                 finish(() => {
                     if (recentKey) {
-                        void injected.context.workspaceState.update(recentKey, value);
+                        void ctx.extensionContext.workspaceState.update(recentKey, value);
                     }
                     resolve(value);
                 });
@@ -300,7 +299,7 @@ export function showSmartInputBox(injected: Injected, options?: ExtendedInputBox
         });
 
         input.onDidTriggerButton((button) => {
-            if (button === injected.code.QuickInputButtons.Back) {
+            if (button === ctx.code.QuickInputButtons.Back) {
                 finish(() => { reject(new GoBackError()); });
             }
         });
@@ -311,11 +310,6 @@ export function showSmartInputBox(injected: Injected, options?: ExtendedInputBox
 
         input.show();
     });
-}
-
-interface Injected {
-    readonly code: IVsCode;
-    readonly context: IExtensionContext;
 }
 
 /**
