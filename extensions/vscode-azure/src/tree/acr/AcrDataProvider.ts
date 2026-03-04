@@ -5,7 +5,7 @@
 
 import { type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
 import { get } from '@azure/arm-containerregistry/api/registries';
-import { ConcreteAzureNode, type GenericResource, isVirtualResource, parseAzureResourceId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { type ConcreteAzureNode, type GenericResource, isVirtualResource, parseAzureResourceId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
 import { isAcrRegistry } from './AcrRegistry';

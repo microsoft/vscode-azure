@@ -111,8 +111,8 @@ interface TreeLike<TItem> {
  * @internal - not intended for public consumption, but exported for use in RecursivePickStep
  */
 export interface FilteredChild<TItem> extends PickPair<TItem> {
-    isIntermediate: boolean;
-    isTerminal: boolean;
+    readonly isIntermediate: boolean;
+    readonly isTerminal: boolean;
 }
 
 interface CreateNewOption<TItem> {

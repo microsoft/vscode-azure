@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PromptStep } from '../../wizard/PromptStep';
-import { FilteredChild, GenericPickStep } from './GenericPickStep';
-import { getLastPick, PickContext } from './PickContext';
+import type { PromptStep } from '../../wizard/PromptStep';
+import { type FilteredChild, GenericPickStep } from './GenericPickStep';
+import { getLastPick, type PickContext } from './PickContext';
 
 export class RecursivePickStep<TItem> extends GenericPickStep<TItem> {
     public override getSubPromptSteps(context: Readonly<PickContext<TItem>>): PromptStep<PickContext<TItem>>[] {
