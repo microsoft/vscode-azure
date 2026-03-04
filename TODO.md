@@ -16,7 +16,8 @@
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
 - Enforce using only "safe" imports of `vscode` (`IVsCode` should be used in most cases)
 - Fix excessive reparsing of `AzureNodeId` (e.g. could be every `canHandle()` call, no good)
-- UI helpers for things like "(recently picked)", throwing cancellation/go-back etc.
+- Tests that enforce bundle size not growing out of control
+- Tests that enforce the view layer stays speedy quick (prefill the data cache?)
 
 Before handoff:
 - Context value array and example commands
