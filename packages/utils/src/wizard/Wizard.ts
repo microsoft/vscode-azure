@@ -52,7 +52,7 @@ export class Wizard<TContext extends object> {
     public constructor(
         private readonly baseContext: TContext,
         promptSteps: PromptStep<TContext>[],
-        executeSteps: ExecuteStep<TContext>[]
+        executeSteps: ExecuteStep<TContext>[] = []
     ) {
         // Make shallow copies of step arrays
         this.promptSteps = [...promptSteps];

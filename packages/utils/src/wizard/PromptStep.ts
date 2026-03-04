@@ -54,7 +54,7 @@ export abstract class PromptStep<TContext> {
      * step. Called after {@link prompt} completes successfully.
      * Defaults to none when not overridden.
      */
-    public getSubPromptSteps(_context: Readonly<TContext>): readonly PromptStep<TContext>[] {
+    public getSubPromptSteps(_context: Readonly<TContext>): PromptStep<TContext>[] {
         return [];
     }
 }
