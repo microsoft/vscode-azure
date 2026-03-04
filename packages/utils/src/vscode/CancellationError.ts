@@ -11,7 +11,7 @@
  */
 export class CancellationError extends Error {
     public constructor(message?: string, public readonly cancelStep?: string) {
-        super(message);
+        super(message ?? CanceledName);
         this.name = CanceledName;
     }
 
