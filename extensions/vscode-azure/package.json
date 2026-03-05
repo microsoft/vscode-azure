@@ -21,7 +21,7 @@
         "commands": [
             {
                 "command": "azure.hello",
-                "category": "Azure",
+                "category": "%commands.category.azure%",
                 "title": "Hello World!"
             },
             {
@@ -30,8 +30,13 @@
                 "title": "%commands.vscode-azure/resources/refresh%"
             },
             {
+                "command": "vscode-azure/resources/openInPortal",
+                "icon": "$(link-external)",
+                "title": "%commands.vscode-azure/resources/openInPortal%"
+            },
+            {
                 "command": "vscode-azure/acr/disableAdminUser",
-                "category": "Azure",
+                "category": "%commands.category.azure%",
                 "title": "Disable Admin User"
             }
         ],
@@ -43,6 +48,10 @@
                 },
                 {
                     "command": "vscode-azure/acr/disableAdminUser",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/resources/openInPortal",
                     "when": "false"
                 }
             ],
@@ -56,7 +65,11 @@
             "view/item/context": [
                 {
                     "command": "vscode-azure/acr/disableAdminUser",
-                    "when": "viewItem == azureContainerRegistry"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableAcrAdminUser\\b/i"
+                },
+                {
+                    "command": "vscode-azure/resources/openInPortal",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bopenInPortal\\b/i"
                 }
             ]
         },

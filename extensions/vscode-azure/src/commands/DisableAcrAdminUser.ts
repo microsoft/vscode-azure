@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { resourceExperience } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree } from '../services';
 import type { EnrichedAcrRegistry } from '../tree/acr/AcrRegistry';
@@ -14,6 +14,8 @@ import type { ManagedCommand } from './ManagedCommand';
 // TODO: remove this demonstration command
 @injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
+    public static ContextValue = 'disableAcrAdminUser';
+
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
@@ -35,12 +37,13 @@ export class DisableAcrAdminUser implements ManagedCommand {
             return;
         }
 
-        const registry = await this.ctx.code.window.withProgress(
+        const registry = await withDelayedProgress(
+            this.ctx.code,
             {
                 location: this.ctx.code.ProgressLocation.Notification,
                 title: this.ctx.code.l10n.t('Loading details for \'{0}\'...', resource.name),
             },
-            () => this.cache.whenEnriched<EnrichedAcrRegistry>(resource),
+            this.cache.whenEnriched<EnrichedAcrRegistry>(resource),
         );
 
         void this.ctx.code.window.showInformationMessage(

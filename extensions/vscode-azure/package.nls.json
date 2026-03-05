@@ -2,5 +2,7 @@
     "extension.description": "Azure for Visual Studio Code",
     "viewContainers.vscode-azure": "Azure",
     "views.vscode-azure/resources": "Resources",
-    "commands.vscode-azure/resources/refresh": "Refresh"
+    "commands.category.azure": "Azure",
+    "commands.vscode-azure/resources/refresh": "Refresh",
+    "commands.vscode-azure/resources/openInPortal": "Open in Azure Portal"
 }

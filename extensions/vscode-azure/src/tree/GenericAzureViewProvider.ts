@@ -9,7 +9,9 @@ import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscript
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { OpenInPortal } from '../commands/OpenInPortal';
 import { IAzureViewDataTree } from '../services';
+import { combineContextValues } from './combineContextValues';
 
 @injectable()
 export class GenericAzureViewProvider implements ViewProvider<string> {
@@ -65,7 +67,6 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             const label = grouping?.groupingValue ?? key;
             const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
-            item.contextValue = 'azureVirtualGroup';
             item.iconPath = new this.code.ThemeIcon('symbol-namespace');
             return item;
         }
@@ -79,7 +80,6 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             case isAccount(resource): {
                 const item = new this.code.TreeItem(resource.label, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.contextValue = 'azureAccount';
                 item.iconPath = new this.code.ThemeIcon('account');
                 return item;
             }
@@ -88,7 +88,6 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
                 const label = resource.displayName ?? resource.tenantId;
                 const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.contextValue = 'azureTenant';
                 item.iconPath = new this.code.ThemeIcon('organization');
                 return item;
             }
@@ -96,7 +95,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             case isSubscription(resource): {
                 const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.contextValue = 'azureSubscription';
+                item.contextValue = combineContextValues(OpenInPortal.ContextValue);
                 item.iconPath = new this.code.ThemeIcon('key');
                 return item;
             }
@@ -104,7 +103,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             case isResourceGroup(resource): {
                 const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.contextValue = 'azureResourceGroup';
+                item.contextValue = combineContextValues(OpenInPortal.ContextValue);
                 item.iconPath = new this.code.ThemeIcon('archive');
                 return item;
             }
@@ -113,7 +112,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
                 const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.None);
                 item.id = key;
                 item.description = resource.logicalType;
-                item.contextValue = 'azureResource';
+                item.contextValue = combineContextValues(OpenInPortal.ContextValue);
                 item.iconPath = new this.code.ThemeIcon('symbol-misc');
                 return item;
             }
