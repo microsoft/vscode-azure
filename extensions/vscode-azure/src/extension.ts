@@ -18,7 +18,7 @@ import {
     IVsCode,
 } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
-import * as vscode from 'vscode';
+import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { registerCommands } from './commands/registerCommands';
 import { IAzureSubscriptionProvider, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
