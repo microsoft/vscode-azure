@@ -4,5 +4,6 @@
     "views.vscode-azure/resources": "Resources",
     "commands.category.azure": "Azure",
     "commands.vscode-azure/resources/refresh": "Refresh",
-    "commands.vscode-azure/resources/openInPortal": "Open in Azure Portal"
+    "commands.vscode-azure/resources/openInPortal": "Open in Azure Portal",
+    "commands.vscode-azure/resources/loadMore": "Load More..."
 }

@@ -12,7 +12,6 @@
 - Figure out why the token expired and wasn't refreshing
 - Setting for node skipping behavior
 - Setting for grouping behavior
-- Pagination of lists or at least a user-adjustable max item limit
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
 - Tests that enforce bundle size not growing out of control
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)

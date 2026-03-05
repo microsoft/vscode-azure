@@ -6,6 +6,25 @@
 import type { ProviderResult } from '../vscode/ProviderResult';
 
 /**
+ * The result of a {@link DataProvider.getChildren} call.
+ *
+ * - A plain `TResource[]` for non-paginated results.
+ * - An `AsyncIterable<TResource[]>` whose iterations each yield one page of
+ *   children. The tree pulls the first page on initial access and subsequent
+ *   pages on demand ("Load More").
+ */
+export type ChildResult<TResource> = TResource[] | AsyncIterable<TResource[]>;
+
+/**
+ * Type guard: returns `true` when `value` is an `AsyncIterable` (has
+ * `Symbol.asyncIterator`), indicating paged children.
+ */
+export function isAsyncIterable<T>(value: T[] | AsyncIterable<T[]>): value is AsyncIterable<T[]> {
+    return typeof value === 'object'
+        && Symbol.asyncIterator in value;
+}
+
+/**
  * Data-layer provider for a resource tree.
  *
  * Each implementation handles a specific subset of resources (identified by
@@ -28,9 +47,15 @@ export interface DataProvider<TResource> {
      * Get child resources for the given parent, or the top-level resources
      * when called with no argument (root providers only).
      *
-     * @returns An array of child resources. Return an empty array or undefined for leaf nodes.
+     * Return a plain `TResource[]` for a non-paginated result, or an
+     * `AsyncIterable<TResource[]>` (e.g. from an `async function*`
+     * generator) where each iteration yields a single page. The tree will
+     * pull one page on first access and subsequent pages when the user
+     * clicks "Load More".
+     *
+     * @returns Child resources or `undefined` / empty for leaf nodes.
      */
-    getChildren(resource?: TResource): ProviderResult<TResource[]>;
+    getChildren(resource?: TResource): ProviderResult<ChildResult<TResource>>;
 
     /**
      * Enrich a resource in-place with provider-specific data.

@@ -11,10 +11,16 @@ import {
     type ResourceClient,
     type ResourceGroup
 } from '@microsoft/vscode-azure-azutils';
-import type { DataProvider } from '@microsoft/vscode-azure-utils';
+import type { ChildResult, DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import * as util from 'util';
 import { IAzureSubscriptionProvider } from '../services';
+
+/**
+ * Default page size used when fetching paginated Azure resource lists.
+ * Can be overridden via the `azure.pageSize` setting in the future.
+ */
+const DEFAULT_PAGE_SIZE = 50;
 
 @injectable()
 export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode> {
@@ -44,7 +50,8 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         return isAccount(node) || isTenant(node) || isSubscription(node) || isResourceGroup(node);
     }
 
-    public async getChildren(resource?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> {
+    public async getChildren(resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> {
+        // Ensure sign-in has been initiated (lazy, only once)
         this.signInPromise ??= this.subscriptionProvider.signIn(); // TODO: handle sign out?
         await this.signInPromise;
 
@@ -61,10 +68,10 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
                 return await this.subscriptionProvider.getSubscriptionsForTenant(resource);
 
             case isSubscription(resource):
-                return await this.getResourceGroups(resource);
+                return this.getResourceGroupPages(resource);
 
             case isResourceGroup(resource):
-                return await this.getResourcesInGroup(resource);
+                return this.getResourcePages(resource);
 
             default:
                 throw new Error(`Unsupported resource type: ${util.inspect(resource)}`);
@@ -87,39 +94,76 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         return client;
     }
 
-    private async getResourceGroups(subscription: AzureSubscription): Promise<ResourceGroup[]> {
+    /**
+     * Yields pages of resource groups for a subscription.
+     */
+    private async *getResourceGroupPages(subscription: AzureSubscription): ChildResult<ResourceGroup> {
         const client = await this.getOrCreateClient(subscription);
+
         const response = await client
             .path('/subscriptions/{subscriptionId}/resourcegroups', subscription.subscriptionId)
-            .get();
+            .get({ queryParameters: { $top: DEFAULT_PAGE_SIZE } });
 
         if (isUnexpected(response)) {
             throw new Error(`Failed to list resource groups: ${response.body.error?.message ?? response.status}`);
         }
 
-        return (response.body.value ?? [])
+        yield (response.body.value ?? [])
             .map(rg => attachMetadata(rg, subscription))
             .map(rg => Object.assign(rg, { groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'], groupingValue: rg.name })) as ResourceGroup[];
+
+        yield* this.followNextLink<ResourceGroup>(client, response.body.nextLink, subscription);
     }
 
-    private async getResourcesInGroup(group: ResourceGroup): Promise<GenericResource[]> {
-        // TODO: switch to the subscription-level `/subscriptions/{id}/resources` endpoint
-        // and use DedupeRequestPipelinePolicy to collapse parallel per-RG calls into a
-        // single HTTP request per subscription.
+    /**
+     * Yields pages of resources within a resource group.
+     */
+    private async *getResourcePages(group: ResourceGroup): ChildResult<GenericResource> {
         const client = await this.getOrCreateClient(group.subscription);
+
         const response = await client
             .path(
                 '/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/resources',
                 group.subscription.subscriptionId,
                 group.name,
             )
-            .get();
+            .get({ queryParameters: { $top: DEFAULT_PAGE_SIZE } });
 
         if (isUnexpected(response)) {
             throw new Error(`Failed to list resources: ${response.body.error?.message ?? response.status}`);
         }
 
-        return (response.body.value ?? [])
+        yield (response.body.value ?? [])
             .map(r => attachMetadata(r, group.subscription));
+
+        yield* this.followNextLink<GenericResource>(client, response.body.nextLink, group.subscription);
+    }
+
+    /**
+     * Chase `nextLink` URLs to yield subsequent pages of resources.
+     * Azure REST APIs return absolute `nextLink` URLs that include all
+     * query parameters needed for the next page.
+     */
+    private async *followNextLink<T>(
+        client: ResourceClient,
+        nextLink: string | undefined,
+        subscription: AzureSubscription,
+    ): AsyncGenerator<T[]> {
+        while (nextLink) {
+            // pathUnchecked accepts absolute URLs and routes them through
+            // the existing pipeline (credentials, dedup policy, etc.)
+            const response = await client.pathUnchecked(nextLink).get();
+
+            if (isUnexpected(response)) {
+                throw new Error(`Failed to fetch next page: ${response.body.error?.message ?? response.status}`);
+            }
+
+            const body = response.body as { value?: Record<string, unknown>[]; nextLink?: string };
+            const resources = (body.value ?? [])
+                .map(r => attachMetadata(r as Partial<T>, subscription));
+
+            yield resources as T[];
+            nextLink = body.nextLink;
+        }
     }
 }

@@ -17,10 +17,19 @@ import type { DataProvider } from './DataProvider';
  * resources they own, change order, group, filter, etc. but may not modify the
  * underlying data layer resources in any way.
  *
+ * View providers always return plain arrays from {@link getChildren}
+ * (never paginated `AsyncIterable`s). Pagination is a data-layer concern.
+ *
  * @typeParam TResource - The base resource type this provider operates on.
  *   Implementations may narrow this to a service-specific subtype.
  */
 export interface ViewProvider<TResource> extends DataProvider<TResource> {
+    /**
+     * Get children for the given resource. View providers always return
+     * plain arrays (pagination is handled by the data layer).
+     */
+    getChildren(resource?: TResource): ProviderResult<TResource[]>;
+
     /**
      * Get the tree item representation for the given resource.
      */

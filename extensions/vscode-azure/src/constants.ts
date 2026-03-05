@@ -4,3 +4,4 @@
  *--------------------------------------------------------------------------------------------*/
 
 export const AzureResourceTreeViewId = 'vscode-azure/resources';
+export const LoadMoreCommandId = 'vscode-azure/resources/loadMore';

@@ -38,6 +38,10 @@
                 "command": "vscode-azure/acr/disableAdminUser",
                 "category": "%commands.category.azure%",
                 "title": "Disable Admin User"
+            },
+            {
+                "command": "vscode-azure/resources/loadMore",
+                "title": "%commands.vscode-azure/resources/loadMore%"
             }
         ],
         "menus": {
@@ -52,6 +56,10 @@
                 },
                 {
                     "command": "vscode-azure/resources/openInPortal",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/resources/loadMore",
                     "when": "false"
                 }
             ],

@@ -25,7 +25,7 @@ export interface CreateNewOption<TItem> {
 export type PickClassification = 'intermediate' | 'skip' | 'terminal' | false;
 
 export type GenericPickOptions<TItem> = ICodeContext & {
-    readonly tree: TreeLike<TItem>;
+    readonly tree: TreeLike<TItem> | vscode.TreeDataProvider<TItem>;
 
     classify(item: TItem, treeItem: ITreeItem): PickClassification;
 

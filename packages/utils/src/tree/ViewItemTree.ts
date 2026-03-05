@@ -7,19 +7,42 @@ import type * as vscode from 'vscode';
 import type { Disposable } from '../vscode/Disposable';
 import type { ITreeItem } from '../vscode/IVsCode';
 import type { ProviderResult } from '../vscode/ProviderResult';
+import type { DataItemTree } from './DataItemTree';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
-import type { DataItemTree } from './DataItemTree';
 import type { ViewProvider } from './ViewProvider';
 
 /**
- * Internal node wrapping a view item with its cached children and parent.
- * @internal
+ * Optional configuration for "Load More" support.
+ *
+ * When provided, the tree automatically appends a synthetic "Load More"
+ * view item to any branch whose data-layer provider has more pages.
+ *
+ * @typeParam TViewItem - The view item type stored in the tree.
  */
-interface ViewNode<T> {
-    readonly viewItem: T;
-    readonly parent: ViewNode<T> | undefined;
-    children: ViewNode<T>[] | undefined; // undefined = not yet loaded
+export interface LoadMoreOptions<TViewItem> {
+    /**
+     * Test whether a view item is a synthetic "Load More" node.
+     */
+    readonly isLoadMoreViewItem: (viewItem: TViewItem) => boolean;
+
+    /**
+     * Derive the "Load More" view item for a given parent.
+     * The returned view item must satisfy {@link isLoadMoreViewItem}.
+     */
+    readonly getLoadMoreViewItem: (parentKey: string) => TViewItem;
+
+    /**
+     * Derive the parent view item from a "Load More" view item.
+     * Inverse of {@link getLoadMoreViewItem}.
+     */
+    readonly getParentViewItem: (loadMoreViewItem: TViewItem) => TViewItem;
+
+    /**
+     * Build the VS Code tree item to display for "Load More" nodes.
+     * The tree item is always rendered the same way regardless of parent.
+     */
+    readonly getTreeItem: () => ITreeItem;
 }
 
 /**
@@ -48,17 +71,33 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
     public readonly onDidChangeTreeData = this.changeEmitter.event;
 
+    private readonly hasMoreData: (key: string) => boolean;
+    private readonly loadMoreData: (key: string) => Promise<void>;
+
     /**
-     * @param dataItemTree - The underlying data-layer tree (read-only).
+     * @param dataItemTree - The underlying data-layer tree. It must not be modified directly,
+     * but this class can get children, initiate loading more, and listen for changes on it.
      * @param toViewItem - Converts a resource to a view item.
      * @param getKey - Extracts a unique string key from a view item.
+     * @param loadMoreOptions - Optional. When provided, enables automatic "Load More" node
+     * injection for paginated branches.
      */
     public constructor(
         dataItemTree: DataItemTree<TResource>,
         toViewItem: (resource: TResource) => TViewItem,
-        private readonly getKey: (viewItem: TViewItem) => string
+        private readonly getKey: (viewItem: TViewItem) => string,
+        private readonly loadMoreOptions?: LoadMoreOptions<TViewItem>,
     ) {
         super();
+
+        this.hasMoreData = key => {
+            const resource = dataItemTree.get(key);
+            return resource ? dataItemTree.hasMore(resource) : false;
+        };
+        this.loadMoreData = key => {
+            const resource = dataItemTree.get(key);
+            return resource ? dataItemTree.loadMore(resource) : Promise.resolve();
+        };
 
         // Forward data-layer changes so the view refreshes automatically.
         // If the changed resource maps to a view item that is NOT in the
@@ -114,7 +153,8 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     }
 
     private async getBranchChildren(viewItem: TViewItem): Promise<TViewItem[]> {
-        const parentNode = this.nodes.get(this.getKey(viewItem));
+        const key = this.getKey(viewItem);
+        const parentNode = this.nodes.get(key);
         if (!parentNode) {
             return [];
         }
@@ -136,6 +176,12 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             return node;
         });
 
+        // Inject a synthetic "Load More" view item if the data layer has
+        // more pages and load-more support is configured.
+        if (this.loadMoreOptions && this.hasMoreData(key)) {
+            return [...childItems, this.loadMoreOptions.getLoadMoreViewItem(key)];
+        }
+
         return childItems;
     }
 
@@ -144,6 +190,11 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * delegating to the {@link ViewProvider} that handles it.
      */
     public getTreeItem(viewItem: TViewItem): ITreeItem | Promise<ITreeItem> {
+        // Synthetic "Load More" nodes: return the configured tree item directly (no provider involved)
+        if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
+            return this.loadMoreOptions.getTreeItem();
+        }
+
         const provider = this.findProvider(viewItem);
         if (!provider) {
             throw new Error(`No view provider found for view item: ${this.getKey(viewItem)}`);
@@ -160,6 +211,11 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * works for nodes that have not yet been loaded.
      */
     public getParent(viewItem: TViewItem): ProviderResult<TViewItem | undefined> {
+        // Synthetic "Load More" nodes: derive the parent directly from the view item (no cache lookup or provider involved)
+        if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
+            return this.loadMoreOptions.getParentViewItem(viewItem);
+        }
+
         // Fast path: node is already in the map from a prior getChildren() call.
         // We must distinguish "not in cache" from "in cache with no parent"
         // (root nodes), so we check the node itself rather than its parent.
@@ -173,8 +229,37 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         return provider?.getParent?.(viewItem);
     }
 
+    /**
+     * Trigger the data layer to pull the next page.
+     *
+     * Accepts either a "Load More" view item (from which the parent is
+     * derived via {@link LoadMoreOptions.getParentViewItem}) or a direct
+     * parent view item.
+     *
+     * The data tree fires {@link DataItemTree.onDidChange} which
+     * automatically refreshes the view, causing the new children (and
+     * possibly a new "Load More" node) to appear.
+     */
+    public async loadMore(viewItem: TViewItem): Promise<void> {
+        const parentViewItem = this.loadMoreOptions?.isLoadMoreViewItem(viewItem)
+            ? this.loadMoreOptions.getParentViewItem(viewItem)
+            : viewItem;
+
+        await this.loadMoreData(this.getKey(parentViewItem));
+    }
+
     public override dispose(): void {
         this.dataItemTreeSubscription.dispose();
         super.dispose();
     }
+}
+
+/**
+ * Internal node wrapping a view item with its cached children and parent.
+ * @internal
+ */
+interface ViewNode<T> {
+    readonly viewItem: T;
+    readonly parent: ViewNode<T> | undefined;
+    children: ViewNode<T>[] | undefined; // undefined = not yet loaded
 }

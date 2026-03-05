@@ -6,7 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { DataItemTree, type DataProvider, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
-import { AzureResourceTreeViewId } from '../constants';
+import { AzureResourceTreeViewId, LoadMoreCommandId } from '../constants';
 import { IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
 import { AcrDataProvider } from './acr/AcrDataProvider';
 import { AcrViewProvider } from './acr/AcrViewProvider';
@@ -32,10 +32,30 @@ export function registerTrees(container: Container): void {
     // Resources view: view layer
     bindAzureViewViewProviders(container);
     container.bind(IAzureViewViewItemTree).toDynamicValue(context => {
+        const code = context.get(IVsCode);
+        const loadMoreSuffix = '/~loadMore';
+
         const viewItemTree = new ViewItemTree<string, ConcreteAzureNode>(
             context.get(IAzureViewDataTree),
             resource => AzureNodeId.from(resource).toString(),
             key => key, // Identity mapping since view item is just the `AzureNodeId` string
+            {
+                isLoadMoreViewItem: key => key.endsWith(loadMoreSuffix),
+                getLoadMoreViewItem: parentKey => parentKey + loadMoreSuffix,
+                getParentViewItem: loadMoreKey => loadMoreKey.slice(0, -loadMoreSuffix.length),
+                getTreeItem: () => {
+                    const item = new code.TreeItem(
+                        code.l10n.t('Load More...'),
+                        code.TreeItemCollapsibleState.None,
+                    );
+                    item.iconPath = new code.ThemeIcon('ellipsis');
+                    item.command = {
+                        command: LoadMoreCommandId,
+                        title: '',
+                    };
+                    return item;
+                },
+            },
         );
 
         for (const provider of context.getAll(IAzureViewViewProviders)) {

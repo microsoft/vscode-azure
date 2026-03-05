@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DataProvider } from './DataProvider';
+import { isAsyncIterable, type DataProvider } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 
@@ -15,6 +15,13 @@ interface TreeNode<T> {
     readonly resource: T;
     children: TreeNode<T>[] | undefined;  // undefined = not yet loaded
     staleAt: number;            // Date.now() after which children should be re-fetched
+
+    /**
+     * If the provider returned an `AsyncIterable<T[]>`, the in-progress
+     * iterator is stored here between page pulls. `undefined` means no
+     * more pages are available (or the provider returned a plain array).
+     */
+    pageIterator?: AsyncIterator<T[]>;
 }
 
 /**
@@ -85,7 +92,16 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             this.getRootProviders()
                 .map(p => Promise.resolve(p.getChildren())),
         );
-        const resources = results.flatMap((r) => r ?? []);
+
+        // Root providers always return plain arrays (pagination at root
+        // level is not supported). Treat async iterables the same as
+        // empty results here.
+        const resources = results.flatMap(result => {
+            if (!result || isAsyncIterable(result)) {
+                return [];
+            }
+            return result;
+        });
 
         this.roots = resources.map(resource => {
             const node: TreeNode<T> = { resource, children: undefined, staleAt: 0 };
@@ -121,19 +137,25 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
         // Remove previously cached descendants that may no longer be present
         this.nodes.removeSubtrees(node.children);
+        node.children = [];
+        node.pageIterator = undefined;
 
-        const children = await provider.getChildren(resource) ?? [];
+        const result = await provider.getChildren(resource);
 
-        node.children = children.map(child => {
-            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0 };
-            this.nodes.set(this.getKey(child), childNode);
-            return childNode;
-        });
+        if (!result) {
+            // No children — leave the empty array
+        } else if (isAsyncIterable(result)) {
+            // Paged result: store the iterator, then pull the first page
+            // via the shared loadMore path.
+            node.pageIterator = result[Symbol.asyncIterator]();
+            await this.loadMore(resource);
+        } else {
+            node.children = this.addChildNodes(result);
+        }
+
         node.staleAt = Date.now() + this.ttl;
 
-        this.enrichAll(children);
-
-        return children;
+        return node.children.map(n => n.resource);
     }
 
     /**
@@ -189,6 +211,57 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     }
 
     /**
+     * Returns `true` when the provider that produced children for the
+     * given resource has more pages available (i.e. the async iterator
+     * has not yet been exhausted).
+     */
+    public hasMore(resource?: T): boolean {
+        if (resource === undefined) {
+            return false; // Root-level pagination not supported
+        }
+        const key = this.getKey(resource);
+        return !!this.nodes.get(key)?.pageIterator;
+    }
+
+    /**
+     * Pull the next page from the stored async iterator for the given
+     * resource. The new children are appended to the cache and enriched.
+     * Fires {@link onDidChange} so the view refreshes automatically;
+     * callers should use {@link getChildren} to read the updated list.
+     */
+    public async loadMore(resource: T): Promise<void> {
+        const key = this.getKey(resource);
+        const node = this.nodes.get(key);
+        if (!node?.pageIterator) {
+            return;
+        }
+
+        const next = await node.pageIterator.next();
+
+        if (next.done) {
+            node.pageIterator = undefined;
+        } else {
+            node.children = [...(node.children ?? []), ...this.addChildNodes(next.value)];
+        }
+
+        this.changeEmitter.fire(resource);
+    }
+
+    /**
+     * Create {@link TreeNode}s for the given resources, register them in
+     * the {@link NodeMap}, and kick off background enrichment.
+     */
+    private addChildNodes(children: T[]): TreeNode<T>[] {
+        const nodes = children.map(child => {
+            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0 };
+            this.nodes.set(this.getKey(child), childNode);
+            return childNode;
+        });
+        this.enrichAll(children);
+        return nodes;
+    }
+
+    /**
      * Get a resource by key from the tree, if it has been loaded.
      */
     public get(key: string): T | undefined {
@@ -206,6 +279,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             this.nodes.removeSubtrees(node.children);
             node.children = undefined;
             node.staleAt = 0;
+            node.pageIterator = undefined;
         }
         this.changeEmitter.fire(resource);
     }
