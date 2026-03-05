@@ -18,7 +18,7 @@
     "types": "dist/esm/index.d.ts",
     "scripts": {
         "lint": "eslint --max-warnings 0",
-        "build": "tsc",
+        "build": "tsgo",
         "package": "npm pack",
         "test": "mocha"
     },

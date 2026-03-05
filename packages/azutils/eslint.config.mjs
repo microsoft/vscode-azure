@@ -9,6 +9,14 @@ import { defineConfig } from 'eslint/config';
 export default defineConfig([
     azExtEslintStrictTypeChecked,
     {
+        languageOptions: {
+            parserOptions: {
+                projectService: false,
+                project: './tsconfig.lint.json', // This tsconfig allows the linter to resolve the utils package without needing to build it first
+            },
+        },
+    },
+    {
         rules: {
             '@typescript-eslint/no-restricted-imports': ['error', {
                 paths: [
