@@ -10,7 +10,7 @@ import { isGenericResource } from '@microsoft/vscode-azure-azutils';
 /**
  * The ARM resource type string for Azure Container Registries.
  */
-export const AcrResourceType = 'microsoft.containerregistry/registries';
+export const AcrResourceType = 'Microsoft.ContainerRegistry/registries';
 
 /**
  * A {@link GenericResource} that has been enriched with ACR-specific
@@ -49,12 +49,12 @@ export interface EnrichedAcrRegistry extends GenericResource {
 /**
  * Type guard that narrows an unknown value to an {@link AcrRegistry}.
  *
- * Returns `true` for `GenericResource` nodes whose `type` matches
+ * Returns `true` for `GenericResource` nodes whose `logicalType` matches
  * `Microsoft.ContainerRegistry/registries`. The node may or may not
  * have been enriched yet -- use the presence of `loginServer` to
  * distinguish enriched from un-enriched registries when needed.
  */
 export function isAcrRegistry(node: unknown): node is AcrRegistry {
-    return isGenericResource(node as GenericResource)
-        && (node as GenericResource).type.toLowerCase() === AcrResourceType;
+    return !!node && typeof node === 'object' && isGenericResource(node as GenericResource)
+        && (node as GenericResource).logicalType.toLowerCase() === AcrResourceType.toLowerCase();
 }
