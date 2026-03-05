@@ -15,7 +15,6 @@
     "author": "Microsoft Corporation",
     "scripts": {
         "postinstall": "node ./scripts/postinstall.mjs",
-        "prelint": "npm run --workspace=packages/utils build",
         "lint": "npm run --workspaces lint",
         "build": "npm run --workspaces build",
         "package": "npm run --workspaces package",

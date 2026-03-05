@@ -1,0 +1,11 @@
+{
+    // This tsconfig allows the linter to resolve the utils package without needing to build it first
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "paths": {
+            "@microsoft/vscode-azure-utils": [
+                "../utils/src/index.ts"
+            ]
+        }
+    },
+}
