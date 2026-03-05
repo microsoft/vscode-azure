@@ -4,21 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { Disposable, IExtensionContext, type DataItemTree, type ViewItemTree } from '@microsoft/vscode-azure-utils';
+import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
+import { Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import type { AzureResourceNode } from './tree/GenericAzureDataProvider';
 
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
 
 /** Identifier for the Azure resource tree cache (representing real Azure resources) */
 export const IAzureViewDataTree: ServiceIdentifier<IAzureViewDataTree> = Symbol.for('IAzureViewDataTree');
-export type IAzureViewDataTree = DataItemTree<AzureResourceNode>;
+export type IAzureViewDataTree = ConcreteAzureNodeTree;
 
 /** Identifier for the Azure resource view-item tree (view layer) */
 export const IAzureViewViewItemTree: ServiceIdentifier<IAzureViewViewItemTree> = Symbol.for('IAzureViewViewItemTree');
-export type IAzureViewViewItemTree = ViewItemTree<string, AzureResourceNode>;
+export type IAzureViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
 
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');

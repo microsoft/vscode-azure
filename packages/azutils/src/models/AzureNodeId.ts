@@ -27,6 +27,8 @@ const virtualGroupingPrefix = '~' as const;
  */
 // TODO: add tests for this class, especially the parsing logic
 export class AzureNodeId {
+    private static readonly parseCache = new Map<string, AzureNodeId>();
+
     private constructor(private readonly data: AccountData | TenantData | SubscriptionData | GroupingData | ResourceData | VirtualData) { }
 
     /**
@@ -38,9 +40,38 @@ export class AzureNodeId {
 
     /**
      * Parses an `azr://` URI string into an {@link AzureNodeId}.
+     * Returns a cached instance if the same string was parsed before.
      * Throws if the string is not a valid node ID.
      */
     public static parse(value: string): AzureNodeId {
+        const cached = AzureNodeId.parseCache.get(value);
+        if (cached) {
+            return cached;
+        }
+
+        const result = AzureNodeId.parseImpl(value);
+        AzureNodeId.parseCache.set(value, result);
+        return result;
+    }
+
+    /**
+     * Removes a previously cached parse result. Call when a node is
+     * evicted from the tree so the cache does not grow without bound.
+     * // TODO: do we even need this?
+     */
+    public static evict(key: string): void {
+        AzureNodeId.parseCache.delete(key);
+    }
+
+    /**
+     * Clears all cached parse results.
+     * // TODO: call on tree refresh? Do we even need this?
+     */
+    public static clearParseCache(): void {
+        AzureNodeId.parseCache.clear();
+    }
+
+    private static parseImpl(value: string): AzureNodeId {
         if (!AzureNodeId.test(value)) {
             throw new Error(`Not an ${schemePrefix} URI: ${value}`);
         }
@@ -142,30 +173,34 @@ export class AzureNodeId {
      * @param node An {@link AzureNode} to create a node ID for
      */
     public static from(node: AzureNode): AzureNodeId {
+        let result: AzureNodeId;
         switch (true) {
             case isAccount(node):
-                return new AzureNodeId({
+                result = new AzureNodeId({
                     kind: 'account',
                     accountId: node.id,
                     portalHost: portalHost(node),
                 });
+                break;
             case isTenant(node):
-                return new AzureNodeId({
+                result = new AzureNodeId({
                     kind: 'tenant',
                     accountId: node.account.id,
                     portalHost: portalHost(node.account),
                     tenantId: node.tenantId,
                 });
+                break;
             case isSubscription(node):
-                return new AzureNodeId({
+                result = new AzureNodeId({
                     kind: 'subscription',
                     accountId: node.account.id,
                     portalHost: portalHost(node.account),
                     tenantId: node.tenantId,
                     armResourceId: `/subscriptions/${node.subscriptionId}`,
                 });
+                break;
             case isResourceGroup(node):
-                return new AzureNodeId({
+                result = new AzureNodeId({
                     kind: 'grouping',
                     accountId: node.subscription.account.id,
                     portalHost: portalHost(node.subscription.account),
@@ -176,8 +211,9 @@ export class AzureNodeId {
                         groupingValue: node.name,
                     },
                 });
+                break;
             case isVirtualGroup(node):
-                return new AzureNodeId({
+                result = new AzureNodeId({
                     kind: 'grouping',
                     accountId: node.subscription.account.id,
                     portalHost: portalHost(node.subscription.account),
@@ -185,16 +221,18 @@ export class AzureNodeId {
                     armResourceId: `/subscriptions/${node.subscription.subscriptionId}/${virtualGroupingPrefix}${node.groupingStrategy}/${encodeURIComponent(node.groupingValue)}`,
                     grouping: node,
                 });
+                break;
             case isGenericResource(node):
-                return new AzureNodeId({
+                result = new AzureNodeId({
                     kind: 'resource',
                     accountId: node.subscription.account.id,
                     portalHost: portalHost(node.subscription.account),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                 });
+                break;
             case isVirtualResource(node):
-                return new AzureNodeId({
+                result = new AzureNodeId({
                     kind: 'virtual',
                     accountId: node.azureResource.subscription.account.id,
                     portalHost: portalHost(node.azureResource.subscription.account),
@@ -202,9 +240,14 @@ export class AzureNodeId {
                     armResourceId: node.azureResource.id,
                     virtual: node,
                 });
+                break;
             default:
                 throw new Error(`Unsupported node type: ${JSON.stringify(node)}`);
         }
+
+        // Populate the parse cache so subsequent parse() calls for the same key are free
+        AzureNodeId.parseCache.set(result.toString(), result);
+        return result;
     }
 
     /**
@@ -331,45 +374,52 @@ export class AzureNodeId {
         }
     }
 
-    //#region TODO: do we need these?
-    /** Narrows this node ID to an {@link AzureAccount} node. */
+    /** Narrows this node ID to an {@link AzureAccount} node ID. */
     public isAccountNodeId(): boolean {
         return this.data.kind === 'account';
     }
 
-    /** Narrows this node ID to an {@link AzureTenant} node. */
+    /** Narrows this node ID to an {@link AzureTenant} node ID. */
     public isTenantNodeId(): boolean {
         return this.data.kind === 'tenant';
     }
 
-    /** Narrows this node ID to an {@link AzureSubscription} node. */
+    /** Narrows this node ID to an {@link AzureSubscription} node ID. */
     public isSubscriptionNodeId(): boolean {
         return this.data.kind === 'subscription';
     }
 
-    /** Narrows this node ID to a {@link VirtualGroup} node (non-RG grouping). */
+    /** Narrows this node ID to a {@link VirtualGroup} node ID (non-RG grouping). */
     public isVirtualGroupNodeId(): boolean {
         return this.data.kind === 'grouping' && this.data.grouping.groupingStrategy !== 'resourceGroup';
     }
 
     /**
-     * Narrows this node ID to a {@link ResourceGroup} node.
+     * Narrows this node ID to a {@link ResourceGroup} node ID.
      * A resource group is a grouping node whose strategy is `'resourceGroup'`.
      */
     public isResourceGroupNodeId(): boolean {
         return this.data.kind === 'grouping' && this.data.grouping.groupingStrategy === 'resourceGroup';
     }
 
-    /** Narrows this node ID to a {@link GenericResource} node. */
+    /** Narrows this node ID to a {@link GenericResource} node ID. {@link ResourceGroup} node IDs do **not** match, though they do conform to `GenericResource`. */
     public isGenericResourceNodeId(): boolean {
         return this.data.kind === 'resource';
     }
 
-    /** Narrows this node ID to a {@link VirtualResource} node. */
+    /** Narrows this node ID to a {@link VirtualResource} node ID. */
     public isVirtualResourceNodeId(): boolean {
         return this.data.kind === 'virtual';
     }
-    //#endregion
+
+    /**
+     * Returns the grouping strategy and value for grouping nodes
+     * (both resource groups and virtual groups), or `undefined` for
+     * non-grouping nodes.
+     */
+    public getGrouping(): Pick<ResourceGroup | VirtualGroup, 'groupingStrategy' | 'groupingValue'> | undefined {
+        return this.data.kind === 'grouping' ? this.data.grouping : undefined;
+    }
 }
 
 /**
