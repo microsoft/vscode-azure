@@ -59,8 +59,10 @@ class ResourceGroupViewItemTree {
     }
 
     public getTreeItem(key: string): ITreeItem {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const node = this.dataItemTree.get(key)!;
+        const node = this.dataItemTree.get(key);
+        if (!node) {
+            throw new Error(`Could not find node for key: ${key}`);
+        }
 
         switch (true) {
             case isAccount(node):

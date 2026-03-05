@@ -61,7 +61,8 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         const nodeId = AzureNodeId.parse(key);
 
         if (nodeId.isVirtualGroupNodeId()) {
-            const label = decodeGroupingValue(key); // TODO: in the other PR, fix this
+            const grouping = nodeId.getGrouping();
+            const label = grouping?.groupingValue ?? key;
             const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
             item.contextValue = 'azureVirtualGroup';
@@ -223,8 +224,8 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         // Virtual group: find the matching bucket from the parent subscription
         if (nodeId.isVirtualGroupNodeId()) {
-            const subscriptionKey = extractSubscriptionKey(key);
-            const subscription = this.cache.get(subscriptionKey);
+            const subscriptionKey = nodeId.parentNodeId()?.toString();
+            const subscription = subscriptionKey ? this.cache.get(subscriptionKey) : undefined;
             if (!subscription || !isSubscription(subscription)) {
                 return [];
             }
@@ -291,25 +292,6 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     }
 
     // #endregion
-}
-
-/**
- * Extract the grouping value from a virtual group key by decoding the
- * last segment — e.g. `azr://...subscriptions/subId/~resourceType/Microsoft.Web%2Fsites`
- * → `'Microsoft.Web/sites'`.
- */
-function decodeGroupingValue(key: string): string {
-    return decodeURIComponent(key.slice(key.lastIndexOf('/') + 1));
-}
-
-/**
- * Extract the subscription key from a virtual group key by truncating
- * at the `/~` segment — e.g.
- * `azr://...subscriptions/subId/~resourceType/value` → `azr://...subscriptions/subId`.
- */
-function extractSubscriptionKey(key: string): string {
-    const tildeIndex = key.indexOf('/~');
-    return tildeIndex === -1 ? key : key.slice(0, tildeIndex);
 }
 
 /**

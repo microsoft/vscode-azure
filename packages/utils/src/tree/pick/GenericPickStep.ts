@@ -37,18 +37,18 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> =
         const children = await this.getPickItems(lastPick?.item);
         const picks = this.getPicks(children);
 
-        if (picks.length === 1 && this.options.shouldSkipIfOne) {
+        if (picks.length === 1) {
             // Skipping only makes sense if there's no create option and the only pick is an intermediate item--if it's terminal, we want to make the user be explicit about choosing it
             const onlyPick = picks[0];
             if (onlyPick.data !== CreateNew &&
                 onlyPick.data.isIntermediate &&
-                this.options.shouldSkipIfOne(onlyPick.data.item, onlyPick.data.treeItem)) {
+                (this.options.shouldSkipIfOne?.(onlyPick.data.item, onlyPick.data.treeItem) ?? false)) {
                 return { picks: [...context.picks, onlyPick.data] };
             }
         }
 
         // `canPickMany` only applies if all of the selectable items are terminal *and* there is no create option
-        const canPickMany = this.options.canPickMany && !this.options.create && children.every(c => c.isTerminal) && children.every(c => !c.isIntermediate);
+        const canPickMany = this.options.canPickMany && !this.options.create && children.every(c => c.isTerminal && !c.isIntermediate);
 
         if (canPickMany) {
             const choices = await showSmartQuickPick(this.options, picks, {

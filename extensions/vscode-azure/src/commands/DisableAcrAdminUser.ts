@@ -23,8 +23,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
     public async execute(key?: string): Promise<void> {
         if (!key) {
             key = await resourceExperience({
-                code: this.ctx.code,
-                extensionContext: this.ctx.extensionContext,
+                ...this.ctx,
                 viewItemTree: this.viewTree,
                 dataItemTree: this.cache,
                 resourceType: AcrResourceType
