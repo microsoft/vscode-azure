@@ -251,11 +251,12 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      * For other strategies the groups are virtual, keyed by grouping value.
      */
     private async groupResources(subscription: AzureSubscription): Promise<Map<string, string[]>> {
-        const resourceGroups = await this.cache.getChildren(subscription as ConcreteAzureNode);
+        const sub = subscription as ConcreteAzureNode;
 
         // Resource group strategy: one group per RG, children resolved by
         // the cache on the next expansion -- no flattening needed.
         if (this.groupingStrategy === 'resourceGroup') {
+            const resourceGroups = await this.cache.getChildren(sub);
             const groups = new Map<string, string[]>();
             for (const rg of resourceGroups) {
                 groups.set(toKey(rg), []);
@@ -263,8 +264,14 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             return groups;
         }
 
-        // Other strategies: flatten all resources across RGs, then bucket.
+        // Other strategies: load ALL resource groups and ALL resources
+        // (exhausting pagination) so the complete set can be bucketed.
+        await this.loadAll(sub);
+        const resourceGroups = await this.cache.getChildren(sub);
+
         // TODO: concurrency limits
+        await Promise.all(resourceGroups.map(rg => this.loadAll(rg)));
+
         const allResources = (
             await Promise.all(resourceGroups.map(rg => this.cache.getChildren(rg)))
         ).flat().filter((r): r is GenericResource => isGenericResource(r) && !isResourceGroup(r));
@@ -288,6 +295,17 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         }
 
         return groups;
+    }
+
+    /**
+     * Exhaust all remaining pages for a resource's children so the
+     * cache holds the complete set. Used by non-RG grouping strategies
+     * that need every resource to bucket correctly.
+     */
+    private async loadAll(resource: ConcreteAzureNode): Promise<void> {
+        while (this.cache.hasMore(resource)) {
+            await this.cache.loadMore(resource);
+        }
     }
 
     // #endregion
