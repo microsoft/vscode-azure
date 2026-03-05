@@ -65,7 +65,7 @@
             "view/item/context": [
                 {
                     "command": "vscode-azure/acr/disableAdminUser",
-                    "when": "viewItem =~ /\\bdisableAcrAdminUser\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableAcrAdminUser\\b/i"
                 },
                 {
                     "command": "vscode-azure/resources/openInPortal",
