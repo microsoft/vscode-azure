@@ -4,14 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
+import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
-import type { DataItemTree, ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
+import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../commands/OpenInPortal';
 import { IAzureViewDataTree } from '../services';
-import type { AzureResourceNode } from './GenericAzureDataProvider';
 import { combineContextValues } from './combineContextValues';
 
 @injectable()
@@ -42,7 +41,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IAzureViewDataTree) private readonly cache: DataItemTree<AzureResourceNode>,
+        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
 
     // #region ViewProvider
@@ -64,7 +63,8 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         const nodeId = AzureNodeId.parse(key);
 
         if (nodeId.isVirtualGroupNodeId()) {
-            const label = decodeGroupingValue(key); // TODO: in the other PR, fix this
+            const grouping = nodeId.getGrouping();
+            const label = grouping?.groupingValue ?? key;
             const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
             item.iconPath = new this.code.ThemeIcon('symbol-namespace');
@@ -223,8 +223,8 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         // Virtual group: find the matching bucket from the parent subscription
         if (nodeId.isVirtualGroupNodeId()) {
-            const subscriptionKey = extractSubscriptionKey(key);
-            const subscription = this.cache.get(subscriptionKey);
+            const subscriptionKey = nodeId.parentNodeId()?.toString();
+            const subscription = subscriptionKey ? this.cache.get(subscriptionKey) : undefined;
             if (!subscription || !isSubscription(subscription)) {
                 return [];
             }
@@ -251,7 +251,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      * For other strategies the groups are virtual, keyed by grouping value.
      */
     private async groupResources(subscription: AzureSubscription): Promise<Map<string, string[]>> {
-        const resourceGroups = await this.cache.getChildren(subscription as AzureResourceNode);
+        const resourceGroups = await this.cache.getChildren(subscription as ConcreteAzureNode);
 
         // Resource group strategy: one group per RG, children resolved by
         // the cache on the next expansion -- no flattening needed.
@@ -291,25 +291,6 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     }
 
     // #endregion
-}
-
-/**
- * Extract the grouping value from a virtual group key by decoding the
- * last segment — e.g. `azr://...subscriptions/subId/~resourceType/Microsoft.Web%2Fsites`
- * → `'Microsoft.Web/sites'`.
- */
-function decodeGroupingValue(key: string): string {
-    return decodeURIComponent(key.slice(key.lastIndexOf('/') + 1));
-}
-
-/**
- * Extract the subscription key from a virtual group key by truncating
- * at the `/~` segment — e.g.
- * `azr://...subscriptions/subId/~resourceType/value` → `azr://...subscriptions/subId`.
- */
-function extractSubscriptionKey(key: string): string {
-    const tildeIndex = key.indexOf('/~');
-    return tildeIndex === -1 ? key : key.slice(0, tildeIndex);
 }
 
 /**

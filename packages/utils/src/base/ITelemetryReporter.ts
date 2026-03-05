@@ -5,7 +5,7 @@
 
 import { TelemetryReporter } from '@vscode/extension-telemetry';
 import type { ServiceIdentifier } from 'inversify';
-import type { IExtensionContext } from '../vscode/IExtensionContext';
+import type { IExtensionContext } from '../vscode/IVsCode';
 
 export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
 export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEvent' | 'dispose'>; // Subset of what we actually use

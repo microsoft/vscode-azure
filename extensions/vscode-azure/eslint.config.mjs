@@ -8,5 +8,18 @@ import { defineConfig } from 'eslint/config';
 
 export default defineConfig([
     azExtEslintStrictTypeChecked,
-    // lazyImportAzurePackages, // TODO: ignore the big packages but not the small ones?
+    {
+        ignores: ['src/test/**'],
+        rules: {
+            '@typescript-eslint/no-restricted-imports': ['error', {
+                paths: [
+                    {
+                        name: 'vscode',
+                        message: 'VSCode should only be used for typings in this package. Pass it down from the caller as IVsCode.',
+                        allowTypeImports: true,
+                    },
+                ],
+            }],
+        },
+    },
 ]);

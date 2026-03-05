@@ -19,5 +19,6 @@
         {
             "mode": "auto"
         }
-    ]
+    ],
+    "js/ts.experimental.useTsgo": true,
 }

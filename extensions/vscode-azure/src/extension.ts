@@ -10,6 +10,7 @@ import {
     createOutputChannel,
     createTelemetryReporter,
     IActionExecutor,
+    ICodeContext,
     ICommandRegistry,
     IExtensionContext,
     IOutputChannel,
@@ -17,7 +18,7 @@ import {
     IVsCode,
 } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
-import * as vscode from 'vscode';
+import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { registerCommands } from './commands/registerCommands';
 import { IAzureSubscriptionProvider, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
@@ -41,9 +42,10 @@ export function deactivateInternal(): Promise<void> {
 function setUpContainer(extensionContext: IExtensionContext): Container {
     const container = new Container();
 
-    // These two come in as constants (vscode by import, context from above)
+    // These three come in as constants (vscode by import, context from above)
     container.bind(IVsCode).toConstantValue(vscode);
     container.bind(IExtensionContext).toConstantValue(extensionContext);
+    container.bind(ICodeContext).toConstantValue({ code: vscode, extensionContext });
 
     // Dynamically created singletons, some of which are disposable, but we do
     // `pushDisposable()` on all of them because it's smart enough to distinguish
