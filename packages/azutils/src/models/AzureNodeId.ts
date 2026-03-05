@@ -127,7 +127,7 @@ export class AzureNodeId {
                 tenantId,
                 armResourceId,
                 grouping: {
-                    groupingStrategy: 'resourceGroup' as const,
+                    groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'],
                     groupingValue: parsed.resourceGroup,
                 },
             });
@@ -172,7 +172,7 @@ export class AzureNodeId {
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                     grouping: {
-                        groupingStrategy: 'resourceGroup',
+                        groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'],
                         groupingValue: node.name,
                     },
                 });
@@ -315,7 +315,7 @@ export class AzureNodeId {
                     portalHost: d.portalHost,
                     tenantId: d.tenantId,
                     armResourceId: getResourceGroupArmId(d.armResourceId),
-                    grouping: { groupingStrategy: 'resourceGroup', groupingValue: parsedResource.resourceGroup },
+                    grouping: { groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'], groupingValue: parsedResource.resourceGroup },
                 });
             }
             case 'virtual': {

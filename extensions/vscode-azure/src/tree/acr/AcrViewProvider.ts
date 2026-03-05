@@ -77,7 +77,7 @@ export class AcrViewProvider implements ViewProvider<string> {
         item.iconPath = new this.code.ThemeIcon('package');
 
         if (isAcrRegistry(resource)) {
-            item.description = resource.type;
+            item.description = resource.logicalType;
 
             if (resource.adminUserEnabled === true) {
                 item.iconPath = new this.code.ThemeIcon('warning', new this.code.ThemeColor('problemsWarningIcon.foreground'));

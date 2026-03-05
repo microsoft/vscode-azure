@@ -35,7 +35,7 @@ export function isVirtualGroup(node: AzureNode): node is VirtualGroup {
 }
 
 export function isGenericResource(node: AzureNode): node is GenericResource {
-    return !isResourceGroup(node) && 'id' in node && 'name' in node && 'type' in node;
+    return !isResourceGroup(node) && 'id' in node && 'name' in node && 'type' in node && 'logicalType' in node;
 }
 
 export function isVirtualResource(node: AzureNode): node is VirtualResource {
