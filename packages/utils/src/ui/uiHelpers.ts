@@ -6,7 +6,7 @@
 import * as crypto from 'crypto';
 import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
-import type { ICodeContext } from '../vscode/IVsCode';
+import type { ICodeContext, IVsCode } from '../vscode/IVsCode';
 import { GoBackError } from '../wizard/GoBackError';
 
 /** A {@link vscode.QuickPickItem} with associated underlying data */

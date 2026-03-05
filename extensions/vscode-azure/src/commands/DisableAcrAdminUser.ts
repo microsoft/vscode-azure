@@ -38,7 +38,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
         }
 
         const registry = await withDelayedProgress(
-            this.code,
+            this.ctx.code,
             {
                 location: this.ctx.code.ProgressLocation.Notification,
                 title: this.ctx.code.l10n.t('Loading details for \'{0}\'...', resource.name),
