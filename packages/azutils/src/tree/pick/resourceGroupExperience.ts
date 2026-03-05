@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getLastPick, RecursivePickStep, Wizard, type ICodeContext, type ITreeItem, type PickContext } from '@microsoft/vscode-azure-utils';
+import { getLastPick, RecursivePickStep, Wizard, type ICodeContext, type ITreeItem, type PickClassification, type PickContext } from '@microsoft/vscode-azure-utils';
 import { isAccount, isResourceGroup, isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../../models/AzureNode';
 import { AzureNodeId } from '../../models/AzureNodeId';
 
@@ -19,14 +19,7 @@ export async function resourceGroupExperience(options: ResourceGroupExperienceOp
         [
             new RecursivePickStep<string>({
                 ...options,
-                isIntermediate: key => {
-                    const nodeId = AzureNodeId.parse(key);
-                    return nodeId.isAccountNodeId() || nodeId.isTenantNodeId() || nodeId.isSubscriptionNodeId();
-                },
-                isTerminal: key => {
-                    const nodeId = AzureNodeId.parse(key);
-                    return nodeId.isResourceGroupNodeId();
-                },
+                classify: key => classifyForResourceGroup(AzureNodeId.parse(key)),
                 tree: new ResourceGroupViewItemTree(options.dataItemTree),
             }),
         ]
@@ -41,6 +34,15 @@ export async function resourceGroupExperience(options: ResourceGroupExperienceOp
     }
 
     return resourceGroupPick.item;
+}
+
+function classifyForResourceGroup(nodeId: AzureNodeId): PickClassification {
+    if (nodeId.isAccountNodeId() || nodeId.isTenantNodeId() || nodeId.isSubscriptionNodeId()) {
+        return 'intermediate';
+    } else if (nodeId.isResourceGroupNodeId()) {
+        return 'terminal';
+    }
+    return false;
 }
 
 // TODO: is this terrible?

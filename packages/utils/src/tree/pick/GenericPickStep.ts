@@ -15,13 +15,19 @@ export interface CreateNewOption<TItem> {
     createNewItem(): TItem | Promise<TItem>;
 }
 
+/**
+ * Classification result for an item in the pick list.
+ * - `'intermediate'` — a drillable node (e.g. account, tenant, subscription)
+ * - `'skip'` — an intermediate node that should be auto-selected when it is the only pick
+ * - `'terminal'` — a selectable leaf node
+ * - `false` — the item should be hidden from the picker
+ */
+export type PickClassification = 'intermediate' | 'skip' | 'terminal' | false;
+
 export type GenericPickOptions<TItem> = ICodeContext & {
     readonly tree: TreeLike<TItem>;
 
-    isIntermediate(item: TItem, treeItem: ITreeItem): boolean;
-    isTerminal(item: TItem, treeItem: ITreeItem): boolean;
-
-    shouldSkipIfOne?(item: TItem, treeItem: ITreeItem): boolean;
+    classify(item: TItem, treeItem: ITreeItem): PickClassification;
 
     readonly canPickMany?: boolean;
     readonly create?: CreateNewOption<TItem>;
@@ -42,7 +48,7 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> =
             const onlyPick = picks[0];
             if (onlyPick.data !== CreateNew &&
                 onlyPick.data.isIntermediate &&
-                (this.options.shouldSkipIfOne?.(onlyPick.data.item, onlyPick.data.treeItem) ?? false)) {
+                onlyPick.data.shouldSkip) {
                 return { picks: [...context.picks, onlyPick.data] };
             }
         }
@@ -107,11 +113,15 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> =
         for (const childItem of await this.options.tree.getChildren(parentItem) ?? []) {
             const treeItem = await this.options.tree.getTreeItem(childItem);
 
-            const isIntermediate = this.options.isIntermediate(childItem, treeItem);
-            const isTerminal = this.options.isTerminal(childItem, treeItem);
-
-            if (isIntermediate || isTerminal) {
-                children.push({ item: childItem, treeItem, isIntermediate, isTerminal });
+            const classification = this.options.classify(childItem, treeItem);
+            if (classification) {
+                children.push({
+                    item: childItem,
+                    treeItem,
+                    isIntermediate: classification === 'intermediate' || classification === 'skip',
+                    isTerminal: classification === 'terminal',
+                    shouldSkip: classification === 'skip',
+                });
             }
         }
 
@@ -136,6 +146,7 @@ interface TreeLike<TItem> {
 export interface FilteredChild<TItem> extends PickPair<TItem> {
     readonly isIntermediate: boolean;
     readonly isTerminal: boolean;
+    readonly shouldSkip: boolean;
 }
 
 const CreateNew: unique symbol = Symbol('CreateNew');

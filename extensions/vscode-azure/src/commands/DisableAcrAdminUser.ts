@@ -26,7 +26,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
                 ...this.ctx,
                 viewItemTree: this.viewTree,
                 dataItemTree: this.cache,
-                resourceType: AcrResourceType
+                logicalType: AcrResourceType
             });
         }
 

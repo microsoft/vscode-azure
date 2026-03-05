@@ -15,7 +15,6 @@
 - Pagination of lists or at least a user-adjustable max item limit
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
 - Enforce using only "safe" imports of `vscode` (`IVsCode` should be used in most cases)
-- Fix excessive reparsing of `AzureNodeId` (e.g. could be every `canHandle()` call across many providers, no good) (same issue appears for tree pick experience but to a lesser degree)
 - Tests that enforce bundle size not growing out of control
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)
 

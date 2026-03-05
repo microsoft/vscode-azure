@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getLastPick, type ICodeContext, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
+import { getLastPick, type ICodeContext, type PickClassification, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
 import type { AzureNode } from '../../models/AzureNode';
 import { AzureNodeId } from '../../models/AzureNodeId';
 
@@ -19,14 +19,7 @@ export async function subscriptionExperience(options: SubscriptionExperienceOpti
         [
             new RecursivePickStep<string>({
                 ...options,
-                isIntermediate: item => {
-                    const nodeId = AzureNodeId.parse(item);
-                    return nodeId.isAccountNodeId() || nodeId.isTenantNodeId();
-                },
-                isTerminal: item => {
-                    const nodeId = AzureNodeId.parse(item);
-                    return nodeId.isSubscriptionNodeId();
-                },
+                classify: item => classifyForSubscription(AzureNodeId.parse(item)),
                 tree: options.viewItemTree,
             }),
         ]
@@ -41,4 +34,13 @@ export async function subscriptionExperience(options: SubscriptionExperienceOpti
     }
 
     return subscriptionPick.item;
+}
+
+function classifyForSubscription(nodeId: AzureNodeId): PickClassification {
+    if (nodeId.isAccountNodeId() || nodeId.isTenantNodeId()) {
+        return 'intermediate';
+    } else if (nodeId.isSubscriptionNodeId()) {
+        return 'terminal';
+    }
+    return false;
 }
