@@ -9,6 +9,7 @@ import { defineConfig } from 'eslint/config';
 export default defineConfig([
     azExtEslintStrictTypeChecked,
     {
+        ignores: ['src/test/**'],
         rules: {
             '@typescript-eslint/no-restricted-imports': ['error', {
                 paths: [
