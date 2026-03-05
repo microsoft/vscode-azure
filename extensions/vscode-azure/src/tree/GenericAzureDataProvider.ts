@@ -7,9 +7,7 @@ import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vs
 import {
     attachMetadata,
     createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected,
-    type ConcreteAzureNode, type GenericResource,
-    type ResourceClient,
-    type ResourceGroup
+    type ConcreteAzureNode, type GenericResource, type ResourceClient, type ResourceGroup
 } from '@microsoft/vscode-azure-azutils';
 import type { ChildResult, DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
