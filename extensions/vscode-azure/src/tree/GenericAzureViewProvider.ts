@@ -62,7 +62,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         const nodeId = AzureNodeId.parse(key);
 
         if (nodeId.isVirtualGroupNodeId()) {
-            const label = decodeGroupingValue(key);
+            const label = decodeGroupingValue(key); // TODO: in the other PR, fix this
             const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
             item.contextValue = 'azureVirtualGroup';

@@ -38,11 +38,16 @@ export interface GenericResource extends GenericResourceBase {
     readonly logicalType: string;
 }
 
-export const FunctionAppLogicalType = 'Microsoft.Web/sites~functionapp';
-export const WorkflowAppLogicalType = 'Microsoft.Web/sites~workflowapp';
-export const AppServiceLogicalType = 'Microsoft.Web/sites~app';
+export const SiteType = 'Microsoft.Web/sites';
+export const FunctionAppLogicalType = `${SiteType}~functionapp`;
+export const WorkflowAppLogicalType = `${SiteType}~workflowapp`;
+export const AppServiceLogicalType = `${SiteType}~app`;
 
 export function attachMetadata(resource: Partial<GenericResourceBase>, subscription: AzureSubscription): GenericResource {
+    if (!resource.type) {
+        throw new Error(`Resource is missing required field "type": ${JSON.stringify(resource)}`);
+    }
+
     return Object.assign(resource, {
         subscription,
         logicalType: logicalType(resource as GenericResourceBase)
@@ -55,7 +60,7 @@ export function attachMetadata(resource: Partial<GenericResourceBase>, subscript
  */
 function logicalType(resource: Pick<GenericResource, 'type' | 'kind'>): string {
     switch (resource.type.toLowerCase()) {
-        case 'microsoft.web/sites': {
+        case SiteType.toLowerCase(): {
             const kind = resource.kind?.toLowerCase();
             if (kind?.includes('functionapp')) {
                 return FunctionAppLogicalType;
