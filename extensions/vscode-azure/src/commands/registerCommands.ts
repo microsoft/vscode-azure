@@ -8,12 +8,16 @@ import { Container } from 'inversify';
 import { DisableAcrAdminUser } from './DisableAcrAdminUser';
 import { Hello } from './Hello';
 import type { ManagedCommand } from './ManagedCommand';
+import { OpenInPortal } from './OpenInPortal';
 import { RefreshResourcesView } from './RefreshResourcesView';
 
 export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'azure.hello', Hello);
-    registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
+
     registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
+    registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
+
+    registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
 }
 
 function registerManagedCommand(

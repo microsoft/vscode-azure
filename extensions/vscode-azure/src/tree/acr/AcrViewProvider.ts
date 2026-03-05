@@ -7,7 +7,10 @@ import { AzureNodeId, isGenericResource, isVirtualResource, type VirtualResource
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { DisableAcrAdminUser } from '../../commands/DisableAcrAdminUser';
+import { OpenInPortal } from '../../commands/OpenInPortal';
 import { IAzureViewDataTree } from '../../services';
+import { combineContextValues } from '../combineContextValues';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**
@@ -67,13 +70,13 @@ export class AcrViewProvider implements ViewProvider<string> {
         }
 
         if (!isGenericResource(resource)) {
-            return new this.code.TreeItem(key);
+            throw new Error('Expected an Azure resource or virtual resource');
         }
 
         // Collapsed since we have children
         const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
-        item.contextValue = 'azureContainerRegistry';
+        item.contextValue = combineContextValues(OpenInPortal.ContextValue, DisableAcrAdminUser.ContextValue);
         item.iconPath = new this.code.ThemeIcon('package');
 
         if (isAcrRegistry(resource)) {

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { IVsCode, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../services';
 import type { EnrichedAcrRegistry } from '../tree/acr/AcrRegistry';
@@ -13,6 +13,8 @@ import type { ManagedCommand } from './ManagedCommand';
 // TODO: remove this demonstration command
 @injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
+    public static ContextValue = 'disableAcrAdminUser';
+
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
@@ -24,12 +26,13 @@ export class DisableAcrAdminUser implements ManagedCommand {
             return;
         }
 
-        const registry = await this.code.window.withProgress(
+        const registry = await withDelayedProgress(
+            this.code,
             {
                 location: this.code.ProgressLocation.Notification,
                 title: this.code.l10n.t('Loading details for \'{0}\'...', resource.name),
             },
-            () => this.cache.whenEnriched<EnrichedAcrRegistry>(resource),
+            this.cache.whenEnriched<EnrichedAcrRegistry>(resource),
         );
 
         void this.code.window.showInformationMessage(

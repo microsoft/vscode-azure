@@ -20,6 +20,5 @@
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)
 
 Before handoff:
-- Context value array and example commands
 - Quick pick walk
 - Deployment story (single and app)

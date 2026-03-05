@@ -23,6 +23,7 @@
 * Use scoped `eslint-disable` comments on specific lines, never file-wide
 * Strings that will be seen by the user must use `IVsCode.l10n.t()` for localization (debug and trace output to the output channel is exempt from this requirement)
 * Any time ARM resource types (`GenericResource.type`) or logical types (`GenericResource.logicalType`) are checked, they should be compared **case-insensitively** to a constant (e.g., `AcrResourceType`) rather than a string literal
+* Commands that act on tree items should define a static `ContextValue` property. The view provider should use that in the tree item's `contextValue`. In `package.json`, the command's `when` clause should check for the context value with a regex (e.g., `viewItem =~ /\\bmyContextValue\\b/i`) rather than an equality check, to allow for multiple context values. The `\b` in the regex is important to prevent unintended matches (e.g., `myContextValue` matching `myContextValueWithSuffix`).
 
 
 ## Understanding the Data Model

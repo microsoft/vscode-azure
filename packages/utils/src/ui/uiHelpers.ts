@@ -355,3 +355,28 @@ function inputBoxRecentKey(options: ExtendedInputBoxOptions): string {
     hash.update(options.stepName ?? '');
     return `recentInput:${hash.digest('hex')}`;
 }
+
+const Pending: unique symbol = Symbol('Pending');
+
+/**
+ * Awaits a promise, showing a progress notification only if it doesn't
+ * resolve within {@link delay} milliseconds. Avoids a brief flash of the
+ * notification when the operation completes instantly (e.g. cache hit).
+ *
+ * @param code - The VS Code API surface.
+ * @param options - Progress options forwarded to `window.withProgress`.
+ * @param promise - The promise to await.
+ * @param delay - Milliseconds to wait before showing the notification. Defaults to 150.
+ */
+export async function withDelayedProgress<T>(code: IVsCode, options: vscode.ProgressOptions, promise: Promise<T>, delay = 150): Promise<T> {
+    const raceResult = await Promise.race([
+        promise,
+        new Promise<typeof Pending>(r => { setTimeout(() => { r(Pending); }, delay); }),
+    ]);
+
+    if (raceResult !== Pending) {
+        return raceResult as T;
+    }
+
+    return code.window.withProgress(options, () => { return promise; });
+}
