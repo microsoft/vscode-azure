@@ -17,6 +17,7 @@ export interface PickPair<T> {
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export function getLastPick<T, TPair extends PickPair<T> = PickPair<T>>(context: Readonly<PickContext<T>>): TPair | undefined {
-    const lastPick = context.picks.slice(-1)[0] as TPair | undefined;
+    const lastIndex: number = context.picks.length - 1;
+    const lastPick = lastIndex >= 0 ? context.picks[lastIndex] as TPair : undefined;
     return lastPick;
 }

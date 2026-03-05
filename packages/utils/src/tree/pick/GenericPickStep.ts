@@ -17,10 +17,10 @@ export interface CreateNewOption<TItem> {
 
 /**
  * Classification result for an item in the pick list.
- * - `'intermediate'` — a drillable node (e.g. account, tenant, subscription)
- * - `'skip'` — an intermediate node that should be auto-selected when it is the only pick
- * - `'terminal'` — a selectable leaf node
- * - `false` — the item should be hidden from the picker
+ * - `'intermediate'` -- a drillable node (e.g. account, tenant, subscription)
+ * - `'skip'` -- an intermediate node that should be auto-selected when it is the only pick
+ * - `'terminal'` -- a selectable leaf node
+ * - `false` -- the item should be hidden from the picker
  */
 export type PickClassification = 'intermediate' | 'skip' | 'terminal' | false;
 
