@@ -15,6 +15,7 @@
     "author": "Microsoft Corporation",
     "scripts": {
         "postinstall": "node ./scripts/postinstall.mjs",
+        "prelint": "npm run --workspace=packages/utils build",
         "lint": "npm run --workspaces lint",
         "build": "npm run --workspaces build",
         "package": "npm run --workspaces package",
@@ -31,6 +32,7 @@
     "devDependencies": {
         "@microsoft/vscode-azext-eng": "^1.0.0-alpha.12",
         "@types/node": "^22.19.11",
-        "@types/vscode": "1.106.0"
+        "@types/vscode": "1.106.0",
+        "@typescript/native-preview": "^7.0.0-dev.20260305.1"
     }
 }

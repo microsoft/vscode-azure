@@ -1,9 +1,10 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
-        "outDir": "dist/esm",
-        "baseUrl": ".",
+        "outDir": "./dist/esm",
+        "rootDir": "./src",
         "paths": {
+            // These cause files in these packages to be directly included in the extension's build
             "@microsoft/vscode-azure-azutils": [
                 "../../packages/azutils/src/index.ts"
             ],
