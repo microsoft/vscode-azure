@@ -266,11 +266,11 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         // Other strategies: load ALL resource groups and ALL resources
         // (exhausting pagination) so the complete set can be bucketed.
-        await this.loadAll(sub);
+        await this.cache.loadAll(sub);
         const resourceGroups = await this.cache.getChildren(sub);
 
         // TODO: concurrency limits
-        await Promise.all(resourceGroups.map(rg => this.loadAll(rg)));
+        await Promise.all(resourceGroups.map(rg => this.cache.loadAll(rg)));
 
         const allResources = (
             await Promise.all(resourceGroups.map(rg => this.cache.getChildren(rg)))
@@ -296,18 +296,6 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         return groups;
     }
-
-    /**
-     * Exhaust all remaining pages for a resource's children so the
-     * cache holds the complete set. Used by non-RG grouping strategies
-     * that need every resource to bucket correctly.
-     */
-    private async loadAll(resource: ConcreteAzureNode): Promise<void> {
-        while (this.cache.hasMore(resource)) {
-            await this.cache.loadMore(resource);
-        }
-    }
-
     // #endregion
 }
 

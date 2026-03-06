@@ -40,9 +40,12 @@ export interface LoadMoreOptions<TViewItem> {
 
     /**
      * Build the VS Code tree item to display for "Load More" nodes.
-     * The tree item is always rendered the same way regardless of parent.
+     * @param parentViewItem - The parent view item for which more data will be loaded.
+     * @param loading - `true` when a page fetch is already in progress
+     * for this node's parent. Implementations should show a spinner and
+     * omit the command to prevent additional clicks.
      */
-    readonly getTreeItem: () => ITreeItem;
+    readonly getTreeItem: (parentViewItem: TViewItem, loading: boolean) => ITreeItem;
 }
 
 /**
@@ -62,6 +65,9 @@ export interface LoadMoreOptions<TViewItem> {
 export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewItem, ViewProvider<TViewItem>> implements vscode.TreeDataProvider<TViewItem> {
     /** Map from key to node for O(1) lookup. */
     private readonly nodes = new NodeMap<ViewNode<TViewItem>>(node => this.getKey(node.viewItem));
+
+    /** Parent keys that currently have a loadMore in progress. */
+    private readonly loadingKeys = new Set<string>();
 
     /** Cached root nodes. */
     private roots: ViewNode<TViewItem>[] | undefined;
@@ -192,7 +198,9 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     public getTreeItem(viewItem: TViewItem): ITreeItem | Promise<ITreeItem> {
         // Synthetic "Load More" nodes: return the configured tree item directly (no provider involved)
         if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
-            return this.loadMoreOptions.getTreeItem();
+            const parentViewItem = this.loadMoreOptions.getParentViewItem(viewItem);
+            const parentKey = this.getKey(parentViewItem);
+            return this.loadMoreOptions.getTreeItem(parentViewItem, this.loadingKeys.has(parentKey));
         }
 
         const provider = this.findProvider(viewItem);
@@ -245,7 +253,21 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             ? this.loadMoreOptions.getParentViewItem(viewItem)
             : viewItem;
 
-        await this.loadMoreData(this.getKey(parentViewItem));
+        const parentKey = this.getKey(parentViewItem);
+
+        if (this.loadingKeys.has(parentKey)) {
+            return; // Already loading — prevent concurrent next() calls
+        }
+
+        this.loadingKeys.add(parentKey);
+        // Re-render the "Load More" node with a spinner / disabled command
+        this.changeEmitter.fire(parentViewItem);
+
+        try {
+            await this.loadMoreData(parentKey);
+        } finally {
+            this.loadingKeys.delete(parentKey);
+        }
     }
 
     public override dispose(): void {

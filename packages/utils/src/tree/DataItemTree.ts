@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { InflightMap } from '../data/InflightMap';
 import { isAsyncIterable, type DataProvider } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -46,6 +47,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * {@link whenEnriched}.
      */
     private readonly enrichmentPromises = new Map<string, Promise<void>>();
+
+    /**
+     * Per-resource in-flight page-load promises. Prevents concurrent
+     * `next()` calls on the same async iterator when `loadMore` /
+     * `loadAll` overlap (e.g. user click + programmatic load).
+     */
+    private readonly loadsInFlight = new InflightMap<void>();
 
     /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
@@ -97,8 +105,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         // level is not supported). Treat async iterables the same as
         // empty results here.
         const resources = results.flatMap(result => {
-            if (!result || isAsyncIterable(result)) {
+            if (!result) {
                 return [];
+            } else if (isAsyncIterable(result)) {
+                throw new Error('Root providers must return plain arrays, not AsyncIterables');
             }
             return result;
         });
@@ -204,6 +214,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * const registry = await cache.whenEnriched<EnrichedAcrRegistry>(resource);
      * registry.loginServer; // string (not string | undefined)
      * ```
+     *
+     * If displaying a loading toast, it is suggested to use `{@link withDelayedProgress}`
+     * instead of `vscode.window.withProgress` directly, to avoid flashing the
+     * toast for fast operations.
      */
     public async whenEnriched<TEnriched extends T = T>(resource: T): Promise<TEnriched> {
         await this.enrichmentPromises.get(this.getKey(resource));
@@ -230,21 +244,38 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * callers should use {@link getChildren} to read the updated list.
      */
     public async loadMore(resource: T): Promise<void> {
-        const key = this.getKey(resource);
-        const node = this.nodes.get(key);
-        if (!node?.pageIterator) {
-            return;
-        }
-
-        const next = await node.pageIterator.next();
-
-        if (next.done) {
-            node.pageIterator = undefined;
-        } else {
-            node.children = [...(node.children ?? []), ...this.addChildNodes(next.value)];
-        }
-
+        await this.loadOnePage(resource);
         this.changeEmitter.fire(resource);
+    }
+
+    /**
+     * Pulls all remaining pages for the given resource until the iterator is
+     * exhausted. Fires {@link onDidChange} after all pages are loaded so the
+     * view refreshes only once.
+     */
+    public async loadAll(resource: T): Promise<void> {
+        while (this.hasMore(resource)) {
+            await this.loadOnePage(resource);
+        }
+        this.changeEmitter.fire(resource);
+    }
+
+    private async loadOnePage(resource: T): Promise<void> {
+        const key = this.getKey(resource);
+        await this.loadsInFlight.getOrRun(key, async () => {
+            const node = this.nodes.get(key);
+            if (!node?.pageIterator) {
+                return;
+            }
+
+            const next = await node.pageIterator.next();
+
+            if (next.done) {
+                node.pageIterator = undefined;
+            } else {
+                node.children = [...(node.children ?? []), ...this.addChildNodes(next.value)];
+            }
+        });
     }
 
     /**

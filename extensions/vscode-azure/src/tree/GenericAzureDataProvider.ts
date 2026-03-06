@@ -106,11 +106,16 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
             throw new Error(`Failed to list resource groups: ${response.body.error?.message ?? response.status}`);
         }
 
-        yield (response.body.value ?? [])
-            .map(rg => attachMetadata(rg, subscription))
-            .map(rg => Object.assign(rg, { groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'], groupingValue: rg.name })) as ResourceGroup[];
+        const toResourceGroup = (rg: Partial<GenericResource>): ResourceGroup => {
+            const resource = attachMetadata(rg, subscription);
+            return Object.assign(resource, {
+                groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'],
+                groupingValue: resource.name,
+            }) as ResourceGroup;
+        };
 
-        yield* this.followNextLink<ResourceGroup>(client, response.body.nextLink, subscription);
+        yield (response.body.value ?? []).map(toResourceGroup);
+        yield* this.followNextLink(client, response.body.nextLink, toResourceGroup);
     }
 
     /**
@@ -131,10 +136,11 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
             throw new Error(`Failed to list resources: ${response.body.error?.message ?? response.status}`);
         }
 
-        yield (response.body.value ?? [])
-            .map(r => attachMetadata(r, group.subscription));
+        const toGenericResource = (r: Partial<GenericResource>) =>
+            attachMetadata(r, group.subscription);
 
-        yield* this.followNextLink<GenericResource>(client, response.body.nextLink, group.subscription);
+        yield (response.body.value ?? []).map(toGenericResource);
+        yield* this.followNextLink(client, response.body.nextLink, toGenericResource);
     }
 
     /**
@@ -145,7 +151,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private async *followNextLink<T>(
         client: ResourceClient,
         nextLink: string | undefined,
-        subscription: AzureSubscription,
+        mapItem: (raw: Partial<GenericResource>) => T,
     ): AsyncGenerator<T[]> {
         while (nextLink) {
             // pathUnchecked accepts absolute URLs and routes them through
@@ -156,11 +162,8 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
                 throw new Error(`Failed to fetch next page: ${response.body.error?.message ?? response.status}`);
             }
 
-            const body = response.body as { value?: Record<string, unknown>[]; nextLink?: string };
-            const resources = (body.value ?? [])
-                .map(r => attachMetadata(r as Partial<T>, subscription));
-
-            yield resources as T[];
+            const body = response.body as { value?: Partial<GenericResource>[]; nextLink?: string };
+            yield (body.value ?? []).map(mapItem);
             nextLink = body.nextLink;
         }
     }

@@ -20,7 +20,8 @@ export type ChildResult<TResource> = TResource[] | AsyncIterable<TResource[]>;
  * `Symbol.asyncIterator`), indicating paged children.
  */
 export function isAsyncIterable<T>(value: T[] | AsyncIterable<T[]>): value is AsyncIterable<T[]> {
-    return typeof value === 'object'
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    return !!value && typeof value === 'object'
         && Symbol.asyncIterator in value;
 }
 

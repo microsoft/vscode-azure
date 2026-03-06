@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, type ITreeItem, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { AzureResourceTreeViewId, LoadMoreCommandId } from '../constants';
 import { IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
@@ -43,18 +43,7 @@ export function registerTrees(container: Container): void {
                 isLoadMoreViewItem: key => key.endsWith(loadMoreSuffix),
                 getLoadMoreViewItem: parentKey => parentKey + loadMoreSuffix,
                 getParentViewItem: loadMoreKey => loadMoreKey.slice(0, -loadMoreSuffix.length),
-                getTreeItem: () => {
-                    const item = new code.TreeItem(
-                        code.l10n.t('Load More...'),
-                        code.TreeItemCollapsibleState.None,
-                    );
-                    item.iconPath = new code.ThemeIcon('ellipsis');
-                    item.command = {
-                        command: LoadMoreCommandId,
-                        title: '',
-                    };
-                    return item;
-                },
+                getTreeItem: (parentViewItem, loading) => defaultLoadMoreTreeItem(code, parentViewItem, loading),
             },
         );
 
@@ -101,4 +90,23 @@ function bindAzureViewViewProviders(container: Container): void {
     // ProviderRegistry.findProvider() returns the first match.
     container.bind(IAzureViewViewProviders).to(AcrViewProvider).onActivation(pushDisposable);
     container.bind(IAzureViewViewProviders).to(GenericAzureViewProvider).onActivation(pushDisposable);
+}
+
+function defaultLoadMoreTreeItem(code: IVsCode, parentViewItem: string, loading: boolean): ITreeItem {
+    const item = new code.TreeItem(
+        loading ? code.l10n.t('Loading...') : code.l10n.t('Load More...'),
+        code.TreeItemCollapsibleState.None,
+    );
+
+    item.iconPath = new code.ThemeIcon(loading ? 'loading~spin' : 'ellipsis');
+
+    if (!loading) {
+        item.command = {
+            command: LoadMoreCommandId,
+            title: '',
+            arguments: [parentViewItem],
+        };
+    }
+
+    return item;
 }
