@@ -17,7 +17,7 @@ let armResources: typeof import('@azure/arm-resources') | undefined;
 
 /**
  * Default page size used when fetching paginated Azure resource lists.
- * Can be overridden via the `azure.pageSize` setting in the future.
+ * TODO: add override setting
  */
 const DEFAULT_PAGE_SIZE = 50;
 
