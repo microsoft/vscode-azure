@@ -98,14 +98,14 @@ function defaultLoadMoreTreeItem(code: IVsCode, parentViewItem: string, loading:
         code.TreeItemCollapsibleState.None,
     );
 
-    item.iconPath = new code.ThemeIcon(loading ? 'loading~spin' : 'ellipsis');
-
     if (!loading) {
         item.command = {
             command: LoadMoreCommandId,
             title: '',
             arguments: [parentViewItem],
         };
+    } else {
+        item.iconPath = new code.ThemeIcon('loading~spin');
     }
 
     return item;
