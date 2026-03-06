@@ -296,6 +296,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         return groups;
     }
+
     // #endregion
 }
 
