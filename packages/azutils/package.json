@@ -26,14 +26,14 @@
         "@azure/arm-containerregistry": "12.0.0-alpha.20260224.1",
         "@azure/core-rest-pipeline": "*",
         "@azure/ms-rest-azure-env": "^2.0.0",
-        "@microsoft/vscode-azext-azureauth": "^6.0.0-alpha.3",
         "@microsoft/vscode-azure-utils": "*"
     },
     "devDependencies": {
         "@azure/arm-resources": "*",
         "@azure/core-auth": "*",
         "@azure/core-client": "*",
-        "@azure-rest/core-client": "*"
+        "@azure-rest/core-client": "*",
+        "@microsoft/vscode-azext-azureauth": "*"
     },
     "mocha": {
         "node-option": [

@@ -123,7 +123,7 @@
     "dependencies": {
         "@azure/arm-containerregistry": "12.0.0-alpha.20260224.1",
         "@azure/arm-resources": "^7.0.0",
-        "@microsoft/vscode-azext-azureauth": "*",
+        "@microsoft/vscode-azext-azureauth": "^6.0.0-alpha.4",
         "@microsoft/vscode-azure-azutils": "*",
         "@microsoft/vscode-azure-utils": "*",
         "inversify": "^7.11.0"
