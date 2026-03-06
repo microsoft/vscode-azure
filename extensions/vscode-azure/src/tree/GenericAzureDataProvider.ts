@@ -9,7 +9,7 @@ import {
     createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected,
     type ConcreteAzureNode, type GenericResource, type ResourceClient, type ResourceGroup
 } from '@microsoft/vscode-azure-azutils';
-import type { ChildResult, DataProvider } from '@microsoft/vscode-azure-utils';
+import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import * as util from 'util';
 import { IAzureSubscriptionProvider } from '../services';
@@ -95,7 +95,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     /**
      * Yields pages of resource groups for a subscription.
      */
-    private async *getResourceGroupPages(subscription: AzureSubscription): ChildResult<ResourceGroup> {
+    private async *getResourceGroupPages(subscription: AzureSubscription): AsyncIterable<Page<ResourceGroup>> {
         const client = await this.getOrCreateClient(subscription);
 
         const response = await client
@@ -109,19 +109,20 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         const toResourceGroup = (rg: Partial<GenericResource>): ResourceGroup => {
             const resource = attachMetadata(rg, subscription);
             return Object.assign(resource, {
-                groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'],
+                groupingStrategy: 'resourceGroup' as const satisfies ResourceGroup['groupingStrategy'],
                 groupingValue: resource.name,
-            }) as ResourceGroup;
+            });
         };
 
-        yield (response.body.value ?? []).map(toResourceGroup);
+        const hasMore = !!response.body.nextLink;
+        yield { items: (response.body.value ?? []).map(toResourceGroup), hasMore };
         yield* this.followNextLink(client, response.body.nextLink, toResourceGroup);
     }
 
     /**
      * Yields pages of resources within a resource group.
      */
-    private async *getResourcePages(group: ResourceGroup): ChildResult<GenericResource> {
+    private async *getResourcePages(group: ResourceGroup): AsyncIterable<Page<GenericResource>> {
         const client = await this.getOrCreateClient(group.subscription);
 
         const response = await client
@@ -139,7 +140,8 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         const toGenericResource = (r: Partial<GenericResource>) =>
             attachMetadata(r, group.subscription);
 
-        yield (response.body.value ?? []).map(toGenericResource);
+        const hasMore = !!response.body.nextLink;
+        yield { items: (response.body.value ?? []).map(toGenericResource), hasMore };
         yield* this.followNextLink(client, response.body.nextLink, toGenericResource);
     }
 
@@ -152,7 +154,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         client: ResourceClient,
         nextLink: string | undefined,
         mapItem: (raw: Partial<GenericResource>) => T,
-    ): AsyncGenerator<T[]> {
+    ): AsyncGenerator<Page<T>> {
         while (nextLink) {
             // pathUnchecked accepts absolute URLs and routes them through
             // the existing pipeline (credentials, dedup policy, etc.)
@@ -163,8 +165,8 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
             }
 
             const body = response.body as { value?: Partial<GenericResource>[]; nextLink?: string };
-            yield (body.value ?? []).map(mapItem);
             nextLink = body.nextLink;
+            yield { items: (body.value ?? []).map(mapItem), hasMore: !!nextLink };
         }
     }
 }

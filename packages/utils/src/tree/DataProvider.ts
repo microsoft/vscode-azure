@@ -6,20 +6,30 @@
 import type { ProviderResult } from '../vscode/ProviderResult';
 
 /**
+ * A single page of children from a paginated {@link DataProvider.getChildren}
+ * result.
+ */
+export interface Page<TResource> {
+    readonly items: TResource[];
+    readonly hasMore: boolean;
+}
+
+/**
  * The result of a {@link DataProvider.getChildren} call.
  *
  * - A plain `TResource[]` for non-paginated results.
- * - An `AsyncIterable<TResource[]>` whose iterations each yield one page of
- *   children. The tree pulls the first page on initial access and subsequent
- *   pages on demand ("Load More").
+ * - An `AsyncIterable<Page<TResource>>` whose iterations each yield one page
+ *   of children. Each page declares whether more pages are available via
+ *   {@link Page.hasMore}. The tree pulls the first page on initial access
+ *   and subsequent pages on demand ("Load More").
  */
-export type ChildResult<TResource> = TResource[] | AsyncIterable<TResource[]>;
+export type ChildResult<TResource> = TResource[] | AsyncIterable<Page<TResource>>;
 
 /**
  * Type guard: returns `true` when `value` is an `AsyncIterable` (has
  * `Symbol.asyncIterator`), indicating paged children.
  */
-export function isAsyncIterable<T>(value: T[] | AsyncIterable<T[]>): value is AsyncIterable<T[]> {
+export function isAsyncIterable<T>(value: T[] | AsyncIterable<Page<T>>): value is AsyncIterable<Page<T>> {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     return !!value && typeof value === 'object'
         && Symbol.asyncIterator in value;
@@ -49,10 +59,10 @@ export interface DataProvider<TResource> {
      * when called with no argument (root providers only).
      *
      * Return a plain `TResource[]` for a non-paginated result, or an
-     * `AsyncIterable<TResource[]>` (e.g. from an `async function*`
-     * generator) where each iteration yields a single page. The tree will
-     * pull one page on first access and subsequent pages when the user
-     * clicks "Load More".
+     * `AsyncIterable<Page<TResource>>` (e.g. from an `async function*`
+     * generator) where each iteration yields a single {@link Page}. The
+     * tree will pull one page on first access and subsequent pages when
+     * the user clicks "Load More".
      *
      * @returns Child resources or `undefined` / empty for leaf nodes.
      */

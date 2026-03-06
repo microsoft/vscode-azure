@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { InflightMap } from '../data/InflightMap';
-import { isAsyncIterable, type DataProvider } from './DataProvider';
+import { isAsyncIterable, type DataProvider, type Page } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 
@@ -18,11 +18,11 @@ interface TreeNode<T> {
     staleAt: number;            // Date.now() after which children should be re-fetched
 
     /**
-     * If the provider returned an `AsyncIterable<T[]>`, the in-progress
+     * If the provider returned an `AsyncIterable<Page<T>>`, the in-progress
      * iterator is stored here between page pulls. `undefined` means no
      * more pages are available (or the provider returned a plain array).
      */
-    pageIterator?: AsyncIterator<T[]>;
+    pageIterator?: AsyncIterator<Page<T>>;
 }
 
 /**
@@ -273,7 +273,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             if (next.done) {
                 node.pageIterator = undefined;
             } else {
-                node.children = [...(node.children ?? []), ...this.addChildNodes(next.value)];
+                node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items)];
+                if (!next.value.hasMore) {
+                    node.pageIterator = undefined;
+                }
             }
         });
     }
