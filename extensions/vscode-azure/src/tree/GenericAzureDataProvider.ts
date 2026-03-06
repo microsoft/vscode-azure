@@ -13,6 +13,8 @@ import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-ut
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
 
+let armResources: typeof import('@azure/arm-resources') | undefined;
+
 /**
  * Default page size used when fetching paginated Azure resource lists.
  * Can be overridden via the `azure.pageSize` setting in the future.
@@ -83,8 +85,8 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private async getOrCreateClient(subscription: AzureSubscription): Promise<ResourceClient> {
         let client = this.clientCache.get(subscription.subscriptionId);
         if (!client) {
-            const armResSubs = await import('@azure/arm-resources');
-            client = await createAzureSubscriptionClient(armResSubs.ResourceManagementClient, subscription.credential, subscription.subscriptionId);
+            armResources ??= await import('@azure/arm-resources');
+            client = await createAzureSubscriptionClient(armResources.ResourceManagementClient, subscription.credential, subscription.subscriptionId);
             this.clientCache.set(subscription.subscriptionId, client);
         }
         return client;
@@ -96,20 +98,18 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private async *getResourceGroupPages(subscription: AzureSubscription): AsyncIterable<Page<ResourceGroup>> {
         const client = await this.getOrCreateClient(subscription);
         const pages = client.resourceGroups.list({ top: DEFAULT_PAGE_SIZE }).byPage();
+        armResources ??= await import('@azure/arm-resources');
 
-        let result = await pages.next();
-        while (!result.done) {
-            const items = result.value;
-            result = await pages.next();
+        for await (const items of pages) {
             yield {
                 items: items.map(rg => {
                     const resource = attachMetadata(rg, subscription);
                     return Object.assign(resource, {
-                        groupingStrategy: 'resourceGroup' as const satisfies ResourceGroup['groupingStrategy'],
+                        groupingStrategy: 'resourceGroup' as const,
                         groupingValue: resource.name,
                     });
                 }),
-                hasMore: !result.done,
+                hasMore: !!armResources.getContinuationToken(items),
             };
         }
     }
@@ -120,14 +120,12 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private async *getResourcePages(group: ResourceGroup): AsyncIterable<Page<GenericResource>> {
         const client = await this.getOrCreateClient(group.subscription);
         const pages = client.resources.listByResourceGroup(group.name, { top: DEFAULT_PAGE_SIZE }).byPage();
+        armResources ??= await import('@azure/arm-resources');
 
-        let result = await pages.next();
-        while (!result.done) {
-            const items = result.value;
-            result = await pages.next();
+        for await (const items of pages) {
             yield {
                 items: items.map(r => attachMetadata(r, group.subscription)),
-                hasMore: !result.done,
+                hasMore: !!armResources.getContinuationToken(items),
             };
         }
     }
