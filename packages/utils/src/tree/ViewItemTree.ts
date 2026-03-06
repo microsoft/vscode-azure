@@ -267,6 +267,8 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             await this.loadMoreData(parentKey);
         } finally {
             this.loadingKeys.delete(parentKey);
+            // Ensure the parent subtree is re-rendered after loadingKeys is updated
+            this.changeEmitter.fire(parentViewItem);
         }
     }
 

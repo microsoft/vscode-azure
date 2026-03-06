@@ -13,7 +13,7 @@ export class LoadMore implements ManagedCommand {
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
     ) { }
 
-    public async execute(loadMoreKey: string): Promise<void> {
-        await this.viewItemTree.loadMore(loadMoreKey);
+    public async execute(parentViewItem: string): Promise<void> {
+        await this.viewItemTree.loadMore(parentViewItem);
     }
 }

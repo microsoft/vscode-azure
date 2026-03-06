@@ -102,8 +102,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         );
 
         // Root providers always return plain arrays (pagination at root
-        // level is not supported). Treat async iterables the same as
-        // empty results here.
+        // level is not supported).
         const resources = results.flatMap(result => {
             if (!result) {
                 return [];
