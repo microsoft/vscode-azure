@@ -95,7 +95,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private async *getResourceGroupPages(subscription: AzureSubscription): AsyncIterable<Page<ResourceGroup>> {
         const client = await this.getOrCreateClient(subscription);
-        const pages = client.resourceGroups.list().byPage({ maxPageSize: DEFAULT_PAGE_SIZE });
+        const pages = client.resourceGroups.list({ top: DEFAULT_PAGE_SIZE }).byPage();
 
         let result = await pages.next();
         while (!result.done) {
@@ -119,7 +119,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private async *getResourcePages(group: ResourceGroup): AsyncIterable<Page<GenericResource>> {
         const client = await this.getOrCreateClient(group.subscription);
-        const pages = client.resources.listByResourceGroup(group.name).byPage({ maxPageSize: DEFAULT_PAGE_SIZE });
+        const pages = client.resources.listByResourceGroup(group.name, { top: DEFAULT_PAGE_SIZE }).byPage();
 
         let result = await pages.next();
         while (!result.done) {
