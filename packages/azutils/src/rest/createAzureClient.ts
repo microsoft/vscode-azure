@@ -54,13 +54,10 @@ function applyDefaults<TOptions extends ClientOptions | ServiceClientOptions>(op
 }
 
 // TODO: Other policies we (maybe) need from before:
-// - User agent? prefix of `${extensionName}/${extensionVersion}`
 // - accept language
 // - correlation ID
 // - endpoint (per sovereign cloud config)
 // - missing content type?
 // - Byte order mark?
 // - Status code?
-// - Insecure connection? (no way?)
 // - MFA challenge
-// - Basic auth? (no way?)
