@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { ResourceManagementClient as ResourceClient } from '@azure/arm-resources';
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
-    attachMetadata,
-    createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, listResourceGroups, listResourcesByGroup,
-    type ConcreteAzureNode, type GenericResource, type ResourceClient, type ResourceGroup
+    attachMetadata, createAzureSubscriptionClient, isAccount, isResourceGroup, isSubscription, isTenant,
+    type ConcreteAzureNode, type GenericResource, type ResourceGroup
 } from '@microsoft/vscode-azure-azutils';
 import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -83,9 +83,8 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private async getOrCreateClient(subscription: AzureSubscription): Promise<ResourceClient> {
         let client = this.clientCache.get(subscription.subscriptionId);
         if (!client) {
-            client = await createAzureClient(
-                opts => createClient(subscription.credential, opts),
-            );
+            const armResSubs = await import('@azure/arm-resources');
+            client = await createAzureSubscriptionClient(armResSubs.ResourceManagementClient, subscription.credential, subscription.subscriptionId);
             this.clientCache.set(subscription.subscriptionId, client);
         }
         return client;
@@ -96,17 +95,21 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private async *getResourceGroupPages(subscription: AzureSubscription): AsyncIterable<Page<ResourceGroup>> {
         const client = await this.getOrCreateClient(subscription);
+        const pages = client.resourceGroups.list().byPage({ maxPageSize: DEFAULT_PAGE_SIZE });
 
-        for await (const page of listResourceGroups(client, subscription.subscriptionId, { top: DEFAULT_PAGE_SIZE })) {
+        let result = await pages.next();
+        while (!result.done) {
+            const items = result.value;
+            result = await pages.next();
             yield {
-                hasMore: page.hasMore,
-                items: page.items.map(rg => {
+                items: items.map(rg => {
                     const resource = attachMetadata(rg, subscription);
                     return Object.assign(resource, {
                         groupingStrategy: 'resourceGroup' as const satisfies ResourceGroup['groupingStrategy'],
                         groupingValue: resource.name,
                     });
                 }),
+                hasMore: !result.done,
             };
         }
     }
@@ -116,11 +119,15 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private async *getResourcePages(group: ResourceGroup): AsyncIterable<Page<GenericResource>> {
         const client = await this.getOrCreateClient(group.subscription);
+        const pages = client.resources.listByResourceGroup(group.name).byPage({ maxPageSize: DEFAULT_PAGE_SIZE });
 
-        for await (const page of listResourcesByGroup(client, group.subscription.subscriptionId, group.name, { top: DEFAULT_PAGE_SIZE })) {
+        let result = await pages.next();
+        while (!result.done) {
+            const items = result.value;
+            result = await pages.next();
             yield {
-                hasMore: page.hasMore,
-                items: page.items.map(r => attachMetadata(r, group.subscription)),
+                items: items.map(r => attachMetadata(r, group.subscription)),
+                hasMore: !result.done,
             };
         }
     }
