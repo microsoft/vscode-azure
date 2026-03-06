@@ -152,7 +152,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         const result = await provider.getChildren(resource);
 
         if (!result) {
-            // No children — leave the empty array
+            // No children -- leave the empty array
         } else if (isAsyncIterable(result)) {
             // Paged result: store the iterator, then pull the first page
             // via the shared loadMore path.
