@@ -15,6 +15,7 @@
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
 - Tests that enforce bundle size not growing out of control
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)
+- Get rid of non-REST (old) `@azure` packages
 
 Before handoff:
 - Deployment story (single and app)

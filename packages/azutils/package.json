@@ -31,6 +31,7 @@
     },
     "devDependencies": {
         "@azure/core-auth": "*",
+        "@azure/core-client": "*",
         "@azure-rest/core-client": "*"
     },
     "mocha": {
