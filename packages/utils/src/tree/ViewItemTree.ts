@@ -13,6 +13,19 @@ import { ProviderRegistry } from './ProviderRegistry';
 import type { ViewProvider } from './ViewProvider';
 
 /**
+ * Options for constructing a {@link ViewItemTree}.
+ *
+ * @typeParam TViewItem - The view item type stored in the tree.
+ * @typeParam TResource - The resource type stored in the underlying {@link DataItemTree}.
+ */
+export interface ViewItemTreeOptions<TViewItem, TResource> {
+    readonly dataItemTree: DataItemTree<TResource>;
+    readonly toViewItem: (resource: TResource) => TViewItem;
+    readonly getKey: (viewItem: TViewItem) => string;
+    readonly getResourceKey: (viewItem: TViewItem) => string;
+}
+
+/**
  * Optional configuration for "Load More" support.
  *
  * When provided, the tree automatically appends a synthetic "Load More"
@@ -77,6 +90,8 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
     public readonly onDidChangeTreeData = this.changeEmitter.event;
 
+    private readonly getKey: (viewItem: TViewItem) => string;
+    private readonly getResourceKey: (viewItem: TViewItem) => string;
     private readonly hasMoreData: (key: string) => boolean;
     private readonly loadMoreData: (key: string) => Promise<void>;
 
@@ -89,29 +104,29 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * injection for paginated branches.
      */
     public constructor(
-        dataItemTree: DataItemTree<TResource>,
-        toViewItem: (resource: TResource) => TViewItem,
-        private readonly getKey: (viewItem: TViewItem) => string,
+        options: ViewItemTreeOptions<TViewItem, TResource>,
         private readonly loadMoreOptions?: LoadMoreOptions<TViewItem>,
     ) {
         super();
 
+        this.getKey = options.getKey;
+        this.getResourceKey = options.getResourceKey;
         this.hasMoreData = key => {
-            const resource = dataItemTree.get(key);
-            return resource ? dataItemTree.hasMore(resource) : false;
+            const resource = options.dataItemTree.get(key);
+            return resource ? options.dataItemTree.hasMore(resource) : false;
         };
         this.loadMoreData = key => {
-            const resource = dataItemTree.get(key);
-            return resource ? dataItemTree.loadMore(resource) : Promise.resolve();
+            const resource = options.dataItemTree.get(key);
+            return resource ? options.dataItemTree.loadMore(resource) : Promise.resolve();
         };
 
         // Forward data-layer changes so the view refreshes automatically.
         // If the changed resource maps to a view item that is NOT in the
         // view tree (e.g. a skipped account/tenant node), fall back to a
         // full refresh so the tree still picks up the structural change.
-        this.dataItemTreeSubscription = dataItemTree.onDidChange(resource => {
+        this.dataItemTreeSubscription = options.dataItemTree.onDidChange(resource => {
             if (resource !== undefined) {
-                const viewItem = toViewItem(resource);
+                const viewItem = options.toViewItem(resource);
                 const node = this.nodes.get(this.getKey(viewItem));
                 if (node) {
                     // Fire with the original `ViewItem`
@@ -159,8 +174,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     }
 
     private async getBranchChildren(viewItem: TViewItem): Promise<TViewItem[]> {
-        const key = this.getKey(viewItem);
-        const parentNode = this.nodes.get(key);
+        const parentNode = this.nodes.get(this.getKey(viewItem));
         if (!parentNode) {
             return [];
         }
@@ -184,8 +198,9 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
         // Inject a synthetic "Load More" view item if the data layer has
         // more pages and load-more support is configured.
-        if (this.loadMoreOptions && this.hasMoreData(key)) {
-            return [...childItems, this.loadMoreOptions.getLoadMoreViewItem(key)];
+        const resourceKey = this.getResourceKey(viewItem);
+        if (this.loadMoreOptions && this.hasMoreData(resourceKey)) {
+            return [...childItems, this.loadMoreOptions.getLoadMoreViewItem(resourceKey)];
         }
 
         return childItems;
@@ -264,7 +279,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         this.changeEmitter.fire(parentViewItem);
 
         try {
-            await this.loadMoreData(parentKey);
+            await this.loadMoreData(this.getResourceKey(parentViewItem));
         } finally {
             this.loadingKeys.delete(parentKey);
             // Ensure the parent subtree is re-rendered after loadingKeys is updated

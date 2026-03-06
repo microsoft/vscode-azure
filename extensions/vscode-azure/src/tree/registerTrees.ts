@@ -34,9 +34,12 @@ export function registerTrees(container: Container): void {
     bindAzureViewViewProviders(container);
     container.bind(IAzureViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, ConcreteAzureNode>(
-            context.get(IAzureViewDataTree),
-            resource => AzureNodeId.from(resource).toString(),
-            key => key, // Identity mapping since view item is just the `AzureNodeId` string
+            {
+                dataItemTree: context.get(IAzureViewDataTree),
+                toViewItem: resource => AzureNodeId.from(resource).toString(),
+                getKey: key => key, // Identity mapping since view item is just the `AzureNodeId` string
+                getResourceKey: key => key, // Identity mapping since both view and data items use the same key
+            },
             defaultLoadMoreOptions(context.get(IVsCode)),
         );
 
