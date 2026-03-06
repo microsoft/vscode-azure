@@ -30,7 +30,9 @@
         "@microsoft/vscode-azure-utils": "*"
     },
     "devDependencies": {
+        "@azure/arm-resources": "*",
         "@azure/core-auth": "*",
+        "@azure/core-client": "*",
         "@azure-rest/core-client": "*"
     },
     "mocha": {

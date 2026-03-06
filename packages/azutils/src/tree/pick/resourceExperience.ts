@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type CreateNewOption, getLastPick, type ICodeContext, type PickClassification, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
-import type { AzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
+import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
 import { AzureNodeId } from '../../models/AzureNodeId';
 import type { GenericResource } from '../../models/GenericResource';
 
 interface ResourceExperienceOptions extends ICodeContext {
-    readonly viewItemTree: ViewItemTree<string, AzureNode>;
+    readonly viewItemTree: ViewItemTree<string, ConcreteAzureNode>;
     readonly dataItemTree: ConcreteAzureNodeTree;
     readonly logicalType: string;
     readonly canPickMany?: boolean;

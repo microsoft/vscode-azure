@@ -6,6 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { DataItemTree, type DataProvider, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
+import { defaultLoadMoreOptions } from '../commands/LoadMore';
 import { AzureResourceTreeViewId } from '../constants';
 import { IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
 import { AcrDataProvider } from './acr/AcrDataProvider';
@@ -33,9 +34,13 @@ export function registerTrees(container: Container): void {
     bindAzureViewViewProviders(container);
     container.bind(IAzureViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, ConcreteAzureNode>(
-            context.get(IAzureViewDataTree),
-            resource => AzureNodeId.from(resource).toString(),
-            key => key, // Identity mapping since view item is just the `AzureNodeId` string
+            {
+                dataItemTree: context.get(IAzureViewDataTree),
+                toViewItem: resource => AzureNodeId.from(resource).toString(),
+                getKey: key => key, // Identity mapping since view item is just the `AzureNodeId` string
+                getResourceKey: key => key, // Identity mapping since both view and data items use the same key
+            },
+            defaultLoadMoreOptions(context.get(IVsCode)),
         );
 
         for (const provider of context.getAll(IAzureViewViewProviders)) {

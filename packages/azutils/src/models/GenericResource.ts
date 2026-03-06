@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { GenericResource as AzSdkGenericResource, ResourceGroup as AzSdkResourceGroup } from '@azure/arm-resources';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AssertAssignable } from '@microsoft/vscode-azure-utils';
-import type { GenericResourceExpandedOutput, ResourceGroupOutput } from '../rest/resources';
 
 /**
  * The ARM-level properties of an Azure resource, without any additional context.
@@ -80,8 +80,8 @@ function logicalType(resource: Pick<GenericResource, 'type' | 'kind'>): string {
 // produce a compile error -- proving our GenericResourceBase stays in sync
 // with the REST SDK output types.
 
-type GenericResourceExpandedWithRequired = Required<Pick<GenericResourceExpandedOutput, 'id' | 'name' | 'type' | 'location'>> & Pick<GenericResourceExpandedOutput, 'tags' | 'kind'>;
-type ResourceGroupOutputWithRequired = Required<Pick<ResourceGroupOutput, 'id' | 'name' | 'type' | 'location'>> & Pick<ResourceGroupOutput, 'tags'>;
+type GenericResourceExpandedWithRequired = Required<Pick<AzSdkGenericResource, 'id' | 'name' | 'type' | 'location'>> & Pick<AzSdkGenericResource, 'tags' | 'kind'>;
+type ResourceGroupOutputWithRequired = Required<Pick<AzSdkResourceGroup, 'id' | 'name' | 'type' | 'location'>> & Pick<AzSdkResourceGroup, 'tags'>;
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // Forward: SDK types are assignable TO GenericResourceBase

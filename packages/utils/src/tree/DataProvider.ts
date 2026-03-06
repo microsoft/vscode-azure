@@ -6,6 +6,36 @@
 import type { ProviderResult } from '../vscode/ProviderResult';
 
 /**
+ * A single page of children from a paginated {@link DataProvider.getChildren}
+ * result.
+ */
+export interface Page<TResource> {
+    readonly items: TResource[];
+    readonly hasMore: boolean;
+}
+
+/**
+ * The result of a {@link DataProvider.getChildren} call.
+ *
+ * - A plain `TResource[]` for non-paginated results.
+ * - An `AsyncIterable<Page<TResource>>` whose iterations each yield one page
+ *   of children. Each page declares whether more pages are available via
+ *   {@link Page.hasMore}. The tree pulls the first page on initial access
+ *   and subsequent pages on demand ("Load More").
+ */
+export type ChildResult<TResource> = TResource[] | AsyncIterable<Page<TResource>>;
+
+/**
+ * Type guard: returns `true` when `value` is an `AsyncIterable` (has
+ * `Symbol.asyncIterator`), indicating paged children.
+ */
+export function isAsyncIterable<T>(value: T[] | AsyncIterable<Page<T>>): value is AsyncIterable<Page<T>> {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    return !!value && typeof value === 'object'
+        && Symbol.asyncIterator in value;
+}
+
+/**
  * Data-layer provider for a resource tree.
  *
  * Each implementation handles a specific subset of resources (identified by
@@ -28,9 +58,15 @@ export interface DataProvider<TResource> {
      * Get child resources for the given parent, or the top-level resources
      * when called with no argument (root providers only).
      *
-     * @returns An array of child resources. Return an empty array or undefined for leaf nodes.
+     * Return a plain `TResource[]` for a non-paginated result, or an
+     * `AsyncIterable<Page<TResource>>` (e.g. from an `async function*`
+     * generator) where each iteration yields a single {@link Page}. The
+     * tree will pull one page on first access and subsequent pages when
+     * the user clicks "Load More".
+     *
+     * @returns Child resources or `undefined` / empty for leaf nodes.
      */
-    getChildren(resource?: TResource): ProviderResult<TResource[]>;
+    getChildren(resource?: TResource): ProviderResult<ChildResult<TResource>>;
 
     /**
      * Enrich a resource in-place with provider-specific data.

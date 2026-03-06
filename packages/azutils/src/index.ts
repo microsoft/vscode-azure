@@ -9,7 +9,6 @@ export * from './models/GenericResource';
 export * from './models/Grouping';
 export * from './models/VirtualResource';
 export * from './rest/createAzureClient';
-export * from './rest/resources';
 export * from './tree/pick/resourceExperience';
 export * from './tree/pick/resourceGroupExperience';
 export * from './tree/pick/subscriptionExperience';

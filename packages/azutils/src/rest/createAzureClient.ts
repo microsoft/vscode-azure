@@ -3,10 +3,29 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Client, ClientOptions } from '@azure-rest/core-client';
+import type { Client, ClientOptions } from '@azure-rest/core-client';
+import type { TokenCredential } from '@azure/core-auth';
+import type { ServiceClient, ServiceClientOptions } from '@azure/core-client';
 import { DedupeRequestPipelinePolicy } from './pipeline/DedupeRequestPipelinePolicy';
 
-export function createAzureClient<TClient extends Client, TOptions extends ClientOptions>(
+export function createAzureClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
+    clientCtor: new (credential: TokenCredential, options?: TOptions) => TClient,
+    credential: TokenCredential,
+    options?: TOptions,
+): Promise<TClient> {
+    return Promise.resolve(new clientCtor(credential, applyDefaults(options)));
+}
+
+export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
+    clientCtor: new (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
+    credential: TokenCredential,
+    subscriptionId: string,
+    options?: TOptions,
+): Promise<TClient> {
+    return Promise.resolve(new clientCtor(credential, subscriptionId, applyDefaults(options)));
+}
+
+export function createAzureRestClient<TClient extends Client, TOptions extends ClientOptions>(
     getClient: (options?: TOptions) => TClient,
     options?: TOptions,
 ): Promise<TClient> {
@@ -17,7 +36,7 @@ export function createAzureClient<TClient extends Client, TOptions extends Clien
     );
 }
 
-function applyDefaults<TOptions extends ClientOptions>(options?: TOptions): TOptions {
+function applyDefaults<TOptions extends ClientOptions | ServiceClientOptions>(options?: TOptions): TOptions {
     return {
         ...options,
         userAgentOptions: {
@@ -31,17 +50,14 @@ function applyDefaults<TOptions extends ClientOptions>(options?: TOptions): TOpt
                 position: 'perCall',
             }
         ]
-    } satisfies ClientOptions as TOptions;
+    } satisfies (ClientOptions | ServiceClientOptions) as TOptions;
 }
 
 // TODO: Other policies we (maybe) need from before:
-// - User agent? prefix of `${extensionName}/${extensionVersion}`
 // - accept language
 // - correlation ID
 // - endpoint (per sovereign cloud config)
 // - missing content type?
 // - Byte order mark?
 // - Status code?
-// - Insecure connection? (no way?)
 // - MFA challenge
-// - Basic auth? (no way?)

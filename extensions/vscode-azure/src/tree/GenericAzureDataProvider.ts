@@ -3,18 +3,23 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { ResourceManagementClient as ResourceClient } from '@azure/arm-resources';
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
-    attachMetadata,
-    createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected,
-    type ConcreteAzureNode, type GenericResource,
-    type ResourceClient,
-    type ResourceGroup
+    attachMetadata, createAzureSubscriptionClient, isAccount, isResourceGroup, isSubscription, isTenant,
+    type ConcreteAzureNode, type GenericResource, type ResourceGroup
 } from '@microsoft/vscode-azure-azutils';
-import type { DataProvider } from '@microsoft/vscode-azure-utils';
+import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import * as util from 'util';
 import { IAzureSubscriptionProvider } from '../services';
+
+let armResources: typeof import('@azure/arm-resources') | undefined;
+
+/**
+ * Default page size used when fetching paginated Azure resource lists.
+ * TODO: add override setting
+ */
+const DEFAULT_PAGE_SIZE = 50;
 
 @injectable()
 export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode> {
@@ -44,7 +49,8 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         return isAccount(node) || isTenant(node) || isSubscription(node) || isResourceGroup(node);
     }
 
-    public async getChildren(resource?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> {
+    public async getChildren(resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> {
+        // Ensure sign-in has been initiated (lazy, only once)
         this.signInPromise ??= this.subscriptionProvider.signIn(); // TODO: handle sign out?
         await this.signInPromise;
 
@@ -61,13 +67,13 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
                 return await this.subscriptionProvider.getSubscriptionsForTenant(resource);
 
             case isSubscription(resource):
-                return await this.getResourceGroups(resource);
+                return this.getResourceGroupPages(resource);
 
             case isResourceGroup(resource):
-                return await this.getResourcesInGroup(resource);
+                return this.getResourcePages(resource);
 
             default:
-                throw new Error(`Unsupported resource type: ${util.inspect(resource)}`);
+                throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
         }
     }
 
@@ -79,47 +85,48 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private async getOrCreateClient(subscription: AzureSubscription): Promise<ResourceClient> {
         let client = this.clientCache.get(subscription.subscriptionId);
         if (!client) {
-            client = await createAzureClient(
-                opts => createClient(subscription.credential, opts),
-            );
+            armResources ??= await import('@azure/arm-resources');
+            client = await createAzureSubscriptionClient(armResources.ResourceManagementClient, subscription.credential, subscription.subscriptionId);
             this.clientCache.set(subscription.subscriptionId, client);
         }
         return client;
     }
 
-    private async getResourceGroups(subscription: AzureSubscription): Promise<ResourceGroup[]> {
+    /**
+     * Yields pages of resource groups for a subscription.
+     */
+    private async *getResourceGroupPages(subscription: AzureSubscription): AsyncIterable<Page<ResourceGroup>> {
         const client = await this.getOrCreateClient(subscription);
-        const response = await client
-            .path('/subscriptions/{subscriptionId}/resourcegroups', subscription.subscriptionId)
-            .get();
+        const pages = client.resourceGroups.list({ top: DEFAULT_PAGE_SIZE }).byPage();
+        armResources ??= await import('@azure/arm-resources');
 
-        if (isUnexpected(response)) {
-            throw new Error(`Failed to list resource groups: ${response.body.error?.message ?? response.status}`);
+        for await (const items of pages) {
+            yield {
+                items: items.map(rg => {
+                    const resource = attachMetadata(rg, subscription);
+                    return Object.assign(resource, {
+                        groupingStrategy: 'resourceGroup' as const,
+                        groupingValue: resource.name,
+                    });
+                }),
+                hasMore: !!armResources.getContinuationToken(items),
+            };
         }
-
-        return (response.body.value ?? [])
-            .map(rg => attachMetadata(rg, subscription))
-            .map(rg => Object.assign(rg, { groupingStrategy: 'resourceGroup' satisfies ResourceGroup['groupingStrategy'], groupingValue: rg.name })) as ResourceGroup[];
     }
 
-    private async getResourcesInGroup(group: ResourceGroup): Promise<GenericResource[]> {
-        // TODO: switch to the subscription-level `/subscriptions/{id}/resources` endpoint
-        // and use DedupeRequestPipelinePolicy to collapse parallel per-RG calls into a
-        // single HTTP request per subscription.
+    /**
+     * Yields pages of resources within a resource group.
+     */
+    private async *getResourcePages(group: ResourceGroup): AsyncIterable<Page<GenericResource>> {
         const client = await this.getOrCreateClient(group.subscription);
-        const response = await client
-            .path(
-                '/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/resources',
-                group.subscription.subscriptionId,
-                group.name,
-            )
-            .get();
+        const pages = client.resources.listByResourceGroup(group.name, { top: DEFAULT_PAGE_SIZE }).byPage();
+        armResources ??= await import('@azure/arm-resources');
 
-        if (isUnexpected(response)) {
-            throw new Error(`Failed to list resources: ${response.body.error?.message ?? response.status}`);
+        for await (const items of pages) {
+            yield {
+                items: items.map(r => attachMetadata(r, group.subscription)),
+                hasMore: !!armResources.getContinuationToken(items),
+            };
         }
-
-        return (response.body.value ?? [])
-            .map(r => attachMetadata(r, group.subscription));
     }
 }

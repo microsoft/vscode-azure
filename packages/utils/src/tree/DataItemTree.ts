@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DataProvider } from './DataProvider';
+import { InflightMap } from '../data/InflightMap';
+import { isAsyncIterable, type DataProvider, type Page } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 
@@ -15,6 +16,13 @@ interface TreeNode<T> {
     readonly resource: T;
     children: TreeNode<T>[] | undefined;  // undefined = not yet loaded
     staleAt: number;            // Date.now() after which children should be re-fetched
+
+    /**
+     * If the provider returned an `AsyncIterable<Page<T>>`, the in-progress
+     * iterator is stored here between page pulls. `undefined` means no
+     * more pages are available (or the provider returned a plain array).
+     */
+    pageIterator?: AsyncIterator<Page<T>>;
 }
 
 /**
@@ -39,6 +47,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * {@link whenEnriched}.
      */
     private readonly enrichmentPromises = new Map<string, Promise<void>>();
+
+    /**
+     * Per-resource in-flight page-load promises. Prevents concurrent
+     * `next()` calls on the same async iterator when `loadMore` /
+     * `loadAll` overlap (e.g. user click + programmatic load).
+     */
+    private readonly loadsInFlight = new InflightMap<void>();
 
     /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
@@ -85,7 +100,17 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             this.getRootProviders()
                 .map(p => Promise.resolve(p.getChildren())),
         );
-        const resources = results.flatMap((r) => r ?? []);
+
+        // Root providers always return plain arrays (pagination at root
+        // level is not supported).
+        const resources = results.flatMap(result => {
+            if (!result) {
+                return [];
+            } else if (isAsyncIterable(result)) {
+                throw new Error('Root providers must return plain arrays, not AsyncIterables');
+            }
+            return result;
+        });
 
         this.roots = resources.map(resource => {
             const node: TreeNode<T> = { resource, children: undefined, staleAt: 0 };
@@ -121,19 +146,28 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
         // Remove previously cached descendants that may no longer be present
         this.nodes.removeSubtrees(node.children);
+        node.children = [];
+        node.pageIterator = undefined;
 
-        const children = await provider.getChildren(resource) ?? [];
+        const result = await provider.getChildren(resource);
 
-        node.children = children.map(child => {
-            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0 };
-            this.nodes.set(this.getKey(child), childNode);
-            return childNode;
-        });
+        if (!result) {
+            // No children -- leave the empty array
+        } else if (isAsyncIterable(result)) {
+            // Paged result: store the iterator, then pull the first page.
+            // Use loadOnePage directly (not loadMore) to avoid firing
+            // onDidChange before staleAt is set -- otherwise listeners
+            // could re-enter getChildren, see staleAt=0, and reset the
+            // iterator.
+            node.pageIterator = result[Symbol.asyncIterator]();
+            await this.loadOnePage(resource);
+        } else {
+            node.children = this.addChildNodes(result);
+        }
+
         node.staleAt = Date.now() + this.ttl;
 
-        this.enrichAll(children);
-
-        return children;
+        return node.children.map(n => n.resource);
     }
 
     /**
@@ -182,10 +216,105 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * const registry = await cache.whenEnriched<EnrichedAcrRegistry>(resource);
      * registry.loginServer; // string (not string | undefined)
      * ```
+     *
+     * If displaying a loading toast, it is suggested to use `{@link withDelayedProgress}`
+     * instead of `vscode.window.withProgress` directly, to avoid flashing the
+     * toast for fast operations.
      */
     public async whenEnriched<TEnriched extends T = T>(resource: T): Promise<TEnriched> {
         await this.enrichmentPromises.get(this.getKey(resource));
         return resource as TEnriched;
+    }
+
+    /**
+     * Returns `true` when the provider that produced children for the
+     * given resource has more pages available (i.e. the async iterator
+     * has not yet been exhausted).
+     */
+    public hasMore(resource?: T): boolean {
+        if (resource === undefined) {
+            return false; // Root-level pagination not supported
+        }
+        const key = this.getKey(resource);
+        return !!this.nodes.get(key)?.pageIterator;
+    }
+
+    /**
+     * Pull the next page from the stored async iterator for the given
+     * resource. The new children are appended to the cache and enriched.
+     * Fires {@link onDidChange} so the view refreshes automatically;
+     * callers should use {@link getChildren} to read the updated list.
+     *
+     * @throws if {@link getChildren} has not been called for this resource yet.
+     */
+    public async loadMore(resource: T): Promise<void> {
+        const key = this.getKey(resource);
+        const node = this.nodes.get(key);
+        if (node?.children === undefined) {
+            throw new Error(`Cannot loadMore before getChildren has been called for: ${key}`);
+        }
+
+        await this.loadOnePage(resource);
+        this.changeEmitter.fire(resource);
+    }
+
+    /**
+     * Pulls all remaining pages for the given resource until the iterator is
+     * exhausted. Fires {@link onDidChange} after all pages are loaded so the
+     * view refreshes only once.
+     *
+     * If children have not been loaded yet (i.e. {@link getChildren} was
+     * never called for this resource), the initial load is triggered first.
+     */
+    public async loadAll(resource: T): Promise<void> {
+        const key = this.getKey(resource);
+        const node = this.nodes.get(key);
+
+        // Ensure children are initialized (first page pulled) before
+        // exhausting remaining pages.
+        if (node?.children === undefined) {
+            await this.getChildren(resource);
+        }
+
+        while (this.hasMore(resource)) {
+            await this.loadOnePage(resource);
+        }
+        this.changeEmitter.fire(resource);
+    }
+
+    private async loadOnePage(resource: T): Promise<void> {
+        const key = this.getKey(resource);
+        await this.loadsInFlight.getOrRun(key, async () => {
+            const node = this.nodes.get(key);
+            if (!node?.pageIterator) {
+                return;
+            }
+
+            const next = await node.pageIterator.next();
+
+            if (next.done) {
+                node.pageIterator = undefined;
+            } else {
+                node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items)];
+                if (!next.value.hasMore) {
+                    node.pageIterator = undefined;
+                }
+            }
+        });
+    }
+
+    /**
+     * Create {@link TreeNode}s for the given resources, register them in
+     * the {@link NodeMap}, and kick off background enrichment.
+     */
+    private addChildNodes(children: T[]): TreeNode<T>[] {
+        const nodes = children.map(child => {
+            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0 };
+            this.nodes.set(this.getKey(child), childNode);
+            return childNode;
+        });
+        this.enrichAll(children);
+        return nodes;
     }
 
     /**
@@ -206,6 +335,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             this.nodes.removeSubtrees(node.children);
             node.children = undefined;
             node.staleAt = 0;
+            node.pageIterator = undefined;
         }
         this.changeEmitter.fire(resource);
     }
