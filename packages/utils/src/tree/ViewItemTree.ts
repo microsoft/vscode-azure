@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
+import { InflightMap } from '../data/InflightMap';
 import type { Disposable } from '../vscode/Disposable';
 import type { ITreeItem } from '../vscode/IVsCode';
 import type { ProviderResult } from '../vscode/ProviderResult';
@@ -79,8 +80,8 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     /** Map from key to node for O(1) lookup. */
     private readonly nodes = new NodeMap<ViewNode<TViewItem>>(node => this.getKey(node.viewItem));
 
-    /** Parent keys that currently have a loadMore in progress. */
-    private readonly loadingKeys = new Set<string>();
+    /** Deduplicates concurrent loadMore calls per parent key. */
+    private readonly loadsInFlight = new InflightMap<void>();
 
     /** Cached root nodes. */
     private roots: ViewNode<TViewItem>[] | undefined;
@@ -215,7 +216,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
             const parentViewItem = this.loadMoreOptions.getParentViewItem(viewItem);
             const parentKey = this.getKey(parentViewItem);
-            return this.loadMoreOptions.getTreeItem(parentViewItem, this.loadingKeys.has(parentKey));
+            return this.loadMoreOptions.getTreeItem(parentViewItem, this.loadsInFlight.has(parentKey));
         }
 
         const provider = this.findProvider(viewItem);
@@ -270,21 +271,17 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
         const parentKey = this.getKey(parentViewItem);
 
-        if (this.loadingKeys.has(parentKey)) {
-            return; // Already loading -- prevent concurrent next() calls
-        }
-
-        this.loadingKeys.add(parentKey);
-        // Re-render the "Load More" node with a spinner / disabled command
-        this.changeEmitter.fire(parentViewItem);
-
-        try {
-            await this.loadMoreData(this.getResourceKey(parentViewItem));
-        } finally {
-            this.loadingKeys.delete(parentKey);
-            // Ensure the parent subtree is re-rendered after loadingKeys is updated
+        await this.loadsInFlight.getOrRun(parentKey, async () => {
+            // Re-render the "Load More" node with a spinner / disabled command
             this.changeEmitter.fire(parentViewItem);
-        }
+
+            try {
+                await this.loadMoreData(this.getResourceKey(parentViewItem));
+            } finally {
+                // Ensure the parent subtree is re-rendered after loading completes
+                this.changeEmitter.fire(parentViewItem);
+            }
+        });
     }
 
     public override dispose(): void {

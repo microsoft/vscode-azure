@@ -14,6 +14,13 @@ export class InflightMap<T> {
     private readonly inflight = new Map<string, Promise<T>>();
 
     /**
+     * Returns `true` if an operation for the given key is currently in-flight.
+     */
+    public has(key: string): boolean {
+        return this.inflight.has(key);
+    }
+
+    /**
      * Returns the result of `fn`, deduplicating by `key`. If a call for the same
      * key is already in-flight, the existing promise is returned. Otherwise, `fn`
      * is called and its promise is tracked until it settles.
