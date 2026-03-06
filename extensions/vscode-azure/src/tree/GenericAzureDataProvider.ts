@@ -6,12 +6,11 @@
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
     attachMetadata,
-    createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, isUnexpected,
+    createAzureClient, createClient, isAccount, isResourceGroup, isSubscription, isTenant, listResourceGroups, listResourcesByGroup,
     type ConcreteAzureNode, type GenericResource, type ResourceClient, type ResourceGroup
 } from '@microsoft/vscode-azure-azutils';
 import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import * as util from 'util';
 import { IAzureSubscriptionProvider } from '../services';
 
 /**
@@ -72,7 +71,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
                 return this.getResourcePages(resource);
 
             default:
-                throw new Error(`Unsupported resource type: ${util.inspect(resource)}`);
+                throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
         }
     }
 
@@ -98,25 +97,18 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private async *getResourceGroupPages(subscription: AzureSubscription): AsyncIterable<Page<ResourceGroup>> {
         const client = await this.getOrCreateClient(subscription);
 
-        const response = await client
-            .path('/subscriptions/{subscriptionId}/resourcegroups', subscription.subscriptionId)
-            .get({ queryParameters: { $top: DEFAULT_PAGE_SIZE } });
-
-        if (isUnexpected(response)) {
-            throw new Error(`Failed to list resource groups: ${response.body.error?.message ?? response.status}`);
+        for await (const page of listResourceGroups(client, subscription.subscriptionId, { top: DEFAULT_PAGE_SIZE })) {
+            yield {
+                hasMore: page.hasMore,
+                items: page.items.map(rg => {
+                    const resource = attachMetadata(rg, subscription);
+                    return Object.assign(resource, {
+                        groupingStrategy: 'resourceGroup' as const satisfies ResourceGroup['groupingStrategy'],
+                        groupingValue: resource.name,
+                    });
+                }),
+            };
         }
-
-        const toResourceGroup = (rg: Partial<GenericResource>): ResourceGroup => {
-            const resource = attachMetadata(rg, subscription);
-            return Object.assign(resource, {
-                groupingStrategy: 'resourceGroup' as const satisfies ResourceGroup['groupingStrategy'],
-                groupingValue: resource.name,
-            });
-        };
-
-        const hasMore = !!response.body.nextLink;
-        yield { items: (response.body.value ?? []).map(toResourceGroup), hasMore };
-        yield* this.followNextLink(client, response.body.nextLink, toResourceGroup);
     }
 
     /**
@@ -125,48 +117,11 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private async *getResourcePages(group: ResourceGroup): AsyncIterable<Page<GenericResource>> {
         const client = await this.getOrCreateClient(group.subscription);
 
-        const response = await client
-            .path(
-                '/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/resources',
-                group.subscription.subscriptionId,
-                group.name,
-            )
-            .get({ queryParameters: { $top: DEFAULT_PAGE_SIZE } });
-
-        if (isUnexpected(response)) {
-            throw new Error(`Failed to list resources: ${response.body.error?.message ?? response.status}`);
-        }
-
-        const toGenericResource = (r: Partial<GenericResource>) =>
-            attachMetadata(r, group.subscription);
-
-        const hasMore = !!response.body.nextLink;
-        yield { items: (response.body.value ?? []).map(toGenericResource), hasMore };
-        yield* this.followNextLink(client, response.body.nextLink, toGenericResource);
-    }
-
-    /**
-     * Chase `nextLink` URLs to yield subsequent pages of resources.
-     * Azure REST APIs return absolute `nextLink` URLs that include all
-     * query parameters needed for the next page.
-     */
-    private async *followNextLink<T>(
-        client: ResourceClient,
-        nextLink: string | undefined,
-        mapItem: (raw: Partial<GenericResource>) => T,
-    ): AsyncGenerator<Page<T>> {
-        while (nextLink) {
-            // pathUnchecked accepts absolute URLs and routes them through
-            // the existing pipeline (credentials, dedup policy, etc.)
-            const response = await client.pathUnchecked(nextLink).get();
-
-            if (isUnexpected(response)) {
-                throw new Error(`Failed to fetch next page: ${response.body.error?.message ?? response.status}`);
-            }
-
-            const body = response.body as { value?: Partial<GenericResource>[]; nextLink?: string };
-            nextLink = body.nextLink;
-            yield { items: (body.value ?? []).map(mapItem), hasMore: !!nextLink };
+        for await (const page of listResourcesByGroup(client, group.subscription.subscriptionId, group.name, { top: DEFAULT_PAGE_SIZE })) {
+            yield {
+                hasMore: page.hasMore,
+                items: page.items.map(r => attachMetadata(r, group.subscription)),
+            };
         }
     }
 }
