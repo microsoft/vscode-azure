@@ -244,8 +244,16 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * resource. The new children are appended to the cache and enriched.
      * Fires {@link onDidChange} so the view refreshes automatically;
      * callers should use {@link getChildren} to read the updated list.
+     *
+     * @throws if {@link getChildren} has not been called for this resource yet.
      */
     public async loadMore(resource: T): Promise<void> {
+        const key = this.getKey(resource);
+        const node = this.nodes.get(key);
+        if (node?.children === undefined) {
+            throw new Error(`Cannot loadMore before getChildren has been called for: ${key}`);
+        }
+
         await this.loadOnePage(resource);
         this.changeEmitter.fire(resource);
     }
@@ -254,8 +262,20 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * Pulls all remaining pages for the given resource until the iterator is
      * exhausted. Fires {@link onDidChange} after all pages are loaded so the
      * view refreshes only once.
+     *
+     * If children have not been loaded yet (i.e. {@link getChildren} was
+     * never called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
+        const key = this.getKey(resource);
+        const node = this.nodes.get(key);
+
+        // Ensure children are initialized (first page pulled) before
+        // exhausting remaining pages.
+        if (node?.children === undefined) {
+            await this.getChildren(resource);
+        }
+
         while (this.hasMore(resource)) {
             await this.loadOnePage(resource);
         }
