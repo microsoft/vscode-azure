@@ -154,10 +154,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         if (!result) {
             // No children -- leave the empty array
         } else if (isAsyncIterable(result)) {
-            // Paged result: store the iterator, then pull the first page
-            // via the shared loadMore path.
+            // Paged result: store the iterator, then pull the first page.
+            // Use loadOnePage directly (not loadMore) to avoid firing
+            // onDidChange before staleAt is set -- otherwise listeners
+            // could re-enter getChildren, see staleAt=0, and reset the
+            // iterator.
             node.pageIterator = result[Symbol.asyncIterator]();
-            await this.loadMore(resource);
+            await this.loadOnePage(resource);
         } else {
             node.children = this.addChildNodes(result);
         }

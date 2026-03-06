@@ -38,6 +38,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      * have only one account and one tenant, so skipping both levels is common
      */
     private rootKind: 'account' | 'tenant' | 'subscription' = 'subscription';
+    private isOneRootSub = false;
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
@@ -93,7 +94,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             }
 
             case isSubscription(resource): {
-                const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
+                const item = new this.code.TreeItem(resource.name, this.isOneRootSub ? this.code.TreeItemCollapsibleState.Expanded : this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
                 item.iconPath = new this.code.ThemeIcon('key');
@@ -194,6 +195,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     private async getRootChildren(): Promise<string[]> {
         let nodes = await this.cache.getChildren(undefined);
         this.rootKind = 'account';
+        this.isOneRootSub = false;
 
         if (nodes.length === 1 && isAccount(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
@@ -203,6 +205,10 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         if (nodes.length === 1 && isTenant(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'subscription';
+
+            if (nodes.length === 1) {
+                this.isOneRootSub = true;
+            }
         }
 
         return nodes.map(toKey);
