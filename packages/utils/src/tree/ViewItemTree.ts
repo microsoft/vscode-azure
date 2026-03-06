@@ -97,10 +97,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     private readonly loadMoreData: (key: string) => Promise<void>;
 
     /**
-     * @param dataItemTree - The underlying data-layer tree. It must not be modified directly,
-     * but this class can get children, initiate loading more, and listen for changes on it.
-     * @param toViewItem - Converts a resource to a view item.
-     * @param getKey - Extracts a unique string key from a view item.
+     * @param options - Configuration for the view item tree.
      * @param loadMoreOptions - Optional. When provided, enables automatic "Load More" node
      * injection for paginated branches.
      */
