@@ -12,6 +12,7 @@ export * from './clientDefinitions.js';
 export * from './isUnexpected.js';
 // export * from './models.js'; // No input models yet — read-only client.
 export * from './outputModels.js';
+export * from './paginators.js';
 export * from './parameters.js';
 export * from './resourceClient.js';
 export * from './responses.js';
