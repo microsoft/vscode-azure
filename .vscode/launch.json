@@ -44,6 +44,20 @@
             "preLaunchTask": "Extension: ESBuild+Watch",
         },
         {
+            "name": "azutils: Run Tests",
+            "request": "launch",
+            "runtimeArgs": [
+                "run",
+                "--workspace=packages/azutils",
+                "test"
+            ],
+            "runtimeExecutable": "npm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node"
+        },
+        {
             "name": "utils: Run Tests",
             "request": "launch",
             "runtimeArgs": [

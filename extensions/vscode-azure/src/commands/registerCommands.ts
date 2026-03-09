@@ -6,7 +6,7 @@
 import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import { LoadMoreCommandId } from '../constants';
-import { DisableAcrAdminUser } from './DisableAcrAdminUser';
+import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
 import { Hello } from './Hello';
 import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';

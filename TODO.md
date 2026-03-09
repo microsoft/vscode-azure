@@ -22,6 +22,7 @@ High level things to iron out:
   - How they contribute
   - Who owns code long-term
   - Rules and how we enforce them
-- User experience for migration from old extensions
-- User experience for deprecation of old extensions
-- Side-by-side? Side-by-side of the views? etc.
+- Migration story
+  - User experience for migration from old extensions
+  - User experience for deprecation of old extensions
+  - Side-by-side? Side-by-side of the views? etc.
