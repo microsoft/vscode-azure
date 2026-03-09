@@ -9,6 +9,7 @@ export * from './base/ICommandRegistry';
 export * from './base/ITelemetryReporter';
 export * from './data/InflightMap';
 export * from './data/Limiter';
+export * from './test/vscode/MockVsCode';
 export * from './tree/DataItemTree';
 export * from './tree/DataProvider';
 export * from './tree/pick/GenericPickStep';

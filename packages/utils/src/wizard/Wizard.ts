@@ -9,16 +9,6 @@ import { GoBackError } from './GoBackError';
 import type { PromptStep } from './PromptStep';
 
 /**
- * Tracks one prompted step and everything it contributed.
- * @internal
- */
-interface PromptRecord<TContext> {
-    readonly step: PromptStep<TContext>;
-    readonly stepResult: Partial<TContext> | undefined | null;
-    childPrompts?: readonly PromptStep<TContext>[];
-}
-
-/**
  * A multi-step wizard that separates user prompting from execution.
  *
  * **Prompt phase** -- Steps run in order, each returning a partial
@@ -198,4 +188,14 @@ export class Wizard<TContext extends object> {
             cursor++;
         }
     }
+}
+
+/**
+ * Tracks one prompted step and everything it contributed.
+ * @internal
+ */
+interface PromptRecord<TContext> {
+    readonly step: PromptStep<TContext>;
+    readonly stepResult: Partial<TContext> | undefined | null;
+    childPrompts?: readonly PromptStep<TContext>[];
 }
