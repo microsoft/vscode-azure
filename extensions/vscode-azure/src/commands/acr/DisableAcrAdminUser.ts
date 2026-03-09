@@ -6,10 +6,10 @@
 import { resourceExperience } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureViewDataTree, IAzureViewViewItemTree } from '../services';
-import type { EnrichedAcrRegistry } from '../tree/acr/AcrRegistry';
-import { AcrResourceType, isAcrRegistry } from '../tree/acr/AcrRegistry';
-import type { ManagedCommand } from './ManagedCommand';
+import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
+import type { EnrichedAcrRegistry } from '../../tree/acr/AcrRegistry';
+import { AcrResourceType, isAcrRegistry } from '../../tree/acr/AcrRegistry';
+import type { ManagedCommand } from '../ManagedCommand';
 
 // TODO: remove this demonstration command
 @injectable()

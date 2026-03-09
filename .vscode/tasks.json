@@ -32,7 +32,7 @@
                 "--",
                 "--watch"
             ],
-            "problemMatcher": "$tsc-watch",
+            "problemMatcher": "$tsgo-watch",
             "presentation": {
                 "revealProblems": "onProblem",
             },
@@ -41,6 +41,26 @@
                 "isDefault": true,
             },
             "isBackground": true,
+        },
+        {
+            "label": "azutils: Build+Watch",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "--workspace=packages/azutils",
+                "build",
+                "--",
+                "--watch",
+            ],
+            "group": {
+                "kind": "build"
+            },
+            "isBackground": true,
+            "presentation": {
+                "revealProblems": "onProblem"
+            },
+            "problemMatcher": "$tsgo-watch",
         },
         {
             "label": "utils: Build+Watch",
@@ -60,7 +80,7 @@
             "presentation": {
                 "revealProblems": "onProblem"
             },
-            "problemMatcher": "$tsc-watch",
+            "problemMatcher": "$tsgo-watch",
         },
     ]
 }
