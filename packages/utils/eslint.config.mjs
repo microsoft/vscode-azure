@@ -19,9 +19,14 @@ export default defineConfig([
                     },
                     {
                         name: 'vscode',
-                        message: 'VSCode should only be used for typings in this package. Pass it down from the caller as IVsCode.',
+                        message: 'vscode should only be used for typings in this package. Pass it down from the caller as IVsCode.',
                         allowTypeImports: true,
                     },
+                    {
+                        name: '@vscode/extension-telemetry',
+                        message: '@vscode/extension-telemetry should only be used for typings in this package. Pass it down from the caller.',
+                        allowTypeImports: true,
+                    }
                 ],
                 patterns: [{
                     group: ['@azure/*', '!@azure/ms-rest-azure-env'],

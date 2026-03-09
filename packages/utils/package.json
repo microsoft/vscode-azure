@@ -16,14 +16,22 @@
     "type": "module",
     "module": "dist/esm/index.js",
     "types": "dist/esm/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/esm/index.d.ts",
+            "import": "./dist/esm/index.js"
+        },
+        "./testing": {
+            "types": "./dist/esm/testing.d.ts",
+            "import": "./dist/esm/testing.js"
+        }
+    },
     "scripts": {
         "lint": "eslint --max-warnings 0",
         "build": "tsgo",
         "package": "npm pack",
-        "test": "mocha"
-    },
-    "dependencies": {
-        "@vscode/extension-telemetry": "^1.5.0"
+        "test": "mocha",
+        "testcov": "npx nyc --reporter=html mocha"
     },
     "mocha": {
         "node-option": [
@@ -34,6 +42,7 @@
         ]
     },
     "devDependencies": {
+        "@vscode/extension-telemetry": "*",
         "inversify": "^7.11.0"
     }
 }

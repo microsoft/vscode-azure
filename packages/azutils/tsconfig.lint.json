@@ -5,6 +5,9 @@
         "paths": {
             "@microsoft/vscode-azure-utils": [
                 "../utils/src/index.ts"
+            ],
+            "@microsoft/vscode-azure-utils/testing": [
+                "../utils/src/testing.ts"
             ]
         }
     },

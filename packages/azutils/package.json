@@ -20,10 +20,10 @@
         "lint": "eslint --max-warnings 0",
         "build": "tsgo",
         "package": "npm pack",
-        "test": "mocha"
+        "test": "mocha",
+        "testcov": "npx nyc --reporter=html mocha"
     },
     "dependencies": {
-        "@azure/arm-containerregistry": "12.0.0-alpha.20260224.1",
         "@azure/core-rest-pipeline": "*",
         "@azure/ms-rest-azure-env": "^2.0.0",
         "@microsoft/vscode-azure-utils": "*"

@@ -1,7 +1,6 @@
 - JSDocs everywhere
 - Address all the TODOs in source
 - ALL the test coverage
-- Create a good mock setup for VSCode (`vscode.window` and config especially)
 - Vastly more logging to the output channel (especially debug/trace)
 - Telemetry on all the things (especially tree operations)
 - Figure out why the token expired and wasn't refreshing

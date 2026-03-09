@@ -10,6 +10,9 @@
             "@microsoft/vscode-azure-utils": [
                 "../../packages/utils/src/index.ts"
             ],
+            "@microsoft/vscode-azure-utils/testing": [
+                "../../packages/utils/src/testing.ts"
+            ],
         },
         "experimentalDecorators": true,
     }
