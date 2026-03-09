@@ -3,14 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TelemetryReporter } from '@vscode/extension-telemetry';
+import type { TelemetryReporter } from '@vscode/extension-telemetry';
 import type { ServiceIdentifier } from 'inversify';
 import type { IExtensionContext } from '../vscode/IVsCode';
 
 export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
 export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEvent' | 'dispose'>; // Subset of what we actually use
 
-export function createTelemetryReporter(context: Readonly<IExtensionContext>): ITelemetryReporter {
+export function createTelemetryReporter(
+    context: Readonly<IExtensionContext>,
+    reporterCtor: new (connectionString: string) => ITelemetryReporter,
+): ITelemetryReporter {
     const debugTelemetry = process.env.DEBUGTELEMETRY?.toLowerCase() ?? process.env.VSCODE_RUNNING_TESTS?.toLowerCase();
 
     if (!debugTelemetry || debugTelemetry === '0' || debugTelemetry === 'false') {
@@ -22,7 +25,7 @@ export function createTelemetryReporter(context: Readonly<IExtensionContext>): I
 
         // TODO extension ID that's part of event name?
         // TODO replacement options to scrub PII?
-        return new TelemetryReporter(aiKey);
+        return new reporterCtor(aiKey);
     } else if (debugTelemetry === 'v' || debugTelemetry === 'verbose') {
         return new DebugTelemetryReporter();
     } else {

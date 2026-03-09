@@ -17,6 +17,7 @@ import {
     ITelemetryReporter,
     IVsCode,
 } from '@microsoft/vscode-azure-utils';
+import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { registerCommands } from './commands/registerCommands';
@@ -54,7 +55,7 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ITelemetryReporter).toDynamicValue(context => {
-        return createTelemetryReporter(context.get(IExtensionContext));
+        return createTelemetryReporter(context.get(IExtensionContext), TelemetryReporter);
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IOutputChannel).toDynamicValue(context => {

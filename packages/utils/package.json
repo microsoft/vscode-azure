@@ -33,9 +33,6 @@
         "test": "mocha",
         "testcov": "npx nyc --reporter=html mocha"
     },
-    "dependencies": {
-        "@vscode/extension-telemetry": "^1.5.0"
-    },
     "mocha": {
         "node-option": [
             "import=tsx"
@@ -45,6 +42,7 @@
         ]
     },
     "devDependencies": {
+        "@vscode/extension-telemetry": "*",
         "inversify": "^7.11.0"
     }
 }
