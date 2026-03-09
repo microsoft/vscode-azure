@@ -20,7 +20,8 @@
         "lint": "eslint --max-warnings 0",
         "build": "tsgo",
         "package": "npm pack",
-        "test": "mocha"
+        "test": "mocha",
+        "testcov": "npx nyc --reporter=html mocha"
     },
     "dependencies": {
         "@azure/core-rest-pipeline": "*",

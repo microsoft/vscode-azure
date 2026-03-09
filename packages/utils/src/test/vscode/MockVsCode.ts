@@ -7,18 +7,11 @@ import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { DebugOutputChannel } from '../../vscode/IOutputChannel';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
-
 import { MockMemento } from './config/MockMemento';
 import { MockWorkspaceConfiguration } from './config/MockWorkspaceConfiguration';
 import { MockInputBox } from './input/MockInputBox';
 import { MockQuickPick } from './input/MockQuickPick';
 import { MockTreeItem } from './tree/MockTreeItem';
-
-export { MockMemento } from './config/MockMemento';
-export { MockWorkspaceConfiguration } from './config/MockWorkspaceConfiguration';
-export { MockInputBox } from './input/MockInputBox';
-export { MockQuickPick } from './input/MockQuickPick';
-export { MockTreeItem } from './tree/MockTreeItem';
 
 /**
  * Result of {@link createMockVsCode}. Provides both the injectable
