@@ -108,8 +108,7 @@
         "build:esbuild": "node esbuild.mjs",
         "build:check": "tsgo --noEmit",
         "package": "vsce package",
-        "test": "vscode-test",
-        "testcov": "npx nyc --reporter=html mocha"
+        "test": "vscode-test"
     },
     "engines": {
         "vscode": "^1.106.0"
