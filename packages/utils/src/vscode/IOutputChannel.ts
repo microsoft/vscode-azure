@@ -29,7 +29,7 @@ export function createOutputChannel(
 export class DebugOutputChannel implements IOutputChannel {
     constructor(public readonly name: string) { }
 
-    public readonly logLevel = 1; // vscode.LogLevel.Trace; // Avoiding the actual enum value to prevent a dependency on vscode, plus this is just a debug channel
+    public readonly logLevel = 1 satisfies vscode.LogLevel; // Avoiding the actual enum value to prevent a dependency on vscode, plus this is just a debug channel
 
     public readonly onDidChangeLogLevel = () => { return Disposable.None; };
 
@@ -62,24 +62,12 @@ export class DebugOutputChannel implements IOutputChannel {
         console.log(`${this.name}: ${value}`); // console.log adds a newline
     }
 
-    public replace(value: string): void {
-        // noop
-    }
-
-    public clear(): void {
-        // noop
-    }
-
-    public show(column?: unknown, preserveFocus?: unknown): void {
-        // noop
-    }
-
-    public hide(): void {
-        // noop
-    }
-
-    public dispose(): void {
-        // noop
-    }
+    public replace = noop;
+    public clear = noop;
+    public show = noop;
+    public hide = noop;
+    public dispose = noop;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
+
+const noop = () => { /* noop */ };

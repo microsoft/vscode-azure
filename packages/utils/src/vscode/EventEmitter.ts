@@ -11,16 +11,6 @@ import type { Disposable } from './Disposable';
 const EventName = 'e' as const;
 
 /**
- * A function that represents an event to which you subscribe by calling it with
- * a listener. Mirrors `vscode.Event<T>`.
- */
-type Event<T> = (
-    listener: (e: T) => void,
-    thisArgs?: unknown,
-    disposables?: Disposable[],
-) => Disposable;
-
-/**
  * A typed event emitter backed by Node's built-in `EventEmitter`.
  *
  * Implements the same interface as `vscode.EventEmitter<T>` so it can be used
@@ -39,7 +29,7 @@ export class EventEmitter<T> implements Disposable {
      * The event that listeners subscribe to. Calling `this.event(fn)` registers
      * `fn` and returns a {@link Disposable} that removes it.
      */
-    public readonly event: Event<T> = (
+    public readonly event: vscode.Event<T> = (
         listener: (e: T) => void,
         thisArgs?: unknown,
         disposables?: Disposable[],
@@ -86,6 +76,5 @@ export class EventEmitter<T> implements Disposable {
 
 // Compile-time checks: our EventEmitter is assignable to vscode.EventEmitter.
 /* eslint-disable @typescript-eslint/no-unused-vars */
-type CheckEvent = AssertAssignable<vscode.Event<unknown>, Event<unknown>>;
 type CheckEventEmitter = AssertAssignable<vscode.EventEmitter<unknown>, EventEmitter<unknown>>;
 /* eslint-enable @typescript-eslint/no-unused-vars */
