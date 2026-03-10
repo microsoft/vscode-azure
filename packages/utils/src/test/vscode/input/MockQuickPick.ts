@@ -44,13 +44,13 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
     private readonly _onDidChangeSelection = new EventEmitter<readonly T[]>();
 
     // ── Event subscriptions (used by production code) ───────
-    readonly onDidAccept = this._onDidAccept.event as vscode.Event<void>;
-    readonly onDidHide = this._onDidHide.event as vscode.Event<void>;
-    readonly onDidTriggerButton = this._onDidTriggerButton.event as vscode.Event<vscode.QuickInputButton>;
-    readonly onDidTriggerItemButton = this._onDidTriggerItemButton.event as vscode.Event<vscode.QuickPickItemButtonEvent<T>>;
-    readonly onDidChangeValue = this._onDidChangeValue.event as vscode.Event<string>;
-    readonly onDidChangeActive = this._onDidChangeActive.event as vscode.Event<readonly T[]>;
-    readonly onDidChangeSelection = this._onDidChangeSelection.event as vscode.Event<readonly T[]>;
+    readonly onDidAccept = this._onDidAccept.event;
+    readonly onDidHide = this._onDidHide.event;
+    readonly onDidTriggerButton = this._onDidTriggerButton.event;
+    readonly onDidTriggerItemButton = this._onDidTriggerItemButton.event;
+    readonly onDidChangeValue = this._onDidChangeValue.event;
+    readonly onDidChangeActive = this._onDidChangeActive.event;
+    readonly onDidChangeSelection = this._onDidChangeSelection.event;
 
     // ── Tracked methods ─────────────────────────────────────
     readonly show = mock.fn(noop);
@@ -61,7 +61,7 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
 
     /** Simulate the user accepting the current selection. */
     accept(): void {
-        this._onDidAccept.fire(undefined as never);
+        this._onDidAccept.fire();
     }
 
     /** Simulate the user pressing a button (e.g. Back). */
@@ -76,7 +76,7 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
 
     /** Simulate the quick pick being hidden (e.g. focus lost). */
     triggerHide(): void {
-        this._onDidHide.fire(undefined as never);
+        this._onDidHide.fire();
     }
 
     /** Simulate the user typing a filter value. */

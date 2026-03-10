@@ -36,7 +36,7 @@ export class MockWorkspaceConfiguration implements vscode.WorkspaceConfiguration
         return { key: full, workspaceValue: this.store.get(full) as T };
     }
 
-    update(key: string, value: unknown, _configurationTarget?: vscode.ConfigurationTarget | boolean | null, _overrideInLanguage?: boolean): Promise<void> {
+    update(key: string, value: unknown): Promise<void> {
         const full = this.fullKey(key);
         if (value === undefined) {
             this.store.delete(full);

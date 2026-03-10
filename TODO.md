@@ -10,6 +10,7 @@
 - Tests that enforce bundle size not growing out of control
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)
 - Get rid of non-REST (old) `@azure` packages
+- Versions to 1.0.0
 
 Before handoff:
 - Deployment story (single and app)

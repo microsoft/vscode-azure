@@ -5,16 +5,27 @@
 
 import type * as vscode from 'vscode';
 
-export interface Disposable {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    dispose(): any;
-}
+export type Disposable = vscode.Disposable;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Disposable {
-    export const None: Disposable = { dispose: () => { /* noop */ } } satisfies vscode.Disposable; // The `satisfies` also makes sure the interfaces are compatible
+    export const None: Disposable = { dispose: () => { /* noop */ } } satisfies vscode.Disposable; // The `satisfies` also makes sure the interfaces are compatible, without the need for an `AssertAssignable` check
 
     export function test(obj: unknown): obj is Disposable {
         return !!obj && typeof obj === 'object' && 'dispose' in obj && typeof obj.dispose === 'function';
+    }
+
+    export function from(...disposables: Disposable[]): Disposable {
+        return {
+            dispose: () => {
+                for (const disposable of disposables) {
+                    try {
+                        disposable.dispose();
+                    } catch {
+                        // noop
+                    }
+                }
+            },
+        };
     }
 }

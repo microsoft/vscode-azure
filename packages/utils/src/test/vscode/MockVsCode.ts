@@ -94,21 +94,24 @@ export function createMockVsCode(): MockVsCodeResult {
     );
 
     const showInformationMessage = mock.fn(
-        () => Promise.resolve(undefined),
+        () => Promise.resolve(),
     );
 
     const showWarningMessage = mock.fn(
-        () => Promise.resolve(undefined),
+        () => Promise.resolve(),
     );
 
     const showErrorMessage = mock.fn(
-        () => Promise.resolve(undefined),
+        () => Promise.resolve(),
     );
 
     // ── l10n ────────────────────────────────────────────────
 
     const t = mock.fn(
-        (message: string, ..._args: unknown[]) => message,
+        (message: string, ...args: unknown[]) => {
+            // eslint-disable-next-line @typescript-eslint/no-base-to-string
+            return message.replace(/\{(\d+)\}/g, (_, i) => String(args[Number(i)] ?? `{${i}}`));
+        }
     );
 
     // ── QuickInputButtons ───────────────────────────────────
@@ -282,6 +285,7 @@ export function withSettings<T>(
  * - `{ pick: 'label' }` -- select a QuickPick item by its label
  * - `{ pickMany: ['a', 'b'] }` -- select multiple QuickPick items by label
  * - `{ input: 'text' }` -- type a value into an InputBox and accept
+ * - `'acceptDefault'` -- accept the current value without changes
  * - `'goBack'` -- press the Back button (rejects with {@link GoBackError})
  * - `'cancel'` -- dismiss the UI (rejects with {@link CancellationError})
  */
@@ -289,6 +293,7 @@ export type WizardResponse =
     | { readonly pick: string }
     | { readonly pickMany: readonly string[] }
     | { readonly input: string }
+    | 'acceptDefault'
     | 'goBack'
     | 'cancel';
 
@@ -389,6 +394,9 @@ function applyToQuickPick(
     } else if (response === 'cancel') {
         qp.triggerHide();
         return;
+    } else if (response === 'acceptDefault') {
+        qp.accept();
+        return;
     } else if ('input' in response) {
         throw new Error('Got an \'input\' response but a QuickPick was shown');
     } else if ('pickMany' in response) {
@@ -427,6 +435,9 @@ function applyToInputBox(
         return;
     } else if (response === 'cancel') {
         ib.triggerHide();
+        return;
+    } else if (response === 'acceptDefault') {
+        ib.accept();
         return;
     } else if ('pick' in response || 'pickMany' in response) {
         throw new Error('Got a \'pick\'/\'pickMany\' response but an InputBox was shown');

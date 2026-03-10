@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as vscode from 'vscode';
+
 /**
  * An error type that signals cancellation of an operation.
  *
  * Compatible with VS Code's `vscode.CancellationError` without requiring
  * a runtime import of the `vscode` module.
  */
-export class CancellationError extends Error {
+export class CancellationError extends Error implements vscode.CancellationError {
     public constructor(message?: string, public readonly stepName?: string) {
         super(message ?? CanceledName);
         this.name = CanceledName;

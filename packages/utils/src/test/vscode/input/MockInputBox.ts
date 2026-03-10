@@ -38,10 +38,10 @@ export class MockInputBox implements vscode.InputBox {
     private readonly _onDidChangeValue = new EventEmitter<string>();
 
     // ── Event subscriptions ─────────────────────────────────
-    readonly onDidAccept = this._onDidAccept.event as vscode.Event<void>;
-    readonly onDidHide = this._onDidHide.event as vscode.Event<void>;
-    readonly onDidTriggerButton = this._onDidTriggerButton.event as vscode.Event<vscode.QuickInputButton>;
-    readonly onDidChangeValue = this._onDidChangeValue.event as vscode.Event<string>;
+    readonly onDidAccept = this._onDidAccept.event;
+    readonly onDidHide = this._onDidHide.event;
+    readonly onDidTriggerButton = this._onDidTriggerButton.event;
+    readonly onDidChangeValue = this._onDidChangeValue.event;
 
     // ── Tracked methods ─────────────────────────────────────
     readonly show = mock.fn(noop);
