@@ -46,7 +46,7 @@ export class MFAChallengePolicy implements PipelinePolicy {
                 }
                 request.headers.set(authorizationHeaderName, `Bearer ${newSession.accessToken}`);
                 return next(request);
-            } else if (context){
+            } else if (context) {
                 context.telemetry.properties.challengeSuccess = 'false';
             }
         }
