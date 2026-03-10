@@ -67,7 +67,12 @@ export class ActionExecutor implements IActionExecutor {
                 }
             } finally {
                 measurements.duration = (Date.now() - startTime) / 1000;
-                this.telemetryReporter.sendTelemetryErrorEvent(telemetryId, properties, measurements);
+
+                if (context.telemetry.suppress !== 'always' &&
+                    !(context.telemetry.suppress === 'onSuccess' && properties.result === 'Succeeded')
+                ) {
+                    this.telemetryReporter.sendTelemetryErrorEvent(telemetryId, properties, measurements);
+                }
             }
         });
     }

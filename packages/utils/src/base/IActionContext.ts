@@ -12,6 +12,7 @@ export interface IActionContext {
         readonly id: string;
         readonly properties: TelemetryProperties;
         readonly measurements: TelemetryMeasurements;
+        suppress?: 'always' | 'onSuccess';
     };
 
     readonly errorHandling: {
