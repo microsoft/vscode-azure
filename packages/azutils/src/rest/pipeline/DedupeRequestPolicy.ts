@@ -18,10 +18,10 @@ import { InflightMap } from '@microsoft/vscode-azure-utils';
  * because they will necessarily have different REST clients, and thus different
  * instances of this policy.
  */
-export class DedupeRequestPipelinePolicy implements PipelinePolicy {
+export class DedupeRequestPolicy implements PipelinePolicy {
     private readonly inflight = new InflightMap<PipelineResponse>();
 
-    public readonly name = 'DedupeRequestPipelinePolicy';
+    public readonly name = 'DedupeRequestPolicy';
 
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
         // Skip dedup for non-GET requests (mutations must always execute) and for

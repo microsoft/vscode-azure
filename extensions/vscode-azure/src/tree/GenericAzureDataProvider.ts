@@ -10,6 +10,7 @@ import {
     type ConcreteAzureNode, type GenericResource, type ResourceGroup
 } from '@microsoft/vscode-azure-azutils';
 import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
 
@@ -32,11 +33,13 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
     /**
      * Cached REST clients per subscription ID, so all calls for the same
-     * subscription share one pipeline (and thus one {@link DedupeRequestPipelinePolicy}).
+     * subscription share one pipeline (and thus one {@link DedupeRequestPolicy}).
      */
     private readonly clientCache = new Map<string, ResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
     ) { }
 
@@ -80,13 +83,13 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     /**
      * Get or create a cached REST client for the given subscription.
      * All callers for the same subscription share the same client and pipeline,
-     * so {@link DedupeRequestPipelinePolicy} can deduplicate concurrent requests.
+     * so {@link DedupeRequestPolicy} can deduplicate concurrent requests.
      */
     private async getOrCreateClient(subscription: AzureSubscription): Promise<ResourceClient> {
         let client = this.clientCache.get(subscription.subscriptionId);
         if (!client) {
             armResources ??= await import('@azure/arm-resources');
-            client = await createAzureSubscriptionClient(armResources.ResourceManagementClient, subscription.credential, subscription.subscriptionId);
+            client = createAzureSubscriptionClient(this.ctx, this.executor, armResources.ResourceManagementClient, subscription.credential, subscription.subscriptionId);
             this.clientCache.set(subscription.subscriptionId, client);
         }
         return client;
