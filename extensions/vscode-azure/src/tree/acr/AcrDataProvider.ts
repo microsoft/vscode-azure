@@ -4,10 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
-import { get } from '@azure/arm-containerregistry/api/registries';
-import { type ConcreteAzureNode, type GenericResource, isVirtualResource, parseAzureResourceId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { get as getRegistries } from '@azure/arm-containerregistry/api/registries';
+import { type ConcreteAzureNode, createAzureRestSubscriptionClient, type GenericResource, isVirtualResource, parseAzureResourceId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
-import { injectable } from 'inversify';
+import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**
@@ -29,6 +30,11 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * the same subscription share one client instance.
      */
     private readonly clientCache = new Map<string, ContainerRegistryManagementContext>();
+
+    public constructor(
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
+    ) { }
 
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
         return isAcrRegistry(resource) || isAcrVirtualResource(resource);
@@ -53,9 +59,9 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
         }
 
         // TODO: remove simulated delay
-        await new Promise(resolve => setTimeout(resolve, 7500));
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
-        const registry = await get(client, resourceGroupName, resource.name);
+        const registry = await getRegistries(client, resourceGroupName, resource.name);
 
         Object.assign(resource, {
             loginServer: registry.loginServer ?? '',
@@ -110,10 +116,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
         const { subscription } = resource;
         let client = this.clientCache.get(subscription.subscriptionId);
         if (!client) {
-            client = createContainerRegistryManagement(
-                subscription.credential,
-                subscription.subscriptionId,
-            );
+            client = createAzureRestSubscriptionClient(this.ctx, this.executor, createContainerRegistryManagement, subscription.credential, subscription.subscriptionId);
             this.clientCache.set(subscription.subscriptionId, client);
         }
         return client;

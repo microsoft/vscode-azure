@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
-import type { IActionContext } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 const wwwAuthenticateHeaderName = 'WWW-Authenticate';
@@ -15,19 +15,23 @@ export class MFAChallengePolicy implements PipelinePolicy {
     public readonly name = 'MFAChallengePolicy';
 
     public constructor(
-        private readonly context: IActionContext,
+        private readonly executor: IActionExecutor,
         private readonly getNewToken: (request: vscode.AuthenticationWwwAuthenticateRequest) => Promise<vscode.AuthenticationSession | undefined>,
     ) { }
 
     // TODO: could we instead use the builtin `bearerTokenAuthenticationPolicy` and just provide a custom `getToken` callback that handles MFA challenges?
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
+        const context = this.executor.currentContext;
         const initialResponse = await next(request);
 
         if (initialResponse.status === 401 &&
             initialResponse.headers.has(wwwAuthenticateHeaderName) &&
             !initialResponse.headers.has(challengeRetryHeaderName)) {
 
-            this.context.telemetry.properties.challenge = 'true';
+            if (context) {
+                context.telemetry.properties.challenge = 'true';
+            }
+
             request.headers.set(challengeRetryHeaderName, 'true'); // Prevent infinite challenge loop
 
             const newSession = await this.getNewToken({
@@ -37,11 +41,13 @@ export class MFAChallengePolicy implements PipelinePolicy {
             });
 
             if (newSession) {
-                this.context.telemetry.properties.challengeSuccess = 'true';
+                if (context) {
+                    context.telemetry.properties.challengeSuccess = 'true';
+                }
                 request.headers.set(authorizationHeaderName, `Bearer ${newSession.accessToken}`);
                 return next(request);
-            } else {
-                this.context.telemetry.properties.challengeSuccess = 'false';
+            } else if (context){
+                context.telemetry.properties.challengeSuccess = 'false';
             }
         }
 

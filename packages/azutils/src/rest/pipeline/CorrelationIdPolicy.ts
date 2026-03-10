@@ -4,17 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
-import type { IActionContext } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor } from '@microsoft/vscode-azure-utils';
 
 const correlationIdHeaderName = 'x-ms-correlation-request-id';
 
 export class CorrelationIdPolicy implements PipelinePolicy {
     public readonly name = 'CorrelationIdPolicy';
 
-    public constructor(private readonly context: IActionContext) {}
+    public constructor(private readonly executor: IActionExecutor) {}
 
     public sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
-        request.headers.set(correlationIdHeaderName, this.context.telemetry.properties.correlationId);
+        const context = this.executor.currentContext;
+        if (context) {
+            request.headers.set(correlationIdHeaderName, context.telemetry.properties.correlationId);
+        }
         return next(request);
     }
 }
