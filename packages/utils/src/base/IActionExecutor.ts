@@ -42,6 +42,7 @@ export class ActionExecutor implements IActionExecutor {
             properties.result = 'Succeeded';
             return result;
         } catch (error) {
+            // TODO: toast error message + report issue button
             if (CancellationError.test(error)) {
                 properties.result = 'Canceled'; // TODO: Verify spelling is the same as existing
                 // TODO: cancel step
