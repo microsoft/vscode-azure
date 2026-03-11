@@ -21,7 +21,8 @@
         "build": "tsgo",
         "package": "npm pack",
         "test": "mocha",
-        "testcov": "npx nyc --reporter=html mocha"
+        "testcov": "npx nyc --reporter=html mocha",
+        "clean": "node ../../scripts/clean.mjs"
     },
     "dependencies": {
         "@azure/core-rest-pipeline": "*",

@@ -1,5 +1,17 @@
 # Instructions for Copilot
 
+For detailed documentation on the project architecture and patterns, see the `docs/` folder:
+* `docs/architecture.md` -- Package organization, dependency graph, activation flow
+* `docs/tree-views.md` -- Data/view layer separation, providers, enrichment, caching, pagination
+* `docs/dependency-injection.md` -- Container setup, service identifiers, scoped execution
+* `docs/commands.md` -- ManagedCommand pattern, registration, context values
+* `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers
+* `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
+* `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, coverage
+* `docs/resource-models.md` -- AzureNode union, GenericResource, AzureNodeId URI scheme
+* `docs/telemetry.md` -- IActionContext, ActionExecutor, telemetry suppression
+* `docs/build-and-dev.md` -- Build commands, esbuild, watch mode, linting, cleaning
+
 
 ## General Instructions
 
