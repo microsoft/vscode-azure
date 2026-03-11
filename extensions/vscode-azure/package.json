@@ -108,7 +108,9 @@
         "build:esbuild": "node esbuild.mjs",
         "build:check": "tsgo --noEmit",
         "package": "vsce package",
-        "test": "vscode-test"
+        "test": "vscode-test",
+        "testcov": "vscode-test --coverage --coverage-reporter=html --coverage-output=coverage",
+        "clean": "node ../../scripts/clean.mjs"
     },
     "engines": {
         "vscode": "^1.106.0"

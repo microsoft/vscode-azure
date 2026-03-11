@@ -18,7 +18,8 @@
         "lint": "npm run --workspaces lint",
         "build": "npm run --workspaces build",
         "package": "npm run --workspaces package",
-        "test": "npm run --workspaces test"
+        "test": "npm run --workspaces test",
+        "clean": "npm run --workspaces clean"
     },
     "workspaces": [
         "packages/utils",
