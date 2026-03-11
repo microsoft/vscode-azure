@@ -12,12 +12,15 @@ extensions/vscode-azure/src/test/
 
 ## Test Labels
 
-Label tests with `(unit)` or `(integration)` in the test description (either root or per-test):
+Label tests with `(unit)` or `(integration)` in the root `describe` description:
 
 ```typescript
-describe('Hello command', () => {
-    it('(unit) should set telemetry property', async () => { ... });
-    it('(integration) should execute without error', async () => { ... });
+describe('(unit) Hello command', () => {
+    it('should set telemetry property', async () => { ... });
+});
+
+describe('(integration) Hello command', () => {
+    it('should execute without error', async () => { ... });
 });
 ```
 
@@ -62,7 +65,7 @@ For tests that also need an `ICodeContext`, use `createMockCodeContext()`:
 ```typescript
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 
-const { context: codeContext, mock: mockResult } = createMockCodeContext();
+const { ctx: codeContext, mock: mockResult } = createMockCodeContext();
 // codeContext has both .code (IVsCode) and .extensionContext (IExtensionContext)
 ```
 
@@ -121,11 +124,9 @@ The extension uses `@vscode/test-cli`'s built-in `--coverage` flag, which levera
 vscode-test --coverage --coverage-reporter=html --coverage-output=coverage
 ```
 
-With esbuild source maps enabled (`sourcemap: 'linked'` in `esbuild.mjs`), coverage from the bundled extension is remapped back to original source files. This means the report merges coverage from:
+When source maps are available, coverage from the bundled extension can be remapped back to original source files. This means the report can merge coverage from:
 - **Unit tests** that import source files directly (via tsx)
 - **Integration tests** that exercise the extension bundle (via source map remapping)
-
-See [coverage-changes.md](temp/coverage-changes.md) for details on upstream patches needed for full source map support.
 
 ## Test Configuration
 

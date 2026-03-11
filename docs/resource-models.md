@@ -39,11 +39,11 @@ interface GenericResource {
     id: string;           // ARM resource ID
     name: string;         // Resource name
     type: string;         // ARM resource type (e.g. 'Microsoft.ContainerRegistry/registries')
-    location?: string;
+    location: string;
     tags?: Record<string, string>;
     kind?: string;
     subscription: AzureSubscription;
-    logicalType?: string; // Enriched type for more specific categorization
+    logicalType: string;  // Enriched type for more specific categorization (set by attachMetadata)
 }
 ```
 
