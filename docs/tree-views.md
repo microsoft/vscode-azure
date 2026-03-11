@@ -32,11 +32,11 @@ Key methods:
 Interface for data fetching. Lives in `packages/utils/src/tree/DataProvider.ts`.
 
 ```typescript
-interface DataProvider<T> {
-    canHandle(resource: T): boolean;            // Type guard
-    getChildren(resource?: T): ChildResult<T>;  // Fetch children
-    enrich?(resource: T): void | Promise<void>; // Background enrichment (mutate in-place)
-    isRoot?: boolean;                           // Whether this provider returns root-level items
+interface DataProvider<TResource> {
+    canHandle(resource: unknown): resource is TResource;                        // Type guard
+    getChildren(resource?: TResource): ProviderResult<ChildResult<TResource>>; // Fetch children
+    enrich?(resource: TResource): void | Promise<void>;                        // Background enrichment (mutate in-place)
+    readonly isRoot?: boolean;                                                 // Whether this provider returns root-level items
 }
 ```
 
