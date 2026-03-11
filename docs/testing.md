@@ -128,6 +128,8 @@ When source maps are available, coverage from the bundled extension can be remap
 - **Unit tests** that import source files directly (via tsx)
 - **Integration tests** that exercise the extension bundle (via source map remapping)
 
+See [coverage-changes.md](temp/coverage-changes.md) for details on upstream patches needed for full source map support.
+
 ## Test Configuration
 
 Extension test configuration lives in `.vscode-test.mjs`:
