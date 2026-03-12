@@ -16,12 +16,16 @@ const DefaultPollIntervalMs = 10_000;
 
 type ArmActivity = ArmDeploymentActivity | ArmDeploymentOperationActivity;
 
+const DeploymentResourceType = 'Microsoft.Resources/deployments';
+
 @injectable()
 export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Disposable {
     public readonly isRoot = true;
 
+    /** Top-level tracked deployments (user-initiated). */
     private readonly deployments = new Map<string, ArmDeploymentActivity>();
-    private readonly operations = new Map<string, ArmDeploymentOperationActivity[]>();
+    /** Children (operations and nested deployments) keyed by parent deployment ID. */
+    private readonly children = new Map<string, ArmActivity[]>();
     private readonly pollingTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly clientCache = new Map<string, DeploymentsClient>();
 
@@ -44,7 +48,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
         }
 
         if (resource.type === 'armDeployment') {
-            return Promise.resolve(this.operations.get(resource.id) ?? []);
+            return Promise.resolve(this.children.get(resource.id) ?? []);
         }
 
         return Promise.resolve([]);
@@ -81,15 +85,8 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
             );
             const provisioningState = deployment.properties?.provisioningState;
 
-            // Fetch deployment operations
-            const ops: ArmDeploymentOperationActivity[] = [];
-            for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName)) {
-                const opActivity = this.toOperationActivity(op, activity);
-                if (opActivity) {
-                    ops.push(opActivity);
-                }
-            }
-            this.operations.set(activity.id, ops);
+            // Fetch deployment operations and build child activities
+            await this.fetchChildren(client, activity);
 
             // Update deployment status
             if (provisioningState) {
@@ -111,6 +108,82 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
 
         const timer = setTimeout(() => void this.poll(activity), DefaultPollIntervalMs);
         this.pollingTimers.set(activity.id, timer);
+    }
+
+    /**
+     * Fetch operations for a deployment and recursively for any nested
+     * deployments that are not yet in a terminal state.
+     */
+    private async fetchChildren(client: DeploymentsClient, activity: ArmDeploymentActivity): Promise<void> {
+        const childActivities: ArmActivity[] = [];
+
+        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName)) {
+            const targetResource = op.properties?.targetResource;
+            const isNestedDeployment = targetResource?.resourceType?.toLowerCase() === DeploymentResourceType.toLowerCase()
+                && targetResource.id;
+
+            if (isNestedDeployment) {
+                const nested = this.toNestedDeploymentActivity(op, activity);
+                if (nested) {
+                    childActivities.push(nested);
+
+                    // Recursively fetch children for nested deployments unless
+                    // they're terminal AND we've already loaded their children
+                    const alreadyLoaded = this.children.has(nested.id);
+                    if (!alreadyLoaded || !isTerminalState(op.properties?.provisioningState)) {
+                        await this.fetchChildren(client, nested);
+                    }
+                }
+            } else {
+                const opActivity = this.toOperationActivity(op, activity);
+                if (opActivity) {
+                    childActivities.push(opActivity);
+                }
+            }
+        }
+
+        this.children.set(activity.id, childActivities);
+    }
+
+    private toNestedDeploymentActivity(op: DeploymentOperation, parent: ArmDeploymentActivity): ArmDeploymentActivity | undefined {
+        const targetResource = op.properties?.targetResource;
+        if (!targetResource?.id || !targetResource.resourceName) {
+            return undefined;
+        }
+
+        const provisioningState = op.properties?.provisioningState;
+
+        // Reuse existing nested activity to preserve object identity across polls,
+        // or create a new one if this is the first time we see it
+        const existingChildren = this.children.get(parent.id);
+        const existing = existingChildren?.find(
+            (c): c is ArmDeploymentActivity => c.type === 'armDeployment' && c.deploymentId === targetResource.id,
+        );
+
+        if (existing) {
+            existing.status = toActivityStatus(provisioningState);
+            existing.description = provisioningState;
+            if (isTerminalState(provisioningState)) {
+                existing.endTime = new Date();
+            }
+            return existing;
+        }
+
+        const { scope, deploymentName } = parseDeploymentId(targetResource.id);
+
+        return {
+            id: targetResource.id,
+            type: 'armDeployment',
+            status: toActivityStatus(provisioningState),
+            title: targetResource.resourceName,
+            description: provisioningState,
+            startTime: parent.startTime,
+            parentId: parent.id,
+            deploymentId: targetResource.id,
+            subscription: parent.subscription,
+            scope,
+            deploymentName,
+        };
     }
 
     private toOperationActivity(op: DeploymentOperation, parent: ArmDeploymentActivity): ArmDeploymentOperationActivity | undefined {

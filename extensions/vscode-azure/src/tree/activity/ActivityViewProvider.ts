@@ -60,6 +60,9 @@ export class ActivityViewProvider implements ViewProvider<string> {
             case 'Completed':
                 treeItem.iconPath = new this.code.ThemeIcon('pass', new this.code.ThemeColor('testing.iconPassed'));
                 break;
+            case 'Canceled':
+                treeItem.iconPath = new this.code.ThemeIcon('circle-slash', new this.code.ThemeColor('testing.iconSkipped'));
+                break;
             case 'Failed':
                 treeItem.iconPath = new this.code.ThemeIcon('error', new this.code.ThemeColor('testing.iconFailed'));
                 break;
