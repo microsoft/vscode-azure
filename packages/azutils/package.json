@@ -1,6 +1,6 @@
 {
     "name": "@microsoft/vscode-azure-azutils",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "private": true,
     "description": "Azure utils for Azure for Visual Studio Code",
     "homepage": "https://github.com/microsoft/vscode-azure#readme",
