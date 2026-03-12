@@ -276,7 +276,7 @@ export class AzureNodeId {
 
     /**
      * Builds a portal URL for this node. Only applicable to subscriptions,
-     * resource groups, and resources. Throws for accounts, tenants, and non-RG groupings,
+     * resource groups, and resources. Throws for accounts, tenants, and non-RG groupings.
      *
      * @returns A URL like `https://portal.azure.com/#@{tenantId}/resource/subscriptions/{subId}/...`
      */
