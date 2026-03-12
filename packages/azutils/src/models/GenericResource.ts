@@ -5,7 +5,7 @@
 
 import type { GenericResource as AzSdkGenericResource, ResourceGroup as AzSdkResourceGroup } from '@azure/arm-resources';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AssertAssignable } from '@microsoft/vscode-azure-utils';
+import type { Satisfies } from '@microsoft/vscode-azure-utils';
 
 /**
  * The ARM-level properties of an Azure resource, without any additional context.
@@ -85,10 +85,10 @@ type ResourceGroupOutputWithRequired = Required<Pick<AzSdkResourceGroup, 'id' | 
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // Forward: SDK types are assignable TO GenericResourceBase
-type CheckExpandedOutput = AssertAssignable<GenericResourceBase, GenericResourceExpandedWithRequired>;
-type CheckResourceGroupOutput = AssertAssignable<GenericResourceBase, ResourceGroupOutputWithRequired>;
+type CheckExpandedOutput = Satisfies<GenericResourceBase, GenericResourceExpandedWithRequired>;
+type CheckResourceGroupOutput = Satisfies<GenericResourceBase, ResourceGroupOutputWithRequired>;
 
 // Reverse: GenericResourceBase is assignable TO the SDK picks (catches missing fields)
-type CheckExpandedOutputReverse = AssertAssignable<GenericResourceExpandedWithRequired, GenericResourceBase>;
-type CheckResourceGroupOutputReverse = AssertAssignable<ResourceGroupOutputWithRequired, GenericResourceBase>;
+type CheckExpandedOutputReverse = Satisfies<GenericResourceExpandedWithRequired, GenericResourceBase>;
+type CheckResourceGroupOutputReverse = Satisfies<ResourceGroupOutputWithRequired, GenericResourceBase>;
 /* eslint-enable @typescript-eslint/no-unused-vars */

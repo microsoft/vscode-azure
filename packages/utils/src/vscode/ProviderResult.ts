@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import type { AssertAssignable } from '../types/AssertAssignable';
+import type { Satisfies } from '../types/Satisfies';
 
 export type ProviderResult<T> = T | undefined | null | Promise<T | undefined | null>;
 
 // Compile-time type checks
 /* eslint-disable @typescript-eslint/no-unused-vars */
-type ForwardCheckProviderResult = AssertAssignable<ProviderResult<unknown>, vscode.ProviderResult<unknown>>;
-type ReverseCheckProviderResult = AssertAssignable<vscode.ProviderResult<unknown>, ProviderResult<unknown>>;
+type ForwardCheckProviderResult = Satisfies<ProviderResult<unknown>, vscode.ProviderResult<unknown>>;
+type ReverseCheckProviderResult = Satisfies<vscode.ProviderResult<unknown>, ProviderResult<unknown>>;
 /* eslint-enable @typescript-eslint/no-unused-vars */
