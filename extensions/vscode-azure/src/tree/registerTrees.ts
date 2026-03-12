@@ -106,6 +106,7 @@ function bindAzureViewViewProviders(container: Container): void {
 
 function registerActivityTree(container: Container): void {
     // Activity view: data layer
+    // Bind each provider as a singleton to its own class so commands can inject them directly.
     bindActivityViewDataProviders(container);
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
@@ -116,6 +117,15 @@ function registerActivityTree(container: Container): void {
         for (const provider of context.getAll(IActivityViewDataProviders)) {
             cache.registerProvider(provider);
         }
+
+        // Wire provider change events to invalidate the data tree.
+        // Each provider fires onDidChange when its tracked activities update.
+        const armProvider = context.get(ArmDeploymentDataProvider);
+        const codeProvider = context.get(CodeDeploymentDataProvider);
+        const genericProvider = context.get(GenericActivityDataProvider);
+        armProvider.onDidChange(() => { cache.invalidateAll(); });
+        codeProvider.onDidChange(() => { cache.invalidateAll(); });
+        genericProvider.onDidChange(() => { cache.invalidateAll(); });
 
         return cache;
     }).inSingletonScope().onActivation(pushDisposable);
@@ -155,9 +165,17 @@ function registerActivityTree(container: Container): void {
 
 const IActivityViewDataProviders: ServiceIdentifier<DataProvider<Activity>> = Symbol.for('IActivityViewDataProviders');
 function bindActivityViewDataProviders(container: Container): void {
-    container.bind(IActivityViewDataProviders).to(ArmDeploymentDataProvider).onActivation(pushDisposable);
-    container.bind(IActivityViewDataProviders).to(CodeDeploymentDataProvider).onActivation(pushDisposable);
-    container.bind(IActivityViewDataProviders).to(GenericActivityDataProvider).onActivation(pushDisposable);
+    // Bind each provider as a singleton to its own class first, then alias
+    // to IActivityViewDataProviders so they can be resolved both individually
+    // (for commands that call track methods) and collectively (for the data tree).
+    container.bind(ArmDeploymentDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
+    container.bind(IActivityViewDataProviders).toService(ArmDeploymentDataProvider);
+
+    container.bind(CodeDeploymentDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
+    container.bind(IActivityViewDataProviders).toService(CodeDeploymentDataProvider);
+
+    container.bind(GenericActivityDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
+    container.bind(IActivityViewDataProviders).toService(GenericActivityDataProvider);
 }
 
 const IActivityViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IActivityViewViewProviders');

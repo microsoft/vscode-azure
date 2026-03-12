@@ -5,13 +5,14 @@
 
 import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
-import { LoadMoreCommandId } from '../constants';
+import { LoadMoreCommandId, TrackArmDeploymentCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
 import { Hello } from './Hello';
 import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';
 import { OpenInPortal } from './OpenInPortal';
 import { RefreshResourcesView } from './RefreshResourcesView';
+import { TrackArmDeployment } from './TrackArmDeployment';
 
 export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'azure.hello', Hello);
@@ -21,6 +22,8 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
 
     registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
+
+    registerManagedCommand(container, TrackArmDeploymentCommandId, TrackArmDeployment);
 }
 
 function registerManagedCommand(

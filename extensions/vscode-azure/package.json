@@ -42,6 +42,11 @@
             {
                 "command": "vscode-azure/resources/loadMore",
                 "title": "%commands.vscode-azure/resources/loadMore%"
+            },
+            {
+                "command": "vscode-azure/activity/trackArmDeployment",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/activity/trackArmDeployment%"
             }
         ],
         "menus": {
