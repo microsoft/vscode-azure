@@ -3,19 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ServiceClient, ServiceClientOptions } from '@azure/core-client';
+import type { DeploymentOperation, DeploymentsClient } from '@azure/arm-resourcesdeployments';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
+import { createAzureSubscriptionClient, parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { type DataProvider, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { type Activity, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity } from './Activity';
 
-let coreClient: typeof import('@azure/core-client') | undefined;
-let coreRestPipeline: typeof import('@azure/core-rest-pipeline') | undefined;
+let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | undefined;
 
 const DefaultPollIntervalMs = 10_000;
-const ArmApiVersion = '2024-07-01';
-const ArmEndpoint = 'https://management.azure.com'; // TODO: get from settings / etc.
 
 type ArmActivity = ArmDeploymentActivity | ArmDeploymentOperationActivity;
 
@@ -26,7 +23,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
     private readonly deployments = new Map<string, ArmDeploymentActivity>();
     private readonly operations = new Map<string, ArmDeploymentOperationActivity[]>();
     private readonly pollingTimers = new Map<string, ReturnType<typeof setTimeout>>();
-    private readonly clientCache = new Map<string, ServiceClient>();
+    private readonly clientCache = new Map<string, DeploymentsClient>();
 
     private readonly onDidChangeEmitter = new EventEmitter<void>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
@@ -77,45 +74,24 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
     }
 
     private async poll(activity: ArmDeploymentActivity): Promise<void> {
-        let nextPollMs = DefaultPollIntervalMs;
-
         try {
             const client = await this.getOrCreateClient(activity.subscription);
-            const baseUrl = `${ArmEndpoint}${activity.deploymentId}`;
-            const pipeline = await this.ensureRestPipeline();
 
             // Get deployment status
-            const deploymentResponse = await client.sendRequest(
-                pipeline.createPipelineRequest({
-                    method: 'GET',
-                    url: `${baseUrl}?api-version=${ArmApiVersion}`,
-                }),
+            const deployment = await client.deployments.get(
+                activity.resourceGroupName,
+                activity.deploymentName,
             );
+            const provisioningState = deployment.properties?.provisioningState;
 
-            const deploymentBody = JSON.parse(deploymentResponse.bodyAsText ?? '{}') as ArmDeploymentResponse;
-            const provisioningState = deploymentBody.properties?.provisioningState;
-
-            // Respect Retry-After header
-            const retryAfter = deploymentResponse.headers.get('retry-after');
-            if (retryAfter) {
-                const retrySeconds = parseInt(retryAfter, 10);
-                if (!isNaN(retrySeconds) && retrySeconds > 0) {
-                    nextPollMs = retrySeconds * 1000;
+            // Fetch deployment operations
+            const ops: ArmDeploymentOperationActivity[] = [];
+            for await (const op of client.deploymentOperations.list(activity.resourceGroupName, activity.deploymentName)) {
+                const opActivity = this.toOperationActivity(op, activity);
+                if (opActivity) {
+                    ops.push(opActivity);
                 }
             }
-
-            // List deployment operations
-            const opsResponse = await client.sendRequest(
-                pipeline.createPipelineRequest({
-                    method: 'GET',
-                    url: `${baseUrl}/operations?api-version=${ArmApiVersion}`,
-                }),
-            );
-
-            const opsBody = JSON.parse(opsResponse.bodyAsText ?? '{}') as ArmDeploymentOperationsResponse;
-            const ops = (opsBody.value ?? [])
-                .map(op => this.toOperationActivity(op, activity))
-                .filter((op): op is ArmDeploymentOperationActivity => op !== undefined);
             this.operations.set(activity.id, ops);
 
             // Update deployment status
@@ -136,11 +112,11 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
 
         this.onDidChangeEmitter.fire();
 
-        const timer = setTimeout(() => void this.poll(activity), nextPollMs);
+        const timer = setTimeout(() => void this.poll(activity), DefaultPollIntervalMs);
         this.pollingTimers.set(activity.id, timer);
     }
 
-    private toOperationActivity(op: ArmDeploymentOperationValue, parent: ArmDeploymentActivity): ArmDeploymentOperationActivity | undefined {
+    private toOperationActivity(op: DeploymentOperation, parent: ArmDeploymentActivity): ArmDeploymentOperationActivity | undefined {
         if (!op.operationId) {
             return undefined;
         }
@@ -162,32 +138,18 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
         };
     }
 
-    private async getOrCreateClient(subscription: AzureSubscription): Promise<ServiceClient> {
+    private async getOrCreateClient(subscription: AzureSubscription): Promise<DeploymentsClient> {
         let client = this.clientCache.get(subscription.subscriptionId);
         if (!client) {
-            coreClient ??= await import('@azure/core-client');
-            const pipeline = await this.ensureRestPipeline();
-
-            const options: ServiceClientOptions = {
-                additionalPolicies: [
-                    {
-                        policy: pipeline.bearerTokenAuthenticationPolicy({
-                            credential: subscription.credential,
-                            scopes: [`${ArmEndpoint}/.default`],
-                        }),
-                        position: 'perCall',
-                    },
-                ],
-            };
-            client = new coreClient.ServiceClient(options);
+            armResourcesDeployments ??= await import('@azure/arm-resourcesdeployments');
+            client = createAzureSubscriptionClient(
+                this.ctx, this.executor,
+                armResourcesDeployments.DeploymentsClient,
+                subscription.credential, subscription.subscriptionId,
+            );
             this.clientCache.set(subscription.subscriptionId, client);
         }
         return client;
-    }
-
-    private async ensureRestPipeline(): Promise<typeof import('@azure/core-rest-pipeline')> {
-        coreRestPipeline ??= await import('@azure/core-rest-pipeline');
-        return coreRestPipeline;
     }
 
     public dispose(): void {
@@ -199,38 +161,14 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
     }
 }
 
-// #region ARM REST response types
-
-interface ArmDeploymentResponse {
-    readonly properties?: {
-        readonly provisioningState?: string;
-    };
-}
-
-interface ArmDeploymentOperationsResponse {
-    readonly value?: readonly ArmDeploymentOperationValue[];
-}
-
-interface ArmDeploymentOperationValue {
-    readonly operationId?: string;
-    readonly properties?: {
-        readonly provisioningState?: string;
-        readonly targetResource?: {
-            readonly resourceType?: string;
-            readonly resourceName?: string;
-        };
-    };
-}
-
-// #endregion
-
 function toActivityStatus(provisioningState: string | undefined): Activity['status'] {
     switch (provisioningState?.toLowerCase()) {
         case 'succeeded':
             return 'Completed';
         case 'failed':
-        case 'canceled':
             return 'Failed';
+        case 'canceled':
+            return 'Canceled';
         case 'running':
         case 'accepted':
         case 'creating':

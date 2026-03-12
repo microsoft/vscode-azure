@@ -146,6 +146,7 @@
     "dependencies": {
         "@azure/arm-containerregistry": "12.0.0-alpha.20260224.1",
         "@azure/arm-resources": "^7.0.0",
+        "@azure/arm-resourcesdeployments": "^1.0.0-alpha.20250716.1",
         "@microsoft/vscode-azext-azureauth": "^6.0.0-alpha.4",
         "@microsoft/vscode-azure-azutils": "*",
         "@microsoft/vscode-azure-utils": "*",
