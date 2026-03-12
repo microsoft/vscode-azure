@@ -7,10 +7,10 @@ import { AzureNodeId, isGenericResource, isVirtualResource, type VirtualResource
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { DisableAcrAdminUser } from '../../commands/acr/DisableAcrAdminUser';
-import { OpenInPortal } from '../../commands/OpenInPortal';
-import { IAzureViewDataTree } from '../../services';
-import { combineContextValues } from '../combineContextValues';
+import { DisableAcrAdminUser } from '../../../commands/acr/DisableAcrAdminUser';
+import { OpenInPortal } from '../../../commands/OpenInPortal';
+import { IAzureViewDataTree } from '../../../services';
+import { combineContextValues } from '../../combineContextValues';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**

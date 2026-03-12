@@ -12,7 +12,7 @@ import {
 import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureSubscriptionProvider } from '../services';
+import { IAzureSubscriptionProvider } from '../../services';
 
 let armResources: typeof import('@azure/arm-resources') | undefined;
 

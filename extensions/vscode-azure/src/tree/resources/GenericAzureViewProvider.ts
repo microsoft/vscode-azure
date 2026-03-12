@@ -9,9 +9,9 @@ import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscript
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { OpenInPortal } from '../commands/OpenInPortal';
-import { IAzureViewDataTree } from '../services';
-import { combineContextValues } from './combineContextValues';
+import { OpenInPortal } from '../../commands/OpenInPortal';
+import { IAzureViewDataTree } from '../../services';
+import { combineContextValues } from '.././combineContextValues';
 
 @injectable()
 export class GenericAzureViewProvider implements ViewProvider<string> {
