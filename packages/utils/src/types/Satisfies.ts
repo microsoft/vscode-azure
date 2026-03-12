@@ -4,8 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Utility type for asserting that one type is assignable to another.
- * If the assertion fails, a compile error will occur.
+ * Compile-time assertion that `Source` is assignable to `Target`.
+ *
+ * If `Source` is not assignable to `Target`, TypeScript reports an error.
+ * This is a type-level helper, distinct from the `satisfies` value operator.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export type AssertAssignable<Target, Source extends Target> = never;
+export type Satisfies<Target, Source extends Target> = never;

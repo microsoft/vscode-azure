@@ -5,7 +5,7 @@
 
 import { EventEmitter as NodeEventEmitter } from 'node:events';
 import type * as vscode from 'vscode';
-import type { AssertAssignable } from '../types/AssertAssignable';
+import type { Satisfies } from '../types/Satisfies';
 import type { Disposable } from './Disposable';
 
 const EventName = 'e' as const;
@@ -76,5 +76,5 @@ export class EventEmitter<T> implements Disposable {
 
 // Compile-time checks: our EventEmitter is assignable to vscode.EventEmitter.
 /* eslint-disable @typescript-eslint/no-unused-vars */
-type CheckEventEmitter = AssertAssignable<vscode.EventEmitter<unknown>, EventEmitter<unknown>>;
+type CheckEventEmitter = Satisfies<vscode.EventEmitter<unknown>, EventEmitter<unknown>>;
 /* eslint-enable @typescript-eslint/no-unused-vars */

@@ -32,7 +32,13 @@
                 "--",
                 "--watch"
             ],
-            "problemMatcher": "$tsgo-watch",
+            "problemMatcher": {
+                "base": "$tsgo-watch",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}/extensions/vscode-azure"
+                ]
+            },
             "presentation": {
                 "revealProblems": "onProblem",
             },
@@ -60,7 +66,13 @@
             "presentation": {
                 "revealProblems": "onProblem"
             },
-            "problemMatcher": "$tsgo-watch",
+            "problemMatcher": {
+                "base": "$tsgo-watch",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}/packages/azutils"
+                ]
+            },
         },
         {
             "label": "utils: Build+Watch",
@@ -80,7 +92,13 @@
             "presentation": {
                 "revealProblems": "onProblem"
             },
-            "problemMatcher": "$tsgo-watch",
+            "problemMatcher": {
+                "base": "$tsgo-watch",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}/packages/utils"
+                ]
+            },
         },
     ]
 }

@@ -9,10 +9,10 @@ import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
 import { AzureResourceTreeViewId } from '../constants';
 import { IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
-import { AcrDataProvider } from './acr/AcrDataProvider';
-import { AcrViewProvider } from './acr/AcrViewProvider';
-import { GenericAzureDataProvider } from './GenericAzureDataProvider';
-import { GenericAzureViewProvider } from './GenericAzureViewProvider';
+import { AcrDataProvider } from './resources/acr/AcrDataProvider';
+import { AcrViewProvider } from './resources/acr/AcrViewProvider';
+import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
+import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 
 export function registerTrees(container: Container): void {
     // Resources view: data layer
