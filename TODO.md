@@ -2,6 +2,7 @@
 - Address all the TODOs in source
 - ALL the test coverage
 - Vastly more logging to the output channel (especially debug/trace)
+  - Also use `@azure/logger` to log to the output channel for SDK calls
 - Telemetry on all the things (especially tree operations)
 - Figure out why the token expired and wasn't refreshing
 - Setting for node skipping behavior
@@ -12,6 +13,10 @@
 - Get rid of non-REST (old) `@azure` packages
 
 Before handoff:
+- Activity View
+  - ARM deployment tracking (i.e. `azd provision`)
+  - Code deployment tracking (i.e. `azd deploy`)
+  - Generic action tracking (delete resource, etc.)
 - Deployment story (single and app)
   - Generally app deployment can be just `azd up`...probably use AZD extension in some capacity? Or absorb it into this one?
   - Single resource--can we draft a Bicep file? Use AVM? Open an editor for the Bicep with very good completions support / tab stops, to make editing many things easy?
