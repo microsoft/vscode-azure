@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DeploymentsClient } from '@azure/arm-resourcesdeployments';
+import type { DeploymentOperation, DeploymentsClient } from '@azure/arm-resourcesdeployments';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { createAzureSubscriptionClient } from '@microsoft/vscode-azure-azutils';
 import { type DataProvider, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
@@ -17,6 +17,13 @@ const DefaultPollIntervalMs = 10_000;
 type ArmActivity = ArmDeploymentActivity | ArmDeploymentOperationActivity;
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
+
+/**
+ * AVM (Azure Verified Modules) telemetry deployments use this name prefix.
+ * These are empty deployments with no resources, used only for module usage
+ * tracking. See https://aka.ms/avm/TelemetryInfo
+ */
+const AvmTelemetryPrefix = '46d3x';
 
 @injectable()
 export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Disposable {
@@ -46,7 +53,11 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
         }
 
         if (resource.type === 'armDeployment') {
-            return this.fetchOperations(resource as ArmDeploymentActivity);
+            try {
+                return await this.fetchOperations(resource as ArmDeploymentActivity);
+            } catch {
+                return [];
+            }
         }
 
         return [];
@@ -109,23 +120,49 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
 
     /**
      * Fetch operations for a deployment from the ARM API.
+     *
+     * Operations without a `targetResource` (e.g. `EvaluateDeploymentOutput`,
+     * `Waiting`) are filtered out. When multiple operations target the same
+     * resource, only one is kept (preferring `Create`/`Delete` over read-only ops).
+     *
      * Operations that target `Microsoft.Resources/deployments` are
      * returned as {@link ArmDeploymentActivity} nodes (collapsible);
      * all others are returned as leaf {@link ArmDeploymentOperationActivity} nodes.
      */
     private async fetchOperations(activity: ArmDeploymentActivity): Promise<ArmActivity[]> {
         const client = await this.getOrCreateClient(activity.subscription);
-        const results: ArmActivity[] = [];
+
+        // Collect operations, deduplicating by target resource ID.
+        // Keep the most meaningful operation per resource (Create/Delete > others).
+        const byTargetId = new Map<string, { op: DeploymentOperation; rank: number }>();
 
         for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName)) {
-            if (!op.operationId) {
+            const targetResource = op.properties?.targetResource;
+            if (!op.operationId || !targetResource?.id) {
                 continue;
             }
 
+            const rank = operationRank(op.properties?.provisioningOperation);
+            const existing = byTargetId.get(targetResource.id);
+            if (!existing || rank > existing.rank) {
+                byTargetId.set(targetResource.id, { op, rank });
+            }
+        }
+
+        const results: ArmActivity[] = [];
+
+        for (const { op } of byTargetId.values()) {
             const targetResource = op.properties?.targetResource;
             const provisioningState = op.properties?.provisioningState;
+            const operationId = op.operationId ?? targetResource?.id ?? '';
 
             if (targetResource?.resourceType?.toLowerCase() === DeploymentResourceType.toLowerCase() && targetResource.id) {
+                // Skip AVM telemetry deployments — empty deployments used
+                // only for module usage tracking.
+                if (targetResource.resourceName?.startsWith(AvmTelemetryPrefix)) {
+                    continue;
+                }
+
                 // Nested deployment — return as a collapsible ArmDeploymentActivity
                 const { scope, deploymentName } = parseDeploymentId(targetResource.id);
                 results.push({
@@ -144,14 +181,14 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
             } else {
                 // Regular operation — return as a leaf node
                 results.push({
-                    id: `${activity.id}/operations/${op.operationId}`,
+                    id: `${activity.id}/operations/${operationId}`,
                     type: 'armDeploymentOperation',
                     status: toActivityStatus(provisioningState),
-                    title: targetResource?.resourceName ?? op.operationId,
+                    title: targetResource?.resourceName ?? operationId,
                     description: targetResource?.resourceType,
                     startTime: activity.startTime,
                     parentId: activity.id,
-                    operationId: op.operationId,
+                    operationId,
                     targetResourceType: targetResource?.resourceType,
                     targetResourceName: targetResource?.resourceName,
                 });
@@ -207,6 +244,26 @@ function toActivityStatus(provisioningState: string | undefined): Activity['stat
 function isTerminalState(provisioningState: string | undefined): boolean {
     const lower = provisioningState?.toLowerCase();
     return lower === 'succeeded' || lower === 'failed' || lower === 'canceled';
+}
+
+/**
+ * Assigns a priority rank to a provisioning operation type.
+ * Higher rank = more meaningful operation when deduplicating by target resource.
+ * `Create` and `Delete` are the most interesting; read-only and internal
+ * operations (e.g. `EvaluateDeploymentOutput`, `Waiting`) rank lowest.
+ */
+function operationRank(provisioningOperation: string | undefined): number {
+    switch (provisioningOperation) {
+        case 'Create':
+        case 'Delete':
+            return 3;
+        case 'Action':
+            return 2;
+        case 'Read':
+            return 1;
+        default:
+            return 0;
+    }
 }
 
 const deploymentsSegment = '/providers/microsoft.resources/deployments/';
