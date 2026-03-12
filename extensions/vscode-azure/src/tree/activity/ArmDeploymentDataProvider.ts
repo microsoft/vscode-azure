@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DeploymentOperation, DeploymentsClient } from '@azure/arm-resourcesdeployments';
+import type { DeploymentOperation, DeploymentsClient, ProvisioningOperation, ProvisioningState } from '@azure/arm-resourcesdeployments';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { createAzureSubscriptionClient } from '@microsoft/vscode-azure-azutils';
 import { type DataProvider, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
@@ -221,7 +221,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
     }
 }
 
-function toActivityStatus(provisioningState: string | undefined): Activity['status'] {
+function toActivityStatus(provisioningState: ProvisioningState | undefined): Activity['status'] {
     switch (provisioningState?.toLowerCase()) {
         case 'succeeded':
             return 'Completed';
@@ -241,7 +241,7 @@ function toActivityStatus(provisioningState: string | undefined): Activity['stat
     }
 }
 
-function isTerminalState(provisioningState: string | undefined): boolean {
+function isTerminalState(provisioningState: ProvisioningState | undefined): boolean {
     const lower = provisioningState?.toLowerCase();
     return lower === 'succeeded' || lower === 'failed' || lower === 'canceled';
 }
@@ -252,7 +252,7 @@ function isTerminalState(provisioningState: string | undefined): boolean {
  * `Create` and `Delete` are the most interesting; read-only and internal
  * operations (e.g. `EvaluateDeploymentOutput`, `Waiting`) rank lowest.
  */
-function operationRank(provisioningOperation: string | undefined): number {
+function operationRank(provisioningOperation: ProvisioningOperation | undefined): number {
     switch (provisioningOperation) {
         case 'Create':
         case 'Delete':
