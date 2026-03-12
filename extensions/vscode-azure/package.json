@@ -88,6 +88,13 @@
                     "icon": "$(azure)",
                     "id": "vscode-azure"
                 }
+            ],
+            "panel": [
+                {
+                    "title": "%viewContainers.vscode-azure-panel%",
+                    "icon": "$(azure)",
+                    "id": "vscode-azure-panel"
+                }
             ]
         },
         "views": {
@@ -97,6 +104,15 @@
                     "id": "vscode-azure/resources",
                     "icon": "$(azure)",
                     "visibility": "visible",
+                    "type": "tree"
+                }
+            ],
+            "vscode-azure-panel": [
+                {
+                    "name": "%views.vscode-azure/activity%",
+                    "id": "vscode-azure/activity",
+                    "icon": "$(azure)",
+                    "visibility": "collapsed",
                     "type": "tree"
                 }
             ]

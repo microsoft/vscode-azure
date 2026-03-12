@@ -5,12 +5,15 @@
 
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
-import { Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
+import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
+import type { Activity } from './tree/activity/Activity';
 
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
+
+// #region Azure resource tree and view identifiers
 
 /** Identifier for the Azure resource tree cache (representing real Azure resources) */
 export const IAzureViewDataTree: ServiceIdentifier<IAzureViewDataTree> = Symbol.for('IAzureViewDataTree');
@@ -23,6 +26,24 @@ export type IAzureViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');
 export type IAzureResourceTreeView = vscode.TreeView<string>;
+
+// #endregion
+
+// #region Activity tree and view identifiers
+
+/** Identifier for the Azure resource tree cache (representing real Azure resources) */
+export const IActivityViewDataTree: ServiceIdentifier<IActivityViewDataTree> = Symbol.for('IActivityViewDataTree');
+export type IActivityViewDataTree = DataItemTree<Activity>;
+
+/** Identifier for the Azure resource view-item tree (view layer) */
+export const IActivityViewViewItemTree: ServiceIdentifier<IActivityViewViewItemTree> = Symbol.for('IActivityViewViewItemTree');
+export type IActivityViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
+
+/** Identifier for the Azure resource VSCode tree view */
+export const IActivityTreeView: ServiceIdentifier<IActivityTreeView> = Symbol.for('IActivityTreeView');
+export type IActivityTreeView = vscode.TreeView<string>;
+
+// #endregion
 
 /**
  * An activation callback that pushes a disposable service to the extension context's subscriptions.

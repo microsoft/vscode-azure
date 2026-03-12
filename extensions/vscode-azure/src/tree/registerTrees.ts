@@ -7,14 +7,26 @@ import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azu
 import { DataItemTree, type DataProvider, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
-import { AzureResourceTreeViewId } from '../constants';
-import { IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
+import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
+import { IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree, IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
+import type { Activity } from './activity/Activity';
+import { ActivityViewProvider } from './activity/ActivityViewProvider';
+import { ArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
+import { CodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvider';
+import { GenericActivityDataProvider } from './activity/GenericActivityDataProvider';
 import { AcrDataProvider } from './resources/acr/AcrDataProvider';
 import { AcrViewProvider } from './resources/acr/AcrViewProvider';
 import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 
 export function registerTrees(container: Container): void {
+    registerResourcesTree(container);
+    registerActivityTree(container);
+}
+
+// #region Resources tree
+
+function registerResourcesTree(container: Container): void {
     // Resources view: data layer
     bindAzureViewDataProviders(container);
     container.bind(IAzureViewDataTree).toDynamicValue(context => {
@@ -87,3 +99,71 @@ function bindAzureViewViewProviders(container: Container): void {
     container.bind(IAzureViewViewProviders).to(AcrViewProvider).onActivation(pushDisposable);
     container.bind(IAzureViewViewProviders).to(GenericAzureViewProvider).onActivation(pushDisposable);
 }
+
+// #endregion
+
+// #region Activity tree
+
+function registerActivityTree(container: Container): void {
+    // Activity view: data layer
+    bindActivityViewDataProviders(container);
+    container.bind(IActivityViewDataTree).toDynamicValue(context => {
+        const cache = new DataItemTree<Activity>(
+            activity => activity.id,
+            5 * 60 * 1000, // 5 minute TTL
+        );
+
+        for (const provider of context.getAll(IActivityViewDataProviders)) {
+            cache.registerProvider(provider);
+        }
+
+        return cache;
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    // Activity view: view layer
+    bindActivityViewViewProviders(container);
+    container.bind(IActivityViewViewItemTree).toDynamicValue(context => {
+        const viewItemTree = new ViewItemTree<string, Activity>(
+            {
+                dataItemTree: context.get(IActivityViewDataTree),
+                toViewItem: activity => activity.id,
+                getKey: key => key, // Identity mapping since view item is just the `TODO` string
+                getResourceKey: key => key, // Identity mapping since both view and data items use the same key
+            },
+            defaultLoadMoreOptions(context.get(IVsCode)),
+        );
+
+        for (const provider of context.getAll(IActivityViewViewProviders)) {
+            viewItemTree.registerProvider(provider);
+        }
+
+        return viewItemTree;
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    // Activity view: VSCode tree view
+    container.bind(IActivityTreeView).toDynamicValue(context => {
+        const code = context.get(IVsCode);
+        return code.window.createTreeView(ActivityTreeViewId, {
+            treeDataProvider: context.get(IActivityViewViewItemTree),
+            showCollapseAll: true,
+            canSelectMany: false,
+        });
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    // Eagerly resolve the tree view to kick off the whole chain
+    container.get(IActivityTreeView);
+}
+
+const IActivityViewDataProviders: ServiceIdentifier<DataProvider<Activity>> = Symbol.for('IActivityViewDataProviders');
+function bindActivityViewDataProviders(container: Container): void {
+    container.bind(IActivityViewDataProviders).to(ArmDeploymentDataProvider).onActivation(pushDisposable);
+    container.bind(IActivityViewDataProviders).to(CodeDeploymentDataProvider).onActivation(pushDisposable);
+    container.bind(IActivityViewDataProviders).to(GenericActivityDataProvider).onActivation(pushDisposable);
+}
+
+const IActivityViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IActivityViewViewProviders');
+function bindActivityViewViewProviders(container: Container): void {
+    container.bind(IActivityViewViewProviders).to(ActivityViewProvider).onActivation(pushDisposable);
+}
+
+// #endregion
