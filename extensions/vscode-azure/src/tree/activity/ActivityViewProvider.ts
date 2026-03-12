@@ -41,8 +41,14 @@ export class ActivityViewProvider implements ViewProvider<string> {
             throw new Error(`Activity with ID ${activityId} not found`);
         }
 
-        const treeItem = new this.code.TreeItem(activity.title, this.code.TreeItemCollapsibleState.Collapsed);
+        const isLeaf = activity.type === 'armDeploymentOperation' || activity.type === 'generic';
+        const collapsibleState = isLeaf
+            ? this.code.TreeItemCollapsibleState.None
+            : this.code.TreeItemCollapsibleState.Collapsed;
+
+        const treeItem = new this.code.TreeItem(activity.title, collapsibleState);
         treeItem.id = activityId;
+        treeItem.description = activity.description;
 
         switch (activity.status) {
             case 'NotStarted':
@@ -59,10 +65,11 @@ export class ActivityViewProvider implements ViewProvider<string> {
                 break;
         }
 
-        return new this.code.TreeItem(activityId, this.code.TreeItemCollapsibleState.Collapsed);
+        return treeItem;
     }
 
-    public getParent(activityId: string): Promise<string | undefined> {
-        throw new Error('Not implemented');
+    public getParent(activityId: string): string | undefined {
+        const activity = this.dataTree.get(activityId);
+        return activity?.parentId;
     }
 }

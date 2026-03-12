@@ -31,15 +31,15 @@ export type IAzureResourceTreeView = vscode.TreeView<string>;
 
 // #region Activity tree and view identifiers
 
-/** Identifier for the Azure resource tree cache (representing real Azure resources) */
+/** Identifier for the activity tree data cache */
 export const IActivityViewDataTree: ServiceIdentifier<IActivityViewDataTree> = Symbol.for('IActivityViewDataTree');
 export type IActivityViewDataTree = DataItemTree<Activity>;
 
-/** Identifier for the Azure resource view-item tree (view layer) */
+/** Identifier for the activity view-item tree (view layer) */
 export const IActivityViewViewItemTree: ServiceIdentifier<IActivityViewViewItemTree> = Symbol.for('IActivityViewViewItemTree');
-export type IActivityViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
+export type IActivityViewViewItemTree = ViewItemTree<string, Activity>;
 
-/** Identifier for the Azure resource VSCode tree view */
+/** Identifier for the activity VSCode tree view */
 export const IActivityTreeView: ServiceIdentifier<IActivityTreeView> = Symbol.for('IActivityTreeView');
 export type IActivityTreeView = vscode.TreeView<string>;
 
