@@ -110,7 +110,7 @@ function registerActivityTree(container: Container): void {
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
             activity => activity.id,
-            5 * 60 * 1000, // 5 minute TTL
+            0, // TTL=0: providers manage their own state; the tree always delegates to them
         );
 
         for (const provider of context.getAll(IActivityViewDataProviders)) {
@@ -127,10 +127,9 @@ function registerActivityTree(container: Container): void {
             {
                 dataItemTree: context.get(IActivityViewDataTree),
                 toViewItem: activity => activity.id,
-                getKey: key => key, // Identity mapping since view item is just the `TODO` string
-                getResourceKey: key => key, // Identity mapping since both view and data items use the same key
+                getKey: key => key,
+                getResourceKey: key => key,
             },
-            defaultLoadMoreOptions(context.get(IVsCode)),
         );
 
         for (const provider of context.getAll(IActivityViewViewProviders)) {
