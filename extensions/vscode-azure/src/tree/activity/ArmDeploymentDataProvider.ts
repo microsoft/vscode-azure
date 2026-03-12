@@ -5,7 +5,7 @@
 
 import type { DeploymentOperation, DeploymentsClient } from '@azure/arm-resourcesdeployments';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { createAzureSubscriptionClient, parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
+import { createAzureSubscriptionClient } from '@microsoft/vscode-azure-azutils';
 import { type DataProvider, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { type Activity, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity } from './Activity';
@@ -51,21 +51,18 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
     }
 
     public trackDeployment(deploymentId: string, subscription: AzureSubscription): void {
-        const parsed = parseAzureResourceId(deploymentId);
-        if (!parsed.resourceGroup || !parsed.resourceName) {
-            throw new Error(`Invalid ARM deployment ID: ${deploymentId}`);
-        }
+        const { scope, deploymentName } = parseDeploymentId(deploymentId);
 
         const activity: ArmDeploymentActivity = {
             id: deploymentId,
             type: 'armDeployment',
             status: 'InProgress',
-            title: parsed.resourceName,
+            title: deploymentName,
             startTime: new Date(),
             deploymentId,
             subscription,
-            resourceGroupName: parsed.resourceGroup,
-            deploymentName: parsed.resourceName,
+            scope,
+            deploymentName,
         };
 
         this.deployments.set(activity.id, activity);
@@ -78,15 +75,15 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
             const client = await this.getOrCreateClient(activity.subscription);
 
             // Get deployment status
-            const deployment = await client.deployments.get(
-                activity.resourceGroupName,
+            const deployment = await client.deployments.getAtScope(
+                activity.scope,
                 activity.deploymentName,
             );
             const provisioningState = deployment.properties?.provisioningState;
 
             // Fetch deployment operations
             const ops: ArmDeploymentOperationActivity[] = [];
-            for await (const op of client.deploymentOperations.list(activity.resourceGroupName, activity.deploymentName)) {
+            for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName)) {
                 const opActivity = this.toOperationActivity(op, activity);
                 if (opActivity) {
                     ops.push(opActivity);
@@ -184,4 +181,34 @@ function toActivityStatus(provisioningState: string | undefined): Activity['stat
 function isTerminalState(provisioningState: string | undefined): boolean {
     const lower = provisioningState?.toLowerCase();
     return lower === 'succeeded' || lower === 'failed' || lower === 'canceled';
+}
+
+const deploymentsSegment = '/providers/microsoft.resources/deployments/';
+
+/**
+ * Parses an ARM deployment resource ID into its scope and deployment name.
+ *
+ * Works for any deployment scope:
+ * - Resource group: `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Resources/deployments/{name}`
+ * - Subscription: `/subscriptions/{sub}/providers/Microsoft.Resources/deployments/{name}`
+ * - Management group: `/providers/Microsoft.Management/managementGroups/{mg}/providers/Microsoft.Resources/deployments/{name}`
+ * - Tenant: `/providers/Microsoft.Resources/deployments/{name}`
+ *
+ * @returns The ARM scope prefix and the deployment name.
+ * @throws if the ID does not contain a `Microsoft.Resources/deployments` segment.
+ */
+export function parseDeploymentId(deploymentId: string): { scope: string; deploymentName: string } {
+    const idx = deploymentId.toLowerCase().indexOf(deploymentsSegment);
+    if (idx === -1) {
+        throw new Error(`Not an ARM deployment resource ID: ${deploymentId}`);
+    }
+
+    const scope = deploymentId.substring(0, idx);
+    const deploymentName = deploymentId.substring(idx + deploymentsSegment.length);
+
+    if (!deploymentName) {
+        throw new Error(`ARM deployment resource ID is missing a deployment name: ${deploymentId}`);
+    }
+
+    return { scope, deploymentName };
 }

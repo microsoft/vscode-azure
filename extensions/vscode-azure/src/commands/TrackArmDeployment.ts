@@ -8,7 +8,7 @@ import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
-import { ArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
+import { ArmDeploymentDataProvider, parseDeploymentId } from '../tree/activity/ArmDeploymentDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
 
 @injectable()
@@ -26,17 +26,10 @@ export class TrackArmDeployment implements ManagedCommand {
             placeHolder: '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Resources/deployments/{name}',
             validateInput: (value) => {
                 try {
-                    const parsed = parseAzureResourceId(value);
-                    if (!parsed.resourceGroup || !parsed.resourceName) {
-                        return this.code.l10n.t('Must be a full ARM resource ID including resource group and deployment name');
-                    }
-                    if (parsed.provider?.toLowerCase() !== 'microsoft.resources'
-                        || parsed.resourceType?.toLowerCase() !== 'deployments') {
-                        return this.code.l10n.t('Must be a Microsoft.Resources/deployments resource ID');
-                    }
+                    parseDeploymentId(value);
                     return undefined;
                 } catch {
-                    return this.code.l10n.t('Invalid ARM resource ID');
+                    return this.code.l10n.t('Must be an ARM deployment resource ID containing Microsoft.Resources/deployments');
                 }
             },
         });
@@ -46,19 +39,34 @@ export class TrackArmDeployment implements ManagedCommand {
             return;
         }
 
-        const parsed = parseAzureResourceId(deploymentId);
-        const subscription = await this.resolveSubscription(parsed.subscriptionId);
+        let subscriptionId: string | undefined;
+        try {
+            subscriptionId = parseAzureResourceId(deploymentId).subscriptionId;
+        } catch {
+            // Deployment ID may not contain a subscription (e.g. tenant-scoped)
+        }
+
+        if (!subscriptionId) {
+            void this.code.window.showErrorMessage(
+                this.code.l10n.t('Only subscription-scoped and resource-group-scoped deployments are supported at this time'),
+            );
+            return;
+        }
+
+        const subscription = await this.resolveSubscription(subscriptionId);
 
         if (!subscription) {
             void this.code.window.showErrorMessage(
-                this.code.l10n.t('Could not find a signed-in subscription matching "{0}"', parsed.subscriptionId),
+                this.code.l10n.t('Could not find a signed-in subscription matching "{0}"', subscriptionId),
             );
             return;
         }
 
         this.armProvider.trackDeployment(deploymentId, subscription);
+
+        const { deploymentName } = parseDeploymentId(deploymentId);
         void this.code.window.showInformationMessage(
-            this.code.l10n.t('Tracking deployment: {0}', parsed.resourceName ?? deploymentId),
+            this.code.l10n.t('Tracking deployment: {0}', deploymentName),
         );
     }
 

@@ -23,7 +23,8 @@ export interface ArmDeploymentActivity extends Activity {
     readonly type: 'armDeployment';
     readonly deploymentId: string;
     readonly subscription: AzureSubscription;
-    readonly resourceGroupName: string;
+    /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
+    readonly scope: string;
     readonly deploymentName: string;
 }
 
