@@ -76,8 +76,13 @@ export interface DataProvider<TResource> {
      * implementation should mutate the resource object directly so the
      * tree's reference remains stable. Key properties such as `id`, `type`,
      * etc. should not be changed, but additional fields may be added as needed.
+     *
+     * @returns `true` if the enrichment also changed the resource's children
+     *   (e.g. populated a field that child providers depend on), causing the
+     *   tree to invalidate and re-fetch them. Any other return value
+     *   (including `void`) only re-renders the resource's own tree item.
      */
-    enrich?(resource: TResource): void | Promise<void>;
+    enrich?(resource: TResource): boolean | Promise<boolean>;
 
     /**
      * Whether a provider can return root-level resources (i.e. be called with `undefined`).

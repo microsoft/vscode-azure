@@ -8,7 +8,7 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { createAzureSubscriptionClient } from '@microsoft/vscode-azure-azutils';
 import { type DataProvider, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { type Activity, type ActivityChangeEvent, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity } from './Activity';
+import { type Activity, type ActivityChangeEvent, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity, isTerminalActivityStatus } from './Activity';
 
 let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | undefined;
 
@@ -75,18 +75,22 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * Starts polling for non-terminal deployments. Called automatically
      * by {@link DataItemTree} after a resource is loaded.
      */
-    public async enrich(resource: ArmDeploymentActivity): Promise<void> {
+    public async enrich(resource: ArmDeploymentActivity): Promise<boolean> {
         if (resource.abortController.signal.aborted) {
-            return;
+            return false;
         }
 
         const client = await this.getOrCreateClient(resource.subscription);
         resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
 
         // Start polling if not terminal
-        if (!isTerminalState(resource.status)) {
+        if (!isTerminalActivityStatus(resource.status)) {
             void this.poll(resource);
         }
+
+        // Children depend on operations, so signal that children changed
+        // now that operations are populated.
+        return true;
     }
 
     public trackDeployment(deploymentId: string, subscription: AzureSubscription): void {

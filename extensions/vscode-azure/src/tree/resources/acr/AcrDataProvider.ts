@@ -47,9 +47,9 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * `loginServer`, `sku`, and `adminUserEnabled` onto the resource
      * so that view providers can render them without additional API calls.
      */
-    public async enrich(resource: ConcreteAzureNode): Promise<void> {
+    public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
         if (!isAcrRegistry(resource)) {
-            return;
+            return false;
         }
 
         const client = this.getOrCreateClient(resource);
@@ -68,6 +68,8 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
             sku: registry.sku,
             adminUserEnabled: registry.adminUserEnabled ?? false,
         });
+
+        return false;
     }
 
     /**

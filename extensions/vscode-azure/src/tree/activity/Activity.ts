@@ -62,6 +62,10 @@ export function isActivity(maybeActivity: unknown): maybeActivity is Activity {
         && 'startTime' in maybeActivity;
 }
 
+export function isTerminalActivityStatus(status: ActivityStatus): boolean {
+    return status === 'Completed' || status === 'Failed' || status === 'Canceled';
+}
+
 /**
  * Fired by activity data providers when tracked activities change.
  *

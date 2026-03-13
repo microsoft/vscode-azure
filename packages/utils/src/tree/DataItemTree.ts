@@ -186,9 +186,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                 const key = this.getKey(resource);
                 const promise = Promise
                     .resolve(provider.enrich(resource))
-                    .then(() => {
+                    .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
-                        this.changeEmitter.fire(resource);
+                        this.invalidate(resource, includeChildren);
                     });
                 this.enrichmentPromises.set(key, promise);
                 // Attach a rejection handler so background rejections are not unhandled
