@@ -5,6 +5,7 @@
 
 import { type DataProvider, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
+import type { ActivityChangeEvent } from './Activity';
 import { type CodeDeploymentActivity, isActivity } from './Activity';
 
 @injectable()
@@ -14,7 +15,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
     private readonly deployments = new Map<string, CodeDeploymentActivity>();
     private readonly subSteps = new Map<string, CodeDeploymentActivity[]>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<void>();
+    private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public canHandle(resource: unknown): resource is CodeDeploymentActivity {
@@ -35,7 +36,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
             startTime: new Date(),
         };
         this.deployments.set(full.id, full);
-        this.onDidChangeEmitter.fire();
+        this.onDidChangeEmitter.fire({ childrenChanged: true });
         return full;
     }
 

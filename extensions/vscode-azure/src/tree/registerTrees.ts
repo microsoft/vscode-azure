@@ -9,7 +9,7 @@ import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
 import { IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree, IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
-import type { Activity } from './activity/Activity';
+import type { Activity, ActivityChangeEvent } from './activity/Activity';
 import { ActivityViewProvider } from './activity/ActivityViewProvider';
 import { ArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
 import { CodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvider';
@@ -111,21 +111,28 @@ function registerActivityTree(container: Container): void {
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
             activity => activity.id,
-            0, // TTL=0: providers manage their own state; the tree always delegates to them
+            30 * 1000, // 30 second TTL
         );
 
         for (const provider of context.getAll(IActivityViewDataProviders)) {
             cache.registerProvider(provider);
         }
 
-        // Wire provider change events to invalidate the data tree.
-        // Each provider fires onDidChange when its tracked activities update.
+        // Wire provider change events to targeted cache invalidation.
+        const handleChange = (event: ActivityChangeEvent) => {
+            if (event.activity) {
+                cache.invalidate(event.activity, event.childrenChanged);
+            } else {
+                cache.invalidateAll();
+            }
+        };
+
         const armProvider = context.get(ArmDeploymentDataProvider);
         const codeProvider = context.get(CodeDeploymentDataProvider);
         const genericProvider = context.get(GenericActivityDataProvider);
-        armProvider.onDidChange(() => { cache.invalidateAll(); });
-        codeProvider.onDidChange(() => { cache.invalidateAll(); });
-        genericProvider.onDidChange(() => { cache.invalidateAll(); });
+        armProvider.onDidChange(handleChange);
+        codeProvider.onDidChange(handleChange);
+        genericProvider.onDidChange(handleChange);
 
         return cache;
     }).inSingletonScope().onActivation(pushDisposable);

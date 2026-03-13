@@ -325,13 +325,18 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     }
 
     /**
-     * Invalidate a specific resource's cached children, removing them from
-     * the tree. They will be re-fetched on next access.
-     * Fires {@link onDidChange}.
+     * Invalidate a specific resource, optionally including its cached
+     * children. Fires {@link onDidChange}.
+     *
+     * @param resource - The resource to invalidate.
+     * @param includeChildren - When `true` (default), cached children are
+     *   removed from the tree and will be re-fetched on next access. When
+     *   `false`, only the resource's own tree item is re-rendered (useful
+     *   when the resource was mutated in-place but its children are unchanged).
      */
-    public invalidate(resource: T): void {
+    public invalidate(resource: T, includeChildren = true): void {
         const node = this.nodes.get(this.getKey(resource));
-        if (node) {
+        if (node && includeChildren) {
             this.nodes.removeSubtrees(node.children);
             node.children = undefined;
             node.staleAt = 0;

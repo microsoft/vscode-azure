@@ -8,7 +8,7 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { createAzureSubscriptionClient } from '@microsoft/vscode-azure-azutils';
 import { type DataProvider, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { type Activity, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity } from './Activity';
+import { type Activity, type ActivityChangeEvent, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity } from './Activity';
 
 let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | undefined;
 
@@ -31,10 +31,12 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
 
     /** Top-level tracked deployments (user-initiated). */
     private readonly trackedRoots = new Map<string, ArmDeploymentActivity>();
+    /** Tracks the number of meaningful operations per deployment for change detection. */
+    private readonly operationCounts = new Map<string, number>();
     private readonly pollingTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly clientCache = new Map<string, DeploymentsClient>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<void>();
+    private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public constructor(
@@ -79,13 +81,16 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
         };
 
         this.trackedRoots.set(activity.id, activity);
-        this.onDidChangeEmitter.fire();
+        this.onDidChangeEmitter.fire({ childrenChanged: true });
         void this.poll(activity);
     }
 
     /**
-     * Polling only checks the root deployment's status and fires
-     * change events. The tree re-fetches children via {@link getChildren}.
+     * Poll a root deployment's status and operation count. Fires targeted
+     * change events:
+     * - `childrenChanged: false` when only the deployment status changed
+     * - `childrenChanged: true` when the operation count changed (new
+     *   resources appeared or nested deployments were added)
      */
     private async poll(activity: ArmDeploymentActivity): Promise<void> {
         try {
@@ -102,20 +107,47 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
                 activity.description = provisioningState;
             }
 
+            // Count current operations to detect structural changes
+            const opCount = await this.countOperations(client, activity);
+            const prevCount = this.operationCounts.get(activity.id) ?? 0;
+            const childrenChanged = opCount !== prevCount;
+            this.operationCounts.set(activity.id, opCount);
+
             if (isTerminalState(provisioningState)) {
                 activity.endTime = new Date();
                 this.pollingTimers.delete(activity.id);
-                this.onDidChangeEmitter.fire();
+                this.onDidChangeEmitter.fire({ activity, childrenChanged });
                 return;
             }
+
+            this.onDidChangeEmitter.fire({ activity, childrenChanged });
         } catch {
             // Continue polling on transient errors
         }
 
-        this.onDidChangeEmitter.fire();
-
         const timer = setTimeout(() => void this.poll(activity), DefaultPollIntervalMs);
         this.pollingTimers.set(activity.id, timer);
+    }
+
+    /**
+     * Count meaningful operations for a deployment (excluding AVM telemetry
+     * and operations without a target resource). Used to detect when the
+     * operation list has structurally changed between polls.
+     */
+    private async countOperations(client: DeploymentsClient, activity: ArmDeploymentActivity): Promise<number> {
+        let count = 0;
+        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName)) {
+            const targetResource = op.properties?.targetResource;
+            if (!op.operationId || !targetResource?.id) {
+                continue;
+            }
+            if (targetResource.resourceType?.toLowerCase() === DeploymentResourceType.toLowerCase()
+                && targetResource.resourceName?.startsWith(AvmTelemetryPrefix)) {
+                continue;
+            }
+            count++;
+        }
+        return count;
     }
 
     /**

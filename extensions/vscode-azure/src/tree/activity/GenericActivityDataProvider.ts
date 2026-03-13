@@ -5,6 +5,7 @@
 
 import { type DataProvider, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
+import type { ActivityChangeEvent } from './Activity';
 import { type GenericActivity, isActivity } from './Activity';
 
 @injectable()
@@ -13,7 +14,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
 
     private readonly activities = new Map<string, GenericActivity>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<void>();
+    private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public canHandle(resource: unknown): resource is GenericActivity {
@@ -34,7 +35,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
             startTime: new Date(),
         };
         this.activities.set(full.id, full);
-        this.onDidChangeEmitter.fire();
+        this.onDidChangeEmitter.fire({ childrenChanged: true });
         return full;
     }
 
@@ -42,7 +43,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
         const activity = this.activities.get(id);
         if (activity) {
             Object.assign(activity, changes);
-            this.onDidChangeEmitter.fire();
+            this.onDidChangeEmitter.fire({ activity, childrenChanged: false });
         }
     }
 

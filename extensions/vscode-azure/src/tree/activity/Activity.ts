@@ -53,3 +53,18 @@ export function isActivity(maybeActivity: unknown): maybeActivity is Activity {
         && 'title' in maybeActivity
         && 'startTime' in maybeActivity;
 }
+
+/**
+ * Fired by activity data providers when tracked activities change.
+ *
+ * @param activity - The activity that changed, or `undefined` for root-level
+ *   changes (e.g. a new activity was added).
+ * @param childrenChanged - When `true`, the activity's children have
+ *   structurally changed (added/removed) and must be re-fetched. When
+ *   `false`, only the activity's own properties (status, description)
+ *   were mutated in-place.
+ */
+export interface ActivityChangeEvent {
+    readonly activity?: Activity;
+    readonly childrenChanged: boolean;
+}
