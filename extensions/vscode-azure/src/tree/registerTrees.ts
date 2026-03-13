@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, Disposable, IExtensionContext, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
@@ -131,10 +131,11 @@ function registerActivityTree(container: Container): void {
         const armProvider = context.get(ArmDeploymentDataProvider);
         const codeProvider = context.get(CodeDeploymentDataProvider);
         const genericProvider = context.get(GenericActivityDataProvider);
-        // TODO: dispose of these disposables
-        armProvider.onDidChange(handleChange);
-        codeProvider.onDidChange(handleChange);
-        genericProvider.onDidChange(handleChange);
+        context.get(IExtensionContext).subscriptions.push(Disposable.from(
+            armProvider.onDidChange(handleChange),
+            codeProvider.onDidChange(handleChange),
+            genericProvider.onDidChange(handleChange),
+        ));
 
         return cache;
     }).inSingletonScope().onActivation(pushDisposable);
