@@ -7,7 +7,7 @@ import { type ITreeItem, IVsCode, type ViewProvider } from '@microsoft/vscode-az
 import { inject, injectable } from 'inversify';
 import { IActivityViewDataTree } from '../../services';
 import { toActivityTreeItem } from './ActivityViewProvider';
-import { type ArmDeploymentActivity, type ArmDeploymentOperationActivity, DeploymentResourceType, isVisibleOperation } from './ArmDeploymentDataProvider';
+import { type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isNestedDeploymentOp, isVisibleOperation } from './ArmDeploymentDataProvider';
 
 /**
  * View provider for ARM deployment activities. Handles both deployment
@@ -90,8 +90,4 @@ export class ArmDeploymentViewProvider implements ViewProvider<string> {
         const parent = this.dataTree.get(parentId) as ArmDeploymentActivity | undefined;
         return parent?.operations?.find(op => op.id === operationId);
     }
-}
-
-function isNestedDeploymentOp(op: ArmDeploymentOperationActivity): boolean {
-    return op.targetResourceType?.toLowerCase() === DeploymentResourceType.toLowerCase();
 }

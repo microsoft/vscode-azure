@@ -10,7 +10,7 @@ import { type DataProvider, type DataProviderChangeEvent, type Disposable, Event
 import { inject, injectable } from 'inversify';
 import { type Activity, isActivity, isTerminalActivityStatus } from './Activity';
 
-export const DeploymentResourceType = 'Microsoft.Resources/deployments';
+const DeploymentResourceType = 'Microsoft.Resources/deployments';
 
 export interface ArmDeploymentActivity extends Activity {
     readonly type: 'armDeployment';
@@ -217,7 +217,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
         const results: ArmDeploymentActivity[] = [];
         for (const op of activity.operations) {
-            if (op.targetResourceType?.toLowerCase() !== DeploymentResourceType.toLowerCase()
+            if (!isNestedDeploymentOp(op)
                 || !op.targetResourceId
                 || !isVisibleOperation(op)) {
                 continue;
@@ -449,9 +449,17 @@ const AvmTelemetryPrefix = '46d3x';
  */
 export function isVisibleOperation(op: ArmDeploymentOperationActivity): boolean {
     // Hide AVM telemetry deployments
-    if (op.targetResourceType?.toLowerCase() === DeploymentResourceType.toLowerCase()
+    if (isNestedDeploymentOp(op)
         && op.targetResourceName?.toLowerCase().startsWith(AvmTelemetryPrefix)) {
         return false;
     }
     return true;
+}
+
+/**
+ * Returns `true` if the operation targets a nested `Microsoft.Resources/deployments`
+ * resource (as opposed to a real Azure resource like a storage account).
+ */
+export function isNestedDeploymentOp(op: ArmDeploymentOperationActivity): boolean {
+    return op.targetResourceType?.toLowerCase() === DeploymentResourceType.toLowerCase();
 }
