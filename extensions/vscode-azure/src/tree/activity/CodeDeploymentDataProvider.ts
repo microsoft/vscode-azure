@@ -5,7 +5,12 @@
 
 import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
-import { type CodeDeploymentActivity, isActivity } from './Activity';
+import { type Activity, isActivity } from './Activity';
+
+interface CodeDeploymentActivity extends Activity {
+    readonly type: 'codeDeployment';
+    children?: CodeDeploymentActivity[];
+}
 
 @injectable()
 export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentActivity>, Disposable {

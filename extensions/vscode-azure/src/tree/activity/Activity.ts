@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-
 export type ActivityType = 'armDeployment' | 'armDeploymentOperation' | 'codeDeployment' | 'generic';
 export type ActivityStatus = 'NotStarted' | 'InProgress' | 'Canceled' | 'Completed' | 'Failed';
 
@@ -16,41 +14,6 @@ export interface Activity {
     description?: string;
     readonly startTime: Date;
     endTime?: Date;
-}
-
-export interface ArmDeploymentActivity extends Activity {
-    readonly type: 'armDeployment';
-    readonly deploymentId: string;
-    readonly subscription: AzureSubscription;
-    /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
-    readonly scope: string;
-    readonly deploymentName: string;
-    /** The ID of the user-initiated root deployment this belongs to. Equal to {@link id} for root deployments. */
-    readonly rootDeploymentId: string;
-    /** Operations discovered by enrichment. Populated asynchronously after the deployment is loaded. */
-    operations?: ArmDeploymentOperationActivity[];
-    /** Controller that is aborted when this deployment tree is cleared. Shared by all nested deployments. */
-    readonly abortController: AbortController;
-}
-
-export interface ArmDeploymentOperationActivity extends Activity {
-    readonly type: 'armDeploymentOperation';
-    readonly operationId: string;
-    /** The full ARM resource ID of the target resource. */
-    readonly targetResourceId: string;
-    readonly targetResourceType?: string;
-    readonly targetResourceName?: string;
-    /** The raw ARM provisioning state string (e.g. 'Succeeded', 'Running'). */
-    readonly provisioningState?: string;
-}
-
-export interface CodeDeploymentActivity extends Activity {
-    readonly type: 'codeDeployment';
-    children?: CodeDeploymentActivity[];
-}
-
-export interface GenericActivity extends Activity {
-    readonly type: 'generic';
 }
 
 export function isActivity(maybeActivity: unknown): maybeActivity is Activity {

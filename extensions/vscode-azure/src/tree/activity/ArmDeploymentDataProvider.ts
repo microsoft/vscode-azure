@@ -8,32 +8,34 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { createAzureSubscriptionClient } from '@microsoft/vscode-azure-azutils';
 import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { type Activity, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity, isTerminalActivityStatus } from './Activity';
+import { type Activity, isActivity, isTerminalActivityStatus } from './Activity';
 
-let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | undefined;
-
-const DefaultPollIntervalMs = 10_000;
 export const DeploymentResourceType = 'Microsoft.Resources/deployments';
 
-/**
- * AVM (Azure Verified Modules) telemetry deployments use this name prefix.
- * These are empty deployments with no resources, used only for module usage
- * tracking. See https://aka.ms/avm/TelemetryInfo
- */
-const AvmTelemetryPrefix = '46d3x';
+export interface ArmDeploymentActivity extends Activity {
+    readonly type: 'armDeployment';
+    readonly deploymentId: string;
+    readonly subscription: AzureSubscription;
+    /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
+    readonly scope: string;
+    readonly deploymentName: string;
+    /** The ID of the user-initiated root deployment this belongs to. Equal to {@link id} for root deployments. */
+    readonly rootDeploymentId: string;
+    /** Operations discovered by enrichment. Populated asynchronously after the deployment is loaded. */
+    operations?: ArmDeploymentOperationActivity[];
+    /** Controller that is aborted when this deployment tree is cleared. Shared by all nested deployments. */
+    readonly abortController: AbortController;
+}
 
-/**
- * Determines whether an operation should be shown in the activity tree.
- * Used by both the data provider (to decide whether to poll a nested
- * deployment) and the view provider (to filter visible leaf operations).
- */
-export function isVisibleOperation(op: ArmDeploymentOperationActivity): boolean {
-    // Hide AVM telemetry deployments
-    if (op.targetResourceType?.toLowerCase() === DeploymentResourceType.toLowerCase()
-        && op.targetResourceName?.startsWith(AvmTelemetryPrefix)) {
-        return false;
-    }
-    return true;
+export interface ArmDeploymentOperationActivity extends Activity {
+    readonly type: 'armDeploymentOperation';
+    readonly operationId: string;
+    /** The full ARM resource ID of the target resource. */
+    readonly targetResourceId: string;
+    readonly targetResourceType?: string;
+    readonly targetResourceName?: string;
+    /** The raw ARM provisioning state string (e.g. 'Succeeded', 'Running'). */
+    readonly provisioningState?: string;
 }
 
 @injectable()
@@ -140,7 +142,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             }, { once: true });
 
             while (!abortSignal.aborted) {
-                let nextPollMs = DefaultPollIntervalMs;
+                let nextPollMs = 10 * 1000; // Default to 10s if server doesn't provide guidance
 
                 try {
                     const client = await this.getOrCreateClient(activity.subscription);
@@ -427,4 +429,29 @@ export function parseDeploymentId(deploymentId: string): { scope: string; deploy
     }
 
     return { scope, deploymentName };
+}
+
+let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | undefined;
+
+/**
+ * AVM (Azure Verified Modules) telemetry deployments use this name prefix.
+ * These are empty deployments with no resources, used only for module usage
+ * tracking. See https://aka.ms/avm/TelemetryInfo
+ *
+ * Verified from AVM owner that this prefix should be stable.
+ */
+const AvmTelemetryPrefix = '46d3x';
+
+/**
+ * Determines whether an operation should be shown in the activity tree.
+ * Used by both the data provider (to decide whether to poll a nested
+ * deployment) and the view provider (to filter visible leaf operations).
+ */
+export function isVisibleOperation(op: ArmDeploymentOperationActivity): boolean {
+    // Hide AVM telemetry deployments
+    if (op.targetResourceType?.toLowerCase() === DeploymentResourceType.toLowerCase()
+        && op.targetResourceName?.toLowerCase().startsWith(AvmTelemetryPrefix)) {
+        return false;
+    }
+    return true;
 }

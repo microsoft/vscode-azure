@@ -6,9 +6,8 @@
 import { type ITreeItem, IVsCode, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IActivityViewDataTree } from '../../services';
-import type { ArmDeploymentActivity, ArmDeploymentOperationActivity } from './Activity';
 import { toActivityTreeItem } from './ActivityViewProvider';
-import { DeploymentResourceType, isVisibleOperation } from './ArmDeploymentDataProvider';
+import { type ArmDeploymentActivity, type ArmDeploymentOperationActivity, DeploymentResourceType, isVisibleOperation } from './ArmDeploymentDataProvider';
 
 /**
  * View provider for ARM deployment activities. Handles both deployment

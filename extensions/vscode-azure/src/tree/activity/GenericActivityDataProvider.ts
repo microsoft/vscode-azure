@@ -5,7 +5,11 @@
 
 import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
-import { type GenericActivity, isActivity } from './Activity';
+import { type Activity, isActivity } from './Activity';
+
+interface GenericActivity extends Activity {
+    readonly type: 'generic';
+}
 
 @injectable()
 export class GenericActivityDataProvider implements DataProvider<GenericActivity>, Disposable {
