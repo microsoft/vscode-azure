@@ -79,8 +79,8 @@ export interface DataProvider<TResource> {
      *
      * @returns `true` if the enrichment also changed the resource's children
      *   (e.g. populated a field that child providers depend on), causing the
-     *   tree to invalidate and re-fetch them. Any other return value
-     *   (including `void`) only re-renders the resource's own tree item.
+     *   tree to invalidate and re-fetch them. Returning `false` only
+     *   re-renders the resource's own tree item.
      */
     enrich?(resource: TResource): boolean | Promise<boolean>;
 
