@@ -52,11 +52,6 @@ export class ActivityViewProvider implements ViewProvider<string> {
 
         return toActivityTreeItem(this.code, activity, activityId);
     }
-
-    public getParent(activityId: string): string | undefined {
-        const activity = this.dataTree.get(activityId);
-        return activity?.parentId;
-    }
 }
 
 /**

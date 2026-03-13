@@ -16,7 +16,6 @@ export interface Activity {
     description?: string;
     readonly startTime: Date;
     endTime?: Date;
-    readonly parentId?: string;
 }
 
 export interface ArmDeploymentActivity extends Activity {
@@ -43,7 +42,6 @@ export interface ArmDeploymentOperationActivity extends Activity {
     readonly targetResourceName?: string;
     /** The raw ARM provisioning state string (e.g. 'Succeeded', 'Running'). */
     readonly provisioningState?: string;
-    readonly parentId: string;
 }
 
 export interface CodeDeploymentActivity extends Activity {

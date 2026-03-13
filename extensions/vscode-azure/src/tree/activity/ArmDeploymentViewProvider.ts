@@ -76,11 +76,6 @@ export class ArmDeploymentViewProvider implements ViewProvider<string> {
         return toActivityTreeItem(this.code, activity, activityId);
     }
 
-    public getParent(activityId: string): string | undefined {
-        const activity = this.dataTree.get(activityId) ?? this.findOperation(activityId);
-        return activity?.parentId;
-    }
-
     /**
      * Find an operation by ID on its parent ARM deployment.
      * Operation IDs are formatted as `{deploymentId}/operations/{operationId}`.
