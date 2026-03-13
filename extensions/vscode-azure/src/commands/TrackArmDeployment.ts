@@ -21,23 +21,25 @@ export class TrackArmDeployment implements ManagedCommand {
     ) { }
 
     public async execute(): Promise<void> {
-        const deploymentId = await this.code.window.showInputBox({
-            prompt: this.code.l10n.t('Enter the full ARM resource ID of the deployment to track'),
+        const rawInput = await this.code.window.showInputBox({
+            prompt: this.code.l10n.t('Enter an ARM deployment resource ID or Azure Portal deployment URL'),
             placeHolder: '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Resources/deployments/{name}',
             validateInput: (value) => {
                 try {
-                    parseDeploymentId(value);
+                    parseDeploymentId(extractDeploymentId(value));
                     return undefined;
                 } catch {
-                    return this.code.l10n.t('Must be an ARM deployment resource ID containing Microsoft.Resources/deployments');
+                    return this.code.l10n.t('Must be an ARM deployment resource ID or Azure Portal deployment URL');
                 }
             },
         });
 
-        if (!deploymentId) {
+        if (!rawInput) {
             this.context.telemetry.properties.cancelStep = 'deploymentId';
             return;
         }
+
+        const deploymentId = extractDeploymentId(rawInput);
 
         let subscriptionId: string | undefined;
         try {
@@ -86,4 +88,22 @@ export class TrackArmDeployment implements ManagedCommand {
         }
         return undefined;
     }
+}
+
+const portalDeploymentPattern = /DeploymentDetailsBlade\/id\/(.+)/i;
+
+/**
+ * Extracts an ARM deployment resource ID from either a raw ARM ID or an
+ * Azure Portal deployment URL.
+ *
+ * Portal URLs look like:
+ * `https://portal.azure.com/#blade/HubsExtension/DeploymentDetailsBlade/id/%2Fsubscriptions%2F...`
+ */
+function extractDeploymentId(input: string): string {
+    const trimmed = input.trim();
+    const match = portalDeploymentPattern.exec(trimmed);
+    if (match) {
+        return decodeURIComponent(match[1]);
+    }
+    return trimmed;
 }
