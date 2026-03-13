@@ -110,6 +110,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             subscription,
             scope,
             deploymentName,
+            rootDeploymentId: deploymentId,
             abortController: new AbortController(),
         };
 
@@ -123,81 +124,87 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * change events based on whether the operation count changed.
      */
     private async poll(activity: ArmDeploymentActivity): Promise<void> {
-        const signal = activity.abortController.signal;
-        if (signal.aborted) {
-            this.activePolls.delete(activity.id);
-            return;
-        }
-
-        this.activePolls.add(activity.id);
-        let nextPollMs = DefaultPollIntervalMs;
-
         try {
-            const client = await this.getOrCreateClient(activity.subscription);
+            const signal = activity.abortController.signal;
+            signal.throwIfAborted();
 
-            let retryAfterSeconds: number | undefined;
-            const deployment = await client.deployments.getAtScope(
-                activity.scope,
-                activity.deploymentName,
-                {
-                    abortSignal: signal,
-                    onResponse: (response) => {
-                        const header = response.headers.get('retry-after');
-                        if (header) {
-                            const parsed = parseInt(header, 10);
-                            if (!isNaN(parsed) && parsed > 0) {
-                                retryAfterSeconds = parsed;
-                            }
-                        }
-                    },
-                },
-            );
+            this.activePolls.add(activity.id);
 
-            if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
-                return;
+            // Single abort handler that clears the pending timer.
+            // `currentTimer` is updated each iteration so only one listener is needed.
+            let currentTimer: ReturnType<typeof setTimeout> | undefined;
+            signal.addEventListener('abort', () => {
+                if (currentTimer !== undefined) {
+                    clearTimeout(currentTimer);
+                }
+            }, { once: true });
+
+            while (!signal.aborted) {
+                let nextPollMs = DefaultPollIntervalMs;
+
+                try {
+                    const client = await this.getOrCreateClient(activity.subscription);
+
+                    let retryAfterSeconds: number | undefined;
+                    const deployment = await client.deployments.getAtScope(
+                        activity.scope,
+                        activity.deploymentName,
+                        {
+                            abortSignal: signal,
+                            onResponse: (response) => {
+                                const header = response.headers.get('retry-after');
+                                if (header) {
+                                    const parsed = parseInt(header, 10);
+                                    if (!isNaN(parsed) && parsed > 0) {
+                                        retryAfterSeconds = parsed;
+                                    }
+                                }
+                            },
+                        },
+                    );
+
+                    signal.throwIfAborted();
+
+                    if (retryAfterSeconds) {
+                        nextPollMs = retryAfterSeconds * 1000;
+                    }
+
+                    const provisioningState = deployment.properties?.provisioningState;
+                    if (provisioningState) {
+                        activity.status = toActivityStatus(provisioningState);
+                        activity.description = provisioningState;
+                    }
+
+                    // Refresh operations and detect structural changes
+                    const prevCount = activity.operations?.length ?? 0;
+                    activity.operations = await this.fetchOperations(client, activity, signal);
+
+                    signal.throwIfAborted();
+
+                    const childrenChanged = activity.operations.length !== prevCount;
+
+                    if (isTerminalState(provisioningState)) {
+                        activity.endTime = new Date();
+                        this.onDidChangeEmitter.fire({ activity, childrenChanged });
+                        return;
+                    }
+
+                    this.onDidChangeEmitter.fire({ activity, childrenChanged });
+                } catch {
+                    signal.throwIfAborted();
+                    // Swallow transient errors and retry on next poll
+                }
+
+                // Wait for the next poll interval
+                await new Promise<void>(resolve => {
+                    currentTimer = setTimeout(resolve, nextPollMs);
+                });
             }
-
-            if (retryAfterSeconds) {
-                nextPollMs = retryAfterSeconds * 1000;
-            }
-
-            const provisioningState = deployment.properties?.provisioningState;
-            if (provisioningState) {
-                activity.status = toActivityStatus(provisioningState);
-                activity.description = provisioningState;
-            }
-
-            // Refresh operations and detect structural changes
-            const prevCount = activity.operations?.length ?? 0;
-            activity.operations = await this.fetchOperations(client, activity, signal);
-
-            if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
-                return;
-            }
-
-            const childrenChanged = activity.operations.length !== prevCount;
-
-            if (isTerminalState(provisioningState)) {
-                activity.endTime = new Date();
-                this.activePolls.delete(activity.id);
-                this.onDidChangeEmitter.fire({ activity, childrenChanged });
-                return;
-            }
-
-            this.onDidChangeEmitter.fire({ activity, childrenChanged });
         } catch {
-            if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
-                this.activePolls.delete(activity.id);
-                return;
-            }
-            // Continue polling on transient errors
-        }
-
-        const timer = setTimeout(() => void this.poll(activity), nextPollMs);
-        signal.addEventListener('abort', () => {
-            clearTimeout(timer);
+            // AbortError or signal.throwIfAborted -- exit cleanly
+        } finally {
             this.activePolls.delete(activity.id);
-        }, { once: true });
+        }
     }
 
     /**
@@ -242,6 +249,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     subscription: activity.subscription,
                     scope,
                     deploymentName,
+                    rootDeploymentId: activity.rootDeploymentId,
                     abortController: activity.abortController,
                 };
                 this.knownDeployments.set(child.id, child);
@@ -339,11 +347,11 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /**
      * Remove a deployment and all its descendants from tracking maps.
+     * Uses {@link ArmDeploymentActivity.rootDeploymentId} to find descendants.
      */
     private cleanupDeploymentTree(rootId: string): void {
-        const prefix = rootId.toLowerCase();
-        for (const id of this.knownDeployments.keys()) {
-            if (id.toLowerCase().startsWith(prefix)) {
+        for (const [id, deployment] of this.knownDeployments) {
+            if (deployment.rootDeploymentId === rootId) {
                 this.knownDeployments.delete(id);
                 this.activePolls.delete(id);
             }

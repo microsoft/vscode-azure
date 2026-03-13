@@ -26,6 +26,8 @@ export interface ArmDeploymentActivity extends Activity {
     /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
     readonly scope: string;
     readonly deploymentName: string;
+    /** The ID of the user-initiated root deployment this belongs to. Equal to {@link id} for root deployments. */
+    readonly rootDeploymentId: string;
     /** Operations discovered by enrichment. Populated asynchronously after the deployment is loaded. */
     operations?: ArmDeploymentOperationActivity[];
     /** Controller that is aborted when this deployment tree is cleared. Shared by all nested deployments. */
