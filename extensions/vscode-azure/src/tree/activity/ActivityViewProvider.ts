@@ -23,8 +23,8 @@ export class ActivityViewProvider implements ViewProvider<string> {
         @inject(IActivityViewDataTree) private readonly dataTree: IActivityViewDataTree,
     ) { }
 
-    public canHandle(_activityId: unknown): _activityId is string {
-        return true;
+    public canHandle(activityId: unknown): activityId is string {
+        return typeof activityId === 'string';
     }
 
     public async getChildren(activityId?: string): Promise<string[]> {

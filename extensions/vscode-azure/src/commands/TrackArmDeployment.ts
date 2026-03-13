@@ -11,6 +11,9 @@ import { IAzureSubscriptionProvider } from '../services';
 import { ArmDeploymentDataProvider, parseDeploymentId } from '../tree/activity/ArmDeploymentDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
 
+/**
+ * TODO: This is a temporary command just to kick off tracking an existing ARM deployment
+ */
 @injectable()
 export class TrackArmDeployment implements ManagedCommand {
     public constructor(

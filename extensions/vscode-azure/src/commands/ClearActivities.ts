@@ -3,16 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Activity, ActivityStatus } from '../tree/activity/Activity';
+import { inject, injectable } from 'inversify';
+import { isTerminalActivityStatus, type Activity } from '../tree/activity/Activity';
 import { ArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
 import { CodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import { GenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
-import { inject, injectable } from 'inversify';
 
-export type ClearMode = 'completed' | 'successful' | 'all';
-
-const terminalStatuses: ReadonlySet<ActivityStatus> = new Set(['Completed', 'Failed', 'Canceled']);
+type ClearMode = 'completed' | 'successful' | 'all';
 
 @injectable()
 export class ClearActivities implements ManagedCommand {
@@ -28,7 +26,7 @@ export class ClearActivities implements ManagedCommand {
                 case 'all':
                     return true;
                 case 'completed':
-                    return terminalStatuses.has(activity.status);
+                    return isTerminalActivityStatus(activity.status);
                 case 'successful':
                     return activity.status === 'Completed';
             }
