@@ -46,6 +46,7 @@ export interface ArmDeploymentOperationActivity extends Activity {
 
 export interface CodeDeploymentActivity extends Activity {
     readonly type: 'codeDeployment';
+    children?: CodeDeploymentActivity[];
 }
 
 export interface GenericActivity extends Activity {

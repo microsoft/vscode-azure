@@ -13,7 +13,6 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
     public readonly isRoot = true;
 
     private readonly rootDeployments = new Map<string, CodeDeploymentActivity>();
-    private readonly subSteps = new Map<string, CodeDeploymentActivity[]>();
 
     private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
@@ -26,7 +25,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
         if (!resource) {
             return Promise.resolve([...this.rootDeployments.values()]);
         }
-        return Promise.resolve(this.subSteps.get(resource.id) ?? []);
+        return Promise.resolve(resource.children ??[]);
     }
 
     public trackDeployment(activity: Omit<CodeDeploymentActivity, 'type' | 'startTime'>): CodeDeploymentActivity {
@@ -45,7 +44,6 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
         for (const [id, activity] of this.rootDeployments) {
             if (filter(activity)) {
                 this.rootDeployments.delete(id);
-                this.subSteps.delete(id);
                 changed = true;
             }
         }
