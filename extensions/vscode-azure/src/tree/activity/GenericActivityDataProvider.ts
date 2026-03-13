@@ -12,7 +12,7 @@ import { type GenericActivity, isActivity } from './Activity';
 export class GenericActivityDataProvider implements DataProvider<GenericActivity>, Disposable {
     public readonly isRoot = true;
 
-    private readonly activities = new Map<string, GenericActivity>();
+    private readonly rootActivities = new Map<string, GenericActivity>();
 
     private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
@@ -23,7 +23,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
 
     public getChildren(resource?: GenericActivity): Promise<GenericActivity[]> {
         if (!resource) {
-            return Promise.resolve([...this.activities.values()]);
+            return Promise.resolve([...this.rootActivities.values()]);
         }
         return Promise.resolve([]);
     }
@@ -34,13 +34,13 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
             type: 'generic',
             startTime: new Date(),
         };
-        this.activities.set(full.id, full);
+        this.rootActivities.set(full.id, full);
         this.onDidChangeEmitter.fire({ childrenChanged: true });
         return full;
     }
 
     public updateActivity(id: string, changes: Partial<Pick<GenericActivity, 'status' | 'title' | 'description' | 'endTime'>>): void {
-        const activity = this.activities.get(id);
+        const activity = this.rootActivities.get(id);
         if (activity) {
             Object.assign(activity, changes);
             this.onDidChangeEmitter.fire({ activity, childrenChanged: false });
@@ -49,9 +49,9 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
 
     public clearActivities(filter: (activity: GenericActivity) => boolean): void {
         let changed = false;
-        for (const [id, activity] of this.activities) {
+        for (const [id, activity] of this.rootActivities) {
             if (filter(activity)) {
-                this.activities.delete(id);
+                this.rootActivities.delete(id);
                 changed = true;
             }
         }

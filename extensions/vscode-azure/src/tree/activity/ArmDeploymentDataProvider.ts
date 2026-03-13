@@ -125,49 +125,47 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      */
     private async poll(activity: ArmDeploymentActivity): Promise<void> {
         try {
-            const signal = activity.abortController.signal;
-            signal.throwIfAborted();
+            const abortSignal = activity.abortController.signal;
+            abortSignal.throwIfAborted();
 
             this.activePolls.add(activity.id);
 
             // Single abort handler that clears the pending timer.
             // `currentTimer` is updated each iteration so only one listener is needed.
             let currentTimer: ReturnType<typeof setTimeout> | undefined;
-            signal.addEventListener('abort', () => {
+            abortSignal.addEventListener('abort', () => {
                 if (currentTimer !== undefined) {
                     clearTimeout(currentTimer);
                 }
             }, { once: true });
 
-            while (!signal.aborted) {
+            while (!abortSignal.aborted) {
                 let nextPollMs = DefaultPollIntervalMs;
 
                 try {
                     const client = await this.getOrCreateClient(activity.subscription);
 
-                    let retryAfterSeconds: number | undefined;
-                    const deployment = await client.deployments.getAtScope(
-                        activity.scope,
-                        activity.deploymentName,
-                        {
-                            abortSignal: signal,
-                            onResponse: (response) => {
-                                const header = response.headers.get('retry-after');
-                                if (header) {
-                                    const parsed = parseInt(header, 10);
-                                    if (!isNaN(parsed) && parsed > 0) {
-                                        retryAfterSeconds = parsed;
+                    const [deployment, operations] = await Promise.all([
+                        client.deployments.getAtScope(
+                            activity.scope,
+                            activity.deploymentName,
+                            {
+                                abortSignal,
+                                onResponse: (response) => {
+                                    const retryAfter = response.headers.get('retry-after');
+                                    if (retryAfter) {
+                                        const seconds = parseInt(retryAfter, 10);
+                                        if (!isNaN(seconds) && seconds > 0) {
+                                            nextPollMs = seconds * 1000;
+                                        }
                                     }
-                                }
+                                },
                             },
-                        },
-                    );
+                        ),
+                        this.fetchOperations(client, activity, abortSignal),
+                    ]);
 
-                    signal.throwIfAborted();
-
-                    if (retryAfterSeconds) {
-                        nextPollMs = retryAfterSeconds * 1000;
-                    }
+                    abortSignal.throwIfAborted();
 
                     const provisioningState = deployment.properties?.provisioningState;
                     if (provisioningState) {
@@ -175,13 +173,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                         activity.description = provisioningState;
                     }
 
-                    // Refresh operations and detect structural changes
+                    // Detect structural changes in operations
                     const prevCount = activity.operations?.length ?? 0;
-                    activity.operations = await this.fetchOperations(client, activity, signal);
-
-                    signal.throwIfAborted();
-
-                    const childrenChanged = activity.operations.length !== prevCount;
+                    activity.operations = operations;
+                    const childrenChanged = operations.length !== prevCount;
 
                     if (isTerminalState(provisioningState)) {
                         activity.endTime = new Date();
@@ -191,8 +186,8 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
                     this.onDidChangeEmitter.fire({ activity, childrenChanged });
                 } catch {
-                    signal.throwIfAborted();
-                    // Swallow transient errors and retry on next poll
+                    abortSignal.throwIfAborted();
+                    // Swallow other probably-transient errors and retry on next poll
                 }
 
                 // Wait for the next poll interval
@@ -266,10 +261,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * Deduplicates by target resource ID, keeping the most meaningful
      * operation per resource (Create/Delete over read-only ops).
      */
-    private async fetchOperations(client: DeploymentsClient, activity: ArmDeploymentActivity, signal?: AbortSignal): Promise<ArmDeploymentOperationActivity[]> {
+    private async fetchOperations(client: DeploymentsClient, activity: ArmDeploymentActivity, abortSignal: AbortSignal): Promise<ArmDeploymentOperationActivity[]> {
         const byTargetId = new Map<string, { op: DeploymentOperation; rank: number }>();
 
-        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal: signal })) {
+        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal })) {
             const targetResource = op.properties?.targetResource;
             if (!op.operationId || !targetResource?.id) {
                 continue;
@@ -360,6 +355,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 }
 
 function toActivityStatus(provisioningState: ProvisioningState | undefined): Activity['status'] {
+    // TODO: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
     switch (provisioningState?.toLowerCase()) {
         case 'succeeded':
             return 'Completed';
@@ -381,6 +377,7 @@ function toActivityStatus(provisioningState: ProvisioningState | undefined): Act
 
 function isTerminalState(provisioningState: ProvisioningState | undefined): boolean {
     const lower = provisioningState?.toLowerCase();
+    // TODO: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
     return lower === 'succeeded' || lower === 'failed' || lower === 'canceled';
 }
 

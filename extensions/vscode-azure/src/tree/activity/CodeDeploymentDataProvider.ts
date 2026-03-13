@@ -12,7 +12,7 @@ import { type CodeDeploymentActivity, isActivity } from './Activity';
 export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentActivity>, Disposable {
     public readonly isRoot = true;
 
-    private readonly deployments = new Map<string, CodeDeploymentActivity>();
+    private readonly rootDeployments = new Map<string, CodeDeploymentActivity>();
     private readonly subSteps = new Map<string, CodeDeploymentActivity[]>();
 
     private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
@@ -24,7 +24,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
 
     public getChildren(resource?: CodeDeploymentActivity): Promise<CodeDeploymentActivity[]> {
         if (!resource) {
-            return Promise.resolve([...this.deployments.values()]);
+            return Promise.resolve([...this.rootDeployments.values()]);
         }
         return Promise.resolve(this.subSteps.get(resource.id) ?? []);
     }
@@ -35,16 +35,16 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
             type: 'codeDeployment',
             startTime: new Date(),
         };
-        this.deployments.set(full.id, full);
+        this.rootDeployments.set(full.id, full);
         this.onDidChangeEmitter.fire({ childrenChanged: true });
         return full;
     }
 
     public clearActivities(filter: (activity: CodeDeploymentActivity) => boolean): void {
         let changed = false;
-        for (const [id, activity] of this.deployments) {
+        for (const [id, activity] of this.rootDeployments) {
             if (filter(activity)) {
-                this.deployments.delete(id);
+                this.rootDeployments.delete(id);
                 this.subSteps.delete(id);
                 changed = true;
             }
