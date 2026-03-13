@@ -31,6 +31,11 @@ export class ActivityViewProvider implements ViewProvider<string> {
         let parentActivity: Activity | undefined;
         if (activityId) {
             parentActivity = this.dataTree.get(activityId);
+
+            if (!parentActivity) {
+                // TODO: unexpected
+                throw new Error(`Activity with ID ${activityId} not found in cache`);
+            }
         }
 
         const children = await this.dataTree.getChildren(parentActivity);
