@@ -6,9 +6,9 @@
 import type { DeploymentOperation, DeploymentsClient, ProvisioningOperation, ProvisioningState } from '@azure/arm-resourcesdeployments';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { createAzureSubscriptionClient } from '@microsoft/vscode-azure-azutils';
-import { type DataProvider, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { type Activity, type ActivityChangeEvent, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity, isTerminalActivityStatus } from './Activity';
+import { type Activity, type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isActivity, isTerminalActivityStatus } from './Activity';
 
 let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | undefined;
 
@@ -48,7 +48,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     private readonly activePolls = new Set<string>();
     private readonly clientCache = new Map<string, DeploymentsClient>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
+    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<ArmDeploymentActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public constructor(
@@ -116,7 +116,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
         this.trackedRoots.set(activity.id, activity);
         this.knownDeployments.set(activity.id, activity);
-        this.onDidChangeEmitter.fire({ childrenChanged: true });
+        this.onDidChangeEmitter.fire({ includeChildren: true });
     }
 
     /**
@@ -176,15 +176,15 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     // Detect structural changes in operations
                     const prevCount = activity.operations?.length ?? 0;
                     activity.operations = operations;
-                    const childrenChanged = operations.length !== prevCount;
+                    const includeChildren = operations.length !== prevCount;
 
                     if (isTerminalState(provisioningState)) {
                         activity.endTime = new Date();
-                        this.onDidChangeEmitter.fire({ activity, childrenChanged });
+                        this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
                         return;
                     }
 
-                    this.onDidChangeEmitter.fire({ activity, childrenChanged });
+                    this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
                 } catch {
                     abortSignal.throwIfAborted();
                     // Swallow other probably-transient errors and retry on next poll
@@ -325,7 +325,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ childrenChanged: true });
+            this.onDidChangeEmitter.fire({ includeChildren: true });
         }
     }
 

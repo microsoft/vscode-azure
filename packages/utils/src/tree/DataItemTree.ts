@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { InflightMap } from '../data/InflightMap';
+import { Disposable } from '../vscode/Disposable';
 import { isAsyncIterable, type DataProvider, type Page } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -70,6 +71,24 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         private readonly ttl: number,
     ) {
         super();
+    }
+
+    /**
+     * Register a provider. If the provider has an {@link DataProvider.onDidChange}
+     * event, the tree automatically subscribes and invalidates accordingly.
+     */
+    public override registerProvider(provider: DataProvider<T>): Disposable {
+        const registration = super.registerProvider(provider);
+
+        const changeSubscription = provider.onDidChange?.((event) => {
+            if (event.resource) {
+                this.invalidate(event.resource, event.includeChildren);
+            } else {
+                this.invalidateAll();
+            }
+        });
+
+        return Disposable.from(registration, changeSubscription ?? Disposable.None);
     }
 
     /**

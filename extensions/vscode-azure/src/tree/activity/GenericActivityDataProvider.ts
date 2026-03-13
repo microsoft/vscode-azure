@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DataProvider, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
-import type { ActivityChangeEvent } from './Activity';
 import { type GenericActivity, isActivity } from './Activity';
 
 @injectable()
@@ -14,7 +13,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
 
     private readonly rootActivities = new Map<string, GenericActivity>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
+    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<GenericActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public canHandle(resource: unknown): resource is GenericActivity {
@@ -35,7 +34,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
             startTime: new Date(),
         };
         this.rootActivities.set(full.id, full);
-        this.onDidChangeEmitter.fire({ childrenChanged: true });
+        this.onDidChangeEmitter.fire({ includeChildren: true });
         return full;
     }
 
@@ -43,7 +42,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
         const activity = this.rootActivities.get(id);
         if (activity) {
             Object.assign(activity, changes);
-            this.onDidChangeEmitter.fire({ activity, childrenChanged: false });
+            this.onDidChangeEmitter.fire({ resource: activity, includeChildren: false });
         }
     }
 
@@ -56,7 +55,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ childrenChanged: true });
+            this.onDidChangeEmitter.fire({ includeChildren: true });
         }
     }
 

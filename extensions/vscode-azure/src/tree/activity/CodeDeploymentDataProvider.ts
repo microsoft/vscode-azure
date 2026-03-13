@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DataProvider, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import { injectable } from 'inversify';
-import type { ActivityChangeEvent } from './Activity';
 import { type CodeDeploymentActivity, isActivity } from './Activity';
 
 @injectable()
@@ -14,7 +13,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
 
     private readonly rootDeployments = new Map<string, CodeDeploymentActivity>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
+    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<CodeDeploymentActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public canHandle(resource: unknown): resource is CodeDeploymentActivity {
@@ -35,7 +34,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
             startTime: new Date(),
         };
         this.rootDeployments.set(full.id, full);
-        this.onDidChangeEmitter.fire({ childrenChanged: true });
+        this.onDidChangeEmitter.fire({ includeChildren: true });
         return full;
     }
 
@@ -48,7 +47,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ childrenChanged: true });
+            this.onDidChangeEmitter.fire({ includeChildren: true });
         }
     }
 

@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, Disposable, IExtensionContext, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
 import { IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree, IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
-import type { Activity, ActivityChangeEvent } from './activity/Activity';
+import type { Activity } from './activity/Activity';
 import { ActivityViewProvider } from './activity/ActivityViewProvider';
 import { ArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
 import { ArmDeploymentViewProvider } from './activity/ArmDeploymentViewProvider';
@@ -118,24 +118,6 @@ function registerActivityTree(container: Container): void {
         for (const provider of context.getAll(IActivityViewDataProviders)) {
             cache.registerProvider(provider);
         }
-
-        // Wire provider change events to targeted cache invalidation.
-        const handleChange = (event: ActivityChangeEvent) => {
-            if (event.activity) {
-                cache.invalidate(event.activity, event.childrenChanged);
-            } else {
-                cache.invalidateAll();
-            }
-        };
-
-        const armProvider = context.get(ArmDeploymentDataProvider);
-        const codeProvider = context.get(CodeDeploymentDataProvider);
-        const genericProvider = context.get(GenericActivityDataProvider);
-        context.get(IExtensionContext).subscriptions.push(Disposable.from(
-            armProvider.onDidChange(handleChange),
-            codeProvider.onDidChange(handleChange),
-            genericProvider.onDidChange(handleChange),
-        ));
 
         return cache;
     }).inSingletonScope().onActivation(pushDisposable);

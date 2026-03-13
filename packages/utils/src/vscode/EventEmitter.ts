@@ -10,6 +10,8 @@ import type { Disposable } from './Disposable';
 
 const EventName = 'e' as const;
 
+export type Event<T> = vscode.Event<T>;
+
 /**
  * A typed event emitter backed by Node's built-in `EventEmitter`.
  *
