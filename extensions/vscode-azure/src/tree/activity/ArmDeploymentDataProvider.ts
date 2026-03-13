@@ -13,10 +13,7 @@ import { type Activity, type ActivityChangeEvent, type ArmDeploymentActivity, ty
 let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | undefined;
 
 const DefaultPollIntervalMs = 10_000;
-
-type ArmActivity = ArmDeploymentActivity | ArmDeploymentOperationActivity;
-
-const DeploymentResourceType = 'Microsoft.Resources/deployments';
+export const DeploymentResourceType = 'Microsoft.Resources/deployments';
 
 /**
  * AVM (Azure Verified Modules) telemetry deployments use this name prefix.
@@ -25,14 +22,26 @@ const DeploymentResourceType = 'Microsoft.Resources/deployments';
  */
 const AvmTelemetryPrefix = '46d3x';
 
+/**
+ * Determines whether an operation should be shown in the activity tree.
+ * Used by both the data provider (to decide whether to poll a nested
+ * deployment) and the view provider (to filter visible leaf operations).
+ */
+export function isVisibleOperation(op: ArmDeploymentOperationActivity): boolean {
+    // Hide AVM telemetry deployments
+    if (op.targetResourceType?.toLowerCase() === DeploymentResourceType.toLowerCase()
+        && op.targetResourceName?.startsWith(AvmTelemetryPrefix)) {
+        return false;
+    }
+    return true;
+}
+
 @injectable()
-export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Disposable {
+export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActivity>, Disposable {
     public readonly isRoot = true;
 
     /** Top-level tracked deployments (user-initiated). */
     private readonly trackedRoots = new Map<string, ArmDeploymentActivity>();
-    /** Tracks the number of meaningful operations per deployment for change detection. */
-    private readonly operationCounts = new Map<string, number>();
     private readonly pollingTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly clientCache = new Map<string, DeploymentsClient>();
 
@@ -44,25 +53,37 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
     ) { }
 
-    public canHandle(resource: unknown): resource is ArmActivity {
-        return isActivity(resource)
-            && (resource.type === 'armDeployment' || resource.type === 'armDeploymentOperation');
+    public canHandle(resource: unknown): resource is ArmDeploymentActivity {
+        return isActivity(resource) && resource.type === 'armDeployment';
     }
 
-    public async getChildren(resource?: Activity): Promise<ArmActivity[]> {
+    /**
+     * Returns child **deployments** only. Leaf operations are stored on
+     * the deployment via {@link enrich} and injected by the view provider.
+     */
+    public getChildren(resource?: ArmDeploymentActivity): ArmDeploymentActivity[] {
         if (!resource) {
             return [...this.trackedRoots.values()];
         }
 
-        if (resource.type === 'armDeployment') {
-            try {
-                return await this.fetchOperations(resource as ArmDeploymentActivity);
-            } catch {
-                return [];
-            }
-        }
+        // Child deployments are extracted from the operations list.
+        // If enrichment hasn't run yet, operations will be undefined.
+        return this.extractChildDeployments(resource);
+    }
 
-        return [];
+    /**
+     * Fetch all operations for the deployment and store them in-place.
+     * Starts polling for non-terminal deployments. Called automatically
+     * by {@link DataItemTree} after a resource is loaded.
+     */
+    public async enrich(resource: ArmDeploymentActivity): Promise<void> {
+        const client = await this.getOrCreateClient(resource.subscription);
+        resource.operations = await this.fetchOperations(client, resource);
+
+        // Start polling if not terminal and not already polling
+        if (!isTerminalState(resource.status) && !this.pollingTimers.has(resource.id)) {
+            void this.poll(resource);
+        }
     }
 
     public trackDeployment(deploymentId: string, subscription: AzureSubscription): void {
@@ -82,36 +103,49 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
 
         this.trackedRoots.set(activity.id, activity);
         this.onDidChangeEmitter.fire({ childrenChanged: true });
-        void this.poll(activity);
     }
 
     /**
-     * Poll a root deployment's status and operation count. Fires targeted
-     * change events:
-     * - `childrenChanged: false` when only the deployment status changed
-     * - `childrenChanged: true` when the operation count changed (new
-     *   resources appeared or nested deployments were added)
+     * Poll a deployment's status and refresh its operations. Fires targeted
+     * change events based on whether the operation count changed.
      */
     private async poll(activity: ArmDeploymentActivity): Promise<void> {
+        let nextPollMs = DefaultPollIntervalMs;
+
         try {
             const client = await this.getOrCreateClient(activity.subscription);
 
+            let retryAfterSeconds: number | undefined;
             const deployment = await client.deployments.getAtScope(
                 activity.scope,
                 activity.deploymentName,
+                {
+                    onResponse: (response) => {
+                        const header = response.headers.get('retry-after');
+                        if (header) {
+                            const parsed = parseInt(header, 10);
+                            if (!isNaN(parsed) && parsed > 0) {
+                                retryAfterSeconds = parsed;
+                            }
+                        }
+                    },
+                },
             );
-            const provisioningState = deployment.properties?.provisioningState;
 
+            if (retryAfterSeconds) {
+                nextPollMs = retryAfterSeconds * 1000;
+            }
+
+            const provisioningState = deployment.properties?.provisioningState;
             if (provisioningState) {
                 activity.status = toActivityStatus(provisioningState);
                 activity.description = provisioningState;
             }
 
-            // Count current operations to detect structural changes
-            const opCount = await this.countOperations(client, activity);
-            const prevCount = this.operationCounts.get(activity.id) ?? 0;
-            const childrenChanged = opCount !== prevCount;
-            this.operationCounts.set(activity.id, opCount);
+            // Refresh operations and detect structural changes
+            const prevCount = activity.operations?.length ?? 0;
+            activity.operations = await this.fetchOperations(client, activity);
+            const childrenChanged = activity.operations.length !== prevCount;
 
             if (isTerminalState(provisioningState)) {
                 activity.endTime = new Date();
@@ -125,47 +159,55 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
             // Continue polling on transient errors
         }
 
-        const timer = setTimeout(() => void this.poll(activity), DefaultPollIntervalMs);
+        // TODO: is this timer cleared?
+        const timer = setTimeout(() => void this.poll(activity), nextPollMs);
         this.pollingTimers.set(activity.id, timer);
     }
 
     /**
-     * Count meaningful operations for a deployment (excluding AVM telemetry
-     * and operations without a target resource). Used to detect when the
-     * operation list has structurally changed between polls.
+     * Extract child deployments from a deployment's operations.
      */
-    private async countOperations(client: DeploymentsClient, activity: ArmDeploymentActivity): Promise<number> {
-        let count = 0;
-        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName)) {
-            const targetResource = op.properties?.targetResource;
-            if (!op.operationId || !targetResource?.id) {
-                continue;
-            }
-            if (targetResource.resourceType?.toLowerCase() === DeploymentResourceType.toLowerCase()
-                && targetResource.resourceName?.startsWith(AvmTelemetryPrefix)) {
-                continue;
-            }
-            count++;
+    private extractChildDeployments(activity: ArmDeploymentActivity): ArmDeploymentActivity[] {
+        if (!activity.operations) {
+            return [];
         }
-        return count;
+
+        const results: ArmDeploymentActivity[] = [];
+        for (const op of activity.operations) {
+            if (op.targetResourceType?.toLowerCase() !== DeploymentResourceType.toLowerCase()
+                || !op.targetResourceId
+                || !isVisibleOperation(op)) {
+                continue;
+            }
+
+            try {
+                const { scope, deploymentName } = parseDeploymentId(op.targetResourceId);
+                results.push({
+                    id: op.targetResourceId,
+                    type: 'armDeployment',
+                    status: op.status,
+                    title: op.targetResourceName ?? deploymentName,
+                    description: op.provisioningState,
+                    startTime: activity.startTime,
+                    parentId: activity.id,
+                    deploymentId: op.targetResourceId,
+                    subscription: activity.subscription,
+                    scope,
+                    deploymentName,
+                });
+            } catch {
+                // Skip if we can't parse the deployment ID
+            }
+        }
+        return results;
     }
 
     /**
-     * Fetch operations for a deployment from the ARM API.
-     *
-     * Operations without a `targetResource` (e.g. `EvaluateDeploymentOutput`,
-     * `Waiting`) are filtered out. When multiple operations target the same
-     * resource, only one is kept (preferring `Create`/`Delete` over read-only ops).
-     *
-     * Operations that target `Microsoft.Resources/deployments` are
-     * returned as {@link ArmDeploymentActivity} nodes (collapsible);
-     * all others are returned as leaf {@link ArmDeploymentOperationActivity} nodes.
+     * Fetch all operations for a deployment from the ARM API.
+     * Deduplicates by target resource ID, keeping the most meaningful
+     * operation per resource (Create/Delete over read-only ops).
      */
-    private async fetchOperations(activity: ArmDeploymentActivity): Promise<ArmActivity[]> {
-        const client = await this.getOrCreateClient(activity.subscription);
-
-        // Collect operations, deduplicating by target resource ID.
-        // Keep the most meaningful operation per resource (Create/Delete > others).
+    private async fetchOperations(client: DeploymentsClient, activity: ArmDeploymentActivity): Promise<ArmDeploymentOperationActivity[]> {
         const byTargetId = new Map<string, { op: DeploymentOperation; rank: number }>();
 
         for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName)) {
@@ -181,50 +223,26 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
             }
         }
 
-        const results: ArmActivity[] = [];
-
+        const results: ArmDeploymentOperationActivity[] = [];
         for (const { op } of byTargetId.values()) {
             const targetResource = op.properties?.targetResource;
             const provisioningState = op.properties?.provisioningState;
             const operationId = op.operationId ?? targetResource?.id ?? '';
 
-            if (targetResource?.resourceType?.toLowerCase() === DeploymentResourceType.toLowerCase() && targetResource.id) {
-                // Skip AVM telemetry deployments — empty deployments used
-                // only for module usage tracking.
-                if (targetResource.resourceName?.startsWith(AvmTelemetryPrefix)) {
-                    continue;
-                }
-
-                // Nested deployment — return as a collapsible ArmDeploymentActivity
-                const { scope, deploymentName } = parseDeploymentId(targetResource.id);
-                results.push({
-                    id: targetResource.id,
-                    type: 'armDeployment',
-                    status: toActivityStatus(provisioningState),
-                    title: targetResource.resourceName ?? deploymentName,
-                    description: provisioningState,
-                    startTime: activity.startTime,
-                    parentId: activity.id,
-                    deploymentId: targetResource.id,
-                    subscription: activity.subscription,
-                    scope,
-                    deploymentName,
-                });
-            } else {
-                // Regular operation — return as a leaf node
-                results.push({
-                    id: `${activity.id}/operations/${operationId}`,
-                    type: 'armDeploymentOperation',
-                    status: toActivityStatus(provisioningState),
-                    title: targetResource?.resourceName ?? operationId,
-                    description: targetResource?.resourceType,
-                    startTime: activity.startTime,
-                    parentId: activity.id,
-                    operationId,
-                    targetResourceType: targetResource?.resourceType,
-                    targetResourceName: targetResource?.resourceName,
-                });
-            }
+            results.push({
+                id: `${activity.id}/operations/${operationId}`,
+                type: 'armDeploymentOperation',
+                status: toActivityStatus(provisioningState),
+                title: targetResource?.resourceName ?? operationId,
+                description: targetResource?.resourceType,
+                startTime: activity.startTime,
+                parentId: activity.id,
+                operationId,
+                targetResourceId: targetResource?.id ?? '',
+                targetResourceType: targetResource?.resourceType,
+                targetResourceName: targetResource?.resourceName,
+                provisioningState: provisioningState ?? undefined,
+            });
         }
 
         return results;
@@ -244,12 +262,34 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmActivity>, Dis
         return client;
     }
 
+    public clearActivities(filter: (activity: ArmDeploymentActivity) => boolean): void {
+        let changed = false;
+        for (const [id, activity] of this.trackedRoots) {
+            if (filter(activity)) {
+                this.trackedRoots.delete(id);
+                this.stopPolling(id);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.onDidChangeEmitter.fire({ childrenChanged: true });
+        }
+    }
+
     public dispose(): void {
         for (const timer of this.pollingTimers.values()) {
             clearTimeout(timer);
         }
         this.pollingTimers.clear();
         this.onDidChangeEmitter.dispose();
+    }
+
+    private stopPolling(id: string): void {
+        const timer = this.pollingTimers.get(id);
+        if (timer) {
+            clearTimeout(timer);
+            this.pollingTimers.delete(id);
+        }
     }
 }
 
@@ -298,7 +338,7 @@ function operationRank(provisioningOperation: ProvisioningOperation | undefined)
     }
 }
 
-const deploymentsSegment = '/providers/microsoft.resources/deployments/';
+const deploymentsSegment = `/providers/${DeploymentResourceType.toLowerCase()}/`;
 
 /**
  * Parses an ARM deployment resource ID into its scope and deployment name.

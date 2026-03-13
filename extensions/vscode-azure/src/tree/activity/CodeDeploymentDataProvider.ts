@@ -40,6 +40,20 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
         return full;
     }
 
+    public clearActivities(filter: (activity: CodeDeploymentActivity) => boolean): void {
+        let changed = false;
+        for (const [id, activity] of this.deployments) {
+            if (filter(activity)) {
+                this.deployments.delete(id);
+                this.subSteps.delete(id);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.onDidChangeEmitter.fire({ childrenChanged: true });
+        }
+    }
+
     public dispose(): void {
         this.onDidChangeEmitter.dispose();
     }

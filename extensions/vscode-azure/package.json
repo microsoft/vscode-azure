@@ -47,6 +47,21 @@
                 "command": "vscode-azure/activity/trackArmDeployment",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/activity/trackArmDeployment%"
+            },
+            {
+                "command": "vscode-azure/activity/clearCompleted",
+                "icon": "$(clear-all)",
+                "title": "%commands.vscode-azure/activity/clearCompleted%"
+            },
+            {
+                "command": "vscode-azure/activity/clearSuccessful",
+                "icon": "$(pass)",
+                "title": "%commands.vscode-azure/activity/clearSuccessful%"
+            },
+            {
+                "command": "vscode-azure/activity/clearAll",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/activity/clearAll%"
             }
         ],
         "menus": {
@@ -66,6 +81,18 @@
                 {
                     "command": "vscode-azure/resources/loadMore",
                     "when": "false"
+                },
+                {
+                    "command": "vscode-azure/activity/clearCompleted",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/activity/clearSuccessful",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/activity/clearAll",
+                    "when": "false"
                 }
             ],
             "view/title": [
@@ -73,6 +100,21 @@
                     "command": "vscode-azure/resources/refresh",
                     "when": "view == vscode-azure/resources",
                     "group": "navigation"
+                },
+                {
+                    "command": "vscode-azure/activity/clearSuccessful",
+                    "when": "view == vscode-azure/activity",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "vscode-azure/activity/clearCompleted",
+                    "when": "view == vscode-azure/activity",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "vscode-azure/activity/clearAll",
+                    "when": "view == vscode-azure/activity",
+                    "group": "navigation@3"
                 }
             ],
             "view/item/context": [

@@ -47,6 +47,19 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
         }
     }
 
+    public clearActivities(filter: (activity: GenericActivity) => boolean): void {
+        let changed = false;
+        for (const [id, activity] of this.activities) {
+            if (filter(activity)) {
+                this.activities.delete(id);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.onDidChangeEmitter.fire({ childrenChanged: true });
+        }
+    }
+
     public dispose(): void {
         this.onDidChangeEmitter.dispose();
     }
