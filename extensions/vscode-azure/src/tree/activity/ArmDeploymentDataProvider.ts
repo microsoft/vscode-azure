@@ -42,6 +42,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /** Top-level tracked deployments (user-initiated). */
     private readonly trackedRoots = new Map<string, ArmDeploymentActivity>();
+    /** All known deployment activities by ID, preserving object identity across re-fetches. */
+    private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
+    /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
+    private readonly activePolls = new Set<string>();
     private readonly clientCache = new Map<string, DeploymentsClient>();
 
     private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
@@ -83,8 +87,8 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         const client = await this.getOrCreateClient(resource.subscription);
         resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
 
-        // Start polling if not terminal
-        if (!isTerminalActivityStatus(resource.status)) {
+        // Start polling if not terminal and not already polling
+        if (!isTerminalActivityStatus(resource.status) && !this.activePolls.has(resource.id)) {
             void this.poll(resource);
         }
 
@@ -110,6 +114,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         };
 
         this.trackedRoots.set(activity.id, activity);
+        this.knownDeployments.set(activity.id, activity);
         this.onDidChangeEmitter.fire({ childrenChanged: true });
     }
 
@@ -120,9 +125,11 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     private async poll(activity: ArmDeploymentActivity): Promise<void> {
         const signal = activity.abortController.signal;
         if (signal.aborted) {
+            this.activePolls.delete(activity.id);
             return;
         }
 
+        this.activePolls.add(activity.id);
         let nextPollMs = DefaultPollIntervalMs;
 
         try {
@@ -172,6 +179,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
             if (isTerminalState(provisioningState)) {
                 activity.endTime = new Date();
+                this.activePolls.delete(activity.id);
                 this.onDidChangeEmitter.fire({ activity, childrenChanged });
                 return;
             }
@@ -179,18 +187,24 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             this.onDidChangeEmitter.fire({ activity, childrenChanged });
         } catch {
             if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
+                this.activePolls.delete(activity.id);
                 return;
             }
             // Continue polling on transient errors
         }
 
         const timer = setTimeout(() => void this.poll(activity), nextPollMs);
-        signal.addEventListener('abort', () => { clearTimeout(timer); }, { once: true });
+        signal.addEventListener('abort', () => {
+            clearTimeout(timer);
+            this.activePolls.delete(activity.id);
+        }, { once: true });
     }
 
     /**
      * Extract child deployments from a deployment's operations.
-     * Child deployments inherit the parent's abort controller.
+     * Reuses existing objects from {@link knownDeployments} to preserve
+     * reference stability across re-fetches (so polling mutates the same
+     * instance the tree holds).
      */
     private extractChildDeployments(activity: ArmDeploymentActivity): ArmDeploymentActivity[] {
         if (!activity.operations) {
@@ -206,8 +220,17 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             }
 
             try {
+                const existing = this.knownDeployments.get(op.targetResourceId);
+                if (existing) {
+                    // Update mutable fields on the existing object
+                    existing.status = op.status;
+                    existing.description = op.provisioningState;
+                    results.push(existing);
+                    continue;
+                }
+
                 const { scope, deploymentName } = parseDeploymentId(op.targetResourceId);
-                results.push({
+                const child: ArmDeploymentActivity = {
                     id: op.targetResourceId,
                     type: 'armDeployment',
                     status: op.status,
@@ -220,7 +243,9 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     scope,
                     deploymentName,
                     abortController: activity.abortController,
-                });
+                };
+                this.knownDeployments.set(child.id, child);
+                results.push(child);
             } catch {
                 // Skip if we can't parse the deployment ID
             }
@@ -294,6 +319,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             if (filter(activity)) {
                 this.trackedRoots.delete(id);
                 activity.abortController.abort();
+                this.cleanupDeploymentTree(id);
                 changed = true;
             }
         }
@@ -306,7 +332,22 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         for (const activity of this.trackedRoots.values()) {
             activity.abortController.abort();
         }
+        this.knownDeployments.clear();
+        this.activePolls.clear();
         this.onDidChangeEmitter.dispose();
+    }
+
+    /**
+     * Remove a deployment and all its descendants from tracking maps.
+     */
+    private cleanupDeploymentTree(rootId: string): void {
+        const prefix = rootId.toLowerCase();
+        for (const id of this.knownDeployments.keys()) {
+            if (id.toLowerCase().startsWith(prefix)) {
+                this.knownDeployments.delete(id);
+                this.activePolls.delete(id);
+            }
+        }
     }
 }
 
