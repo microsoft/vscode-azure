@@ -28,6 +28,8 @@ export interface ArmDeploymentActivity extends Activity {
     readonly deploymentName: string;
     /** Operations discovered by enrichment. Populated asynchronously after the deployment is loaded. */
     operations?: ArmDeploymentOperationActivity[];
+    /** Controller that is aborted when this deployment tree is cleared. Shared by all nested deployments. */
+    readonly abortController: AbortController;
 }
 
 export interface ArmDeploymentOperationActivity extends Activity {

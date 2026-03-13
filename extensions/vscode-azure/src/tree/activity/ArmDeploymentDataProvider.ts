@@ -42,7 +42,6 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /** Top-level tracked deployments (user-initiated). */
     private readonly trackedRoots = new Map<string, ArmDeploymentActivity>();
-    private readonly pollingTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly clientCache = new Map<string, DeploymentsClient>();
 
     private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
@@ -77,11 +76,15 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * by {@link DataItemTree} after a resource is loaded.
      */
     public async enrich(resource: ArmDeploymentActivity): Promise<void> {
-        const client = await this.getOrCreateClient(resource.subscription);
-        resource.operations = await this.fetchOperations(client, resource);
+        if (resource.abortController.signal.aborted) {
+            return;
+        }
 
-        // Start polling if not terminal and not already polling
-        if (!isTerminalState(resource.status) && !this.pollingTimers.has(resource.id)) {
+        const client = await this.getOrCreateClient(resource.subscription);
+        resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
+
+        // Start polling if not terminal
+        if (!isTerminalState(resource.status)) {
             void this.poll(resource);
         }
     }
@@ -99,6 +102,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             subscription,
             scope,
             deploymentName,
+            abortController: new AbortController(),
         };
 
         this.trackedRoots.set(activity.id, activity);
@@ -110,6 +114,11 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * change events based on whether the operation count changed.
      */
     private async poll(activity: ArmDeploymentActivity): Promise<void> {
+        const signal = activity.abortController.signal;
+        if (signal.aborted) {
+            return;
+        }
+
         let nextPollMs = DefaultPollIntervalMs;
 
         try {
@@ -120,6 +129,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                 activity.scope,
                 activity.deploymentName,
                 {
+                    abortSignal: signal,
                     onResponse: (response) => {
                         const header = response.headers.get('retry-after');
                         if (header) {
@@ -131,6 +141,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     },
                 },
             );
+
+            if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
+                return;
+            }
 
             if (retryAfterSeconds) {
                 nextPollMs = retryAfterSeconds * 1000;
@@ -144,28 +158,35 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
             // Refresh operations and detect structural changes
             const prevCount = activity.operations?.length ?? 0;
-            activity.operations = await this.fetchOperations(client, activity);
+            activity.operations = await this.fetchOperations(client, activity, signal);
+
+            if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
+                return;
+            }
+
             const childrenChanged = activity.operations.length !== prevCount;
 
             if (isTerminalState(provisioningState)) {
                 activity.endTime = new Date();
-                this.pollingTimers.delete(activity.id);
                 this.onDidChangeEmitter.fire({ activity, childrenChanged });
                 return;
             }
 
             this.onDidChangeEmitter.fire({ activity, childrenChanged });
         } catch {
+            if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
+                return;
+            }
             // Continue polling on transient errors
         }
 
-        // TODO: is this timer cleared?
         const timer = setTimeout(() => void this.poll(activity), nextPollMs);
-        this.pollingTimers.set(activity.id, timer);
+        signal.addEventListener('abort', () => { clearTimeout(timer); }, { once: true });
     }
 
     /**
      * Extract child deployments from a deployment's operations.
+     * Child deployments inherit the parent's abort controller.
      */
     private extractChildDeployments(activity: ArmDeploymentActivity): ArmDeploymentActivity[] {
         if (!activity.operations) {
@@ -194,6 +215,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     subscription: activity.subscription,
                     scope,
                     deploymentName,
+                    abortController: activity.abortController,
                 });
             } catch {
                 // Skip if we can't parse the deployment ID
@@ -207,10 +229,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * Deduplicates by target resource ID, keeping the most meaningful
      * operation per resource (Create/Delete over read-only ops).
      */
-    private async fetchOperations(client: DeploymentsClient, activity: ArmDeploymentActivity): Promise<ArmDeploymentOperationActivity[]> {
+    private async fetchOperations(client: DeploymentsClient, activity: ArmDeploymentActivity, signal?: AbortSignal): Promise<ArmDeploymentOperationActivity[]> {
         const byTargetId = new Map<string, { op: DeploymentOperation; rank: number }>();
 
-        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName)) {
+        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal: signal })) {
             const targetResource = op.properties?.targetResource;
             if (!op.operationId || !targetResource?.id) {
                 continue;
@@ -267,7 +289,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         for (const [id, activity] of this.trackedRoots) {
             if (filter(activity)) {
                 this.trackedRoots.delete(id);
-                this.stopPolling(id);
+                activity.abortController.abort();
                 changed = true;
             }
         }
@@ -277,19 +299,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     }
 
     public dispose(): void {
-        for (const timer of this.pollingTimers.values()) {
-            clearTimeout(timer);
+        for (const activity of this.trackedRoots.values()) {
+            activity.abortController.abort();
         }
-        this.pollingTimers.clear();
         this.onDidChangeEmitter.dispose();
-    }
-
-    private stopPolling(id: string): void {
-        const timer = this.pollingTimers.get(id);
-        if (timer) {
-            clearTimeout(timer);
-            this.pollingTimers.delete(id);
-        }
     }
 }
 

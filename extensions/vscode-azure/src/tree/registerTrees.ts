@@ -112,7 +112,7 @@ function registerActivityTree(container: Container): void {
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
             activity => activity.id,
-            30 * 1000, // 30 second TTL
+            Infinity, // Providers manage freshness via polling and change events
         );
 
         for (const provider of context.getAll(IActivityViewDataProviders)) {
