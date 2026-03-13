@@ -90,7 +90,7 @@ export class TrackArmDeployment implements ManagedCommand {
     }
 }
 
-const portalDeploymentPattern = /DeploymentDetailsBlade\/id\/(.+)/i;
+const portalDeploymentPattern = /DeploymentDetailsBlade.*\/id\/(.+)/i;
 
 /**
  * Extracts an ARM deployment resource ID from either a raw ARM ID or an

@@ -9,6 +9,11 @@ import { inject, injectable } from 'inversify';
 import { IActivityViewDataTree } from '../../services';
 import type { Activity } from './Activity';
 
+/**
+ * General-purpose view provider for activity tree items (generic activities,
+ * code deployments, etc.). Handles any activity type that does not have a
+ * more specific view provider registered.
+ */
 @injectable()
 export class ActivityViewProvider implements ViewProvider<string> {
     public readonly isRoot = true;
@@ -19,7 +24,7 @@ export class ActivityViewProvider implements ViewProvider<string> {
     ) { }
 
     public canHandle(_activityId: unknown): _activityId is string {
-        return true; // One view provider for all activity types
+        return true;
     }
 
     public async getChildren(activityId?: string): Promise<string[]> {
@@ -29,7 +34,6 @@ export class ActivityViewProvider implements ViewProvider<string> {
         }
 
         const children = await this.dataTree.getChildren(parentActivity);
-
         return children.map(activity => activity.id);
     }
 
@@ -41,38 +45,46 @@ export class ActivityViewProvider implements ViewProvider<string> {
             throw new Error(`Activity with ID ${activityId} not found`);
         }
 
-        const isLeaf = activity.type === 'armDeploymentOperation' || activity.type === 'generic';
-        const collapsibleState = isLeaf
-            ? this.code.TreeItemCollapsibleState.None
-            : this.code.TreeItemCollapsibleState.Collapsed;
-
-        const treeItem = new this.code.TreeItem(activity.title, collapsibleState);
-        treeItem.id = activityId;
-        treeItem.description = activity.description;
-
-        switch (activity.status) {
-            case 'NotStarted':
-                treeItem.iconPath = new this.code.ThemeIcon('circle-large');
-                break;
-            case 'InProgress':
-                treeItem.iconPath = new this.code.ThemeIcon('loading~spin');
-                break;
-            case 'Completed':
-                treeItem.iconPath = new this.code.ThemeIcon('pass', new this.code.ThemeColor('testing.iconPassed'));
-                break;
-            case 'Canceled':
-                treeItem.iconPath = new this.code.ThemeIcon('circle-slash', new this.code.ThemeColor('testing.iconSkipped'));
-                break;
-            case 'Failed':
-                treeItem.iconPath = new this.code.ThemeIcon('error', new this.code.ThemeColor('testing.iconFailed'));
-                break;
-        }
-
-        return treeItem;
+        return toActivityTreeItem(this.code, activity, activityId);
     }
 
     public getParent(activityId: string): string | undefined {
         const activity = this.dataTree.get(activityId);
         return activity?.parentId;
     }
+}
+
+/**
+ * Builds a VS Code tree item for any activity, with status-based icon.
+ * Shared by all activity view providers.
+ */
+export function toActivityTreeItem(code: IVsCode, activity: Activity, activityId: string): ITreeItem {
+    const isLeaf = activity.type === 'armDeploymentOperation' || activity.type === 'generic';
+    const collapsibleState = isLeaf
+        ? code.TreeItemCollapsibleState.None
+        : code.TreeItemCollapsibleState.Collapsed;
+
+    const treeItem = new code.TreeItem(activity.title, collapsibleState);
+    treeItem.id = activityId;
+    treeItem.description = activity.description;
+
+    switch (activity.status) {
+        case 'NotStarted':
+            treeItem.iconPath = new code.ThemeIcon('circle-large');
+            break;
+        case 'InProgress':
+            treeItem.iconPath = new code.ThemeIcon('loading~spin');
+            break;
+        case 'Completed':
+            treeItem.iconPath = new code.ThemeIcon('pass', new code.ThemeColor('testing.iconPassed'));
+            break;
+        case 'Canceled':
+            treeItem.iconPath = new code.ThemeIcon('circle-slash', new code.ThemeColor('testing.iconSkipped'));
+            break;
+        case 'Failed':
+            treeItem.iconPath = new code.ThemeIcon('error', new code.ThemeColor('testing.iconFailed'));
+            break;
+    }
+
+    return treeItem;
 }

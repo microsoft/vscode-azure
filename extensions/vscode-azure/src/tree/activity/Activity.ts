@@ -26,13 +26,19 @@ export interface ArmDeploymentActivity extends Activity {
     /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
     readonly scope: string;
     readonly deploymentName: string;
+    /** Operations discovered by enrichment. Populated asynchronously after the deployment is loaded. */
+    operations?: ArmDeploymentOperationActivity[];
 }
 
 export interface ArmDeploymentOperationActivity extends Activity {
     readonly type: 'armDeploymentOperation';
     readonly operationId: string;
+    /** The full ARM resource ID of the target resource. */
+    readonly targetResourceId: string;
     readonly targetResourceType?: string;
     readonly targetResourceName?: string;
+    /** The raw ARM provisioning state string (e.g. 'Succeeded', 'Running'). */
+    readonly provisioningState?: string;
     readonly parentId: string;
 }
 

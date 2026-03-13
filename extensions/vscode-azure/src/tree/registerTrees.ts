@@ -12,6 +12,7 @@ import { IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree, IA
 import type { Activity, ActivityChangeEvent } from './activity/Activity';
 import { ActivityViewProvider } from './activity/ActivityViewProvider';
 import { ArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
+import { ArmDeploymentViewProvider } from './activity/ArmDeploymentViewProvider';
 import { CodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvider';
 import { GenericActivityDataProvider } from './activity/GenericActivityDataProvider';
 import { AcrDataProvider } from './resources/acr/AcrDataProvider';
@@ -130,6 +131,7 @@ function registerActivityTree(container: Container): void {
         const armProvider = context.get(ArmDeploymentDataProvider);
         const codeProvider = context.get(CodeDeploymentDataProvider);
         const genericProvider = context.get(GenericActivityDataProvider);
+        // TODO: dispose of these disposables
         armProvider.onDidChange(handleChange);
         codeProvider.onDidChange(handleChange);
         genericProvider.onDidChange(handleChange);
@@ -187,6 +189,8 @@ function bindActivityViewDataProviders(container: Container): void {
 
 const IActivityViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IActivityViewViewProviders');
 function bindActivityViewViewProviders(container: Container): void {
+    // Registration order matters: specific providers first, generic fallback last.
+    container.bind(IActivityViewViewProviders).to(ArmDeploymentViewProvider).onActivation(pushDisposable);
     container.bind(IActivityViewViewProviders).to(ActivityViewProvider).onActivation(pushDisposable);
 }
 
