@@ -49,18 +49,18 @@
                 "title": "%commands.vscode-azure/activity/trackArmDeployment%"
             },
             {
-                "command": "vscode-azure/activity/clearCompleted",
-                "icon": "$(clear-all)",
-                "title": "%commands.vscode-azure/activity/clearCompleted%"
-            },
-            {
                 "command": "vscode-azure/activity/clearSuccessful",
-                "icon": "$(pass)",
+                "icon": "$(check)",
                 "title": "%commands.vscode-azure/activity/clearSuccessful%"
             },
             {
+                "command": "vscode-azure/activity/clearCompleted",
+                "icon": "$(check-all)",
+                "title": "%commands.vscode-azure/activity/clearCompleted%"
+            },
+            {
                 "command": "vscode-azure/activity/clearAll",
-                "icon": "$(trash)",
+                "icon": "$(clear-all)",
                 "title": "%commands.vscode-azure/activity/clearAll%"
             }
         ],
@@ -83,11 +83,11 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/activity/clearCompleted",
+                    "command": "vscode-azure/activity/clearSuccessful",
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/activity/clearSuccessful",
+                    "command": "vscode-azure/activity/clearCompleted",
                     "when": "false"
                 },
                 {
