@@ -14,6 +14,7 @@ let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | 
 
 const DefaultPollIntervalMs = 10_000;
 export const DeploymentResourceType = 'Microsoft.Resources/deployments';
+const DeploymentResourceTypeLower = DeploymentResourceType.toLowerCase();
 
 /**
  * AVM (Azure Verified Modules) telemetry deployments use this name prefix.
@@ -29,7 +30,7 @@ const AvmTelemetryPrefix = '46d3x';
  */
 export function isVisibleOperation(op: ArmDeploymentOperationActivity): boolean {
     // Hide AVM telemetry deployments
-    if (op.targetResourceType?.toLowerCase() === DeploymentResourceType.toLowerCase()
+    if (op.targetResourceType?.toLowerCase() === DeploymentResourceTypeLower
         && op.targetResourceName?.startsWith(AvmTelemetryPrefix)) {
         return false;
     }
@@ -46,6 +47,8 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
     private readonly activePolls = new Set<string>();
+    /** Pending next-poll timers keyed by deployment ID, to allow cancellation on abort. */
+    private readonly activeTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly clientCache = new Map<string, DeploymentsClient>();
 
     private readonly onDidChangeEmitter = new EventEmitter<ActivityChangeEvent>();
@@ -89,6 +92,17 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
         // Start polling if not terminal and not already polling
         if (!isTerminalActivityStatus(resource.status) && !this.activePolls.has(resource.id)) {
+            // Register a single abort handler for this deployment's polling lifecycle.
+            // This avoids accumulating a new listener on every poll iteration.
+            const signal = resource.abortController.signal;
+            signal.addEventListener('abort', () => {
+                const timer = this.activeTimers.get(resource.id);
+                if (timer !== undefined) {
+                    clearTimeout(timer);
+                    this.activeTimers.delete(resource.id);
+                }
+                this.activePolls.delete(resource.id);
+            }, { once: true });
             void this.poll(resource);
         }
 
@@ -120,7 +134,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /**
      * Poll a deployment's status and refresh its operations. Fires targeted
-     * change events based on whether the operation count changed.
+     * change events based on whether the child deployment set changed.
      */
     private async poll(activity: ArmDeploymentActivity): Promise<void> {
         const signal = activity.abortController.signal;
@@ -154,6 +168,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             );
 
             if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
+                this.activePolls.delete(activity.id);
                 return;
             }
 
@@ -167,15 +182,18 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                 activity.description = provisioningState;
             }
 
-            // Refresh operations and detect structural changes
-            const prevCount = activity.operations?.length ?? 0;
+            // Snapshot child deployment IDs before refresh to detect structural changes.
+            // Comparing IDs (not just count) catches the case where one nested deployment
+            // is replaced by another with the same total count.
+            const prevChildIds = getChildDeploymentIds(activity.operations);
             activity.operations = await this.fetchOperations(client, activity, signal);
 
             if (signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
+                this.activePolls.delete(activity.id);
                 return;
             }
 
-            const childrenChanged = activity.operations.length !== prevCount;
+            const childrenChanged = !sameIdSets(prevChildIds, getChildDeploymentIds(activity.operations));
 
             if (isTerminalState(provisioningState)) {
                 activity.endTime = new Date();
@@ -193,11 +211,17 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             // Continue polling on transient errors
         }
 
-        const timer = setTimeout(() => void this.poll(activity), nextPollMs);
-        signal.addEventListener('abort', () => {
-            clearTimeout(timer);
+        // Schedule the next poll. The single abort handler registered in enrich()
+        // will cancel this timer if the deployment is cleared before it fires.
+        if (!signal.aborted) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
+            const timer = setTimeout(() => {
+                this.activeTimers.delete(activity.id);
+                void this.poll(activity);
+            }, nextPollMs);
+            this.activeTimers.set(activity.id, timer);
+        } else {
             this.activePolls.delete(activity.id);
-        }, { once: true });
+        }
     }
 
     /**
@@ -213,7 +237,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
         const results: ArmDeploymentActivity[] = [];
         for (const op of activity.operations) {
-            if (op.targetResourceType?.toLowerCase() !== DeploymentResourceType.toLowerCase()
+            if (op.targetResourceType?.toLowerCase() !== DeploymentResourceTypeLower
                 || !op.targetResourceId
                 || !isVisibleOperation(op)) {
                 continue;
@@ -332,6 +356,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         for (const activity of this.trackedRoots.values()) {
             activity.abortController.abort();
         }
+        for (const timer of this.activeTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.activeTimers.clear();
         this.knownDeployments.clear();
         this.activePolls.clear();
         this.onDidChangeEmitter.dispose();
@@ -339,16 +367,66 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /**
      * Remove a deployment and all its descendants from tracking maps.
+     * Uses {@link ArmDeploymentActivity.parentId} to traverse the tree rather
+     * than relying on ID prefix matching, which does not hold for nested ARM
+     * deployments (they are independent resources with unrelated IDs).
      */
     private cleanupDeploymentTree(rootId: string): void {
-        const prefix = rootId.toLowerCase();
-        for (const id of this.knownDeployments.keys()) {
-            if (id.toLowerCase().startsWith(prefix)) {
-                this.knownDeployments.delete(id);
-                this.activePolls.delete(id);
+        const toRemove = new Set<string>();
+        const stack = [rootId];
+        while (stack.length > 0) {
+            const id = stack.pop()!;
+            toRemove.add(id);
+            for (const [childId, dep] of this.knownDeployments) {
+                if (dep.parentId === id && !toRemove.has(childId)) {
+                    stack.push(childId);
+                }
+            }
+        }
+        for (const id of toRemove) {
+            this.knownDeployments.delete(id);
+            this.activePolls.delete(id);
+            const timer = this.activeTimers.get(id);
+            if (timer !== undefined) {
+                clearTimeout(timer);
+                this.activeTimers.delete(id);
             }
         }
     }
+}
+
+/**
+ * Returns the set of child deployment resource IDs derived from an operations list.
+ * Used to detect structural changes in the deployment tree across poll iterations:
+ * comparing IDs (rather than just the count) catches the case where one nested
+ * deployment is replaced by another with the same total count.
+ */
+function getChildDeploymentIds(operations: ArmDeploymentOperationActivity[] | undefined): Set<string> {
+    const ids = new Set<string>();
+    if (!operations) {
+        return ids;
+    }
+    for (const op of operations) {
+        if (op.targetResourceType?.toLowerCase() === DeploymentResourceTypeLower
+            && op.targetResourceId
+            && isVisibleOperation(op)) {
+            ids.add(op.targetResourceId);
+        }
+    }
+    return ids;
+}
+
+/** Returns `true` if both sets contain exactly the same string elements. */
+function sameIdSets(a: Set<string>, b: Set<string>): boolean {
+    if (a.size !== b.size) {
+        return false;
+    }
+    for (const id of a) {
+        if (!b.has(id)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 function toActivityStatus(provisioningState: ProvisioningState | undefined): Activity['status'] {
@@ -396,7 +474,7 @@ function operationRank(provisioningOperation: ProvisioningOperation | undefined)
     }
 }
 
-const deploymentsSegment = `/providers/${DeploymentResourceType.toLowerCase()}/`;
+const deploymentsSegment = `/providers/${DeploymentResourceTypeLower}/`;
 
 /**
  * Parses an ARM deployment resource ID into its scope and deployment name.
