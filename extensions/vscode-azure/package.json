@@ -193,6 +193,6 @@
         "@microsoft/vscode-azure-azutils": "*",
         "@microsoft/vscode-azure-utils": "*",
         "@vscode/extension-telemetry": "^1.5.1",
-        "inversify": "^7.11.0"
+        "inversify": "^8.1.0"
     }
 }
