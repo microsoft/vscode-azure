@@ -1,9 +1,15 @@
 {
     "extension.description": "Azure for Visual Studio Code",
     "viewContainers.vscode-azure": "Azure",
+    "viewContainers.vscode-azure-panel": "Azure",
     "views.vscode-azure/resources": "Resources",
+    "views.vscode-azure/activity": "Activity Log",
     "commands.category.azure": "Azure",
     "commands.vscode-azure/resources/refresh": "Refresh",
     "commands.vscode-azure/resources/openInPortal": "Open in Azure Portal",
-    "commands.vscode-azure/resources/loadMore": "Load More..."
+    "commands.vscode-azure/resources/loadMore": "Load More...",
+    "commands.vscode-azure/activity/trackArmDeployment": "Track ARM Deployment",
+    "commands.vscode-azure/activity/clearSuccessful": "Clear Successful",
+    "commands.vscode-azure/activity/clearCompleted": "Clear Completed",
+    "commands.vscode-azure/activity/clearAll": "Clear All"
 }

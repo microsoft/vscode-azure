@@ -42,6 +42,26 @@
             {
                 "command": "vscode-azure/resources/loadMore",
                 "title": "%commands.vscode-azure/resources/loadMore%"
+            },
+            {
+                "command": "vscode-azure/activity/trackArmDeployment",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/activity/trackArmDeployment%"
+            },
+            {
+                "command": "vscode-azure/activity/clearSuccessful",
+                "icon": "$(check)",
+                "title": "%commands.vscode-azure/activity/clearSuccessful%"
+            },
+            {
+                "command": "vscode-azure/activity/clearCompleted",
+                "icon": "$(check-all)",
+                "title": "%commands.vscode-azure/activity/clearCompleted%"
+            },
+            {
+                "command": "vscode-azure/activity/clearAll",
+                "icon": "$(clear-all)",
+                "title": "%commands.vscode-azure/activity/clearAll%"
             }
         ],
         "menus": {
@@ -61,6 +81,18 @@
                 {
                     "command": "vscode-azure/resources/loadMore",
                     "when": "false"
+                },
+                {
+                    "command": "vscode-azure/activity/clearSuccessful",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/activity/clearCompleted",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/activity/clearAll",
+                    "when": "false"
                 }
             ],
             "view/title": [
@@ -68,6 +100,21 @@
                     "command": "vscode-azure/resources/refresh",
                     "when": "view == vscode-azure/resources",
                     "group": "navigation"
+                },
+                {
+                    "command": "vscode-azure/activity/clearSuccessful",
+                    "when": "view == vscode-azure/activity",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "vscode-azure/activity/clearCompleted",
+                    "when": "view == vscode-azure/activity",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "vscode-azure/activity/clearAll",
+                    "when": "view == vscode-azure/activity",
+                    "group": "navigation@3"
                 }
             ],
             "view/item/context": [
@@ -88,6 +135,13 @@
                     "icon": "$(azure)",
                     "id": "vscode-azure"
                 }
+            ],
+            "panel": [
+                {
+                    "title": "%viewContainers.vscode-azure-panel%",
+                    "icon": "$(azure)",
+                    "id": "vscode-azure-panel"
+                }
             ]
         },
         "views": {
@@ -97,6 +151,15 @@
                     "id": "vscode-azure/resources",
                     "icon": "$(azure)",
                     "visibility": "visible",
+                    "type": "tree"
+                }
+            ],
+            "vscode-azure-panel": [
+                {
+                    "name": "%views.vscode-azure/activity%",
+                    "id": "vscode-azure/activity",
+                    "icon": "$(azure)",
+                    "visibility": "collapsed",
                     "type": "tree"
                 }
             ]
@@ -125,6 +188,7 @@
     "dependencies": {
         "@azure/arm-containerregistry": "12.0.0-alpha.20260224.1",
         "@azure/arm-resources": "^7.0.0",
+        "@azure/arm-resourcesdeployments": "^1.0.0-alpha.20250716.1",
         "@microsoft/vscode-azext-azureauth": "^6.0.0-alpha.4",
         "@microsoft/vscode-azure-azutils": "*",
         "@microsoft/vscode-azure-utils": "*",

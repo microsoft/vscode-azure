@@ -3,7 +3,20 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { Event } from '../vscode/EventEmitter';
 import type { ProviderResult } from '../vscode/ProviderResult';
+
+/**
+ * Event fired by a {@link DataProvider} when its data changes externally
+ * (e.g. polling, user action). The tree subscribes to this automatically
+ * when the provider is registered.
+ */
+export interface DataProviderChangeEvent<TResource> {
+    /** The resource that changed, or `undefined` for root-level changes. */
+    readonly resource?: TResource;
+    /** When `true`, cached children are invalidated and re-fetched. */
+    readonly includeChildren: boolean;
+}
 
 /**
  * A single page of children from a paginated {@link DataProvider.getChildren}
@@ -76,11 +89,30 @@ export interface DataProvider<TResource> {
      * implementation should mutate the resource object directly so the
      * tree's reference remains stable. Key properties such as `id`, `type`,
      * etc. should not be changed, but additional fields may be added as needed.
+     *
+     * @returns `true` if the enrichment also changed the resource's children
+     *   (e.g. populated a field that child providers depend on), causing
+     *   cached children to be removed and re-fetched on next access.
+     *   Returning `false` only re-renders the resource's own tree item;
+     *   children will still be re-rendered, but the next access will hit
+     *   the cache, avoiding a re-fetch (unless they are stale).
      */
-    enrich?(resource: TResource): void | Promise<void>;
+    enrich?(resource: TResource): boolean | Promise<boolean>;
 
     /**
      * Whether a provider can return root-level resources (i.e. be called with `undefined`).
      */
     readonly isRoot?: boolean;
+
+    /**
+     * Optional event fired when the provider's data changes externally.
+     * The tree automatically subscribes when the provider is registered
+     * and calls {@link DataItemTree.invalidate} or {@link DataItemTree.invalidateAll}
+     * accordingly.
+     *
+     * This is appropriate when the provider is aware of changes to its data that the
+     * tree is not (e.g. polling, user action in another view, etc.). When practical,
+     * {@link DataItemTree.invalidate} should be used instead.
+     */
+    readonly onDidChange?: Event<DataProviderChangeEvent<TResource>>;
 }

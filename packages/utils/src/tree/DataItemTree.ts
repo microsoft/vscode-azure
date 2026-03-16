@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { InflightMap } from '../data/InflightMap';
+import { Disposable } from '../vscode/Disposable';
 import { isAsyncIterable, type DataProvider, type Page } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -70,6 +71,24 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         private readonly ttl: number,
     ) {
         super();
+    }
+
+    /**
+     * Register a provider. If the provider has an {@link DataProvider.onDidChange}
+     * event, the tree automatically subscribes and invalidates accordingly.
+     */
+    public override registerProvider(provider: DataProvider<T>): Disposable {
+        const registration = super.registerProvider(provider);
+
+        const changeSubscription = provider.onDidChange?.((event) => {
+            if (event.resource !== undefined && event.resource !== null) {
+                this.invalidate(event.resource, event.includeChildren);
+            } else {
+                this.invalidateAll();
+            }
+        });
+
+        return Disposable.from(registration, changeSubscription ?? Disposable.None);
     }
 
     /**
@@ -186,9 +205,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                 const key = this.getKey(resource);
                 const promise = Promise
                     .resolve(provider.enrich(resource))
-                    .then(() => {
+                    .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
-                        this.changeEmitter.fire(resource);
+                        this.invalidate(resource, includeChildren);
                     });
                 this.enrichmentPromises.set(key, promise);
                 // Attach a rejection handler so background rejections are not unhandled
@@ -325,13 +344,19 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     }
 
     /**
-     * Invalidate a specific resource's cached children, removing them from
-     * the tree. They will be re-fetched on next access.
-     * Fires {@link onDidChange}.
+     * Invalidate a specific resource, optionally including its cached
+     * children. Fires {@link onDidChange}.
+     *
+     * @param resource - The resource to invalidate. {@link ViewItemTree}
+     *   will see the event and re-render the corresponding tree item.
+     * @param includeChildren - When `true` (default), cached children are
+     *   removed from the tree and will be re-fetched on next access. When
+     *   `false`, children will still be re-rendered, but the next access
+     *   will hit the cache, avoiding a re-fetch (unless they are stale).
      */
-    public invalidate(resource: T): void {
+    public invalidate(resource: T, includeChildren = true): void {
         const node = this.nodes.get(this.getKey(resource));
-        if (node) {
+        if (node && includeChildren) {
             this.nodes.removeSubtrees(node.children);
             node.children = undefined;
             node.staleAt = 0;

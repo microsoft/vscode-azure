@@ -7,11 +7,13 @@ import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils'
 import { Container } from 'inversify';
 import { LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
+import { ClearActivities } from './ClearActivities';
 import { Hello } from './Hello';
 import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';
 import { OpenInPortal } from './OpenInPortal';
 import { RefreshResourcesView } from './RefreshResourcesView';
+import { TrackArmDeployment } from './TrackArmDeployment';
 
 export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'azure.hello', Hello);
@@ -21,12 +23,18 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
 
     registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
+
+    registerManagedCommand(container, 'vscode-azure/activity/trackArmDeployment', TrackArmDeployment);
+    registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
+    registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
+    registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
 }
 
 function registerManagedCommand(
     container: Container,
     commandId: string,
-    commandClass: new (...ctorArgs: never[]) => ManagedCommand
+    commandClass: new (...ctorArgs: never[]) => ManagedCommand,
+    ...prefixArgs: unknown[]
 ): void {
     // Bind the command class if not already bound
     if (!container.isBound(commandClass)) {
@@ -39,6 +47,6 @@ function registerManagedCommand(
         const executionContainer = new Container({ parent: container });
         executionContainer.bind(IActionContext).toConstantValue(context);
 
-        return executionContainer.get(commandClass).execute(...args);
+        return executionContainer.get(commandClass).execute(...prefixArgs, ...args);
     });
 }
