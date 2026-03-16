@@ -25,14 +25,14 @@
         "clean": "node ../../scripts/clean.mjs"
     },
     "dependencies": {
-        "@azure/core-rest-pipeline": "*",
         "@azure/ms-rest-azure-env": "^2.0.0",
-        "@microsoft/vscode-azure-utils": "*"
+        "@microsoft/vscode-azure-utils": "^1.0.0"
     },
     "devDependencies": {
         "@azure/arm-resources": "*",
         "@azure/core-auth": "*",
         "@azure/core-client": "*",
+        "@azure/core-rest-pipeline": "*",
         "@azure-rest/core-client": "*",
         "@microsoft/vscode-azext-azureauth": "*"
     },

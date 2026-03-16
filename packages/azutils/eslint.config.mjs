@@ -27,7 +27,7 @@ export default defineConfig([
                     },
                 ],
                 patterns: [{
-                    group: ['@azure/*', '!@azure/ms-rest-azure-env', '!@azure/core-rest-pipeline'],
+                    group: ['@azure/*', '!@azure/ms-rest-azure-env'],
                     message: 'Please lazily import this package within the function that uses it to reduce extension activation time.',
                     allowTypeImports: true,
                 }],
