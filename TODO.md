@@ -14,6 +14,7 @@
 - Could we use a hardcoded Azure location list, along with a test case that makes sure we keep it up-to-date with real Azure? Would save a lot of location list step time.
 - Ability to mock and/or inject the Azure clients
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
+- CODEOWNERS, but not yet to avoid email overload
 
 Before handoff:
 - Activity View
