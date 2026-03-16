@@ -44,6 +44,6 @@
     },
     "devDependencies": {
         "@vscode/extension-telemetry": "*",
-        "inversify": "^7.11.0"
+        "inversify": "*"
     }
 }

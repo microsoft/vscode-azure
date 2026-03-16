@@ -33,7 +33,7 @@ export function registerCommands(container: Container): void {
 function registerManagedCommand(
     container: Container,
     commandId: string,
-    commandClass: new (...ctorArgs: never[]) => ManagedCommand,
+    commandClass: new (...ctorArgs: any[]) => ManagedCommand, // eslint-disable-line @typescript-eslint/no-explicit-any
     ...prefixArgs: unknown[]
 ): void {
     // Bind the command class if not already bound
