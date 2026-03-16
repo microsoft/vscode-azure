@@ -29,7 +29,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
         if (!resource) {
             return Promise.resolve([...this.rootDeployments.values()]);
         }
-        return Promise.resolve(resource.children ??[]);
+        return Promise.resolve(resource.children ?? []);
     }
 
     public trackDeployment(activity: Omit<CodeDeploymentActivity, 'type' | 'startTime'>): CodeDeploymentActivity {

@@ -69,6 +69,7 @@ export class ArmDeploymentViewProvider implements ViewProvider<string> {
             ?? this.findOperation(activityId);
 
         if (!activity) {
+            // TODO: unexpected
             throw new Error(`Activity with ID ${activityId} not found`);
         }
 

@@ -81,7 +81,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         const registration = super.registerProvider(provider);
 
         const changeSubscription = provider.onDidChange?.((event) => {
-            if (event.resource) {
+            if (event.resource !== undefined && event.resource !== null) {
                 this.invalidate(event.resource, event.includeChildren);
             } else {
                 this.invalidateAll();
