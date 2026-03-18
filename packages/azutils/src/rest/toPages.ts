@@ -8,23 +8,42 @@ import type { Page } from '@microsoft/vscode-azure-utils';
 
 /**
  * Converts a `PagedAsyncIterableIterator<T>` from an Azure SDK into an
+ * `AsyncIterable<Page<T>>`, using `.byPage()` for page-level iteration
+ * and `getContinuationToken` to set {@link Page.hasMore}.
+ *
+ * @param iterator - The Azure SDK paged iterator.
+ * @param getContinuationToken - The SDK's `getContinuationToken` function
+ *   (re-exported from each ARM package).
+ */
+export function toPages<T>(
+    iterator: PagedAsyncIterableIterator<T, T[]>,
+    getContinuationToken: (page: unknown) => string | undefined,
+): AsyncIterable<Page<T>>;
+
+/**
+ * Converts a `PagedAsyncIterableIterator<T>` from an Azure SDK into an
  * `AsyncIterable<Page<U>>`, using `.byPage()` for page-level iteration
  * and `getContinuationToken` to set {@link Page.hasMore}.
  *
  * @param iterator - The Azure SDK paged iterator.
  * @param getContinuationToken - The SDK's `getContinuationToken` function
  *   (re-exported from each ARM package).
- * @param map - Optional mapping function applied to each item in a page.
- *   When omitted, items are yielded as-is (and `T` must equal `U`).
+ * @param map - Mapping function applied to each item in a page.
  */
-export async function* toPages<T, U = T>(
+export function toPages<T, U>(
+    iterator: PagedAsyncIterableIterator<T, T[]>,
+    getContinuationToken: (page: unknown) => string | undefined,
+    map: (item: T) => U,
+): AsyncIterable<Page<U>>;
+
+export async function* toPages<T, U>(
     iterator: PagedAsyncIterableIterator<T, T[]>,
     getContinuationToken: (page: unknown) => string | undefined,
     map?: (item: T) => U,
-): AsyncIterable<Page<U>> {
+): AsyncIterable<Page<T | U>> {
     for await (const items of iterator.byPage()) {
         yield {
-            items: map ? items.map(map) : items as unknown as U[],
+            items: map ? items.map(map) : items,
             hasMore: !!getContinuationToken(items),
         };
     }

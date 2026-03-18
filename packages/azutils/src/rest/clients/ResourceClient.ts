@@ -74,7 +74,7 @@ export class ResourceClient implements IResourceClient {
         return { listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options) };
     }
 
-    private listResourceGroups(options?: { top?: number }): AsyncIterable<Page<ResourceGroup>> {
+    private listResourceGroups(options?: ResourceGroupsListOptionalParams): AsyncIterable<Page<ResourceGroup>> {
         return toPages(
             this.inner.resourceGroups.list(options),
             ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
@@ -88,7 +88,7 @@ export class ResourceClient implements IResourceClient {
         );
     }
 
-    private listResources(resourceGroupName: string, options?: { top?: number }): AsyncIterable<Page<GenericResource>> {
+    private listResources(resourceGroupName: string, options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>> {
         return toPages(
             this.inner.resources.listByResourceGroup(resourceGroupName, options),
             ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
