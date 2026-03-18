@@ -118,7 +118,7 @@ Set `context.telemetry.isUserEvent = false` to indicate an event that was not di
 context.telemetry.isUserEvent = false;
 ```
 
-`ActionExecutor` automatically remaps this to the legacy `properties.isActivationEvent = 'true'` before sending telemetry, unless the caller explicitly set `properties.isActivationEvent` themselves. This allows downstream telemetry queries to filter user-initiated events from background operations.
+`ActionExecutor` automatically remaps this to the legacy `properties.isActivationEvent = 'true'` before sending telemetry, unless the callback explicitly set `properties.isActivationEvent` themselves. This allows downstream telemetry queries to filter user-initiated events from background operations.
 
 Events that **should not** set `isUserEvent = false` (i.e. they are user-initiated):
 - Command executions (user clicked a button or ran a command)

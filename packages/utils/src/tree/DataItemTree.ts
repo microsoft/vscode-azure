@@ -226,12 +226,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                 const promise = this.executor
                     .callWithTelemetryAndErrorHandling('tree.enrich', (context) => {
                         context.telemetry.isUserEvent = false;
+                        context.telemetry.suppress = 'onSuccess'; // TODO: should we be suppressing?
                         context.errorHandling.rethrow = true;
                         return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
                     })
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
-                        this.invalidate(resource, includeChildren ?? false);
+                        this.invalidate(resource, includeChildren);
                     });
                 this.enrichmentPromises.set(key, promise);
                 // Attach a rejection handler so background rejections are not unhandled

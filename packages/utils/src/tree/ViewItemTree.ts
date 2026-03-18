@@ -155,6 +155,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             if (viewItem === undefined) {
                 return this.getRootChildren();
             }
+
             return this.getBranchChildren(viewItem);
         }))!;
     }
