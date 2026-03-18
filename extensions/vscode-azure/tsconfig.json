@@ -1,6 +1,7 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
+        "rootDir": "./src",
         "outDir": "./dist/esm",
         "paths": {
             // These cause files in these packages to be resolved correctly by the linter and type checker

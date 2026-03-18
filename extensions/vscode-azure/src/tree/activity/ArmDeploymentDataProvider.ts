@@ -3,12 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DeploymentOperation, DeploymentsClient, ProvisioningOperation, ProvisioningState } from '@azure/arm-resourcesdeployments';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { createAzureSubscriptionClient } from '@microsoft/vscode-azure-azutils';
-import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import type { DeploymentOperation, IDeploymentClient, ProvisioningOperation, ProvisioningState } from '@microsoft/vscode-azure-azutils';
+import {
+    EventEmitter, flattenPages, InflightMap,
+    type DataProvider, type DataProviderChangeEvent, type Disposable
+} from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { type Activity, isActivity, isTerminalActivityStatus } from './Activity';
+import { IDeploymentClientProvider } from '../../services';
+import { isActivity, isTerminalActivityStatus, type Activity } from './Activity';
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
 
@@ -48,14 +51,13 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
     private readonly activePolls = new Set<string>();
-    private readonly clientCache = new Map<string, DeploymentsClient>();
+    private readonly clientCache = new InflightMap<IDeploymentClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<ArmDeploymentActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public constructor(
-        @inject(ICodeContext) private readonly ctx: ICodeContext,
-        @inject(IActionExecutor) private readonly executor: IActionExecutor,
+        @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
     ) { }
 
     public canHandle(resource: unknown): resource is ArmDeploymentActivity {
@@ -262,10 +264,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * Deduplicates by target resource ID, keeping the most meaningful
      * operation per resource (Create/Delete over read-only ops).
      */
-    private async fetchOperations(client: DeploymentsClient, activity: ArmDeploymentActivity, abortSignal: AbortSignal): Promise<ArmDeploymentOperationActivity[]> {
+    private async fetchOperations(client: IDeploymentClient, activity: ArmDeploymentActivity, abortSignal: AbortSignal): Promise<ArmDeploymentOperationActivity[]> {
         const byTargetId = new Map<string, { op: DeploymentOperation; rank: number }>();
 
-        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal })) {
+        for await (const op of flattenPages(client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal }))) {
             const targetResource = op.properties?.targetResource;
             if (!op.operationId || !targetResource?.id) {
                 continue;
@@ -302,18 +304,8 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         return results;
     }
 
-    private async getOrCreateClient(subscription: AzureSubscription): Promise<DeploymentsClient> {
-        let client = this.clientCache.get(subscription.subscriptionId);
-        if (!client) {
-            armResourcesDeployments ??= await import('@azure/arm-resourcesdeployments');
-            client = createAzureSubscriptionClient(
-                this.ctx, this.executor,
-                armResourcesDeployments.DeploymentsClient,
-                subscription.credential, subscription.subscriptionId,
-            );
-            this.clientCache.set(subscription.subscriptionId, client);
-        }
-        return client;
+    private getOrCreateClient(subscription: AzureSubscription): Promise<IDeploymentClient> {
+        return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
     }
 
     public clearActivities(filter: (activity: ArmDeploymentActivity) => boolean): void {
@@ -430,8 +422,6 @@ export function parseDeploymentId(deploymentId: string): { scope: string; deploy
 
     return { scope, deploymentName };
 }
-
-let armResourcesDeployments: typeof import('@azure/arm-resourcesdeployments') | undefined;
 
 /**
  * AVM (Azure Verified Modules) telemetry deployments use this name prefix.

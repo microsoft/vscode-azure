@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { Page } from '../data/Page';
 import type { Event } from '../vscode/EventEmitter';
 import type { ProviderResult } from '../vscode/ProviderResult';
 
@@ -19,15 +20,6 @@ export interface DataProviderChangeEvent<TResource> {
 }
 
 /**
- * A single page of children from a paginated {@link DataProvider.getChildren}
- * result.
- */
-export interface Page<TResource> {
-    readonly items: TResource[];
-    readonly hasMore: boolean;
-}
-
-/**
  * The result of a {@link DataProvider.getChildren} call.
  *
  * - A plain `TResource[]` for non-paginated results.
@@ -37,16 +29,6 @@ export interface Page<TResource> {
  *   and subsequent pages on demand ("Load More").
  */
 export type ChildResult<TResource> = TResource[] | AsyncIterable<Page<TResource>>;
-
-/**
- * Type guard: returns `true` when `value` is an `AsyncIterable` (has
- * `Symbol.asyncIterator`), indicating paged children.
- */
-export function isAsyncIterable<T>(value: T[] | AsyncIterable<Page<T>>): value is AsyncIterable<Page<T>> {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    return !!value && typeof value === 'object'
-        && Symbol.asyncIterator in value;
-}
 
 /**
  * Data-layer provider for a resource tree.
