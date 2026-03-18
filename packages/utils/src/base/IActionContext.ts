@@ -13,6 +13,18 @@ export interface IActionContext {
         readonly properties: TelemetryProperties;
         readonly measurements: TelemetryMeasurements;
         suppress?: 'always' | 'onSuccess';
+        /**
+         * Set to `false` to indicate this event was not directly initiated by
+         * the user (e.g. background enrichment, polling, VS Code tree callbacks).
+         *
+         * When `false`, `ActionExecutor` sets the legacy
+         * `telemetry.properties.isActivationEvent` to `'true'` before sending
+         * telemetry, unless the caller explicitly set that property themselves.
+         *
+         * When `undefined` or `true`, `telemetry.properties.isActivationEvent`
+         * is left untouched
+         */
+        isUserEvent?: boolean;
     };
 
     readonly errorHandling: {

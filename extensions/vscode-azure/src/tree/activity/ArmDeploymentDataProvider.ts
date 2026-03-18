@@ -6,7 +6,7 @@
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { DeploymentOperation, IDeploymentClient, ProvisioningOperation, ProvisioningState } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, flattenPages, InflightMap,
+    EventEmitter, flattenPages, IActionExecutor, InflightMap,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -58,6 +58,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     public constructor(
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
     ) { }
 
     public canHandle(resource: unknown): resource is ArmDeploymentActivity {
@@ -147,48 +148,56 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                 let nextPollMs = 10 * 1000; // Default to 10s if server doesn't provide guidance
 
                 try {
-                    const client = await this.getOrCreateClient(activity.subscription);
+                    await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
+                        context.telemetry.isUserEvent = false;
+                        const client = await this.getOrCreateClient(activity.subscription);
 
-                    const [deployment, operations] = await Promise.all([
-                        client.deployments.getAtScope(
-                            activity.scope,
-                            activity.deploymentName,
-                            {
-                                abortSignal,
-                                onResponse: (response) => {
-                                    const retryAfter = response.headers.get('retry-after');
-                                    if (retryAfter) {
-                                        const seconds = parseInt(retryAfter, 10);
-                                        if (!isNaN(seconds) && seconds > 0) {
-                                            nextPollMs = seconds * 1000;
+                        const [deployment, operations] = await Promise.all([
+                            client.deployments.getAtScope(
+                                activity.scope,
+                                activity.deploymentName,
+                                {
+                                    abortSignal,
+                                    onResponse: (response) => {
+                                        const retryAfter = response.headers.get('retry-after');
+                                        if (retryAfter) {
+                                            const seconds = parseInt(retryAfter, 10);
+                                            if (!isNaN(seconds) && seconds > 0) {
+                                                nextPollMs = seconds * 1000;
+                                            }
                                         }
-                                    }
+                                    },
                                 },
-                            },
-                        ),
-                        this.fetchOperations(client, activity, abortSignal),
-                    ]);
+                            ),
+                            this.fetchOperations(client, activity, abortSignal),
+                        ]);
 
-                    abortSignal.throwIfAborted();
+                        abortSignal.throwIfAborted();
 
-                    const provisioningState = deployment.properties?.provisioningState;
-                    if (provisioningState) {
-                        activity.status = toActivityStatus(provisioningState);
-                        activity.description = provisioningState;
-                    }
+                        const provisioningState = deployment.properties?.provisioningState;
+                        if (provisioningState) {
+                            activity.status = toActivityStatus(provisioningState);
+                            activity.description = provisioningState;
+                        }
 
-                    // Detect structural changes in operations
-                    const prevCount = activity.operations?.length ?? 0;
-                    activity.operations = operations;
-                    const includeChildren = operations.length !== prevCount;
+                        // Detect structural changes in operations
+                        const prevCount = activity.operations?.length ?? 0;
+                        activity.operations = operations;
+                        const includeChildren = operations.length !== prevCount;
 
-                    if (isTerminalState(provisioningState)) {
-                        activity.endTime = new Date();
+                        if (isTerminalState(provisioningState)) {
+                            activity.endTime = new Date();
+                            this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
+                            return;
+                        }
+
                         this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
+                    });
+
+                    // Exit the loop if the deployment reached a terminal state
+                    if (isTerminalActivityStatus(activity.status)) {
                         return;
                     }
-
-                    this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
                 } catch {
                     abortSignal.throwIfAborted();
                     // Swallow other probably-transient errors and retry on next poll

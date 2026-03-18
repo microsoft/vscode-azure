@@ -68,6 +68,11 @@ export class ActionExecutor implements IActionExecutor {
             } finally {
                 measurements.duration = (Date.now() - startTime) / 1000;
 
+                // Remap isUserEvent to the legacy isActivationEvent property
+                if (context.telemetry.isUserEvent === false && properties.isActivationEvent === undefined) {
+                    properties.isActivationEvent = 'true';
+                }
+
                 if (context.telemetry.suppress !== 'always' &&
                     !(context.telemetry.suppress === 'onSuccess' && properties.result === 'Succeeded')
                 ) {

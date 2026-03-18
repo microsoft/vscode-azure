@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
-import { Disposable } from '../vscode/Disposable';
 import { isAsyncIterable, type Page } from '../data/Page';
+import { Disposable } from '../vscode/Disposable';
 import type { DataProvider } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -64,10 +65,19 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     public readonly onDidChange = this.changeEmitter.event;
 
     /**
+     * @param executor - Action executor for wrapping provider calls in
+     *   telemetry scopes. Every {@link DataProvider.getChildren} and
+     *   {@link DataProvider.enrich} call runs inside
+     *   {@link IActionExecutor.callWithTelemetryAndErrorHandling}, which
+     *   establishes an {@link IActionContext} on the async call stack via
+     *   `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`)
+     *   pick up this context automatically without any changes to provider
+     *   or client signatures.
      * @param getKey - Extracts a unique string key from a resource.
      * @param ttl - Time-to-live in milliseconds for cached children.
      */
     public constructor(
+        private readonly executor: IActionExecutor,
         private readonly getKey: (resource: T) => string,
         private readonly ttl: number,
     ) {
@@ -116,10 +126,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         this.roots = undefined;
 
         // TODO: concurrency limits
-        const results = await Promise.all(
-            this.getRootProviders()
-                .map(p => Promise.resolve(p.getChildren())),
-        );
+        const results = await this.executor.callWithTelemetryAndErrorHandling('tree.getChildren', (context) => {
+            context.telemetry.isUserEvent = false;
+            return Promise.all(
+                this.getRootProviders()
+                    .map(p => Promise.resolve(p.getChildren())),
+            );
+        }) ?? [];
 
         // Root providers always return plain arrays (pagination at root
         // level is not supported).
@@ -169,7 +182,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         node.children = [];
         node.pageIterator = undefined;
 
-        const result = await provider.getChildren(resource);
+        const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getChildren', (context) => {
+            context.telemetry.isUserEvent = false;
+            return provider.getChildren(resource);
+        });
 
         if (!result) {
             // No children -- leave the empty array
@@ -204,11 +220,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             const provider = this.findProvider(resource);
             if (provider?.enrich) {
                 const key = this.getKey(resource);
-                const promise = Promise
-                    .resolve(provider.enrich(resource))
+                const promise = this.executor
+                    .callWithTelemetryAndErrorHandling('tree.enrich', (context) => {
+                        context.telemetry.isUserEvent = false;
+                        return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
+                    })
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
-                        this.invalidate(resource, includeChildren);
+                        this.invalidate(resource, includeChildren ?? false);
                     });
                 this.enrichmentPromises.set(key, promise);
                 // Attach a rejection handler so background rejections are not unhandled
@@ -287,18 +306,21 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * never called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
-        const key = this.getKey(resource);
-        const node = this.nodes.get(key);
+        await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
+            context.telemetry.isUserEvent = false;
+            const key = this.getKey(resource);
+            const node = this.nodes.get(key);
 
-        // Ensure children are initialized (first page pulled) before
-        // exhausting remaining pages.
-        if (node?.children === undefined) {
-            await this.getChildren(resource);
-        }
+            // Ensure children are initialized (first page pulled) before
+            // exhausting remaining pages.
+            if (node?.children === undefined) {
+                await this.getChildren(resource);
+            }
 
-        while (this.hasMore(resource)) {
-            await this.loadOnePage(resource);
-        }
+            while (this.hasMore(resource)) {
+                await this.loadOnePage(resource);
+            }
+        });
         this.changeEmitter.fire(resource);
     }
 
@@ -310,9 +332,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                 return;
             }
 
-            const next = await node.pageIterator.next();
+            const next = await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
+                context.telemetry.isUserEvent = false;
+                return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
+            });
 
-            if (next.done) {
+            if (!next || next.done) {
                 node.pageIterator = undefined;
             } else {
                 node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items)];

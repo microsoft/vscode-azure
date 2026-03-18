@@ -40,7 +40,7 @@ Every client created through the factory functions gets five custom pipeline pol
 | Policy | Position | Description |
 |--------|----------|-------------|
 | `DedupeRequestPolicy` | perCall | Deduplicates concurrent identical GET requests using `InflightMap`. If two concurrent calls hit the same URL, the second reuses the first's response (with a cloned response object). Streaming requests are excluded. |
-| `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command that initiated them. |
+| `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command or tree operation that initiated them. The context is looked up via `IActionExecutor.currentContext` (backed by `AsyncLocalStorage`), so policies don't need `IActionContext` passed explicitly — it's established by whichever scope wraps the call (command execution or `DataItemTree` provider call). |
 | `AcceptLanguagePolicy` | perCall | Sets the `accept-language` header to VS Code's UI language (`vscode.env.language`), so ARM responses match the user's locale. |
 | `MFAChallengePolicy` | perRetry | Handles 401 responses with a `WWW-Authenticate` header by requesting a stepped-up token. Records `challenge` and `challengeSuccess` telemetry properties. |
 | `RemoveBOMPolicy` | perRetry | Strips a leading UTF-8 BOM (`U+FEFF`) from response body text, which some Azure endpoints include. |

@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
+import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
 import type { Disposable } from '../vscode/Disposable';
 import type { ITreeItem } from '../vscode/IVsCode';
-import type { ProviderResult } from '../vscode/ProviderResult';
 import type { DataItemTree } from './DataItemTree';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -97,11 +97,13 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     private readonly loadMoreData: (key: string) => Promise<void>;
 
     /**
+     * @param executor - The {@link IActionExecutor} to use for telemetry and error handling when calling view providers.
      * @param options - Configuration for the view item tree.
      * @param loadMoreOptions - Optional. When provided, enables automatic "Load More" node
      * injection for paginated branches.
      */
     public constructor(
+        private readonly executor: IActionExecutor,
         options: ViewItemTreeOptions<TViewItem, TResource>,
         private readonly loadMoreOptions?: LoadMoreOptions<TViewItem>,
     ) {
@@ -145,11 +147,16 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * nodes, filter, reorder, or group the results as they see fit.
      */
     public async getChildren(viewItem?: TViewItem): Promise<TViewItem[]> {
-        if (viewItem === undefined) {
-            return this.getRootChildren();
-        }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Errors are rethrown, so the result will always be defined (or an error thrown).
+        return (await this.executor.callWithTelemetryAndErrorHandling('view.getChildren', (context) => {
+            context.telemetry.suppress = 'onSuccess';
+            context.errorHandling.rethrow = true;
 
-        return this.getBranchChildren(viewItem);
+            if (viewItem === undefined) {
+                return this.getRootChildren();
+            }
+            return this.getBranchChildren(viewItem);
+        }))!;
     }
 
     private async getRootChildren(): Promise<TViewItem[]> {
@@ -208,19 +215,26 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * Get the VS Code tree item representation for the given resource by
      * delegating to the {@link ViewProvider} that handles it.
      */
-    public getTreeItem(viewItem: TViewItem): ITreeItem | Promise<ITreeItem> {
-        // Synthetic "Load More" nodes: return the configured tree item directly (no provider involved)
-        if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
-            const parentViewItem = this.loadMoreOptions.getParentViewItem(viewItem);
-            const parentKey = this.getKey(parentViewItem);
-            return this.loadMoreOptions.getTreeItem(parentViewItem, this.loadsInFlight.has(parentKey));
-        }
+    public async getTreeItem(viewItem: TViewItem): Promise<ITreeItem> {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Errors are rethrown, so the result will always be defined (or an error thrown).
+        return (await this.executor.callWithTelemetryAndErrorHandling('view.getTreeItem', (context) => {
+            context.telemetry.suppress = 'onSuccess';
+            context.telemetry.isUserEvent = false;
+            context.errorHandling.rethrow = true;
 
-        const provider = this.findProvider(viewItem);
-        if (!provider) {
-            throw new Error(`No view provider found for view item: ${this.getKey(viewItem)}`);
-        }
-        return provider.getTreeItem(viewItem);
+            // Synthetic "Load More" nodes: return the configured tree item directly (no provider involved)
+            if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
+                const parentViewItem = this.loadMoreOptions.getParentViewItem(viewItem);
+                const parentKey = this.getKey(parentViewItem);
+                return this.loadMoreOptions.getTreeItem(parentViewItem, this.loadsInFlight.has(parentKey));
+            }
+
+            const provider = this.findProvider(viewItem);
+            if (!provider) {
+                throw new Error(`No view provider found for view item: ${this.getKey(viewItem)}`);
+            }
+            return provider.getTreeItem(viewItem);
+        }))!;
     }
 
     /**
@@ -231,23 +245,29 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * `getParent` method (if implemented) so that `TreeView.reveal()`
      * works for nodes that have not yet been loaded.
      */
-    public getParent(viewItem: TViewItem): ProviderResult<TViewItem | undefined> {
-        // Synthetic "Load More" nodes: derive the parent directly from the view item (no cache lookup or provider involved)
-        if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
-            return this.loadMoreOptions.getParentViewItem(viewItem);
-        }
+    public async getParent(viewItem: TViewItem): Promise<TViewItem | undefined> {
+        return await this.executor.callWithTelemetryAndErrorHandling('view.getParent', async (context) => {
+            context.telemetry.suppress = 'onSuccess';
+            context.telemetry.isUserEvent = false;
+            context.errorHandling.rethrow = true;
 
-        // Fast path: node is already in the map from a prior getChildren() call.
-        // We must distinguish "not in cache" from "in cache with no parent"
-        // (root nodes), so we check the node itself rather than its parent.
-        const node = this.nodes.get(this.getKey(viewItem));
-        if (node) {
-            return node.parent?.viewItem;
-        }
+            // Synthetic "Load More" nodes: derive the parent directly from the view item (no cache lookup or provider involved)
+            if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
+                return this.loadMoreOptions.getParentViewItem(viewItem);
+            }
 
-        // Slow path: ask the provider to compute the parent on demand
-        const provider = this.findProvider(viewItem);
-        return provider?.getParent?.(viewItem);
+            // Fast path: node is already in the map from a prior getChildren() call.
+            // We must distinguish "not in cache" from "in cache with no parent"
+            // (root nodes), so we check the node itself rather than its parent.
+            const node = this.nodes.get(this.getKey(viewItem));
+            if (node) {
+                return node.parent?.viewItem;
+            }
+
+            // Slow path: ask the provider to compute the parent on demand
+            const provider = this.findProvider(viewItem);
+            return await provider?.getParent?.(viewItem) ?? undefined;
+        });
     }
 
     /**

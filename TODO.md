@@ -1,7 +1,6 @@
 ## TODO
 - Vastly more logging to the output channel (especially debug/trace)
   - Also use `@azure/logger` to log to the output channel for SDK calls
-- Telemetry on all the things (especially tree operations)
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
 - Setting for default page size
