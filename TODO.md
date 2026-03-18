@@ -27,7 +27,6 @@
 - Test that enforces bundle size not growing out of control
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)
 - Could we use a hardcoded Azure location list, along with a test case that makes sure we keep it up-to-date with real Azure? Would save a lot of location list step time.
-- Ability to mock and/or inject the Azure clients
 
 ## Before handoff
 - Activity view
