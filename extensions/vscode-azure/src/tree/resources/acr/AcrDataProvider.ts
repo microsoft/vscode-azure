@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
-import { get as getRegistries } from '@azure/arm-containerregistry/api/registries';
-import { type ConcreteAzureNode, createAzureRestSubscriptionClient, type GenericResource, isVirtualResource, parseAzureResourceId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import {
+    isVirtualResource, parseAzureResourceId,
+    type ConcreteAzureNode, type GenericResource, type IAcrClient, type VirtualResource
+} from '@microsoft/vscode-azure-azutils';
 import type { DataProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { IAcrClientProvider } from '../../../services';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**
@@ -20,7 +21,7 @@ import { isAcrRegistry } from './AcrRegistry';
  *   {@link AcrRegistry}-specific properties (`loginServer`, `sku`, etc.)
  *   to the resource in-place.
  * - **`getChildren`**: stubbed — will return repositories and tags once
- *   the data-plane client (`@azure/container-registry`) is integrated.
+ *   the data-plane client is integrated.
  */
 @injectable()
 export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
@@ -29,11 +30,10 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * Cached ARM management clients per subscription ID, so all calls for
      * the same subscription share one client instance.
      */
-    private readonly clientCache = new Map<string, ContainerRegistryManagementContext>();
+    private readonly clientCache = new Map<string, IAcrClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
-        @inject(ICodeContext) private readonly ctx: ICodeContext,
-        @inject(IActionExecutor) private readonly executor: IActionExecutor,
+        @inject(IAcrClientProvider) private readonly createClient: IAcrClientProvider,
     ) { }
 
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
@@ -52,7 +52,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
             return false;
         }
 
-        const client = this.getOrCreateClient(resource);
+        const client = await this.getOrCreateClient(resource);
         const { resourceGroup: resourceGroupName } = parseAzureResourceId(resource.id);
         if (!resourceGroupName) {
             throw new Error(`Cannot extract resource group name from resource ID: ${resource.id}`);
@@ -61,7 +61,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
         // TODO: remove simulated delay
         await new Promise(resolve => setTimeout(resolve, 5000));
 
-        const registry = await getRegistries(client, resourceGroupName, resource.name);
+        const registry = await client.registries.get(resourceGroupName, resource.name);
 
         Object.assign(resource, {
             loginServer: registry.loginServer ?? '',
@@ -114,11 +114,11 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * Get or create a cached ARM management client for the given resource's
      * subscription.
      */
-    private getOrCreateClient(resource: GenericResource): ContainerRegistryManagementContext {
+    private async getOrCreateClient(resource: GenericResource): Promise<IAcrClient> {
         const { subscription } = resource;
         let client = this.clientCache.get(subscription.subscriptionId);
         if (!client) {
-            client = createAzureRestSubscriptionClient(this.ctx, this.executor, createContainerRegistryManagement, subscription.credential, subscription.subscriptionId);
+            client = await this.createClient(subscription);
             this.clientCache.set(subscription.subscriptionId, client);
         }
         return client;

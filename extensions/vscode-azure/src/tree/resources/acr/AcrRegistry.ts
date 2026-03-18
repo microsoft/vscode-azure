@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Sku } from '@azure/arm-containerregistry/models';
-import type { GenericResource } from '@microsoft/vscode-azure-azutils';
+import type { Sku as AcrSku, GenericResource } from '@microsoft/vscode-azure-azutils';
 import { isGenericResource } from '@microsoft/vscode-azure-azutils';
 
 /**
@@ -24,7 +23,7 @@ export interface AcrRegistry extends GenericResource {
     /** The URL that can be used to log into the container registry. */
     readonly loginServer: string | undefined;
     /** The SKU of the container registry. */
-    readonly sku: Sku | undefined;
+    readonly sku: AcrSku | undefined;
     /** Whether the admin user is enabled. */
     readonly adminUserEnabled: boolean | undefined;
 }
@@ -42,7 +41,7 @@ export interface AcrRegistry extends GenericResource {
  */
 export interface EnrichedAcrRegistry extends GenericResource {
     readonly loginServer: string;
-    readonly sku: Sku;
+    readonly sku: AcrSku;
     readonly adminUserEnabled: boolean;
 }
 

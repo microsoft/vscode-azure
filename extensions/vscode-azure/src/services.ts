@@ -3,15 +3,31 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import type { ConcreteAzureNode, ConcreteAzureNodeTree, IAcrClient, IDeploymentClient, IResourceClient } from '@microsoft/vscode-azure-azutils';
 import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
-import type { ResolutionContext, ServiceIdentifier } from 'inversify';
+import type { Factory, ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { Activity } from './tree/activity/Activity';
 
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
+
+// #region Client provider identifiers
+
+/** Factory that creates an {@link IResourceClient} for a given subscription. */
+export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
+export type IResourceClientProvider = Factory<IResourceClient, [AzureSubscription]>;
+
+/** Factory that creates an {@link IDeploymentClient} for a given subscription. */
+export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');
+export type IDeploymentClientProvider = Factory<IDeploymentClient, [AzureSubscription]>;
+
+/** Factory that creates an {@link IAcrClient} for a given subscription. */
+export const IAcrClientProvider: ServiceIdentifier<IAcrClientProvider> = Symbol.for('IAcrClientProvider');
+export type IAcrClientProvider = Factory<IAcrClient, [AzureSubscription]>;
+
+// #endregion
 
 // #region Azure resource tree and view identifiers
 

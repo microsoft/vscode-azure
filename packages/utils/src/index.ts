@@ -18,6 +18,7 @@ export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AsWritable';
 export * from './types/Satisfies';
+export * from './types/WithRequired';
 export * from './ui/uiHelpers';
 export * from './vscode/CancellationError';
 export * from './vscode/Disposable';

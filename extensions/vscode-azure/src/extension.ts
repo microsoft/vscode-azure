@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import { AcrClient, DeploymentClient, ResourceClient } from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
     CommandRegistry,
@@ -21,7 +22,7 @@ import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { registerCommands } from './commands/registerCommands';
-import { IAzureSubscriptionProvider, pushDisposable } from './services';
+import { IAcrClientProvider, IAzureSubscriptionProvider, IDeploymentClientProvider, IResourceClientProvider, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 
 export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
@@ -72,6 +73,24 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
         return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
     }).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IResourceClientProvider).toFactory(context => {
+        const ctx = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        return (subscription) => ResourceClient.create(ctx, executor, subscription);
+    });
+
+    container.bind(IDeploymentClientProvider).toFactory(context => {
+        const ctx = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        return (subscription) => DeploymentClient.create(ctx, executor, subscription);
+    });
+
+    container.bind(IAcrClientProvider).toFactory(context => {
+        const ctx = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        return (subscription) => AcrClient.create(ctx, executor, subscription);
+    });
 
     return container;
 }

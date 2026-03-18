@@ -25,13 +25,16 @@
         "clean": "node ../../scripts/clean.mjs"
     },
     "dependencies": {
+        "@azure/arm-containerregistry": "12.0.0-alpha.20260224.1",
+        "@azure/arm-resources": "^7.0.0",
+        "@azure/arm-resourcesdeployments": "^1.0.0-alpha.20250716.1",
         "@azure/ms-rest-azure-env": "^2.0.0",
         "@microsoft/vscode-azure-utils": "^1.0.0"
     },
     "devDependencies": {
-        "@azure/arm-resources": "*",
         "@azure/core-auth": "*",
         "@azure/core-client": "*",
+        "@azure/core-paging": "*",
         "@azure/core-rest-pipeline": "*",
         "@azure-rest/core-client": "*",
         "@microsoft/vscode-azext-azureauth": "*"
