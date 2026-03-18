@@ -127,7 +127,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
         // TODO: concurrency limits
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
-        const results = (await this.executor.callWithTelemetryAndErrorHandling('tree.getChildren', (context) => {
+        const results = (await this.executor.callWithTelemetryAndErrorHandling('tree.getRootChildren', (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
             return Promise.all(
@@ -184,7 +184,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         node.children = [];
         node.pageIterator = undefined;
 
-        const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getChildren', (context) => {
+        const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
             return provider.getChildren(resource);
