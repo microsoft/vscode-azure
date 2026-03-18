@@ -55,7 +55,23 @@ export interface TelemetryProperties extends Record<string, string | undefined> 
     readonly error?: string;
     readonly errorMessage?: string;
     readonly stack?: string;
+
+    /** Which tree instance this event originated from */
+    tree?: string;
+    /** The provider class name that handled this operation */
+    provider?: string;
+    /** The domain-specific node type (e.g. `'subscription'`, `'acrRegistry'`). Set by providers. */
+    nodeType?: string;
 }
+
+/**
+ * Well-known writable telemetry property names. Used by {@link IActionExecutor.setTelProp}
+ * to provide autocomplete for common keys while still allowing arbitrary strings.
+ *
+ * The `| (string & {})` hack causes intellisense to suggest the known keys but not restrict
+ * callers to them.
+ */
+export type KnownTelemetryProperty = 'tree' | 'provider' | 'nodeType' | (string & {});
 
 export interface TelemetryMeasurements extends Record<string, number | undefined> {
     // TODO: All these need to match existing property names

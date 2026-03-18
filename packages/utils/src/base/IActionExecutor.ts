@@ -7,12 +7,16 @@ import { AsyncLocalStorage } from 'async_hooks';
 import type { ServiceIdentifier } from 'inversify';
 import type { AsWritable } from '../types/AsWritable';
 import { CancellationError } from '../vscode/CancellationError';
-import { createActionContext, type IActionContext, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
+import { createActionContext, type IActionContext, type KnownTelemetryProperty, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 
 export const IActionExecutor: ServiceIdentifier<IActionExecutor> = Symbol.for('IActionExecutor');
 export interface IActionExecutor {
     readonly currentContext: IActionContext | undefined;
+    /** Set a telemetry property on the current context, if one exists. No-op otherwise. */
+    setTelProp(name: KnownTelemetryProperty, value: string): void;
+    /** Set a telemetry measurement on the current context, if one exists. No-op otherwise. */
+    setTelMeasure(name: string, value: number): void;
     callWithTelemetryAndErrorHandling<T>(
         telemetryId: string,
         callback: ActionCallback<T>
@@ -30,6 +34,20 @@ export class ActionExecutor implements IActionExecutor {
 
     public get currentContext(): IActionContext | undefined {
         return this.storage.getStore();
+    }
+
+    public setTelProp(name: KnownTelemetryProperty, value: string): void {
+        const context = this.currentContext;
+        if (context) {
+            context.telemetry.properties[name] = value;
+        }
+    }
+
+    public setTelMeasure(name: string, value: number): void {
+        const context = this.currentContext;
+        if (context) {
+            context.telemetry.measurements[name] = value;
+        }
     }
 
     public async callWithTelemetryAndErrorHandling<T>(
