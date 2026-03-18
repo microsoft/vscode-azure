@@ -7,7 +7,7 @@ import {
     isVirtualResource, parseAzureResourceId,
     type ConcreteAzureNode, type GenericResource, type IAcrClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
-import type { DataProvider } from '@microsoft/vscode-azure-utils';
+import { InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAcrClientProvider } from '../../../services';
 import { isAcrRegistry } from './AcrRegistry';
@@ -30,7 +30,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * Cached ARM management clients per subscription ID, so all calls for
      * the same subscription share one client instance.
      */
-    private readonly clientCache = new Map<string, IAcrClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
+    private readonly clientCache = new InflightMap<IAcrClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
         @inject(IAcrClientProvider) private readonly createClient: IAcrClientProvider,
@@ -114,14 +114,8 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * Get or create a cached ARM management client for the given resource's
      * subscription.
      */
-    private async getOrCreateClient(resource: GenericResource): Promise<IAcrClient> {
-        const { subscription } = resource;
-        let client = this.clientCache.get(subscription.subscriptionId);
-        if (!client) {
-            client = await this.createClient(subscription);
-            this.clientCache.set(subscription.subscriptionId, client);
-        }
-        return client;
+    private getOrCreateClient(resource: GenericResource): Promise<IAcrClient> {
+        return this.clientCache.getOrCreate(resource.subscription.subscriptionId, () => this.createClient(resource.subscription));
     }
 }
 

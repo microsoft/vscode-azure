@@ -8,7 +8,7 @@ import {
     isAccount, isResourceGroup, isSubscription, isTenant,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
-import type { ChildResult, DataProvider } from '@microsoft/vscode-azure-utils';
+import { InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider, IResourceClientProvider } from '../../services';
 
@@ -31,7 +31,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      * Cached REST clients per subscription ID, so all calls for the same
      * subscription share one pipeline (and thus one {@link DedupeRequestPolicy}).
      */
-    private readonly clientCache = new Map<string, IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
+    private readonly clientCache = new InflightMap<IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
@@ -84,12 +84,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      * All callers for the same subscription share the same client and pipeline,
      * so {@link DedupeRequestPolicy} can deduplicate concurrent requests.
      */
-    private async getOrCreateClient(subscription: AzureSubscription): Promise<IResourceClient> {
-        let client = this.clientCache.get(subscription.subscriptionId);
-        if (!client) {
-            client = await this.createClient(subscription);
-            this.clientCache.set(subscription.subscriptionId, client);
-        }
-        return client;
+    private getOrCreateClient(subscription: AzureSubscription): Promise<IResourceClient> {
+        return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
     }
 }

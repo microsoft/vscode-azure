@@ -5,10 +5,13 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { DeploymentOperation, IDeploymentClient, ProvisioningOperation, ProvisioningState } from '@microsoft/vscode-azure-azutils';
-import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, flattenPages } from '@microsoft/vscode-azure-utils';
+import {
+    EventEmitter, flattenPages, InflightMap,
+    type DataProvider, type DataProviderChangeEvent, type Disposable
+} from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IDeploymentClientProvider } from '../../services';
-import { type Activity, isActivity, isTerminalActivityStatus } from './Activity';
+import { isActivity, isTerminalActivityStatus, type Activity } from './Activity';
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
 
@@ -48,7 +51,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
     private readonly activePolls = new Set<string>();
-    private readonly clientCache = new Map<string, IDeploymentClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
+    private readonly clientCache = new InflightMap<IDeploymentClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<ArmDeploymentActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
@@ -301,13 +304,8 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         return results;
     }
 
-    private async getOrCreateClient(subscription: AzureSubscription): Promise<IDeploymentClient> {
-        let client = this.clientCache.get(subscription.subscriptionId);
-        if (!client) {
-            client = await this.createClient(subscription);
-            this.clientCache.set(subscription.subscriptionId, client);
-        }
-        return client;
+    private getOrCreateClient(subscription: AzureSubscription): Promise<IDeploymentClient> {
+        return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
     }
 
     public clearActivities(filter: (activity: ArmDeploymentActivity) => boolean): void {
