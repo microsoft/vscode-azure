@@ -69,18 +69,21 @@ npm run build --workspace=extensions/vscode-azure
 
 `esbuild.mjs` uses shared configs from `@microsoft/vscode-azext-eng/esbuild`:
 
-- **Production** (`npm run build:esbuild`): minified, no source maps
-- **Watch** (`npm run build:esbuild -- --watch`): unminified, linked source maps, watch mode
-- **Debug** (`DEBUG_ESBUILD=1`): production + metafile
-
-The `alias` configuration resolves local package imports to their source files so esbuild bundles them directly:
-
 ```javascript
+const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig(true);
+
 extensionConfig.alias = {
+    ...extensionConfig.alias,
     '@microsoft/vscode-azure-utils': '../../packages/utils/src/index.ts',
     '@microsoft/vscode-azure-azutils': '../../packages/azutils/src/index.ts',
 };
+
+await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
 ```
+
+- `autoSelectEsbuildConfig(true)` returns both an `extensionConfig` and a `telemetryConfig` (for the separate telemetry bundle). The `true` argument enables ESM output.
+- `autoEsbuildOrWatch` builds in production mode by default, or enters watch mode when `--watch` is passed on the command line.
+- The `alias` configuration resolves local package imports to their source files so esbuild bundles them directly.
 
 ## Watch Mode
 

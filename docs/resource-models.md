@@ -65,21 +65,24 @@ interface VirtualResource {
 
 Used by service-specific providers (e.g. ACR) to represent sub-resources like container repositories that aren't top-level ARM resources.
 
-## `VirtualGroup`
+## `VirtualGroup` and `ResourceGroup`
 
 Grouping nodes for organizing resources in the tree:
 
 ```typescript
-interface VirtualGroup {
-    subscription: AzureSubscription;
-    groupingStrategy: GroupingStrategy;
-    groupingValue: string;
+type GroupingStrategy = 'location' | 'resourceType' | 'armTag' | 'resourceGroup';
+
+interface GroupingBase {
+    readonly subscription: AzureSubscription;
+    readonly groupingStrategy: GroupingStrategy;
+    readonly groupingValue: string;
 }
 
-type GroupingStrategy = 'location' | 'resourceType' | 'armTag' | 'resourceGroup';
+type VirtualGroup = GroupingBase & { readonly groupingStrategy: Exclude<GroupingStrategy, 'resourceGroup'> };
+type ResourceGroup = GroupingBase & { readonly groupingStrategy: 'resourceGroup' } & GenericResource;
 ```
 
-`ResourceGroup` is a special case: it uses `groupingStrategy = 'resourceGroup'` and extends `GenericResource` (since resource groups are themselves ARM resources).
+`VirtualGroup` explicitly excludes `'resourceGroup'` from its discriminant — resource groups are handled by the `ResourceGroup` type instead. `ResourceGroup` extends both `GroupingBase` and `GenericResource` since resource groups are themselves ARM resources.
 
 ## `AzureNodeId`
 

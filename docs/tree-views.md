@@ -19,7 +19,7 @@ Key methods:
 | Method | Description |
 |--------|-------------|
 | `getChildren(resource?)` | Fetch and cache children (root if undefined) |
-| `invalidate(resource)` | Clear a resource's cached children |
+| `invalidate(resource, includeChildren?)` | Clear a resource's cached data (optionally keep children) |
 | `invalidateAll()` | Clear the entire tree |
 | `whenEnriched<T>(resource)` | Await background enrichment completion |
 | `hasMore(resource)` | Whether more pages are available |
@@ -35,12 +35,24 @@ Interface for data fetching. Lives in `packages/utils/src/tree/DataProvider.ts`.
 interface DataProvider<TResource> {
     canHandle(resource: unknown): resource is TResource;                        // Type guard
     getChildren(resource?: TResource): ProviderResult<ChildResult<TResource>>; // Fetch children
-    enrich?(resource: TResource): void | Promise<void>;                        // Background enrichment (mutate in-place)
+    enrich?(resource: TResource): boolean | Promise<boolean>;                  // Background enrichment (mutate in-place); return true to invalidate children
     readonly isRoot?: boolean;                                                 // Whether this provider returns root-level items
+    readonly onDidChange?: Event<DataProviderChangeEvent<TResource>>;          // Provider-initiated change notifications
 }
 ```
 
 `ChildResult<T>` can be either `T[]` (simple array) or `AsyncIterable<Page<T>>` (paginated).
+
+`DataProviderChangeEvent<T>` allows providers to push changes without going through invalidation:
+
+```typescript
+interface DataProviderChangeEvent<TResource> {
+    readonly resource?: TResource;     // Undefined = root changed
+    readonly includeChildren: boolean; // Whether to clear cached children too
+}
+```
+
+`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it. This is used by activity providers that need to push real-time status updates.
 
 ### Enrichment Pattern
 
@@ -53,6 +65,12 @@ Resources can be enriched with additional data lazily after loading:
 5. Commands that need enriched data call `await cache.whenEnriched<EnrichedType>(resource)`
 
 **Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (e.g. `id`, `name`, `type`, `subscription`). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
+
+The `enrich()` return value controls child invalidation:
+- Return `false` (or resolve to `false`) — only re-render the resource itself
+- Return `true` (or resolve to `true`) — also clear the resource's cached children so they are re-fetched on next access
+
+This is useful when enrichment discovers that the resource's children have changed (e.g. ARM deployment operations are fetched during enrichment of the deployment itself).
 
 Example from `AcrDataProvider`:
 
@@ -104,6 +122,43 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 container.bind(IAzureViewDataProviders).to(AcrDataProvider);
 container.bind(IAzureViewDataProviders).to(GenericAzureDataProvider); // fallback
 ```
+
+## Activity Tree
+
+A second tree view tracks long-running operations (ARM deployments, code deployments, generic activities). It uses the same `DataItemTree` / `ViewItemTree` infrastructure as the resources tree but with `Infinity` TTL — providers manage freshness via polling and the `onDidChange` event.
+
+### Activity Model
+
+Activities implement a common interface:
+
+```typescript
+interface Activity {
+    readonly id: string;
+    readonly type: ActivityType;     // 'armDeployment' | 'armDeploymentOperation' | 'codeDeployment' | 'generic'
+    readonly status: ActivityStatus; // 'NotStarted' | 'InProgress' | 'Canceled' | 'Completed' | 'Failed'
+    readonly title: string;
+    readonly description?: string;
+    readonly startTime: number;
+    readonly endTime?: number;
+}
+```
+
+### Activity Data Providers
+
+| Provider | Root? | Description |
+|----------|-------|-------------|
+| `ArmDeploymentDataProvider` | Yes | Tracks ARM deployments. Polls for status and fetches deployment operations during enrichment. |
+| `CodeDeploymentDataProvider` | Yes | Tracks code deployments with nested child activities. |
+| `GenericActivityDataProvider` | Yes | Tracks simple one-off activities (leaf nodes, no children). |
+
+Activity providers are bound with `.toSelf().inSingletonScope()` first, then aliased with `.toService()` to the multi-binding identifier. This allows commands (e.g. `TrackArmDeployment`, `ClearActivities`) to inject specific providers directly while the tree still retrieves all providers collectively.
+
+### Activity View Providers
+
+| Provider | Description |
+|----------|-------------|
+| `ArmDeploymentViewProvider` | Handles ARM deployment and operation nodes with nested children. |
+| `ActivityViewProvider` | Fallback: handles all other activity types. Renders status icons (loading/pass/error/circle-slash). |
 
 ## Load More / Pagination
 

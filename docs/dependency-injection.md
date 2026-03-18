@@ -18,9 +18,15 @@ export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('Out
 
 // In extensions/vscode-azure/src/services.ts
 export const IAzureSubscriptionProvider: ServiceIdentifier<...> = Symbol.for('IAzureSubscriptionProvider');
+export const IResourceClientProvider: ServiceIdentifier<...> = Symbol.for('IResourceClientProvider');
+export const IDeploymentClientProvider: ServiceIdentifier<...> = Symbol.for('IDeploymentClientProvider');
+export const IAcrClientProvider: ServiceIdentifier<...> = Symbol.for('IAcrClientProvider');
 export const IAzureViewDataTree: ServiceIdentifier<...> = Symbol.for('IAzureViewDataTree');
 export const IAzureViewViewItemTree: ServiceIdentifier<...> = Symbol.for('IAzureViewViewItemTree');
 export const IAzureResourceTreeView: ServiceIdentifier<...> = Symbol.for('IAzureResourceTreeView');
+export const IActivityViewDataTree: ServiceIdentifier<...> = Symbol.for('IActivityViewDataTree');
+export const IActivityViewViewItemTree: ServiceIdentifier<...> = Symbol.for('IActivityViewViewItemTree');
+export const IActivityTreeView: ServiceIdentifier<...> = Symbol.for('IActivityTreeView');
 ```
 
 Each identifier doubles as both the type alias and the DI token using TypeScript's declaration merging:
@@ -62,15 +68,15 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
 The `pushDisposable` helper (in `services.ts`) registers disposable services with the extension context so they're cleaned up on deactivation:
 
 ```typescript
-export function pushDisposable<T>(_context: unknown, instance: T): T {
-    if (instance && typeof instance === 'object' && 'dispose' in instance) {
-        extensionContext.subscriptions.push(instance as Disposable);
+export function pushDisposable<T>(context: ResolutionContext, injectable: T): T {
+    if (Disposable.test(injectable)) {
+        context.get(IExtensionContext).subscriptions.push(injectable);
     }
-    return instance;
+    return injectable;
 }
 ```
 
-All singleton bindings use `.onActivation(pushDisposable)` to opt into this pattern.
+It uses the inversify `ResolutionContext` to look up `IExtensionContext` and `Disposable.test()` to check disposability. All singleton bindings use `.onActivation(pushDisposable)` to opt into this pattern.
 
 ## Scoped Command Execution
 
@@ -129,3 +135,30 @@ import * as vscode from 'vscode';
 ```
 
 This makes code testable — unit tests can provide a mock `IVsCode` with only the needed properties. See [Testing](testing.md).
+
+## Factory Bindings for Azure Clients
+
+Azure SDK client providers use `.toFactory()` bindings. Each factory captures `ICodeContext` and `IActionExecutor`, then returns an async function that creates the client for a given subscription:
+
+```typescript
+container.bind(IResourceClientProvider).toFactory(context => {
+    const ctx = context.get(ICodeContext);
+    const executor = context.get(IActionExecutor);
+    return (subscription) => ResourceClient.create(ctx, executor, subscription);
+});
+```
+
+The resulting `IResourceClientProvider` type is an `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. See [Azure Clients](azure-clients.md) for details on the client wrappers.
+
+## Multi-Binding with Dual Registration
+
+Activity providers use a dual-binding pattern: each is bound to its own class first (for direct injection into commands), then aliased to the shared multi-binding identifier (for collective retrieval by the tree):
+
+```typescript
+// 1. Bind to self so commands can inject it directly
+container.bind(ArmDeploymentDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
+// 2. Alias to multi-binding so DataItemTree can retrieve all providers
+container.bind(IActivityViewDataProviders).toService(ArmDeploymentDataProvider);
+```
+
+This enables commands like `TrackArmDeployment` to inject `ArmDeploymentDataProvider` directly while the tree system retrieves all providers via `container.getAll(IActivityViewDataProviders)`.
