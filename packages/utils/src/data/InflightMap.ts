@@ -39,11 +39,17 @@ export class InflightMap<T> {
     /**
      * Like {@link getOrRun}, but the entry is **kept** after the promise settles,
      * so subsequent calls return the cached result without re-invoking `fn`.
+     *
+     * If the promise rejects, the error is propagated and the entry is deleted,
+     * so a subsequent call will retry the operation.
      */
     public getOrCreate(key: string, fn: () => Promise<T>): Promise<T> {
         let existing = this.inflight.get(key);
         if (!existing) {
-            existing = Promise.resolve(fn());
+            existing = Promise.resolve(fn()).catch((err: unknown) => {
+                this.inflight.delete(key);
+                throw err;
+            });
             this.inflight.set(key, existing);
         }
         return existing;
