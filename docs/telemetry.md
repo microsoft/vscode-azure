@@ -33,7 +33,7 @@ These are set automatically by `ActionExecutor`:
 | `result` | `'Succeeded'` \| `'Failed'` \| `'Canceled'` | Set based on whether the callback completed, threw, or was cancelled |
 | `correlationId` | UUID | Unique ID for this execution |
 | `duration` | number (seconds) | Elapsed time, set in `finally` block |
-| `isActivationEvent` | `'true'` \| `'false'` | Set to `'true'` when `isUserEvent` is `false` (see below) |
+| `isActivationEvent` | auto: `'true'` \| unset; manual: `'true'` \| `'false'` | Automatically set to `'true'` when `isUserEvent` is `false` and the property was previously unset; otherwise left unchanged |
 
 ### Custom Properties
 
