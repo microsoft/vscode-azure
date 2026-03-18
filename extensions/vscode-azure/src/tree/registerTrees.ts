@@ -32,6 +32,7 @@ function registerResourcesTree(container: Container): void {
     bindAzureViewDataProviders(container);
     container.bind(IAzureViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<ConcreteAzureNode>(
+            AzureResourceTreeViewId,
             context.get(IActionExecutor),
             resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000, // 5 minute TTL
@@ -48,6 +49,7 @@ function registerResourcesTree(container: Container): void {
     bindAzureViewViewProviders(container);
     container.bind(IAzureViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, ConcreteAzureNode>(
+            AzureResourceTreeViewId,
             context.get(IActionExecutor),
             {
                 dataItemTree: context.get(IAzureViewDataTree),
@@ -113,6 +115,7 @@ function registerActivityTree(container: Container): void {
     bindActivityViewDataProviders(container);
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
+            ActivityTreeViewId,
             context.get(IActionExecutor),
             activity => activity.id,
             Infinity, // Providers manage freshness via polling and change events
@@ -129,6 +132,7 @@ function registerActivityTree(container: Container): void {
     bindActivityViewViewProviders(container);
     container.bind(IActivityViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, Activity>(
+            ActivityTreeViewId,
             context.get(IActionExecutor),
             {
                 dataItemTree: context.get(IActivityViewDataTree),

@@ -65,6 +65,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     public readonly onDidChange = this.changeEmitter.event;
 
     /**
+     * @param name - A short identifier for this tree instance (e.g.
+     *   `'resources'`, `'activity'`). Stamped on every telemetry event as
+     *   `properties.tree`.
      * @param executor - Action executor for wrapping provider calls in
      *   telemetry scopes. Every {@link DataProvider.getChildren} and
      *   {@link DataProvider.enrich} call runs inside
@@ -77,6 +80,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * @param ttl - Time-to-live in milliseconds for cached children.
      */
     public constructor(
+        private readonly name: string,
         private readonly executor: IActionExecutor,
         private readonly getKey: (resource: T) => string,
         private readonly ttl: number,
@@ -130,6 +134,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         const results = (await this.executor.callWithTelemetryAndErrorHandling('tree.getRootChildren', (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
             return Promise.all(
                 this.getRootProviders()
                     .map(p => Promise.resolve(p.getChildren())),
@@ -187,6 +192,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
+            context.telemetry.properties.provider = provider.constructor.name;
             return provider.getChildren(resource);
         });
 
@@ -228,6 +235,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                         context.telemetry.isUserEvent = false;
                         context.telemetry.suppress = 'onSuccess'; // TODO: should we be suppressing?
                         context.errorHandling.rethrow = true;
+                        context.telemetry.properties.tree = this.name;
+                        context.telemetry.properties.provider = provider.constructor.name;
                         return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
                     })
                     .then((includeChildren) => {
@@ -314,6 +323,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
 
             const key = this.getKey(resource);
             const node = this.nodes.get(key);
@@ -344,6 +354,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             const next = (await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
                 context.telemetry.isUserEvent = false;
                 context.errorHandling.rethrow = true;
+                context.telemetry.properties.tree = this.name;
                 return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
             }))!;
 

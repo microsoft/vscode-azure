@@ -97,12 +97,16 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     private readonly loadMoreData: (key: string) => Promise<void>;
 
     /**
+     * @param name - A short identifier for this tree instance (e.g.
+     *   `'resources'`, `'activity'`). Stamped on every telemetry event as
+     *   `properties.tree`.
      * @param executor - The {@link IActionExecutor} to use for telemetry and error handling when calling view providers.
      * @param options - Configuration for the view item tree.
      * @param loadMoreOptions - Optional. When provided, enables automatic "Load More" node
      * injection for paginated branches.
      */
     public constructor(
+        private readonly name: string,
         private readonly executor: IActionExecutor,
         options: ViewItemTreeOptions<TViewItem, TResource>,
         private readonly loadMoreOptions?: LoadMoreOptions<TViewItem>,
@@ -151,6 +155,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         return (await this.executor.callWithTelemetryAndErrorHandling('view.getChildren', (context) => {
             context.telemetry.suppress = 'onSuccess';
             context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
 
             if (viewItem === undefined) {
                 return this.getRootChildren();
@@ -192,6 +197,12 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             return [];
         }
 
+        // Tag the ambient telemetry context (from view.getChildren) with the provider name
+        const ambientContext = this.executor.currentContext;
+        if (ambientContext) {
+            ambientContext.telemetry.properties.provider = provider.constructor.name;
+        }
+
         const childItems = await provider.getChildren(viewItem) ?? [];
 
         // Evict old children subtrees and build new child nodes
@@ -222,6 +233,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             context.telemetry.suppress = 'onSuccess';
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
 
             // Synthetic "Load More" nodes: return the configured tree item directly (no provider involved)
             if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
@@ -234,6 +246,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             if (!provider) {
                 throw new Error(`No view provider found for view item: ${this.getKey(viewItem)}`);
             }
+            context.telemetry.properties.provider = provider.constructor.name;
             return provider.getTreeItem(viewItem);
         }))!;
     }
@@ -251,6 +264,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             context.telemetry.suppress = 'onSuccess';
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
 
             // Synthetic "Load More" nodes: derive the parent directly from the view item (no cache lookup or provider involved)
             if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
@@ -267,6 +281,9 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
             // Slow path: ask the provider to compute the parent on demand
             const provider = this.findProvider(viewItem);
+            if (provider) {
+                context.telemetry.properties.provider = provider.constructor.name;
+            }
             return await provider?.getParent?.(viewItem) ?? undefined;
         });
     }
