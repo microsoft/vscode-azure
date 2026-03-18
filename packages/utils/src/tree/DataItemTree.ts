@@ -126,13 +126,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         this.roots = undefined;
 
         // TODO: concurrency limits
-        const results = await this.executor.callWithTelemetryAndErrorHandling('tree.getChildren', (context) => {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
+        const results = (await this.executor.callWithTelemetryAndErrorHandling('tree.getChildren', (context) => {
             context.telemetry.isUserEvent = false;
+            context.errorHandling.rethrow = true;
             return Promise.all(
                 this.getRootProviders()
                     .map(p => Promise.resolve(p.getChildren())),
             );
-        }) ?? [];
+        }))!;
 
         // Root providers always return plain arrays (pagination at root
         // level is not supported).
@@ -184,6 +186,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
         const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getChildren', (context) => {
             context.telemetry.isUserEvent = false;
+            context.errorHandling.rethrow = true;
             return provider.getChildren(resource);
         });
 
@@ -223,6 +226,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                 const promise = this.executor
                     .callWithTelemetryAndErrorHandling('tree.enrich', (context) => {
                         context.telemetry.isUserEvent = false;
+                        context.errorHandling.rethrow = true;
                         return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
                     })
                     .then((includeChildren) => {
@@ -308,6 +312,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     public async loadAll(resource: T): Promise<void> {
         await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
             context.telemetry.isUserEvent = false;
+            context.errorHandling.rethrow = true;
+
             const key = this.getKey(resource);
             const node = this.nodes.get(key);
 
@@ -332,12 +338,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                 return;
             }
 
-            const next = await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
-                context.telemetry.isUserEvent = false;
-                return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
-            });
 
-            if (!next || next.done) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
+            const next = (await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
+            }))!;
+
+            if (next.done) {
                 node.pageIterator = undefined;
             } else {
                 node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items)];
