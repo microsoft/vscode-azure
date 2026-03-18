@@ -7,7 +7,7 @@ import {
     isVirtualResource, parseAzureResourceId,
     type ConcreteAzureNode, type GenericResource, type IAcrClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
-import { InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAcrClientProvider } from '../../../services';
 import { isAcrRegistry } from './AcrRegistry';
@@ -33,6 +33,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
     private readonly clientCache = new InflightMap<IAcrClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAcrClientProvider) private readonly createClient: IAcrClientProvider,
     ) { }
 
@@ -82,7 +83,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
             return [];
         }
 
-        // Registry → category nodes (Repositories, Webhooks)
+        // Registry -> category nodes (Repositories, Webhooks)
         if (isAcrRegistry(resource)) {
             return [
                 { virtualType: 'acr.repositories', virtualPath: 'Repositories', azureResource: resource },

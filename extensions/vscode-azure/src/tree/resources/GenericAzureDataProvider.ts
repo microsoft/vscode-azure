@@ -8,7 +8,7 @@ import {
     isAccount, isResourceGroup, isSubscription, isTenant,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
-import { InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider, IResourceClientProvider } from '../../services';
 
@@ -34,6 +34,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private readonly clientCache = new InflightMap<IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
     ) { }
