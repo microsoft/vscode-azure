@@ -125,7 +125,7 @@ Events that **should not** set `isUserEvent = false` (i.e. they are user-initiat
 - `view.getChildren` (user expanded a tree node — the top-level entry point)
 
 Events that **should** set `isUserEvent = false`:
-- `tree.getChildren`, `tree.enrich`, `tree.loadMore`, `tree.loadAll` (data-layer operations triggered by the view)
+- `tree.get*Children`, `tree.enrich`, `tree.loadMore`, `tree.loadAll` (data-layer operations triggered by the view)
 - `view.getTreeItem`, `view.getParent` (VS Code tree UI callbacks)
 - `tree.pollArmDeployments` (timer-driven polling)
 - `activate` (extension activation)
