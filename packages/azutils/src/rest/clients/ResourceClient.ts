@@ -13,6 +13,7 @@ import type { IActionExecutor, ICodeContext, Page } from '@microsoft/vscode-azur
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
 import { createAzureSubscriptionClient } from '../createAzureClient';
+import { toPages } from '../toPages';
 
 export const SiteType = 'Microsoft.Web/sites';
 export const FunctionAppLogicalType = `${SiteType}~functionapp`;
@@ -73,28 +74,26 @@ export class ResourceClient implements IResourceClient {
         return { listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options) };
     }
 
-    private async *listResourceGroups(options?: { top?: number }): AsyncIterable<Page<ResourceGroup>> {
-        for await (const items of this.inner.resourceGroups.list(options).byPage()) {
-            yield {
-                items: items.map(rg => {
-                    const resourceGroup = attachMetadata(rg, this.subscription);
-                    return Object.assign(resourceGroup, {
-                        groupingStrategy: 'resourceGroup' as const,
-                        groupingValue: resourceGroup.name,
-                    });
-                }),
-                hasMore: !!ResourceClient.sdk!.getContinuationToken(items), // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
-            };
-        }
+    private listResourceGroups(options?: { top?: number }): AsyncIterable<Page<ResourceGroup>> {
+        return toPages(
+            this.inner.resourceGroups.list(options),
+            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
+            rg => {
+                const resourceGroup = attachMetadata(rg, this.subscription);
+                return Object.assign(resourceGroup, {
+                    groupingStrategy: 'resourceGroup' as const,
+                    groupingValue: resourceGroup.name,
+                });
+            },
+        );
     }
 
-    private async *listResources(resourceGroupName: string, options?: { top?: number }): AsyncIterable<Page<GenericResource>> {
-        for await (const items of this.inner.resources.listByResourceGroup(resourceGroupName, options).byPage()) {
-            yield {
-                items: items.map(r => attachMetadata(r, this.subscription)),
-                hasMore: !!ResourceClient.sdk!.getContinuationToken(items), // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
-            };
-        }
+    private listResources(resourceGroupName: string, options?: { top?: number }): AsyncIterable<Page<GenericResource>> {
+        return toPages(
+            this.inner.resources.listByResourceGroup(resourceGroupName, options),
+            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
+            r => attachMetadata(r, this.subscription),
+        );
     }
 }
 

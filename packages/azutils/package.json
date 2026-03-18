@@ -34,6 +34,7 @@
     "devDependencies": {
         "@azure/core-auth": "*",
         "@azure/core-client": "*",
+        "@azure/core-paging": "*",
         "@azure/core-rest-pipeline": "*",
         "@azure-rest/core-client": "*",
         "@microsoft/vscode-azext-azureauth": "*"

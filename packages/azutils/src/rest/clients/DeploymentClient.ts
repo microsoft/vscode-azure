@@ -15,6 +15,7 @@ import type {
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { IActionExecutor, ICodeContext, Page, WithRequired } from '@microsoft/vscode-azure-utils';
 import { createAzureSubscriptionClient } from '../createAzureClient';
+import { toPages } from '../toPages';
 
 /**
  * Subset of {@link SdkDeploymentExtended} with fields that the ARM API always returns.
@@ -71,12 +72,10 @@ export class DeploymentClient implements IDeploymentClient {
         return { listAtScope: (scope, deploymentName, options) => this.listOperationsAtScope(scope, deploymentName, options) };
     }
 
-    private async *listOperationsAtScope(scope: string, deploymentName: string, options?: DeploymentOperationsListAtScopeOptionalParams): AsyncIterable<Page<SdkDeploymentOperation>> {
-        for await (const items of this.inner.deploymentOperations.listAtScope(scope, deploymentName, options).byPage()) {
-            yield {
-                items,
-                hasMore: !!DeploymentClient.sdk!.getContinuationToken(items), // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
-            };
-        }
+    private listOperationsAtScope(scope: string, deploymentName: string, options?: DeploymentOperationsListAtScopeOptionalParams): AsyncIterable<Page<SdkDeploymentOperation>> {
+        return toPages(
+            this.inner.deploymentOperations.listAtScope(scope, deploymentName, options),
+            DeploymentClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
+        );
     }
 }
