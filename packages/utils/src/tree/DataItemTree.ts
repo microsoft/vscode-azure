@@ -5,7 +5,8 @@
 
 import { InflightMap } from '../data/InflightMap';
 import { Disposable } from '../vscode/Disposable';
-import { isAsyncIterable, type DataProvider, type Page } from './DataProvider';
+import { isAsyncIterable, type Page } from '../data/Page';
+import type { DataProvider } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 

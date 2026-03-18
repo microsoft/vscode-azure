@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Makes the specified properties of `T` non-optional and removes
- * `undefined` from their type. All other properties are left unchanged.
+ * Makes the specified properties of `T` non-optional, and removes
+ * `undefined` and `null` from their type. All other properties are
+ * left unchanged.
  *
  * Useful for Azure SDK types that declare properties as optional
  * (`id?: string`) even though the REST API always returns them.

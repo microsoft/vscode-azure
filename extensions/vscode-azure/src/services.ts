@@ -6,7 +6,7 @@
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree, IAcrClient, IDeploymentClient, IResourceClient } from '@microsoft/vscode-azure-azutils';
 import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
-import type { Factory, ResolutionContext, ServiceIdentifier } from 'inversify';
+import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { Activity } from './tree/activity/Activity';
 
@@ -17,15 +17,15 @@ export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProv
 
 /** Factory that creates an {@link IResourceClient} for a given subscription. */
 export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
-export type IResourceClientProvider = Factory<IResourceClient, [AzureSubscription]>;
+export type IResourceClientProvider = AsyncFactory<IResourceClient, [AzureSubscription]>;
 
 /** Factory that creates an {@link IDeploymentClient} for a given subscription. */
 export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');
-export type IDeploymentClientProvider = Factory<IDeploymentClient, [AzureSubscription]>;
+export type IDeploymentClientProvider = AsyncFactory<IDeploymentClient, [AzureSubscription]>;
 
 /** Factory that creates an {@link IAcrClient} for a given subscription. */
 export const IAcrClientProvider: ServiceIdentifier<IAcrClientProvider> = Symbol.for('IAcrClientProvider');
-export type IAcrClientProvider = Factory<IAcrClient, [AzureSubscription]>;
+export type IAcrClientProvider = AsyncFactory<IAcrClient, [AzureSubscription]>;
 
 // #endregion
 
@@ -71,3 +71,11 @@ export function pushDisposable<T>(context: ResolutionContext, injectable: T): T 
     }
     return injectable;
 }
+
+/**
+ * A factory function that asynchronously creates a service instance.
+ * Unlike inversify's `Factory<T>` (which returns `T | Promise<T>`),
+ * this always returns a `Promise<T>` so callers know they must `await`
+ * the result.
+ */
+type AsyncFactory<T, TArgs extends unknown[]> = (...args: TArgs) => Promise<T>;

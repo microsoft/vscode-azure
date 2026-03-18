@@ -12,9 +12,8 @@ import type {
     ProvisioningOperation as SdkProvisioningOperation,
     ProvisioningState as SdkProvisioningState,
 } from '@azure/arm-resourcesdeployments';
-import type { PagedAsyncIterableIterator } from '@azure/core-paging';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { IActionExecutor, ICodeContext, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, Page, WithRequired } from '@microsoft/vscode-azure-utils';
 import { createAzureSubscriptionClient } from '../createAzureClient';
 
 /**
@@ -28,17 +27,13 @@ export type ProvisioningState = SdkProvisioningState;
 /**
  * Interface describing the deployment APIs we use.
  * Designed so that tests can provide a mock implementation directly.
- *
- * Note: `deploymentOperations.listAtScope` returns a
- * `PagedAsyncIterableIterator` (not `AsyncIterable<Page<T>>`) because the
- * consumer iterates item-by-item via `for await...of`, not page-by-page.
  */
 export interface IDeploymentClient {
     readonly deployments: {
         getAtScope(scope: string, deploymentName: string, options?: DeploymentsGetAtScopeOptionalParams): Promise<DeploymentExtended>;
     };
     readonly deploymentOperations: {
-        listAtScope(scope: string, deploymentName: string, options?: DeploymentOperationsListAtScopeOptionalParams): PagedAsyncIterableIterator<SdkDeploymentOperation>;
+        listAtScope(scope: string, deploymentName: string, options?: DeploymentOperationsListAtScopeOptionalParams): AsyncIterable<Page<SdkDeploymentOperation>>;
     };
 }
 
@@ -73,6 +68,15 @@ export class DeploymentClient implements IDeploymentClient {
     }
 
     public get deploymentOperations(): IDeploymentClient['deploymentOperations'] {
-        return this.inner.deploymentOperations as IDeploymentClient['deploymentOperations'];
+        return { listAtScope: (scope, deploymentName, options) => this.listOperationsAtScope(scope, deploymentName, options) };
+    }
+
+    private async *listOperationsAtScope(scope: string, deploymentName: string, options?: DeploymentOperationsListAtScopeOptionalParams): AsyncIterable<Page<SdkDeploymentOperation>> {
+        for await (const items of this.inner.deploymentOperations.listAtScope(scope, deploymentName, options).byPage()) {
+            yield {
+                items,
+                hasMore: !!DeploymentClient.sdk!.getContinuationToken(items), // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
+            };
+        }
     }
 }

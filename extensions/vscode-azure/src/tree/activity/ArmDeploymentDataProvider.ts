@@ -5,7 +5,7 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { DeploymentOperation, IDeploymentClient, ProvisioningOperation, ProvisioningState } from '@microsoft/vscode-azure-azutils';
-import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, flattenPages } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IDeploymentClientProvider } from '../../services';
 import { type Activity, isActivity, isTerminalActivityStatus } from './Activity';
@@ -264,7 +264,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     private async fetchOperations(client: IDeploymentClient, activity: ArmDeploymentActivity, abortSignal: AbortSignal): Promise<ArmDeploymentOperationActivity[]> {
         const byTargetId = new Map<string, { op: DeploymentOperation; rank: number }>();
 
-        for await (const op of client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal })) {
+        for await (const op of flattenPages(client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal }))) {
             const targetResource = op.properties?.targetResource;
             if (!op.operationId || !targetResource?.id) {
                 continue;

@@ -77,7 +77,7 @@ export class ResourceClient implements IResourceClient {
         for await (const items of this.inner.resourceGroups.list(options).byPage()) {
             yield {
                 items: items.map(rg => {
-                    const resourceGroup = attachMetadata(rg as Partial<GenericResource>, this.subscription);
+                    const resourceGroup = attachMetadata(rg, this.subscription);
                     return Object.assign(resourceGroup, {
                         groupingStrategy: 'resourceGroup' as const,
                         groupingValue: resourceGroup.name,
@@ -98,7 +98,7 @@ export class ResourceClient implements IResourceClient {
     }
 }
 
-function attachMetadata(resource: Partial<GenericResource>, subscription: AzureSubscription): GenericResource {
+function attachMetadata<T extends { type?: string; kind?: string }>(resource: T, subscription: AzureSubscription): T & GenericResource {
     if (!resource.type) {
         throw new Error(`Resource is missing required field "type": ${JSON.stringify(resource)}`);
     }
@@ -106,7 +106,7 @@ function attachMetadata(resource: Partial<GenericResource>, subscription: AzureS
     return Object.assign(resource, {
         subscription,
         logicalType: logicalType(resource.type, resource.kind),
-    }) as GenericResource;
+    }) as T & GenericResource;
 }
 
 function logicalType(type: string, kind?: string): string {
