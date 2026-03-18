@@ -19,7 +19,7 @@ Key methods:
 | Method | Description |
 |--------|-------------|
 | `getChildren(resource?)` | Fetch and cache children (root if undefined) |
-| `invalidate(resource, includeChildren?)` | Clear a resource's cached data (optionally keep children) |
+| `invalidate(resource, includeChildren?)` | Clear a resource's cached data (optionally invalidate children) |
 | `invalidateAll()` | Clear the entire tree |
 | `whenEnriched<T>(resource)` | Await background enrichment completion |
 | `hasMore(resource)` | Whether more pages are available |
