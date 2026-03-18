@@ -20,11 +20,11 @@ export type Event<T> = vscode.Event<T>;
  * (unit tests, shared packages, etc.).
  */
 export class EventEmitter<T> implements Disposable {
-    private readonly emitter: NodeEventEmitter;
+    private readonly innerEmitter: NodeEventEmitter;
 
     public constructor() {
-        this.emitter = new NodeEventEmitter();
-        this.emitter.setMaxListeners(0);
+        this.innerEmitter = new NodeEventEmitter();
+        this.innerEmitter.setMaxListeners(0);
     }
 
     /**
@@ -37,11 +37,11 @@ export class EventEmitter<T> implements Disposable {
         disposables?: Disposable[],
     ): Disposable => {
         const bound = (thisArgs !== undefined && thisArgs !== null) ? listener.bind(thisArgs) : listener;
-        this.emitter.on(EventName, bound);
+        this.innerEmitter.on(EventName, bound);
 
         const disposable: Disposable = {
             dispose: () => {
-                this.emitter.removeListener(EventName, bound);
+                this.innerEmitter.removeListener(EventName, bound);
             },
         };
 
@@ -59,7 +59,7 @@ export class EventEmitter<T> implements Disposable {
      * listeners are still called -- matching `vscode.EventEmitter` semantics.
      */
     public fire(data: T): void {
-        const listeners = this.emitter.listeners(EventName);
+        const listeners = this.innerEmitter.listeners(EventName);
         for (const listener of listeners) {
             try {
                 (listener as (data: T) => void)(data);
@@ -72,11 +72,12 @@ export class EventEmitter<T> implements Disposable {
 
     /** Remove all listeners. */
     public dispose(): void {
-        this.emitter.removeAllListeners(EventName);
+        this.innerEmitter.removeAllListeners(EventName);
     }
 }
 
 // Compile-time checks: our EventEmitter is assignable to vscode.EventEmitter.
 /* eslint-disable @typescript-eslint/no-unused-vars */
-type CheckEventEmitter = Satisfies<vscode.EventEmitter<unknown>, EventEmitter<unknown>>;
+type ForwardCheckEventEmitter = Satisfies<Omit<EventEmitter<unknown>, 'innerEmitter'>, vscode.EventEmitter<unknown>>;
+type ReverseCheckEventEmitter = Satisfies<vscode.EventEmitter<unknown>, EventEmitter<unknown>>;
 /* eslint-enable @typescript-eslint/no-unused-vars */
