@@ -47,7 +47,16 @@ Commands are registered in `registerCommands.ts` using `registerManagedCommand`:
 ```typescript
 export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'azure.hello', Hello);
-    registerManagedCommand(container, 'azure.openInPortal', OpenInPortal);
+
+    registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
+    registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
+
+    // ...
+
+    registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
+    registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
+    registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
+
     // ...
 }
 ```
@@ -56,6 +65,21 @@ Each call:
 1. Binds the command class to itself in the container (if not already)
 2. Registers it with `ICommandRegistry`, which wraps execution in `callWithTelemetryAndErrorHandling`
 3. Creates a scoped child container per execution with `IActionContext` bound
+
+### `prefixArgs` Pattern
+
+`registerManagedCommand` accepts optional trailing `...prefixArgs` that are prepended to the command's `execute()` arguments:
+
+```typescript
+function registerManagedCommand(
+    container: Container,
+    commandId: string,
+    commandClass: new (...ctorArgs: any[]) => ManagedCommand,
+    ...prefixArgs: unknown[]
+): void
+```
+
+This enables a single command class to be registered multiple times with different fixed arguments. For example, `ClearActivities` is registered three times with different modes (`'completed'`, `'successful'`, `'all'`) rather than needing three separate classes.
 
 ## Context Values for Tree Item Commands
 
@@ -114,6 +138,20 @@ export class DisableAcrAdminUser implements ManagedCommand {
             this.cache.whenEnriched<EnrichedAcrRegistry>(resource)
         );
         // ... use enriched resource
+    }
+}
+```
+
+## Activity Commands
+
+### `ClearActivities`
+
+Clears activities from all three activity providers. Uses the `prefixArgs` pattern to receive a `ClearMode` (`'completed'` | `'successful'` | `'all'`) without needing separate classes:
+
+```typescript
+export class ClearActivities implements ManagedCommand {
+    public execute(mode: ClearMode): void {
+        // ...
     }
 }
 ```

@@ -1,0 +1,152 @@
+# Azure Client Wrappers
+
+Azure SDK client wrappers live in `packages/azutils/src/rest/`. They provide typed, testable interfaces around Azure SDK clients with custom pipeline policies, lazy SDK imports, and pagination converted to `AsyncIterable<Page<T>>`.
+
+## Factory Functions
+
+Four factory functions in `createAzureClient.ts` create Azure SDK clients with custom pipeline policies injected:
+
+| Function | SDK Style | Subscription-Scoped? |
+|----------|-----------|---------------------|
+| `createAzureClient` | Classic `ServiceClient` | No |
+| `createAzureSubscriptionClient` | Classic `ServiceClient` | Yes |
+| `createAzureRestClient` | REST-style `@azure-rest/core-client` | No |
+| `createAzureRestSubscriptionClient` | REST-style `@azure-rest/core-client` | Yes |
+
+All four accept `ICodeContext` and `IActionExecutor` (for telemetry context and user agent) and inject the same set of pipeline policies. Usage:
+
+```typescript
+// Classic SDK (constructor-based)
+const client = createAzureSubscriptionClient(
+    ctx, executor,
+    ResourceManagementClient,     // SDK class constructor
+    subscription.credential,
+    subscription.subscriptionId,
+);
+
+// REST-style SDK (factory-function-based)
+const context = createAzureRestSubscriptionClient(
+    ctx, executor,
+    createContainerRegistryManagement, // SDK factory function
+    subscription.credential,
+    subscription.subscriptionId,
+);
+```
+
+## Pipeline Policies
+
+Every client created through the factory functions gets five custom pipeline policies:
+
+| Policy | Position | Description |
+|--------|----------|-------------|
+| `DedupeRequestPolicy` | perCall | Deduplicates concurrent identical GET requests using `InflightMap`. If two concurrent calls hit the same URL, the second reuses the first's response (with a cloned response object). Streaming requests are excluded. |
+| `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command that initiated them. |
+| `AcceptLanguagePolicy` | perCall | Sets the `accept-language` header to VS Code's UI language (`vscode.env.language`), so ARM responses match the user's locale. |
+| `MFAChallengePolicy` | perRetry | Handles 401 responses with a `WWW-Authenticate` header by requesting a stepped-up token. Records `challenge` and `challengeSuccess` telemetry properties. |
+| `RemoveBOMPolicy` | perRetry | Strips a leading UTF-8 BOM (`U+FEFF`) from response body text, which some Azure endpoints include. |
+
+The factory also sets a `userAgentPrefix` combining the extension's ID and version with any caller-provided prefix.
+
+## Client Wrappers
+
+Three concrete client classes wrap Azure SDK clients with typed interfaces:
+
+### `ResourceClient`
+
+Wraps `@azure/arm-resources` (`ResourceManagementClient`). Provides:
+
+```typescript
+interface IResourceClient {
+    readonly resourceGroups: {
+        list(options?): AsyncIterable<Page<ResourceGroup>>;
+    };
+    readonly resources: {
+        listByResourceGroup(resourceGroupName, options?): AsyncIterable<Page<GenericResource>>;
+    };
+}
+```
+
+Key behaviors:
+- **Lazy SDK import**: The `@azure/arm-resources` module is imported dynamically on first `create()` call and cached in a static field, keeping activation fast.
+- **`attachMetadata()`**: After fetching resources from ARM, attaches `subscription` and `logicalType` properties to each resource, converting raw SDK types into `GenericResource`.
+- **`logicalType()`**: Classifies `Microsoft.Web/sites` by `kind` into more specific logical types:
+  - `Microsoft.Web/sites~functionapp` — Function Apps
+  - `Microsoft.Web/sites~workflowapp` — Logic Apps (Standard)
+  - `Microsoft.Web/sites~app` — App Service web apps
+
+Exported type constants: `SiteType`, `FunctionAppLogicalType`, `WorkflowAppLogicalType`, `AppServiceLogicalType`.
+
+### `DeploymentClient`
+
+Wraps `@azure/arm-resourcesdeployments` (`DeploymentsClient`). Provides:
+
+```typescript
+interface IDeploymentClient {
+    readonly deployments: {
+        getAtScope(scope, deploymentName, options?): Promise<DeploymentExtended>;
+    };
+    readonly deploymentOperations: {
+        listAtScope(scope, deploymentName, options?): AsyncIterable<Page<DeploymentOperation>>;
+    };
+}
+```
+
+Used by `ArmDeploymentDataProvider` to track ARM deployment status and operations in the Activity view.
+
+### `AcrClient`
+
+Wraps `@azure/arm-containerregistry` using the REST-style SDK pattern (free functions + context). Provides:
+
+```typescript
+interface IAcrClient {
+    readonly registries: {
+        get(resourceGroupName, registryName, options?): Promise<Registry>;
+    };
+}
+```
+
+Unlike the other clients, ACR uses `createAzureRestSubscriptionClient` because the `@azure/arm-containerregistry` SDK follows the newer REST-style pattern with `createContainerRegistryManagement` and free function operations.
+
+## `toPages`
+
+Converts Azure SDK's `PagedAsyncIterableIterator` to the project-standard `AsyncIterable<Page<T>>`:
+
+```typescript
+function toPages<T>(
+    iterator: PagedAsyncIterableIterator<T, T[]>,
+    getContinuationToken: (page: unknown) => string | undefined,
+): AsyncIterable<Page<T>>;
+
+// With item mapping
+function toPages<T, U>(
+    iterator: PagedAsyncIterableIterator<T, T[]>,
+    getContinuationToken: (page: unknown) => string | undefined,
+    map: (item: T) => U,
+): AsyncIterable<Page<U>>;
+```
+
+Uses `.byPage()` for page-level iteration and `getContinuationToken` (exported by each Azure SDK) to determine `hasMore`. The optional `map` parameter transforms items — used by `ResourceClient` to call `attachMetadata()` on each resource.
+
+## DI Integration
+
+Client providers are registered as factory bindings in `extension.ts`:
+
+```typescript
+container.bind(IResourceClientProvider).toFactory(context => {
+    const ctx = context.get(ICodeContext);
+    const executor = context.get(IActionExecutor);
+    return (subscription) => ResourceClient.create(ctx, executor, subscription);
+});
+```
+
+The resulting type is `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. Commands and data providers inject the factory and call it with the relevant subscription:
+
+```typescript
+@inject(IResourceClientProvider) private readonly getResourceClient: IResourceClientProvider
+
+// Later, in a method:
+const client = await this.getResourceClient(subscription);
+const resources = client.resources.listByResourceGroup(rgName);
+```
+
+Each client wrapper exposes an interface (`IResourceClient`, `IDeploymentClient`, `IAcrClient`) that can be mocked in unit tests without needing the real Azure SDK.

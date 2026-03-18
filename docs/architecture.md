@@ -38,17 +38,21 @@ Azure-specific models and helpers that build on `utils`:
 
 - **Resource models**: `GenericResource`, `AzureNode`, `VirtualResource`, `VirtualGroup`, `ResourceGroup`
 - **Identity**: `AzureNodeId` (URI-based resource identification)
-- **REST client**: `createAzureClient`, custom pipeline policies (deduplication, correlation ID, etc.)
-- **Tree pick**: `resourceExperience` for resource selection UI
+- **REST client wrappers**: `ResourceClient`, `DeploymentClient`, `AcrClient` — typed wrappers around Azure SDK clients. See [Azure Clients](azure-clients.md).
+- **Client factories**: `createAzureClient`, `createAzureSubscriptionClient`, `createAzureRestClient`, `createAzureRestSubscriptionClient` — inject custom pipeline policies (deduplication, correlation ID, accept language, MFA challenge, BOM removal)
+- **Pagination**: `toPages` — converts Azure SDK `PagedAsyncIterableIterator` to `AsyncIterable<Page<T>>`
+- **Tree pick**: `resourceExperience`, `resourceGroupExperience`, `subscriptionExperience` for resource selection UI
 
 ### `extensions/vscode-azure` — The Extension
 
 The VS Code extension that wires everything together:
 
 - **Activation**: Container setup, command and tree registration
-- **Commands**: `Hello`, `OpenInPortal`, `RefreshResourcesView`, `LoadMore`, `DisableAcrAdminUser`
-- **Tree providers**: `GenericAzureDataProvider`/`ViewProvider`, `AcrDataProvider`/`ViewProvider`
-- **Services**: Extension-scoped DI identifiers (`IAzureSubscriptionProvider`, `IAzureViewDataTree`, etc.)
+- **Commands**: `Hello`, `OpenInPortal`, `RefreshResourcesView`, `LoadMore`, `DisableAcrAdminUser`, `TrackArmDeployment`, `ClearActivities`
+- **Tree providers**:
+  - Resources: `GenericAzureDataProvider`/`ViewProvider`, `AcrDataProvider`/`ViewProvider`
+  - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`
+- **Services**: Extension-scoped DI identifiers (`IAzureSubscriptionProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IActivityViewDataTree`, etc.)
 
 ## Activation Flow
 
@@ -66,3 +70,4 @@ The VS Code extension that wires everything together:
 - **DI everywhere**: Services are injected via inversify. Each command execution gets a scoped child container with `IActionContext`. See [Dependency Injection](dependency-injection.md).
 - **Automatic telemetry**: Every command is wrapped in `callWithTelemetryAndErrorHandling`, which captures duration, result, and errors. See [Telemetry](telemetry.md).
 - **Localization**: All user-facing strings use `IVsCode.l10n.t()`. Debug/trace output is exempt. See [Conventions](conventions.md).
+- **Azure client wrappers**: Typed wrappers around Azure SDK clients with custom pipeline policies, lazy SDK imports, and `AsyncIterable<Page<T>>` return types. See [Azure Clients](azure-clients.md).
