@@ -139,6 +139,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                     context.errorHandling.rethrow = true;
                     context.telemetry.properties.tree = this.name;
                     context.telemetry.properties.provider = p.constructor.name;
+
                     return Promise.resolve(p.getChildren());
                 })),
         );

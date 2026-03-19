@@ -149,8 +149,8 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
                 try {
                     await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
-                        context.telemetry.isUserEvent = false;
                         context.telemetry.suppress = 'onSuccess';
+                        context.telemetry.isUserEvent = false;
                         context.errorHandling.rethrow = true;
                         const client = await this.getOrCreateClient(activity.subscription);
 
