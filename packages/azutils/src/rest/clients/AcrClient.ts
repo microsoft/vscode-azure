@@ -52,7 +52,14 @@ export class AcrClient implements IAcrClient {
         executor: IActionExecutor,
         subscription: AzureSubscription,
     ): Promise<AcrClient> {
-        const context = createAzureRestSubscriptionClient(ctx, executor, createContainerRegistryManagement, subscription.credential, subscription.subscriptionId);
+        const context = createAzureRestSubscriptionClient(
+            ctx,
+            executor,
+            createContainerRegistryManagement,
+            subscription.credential,
+            subscription.subscriptionId,
+            { endpoint: subscription.environment.resourceManagerEndpointUrl },
+        );
         return Promise.resolve(new AcrClient(context, sdkGetRegistry));
     }
 

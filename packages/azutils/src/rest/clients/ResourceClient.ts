@@ -62,7 +62,14 @@ export class ResourceClient implements IResourceClient {
         subscription: AzureSubscription,
     ): Promise<ResourceClient> {
         ResourceClient.sdk ??= await import('@azure/arm-resources');
-        const inner = createAzureSubscriptionClient(ctx, executor, ResourceClient.sdk.ResourceManagementClient, subscription.credential, subscription.subscriptionId);
+        const inner = createAzureSubscriptionClient(
+            ctx,
+            executor,
+            ResourceClient.sdk.ResourceManagementClient,
+            subscription.credential,
+            subscription.subscriptionId,
+            { endpoint: subscription.environment.resourceManagerEndpointUrl },
+        );
         return new ResourceClient(inner, subscription);
     }
 

@@ -60,7 +60,14 @@ export class DeploymentClient implements IDeploymentClient {
         subscription: AzureSubscription,
     ): Promise<DeploymentClient> {
         DeploymentClient.sdk ??= await import('@azure/arm-resourcesdeployments');
-        const client = createAzureSubscriptionClient(ctx, executor, DeploymentClient.sdk.DeploymentsClient, subscription.credential, subscription.subscriptionId);
+        const client = createAzureSubscriptionClient(
+            ctx,
+            executor,
+            DeploymentClient.sdk.DeploymentsClient,
+            subscription.credential,
+            subscription.subscriptionId,
+            { endpoint: subscription.environment.resourceManagerEndpointUrl },
+        );
         return new DeploymentClient(client);
     }
 
