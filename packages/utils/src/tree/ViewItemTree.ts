@@ -151,27 +151,29 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * nodes, filter, reorder, or group the results as they see fit.
      */
     public async getChildren(viewItem?: TViewItem): Promise<TViewItem[]> {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Errors are rethrown, so the result will always be defined (or an error thrown).
-        return (await this.executor.callWithTelemetryAndErrorHandling('view.getChildren', (context) => {
-            context.telemetry.suppress = 'onSuccess';
-            context.errorHandling.rethrow = true;
-            context.telemetry.properties.tree = this.name;
+        if (viewItem === undefined) {
+            return this.getRootChildren();
+        }
 
-            if (viewItem === undefined) {
-                return this.getRootChildren();
-            }
-
-            return this.getBranchChildren(viewItem);
-        }))!;
+        return this.getBranchChildren(viewItem);
     }
 
     private async getRootChildren(): Promise<TViewItem[]> {
         // TODO: concurrency limits
+        // Each root provider gets its own telemetry scope so that
+        // concurrent calls don't overwrite shared mutable properties.
         const results = await Promise.all(
             this.getRootProviders()
-                .map(p => Promise.resolve(p.getChildren())),
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Errors are rethrown, so the result will always be defined (or an error thrown).
+                .map(async (p) => (await this.executor.callWithTelemetryAndErrorHandling('view.getRootChildren', (context) => {
+                    context.telemetry.suppress = 'onSuccess';
+                    context.errorHandling.rethrow = true;
+                    context.telemetry.properties.tree = this.name;
+                    context.telemetry.properties.provider = p.constructor.name;
+                    return Promise.resolve(p.getChildren());
+                }))!),
         );
-        const viewItems = results.flatMap(r => r ?? []);
+        const viewItems = results.flatMap(r => r);
 
         // Evict the old root subtree and build new root nodes
         this.nodes.removeSubtrees(this.roots);
@@ -197,9 +199,13 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             return [];
         }
 
-        this.executor.setTelProp('provider', provider.constructor.name);
-
-        const childItems = await provider.getChildren(viewItem) ?? [];
+        const childItems = await this.executor.callWithTelemetryAndErrorHandling('view.getBranchChildren', (context) => {
+            context.telemetry.suppress = 'onSuccess';
+            context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
+            context.telemetry.properties.provider = provider.constructor.name;
+            return provider.getChildren(viewItem);
+        }) ?? [];
 
         // Evict old children subtrees and build new child nodes
         this.nodes.removeSubtrees(parentNode.children);
