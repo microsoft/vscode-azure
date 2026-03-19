@@ -197,11 +197,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             return [];
         }
 
-        // Tag the ambient telemetry context (from view.getChildren) with the provider name
-        const ambientContext = this.executor.currentContext;
-        if (ambientContext) {
-            ambientContext.telemetry.properties.provider = provider.constructor.name;
-        }
+        this.executor.setTelProp('provider', provider.constructor.name);
 
         const childItems = await provider.getChildren(viewItem) ?? [];
 
