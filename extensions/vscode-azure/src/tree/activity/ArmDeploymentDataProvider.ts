@@ -57,8 +57,8 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public constructor(
-        @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
+        @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
     ) { }
 
     public canHandle(resource: unknown): resource is ArmDeploymentActivity {

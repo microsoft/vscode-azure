@@ -87,7 +87,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
 
-        // Registry -> category nodes (Repositories, Webhooks)
+        // Registry → category nodes (Repositories, Webhooks)
         if (isAcrRegistry(resource)) {
             return [
                 { virtualType: 'acr.repositories', virtualPath: 'Repositories', azureResource: resource },
