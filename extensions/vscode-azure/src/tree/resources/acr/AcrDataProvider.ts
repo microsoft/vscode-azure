@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    isVirtualResource, parseAzureResourceId,
+    getNodeType, isVirtualResource, parseAzureResourceId,
     type ConcreteAzureNode, type GenericResource, type IAcrClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
@@ -53,6 +53,8 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
             return false;
         }
 
+        this.executor.setTelProp('nodeType', getNodeType(resource));
+
         const client = await this.getOrCreateClient(resource);
         const { resourceGroup: resourceGroupName } = parseAzureResourceId(resource.id);
         if (!resourceGroupName) {
@@ -82,6 +84,8 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
         if (!resource) {
             return [];
         }
+
+        this.executor.setTelProp('nodeType', getNodeType(resource));
 
         // Registry -> category nodes (Repositories, Webhooks)
         if (isAcrRegistry(resource)) {

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, isGenericResource, isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, getNodeType, isGenericResource, isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -49,6 +49,8 @@ export class AcrViewProvider implements ViewProvider<string> {
         if (!resource) {
             return new this.code.TreeItem(key);
         }
+
+        this.executor.setTelProp('nodeType', getNodeType(resource));
 
         // Virtual sub-nodes (categories and leaf items)
         if (isVirtualResource(resource) && resource.virtualType.startsWith('acr.')) {
@@ -105,6 +107,8 @@ export class AcrViewProvider implements ViewProvider<string> {
         if (!resource) {
             return [];
         }
+
+        this.executor.setTelProp('nodeType', getNodeType(resource));
 
         const children = await this.cache.getChildren(resource);
         return children.map(child => AzureNodeId.from(child).toString());

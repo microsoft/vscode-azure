@@ -5,7 +5,7 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -77,6 +77,8 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         if (!resource) {
             return new this.code.TreeItem(key); // TODO: throw?
         }
+
+        this.executor.setTelProp('nodeType', getNodeType(resource));
 
         switch (true) {
             case isAccount(resource): {
@@ -220,6 +222,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         // Subscription: group its resources according to the current strategy
         if (nodeId.isSubscriptionNodeId()) {
+            this.executor.setTelProp('nodeType', SubscriptionArmType);
             const subscription = this.cache.get(key);
             if (!subscription || !isSubscription(subscription)) {
                 return [];
@@ -244,6 +247,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         if (!resource) {
             return [];
         } else {
+            this.executor.setTelProp('nodeType', getNodeType(resource));
             return (await this.cache.getChildren(resource)).map(toKey);
         }
     }

@@ -5,7 +5,7 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
-    isAccount, isResourceGroup, isSubscription, isTenant,
+    getNodeType, isAccount, isResourceGroup, isSubscription, isTenant,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
@@ -52,6 +52,10 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         // Ensure sign-in has been initiated (lazy, only once)
         this.signInPromise ??= this.subscriptionProvider.signIn(); // TODO: handle sign out?
         await this.signInPromise;
+
+        if (resource) {
+            this.executor.setTelProp('nodeType', getNodeType(resource));
+        }
 
         if (!resource) {
             // Root: return all signed-in accounts
