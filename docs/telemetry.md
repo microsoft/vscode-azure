@@ -80,9 +80,9 @@ This is used in three key places:
 
 1. **Commands** — `registerManagedCommand` wraps each command execution in `callWithTelemetryAndErrorHandling`, which establishes the context for the duration of the command.
 
-2. **Data-layer tree operations** — `DataItemTree` wraps every `getChildren()`, `enrich()`, and page-load call in `callWithTelemetryAndErrorHandling`. This ensures pipeline policies (e.g. `CorrelationIdPolicy`) always have a context available when making HTTP requests, even though providers and client wrappers don't accept `IActionContext` in their signatures.
+2. **Data-layer tree operations** — `DataItemTree` wraps every `getChildren()`, `enrich()`, and page-load call in `callWithTelemetryAndErrorHandling`. Each root provider call gets its own `tree.getRootChildren` scope (with `properties.provider`), and branch calls get a `tree.getBranchChildren` scope. This ensures pipeline policies (e.g. `CorrelationIdPolicy`) always have a context available when making HTTP requests, even though providers and client wrappers don't accept `IActionContext` in their signatures.
 
-3. **View-layer tree operations** — `ViewItemTree` wraps `getChildren()`, `getTreeItem()`, and `getParent()` with `suppress: 'onSuccess'` and `rethrow: true`. Only failures emit telemetry; errors are re-thrown so VS Code sees them. This also establishes an `IActionContext` on the async stack for any downstream work within view providers.
+3. **View-layer tree operations** — `ViewItemTree` wraps root and branch `getChildren()` calls in separate scopes (`view.getRootChildren` per provider and `view.getBranchChildren`), plus `getTreeItem()` and `getParent()`, all with `suppress: 'onSuccess'` and `rethrow: true`. Only failures emit telemetry; errors are re-thrown so VS Code sees them. This also establishes an `IActionContext` on the async stack for any downstream work within view providers.
 
 Providers like `ArmDeploymentDataProvider` that run their own async loops (e.g. polling) wrap each iteration in `callWithTelemetryAndErrorHandling` directly, so each poll gets its own telemetry scope and correlation ID.
 
@@ -122,11 +122,10 @@ context.telemetry.isUserEvent = false;
 
 Events that **should not** set `isUserEvent = false` (i.e. they are user-initiated):
 - Command executions (user clicked a button or ran a command)
-- `view.getChildren` (user expanded a tree node — the top-level entry point)
 
 Events that **should** set `isUserEvent = false`:
-- `tree.get*Children`, `tree.enrich`, `tree.loadMore`, `tree.loadAll` (data-layer operations triggered by the view)
-- `view.getTreeItem`, `view.getParent` (VS Code tree UI callbacks)
+- `tree.getRootChildren`, `tree.getBranchChildren`, `tree.enrich`, `tree.loadMore`, `tree.loadAll` (data-layer operations triggered by the view)
+- `view.getRootChildren`, `view.getBranchChildren`, `view.getTreeItem`, `view.getParent` (VS Code tree UI callbacks)
 - `tree.pollArmDeployments` (timer-driven polling)
 - `activate` (extension activation)
 
