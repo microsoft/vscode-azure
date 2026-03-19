@@ -350,7 +350,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                 return;
             }
 
-
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
             const next = (await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
                 context.telemetry.isUserEvent = false;

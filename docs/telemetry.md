@@ -122,10 +122,11 @@ context.telemetry.isUserEvent = false;
 
 Events that **should not** set `isUserEvent = false` (i.e. they are user-initiated):
 - Command executions (user clicked a button or ran a command)
+- `view.getRootChildren`, `view.getBranchChildren` (user opened the tree or expanded a tree node)
 
 Events that **should** set `isUserEvent = false`:
 - `tree.getRootChildren`, `tree.getBranchChildren`, `tree.enrich`, `tree.loadMore`, `tree.loadAll` (data-layer operations triggered by the view)
-- `view.getRootChildren`, `view.getBranchChildren`, `view.getTreeItem`, `view.getParent` (VS Code tree UI callbacks)
+- `view.getTreeItem`, `view.getParent` (VS Code tree UI callbacks)
 - `tree.pollArmDeployments` (timer-driven polling)
 - `activate` (extension activation)
 
