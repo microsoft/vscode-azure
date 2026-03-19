@@ -59,4 +59,4 @@ export function getNodeType(node: ConcreteAzureNode): string {
     return 'unknown';
 }
 
-export const SubscriptionArmType = 'Microsoft.Subscription/subscriptions';
+export const SubscriptionArmType = 'Microsoft.Resources/subscriptions';
