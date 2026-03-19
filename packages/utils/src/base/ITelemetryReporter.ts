@@ -47,9 +47,9 @@ class DebugTelemetryReporter implements ITelemetryReporter {
     public constructor(private readonly extensionId: string) { }
 
     public sendTelemetryErrorEvent(eventName: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
-        console.log(`DEBUGTELEMETRY: ${this.extensionId}/${eventName}`);
-        console.log(`  Properties  : ${this.formatPropsOrMeasurements(properties)}`);
-        console.log(`  Measurements: ${this.formatPropsOrMeasurements(measurements)}`);
+        console.log(`DEBUGTEL: ${this.extensionId}/${eventName}`);
+        console.log(`  Props : ${this.formatPropsOrMeasurements(properties)}`);
+        console.log(`  Msmts : ${this.formatPropsOrMeasurements(measurements)}`);
     }
 
     public dispose(): Promise<void> {
