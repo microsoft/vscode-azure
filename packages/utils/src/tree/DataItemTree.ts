@@ -134,20 +134,21 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         // concurrent calls don't overwrite shared mutable properties.
         const results = await Promise.all(
             this.getRootProviders()
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Errors are rethrown, so the result will always be defined (or an error thrown).
-                .map(async (p) => (await this.executor.callWithTelemetryAndErrorHandling('tree.getRootChildren', (context) => {
+                .map(async p => this.executor.callWithTelemetryAndErrorHandling('tree.getRootChildren', (context) => {
                     context.telemetry.isUserEvent = false;
                     context.errorHandling.rethrow = true;
                     context.telemetry.properties.tree = this.name;
                     context.telemetry.properties.provider = p.constructor.name;
                     return Promise.resolve(p.getChildren());
-                }))!),
+                })),
         );
 
         // Root providers always return plain arrays (pagination at root
         // level is not supported).
         const resources = results.flatMap(result => {
-            if (isAsyncIterable(result)) {
+            if (!result) {
+                return [];
+            } else if (isAsyncIterable(result)) {
                 throw new Error('Root providers must return plain arrays, not AsyncIterables');
             }
             return result;

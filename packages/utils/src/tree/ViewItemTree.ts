@@ -164,16 +164,15 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         // concurrent calls don't overwrite shared mutable properties.
         const results = await Promise.all(
             this.getRootProviders()
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Errors are rethrown, so the result will always be defined (or an error thrown).
-                .map(async (p) => (await this.executor.callWithTelemetryAndErrorHandling('view.getRootChildren', (context) => {
+                .map(async p => this.executor.callWithTelemetryAndErrorHandling('view.getRootChildren', (context) => {
                     context.telemetry.suppress = 'onSuccess';
                     context.errorHandling.rethrow = true;
                     context.telemetry.properties.tree = this.name;
                     context.telemetry.properties.provider = p.constructor.name;
                     return Promise.resolve(p.getChildren());
-                }))!),
+                })),
         );
-        const viewItems = results.flatMap(r => r);
+        const viewItems = results.flatMap(r => r ?? []);
 
         // Evict the old root subtree and build new root nodes
         this.nodes.removeSubtrees(this.roots);
@@ -230,7 +229,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * delegating to the {@link ViewProvider} that handles it.
      */
     public async getTreeItem(viewItem: TViewItem): Promise<ITreeItem> {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Errors are rethrown, so the result will always be defined (or an error thrown).
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
         return (await this.executor.callWithTelemetryAndErrorHandling('view.getTreeItem', (context) => {
             context.telemetry.suppress = 'onSuccess';
             context.telemetry.isUserEvent = false;
