@@ -65,6 +65,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         const nodeId = AzureNodeId.parse(key);
 
         if (nodeId.isVirtualGroupNodeId()) {
+            this.executor.setTelProp('nodeType', virtualGroupNodeType);
             const grouping = nodeId.getGrouping();
             const label = grouping?.groupingValue ?? key;
             const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
@@ -233,6 +234,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         // Virtual group: find the matching bucket from the parent subscription
         if (nodeId.isVirtualGroupNodeId()) {
+            this.executor.setTelProp('nodeType', virtualGroupNodeType);
             const subscriptionKey = nodeId.parentNodeId()?.toString();
             const subscription = subscriptionKey ? this.cache.get(subscriptionKey) : undefined;
             if (!subscription || !isSubscription(subscription)) {
@@ -330,3 +332,5 @@ function groupingValue(strategy: GroupingStrategy, resource: GenericResource): s
 function toKey(node: AzureNode): string {
     return AzureNodeId.from(node).toString();
 }
+
+const virtualGroupNodeType = 'virtualGroup';
