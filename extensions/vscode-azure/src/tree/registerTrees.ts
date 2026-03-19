@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
@@ -32,6 +32,8 @@ function registerResourcesTree(container: Container): void {
     bindAzureViewDataProviders(container);
     container.bind(IAzureViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<ConcreteAzureNode>(
+            AzureResourceTreeViewId,
+            context.get(IActionExecutor),
             resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000, // 5 minute TTL
         );
@@ -47,6 +49,8 @@ function registerResourcesTree(container: Container): void {
     bindAzureViewViewProviders(container);
     container.bind(IAzureViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, ConcreteAzureNode>(
+            AzureResourceTreeViewId,
+            context.get(IActionExecutor),
             {
                 dataItemTree: context.get(IAzureViewDataTree),
                 toViewItem: resource => AzureNodeId.from(resource).toString(),
@@ -111,6 +115,8 @@ function registerActivityTree(container: Container): void {
     bindActivityViewDataProviders(container);
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
+            ActivityTreeViewId,
+            context.get(IActionExecutor),
             activity => activity.id,
             Infinity, // Providers manage freshness via polling and change events
         );
@@ -126,6 +132,8 @@ function registerActivityTree(container: Container): void {
     bindActivityViewViewProviders(container);
     container.bind(IActivityViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, Activity>(
+            ActivityTreeViewId,
+            context.get(IActionExecutor),
             {
                 dataItemTree: context.get(IActivityViewDataTree),
                 toViewItem: activity => activity.id,

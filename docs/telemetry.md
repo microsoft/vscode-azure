@@ -13,6 +13,7 @@ interface IActionContext {
         readonly properties: TelemetryProperties;     // string key-value pairs
         readonly measurements: TelemetryMeasurements; // numeric measurements
         suppress?: 'always' | 'onSuccess';            // opt out of sending
+        isUserEvent?: boolean;                        // false = not user-initiated (see below)
     };
 
     readonly errorHandling: {
@@ -32,6 +33,7 @@ These are set automatically by `ActionExecutor`:
 | `result` | `'Succeeded'` \| `'Failed'` \| `'Canceled'` | Set based on whether the callback completed, threw, or was cancelled |
 | `correlationId` | UUID | Unique ID for this execution |
 | `duration` | number (seconds) | Elapsed time, set in `finally` block |
+| `isActivationEvent` | auto: `'true'` \| unset; manual: `'true'` \| `'false'` | Automatically set to `'true'` when `isUserEvent` is `false` and the property was previously unset; otherwise left unchanged |
 
 ### Custom Properties
 
@@ -74,6 +76,16 @@ The `callWithTelemetryAndErrorHandling` method wraps every command:
 const context = actionExecutor.currentContext;
 ```
 
+This is used in three key places:
+
+1. **Commands** — `registerManagedCommand` wraps each command execution in `callWithTelemetryAndErrorHandling`, which establishes the context for the duration of the command.
+
+2. **Data-layer tree operations** — `DataItemTree` wraps every `getChildren()`, `enrich()`, and page-load call in `callWithTelemetryAndErrorHandling`. Each root provider call gets its own `tree.getRootChildren` scope (with `properties.provider`), and branch calls get a `tree.getBranchChildren` scope. This ensures pipeline policies (e.g. `CorrelationIdPolicy`) always have a context available when making HTTP requests, even though providers and client wrappers don't accept `IActionContext` in their signatures.
+
+3. **View-layer tree operations** — `ViewItemTree` wraps root and branch `getChildren()` calls in separate scopes (`view.getRootChildren` per provider and `view.getBranchChildren`), plus `getTreeItem()` and `getParent()`, all with `suppress: 'onSuccess'` and `rethrow: true`. Only failures emit telemetry; errors are re-thrown so VS Code sees them. This also establishes an `IActionContext` on the async stack for any downstream work within view providers.
+
+Providers like `ArmDeploymentDataProvider` that run their own async loops (e.g. polling) wrap each iteration in `callWithTelemetryAndErrorHandling` directly, so each poll gets its own telemetry scope and correlation ID.
+
 ## `ITelemetryReporter`
 
 A thin wrapper around `@vscode/extension-telemetry`. Behavior depends on environment:
@@ -98,13 +110,31 @@ context.telemetry.suppress = 'always';
 context.telemetry.suppress = 'onSuccess';
 ```
 
+## User vs Non-User Events
+
+Set `context.telemetry.isUserEvent = false` to indicate an event that was not directly initiated by the user (e.g. background enrichment, polling, VS Code tree callbacks other than `getChildren`):
+
+```typescript
+context.telemetry.isUserEvent = false;
+```
+
+`ActionExecutor` automatically remaps this to the legacy `properties.isActivationEvent = 'true'` before sending telemetry, unless the callback explicitly set `properties.isActivationEvent` themselves. This allows downstream telemetry queries to filter user-initiated events from background operations.
+
+Events that **should not** set `isUserEvent = false` (i.e. they are user-initiated):
+- Command executions (user clicked a button or ran a command)
+- `view.getRootChildren`, `view.getBranchChildren` (user opened the tree or expanded a tree node)
+
+Events that **should** set `isUserEvent = false`:
+- `tree.getRootChildren`, `tree.getBranchChildren`, `tree.enrich`, `tree.loadMore`, `tree.loadAll` (data-layer operations triggered by the view)
+- `view.getTreeItem`, `view.getParent` (VS Code tree UI callbacks)
+- `tree.pollArmDeployments` (timer-driven polling)
+- `activate` (extension activation)
+
 ## Activation Telemetry
 
 The `activate` event includes a special measurement:
 
 ```typescript
 activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
-activateContext.telemetry.properties.isActivationEvent = 'true';
+activateContext.telemetry.isUserEvent = false;
 ```
-
-Despite the name, this is broadly used to distinguish events not directly initiated by the user.

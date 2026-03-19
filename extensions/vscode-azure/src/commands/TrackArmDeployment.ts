@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -75,7 +75,7 @@ export class TrackArmDeployment implements ManagedCommand {
         );
     }
 
-    private async resolveSubscription(subscriptionId: string) {
+    private async resolveSubscription(subscriptionId: string): Promise<AzureSubscription | undefined> {
         await this.subscriptionProvider.signIn();
 
         const accounts = await this.subscriptionProvider.getAccounts();

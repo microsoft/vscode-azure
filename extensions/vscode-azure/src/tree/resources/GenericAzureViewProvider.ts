@@ -5,9 +5,9 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
 import { IAzureViewDataTree } from '../../services';
@@ -42,6 +42,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
 
@@ -64,6 +65,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         const nodeId = AzureNodeId.parse(key);
 
         if (nodeId.isVirtualGroupNodeId()) {
+            this.executor.setTelProp('nodeType', virtualGroupNodeType);
             const grouping = nodeId.getGrouping();
             const label = grouping?.groupingValue ?? key;
             const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
@@ -76,6 +78,8 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         if (!resource) {
             return new this.code.TreeItem(key); // TODO: throw?
         }
+
+        this.executor.setTelProp('nodeType', getNodeType(resource));
 
         switch (true) {
             case isAccount(resource): {
@@ -219,6 +223,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         // Subscription: group its resources according to the current strategy
         if (nodeId.isSubscriptionNodeId()) {
+            this.executor.setTelProp('nodeType', SubscriptionArmType);
             const subscription = this.cache.get(key);
             if (!subscription || !isSubscription(subscription)) {
                 return [];
@@ -229,6 +234,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         // Virtual group: find the matching bucket from the parent subscription
         if (nodeId.isVirtualGroupNodeId()) {
+            this.executor.setTelProp('nodeType', virtualGroupNodeType);
             const subscriptionKey = nodeId.parentNodeId()?.toString();
             const subscription = subscriptionKey ? this.cache.get(subscriptionKey) : undefined;
             if (!subscription || !isSubscription(subscription)) {
@@ -243,6 +249,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         if (!resource) {
             return [];
         } else {
+            this.executor.setTelProp('nodeType', getNodeType(resource));
             return (await this.cache.getChildren(resource)).map(toKey);
         }
     }
@@ -325,3 +332,5 @@ function groupingValue(strategy: GroupingStrategy, resource: GenericResource): s
 function toKey(node: AzureNode): string {
     return AzureNodeId.from(node).toString();
 }
+
+const virtualGroupNodeType = 'virtualGroup';

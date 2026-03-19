@@ -12,6 +12,7 @@ The single source of truth for tree data. Lives in `packages/utils/src/tree/Data
 - **Caching with TTL**: Results are cached and re-fetched once stale (default: 5 minutes, configured in `registerTrees.ts`)
 - **Pagination**: Providers can return `AsyncIterable<Page<T>>` for paged results. The tree stores the iterator and pulls pages on demand via `loadMore()`/`loadAll()`
 - **Enrichment**: After children load, the tree calls each provider's `enrich()` in the background, then fires `onDidChange` when done
+- **Telemetry scoping**: Every `getChildren()`, `enrich()`, and page-load call is wrapped in `callWithTelemetryAndErrorHandling`, establishing an `IActionContext` on the async call stack via `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`) pick up this context automatically without any changes to provider or client signatures. See [Telemetry](telemetry.md).
 - **Node map**: `NodeMap` provides O(1) key-based lookup and recursive subtree removal for cache eviction
 
 Key methods:
@@ -75,11 +76,12 @@ This is useful when enrichment discovers that the resource's children have chang
 Example from `AcrDataProvider`:
 
 ```typescript
-public async enrich(resource: ConcreteAzureNode): Promise<void> {
+public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
     // Fetch details via ARM API
-    const registry = await getRegistries(client, resourceGroupName, resource.name);
+    const registry = await client.registries.get(resourceGroupName, resource.name);
     // Mutate in-place
     Object.assign(resource, { loginServer: registry.loginServer, sku: registry.sku });
+    return false;
 }
 ```
 
@@ -93,6 +95,7 @@ Sits on top of a `DataItemTree` and implements VS Code's `TreeDataProvider`. Liv
 - Tracks parent relationships internally so `getParent()` works for both real and virtual nodes
 - Subscribes to `DataItemTree.onDidChange` and forwards as `onDidChangeTreeData`
 - Automatically injects "Load More" nodes for paginated branches when configured
+- **Telemetry scoping**: `getChildren()`, `getTreeItem()`, and `getParent()` are wrapped in `callWithTelemetryAndErrorHandling` with `suppress: 'onSuccess'` and `rethrow: true`, so only failures emit telemetry. This also establishes an `IActionContext` on the async stack for any downstream work.
 
 ### `ViewProvider<TViewItem>`
 

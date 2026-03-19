@@ -5,10 +5,10 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
-    isAccount, isResourceGroup, isSubscription, isTenant,
+    getNodeType, isAccount, isResourceGroup, isSubscription, isTenant,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
-import { InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider, IResourceClientProvider } from '../../services';
 
@@ -34,6 +34,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private readonly clientCache = new InflightMap<IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
     ) { }
@@ -51,6 +52,10 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         // Ensure sign-in has been initiated (lazy, only once)
         this.signInPromise ??= this.subscriptionProvider.signIn(); // TODO: handle sign out?
         await this.signInPromise;
+
+        if (resource) {
+            this.executor.setTelProp('nodeType', getNodeType(resource));
+        }
 
         if (!resource) {
             // Root: return all signed-in accounts

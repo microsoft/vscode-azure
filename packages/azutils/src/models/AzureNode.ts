@@ -42,3 +42,21 @@ export function isGenericResource(node: AzureNode): node is GenericResource {
 export function isVirtualResource(node: AzureNode): node is VirtualResource {
     return 'virtualType' in node && 'virtualPath' in node;
 }
+
+/**
+ * Returns a consistent type string for any node in the tree, suitable for
+ * telemetry. Uses {@link GenericResource.logicalType} for ARM resources,
+ * {@link VirtualResource.virtualType} for virtual sub-resources, and
+ * well-known strings for account/tenant/subscription nodes.
+ */
+export function getNodeType(node: ConcreteAzureNode): string {
+    if (isVirtualResource(node)) { return node.virtualType; }
+    if (isGenericResource(node)) { return node.logicalType; }
+    if (isResourceGroup(node)) { return node.logicalType; }
+    if (isSubscription(node)) { return SubscriptionArmType; }
+    if (isTenant(node)) { return 'tenant'; }
+    if (isAccount(node)) { return 'account'; }
+    return 'unknown';
+}
+
+export const SubscriptionArmType = 'Microsoft.Resources/subscriptions';

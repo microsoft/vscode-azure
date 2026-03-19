@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
-import { Disposable } from '../vscode/Disposable';
 import { isAsyncIterable, type Page } from '../data/Page';
+import { Disposable } from '../vscode/Disposable';
 import type { DataProvider } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -64,10 +65,23 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     public readonly onDidChange = this.changeEmitter.event;
 
     /**
+     * @param name - A short identifier for this tree instance (e.g.
+     *   `'resources'`, `'activity'`). Stamped on every telemetry event as
+     *   `properties.tree`.
+     * @param executor - Action executor for wrapping provider calls in
+     *   telemetry scopes. Every {@link DataProvider.getChildren} and
+     *   {@link DataProvider.enrich} call runs inside
+     *   {@link IActionExecutor.callWithTelemetryAndErrorHandling}, which
+     *   establishes an {@link IActionContext} on the async call stack via
+     *   `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`)
+     *   pick up this context automatically without any changes to provider
+     *   or client signatures.
      * @param getKey - Extracts a unique string key from a resource.
      * @param ttl - Time-to-live in milliseconds for cached children.
      */
     public constructor(
+        private readonly name: string,
+        private readonly executor: IActionExecutor,
         private readonly getKey: (resource: T) => string,
         private readonly ttl: number,
     ) {
@@ -116,9 +130,18 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         this.roots = undefined;
 
         // TODO: concurrency limits
+        // Each root provider gets its own telemetry scope so that
+        // concurrent calls don't overwrite shared mutable properties.
         const results = await Promise.all(
             this.getRootProviders()
-                .map(p => Promise.resolve(p.getChildren())),
+                .map(async p => this.executor.callWithTelemetryAndErrorHandling('tree.getRootChildren', (context) => {
+                    context.telemetry.isUserEvent = false;
+                    context.errorHandling.rethrow = true;
+                    context.telemetry.properties.tree = this.name;
+                    context.telemetry.properties.provider = p.constructor.name;
+
+                    return Promise.resolve(p.getChildren());
+                })),
         );
 
         // Root providers always return plain arrays (pagination at root
@@ -169,7 +192,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         node.children = [];
         node.pageIterator = undefined;
 
-        const result = await provider.getChildren(resource);
+        const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
+            context.telemetry.isUserEvent = false;
+            context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
+            context.telemetry.properties.provider = provider.constructor.name;
+            return provider.getChildren(resource);
+        });
 
         if (!result) {
             // No children -- leave the empty array
@@ -204,8 +233,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             const provider = this.findProvider(resource);
             if (provider?.enrich) {
                 const key = this.getKey(resource);
-                const promise = Promise
-                    .resolve(provider.enrich(resource))
+                const promise = this.executor
+                    .callWithTelemetryAndErrorHandling('tree.enrich', (context) => {
+                        context.telemetry.isUserEvent = false;
+                        context.telemetry.suppress = 'onSuccess'; // TODO: should we be suppressing?
+                        context.errorHandling.rethrow = true;
+                        context.telemetry.properties.tree = this.name;
+                        context.telemetry.properties.provider = provider.constructor.name;
+                        return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
+                    })
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
                         this.invalidate(resource, includeChildren);
@@ -287,18 +323,24 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * never called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
-        const key = this.getKey(resource);
-        const node = this.nodes.get(key);
+        await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
+            context.telemetry.isUserEvent = false;
+            context.errorHandling.rethrow = true;
+            context.telemetry.properties.tree = this.name;
 
-        // Ensure children are initialized (first page pulled) before
-        // exhausting remaining pages.
-        if (node?.children === undefined) {
-            await this.getChildren(resource);
-        }
+            const key = this.getKey(resource);
+            const node = this.nodes.get(key);
 
-        while (this.hasMore(resource)) {
-            await this.loadOnePage(resource);
-        }
+            // Ensure children are initialized (first page pulled) before
+            // exhausting remaining pages.
+            if (node?.children === undefined) {
+                await this.getChildren(resource);
+            }
+
+            while (this.hasMore(resource)) {
+                await this.loadOnePage(resource);
+            }
+        });
         this.changeEmitter.fire(resource);
     }
 
@@ -310,7 +352,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                 return;
             }
 
-            const next = await node.pageIterator.next();
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
+            const next = (await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                context.telemetry.properties.tree = this.name;
+                return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
+            }))!;
 
             if (next.done) {
                 node.pageIterator = undefined;

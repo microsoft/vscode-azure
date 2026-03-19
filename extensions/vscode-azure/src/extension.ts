@@ -30,7 +30,7 @@ export async function activateInternal(extensionContext: vscode.ExtensionContext
 
     return await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
-        activateContext.telemetry.properties.isActivationEvent = 'true';
+        activateContext.telemetry.isUserEvent = false;
 
         registerCommands(container);
         registerTrees(container);
