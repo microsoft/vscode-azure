@@ -27,7 +27,7 @@ export function createTelemetryReporter(
         // TODO replacement options to scrub PII?
         return new reporterCtor(aiKey);
     } else if (debugTelemetry === 'v' || debugTelemetry === 'verbose') {
-        return new DebugTelemetryReporter();
+        return new DebugTelemetryReporter(context.extension.id);
     } else {
         return new NullTelemetryReporter();
     }
@@ -44,11 +44,19 @@ class NullTelemetryReporter implements ITelemetryReporter {
 }
 
 class DebugTelemetryReporter implements ITelemetryReporter {
+    public constructor(private readonly extensionId: string) { }
+
     public sendTelemetryErrorEvent(eventName: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
-        console.log(`DEBUGTELEMETRY: "${eventName}"\nProperties: ${JSON.stringify(properties)}\nMeasurements: ${JSON.stringify(measurements)}`);
+        console.log(`DEBUGTELEMETRY: ${this.extensionId}/${eventName}`);
+        console.log(`  Properties  : ${this.formatPropsOrMeasurements(properties)}`);
+        console.log(`  Measurements: ${this.formatPropsOrMeasurements(measurements)}`);
     }
 
     public dispose(): Promise<void> {
         return Promise.resolve();
+    }
+
+    private formatPropsOrMeasurements(propsOrMsmt?: Record<string, string> | Record<string, number>): string {
+        return Object.entries(propsOrMsmt ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join(' | ');
     }
 }
