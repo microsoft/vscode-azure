@@ -11,9 +11,10 @@ import type { ConcreteAzureNode } from '../../../models/AzureNode';
 import { AzureNodeId } from '../../../models/AzureNodeId';
 import type { ResourceGroup } from '../../../models/Grouping';
 import { resourceGroupExperience } from '../../../tree/pick/resourceGroupExperience';
-import { makeAccount, makeSubscription } from '../../mockAzure';
+import { makeAccount, makeSubscription, makeTenant } from '../../mockAzure';
 
 const account = makeAccount();
+const tenant = makeTenant();
 const subscription = makeSubscription();
 
 const rg1: ResourceGroup = {
@@ -91,17 +92,19 @@ describe('resourceGroupExperience (unit)', () => {
         tracker.assertAllConsumed();
     });
 
-    it('should drill through account, subscription, to pick a resource group', async () => {
+    it('should drill through account, tenant, subscription, to pick a resource group', async () => {
         const { ctx, mock } = createMockCodeContext();
 
         const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>();
-        childrenMap.set(account as ConcreteAzureNode, [subscription]);
+        childrenMap.set(account as ConcreteAzureNode, [tenant]);
+        childrenMap.set(tenant as ConcreteAzureNode, [subscription]);
         childrenMap.set(subscription, [rg1]);
 
         const dataItemTree = createMockDataItemTree([account as ConcreteAzureNode], childrenMap);
 
         const tracker = respondToPrompts(mock, [
             { pick: 'Test Account $(chevron-right)' },      // pick account (intermediate)
+            { pick: 'Test Tenant $(chevron-right)' },        // pick tenant (intermediate)
             { pick: 'Test Subscription $(chevron-right)' },  // pick subscription (intermediate)
             { pick: 'rg1' },                                 // pick resource group (terminal)
         ]);

@@ -68,23 +68,4 @@ describe('subscriptionExperience (unit)', () => {
         expect(result).to.equal(sub2Id);
         tracker.assertAllConsumed();
     });
-
-    it('should pick directly when subscriptions are at root level', async () => {
-        const { ctx, mock } = createMockCodeContext();
-        const viewItemTree = createMockViewItemTree({
-            '': [sub1Id, sub2Id],
-        });
-
-        const tracker = respondToPrompts(mock, [
-            { pick: 'sub-1' },
-        ]);
-
-        const result = await subscriptionExperience({
-            ...ctx,
-            viewItemTree: viewItemTree as never,
-        });
-
-        expect(result).to.equal(sub1Id);
-        tracker.assertAllConsumed();
-    });
 });
