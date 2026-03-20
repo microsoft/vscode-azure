@@ -101,9 +101,13 @@ function resolveSubscriptionArgs<TOptions>(
     optionsOrUndefined?: TOptions,
 ): { credential: TokenCredential; subscriptionId: string; resolvedOptions: TOptions | undefined } {
     if (isTokenCredential(credentialOrSubscription)) {
+        if (typeof subscriptionIdOrOptions !== 'string' || subscriptionIdOrOptions.length === 0) {
+            throw new TypeError('Invalid arguments: when using a TokenCredential, the second argument must be a non-empty subscription ID string.');
+        }
+
         return {
             credential: credentialOrSubscription,
-            subscriptionId: subscriptionIdOrOptions as string,
+            subscriptionId: subscriptionIdOrOptions,
             resolvedOptions: optionsOrUndefined,
         };
     } else {
