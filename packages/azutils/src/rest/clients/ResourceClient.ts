@@ -66,9 +66,7 @@ export class ResourceClient implements IResourceClient {
             ctx,
             executor,
             ResourceClient.sdk.ResourceManagementClient,
-            subscription.credential,
-            subscription.subscriptionId,
-            { endpoint: subscription.environment.resourceManagerEndpointUrl },
+            subscription,
         );
         return new ResourceClient(inner, subscription);
     }

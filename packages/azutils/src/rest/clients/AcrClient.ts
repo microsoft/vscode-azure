@@ -56,9 +56,7 @@ export class AcrClient implements IAcrClient {
             ctx,
             executor,
             createContainerRegistryManagement,
-            subscription.credential,
-            subscription.subscriptionId,
-            { endpoint: subscription.environment.resourceManagerEndpointUrl },
+            subscription,
         );
         return Promise.resolve(new AcrClient(context, sdkGetRegistry));
     }

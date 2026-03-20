@@ -64,9 +64,7 @@ export class DeploymentClient implements IDeploymentClient {
             ctx,
             executor,
             DeploymentClient.sdk.DeploymentsClient,
-            subscription.credential,
-            subscription.subscriptionId,
-            { endpoint: subscription.environment.resourceManagerEndpointUrl },
+            subscription,
         );
         return new DeploymentClient(client);
     }
