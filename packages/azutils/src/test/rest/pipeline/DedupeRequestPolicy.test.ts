@@ -128,4 +128,50 @@ describe('DedupeRequestPolicy (unit)', () => {
 
         expect(callCount).to.equal(2);
     });
+
+    it('should deduplicate GET requests with empty streamResponseStatusCodes', async () => {
+        const policy = new DedupeRequestPolicy();
+        let callCount = 0;
+
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await new Promise(resolve => setTimeout(resolve, 10));
+            return makeResponse(req);
+        };
+
+        // Empty set (size === 0) should still allow dedup
+        const emptySet = new Set<number>();
+        const req1 = makeRequest({ requestId: 'r1', streamResponseStatusCodes: emptySet });
+        const req2 = makeRequest({ requestId: 'r2', streamResponseStatusCodes: emptySet });
+
+        await Promise.all([
+            policy.sendRequest(req1, next),
+            policy.sendRequest(req2, next),
+        ]);
+
+        expect(callCount).to.equal(1);
+    });
+
+    it('should clone the response for piggybacked callers with correct properties', async () => {
+        const policy = new DedupeRequestPolicy();
+
+        const next = async (req: PipelineRequest) => {
+            await new Promise(resolve => setTimeout(resolve, 10));
+            return makeResponse(req, 200, '{"data":true}');
+        };
+
+        const req1 = makeRequest({ requestId: 'r1' });
+        const req2 = makeRequest({ requestId: 'r2' });
+
+        const [res1, res2] = await Promise.all([
+            policy.sendRequest(req1, next),
+            policy.sendRequest(req2, next),
+        ]);
+
+        // Cloned response should have the correct request, status, and body
+        expect(res2.request).to.equal(req2);
+        expect(res2.status).to.equal(200);
+        expect(res2.bodyAsText).to.equal('{"data":true}');
+        expect(res2.headers).to.equal(res1.headers);
+    });
 });
