@@ -124,6 +124,65 @@ describe('resourceExperience (unit)', () => {
         tracker.assertAllConsumed();
     });
 
+    it('should drill through a resource group to pick a resource', async () => {
+        const { ctx, mock } = createMockCodeContext();
+
+        const rgId = 'azr://test-account@portal.azure.com/tenants/test-tenant/subscriptions/test-sub/resourceGroups/rg1';
+
+        const viewItemTree = createMockViewItemTree({
+            '': [subId],
+            [subId]: [rgId],
+            [rgId]: [site1Id, site2Id],
+        });
+
+        const dataItemTree = createMockDataItemTree([subscription, site1, site2]);
+
+        const tracker = respondToPrompts(mock, [
+            { pick: 'test-sub $(chevron-right)' },   // subscription (intermediate)
+            { pick: 'rg1 $(chevron-right)' },         // resource group (intermediate)
+            { pick: 'site2' },                         // pick site2 (terminal)
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx,
+            viewItemTree: viewItemTree as never,
+            dataItemTree,
+            logicalType: 'Microsoft.Web/sites',
+        });
+
+        expect(result).to.equal(site2Id);
+        tracker.assertAllConsumed();
+    });
+
+    it('should drill through a non-matching virtual group as intermediate', async () => {
+        const { ctx, mock } = createMockCodeContext();
+
+        // Virtual group for location (not matching the target resource type)
+        const locationGroupId = 'azr://test-account@portal.azure.com/tenants/test-tenant/subscriptions/test-sub/~location/eastus';
+
+        const viewItemTree = createMockViewItemTree({
+            '': [locationGroupId],
+            [locationGroupId]: [site1Id],
+        });
+
+        const dataItemTree = createMockDataItemTree([site1]);
+
+        const tracker = respondToPrompts(mock, [
+            { pick: 'eastus $(chevron-right)' },  // location group (intermediate, not skip)
+            { pick: 'site1' },                     // pick site1 (terminal)
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx,
+            viewItemTree: viewItemTree as never,
+            dataItemTree,
+            logicalType: 'Microsoft.Web/sites',
+        });
+
+        expect(result).to.equal(site1Id);
+        tracker.assertAllConsumed();
+    });
+
     it('should auto-skip a virtual group matching the target resource type', async () => {
         const { ctx, mock } = createMockCodeContext();
 
