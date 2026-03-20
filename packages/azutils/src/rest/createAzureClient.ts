@@ -112,6 +112,7 @@ function resolveSubscriptionArgs<TOptions>(
             subscriptionId: credentialOrSubscription.subscriptionId,
             resolvedOptions: {
                 ...subscriptionIdOrOptions as TOptions | undefined,
+                // TODO: this won't work for non-ARM clients. Is that a problem? Probably not since only ARM clients care about subscriptions?
                 endpoint: credentialOrSubscription.environment.resourceManagerEndpointUrl.replace(/\/+$/, ''),
             } as TOptions,
         };
