@@ -4,7 +4,6 @@
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
 - Setting for default page size
-- Sovereign cloud support via using `Environment` returned by subscription provider
 
 ## Issues
 - Figure out why the token expired and wasn't refreshing
