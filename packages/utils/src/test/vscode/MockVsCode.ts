@@ -144,9 +144,21 @@ export function createMockVsCode(): MockVsCodeResult {
         WorkspaceFolder: 3,
     } satisfies typeof vscode.ConfigurationTarget;
 
+    // ── authentication ──────────────────────────────────────
+
+    const getSession = mock.fn(
+        () => Promise.resolve(undefined),
+    );
+
     // ── Assemble ────────────────────────────────────────────
 
     const mockVsCode = {
+        authentication: {
+            getSession,
+        },
+        env: {
+            language: 'en',
+        },
         window: {
             createQuickPick,
             createInputBox,
@@ -210,6 +222,10 @@ export function createMockCodeContext(): MockCodeContextResult {
         globalState: Object.assign(new MockMemento(), {
             setKeysForSync: () => { /* noop */ },
         }),
+        extension: {
+            id: 'test-publisher.test-extension',
+            packageJSON: { version: '0.0.0-test' },
+        },
     } as unknown as IExtensionContext;
 
     return {

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+export { NullTelemetryReporter } from './base/ITelemetryReporter';
 export * from './test/vscode/config/MockMemento';
 export * from './test/vscode/config/MockWorkspaceConfiguration';
 export * from './test/vscode/input/MockInputBox';

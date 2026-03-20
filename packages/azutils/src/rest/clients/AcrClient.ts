@@ -6,7 +6,7 @@
 import type { RegistriesGetOptionalParams } from '@azure/arm-containerregistry';
 import type { Registry as SdkRegistry, Sku as SdkSku } from '@azure/arm-containerregistry/models';
 /* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
-import { type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
+import { type ContainerRegistryManagementClientOptionalParams, type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
 import { get as sdkGetRegistry } from '@azure/arm-containerregistry/api/registries';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
@@ -51,12 +51,14 @@ export class AcrClient implements IAcrClient {
         ctx: ICodeContext,
         executor: IActionExecutor,
         subscription: AzureSubscription,
+        options?: ContainerRegistryManagementClientOptionalParams,
     ): Promise<AcrClient> {
         const context = createAzureRestSubscriptionClient(
             ctx,
             executor,
             createContainerRegistryManagement,
             subscription,
+            options,
         );
         return Promise.resolve(new AcrClient(context, sdkGetRegistry));
     }
