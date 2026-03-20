@@ -180,11 +180,13 @@
         "vscode": "^1.106.0"
     },
     "devDependencies": {
+        "@types/sinon": "^21.0.0",
         "@vscode/test-cli": "*",
         "@vscode/test-electron": "*",
         "@vscode/vsce": "*",
         "esbuild": "*",
-        "esbuild-plugin-copy": "*"
+        "esbuild-plugin-copy": "*",
+        "sinon": "^21.0.3"
     },
     "dependencies": {
         "@microsoft/vscode-azext-azureauth": "^6.0.0-alpha.5",
