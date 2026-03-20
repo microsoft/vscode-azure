@@ -33,7 +33,7 @@ export function createTelemetryReporter(
     }
 }
 
-class NullTelemetryReporter implements ITelemetryReporter {
+export class NullTelemetryReporter implements ITelemetryReporter {
     public sendTelemetryErrorEvent(): void {
         // noop
     }

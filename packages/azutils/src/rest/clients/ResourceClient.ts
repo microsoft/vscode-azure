@@ -6,6 +6,7 @@
 import type {
     ResourceGroupsListOptionalParams,
     ResourceManagementClient,
+    ResourceManagementClientOptionalParams,
     ResourcesListOptionalParams
 } from '@azure/arm-resources';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
@@ -60,6 +61,7 @@ export class ResourceClient implements IResourceClient {
         ctx: ICodeContext,
         executor: IActionExecutor,
         subscription: AzureSubscription,
+        options?: ResourceManagementClientOptionalParams,
     ): Promise<ResourceClient> {
         ResourceClient.sdk ??= await import('@azure/arm-resources');
         const inner = createAzureSubscriptionClient(
@@ -67,6 +69,7 @@ export class ResourceClient implements IResourceClient {
             executor,
             ResourceClient.sdk.ResourceManagementClient,
             subscription,
+            options,
         );
         return new ResourceClient(inner, subscription);
     }

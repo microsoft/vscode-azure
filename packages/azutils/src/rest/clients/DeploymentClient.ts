@@ -6,6 +6,7 @@
 import type {
     DeploymentOperationsListAtScopeOptionalParams,
     DeploymentsClient,
+    DeploymentsClientOptionalParams,
     DeploymentsGetAtScopeOptionalParams,
     DeploymentExtended as SdkDeploymentExtended,
     DeploymentOperation as SdkDeploymentOperation,
@@ -58,6 +59,7 @@ export class DeploymentClient implements IDeploymentClient {
         ctx: ICodeContext,
         executor: IActionExecutor,
         subscription: AzureSubscription,
+        options?: DeploymentsClientOptionalParams,
     ): Promise<DeploymentClient> {
         DeploymentClient.sdk ??= await import('@azure/arm-resourcesdeployments');
         const client = createAzureSubscriptionClient(
@@ -65,6 +67,7 @@ export class DeploymentClient implements IDeploymentClient {
             executor,
             DeploymentClient.sdk.DeploymentsClient,
             subscription,
+            options,
         );
         return new DeploymentClient(client);
     }

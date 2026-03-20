@@ -6,7 +6,7 @@
 export * from './base/IActionContext';
 export * from './base/IActionExecutor';
 export * from './base/ICommandRegistry';
-export * from './base/ITelemetryReporter';
+export { ITelemetryReporter, createTelemetryReporter } from './base/ITelemetryReporter';
 export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './data/Page';
