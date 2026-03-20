@@ -8,8 +8,8 @@ import type { IActionExecutor } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 const wwwAuthenticateHeaderName = 'WWW-Authenticate';
-const challengeRetryHeaderName = 'x-azext-challenge-retry';
 const authorizationHeaderName = 'Authorization';
+const retriedRequests = new WeakSet<PipelineRequest>();
 
 export class MFAChallengePolicy implements PipelinePolicy {
     public readonly name = 'MFAChallengePolicy';
@@ -26,13 +26,13 @@ export class MFAChallengePolicy implements PipelinePolicy {
 
         if (initialResponse.status === 401 &&
             initialResponse.headers.has(wwwAuthenticateHeaderName) &&
-            !initialResponse.headers.has(challengeRetryHeaderName)) {
+            !retriedRequests.has(request)) {
 
             if (context) {
                 context.telemetry.properties.challenge = 'true';
             }
 
-            request.headers.set(challengeRetryHeaderName, 'true'); // Prevent infinite challenge loop
+            retriedRequests.add(request); // Prevent infinite challenge loop
 
             const newSession = await this.getNewToken({
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
