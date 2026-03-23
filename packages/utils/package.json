@@ -31,7 +31,7 @@
         "build": "tsgo",
         "package": "npm pack",
         "test": "mocha",
-        "testcov": "npx nyc --reporter=html mocha",
+        "testcov": "npx c8 --reporter=html --exclude=\"**/test/**\" mocha",
         "clean": "node ../../scripts/clean.mjs"
     },
     "mocha": {
