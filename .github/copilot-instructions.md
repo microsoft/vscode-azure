@@ -30,7 +30,7 @@ For detailed documentation on the project architecture and patterns, see the `do
   - `Disposable` instead of `vscode.Disposable`
 * Mark interface properties as `readonly` by default
 * Use PascalCase for files containing classes/interfaces, camelCase for function-oriented files
-* Label test cases with `(unit)` or `(integration)` in the root `describe` description
+* Label test cases with `(unit)` or `(integration)` **after** the name in the root `describe` description (e.g., `describe('AzureNodeId (unit)', ...)`)
 * Include the Microsoft copyright header on every TypeScript/JavaScript file
 * Use `void` prefix for intentionally un-awaited promises, unless they have a `.then()` with two arguments (for resolve and reject), or a `.catch()` handler
 * Use scoped `eslint-disable` comments on specific lines, avoid file-wide unless it requires repeating the same disable many times
@@ -75,4 +75,19 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 * Run `npm run lint` to check for linting errors
 * Run `npm run build` to compile TypeScript to JavaScript
 * Run `npm run test` to execute tests
+* Run `npm run testcov` to run tests with code coverage (via c8)
 * For individual workspaces, use the above commands, adding `--workspace=<workspace-name>` to target a specific package
+
+
+## Writing Tests
+
+* Use `createMockCodeContext()` or `createMockVsCode()` from `@microsoft/vscode-azure-utils/testing` instead of hand-rolling `IVsCode`, `IExtensionContext`, or `ICodeContext` mocks. If the mock needs new capabilities, add them to `MockVsCode.ts` in the utils package.
+* Use real `ActionExecutor` (with `NullTelemetryReporter`) instead of mocking `IActionExecutor`
+* Use real `createActionContext()` instead of mocking `IActionContext`
+* Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` (not from the main entry point)
+* Use `mock.fn()` from `node:test` to track call counts and arguments — prefer over manual counters
+* Use `respondToPrompts()` from the testing package to drive wizard / pick-step UI flows
+* In azutils, use the shared fixtures in `src/test/mockAzure.ts` and `src/test/mockPipeline.ts` instead of creating local mocks
+* For Azure environments, use `Environment.AzureCloud` from `@azure/ms-rest-azure-env` instead of hand-rolled environment objects
+* Don't test that constants equal their literal values — those tests add no value
+* Testing Azure SDK clients: use `MockHttpClient` injected via the `options` parameter on the client's `create()` method

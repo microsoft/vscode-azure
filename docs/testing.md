@@ -12,14 +12,14 @@ extensions/vscode-azure/src/test/
 
 ## Test Labels
 
-Label tests with `(unit)` or `(integration)` in the root `describe` description:
+Label tests with `(unit)` or `(integration)` **after** the name in the root `describe` description:
 
 ```typescript
-describe('(unit) Hello command', () => {
-    it('should set telemetry property', async () => { ... });
+describe('AzureNodeId (unit)', () => {
+    it('should round-trip a subscription node ID', () => { ... });
 });
 
-describe('(integration) Hello command', () => {
+describe('Hello command (integration)', () => {
     it('should execute without error', async () => { ... });
 });
 ```
@@ -55,10 +55,13 @@ it('(unit) should set telemetry property', async () => {
 ```
 
 `createMockVsCode()` returns a `MockVsCodeResult` with:
-- `vscode` — an `IVsCode` mock with tracked methods (`window.showInformationMessage`, `l10n.t`, `window.createQuickPick`, etc.)
+- `vscode` — an `IVsCode` mock with tracked methods (`window.showInformationMessage`, `l10n.t`, `window.createQuickPick`, `commands.registerCommand`, `authentication.getSession`, etc.)
 - `quickPicks` — all `MockQuickPick` instances created, for driving and asserting user interactions
 - `inputBoxes` — all `MockInputBox` instances created
 - `settings` — backing store for `workspace.getConfiguration()`
+- `registeredCommands` — commands registered via `commands.registerCommand`
+
+All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior.
 
 For tests that also need an `ICodeContext`, use `createMockCodeContext()`:
 
@@ -67,13 +70,43 @@ import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 
 const { ctx: codeContext, mock: mockResult } = createMockCodeContext();
 // codeContext has both .code (IVsCode) and .extensionContext (IExtensionContext)
+// extensionContext includes extension.id and extension.packageJSON
 ```
 
 Key patterns:
-- Prefer `createMockVsCode()` over hand-rolled mocks for consistency and completeness
-- Use `createActionContext('test')` for a real context with empty telemetry
-- Access `mock.fn()` call info via the returned mock result for assertions
-- For simulating quick pick interactions, use `mockResult.quickPicks[0].accept()` etc.
+- Prefer `createMockVsCode()` / `createMockCodeContext()` over hand-rolled mocks for consistency and completeness
+- Use real implementations (`ActionExecutor`, `createActionContext`) instead of mocking them — they work fine in tests
+- Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` for the `ActionExecutor` constructor
+- Use `Mock` from `node:test` to track call counts and arguments — prefer over manual `let callCount = 0` patterns
+- For Azure environments in azutils tests, use `Environment.AzureCloud` from `@azure/ms-rest-azure-env` instead of hand-rolled environment objects
+
+### Driving Wizard UI in Tests
+
+Use `respondToPrompts()` to pre-program responses to QuickPicks and InputBoxes:
+
+```typescript
+import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+
+const { ctx, mock } = createMockCodeContext();
+const tracker = respondToPrompts(mock, [
+    { pick: 'My Subscription $(chevron-right)' },  // pick an intermediate item (note chevron suffix)
+    { input: 'my-resource' },                        // type into an input box
+    { pickMany: ['A', 'B'] },                        // multi-select
+    'goBack',                                        // press back button
+    'cancel',                                        // dismiss the UI
+]);
+
+// ... run wizard ...
+tracker.assertAllConsumed();  // verify all responses were used
+```
+
+Note: intermediate items in the pick step get ` $(chevron-right)` appended to their labels. Use the full label including the suffix when specifying picks.
+
+### Shared Test Fixtures (azutils)
+
+`packages/azutils/src/test/` provides shared helpers:
+- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()` using `Environment.AzureCloud`
+- `mockPipeline.ts` — `makeRequest()`, `makeResponse()` (using SDK's `createHttpHeaders`), and `MockHttpClient` for injecting into Azure SDK clients
 
 ### Integration Tests
 
@@ -110,10 +143,11 @@ npm run testcov --workspace=extensions/vscode-azure
 
 ### Package Coverage
 
-Packages use **nyc** (Istanbul) with Mocha:
+Packages use **c8** (V8 native coverage) with Mocha:
 
 ```bash
-npx nyc --reporter=html mocha
+npm run testcov --workspace=packages/utils
+npm run testcov --workspace=packages/azutils
 ```
 
 ### Extension Coverage
