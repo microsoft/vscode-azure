@@ -45,6 +45,9 @@ export interface MockVsCodeResult {
      * Mutate directly or use {@link withSettings} for scoped overrides.
      */
     readonly settings: Map<string, unknown>;
+
+    /** Commands registered via `vscode.commands.registerCommand`. Keyed by command ID. */
+    readonly registeredCommands: Map<string, (...args: unknown[]) => unknown>;
 }
 
 /**
@@ -144,6 +147,17 @@ export function createMockVsCode(): MockVsCodeResult {
         WorkspaceFolder: 3,
     } satisfies typeof vscode.ConfigurationTarget;
 
+    // ── commands ─────────────────────────────────────────────
+
+    const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
+
+    const registerCommand = mock.fn(
+        (id: string, handler: (...args: unknown[]) => unknown) => {
+            registeredCommands.set(id, handler);
+            return { dispose: () => { registeredCommands.delete(id); } };
+        },
+    );
+
     // ── authentication ──────────────────────────────────────
 
     const getSession = mock.fn(
@@ -155,6 +169,9 @@ export function createMockVsCode(): MockVsCodeResult {
     const mockVsCode = {
         authentication: {
             getSession,
+        },
+        commands: {
+            registerCommand,
         },
         env: {
             language: 'en',
@@ -182,6 +199,7 @@ export function createMockVsCode(): MockVsCodeResult {
         quickPicks,
         inputBoxes,
         settings,
+        registeredCommands,
     };
 }
 

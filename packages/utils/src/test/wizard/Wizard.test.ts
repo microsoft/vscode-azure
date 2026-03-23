@@ -78,7 +78,7 @@ class RecordingExecuteStep extends ExecuteStep<TestContext> {
 
 // ── Tests ──────────────────────────────────────────────────
 
-describe('(unit) Wizard with MockVsCode', () => {
+describe('Wizard (unit)', () => {
 
     it('should complete a single-step wizard with an input box', async () => {
         const { ctx, mock } = createMockCodeContext();
