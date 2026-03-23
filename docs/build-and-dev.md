@@ -125,7 +125,7 @@ Removes `dist/`, `coverage/`, and `.nyc_output/` folders. Each workspace calls t
 ```bash
 npm run test                                    # All workspaces
 npm run test --workspace=packages/utils         # Single workspace
-npm run testcov --workspace=packages/utils      # With coverage (nyc)
+npm run testcov --workspace=packages/utils      # With coverage (c8)
 npm run testcov --workspace=extensions/vscode-azure # With coverage (vscode-test)
 ```
 

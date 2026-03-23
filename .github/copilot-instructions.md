@@ -75,7 +75,7 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 * Run `npm run lint` to check for linting errors
 * Run `npm run build` to compile TypeScript to JavaScript
 * Run `npm run test` to execute tests
-* Run `npm run testcov` to run tests with code coverage (uses CJS build + c8)
+* Run `npm run testcov` to run tests with code coverage (via c8)
 * For individual workspaces, use the above commands, adding `--workspace=<workspace-name>` to target a specific package
 
 
