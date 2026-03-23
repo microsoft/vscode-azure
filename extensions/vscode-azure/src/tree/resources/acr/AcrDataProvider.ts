@@ -128,6 +128,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
  * Type guard for ACR-owned {@link VirtualResource} nodes.
  */
 function isAcrVirtualResource(node: unknown): node is VirtualResource {
-    return isVirtualResource(node as VirtualResource)
+    return !!node && typeof node === 'object'
+        && isVirtualResource(node as VirtualResource)
         && isAcrRegistry((node as VirtualResource).azureResource);
 }
