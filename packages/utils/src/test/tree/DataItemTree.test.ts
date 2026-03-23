@@ -1,0 +1,370 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { expect } from 'chai';
+import { describe, it } from 'mocha';
+import { mock } from 'node:test';
+import { ActionExecutor } from '../../base/IActionExecutor';
+import { NullTelemetryReporter } from '../../base/ITelemetryReporter';
+import type { Page } from '../../data/Page';
+import { DataItemTree } from '../../tree/DataItemTree';
+import type { DataProvider } from '../../tree/DataProvider';
+
+interface TestResource {
+    id: string;
+    enriched?: boolean;
+}
+
+const canHandleAll = (_r: unknown): _r is TestResource => true;
+const canHandleNone = (_r: unknown): _r is TestResource => false;
+
+function createTree(ttl = 60_000) {
+    const executor = new ActionExecutor(new NullTelemetryReporter());
+    return new DataItemTree<TestResource>('test', executor, r => r.id, ttl);
+}
+
+function createRootProvider(children: TestResource[]): DataProvider<TestResource> {
+    return {
+        isRoot: true,
+        canHandle: canHandleNone,
+        getChildren: () => children,
+    };
+}
+
+function createBranchProvider(
+    childMap: Map<string, TestResource[]>,
+    options?: { enrich?: (r: TestResource) => Promise<boolean> },
+): DataProvider<TestResource> {
+    return {
+        isRoot: false,
+        canHandle: (r: unknown): r is TestResource => childMap.has((r as TestResource).id),
+        getChildren: (r?: TestResource) => r ? (childMap.get(r.id) ?? []) : [],
+        enrich: options?.enrich,
+    };
+}
+
+describe('DataItemTree (unit)', () => {
+    describe('getChildren (roots)', () => {
+        it('should return children from registered root providers', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }, { id: 'b' }]));
+
+            const children = await tree.getChildren();
+            expect(children.map(c => c.id)).to.deep.equal(['a', 'b']);
+        });
+
+        it('should merge children from multiple root providers', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            tree.registerProvider(createRootProvider([{ id: 'b' }]));
+
+            const children = await tree.getChildren();
+            expect(children.map(c => c.id)).to.deep.equal(['a', 'b']);
+        });
+
+        it('should cache root children within TTL', async () => {
+            const tree = createTree();
+            const fn = mock.fn(() => [{ id: 'a' }]);
+            tree.registerProvider({ isRoot: true, canHandle: canHandleNone, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren();
+
+            expect(fn.mock.callCount()).to.equal(1);
+        });
+
+        it('should re-fetch after TTL expires', async () => {
+            const tree = createTree(0); // TTL = 0 -> always stale
+            const fn = mock.fn(() => [{ id: 'a' }]);
+            tree.registerProvider({ isRoot: true, canHandle: canHandleNone, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren();
+
+            expect(fn.mock.callCount()).to.equal(2);
+        });
+    });
+
+    describe('getChildren (branches)', () => {
+        it('should return children for a known resource', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider(createBranchProvider(new Map([['root', [{ id: 'child1' }, { id: 'child2' }]]])));
+
+            await tree.getChildren(); // load roots
+            const children = await tree.getChildren({ id: 'root' });
+            expect(children.map(c => c.id)).to.deep.equal(['child1', 'child2']);
+        });
+
+        it('should return empty array when no provider matches', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+
+            await tree.getChildren(); // load roots
+            const children = await tree.getChildren({ id: 'root' });
+            expect(children).to.deep.equal([]);
+        });
+
+        it('should cache branch children within TTL', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            const fn = mock.fn(() => [{ id: 'child' }]);
+            tree.registerProvider({ isRoot: false, canHandle: canHandleAll, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+            await tree.getChildren({ id: 'root' });
+
+            expect(fn.mock.callCount()).to.equal(1);
+        });
+
+        it('should throw for resources not in the tree', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            await tree.getChildren();
+
+            try {
+                await tree.getChildren({ id: 'unknown' });
+                expect.fail('Expected error');
+            } catch (e) {
+                expect((e as Error).message).to.include('not found');
+            }
+        });
+    });
+
+    describe('get', () => {
+        it('should return a resource by key after loading', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+
+            await tree.getChildren();
+            expect(tree.get('a')).to.deep.equal({ id: 'a' });
+        });
+
+        it('should return undefined for unknown keys', () => {
+            const tree = createTree();
+            expect(tree.get('nope')).to.be.undefined;
+        });
+    });
+
+    describe('pagination', () => {
+        function createPagedProvider(parentId: string, pages: Page<TestResource>[]): DataProvider<TestResource> {
+            return {
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => (r as TestResource).id === parentId,
+                getChildren: () => {
+                    const iter = pages[Symbol.iterator]();
+                    return {
+                        [Symbol.asyncIterator]() {
+                            return { next: () => Promise.resolve(iter.next()) };
+                        },
+                    };
+                },
+            };
+        }
+
+        it('should load the first page on getChildren', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider(createPagedProvider('root', [
+                { items: [{ id: 'p1a' }, { id: 'p1b' }], hasMore: true },
+                { items: [{ id: 'p2a' }], hasMore: false },
+            ]));
+
+            await tree.getChildren();
+            const children = await tree.getChildren({ id: 'root' });
+
+            expect(children.map(c => c.id)).to.deep.equal(['p1a', 'p1b']);
+            expect(tree.hasMore({ id: 'root' })).to.be.true;
+        });
+
+        it('should append the second page on loadMore', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider(createPagedProvider('root', [
+                { items: [{ id: 'p1a' }], hasMore: true },
+                { items: [{ id: 'p2a' }], hasMore: false },
+            ]));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+
+            await tree.loadMore({ id: 'root' });
+
+            const children = await tree.getChildren({ id: 'root' });
+            expect(children.map(c => c.id)).to.deep.equal(['p1a', 'p2a']);
+            expect(tree.hasMore({ id: 'root' })).to.be.false;
+        });
+
+        it('should load all pages with loadAll', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider(createPagedProvider('root', [
+                { items: [{ id: 'a' }], hasMore: true },
+                { items: [{ id: 'b' }], hasMore: true },
+                { items: [{ id: 'c' }], hasMore: false },
+            ]));
+
+            await tree.getChildren();
+            await tree.loadAll({ id: 'root' });
+
+            const children = await tree.getChildren({ id: 'root' });
+            expect(children.map(c => c.id)).to.deep.equal(['a', 'b', 'c']);
+            expect(tree.hasMore({ id: 'root' })).to.be.false;
+        });
+
+        it('should return false for hasMore at root level', () => {
+            const tree = createTree();
+            expect(tree.hasMore()).to.be.false;
+        });
+    });
+
+    describe('enrichment', () => {
+        it('should run enrich on loaded resources', async () => {
+            const tree = createTree();
+            const enriched: string[] = [];
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => [{ id: 'a' }, { id: 'b' }],
+                enrich: (r: TestResource) => {
+                    enriched.push(r.id);
+                    r.enriched = true;
+                    return Promise.resolve(false);
+                },
+            });
+
+            await tree.getChildren();
+            // Wait for background enrichment
+            await tree.whenEnriched(tree.get('a')!);
+            await tree.whenEnriched(tree.get('b')!);
+
+            expect(enriched).to.include('a');
+            expect(enriched).to.include('b');
+        });
+
+        it('should resolve immediately when no enrich provider matches', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+
+            await tree.getChildren();
+            const result = await tree.whenEnriched(tree.get('a')!);
+            expect(result.id).to.equal('a');
+        });
+    });
+
+    describe('invalidation', () => {
+        it('should re-fetch children after invalidate', async () => {
+            const tree = createTree();
+            const fn = mock.fn(() => [{ id: 'child' }]);
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider({ isRoot: false, canHandle: canHandleAll, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+
+            tree.invalidate({ id: 'root' });
+            await tree.getChildren({ id: 'root' });
+
+            expect(fn.mock.callCount()).to.equal(2);
+        });
+
+        it('should not re-fetch when includeChildren is false', async () => {
+            const tree = createTree();
+            const fn = mock.fn(() => [{ id: 'child' }]);
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider({ isRoot: false, canHandle: canHandleAll, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+
+            tree.invalidate({ id: 'root' }, false);
+            await tree.getChildren({ id: 'root' });
+
+            // Children are still cached, so provider is called only once
+            expect(fn.mock.callCount()).to.equal(1);
+        });
+
+        it('should fire onDidChange on invalidate', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            await tree.getChildren();
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            tree.invalidate({ id: 'a' });
+            expect(onChange.mock.callCount()).to.equal(1);
+        });
+
+        it('should clear all caches on invalidateAll', async () => {
+            const tree = createTree();
+            const fn = mock.fn(() => [{ id: 'root' }]);
+            tree.registerProvider({ isRoot: true, canHandle: canHandleNone, getChildren: fn });
+
+            await tree.getChildren();
+            tree.invalidateAll();
+            await tree.getChildren();
+
+            expect(fn.mock.callCount()).to.equal(2);
+        });
+
+        it('should fire onDidChange with undefined on invalidateAll', () => {
+            const tree = createTree();
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            tree.invalidateAll();
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onChange.mock.calls[0].arguments[0]).to.be.undefined;
+        });
+    });
+
+    describe('provider change events', () => {
+        it('should invalidate when provider fires onDidChange for a resource', async () => {
+            const tree = createTree();
+            let fireChange!: (event: { resource: TestResource; includeChildren: boolean }) => void;
+            const provider: DataProvider<TestResource> = {
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => [{ id: 'a' }],
+                onDidChange: (listener) => {
+                    fireChange = listener;
+                    return { dispose: () => { /* noop */ } };
+                },
+            };
+            tree.registerProvider(provider);
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            await tree.getChildren();
+            fireChange({ resource: { id: 'a' }, includeChildren: true });
+
+            expect(onChange.mock.callCount()).to.be.greaterThan(0);
+        });
+
+        it('should invalidateAll when provider fires onDidChange with undefined resource', async () => {
+            const tree = createTree();
+            let fireChange!: (event: { resource: undefined; includeChildren: boolean }) => void;
+            const provider: DataProvider<TestResource> = {
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => [{ id: 'a' }],
+                onDidChange: (listener) => {
+                    fireChange = listener;
+                    return { dispose: () => { /* noop */ } };
+                },
+            };
+            tree.registerProvider(provider);
+            await tree.getChildren();
+
+            fireChange({ resource: undefined, includeChildren: true });
+
+            // After invalidateAll, get('a') should be undefined
+            expect(tree.get('a')).to.be.undefined;
+        });
+    });
+});

@@ -8,7 +8,7 @@ import { describe, it } from 'mocha';
 import type { Disposable } from '../../vscode/Disposable';
 import { EventEmitter } from '../../vscode/EventEmitter';
 
-describe('(unit) EventEmitter', () => {
+describe('EventEmitter (unit)', () => {
     it('should fire listener with the emitted value', () => {
         const emitter = new EventEmitter<number>();
         const received: number[] = [];
