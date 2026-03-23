@@ -76,13 +76,13 @@ describe('uiHelpers (unit)', () => {
 
             const ib = mock.inputBoxes[0];
             ib.value = 'bad';
-            ib.accept(); // triggers async validation → returns 'Invalid!'
+            ib.accept(); // triggers async validation -> returns 'Invalid!'
             await new Promise(r => { setTimeout(r, 10); }); // let the promise settle
             expect(ib.validationMessage).to.equal('Invalid!');
             expect(ib.enabled).to.be.true;
 
             ib.value = 'good';
-            ib.accept(); // second attempt → passes
+            ib.accept(); // second attempt -> passes
             const result = await resultPromise;
             expect(result).to.equal('good');
         });

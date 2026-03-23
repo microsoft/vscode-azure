@@ -76,7 +76,7 @@ describe('DataItemTree (unit)', () => {
         });
 
         it('should re-fetch after TTL expires', async () => {
-            const tree = createTree(0); // TTL = 0 → always stale
+            const tree = createTree(0); // TTL = 0 -> always stale
             const fn = mock.fn(() => [{ id: 'a' }]);
             tree.registerProvider({ isRoot: true, canHandle: canHandleNone, getChildren: fn });
 

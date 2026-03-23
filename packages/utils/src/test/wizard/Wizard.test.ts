@@ -383,7 +383,7 @@ describe('Wizard (unit)', () => {
             { input: 'first' },
             { pick: 'Red' },       // StepWithSub picks Red → adds ConditionalConfirmStep
             'goBack',              // Go back from ConditionalConfirmStep → removes it
-            { pick: 'Blue' },      // Re-pick StepWithSub with Blue → no sub-steps
+            { pick: 'Blue' },      // Re-pick StepWithSub with Blue -> no sub-steps
         ]);
 
         const wizard = new Wizard<TestContext>(

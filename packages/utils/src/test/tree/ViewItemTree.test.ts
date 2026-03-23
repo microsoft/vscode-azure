@@ -130,11 +130,15 @@ describe('ViewItemTree (unit)', () => {
             viewTree.registerProvider(createRootViewProvider(['item']));
 
             await viewTree.getChildren();
-            // Unregister the provider so nothing matches
+            // Unregister all providers so nothing matches
             viewTree.dispose();
 
-            // The executor swallows errors (returns undefined), but with rethrow it throws
-            // In practice the error is caught by the executor — just verify no crash
+            try {
+                await viewTree.getTreeItem('item');
+                expect.fail('Expected error');
+            } catch (e) {
+                expect((e as Error).message).to.include('No view provider found');
+            }
         });
     });
 
