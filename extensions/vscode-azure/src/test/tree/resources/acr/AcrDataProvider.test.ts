@@ -7,8 +7,7 @@ import type { ConcreteAzureNode, GenericResource, VirtualResource } from '@micro
 import { AzureNodeId, isVirtualResource } from '@microsoft/vscode-azure-azutils';
 import { type IActionExecutor, DataItemTree } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
-import { describe, it, beforeEach, afterEach } from 'mocha';
-import sinon from 'sinon';
+import { describe, it, beforeEach } from 'mocha';
 import type { IAcrClientProvider } from '../../../../services';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
 import { createFakeAcrResource, createFakeSubscription, createMockAcrClient } from './testData';
@@ -50,10 +49,6 @@ describe('AcrDataProvider (unit)', () => {
         acrClient = createMockAcrClient();
         clientProvider = async () => acrClient;
         provider = new AcrDataProvider(executor, clientProvider);
-    });
-
-    afterEach(() => {
-        // intentionally empty — placeholder for future cleanup
     });
 
     // #region canHandle
@@ -155,22 +150,10 @@ describe('AcrDataProvider (unit)', () => {
     // #region enrich
 
     describe('enrich', function () {
-        let clock: sinon.SinonFakeTimers;
-
-        beforeEach(() => {
-            clock = sinon.useFakeTimers();
-        });
-
-        afterEach(() => {
-            clock.restore();
-        });
-
         it('should populate loginServer, sku, and adminUserEnabled on the resource', async () => {
             const resource = createFakeAcrResource('myregistry') as GenericResource & Record<string, unknown>;
 
-            const enrichPromise = provider.enrich(resource as ConcreteAzureNode);
-            await clock.tickAsync(5000);
-            const result = await enrichPromise;
+            const result = await provider.enrich(resource as ConcreteAzureNode);
 
             expect(result).to.equal(false); // does not invalidate children
             expect(resource.loginServer).to.equal('myregistry.azurecr.io');
@@ -182,9 +165,7 @@ describe('AcrDataProvider (unit)', () => {
             const resource = createFakeAcrResource('myregistry');
             (resource as any).logicalType = 'Microsoft.Storage/storageAccounts';
 
-            const enrichPromise = provider.enrich(resource as ConcreteAzureNode);
-            await clock.tickAsync(5000);
-            const result = await enrichPromise;
+            const result = await provider.enrich(resource as ConcreteAzureNode);
             expect(result).to.equal(false);
         });
 
@@ -199,13 +180,8 @@ describe('AcrDataProvider (unit)', () => {
             const r1 = createFakeAcrResource('reg1');
             const r2 = createFakeAcrResource('reg2');
 
-            const p1 = provider.enrich(r1 as ConcreteAzureNode);
-            await clock.tickAsync(5000);
-            await p1;
-
-            const p2 = provider.enrich(r2 as ConcreteAzureNode);
-            await clock.tickAsync(5000);
-            await p2;
+            await provider.enrich(r1 as ConcreteAzureNode);
+            await provider.enrich(r2 as ConcreteAzureNode);
 
             expect(callCount).to.equal(1);
         });
@@ -217,10 +193,8 @@ describe('AcrDataProvider (unit)', () => {
 describe('AcrDataProvider in DataItemTree (unit)', function () {
     let executor: IActionExecutor;
     let tree: DataItemTree<ConcreteAzureNode>;
-    let clock: sinon.SinonFakeTimers;
 
     beforeEach(() => {
-        clock = sinon.useFakeTimers();
         executor = createStubExecutor();
         tree = new DataItemTree<ConcreteAzureNode>(
             'test-acr',
@@ -228,10 +202,6 @@ describe('AcrDataProvider in DataItemTree (unit)', function () {
             resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000, // 5 minute TTL
         );
-    });
-
-    afterEach(() => {
-        clock.restore();
     });
 
     it('should show 3 ACR registries as root items', async () => {
@@ -326,9 +296,6 @@ describe('AcrDataProvider in DataItemTree (unit)', function () {
         tree.registerProvider(acrDataProvider);
 
         const roots = await tree.getChildren();
-
-        // Advance fake timers past the simulated 5s delay in enrich
-        await clock.tickAsync(5000);
 
         // Wait for enrichment to complete
         for (const resource of roots) {
