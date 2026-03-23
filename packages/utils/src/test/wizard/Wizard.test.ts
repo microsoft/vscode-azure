@@ -358,4 +358,43 @@ describe('Wizard (unit)', () => {
 
         expect(order).to.deep.equal(['parent', 'child']);
     });
+
+    it('should clean up sub-prompt steps when going back', async () => {
+        const { ctx, mock } = createMockCodeContext();
+
+        class StepWithSub extends PromptStep<TestContext> {
+            constructor(private readonly codeCtx: ICodeContext) { super(); }
+
+            public async prompt(): Promise<Partial<TestContext>> {
+                const items: vscode.QuickPickItem[] = [{ label: 'Red' }, { label: 'Blue' }];
+                const picked = await showSmartQuickPick(this.codeCtx, items);
+                return { color: picked.label };
+            }
+
+            public override getSubPromptSteps(context: Readonly<TestContext>): PromptStep<TestContext>[] {
+                if (context.color === 'Red') {
+                    return [new ConditionalConfirmStep(this.codeCtx)];
+                }
+                return [];
+            }
+        }
+
+        const tracker = respondToPrompts(mock, [
+            { input: 'first' },
+            { pick: 'Red' },       // StepWithSub picks Red → adds ConditionalConfirmStep
+            'goBack',              // Go back from ConditionalConfirmStep → removes it
+            { pick: 'Blue' },      // Re-pick StepWithSub with Blue → no sub-steps
+        ]);
+
+        const wizard = new Wizard<TestContext>(
+            {},
+            [new NameInputStep(ctx), new StepWithSub(ctx)],
+        );
+        const result = await wizard.run();
+
+        expect(result.name).to.equal('first');
+        expect(result.color).to.equal('Blue');
+        expect(result.confirmed).to.be.undefined;
+        tracker.assertAllConsumed();
+    });
 });

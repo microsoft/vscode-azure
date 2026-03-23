@@ -5,7 +5,7 @@
 
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import type { PickClassification } from '../../../tree/pick/GenericPickStep';
+import { GenericPickStep, type PickClassification } from '../../../tree/pick/GenericPickStep';
 import type { PickContext } from '../../../tree/pick/PickContext';
 import { RecursivePickStep } from '../../../tree/pick/RecursivePickStep';
 import type { ITreeItem } from '../../../vscode/IVsCode';
@@ -180,6 +180,58 @@ describe('RecursivePickStep (unit)', () => {
 
         expect(result.picks).to.have.length(4);
         expect(result.picks[3].item).to.equal('leaf');
+        tracker.assertAllConsumed();
+    });
+
+    it('should support canPickMany when all items are terminal', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const tree = createTree({ '': ['a', 'b', 'c'] });
+
+        const tracker = respondToPrompts(mock, [
+            { pickMany: ['a', 'c'] },
+        ]);
+
+        const wizard = new Wizard<PickContext<string>>(
+            { picks: [] },
+            [new RecursivePickStep({
+                ...ctx,
+                tree,
+                classify: () => 'terminal' as PickClassification,
+                canPickMany: true,
+            })],
+        );
+
+        const result = await wizard.run();
+
+        expect(result.selectedTerminalPicks).to.deep.equal(['a', 'c']);
+        tracker.assertAllConsumed();
+    });
+
+    it('should support CreateNew option', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const tree = createTree({ '': ['existing'] });
+
+        const tracker = respondToPrompts(mock, [
+            { pick: '$(add) Create New' },
+        ]);
+
+        const wizard = new Wizard<PickContext<string>>(
+            { picks: [] },
+            [new GenericPickStep({
+                ...ctx,
+                tree,
+                classify: () => 'terminal' as PickClassification,
+                create: {
+                    label: 'Create New',
+                    createNewItem: () => 'newly-created',
+                },
+            })],
+        );
+
+        const result = await wizard.run();
+
+        expect(result.picks).to.have.length(1);
+        expect(result.picks[0].item).to.equal('newly-created');
         tracker.assertAllConsumed();
     });
 });

@@ -173,6 +173,26 @@ describe('ViewItemTree (unit)', () => {
             const parent = await viewTree.getParent('child');
             expect(parent).to.equal('root');
         });
+
+        it('should return the parent for a load-more view item', async () => {
+            const executor = new ActionExecutor(new NullTelemetryReporter());
+            const dataTree = new DataItemTree<TestResource>('test', executor, r => r.id, 60_000);
+
+            const viewTree = new ViewItemTree<TestViewItem, TestResource>('test', executor, {
+                dataItemTree: dataTree,
+                toViewItem: r => r.id,
+                getKey: vi => vi,
+                getResourceKey: vi => vi,
+            }, {
+                isLoadMoreViewItem: vi => vi === '__loadMore__',
+                getLoadMoreViewItem: () => '__loadMore__',
+                getParentViewItem: () => 'parent',
+                getTreeItem: (): ITreeItem => ({ label: 'Load More' }),
+            });
+
+            const parent = await viewTree.getParent('__loadMore__');
+            expect(parent).to.equal('parent');
+        });
     });
 
     describe('onDidChangeTreeData', () => {
@@ -299,6 +319,65 @@ describe('ViewItemTree (unit)', () => {
 
             const treeItem = await viewTreeWithLoadMore.getTreeItem('__loadMore__');
             expect(treeItem.label).to.equal('Load More');
+        });
+
+        it('should trigger loadMore on the data tree via viewTree.loadMore', async () => {
+            const executor = new ActionExecutor(new NullTelemetryReporter());
+            const dataTree = new DataItemTree<TestResource>('test', executor, r => r.id, 60_000);
+
+            dataTree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleNoResources,
+                getChildren: () => [{ id: 'parent' }],
+            });
+
+            let pageCount = 0;
+            dataTree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'parent',
+                getChildren: () => ({
+                    [Symbol.asyncIterator]() {
+                        return {
+                            next() {
+                                pageCount++;
+                                if (pageCount === 1) {
+                                    return Promise.resolve({ value: { items: [{ id: 'c1' }], hasMore: true }, done: false as const });
+                                }
+                                return Promise.resolve({ value: { items: [{ id: 'c2' }], hasMore: false }, done: false as const });
+                            },
+                        };
+                    },
+                }),
+            });
+
+            await dataTree.getChildren();
+            await dataTree.getChildren({ id: 'parent' });
+
+            const viewTree = new ViewItemTree<TestViewItem, TestResource>('test', executor, {
+                dataItemTree: dataTree,
+                toViewItem: r => r.id,
+                getKey: vi => vi,
+                getResourceKey: vi => vi,
+            }, {
+                isLoadMoreViewItem: vi => vi === '__loadMore__',
+                getLoadMoreViewItem: () => '__loadMore__',
+                getParentViewItem: () => 'parent',
+                getTreeItem: (_parent, _loading): ITreeItem => ({ label: 'Load More' }),
+            });
+
+            viewTree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestViewItem => r === 'parent',
+                getChildren: () => ['c1'],
+                getTreeItem: (vi) => ({ label: vi, id: vi }),
+            });
+            viewTree.registerProvider(createRootViewProvider(['parent']));
+            await viewTree.getChildren();
+
+            // Call loadMore via the load-more view item
+            await viewTree.loadMore('__loadMore__');
+
+            expect(dataTree.hasMore({ id: 'parent' })).to.be.false;
         });
     });
 
