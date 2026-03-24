@@ -61,9 +61,6 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
             throw new Error(`Cannot extract resource group name from resource ID: ${resource.id}`);
         }
 
-        // TODO: remove simulated delay
-        await new Promise(resolve => setTimeout(resolve, 5000));
-
         const registry = await client.registries.get(resourceGroupName, resource.name);
 
         Object.assign(resource, {

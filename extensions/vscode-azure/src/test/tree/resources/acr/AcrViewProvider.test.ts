@@ -12,22 +12,9 @@ import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
 import { OpenInPortal } from '../../../../commands/OpenInPortal';
 import { DisableAcrAdminUser } from '../../../../commands/acr/DisableAcrAdminUser';
-import type { AcrRegistry } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../tree/resources/acr/AcrViewProvider';
-
-function makeAcrRegistry(overrides?: Partial<AcrRegistry>): AcrRegistry {
-    return makeGenericResource({
-        id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.ContainerRegistry/registries/myReg',
-        name: 'myReg',
-        type: AcrResourceType,
-        logicalType: AcrResourceType,
-        loginServer: 'myreg.azurecr.io',
-        sku: { name: 'Basic', tier: 'Basic' },
-        adminUserEnabled: false,
-        ...overrides,
-    }) as AcrRegistry;
-}
+import { makeAcrRegistry } from './mockAcr';
 
 function makeAcrVirtualResource(overrides?: Partial<VirtualResource>): VirtualResource {
     return makeVirtualResource({
