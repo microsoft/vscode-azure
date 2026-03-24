@@ -11,6 +11,8 @@ import { IAzureSubscriptionProvider } from '../services';
 import { ArmDeploymentDataProvider, parseDeploymentId } from '../tree/activity/ArmDeploymentDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
 
+/* c8 ignore start */
+
 /**
  * TODO: This is a temporary command just to kick off tracking an existing ARM deployment
  */
@@ -110,3 +112,5 @@ function extractDeploymentId(input: string): string {
     }
     return trimmed;
 }
+
+/* c8 ignore stop */
