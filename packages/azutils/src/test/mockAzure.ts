@@ -6,7 +6,8 @@
 import { Environment } from '@azure/ms-rest-azure-env';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import type { GenericResource } from '../models/GenericResource';
-import type { ResourceGroup } from '../models/Grouping';
+import type { ResourceGroup, VirtualGroup } from '../models/Grouping';
+import type { VirtualResource } from '../models/VirtualResource';
 
 const defaultEnvironment = Object.assign(Object.create(Environment.AzureCloud) as Environment, {
     isCustomCloud: false,
@@ -69,4 +70,22 @@ export function makeGenericResource(overrides?: Partial<GenericResource>): Gener
         subscription: makeSubscription(),
         ...overrides,
     } as GenericResource;
+}
+
+export function makeVirtualGroup(overrides?: Partial<VirtualGroup>): VirtualGroup {
+    return {
+        groupingStrategy: 'resourceType',
+        groupingValue: 'Microsoft.Web/sites',
+        subscription: makeSubscription(),
+        ...overrides,
+    } as VirtualGroup;
+}
+
+export function makeVirtualResource(overrides?: Partial<VirtualResource>): VirtualResource {
+    return {
+        virtualType: 'repository',
+        virtualPath: 'myrepo',
+        azureResource: makeGenericResource(),
+        ...overrides,
+    } as VirtualResource;
 }
