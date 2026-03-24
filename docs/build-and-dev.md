@@ -118,7 +118,7 @@ npm run clean                            # All workspaces
 npm run clean --workspace=packages/utils # Single workspace
 ```
 
-Removes `dist/`, `coverage/`, and `.nyc_output/` folders. Each workspace calls the shared `scripts/clean.mjs` script.
+Removes `dist/` and `coverage/` folders. Each workspace calls the shared `scripts/clean.mjs` script.
 
 ## Testing
 
