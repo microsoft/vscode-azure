@@ -43,7 +43,7 @@
         "node-option": [
             "experimental-transform-types",
             "disable-warning=ExperimentalWarning",
-            "import=./src/test/register-hooks.mjs"
+            "import=../../scripts/register-hooks.mjs"
         ],
         "spec": [
             "src/test/**/*.test.ts"
