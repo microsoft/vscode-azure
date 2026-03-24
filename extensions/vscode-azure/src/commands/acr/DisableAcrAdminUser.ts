@@ -11,6 +11,8 @@ import type { EnrichedAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
 import { AcrResourceType, isAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
 import type { ManagedCommand } from '../ManagedCommand';
 
+/* c8 ignore start */
+
 // TODO: remove this demonstration command
 @injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
@@ -51,3 +53,5 @@ export class DisableAcrAdminUser implements ManagedCommand {
         );
     }
 }
+
+/* c8 ignore stop */

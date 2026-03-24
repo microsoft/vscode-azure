@@ -6,13 +6,19 @@
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
+import { AzureNodeId } from '../../../models/AzureNodeId';
 import { subscriptionExperience } from '../../../tree/pick/subscriptionExperience';
+import { makeAccount, makeSubscription, makeTenant } from '../../mockAzure';
 
-// Node IDs following the azr:// scheme
-const accountId = 'azr://acc1@portal.azure.com';
-const tenantId = 'azr://acc1@portal.azure.com/tenants/t1';
-const sub1Id = 'azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub-1';
-const sub2Id = 'azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub-2';
+const account = makeAccount();
+const tenant = makeTenant();
+const sub1 = makeSubscription({ subscriptionId: 'sub-1', name: 'Sub One' });
+const sub2 = makeSubscription({ subscriptionId: 'sub-2', name: 'Sub Two' });
+
+const accountId = AzureNodeId.from(account).toString();
+const tenantId = AzureNodeId.from(tenant).toString();
+const sub1Id = AzureNodeId.from(sub1).toString();
+const sub2Id = AzureNodeId.from(sub2).toString();
 
 function createMockViewItemTree(tree: Record<string, string[]>) {
     return {
@@ -55,9 +61,9 @@ describe('subscriptionExperience (unit)', () => {
         });
 
         const tracker = respondToPrompts(mock, [
-            { pick: 'acc1@portal.azure.com $(chevron-right)' },  // pick account (intermediate)
-            { pick: 't1 $(chevron-right)' },                     // pick tenant (intermediate)
-            { pick: 'sub-2' },                                   // pick subscription (terminal)
+            { pick: 'test-account@portal.azure.com $(chevron-right)' }, // pick account (intermediate)
+            { pick: 'test-tenant $(chevron-right)' },                   // pick tenant (intermediate)
+            { pick: 'sub-2' },                                          // pick subscription (terminal)
         ]);
 
         const result = await subscriptionExperience({

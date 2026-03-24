@@ -9,35 +9,15 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { ConcreteAzureNode } from '../../../models/AzureNode';
 import { AzureNodeId } from '../../../models/AzureNodeId';
-import type { ResourceGroup } from '../../../models/Grouping';
 import { resourceGroupExperience } from '../../../tree/pick/resourceGroupExperience';
-import { makeAccount, makeSubscription, makeTenant } from '../../mockAzure';
+import { makeAccount, makeResourceGroup, makeSubscription, makeTenant } from '../../mockAzure';
 
 const account = makeAccount();
 const tenant = makeTenant();
 const subscription = makeSubscription();
 
-const rg1: ResourceGroup = {
-    id: '/subscriptions/test-sub/resourceGroups/rg1',
-    name: 'rg1',
-    type: 'Microsoft.Resources/resourceGroups',
-    location: 'eastus',
-    logicalType: 'Microsoft.Resources/resourceGroups',
-    subscription,
-    groupingStrategy: 'resourceGroup',
-    groupingValue: 'rg1',
-} as ResourceGroup;
-
-const rg2: ResourceGroup = {
-    id: '/subscriptions/test-sub/resourceGroups/rg2',
-    name: 'rg2',
-    type: 'Microsoft.Resources/resourceGroups',
-    location: 'westus',
-    logicalType: 'Microsoft.Resources/resourceGroups',
-    subscription,
-    groupingStrategy: 'resourceGroup',
-    groupingValue: 'rg2',
-} as ResourceGroup;
+const rg1 = makeResourceGroup({ name: 'rg1', groupingValue: 'rg1' });
+const rg2 = makeResourceGroup({ name: 'rg2', location: 'westus', id: '/subscriptions/test-sub/resourceGroups/rg2', groupingValue: 'rg2' });
 
 // Build a simple mock DataItemTree that maps nodes by their AzureNodeId key
 function createMockDataItemTree(

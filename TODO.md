@@ -20,8 +20,7 @@
 - Product icon set for Azure resources
 
 ## Testing
-- ALL the test coverage
-  - Validate high coverage? Maybe with a minimum too?
+- Test to verify high code coverage?
 - Test that enforces bundle size not growing out of control
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)
 

@@ -16,55 +16,15 @@ import {
     isVirtualResource,
     SubscriptionArmType,
 } from '../../models/AzureNode';
-import type { GenericResource } from '../../models/GenericResource';
-import type { ResourceGroup, VirtualGroup } from '../../models/Grouping';
-import type { VirtualResource } from '../../models/VirtualResource';
-import { makeAccount, makeSubscription, makeTenant } from '../mockAzure';
-
-function makeGenericResource(overrides?: Partial<GenericResource>): GenericResource {
-    return {
-        id: '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Web/sites/site1',
-        name: 'site1',
-        type: 'Microsoft.Web/sites',
-        location: 'eastus',
-        logicalType: 'Microsoft.Web/sites',
-        subscription: makeSubscription(),
-        ...overrides,
-    } as GenericResource;
-}
-
-function makeResourceGroup(overrides?: Partial<ResourceGroup>): ResourceGroup {
-    return {
-        ...makeGenericResource({
-            id: '/subscriptions/sub-1/resourceGroups/rg1',
-            name: 'rg1',
-            type: 'Microsoft.Resources/resourceGroups',
-            logicalType: 'Microsoft.Resources/resourceGroups',
-        }),
-        groupingStrategy: 'resourceGroup',
-        groupingValue: 'rg1',
-        subscription: makeSubscription(),
-        ...overrides,
-    } as ResourceGroup;
-}
-
-function makeVirtualGroup(overrides?: Partial<VirtualGroup>): VirtualGroup {
-    return {
-        groupingStrategy: 'resourceType',
-        groupingValue: 'Microsoft.Web/sites',
-        subscription: makeSubscription(),
-        ...overrides,
-    } as VirtualGroup;
-}
-
-function makeVirtualResource(overrides?: Partial<VirtualResource>): VirtualResource {
-    return {
-        virtualType: 'repository',
-        virtualPath: 'myrepo',
-        azureResource: makeGenericResource(),
-        ...overrides,
-    } as VirtualResource;
-}
+import {
+    makeAccount,
+    makeGenericResource,
+    makeResourceGroup,
+    makeSubscription,
+    makeTenant,
+    makeVirtualGroup,
+    makeVirtualResource,
+} from '../mockAzure';
 
 describe('AzureNode (unit)', () => {
     describe('isAccount', () => {
