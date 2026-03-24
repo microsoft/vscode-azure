@@ -74,7 +74,7 @@ export interface MockVsCodeResult {
  * expect(mock.quickPicks).to.have.lengthOf(1);
  * ```
  */
-export function createMockVsCode(): MockVsCodeResult {
+export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult {
     const quickPicks: MockQuickPick<vscode.QuickPickItem>[] = [];
     const inputBoxes: MockInputBox[] = [];
 
@@ -147,6 +147,12 @@ export function createMockVsCode(): MockVsCodeResult {
         WorkspaceFolder: 3,
     } satisfies typeof vscode.ConfigurationTarget;
 
+    // ── env ──────────────────────────────────────────────────
+
+    const openExternal = mock.fn(
+        () => Promise.resolve(true),
+    );
+
     // ── commands ─────────────────────────────────────────────
 
     const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
@@ -175,6 +181,7 @@ export function createMockVsCode(): MockVsCodeResult {
         },
         env: {
             language: 'en',
+            openExternal,
         },
         window: {
             createQuickPick,
@@ -192,6 +199,7 @@ export function createMockVsCode(): MockVsCodeResult {
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState,
         ConfigurationTarget,
+        ...overrides,
     } as unknown as IVsCode;
 
     return {
