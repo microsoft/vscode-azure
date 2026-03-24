@@ -3,4 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { azExtSrcTestConfig as default } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
+import { azExtSrcTestConfig } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
+import { defineConfig } from '@vscode/test-cli';
+
+export default defineConfig({
+    tests: [azExtSrcTestConfig],
+    coverage: {
+        include: [
+            '**/extensions/vscode-azure/src/**'
+        ],
+        exclude: [
+            '**/extensions/vscode-azure/src/test/**',
+        ],
+        reporter: ['html'],
+        output: 'coverage',
+    },
+});

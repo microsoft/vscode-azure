@@ -155,14 +155,12 @@ npm run testcov --workspace=packages/azutils
 The extension uses `@vscode/test-cli`'s built-in `--coverage` flag, which leverages V8 native coverage and c8:
 
 ```bash
-vscode-test --coverage --coverage-reporter=html --coverage-output=coverage
+vscode-test --coverage
 ```
 
 When source maps are available, coverage from the bundled extension can be remapped back to original source files. This means the report can merge coverage from:
 - **Unit tests** that import source files directly (via tsx)
 - **Integration tests** that exercise the extension bundle (via source map remapping)
-
-See [coverage-changes.md](temp/coverage-changes.md) for details on upstream patches needed for full source map support.
 
 ## Test Configuration
 

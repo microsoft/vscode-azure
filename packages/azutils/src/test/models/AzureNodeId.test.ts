@@ -6,10 +6,7 @@
 import { expect } from 'chai';
 import { afterEach, describe, it } from 'mocha';
 import { AzureNodeId } from '../../models/AzureNodeId';
-import type { GenericResource } from '../../models/GenericResource';
-import type { ResourceGroup, VirtualGroup } from '../../models/Grouping';
-import type { VirtualResource } from '../../models/VirtualResource';
-import { makeAccount, makeSubscription, makeTenant } from '../mockAzure';
+import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, makeVirtualGroup, makeVirtualResource } from '../mockAzure';
 
 describe('AzureNodeId (unit)', () => {
     afterEach(() => {
@@ -156,58 +153,35 @@ describe('AzureNodeId (unit)', () => {
         });
 
         it('should create a node ID from a resource group', () => {
-            const rg: ResourceGroup = {
-                id: '/subscriptions/test-sub/resourceGroups/myRg',
-                name: 'myRg',
-                type: 'Microsoft.Resources/resourceGroups',
-                location: 'eastus',
-                logicalType: 'Microsoft.Resources/resourceGroups',
-                subscription: makeSubscription(),
-                groupingStrategy: 'resourceGroup',
-                groupingValue: 'myRg',
-            } as ResourceGroup;
+            const rg = makeResourceGroup({ name: 'myRg', id: '/subscriptions/test-sub/resourceGroups/myRg', groupingValue: 'myRg' });
             const nodeId = AzureNodeId.from(rg);
             expect(nodeId.isResourceGroupNodeId()).to.be.true;
             expect(nodeId.toString()).to.contain('/subscriptions/test-sub/resourceGroups/myRg');
         });
 
         it('should create a node ID from a virtual group', () => {
-            const vg: VirtualGroup = {
-                groupingStrategy: 'resourceType',
-                groupingValue: 'Microsoft.Web/sites',
-                subscription: makeSubscription(),
-            } as VirtualGroup;
+            const vg = makeVirtualGroup();
             const nodeId = AzureNodeId.from(vg);
             expect(nodeId.isVirtualGroupNodeId()).to.be.true;
             expect(nodeId.toString()).to.contain('~resourceType');
         });
 
         it('should create a node ID from a generic resource', () => {
-            const resource: GenericResource = {
-                id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site1',
-                name: 'site1',
-                type: 'Microsoft.Web/sites',
-                location: 'eastus',
-                logicalType: 'Microsoft.Web/sites',
-                subscription: makeSubscription(),
-            } as GenericResource;
+            const resource = makeGenericResource();
             const nodeId = AzureNodeId.from(resource);
             expect(nodeId.isGenericResourceNodeId()).to.be.true;
         });
 
         it('should create a node ID from a virtual resource', () => {
-            const vr: VirtualResource = {
-                virtualType: 'repository',
+            const vr = makeVirtualResource({
                 virtualPath: 'myrepo/latest',
-                azureResource: {
+                azureResource: makeGenericResource({
                     id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.ContainerRegistry/registries/myReg',
                     name: 'myReg',
                     type: 'Microsoft.ContainerRegistry/registries',
-                    location: 'eastus',
                     logicalType: 'Microsoft.ContainerRegistry/registries',
-                    subscription: makeSubscription(),
-                } as GenericResource,
-            };
+                }),
+            });
             const nodeId = AzureNodeId.from(vr);
             expect(nodeId.isVirtualResourceNodeId()).to.be.true;
             expect(nodeId.toString()).to.contain('#/repository/');

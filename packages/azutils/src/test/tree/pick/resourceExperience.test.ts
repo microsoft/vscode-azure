@@ -9,40 +9,22 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { ConcreteAzureNode } from '../../../models/AzureNode';
 import { AzureNodeId } from '../../../models/AzureNodeId';
-import type { GenericResource } from '../../../models/GenericResource';
 import { resourceExperience } from '../../../tree/pick/resourceExperience';
-import { makeSubscription } from '../../mockAzure';
+import { makeGenericResource, makeSubscription } from '../../mockAzure';
 
 const subscription = makeSubscription();
 
 const subId = AzureNodeId.from(subscription).toString();
 
-const site1: GenericResource = {
-    id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site1',
-    name: 'site1',
-    type: 'Microsoft.Web/sites',
-    location: 'eastus',
-    logicalType: 'Microsoft.Web/sites',
-    subscription,
-} as GenericResource;
-
-const site2: GenericResource = {
-    id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site2',
-    name: 'site2',
-    type: 'Microsoft.Web/sites',
-    location: 'westus',
-    logicalType: 'Microsoft.Web/sites',
-    subscription,
-} as GenericResource;
-
-const storageAccount: GenericResource = {
+const site1 = makeGenericResource({ name: 'site1', subscription });
+const site2 = makeGenericResource({ name: 'site2', location: 'westus', id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site2', subscription });
+const storageAccount = makeGenericResource({
     id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Storage/storageAccounts/sa1',
     name: 'sa1',
     type: 'Microsoft.Storage/storageAccounts',
-    location: 'eastus',
     logicalType: 'Microsoft.Storage/storageAccounts',
     subscription,
-} as GenericResource;
+});
 
 const site1Id = AzureNodeId.from(site1).toString();
 const site2Id = AzureNodeId.from(site2).toString();

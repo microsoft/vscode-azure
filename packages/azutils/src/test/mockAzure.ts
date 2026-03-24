@@ -5,6 +5,9 @@
 
 import { Environment } from '@azure/ms-rest-azure-env';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
+import type { GenericResource } from '../models/GenericResource';
+import type { ResourceGroup, VirtualGroup } from '../models/Grouping';
+import type { VirtualResource } from '../models/VirtualResource';
 
 const defaultEnvironment = Object.assign(Object.create(Environment.AzureCloud) as Environment, {
     isCustomCloud: false,
@@ -41,4 +44,48 @@ export function makeSubscription(overrides?: Partial<AzureSubscription>): AzureS
         authentication: { getSession: () => Promise.resolve(undefined) },
         ...overrides,
     } as AzureSubscription;
+}
+
+export function makeResourceGroup(overrides?: Partial<ResourceGroup>): ResourceGroup {
+    return {
+        id: '/subscriptions/test-sub/resourceGroups/rg1',
+        name: 'rg1',
+        type: 'Microsoft.Resources/resourceGroups',
+        location: 'eastus',
+        logicalType: 'Microsoft.Resources/resourceGroups',
+        subscription: makeSubscription(),
+        groupingStrategy: 'resourceGroup',
+        groupingValue: 'rg1',
+        ...overrides,
+    } as ResourceGroup;
+}
+
+export function makeGenericResource(overrides?: Partial<GenericResource>): GenericResource {
+    return {
+        id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site1',
+        name: 'site1',
+        type: 'Microsoft.Web/sites',
+        location: 'eastus',
+        logicalType: 'Microsoft.Web/sites',
+        subscription: makeSubscription(),
+        ...overrides,
+    } as GenericResource;
+}
+
+export function makeVirtualGroup(overrides?: Partial<VirtualGroup>): VirtualGroup {
+    return {
+        groupingStrategy: 'resourceType',
+        groupingValue: 'Microsoft.Web/sites',
+        subscription: makeSubscription(),
+        ...overrides,
+    } as VirtualGroup;
+}
+
+export function makeVirtualResource(overrides?: Partial<VirtualResource>): VirtualResource {
+    return {
+        virtualType: 'repository',
+        virtualPath: 'myrepo',
+        azureResource: makeGenericResource(),
+        ...overrides,
+    } as VirtualResource;
 }
