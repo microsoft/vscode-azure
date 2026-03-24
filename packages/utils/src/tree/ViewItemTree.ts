@@ -32,25 +32,34 @@ export interface ViewItemTreeOptions<TViewItem, TResource> {
  * When provided, the tree automatically appends a synthetic "Load More"
  * view item to any branch whose data-layer provider has more pages.
  *
+ * All parent-child relationships are expressed as **string keys** so
+ * that {@link ViewItemTree} can resolve the real cached view item
+ * instead of fabricating a new object (which would break reference
+ * equality for non-string view item types).
+ *
  * @typeParam TViewItem - The view item type stored in the tree.
  */
 export interface LoadMoreOptions<TViewItem> {
     /**
-     * Test whether a view item is a synthetic "Load More" node.
+     * Test whether a key represents a synthetic "Load More" node.
      */
-    readonly isLoadMoreViewItem: (viewItem: TViewItem) => boolean;
+    readonly isLoadMoreKey: (key: string) => boolean;
 
     /**
-     * Derive the "Load More" view item for a given parent.
-     * The returned view item must satisfy {@link isLoadMoreViewItem}.
+     * Derive the "Load More" key for a given parent key.
      */
-    readonly getLoadMoreViewItem: (parentKey: string) => TViewItem;
+    readonly getLoadMoreKey: (parentKey: string) => string;
 
     /**
-     * Derive the parent view item from a "Load More" view item.
-     * Inverse of {@link getLoadMoreViewItem}.
+     * Derive the parent key from a "Load More" key.
+     * Inverse of {@link getLoadMoreKey}.
      */
-    readonly getParentViewItem: (loadMoreViewItem: TViewItem) => TViewItem;
+    readonly getParentKey: (loadMoreKey: string) => string;
+
+    /**
+     * Create a synthetic "Load More" view item for the given key.
+     */
+    readonly createLoadMoreViewItem: (loadMoreKey: string) => TViewItem;
 
     /**
      * Build the VS Code tree item to display for "Load More" nodes.
@@ -60,6 +69,37 @@ export interface LoadMoreOptions<TViewItem> {
      * omit the command to prevent additional clicks.
      */
     readonly getTreeItem: (parentViewItem: TViewItem, loading: boolean) => ITreeItem;
+}
+
+/**
+ * Adapters for creating synthetic "Load More" view items,
+ * used by {@link createDefaultLoadMoreOptions}.
+ */
+export interface LoadMoreAdapter<TViewItem> {
+    /** Create a synthetic "Load More" view item from a key. */
+    readonly createLoadMoreViewItem: (key: string) => TViewItem;
+    /** Build the VS Code tree item for a "Load More" node. */
+    readonly getTreeItem: (parentViewItem: TViewItem, loading: boolean) => ITreeItem;
+}
+
+const loadMoreSuffix = '/~loadMore';
+
+/**
+ * Creates a default {@link LoadMoreOptions} implementation using a
+ * suffix-based key convention. The "Load More" view item for a parent
+ * with key `'foo'` will have key `'foo/~loadMore'`.
+ *
+ * Callers provide a {@link LoadMoreAdapter} to bridge between the
+ * generic key strings and their concrete view item type.
+ */
+export function createDefaultLoadMoreOptions<TViewItem>(adapter: LoadMoreAdapter<TViewItem>): LoadMoreOptions<TViewItem> {
+    return {
+        isLoadMoreKey: key => key.endsWith(loadMoreSuffix),
+        getLoadMoreKey: parentKey => parentKey + loadMoreSuffix,
+        getParentKey: loadMoreKey => loadMoreKey.slice(0, -loadMoreSuffix.length),
+        createLoadMoreViewItem: adapter.createLoadMoreViewItem,
+        getTreeItem: adapter.getTreeItem,
+    };
 }
 
 /**
@@ -216,9 +256,13 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
         // Inject a synthetic "Load More" view item if the data layer has
         // more pages and load-more support is configured.
+        // The load-more key is derived from the view key (not the resource
+        // key) so that getParentKey returns the view key used by this.nodes.
         const resourceKey = this.getResourceKey(viewItem);
         if (this.loadMoreOptions && this.hasMoreData(resourceKey)) {
-            return [...childItems, this.loadMoreOptions.getLoadMoreViewItem(resourceKey)];
+            const viewKey = this.getKey(viewItem);
+            const loadMoreKey = this.loadMoreOptions.getLoadMoreKey(viewKey);
+            return [...childItems, this.loadMoreOptions.createLoadMoreViewItem(loadMoreKey)];
         }
 
         return childItems;
@@ -237,9 +281,11 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             context.telemetry.properties.tree = this.name;
 
             // Synthetic "Load More" nodes: return the configured tree item directly (no provider involved)
-            if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
-                const parentViewItem = this.loadMoreOptions.getParentViewItem(viewItem);
-                const parentKey = this.getKey(parentViewItem);
+            const key = this.getKey(viewItem);
+            if (this.loadMoreOptions?.isLoadMoreKey(key)) {
+                const parentKey = this.loadMoreOptions.getParentKey(key);
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Parent is guaranteed to be cached; Load More nodes are only injected as children of cached branch nodes.
+                const parentViewItem = this.nodes.get(parentKey)!.viewItem;
                 return this.loadMoreOptions.getTreeItem(parentViewItem, this.loadsInFlight.has(parentKey));
             }
 
@@ -267,9 +313,11 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             context.errorHandling.rethrow = true;
             context.telemetry.properties.tree = this.name;
 
-            // Synthetic "Load More" nodes: derive the parent directly from the view item (no cache lookup or provider involved)
-            if (this.loadMoreOptions?.isLoadMoreViewItem(viewItem)) {
-                return this.loadMoreOptions.getParentViewItem(viewItem);
+            // Synthetic "Load More" nodes: derive the parent from the cached node map
+            const key = this.getKey(viewItem);
+            if (this.loadMoreOptions?.isLoadMoreKey(key)) {
+                const parentKey = this.loadMoreOptions.getParentKey(key);
+                return this.nodes.get(parentKey)?.viewItem;
             }
 
             // Fast path: node is already in the map from a prior getChildren() call.
@@ -292,8 +340,8 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     /**
      * Trigger the data layer to pull the next page.
      *
-     * Accepts either a "Load More" view item (from which the parent is
-     * derived via {@link LoadMoreOptions.getParentViewItem}) or a direct
+     * Accepts either a "Load More" view item (from which the parent key is
+     * derived via {@link LoadMoreOptions.getParentKey}) or a direct
      * parent view item.
      *
      * The data tree fires {@link DataItemTree.onDidChange} which
@@ -301,21 +349,28 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * possibly a new "Load More" node) to appear.
      */
     public async loadMore(viewItem: TViewItem): Promise<void> {
-        const parentViewItem = this.loadMoreOptions?.isLoadMoreViewItem(viewItem)
-            ? this.loadMoreOptions.getParentViewItem(viewItem)
-            : viewItem;
+        const viewItemKey = this.getKey(viewItem);
+        const parentKey = this.loadMoreOptions?.isLoadMoreKey(viewItemKey)
+            ? this.loadMoreOptions.getParentKey(viewItemKey)
+            : viewItemKey;
 
-        const parentKey = this.getKey(parentViewItem);
+        // The parent is guaranteed to be in the cache because Load More
+        // nodes are only injected as children of cached branch nodes.
+        const parentNode = this.nodes.get(parentKey);
+        if (!parentNode) {
+            throw new Error(`loadMore: parent node not found in cache for key: ${parentKey}`);
+        }
 
         await this.loadsInFlight.getOrRun(parentKey, async () => {
             // Re-render the "Load More" node with a spinner / disabled command
-            this.changeEmitter.fire(parentViewItem);
+            this.changeEmitter.fire(parentNode.viewItem);
 
             try {
-                await this.loadMoreData(this.getResourceKey(parentViewItem));
+                const resourceKey = this.getResourceKey(parentNode.viewItem);
+                await this.loadMoreData(resourceKey);
             } finally {
                 // Ensure the parent subtree is re-rendered after loading completes
-                this.changeEmitter.fire(parentViewItem);
+                this.changeEmitter.fire(parentNode.viewItem);
             }
         });
     }
