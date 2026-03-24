@@ -182,17 +182,27 @@ describe('ViewItemTree (unit)', () => {
             const executor = new ActionExecutor(new NullTelemetryReporter());
             const dataTree = new DataItemTree<TestResource>('test', executor, r => r.id, 60_000);
 
+            dataTree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleNoResources,
+                getChildren: () => [{ id: 'parent' }],
+            });
+
             const viewTree = new ViewItemTree<TestViewItem, TestResource>('test', executor, {
                 dataItemTree: dataTree,
                 toViewItem: r => r.id,
                 getKey: vi => vi,
                 getResourceKey: vi => vi,
             }, {
-                isLoadMoreViewItem: vi => vi === '__loadMore__',
-                getLoadMoreViewItem: () => '__loadMore__',
-                getParentViewItem: () => 'parent',
+                isLoadMoreKey: key => key === '__loadMore__',
+                getLoadMoreKey: () => '__loadMore__',
+                createViewItem: key => key,
+                getParentKey: () => 'parent',
                 getTreeItem: (): ITreeItem => ({ label: 'Load More' }),
             });
+
+            viewTree.registerProvider(createRootViewProvider(['parent']));
+            await viewTree.getChildren();
 
             const parent = await viewTree.getParent('__loadMore__');
             expect(parent).to.equal('parent');
@@ -282,9 +292,10 @@ describe('ViewItemTree (unit)', () => {
                 getKey: vi => vi,
                 getResourceKey: vi => vi,
             }, {
-                isLoadMoreViewItem: vi => vi === '__loadMore__',
-                getLoadMoreViewItem: () => '__loadMore__',
-                getParentViewItem: () => 'parent',
+                isLoadMoreKey: key => key === '__loadMore__',
+                getLoadMoreKey: () => '__loadMore__',
+                createViewItem: key => key,
+                getParentKey: () => 'parent',
                 getTreeItem: (_parent, loading) => ({ label: loading ? 'Loading...' : 'Load More' }),
             });
 
@@ -312,9 +323,10 @@ describe('ViewItemTree (unit)', () => {
                 getKey: vi => vi,
                 getResourceKey: vi => vi,
             }, {
-                isLoadMoreViewItem: vi => vi === '__loadMore__',
-                getLoadMoreViewItem: () => '__loadMore__',
-                getParentViewItem: () => 'parent',
+                isLoadMoreKey: key => key === '__loadMore__',
+                getLoadMoreKey: () => '__loadMore__',
+                createViewItem: key => key,
+                getParentKey: () => 'parent',
                 getTreeItem: (_parent, _loading): ITreeItem => ({ label: 'Load More' }),
             });
 
@@ -363,9 +375,10 @@ describe('ViewItemTree (unit)', () => {
                 getKey: vi => vi,
                 getResourceKey: vi => vi,
             }, {
-                isLoadMoreViewItem: vi => vi === '__loadMore__',
-                getLoadMoreViewItem: () => '__loadMore__',
-                getParentViewItem: () => 'parent',
+                isLoadMoreKey: key => key === '__loadMore__',
+                getLoadMoreKey: () => '__loadMore__',
+                createViewItem: key => key,
+                getParentKey: () => 'parent',
                 getTreeItem: (_parent, _loading): ITreeItem => ({ label: 'Load More' }),
             });
 

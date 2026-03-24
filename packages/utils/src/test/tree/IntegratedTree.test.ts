@@ -37,7 +37,6 @@ interface TestViewItem {
 function defaultLoadMoreOptions(): LoadMoreOptions<TestViewItem> {
     return createDefaultLoadMoreOptions<TestViewItem>({
         createViewItem: key => ({ key, resourceKey: key, label: key }),
-        getKey: v => v.key,
         getTreeItem: (_parent, loading) => ({
             label: loading ? 'Loading...' : 'Load More...',
         }),
@@ -745,7 +744,7 @@ describe('Tree Integration Tests (integration)', () => {
 
             // Last item should be the Load More sentinel
             const lastItem = children[children.length - 1];
-            expect(lastItem.key).to.equal(defaultLoadMoreOptions().getLoadMoreViewItem('parent').key);
+            expect(lastItem.key).to.equal(defaultLoadMoreOptions().getLoadMoreKey('parent'));
         });
 
         it('should load more pages via viewTree.loadMore', async () => {
@@ -767,30 +766,59 @@ describe('Tree Integration Tests (integration)', () => {
 
             await viewTree.getChildren();
 
-            const loadMoreItem = defaultLoadMoreOptions().getLoadMoreViewItem('parent');
+            const opts = defaultLoadMoreOptions();
+            const loadMoreItem = opts.createViewItem(opts.getLoadMoreKey('parent'));
             await viewTree.loadMore(loadMoreItem);
 
             expect(dataTree.hasMore(res('parent'))).to.be.false;
         });
 
         it('should return correct tree item for Load More node', async () => {
-            const { viewTree } = createPipelineWithLoadMore();
+            const { dataTree, viewTree } = createPipelineWithLoadMore();
 
+            dataTree.registerProvider(createRootDataProvider([res('parent')]));
+            dataTree.registerProvider(createPagedDataProvider('parent', [
+                { items: [res('a', 'file')], hasMore: true },
+            ]));
+
+            await dataTree.getChildren();
+            await dataTree.getChildren(res('parent'));
+
+            viewTree.registerProvider(createBranchViewProvider(
+                new Map([['parent', [vi('a')]]]),
+            ));
             viewTree.registerProvider(createRootViewProvider([vi('parent')]));
-            await viewTree.getChildren();
 
-            const loadMoreItem = defaultLoadMoreOptions().getLoadMoreViewItem('parent');
+            await viewTree.getChildren();
+            const children = await viewTree.getChildren(vi('parent'));
+
+            // The last child should be the Load More sentinel
+            const loadMoreItem = children[children.length - 1];
             const treeItem = await viewTree.getTreeItem(loadMoreItem);
             expect(treeItem.label).to.equal('Load More...');
         });
 
         it('should return the parent for a Load More node via getParent', async () => {
-            const { viewTree } = createPipelineWithLoadMore();
+            const { dataTree, viewTree } = createPipelineWithLoadMore();
 
+            dataTree.registerProvider(createRootDataProvider([res('parent')]));
+            dataTree.registerProvider(createPagedDataProvider('parent', [
+                { items: [res('a', 'file')], hasMore: true },
+            ]));
+
+            await dataTree.getChildren();
+            await dataTree.getChildren(res('parent'));
+
+            viewTree.registerProvider(createBranchViewProvider(
+                new Map([['parent', [vi('a')]]]),
+            ));
             viewTree.registerProvider(createRootViewProvider([vi('parent')]));
-            await viewTree.getChildren();
 
-            const loadMoreItem = defaultLoadMoreOptions().getLoadMoreViewItem('parent');
+            await viewTree.getChildren();
+            await viewTree.getChildren(vi('parent'));
+
+            const opts = defaultLoadMoreOptions();
+            const loadMoreItem = opts.createViewItem(opts.getLoadMoreKey('parent'));
             const parent = await viewTree.getParent(loadMoreItem);
             expect(parent?.key).to.equal('parent');
         });
