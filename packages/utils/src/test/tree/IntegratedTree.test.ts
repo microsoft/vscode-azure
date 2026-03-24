@@ -11,9 +11,9 @@ import { NullTelemetryReporter } from '../../base/ITelemetryReporter';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider } from '../../tree/DataProvider';
-import { ViewItemTree, type LoadMoreOptions, type ViewItemTreeOptions } from '../../tree/ViewItemTree';
+import { ViewItemTree, type LoadMoreOptions, type ViewItemTreeOptions, createDefaultLoadMoreOptions } from '../../tree/ViewItemTree';
 import type { ViewProvider } from '../../tree/ViewProvider';
-import type { ITreeItem } from '../../vscode/IVsCode';
+
 
 // ---------------------------------------------------------------------------
 // Test resource model
@@ -35,22 +35,13 @@ interface TestViewItem {
 // "Load More" helpers
 
 function defaultLoadMoreOptions(): LoadMoreOptions<TestViewItem> {
-    const prefix = '__loadMore__:';
-    return {
-        isLoadMoreViewItem: vi => vi.key.startsWith(prefix),
-        getLoadMoreViewItem: parentKey => ({
-            key: `${prefix}${parentKey}`,
-            resourceKey: parentKey,
-            label: 'Load More...',
-        }),
-        getParentViewItem: vi => {
-            const parentKey = vi.key.slice(prefix.length);
-            return { key: parentKey, resourceKey: parentKey, label: parentKey };
-        },
-        getTreeItem: (_parent, loading): ITreeItem => ({
+    return createDefaultLoadMoreOptions<TestViewItem>({
+        createViewItem: key => ({ key, resourceKey: key, label: key }),
+        getKey: v => v.key,
+        getTreeItem: (_parent, loading) => ({
             label: loading ? 'Loading...' : 'Load More...',
         }),
-    };
+    });
 }
 
 // ---------------------------------------------------------------------------

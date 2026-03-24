@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode, LoadMoreOptions } from '@microsoft/vscode-azure-utils';
+import { type IVsCode, type LoadMoreOptions, createDefaultLoadMoreOptions } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { LoadMoreCommandId } from '../constants';
 import { IAzureViewViewItemTree } from '../services';
@@ -24,12 +24,9 @@ export class LoadMore implements ManagedCommand {
  * Default {@link LoadMoreOptions} implementation for Azure resource trees
  */
 export function defaultLoadMoreOptions(code: IVsCode): LoadMoreOptions<string> {
-    const loadMoreSuffix = '/~loadMore' as const;
-
-    return {
-        isLoadMoreViewItem: key => key.endsWith(loadMoreSuffix),
-        getLoadMoreViewItem: parentKey => parentKey + loadMoreSuffix,
-        getParentViewItem: loadMoreKey => loadMoreKey.slice(0, -loadMoreSuffix.length),
+    return createDefaultLoadMoreOptions<string>({
+        createViewItem: key => key,
+        getKey: key => key,
         getTreeItem: (parentViewItem, loading) => {
             const item = new code.TreeItem(
                 loading ? code.l10n.t('Loading...') : code.l10n.t('Load More...'),
@@ -48,5 +45,5 @@ export function defaultLoadMoreOptions(code: IVsCode): LoadMoreOptions<string> {
 
             return item;
         },
-    };
+    });
 }

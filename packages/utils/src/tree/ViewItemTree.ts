@@ -63,6 +63,38 @@ export interface LoadMoreOptions<TViewItem> {
 }
 
 /**
+ * Adapters for mapping between view items and string keys,
+ * used by {@link createDefaultLoadMoreOptions}.
+ */
+export interface LoadMoreAdapter<TViewItem> {
+    /** Create a view item from its key. */
+    readonly createViewItem: (key: string) => TViewItem;
+    /** Extract the key from a view item. */
+    readonly getKey: (viewItem: TViewItem) => string;
+    /** Build the VS Code tree item for a "Load More" node. */
+    readonly getTreeItem: (parentViewItem: TViewItem, loading: boolean) => ITreeItem;
+}
+
+const loadMoreSuffix = '/~loadMore';
+
+/**
+ * Creates a default {@link LoadMoreOptions} implementation using a
+ * suffix-based key convention. The "Load More" view item for a parent
+ * with key `'foo'` will have key `'foo/~loadMore'`.
+ *
+ * Callers provide a {@link LoadMoreAdapter} to bridge between the
+ * generic key strings and their concrete view item type.
+ */
+export function createDefaultLoadMoreOptions<TViewItem>(adapter: LoadMoreAdapter<TViewItem>): LoadMoreOptions<TViewItem> {
+    return {
+        isLoadMoreViewItem: vi => adapter.getKey(vi).endsWith(loadMoreSuffix),
+        getLoadMoreViewItem: parentKey => adapter.createViewItem(parentKey + loadMoreSuffix),
+        getParentViewItem: vi => adapter.createViewItem(adapter.getKey(vi).slice(0, -loadMoreSuffix.length)),
+        getTreeItem: adapter.getTreeItem,
+    };
+}
+
+/**
  * A view-layer tree built on top of a {@link DataItemTree}.
  *
  * Registered {@link ViewProvider}s control how resources are presented:
