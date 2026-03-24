@@ -36,7 +36,7 @@ interface TestViewItem {
 
 function defaultLoadMoreOptions(): LoadMoreOptions<TestViewItem> {
     return createDefaultLoadMoreOptions<TestViewItem>({
-        createViewItem: key => ({ key, resourceKey: key, label: key }),
+        createLoadMoreViewItem: key => ({ key, resourceKey: key, label: key }),
         getTreeItem: (_parent, loading) => ({
             label: loading ? 'Loading...' : 'Load More...',
         }),
@@ -55,7 +55,7 @@ function createDataTree(ttl = 60_000) {
     return new DataItemTree<TestResource>('integrated', createExecutor(), r => r.id, ttl);
 }
 
-function createPipeline(ttl = 60_000): {
+function createPipeline(ttl = 60_000, loadMoreOptions?: LoadMoreOptions<TestViewItem>): {
     executor: ActionExecutor;
     dataTree: DataItemTree<TestResource>;
     viewTree: ViewItemTree<TestViewItem, TestResource>;
@@ -70,7 +70,7 @@ function createPipeline(ttl = 60_000): {
         getResourceKey: vi => vi.resourceKey,
     };
 
-    const viewTree = new ViewItemTree<TestViewItem, TestResource>('integrated', executor, options);
+    const viewTree = new ViewItemTree<TestViewItem, TestResource>('integrated', executor, options, loadMoreOptions);
     return { executor, dataTree, viewTree };
 }
 
@@ -79,18 +79,7 @@ function createPipelineWithLoadMore(): {
     dataTree: DataItemTree<TestResource>;
     viewTree: ViewItemTree<TestViewItem, TestResource>;
 } {
-    const executor = createExecutor();
-    const dataTree = new DataItemTree<TestResource>('integrated', executor, r => r.id, 60_000);
-
-    const options: ViewItemTreeOptions<TestViewItem, TestResource> = {
-        dataItemTree: dataTree,
-        toViewItem: r => ({ key: r.id, resourceKey: r.id, label: r.enrichedLabel ?? r.id }),
-        getKey: vi => vi.key,
-        getResourceKey: vi => vi.resourceKey,
-    };
-
-    const viewTree = new ViewItemTree<TestViewItem, TestResource>('integrated', executor, options, defaultLoadMoreOptions());
-    return { executor, dataTree, viewTree };
+    return createPipeline(60_000, defaultLoadMoreOptions());
 }
 
 // Data providers
@@ -767,7 +756,7 @@ describe('Tree Integration Tests (integration)', () => {
             await viewTree.getChildren();
 
             const opts = defaultLoadMoreOptions();
-            const loadMoreItem = opts.createViewItem(opts.getLoadMoreKey('parent'));
+            const loadMoreItem = opts.createLoadMoreViewItem(opts.getLoadMoreKey('parent'));
             await viewTree.loadMore(loadMoreItem);
 
             expect(dataTree.hasMore(res('parent'))).to.be.false;
@@ -792,7 +781,7 @@ describe('Tree Integration Tests (integration)', () => {
             };
 
             const loadMoreOpts = createDefaultLoadMoreOptions<TestViewItem>({
-                createViewItem: key => ({ key, resourceKey: key, label: key }),
+                createLoadMoreViewItem: key => ({ key, resourceKey: key, label: key }),
                 getTreeItem: (_parent, loading) => ({
                     label: loading ? 'Loading...' : 'Load More...',
                 }),
@@ -820,7 +809,7 @@ describe('Tree Integration Tests (integration)', () => {
 
             // loadMore must resolve parent via resourceKey='parent', not viewKey='view-parent'
             const loadMoreKey = loadMoreOpts.getLoadMoreKey('view-parent');
-            const loadMoreItem = loadMoreOpts.createViewItem(loadMoreKey);
+            const loadMoreItem = loadMoreOpts.createLoadMoreViewItem(loadMoreKey);
             await viewTree.loadMore(loadMoreItem);
 
             expect(dataTree.hasMore(res('parent'))).to.be.false;
@@ -871,7 +860,7 @@ describe('Tree Integration Tests (integration)', () => {
             await viewTree.getChildren(vi('parent'));
 
             const opts = defaultLoadMoreOptions();
-            const loadMoreItem = opts.createViewItem(opts.getLoadMoreKey('parent'));
+            const loadMoreItem = opts.createLoadMoreViewItem(opts.getLoadMoreKey('parent'));
             const parent = await viewTree.getParent(loadMoreItem);
             expect(parent?.key).to.equal('parent');
         });

@@ -25,7 +25,7 @@ describe('defaultLoadMoreOptions (unit)', () => {
     });
 
     it('should create a view item from a load-more key', () => {
-        expect(options.createViewItem('parent/~loadMore')).to.equal('parent/~loadMore');
+        expect(options.createLoadMoreViewItem('parent/~loadMore')).to.equal('parent/~loadMore');
     });
 
     it('should return a tree item with Load More label when not loading', () => {

@@ -196,7 +196,7 @@ describe('ViewItemTree (unit)', () => {
             }, {
                 isLoadMoreKey: key => key === '__loadMore__',
                 getLoadMoreKey: () => '__loadMore__',
-                createViewItem: key => key,
+                createLoadMoreViewItem: key => key,
                 getParentKey: () => 'parent',
                 getTreeItem: (): ITreeItem => ({ label: 'Load More' }),
             });
@@ -294,7 +294,7 @@ describe('ViewItemTree (unit)', () => {
             }, {
                 isLoadMoreKey: key => key === '__loadMore__',
                 getLoadMoreKey: () => '__loadMore__',
-                createViewItem: key => key,
+                createLoadMoreViewItem: key => key,
                 getParentKey: () => 'parent',
                 getTreeItem: (_parent, loading) => ({ label: loading ? 'Loading...' : 'Load More' }),
             });
@@ -325,7 +325,7 @@ describe('ViewItemTree (unit)', () => {
             }, {
                 isLoadMoreKey: key => key === '__loadMore__',
                 getLoadMoreKey: () => '__loadMore__',
-                createViewItem: key => key,
+                createLoadMoreViewItem: key => key,
                 getParentKey: () => 'parent',
                 getTreeItem: (_parent, _loading): ITreeItem => ({ label: 'Load More' }),
             });
@@ -377,7 +377,7 @@ describe('ViewItemTree (unit)', () => {
             }, {
                 isLoadMoreKey: key => key === '__loadMore__',
                 getLoadMoreKey: () => '__loadMore__',
-                createViewItem: key => key,
+                createLoadMoreViewItem: key => key,
                 getParentKey: () => 'parent',
                 getTreeItem: (_parent, _loading): ITreeItem => ({ label: 'Load More' }),
             });

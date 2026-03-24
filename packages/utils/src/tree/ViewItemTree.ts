@@ -59,7 +59,7 @@ export interface LoadMoreOptions<TViewItem> {
     /**
      * Create a synthetic "Load More" view item for the given key.
      */
-    readonly createViewItem: (loadMoreKey: string) => TViewItem;
+    readonly createLoadMoreViewItem: (loadMoreKey: string) => TViewItem;
 
     /**
      * Build the VS Code tree item to display for "Load More" nodes.
@@ -77,7 +77,7 @@ export interface LoadMoreOptions<TViewItem> {
  */
 export interface LoadMoreAdapter<TViewItem> {
     /** Create a synthetic "Load More" view item from a key. */
-    readonly createViewItem: (key: string) => TViewItem;
+    readonly createLoadMoreViewItem: (key: string) => TViewItem;
     /** Build the VS Code tree item for a "Load More" node. */
     readonly getTreeItem: (parentViewItem: TViewItem, loading: boolean) => ITreeItem;
 }
@@ -97,7 +97,7 @@ export function createDefaultLoadMoreOptions<TViewItem>(adapter: LoadMoreAdapter
         isLoadMoreKey: key => key.endsWith(loadMoreSuffix),
         getLoadMoreKey: parentKey => parentKey + loadMoreSuffix,
         getParentKey: loadMoreKey => loadMoreKey.slice(0, -loadMoreSuffix.length),
-        createViewItem: adapter.createViewItem,
+        createLoadMoreViewItem: adapter.createLoadMoreViewItem,
         getTreeItem: adapter.getTreeItem,
     };
 }
@@ -262,7 +262,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         if (this.loadMoreOptions && this.hasMoreData(resourceKey)) {
             const viewKey = this.getKey(viewItem);
             const loadMoreKey = this.loadMoreOptions.getLoadMoreKey(viewKey);
-            return [...childItems, this.loadMoreOptions.createViewItem(loadMoreKey)];
+            return [...childItems, this.loadMoreOptions.createLoadMoreViewItem(loadMoreKey)];
         }
 
         return childItems;
@@ -284,9 +284,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             const key = this.getKey(viewItem);
             if (this.loadMoreOptions?.isLoadMoreKey(key)) {
                 const parentKey = this.loadMoreOptions.getParentKey(key);
-                // The parent is guaranteed to be in the cache because Load More
-                // nodes are only injected as children of cached branch nodes.
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Parent is guaranteed to be cached; Load More nodes are only injected as children of cached branch nodes.
                 const parentViewItem = this.nodes.get(parentKey)!.viewItem;
                 return this.loadMoreOptions.getTreeItem(parentViewItem, this.loadsInFlight.has(parentKey));
             }

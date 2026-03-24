@@ -25,7 +25,7 @@ export class LoadMore implements ManagedCommand {
  */
 export function defaultLoadMoreOptions(code: IVsCode): LoadMoreOptions<string> {
     return createDefaultLoadMoreOptions<string>({
-        createViewItem: key => key,
+        createLoadMoreViewItem: key => key,
         getTreeItem: (parentViewItem, loading) => {
             const item = new code.TreeItem(
                 loading ? code.l10n.t('Loading...') : code.l10n.t('Load More...'),
