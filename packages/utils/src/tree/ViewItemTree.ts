@@ -256,9 +256,12 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
         // Inject a synthetic "Load More" view item if the data layer has
         // more pages and load-more support is configured.
+        // The load-more key is derived from the view key (not the resource
+        // key) so that getParentKey returns the view key used by this.nodes.
         const resourceKey = this.getResourceKey(viewItem);
         if (this.loadMoreOptions && this.hasMoreData(resourceKey)) {
-            const loadMoreKey = this.loadMoreOptions.getLoadMoreKey(resourceKey);
+            const viewKey = this.getKey(viewItem);
+            const loadMoreKey = this.loadMoreOptions.getLoadMoreKey(viewKey);
             return [...childItems, this.loadMoreOptions.createViewItem(loadMoreKey)];
         }
 
@@ -353,22 +356,23 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             ? this.loadMoreOptions.getParentKey(viewItemKey)
             : viewItemKey;
 
+        // The parent is guaranteed to be in the cache because Load More
+        // nodes are only injected as children of cached branch nodes.
         const parentNode = this.nodes.get(parentKey);
+        if (!parentNode) {
+            throw new Error(`loadMore: parent node not found in cache for key: ${parentKey}`);
+        }
 
         await this.loadsInFlight.getOrRun(parentKey, async () => {
             // Re-render the "Load More" node with a spinner / disabled command
-            if (parentNode) {
-                this.changeEmitter.fire(parentNode.viewItem);
-            }
+            this.changeEmitter.fire(parentNode.viewItem);
 
             try {
-                const resourceKey = parentNode ? this.getResourceKey(parentNode.viewItem) : parentKey;
+                const resourceKey = this.getResourceKey(parentNode.viewItem);
                 await this.loadMoreData(resourceKey);
             } finally {
                 // Ensure the parent subtree is re-rendered after loading completes
-                if (parentNode) {
-                    this.changeEmitter.fire(parentNode.viewItem);
-                }
+                this.changeEmitter.fire(parentNode.viewItem);
             }
         });
     }

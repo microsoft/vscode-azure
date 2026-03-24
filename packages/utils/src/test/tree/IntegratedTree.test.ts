@@ -773,6 +773,59 @@ describe('Tree Integration Tests (integration)', () => {
             expect(dataTree.hasMore(res('parent'))).to.be.false;
         });
 
+        it('should use resourceKey (not viewKey) when loading more pages', async () => {
+            const executor = createExecutor();
+            const dataTree = new DataItemTree<TestResource>('integrated', executor, r => r.id, 60_000);
+
+            // View items where key differs from resourceKey
+            const prefixedVi = (id: string): TestViewItem => ({
+                key: `view-${id}`,
+                resourceKey: id,
+                label: id,
+            });
+
+            const options: ViewItemTreeOptions<TestViewItem, TestResource> = {
+                dataItemTree: dataTree,
+                toViewItem: r => prefixedVi(r.id),
+                getKey: item => item.key,
+                getResourceKey: item => item.resourceKey,
+            };
+
+            const loadMoreOpts = createDefaultLoadMoreOptions<TestViewItem>({
+                createViewItem: key => ({ key, resourceKey: key, label: key }),
+                getTreeItem: (_parent, loading) => ({
+                    label: loading ? 'Loading...' : 'Load More...',
+                }),
+            });
+
+            const viewTree = new ViewItemTree<TestViewItem, TestResource>(
+                'integrated', executor, options, loadMoreOpts,
+            );
+
+            dataTree.registerProvider(createRootDataProvider([res('parent')]));
+            dataTree.registerProvider(createPagedDataProvider('parent', [
+                { items: [res('a', 'file')], hasMore: true },
+                { items: [res('b', 'file')], hasMore: false },
+            ]));
+
+            await dataTree.getChildren();
+            await dataTree.getChildren(res('parent'));
+
+            viewTree.registerProvider(createBranchViewProvider(
+                new Map([['view-parent', [prefixedVi('a')]]]),
+            ));
+            viewTree.registerProvider(createRootViewProvider([prefixedVi('parent')]));
+
+            await viewTree.getChildren();
+
+            // loadMore must resolve parent via resourceKey='parent', not viewKey='view-parent'
+            const loadMoreKey = loadMoreOpts.getLoadMoreKey('view-parent');
+            const loadMoreItem = loadMoreOpts.createViewItem(loadMoreKey);
+            await viewTree.loadMore(loadMoreItem);
+
+            expect(dataTree.hasMore(res('parent'))).to.be.false;
+        });
+
         it('should return correct tree item for Load More node', async () => {
             const { dataTree, viewTree } = createPipelineWithLoadMore();
 
