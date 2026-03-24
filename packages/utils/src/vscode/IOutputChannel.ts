@@ -16,8 +16,8 @@ export function createOutputChannel(
     name: string,
     code: IVsCode
 ): IOutputChannel {
+    /* c8 ignore next 4 */
     const debugOutputChannel = process.env.VSCODE_RUNNING_TESTS?.toLowerCase();
-
     if (debugOutputChannel === '1') {
         return new DebugOutputChannel(name);
     }
@@ -25,6 +25,7 @@ export function createOutputChannel(
     return code.window.createOutputChannel(name, { log: true });
 }
 
+/* c8 ignore start */
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 export class DebugOutputChannel implements IOutputChannel {
     constructor(public readonly name: string) { }
@@ -71,3 +72,4 @@ export class DebugOutputChannel implements IOutputChannel {
 /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 
 const noop = () => { /* noop */ };
+/* c8 ignore stop */

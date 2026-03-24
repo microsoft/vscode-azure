@@ -6,7 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-const folders = ['dist', 'coverage', '.nyc_output'];
+const folders = ['dist', 'coverage'];
 
 for (const folder of folders) {
     const resolved = path.resolve(folder);
