@@ -173,7 +173,7 @@
         "build:check": "tsgo --noEmit",
         "package": "vsce package",
         "test": "vscode-test",
-        "testcov": "vscode-test --coverage --coverage-reporter=html --coverage-output=coverage",
+        "testcov": "vscode-test --coverage",
         "clean": "node ../../scripts/clean.mjs"
     },
     "engines": {
