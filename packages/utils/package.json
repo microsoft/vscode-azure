@@ -36,7 +36,9 @@
     },
     "mocha": {
         "node-option": [
-            "import=tsx"
+            "experimental-transform-types",
+            "disable-warning=ExperimentalWarning",
+            "import=../../scripts/register-hooks.mjs"
         ],
         "spec": [
             "src/test/**/*.test.ts"
