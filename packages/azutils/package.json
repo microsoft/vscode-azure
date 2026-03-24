@@ -16,6 +16,16 @@
     "type": "module",
     "module": "dist/esm/index.js",
     "types": "dist/esm/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/esm/index.d.ts",
+            "import": "./dist/esm/index.js"
+        },
+        "./testing": {
+            "types": "./dist/esm/testing.d.ts",
+            "import": "./dist/esm/testing.js"
+        }
+    },
     "scripts": {
         "lint": "eslint --max-warnings 0",
         "build": "tsgo",

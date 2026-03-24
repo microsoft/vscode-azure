@@ -6,7 +6,7 @@
 export * from './base/IActionContext';
 export * from './base/IActionExecutor';
 export * from './base/ICommandRegistry';
-export { ITelemetryReporter, createTelemetryReporter } from './base/ITelemetryReporter';
+export { ITelemetryReporter, createTelemetryReporter } from './base/ITelemetryReporter'; // Excluding `NullTelemetryReporter` since it's only intended for testing
 export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './data/Page';
@@ -31,4 +31,3 @@ export * from './wizard/ExecuteStep';
 export * from './wizard/GoBackError';
 export * from './wizard/PromptStep';
 export * from './wizard/Wizard';
-
