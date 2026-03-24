@@ -12,8 +12,10 @@ export default defineConfig({
         include: [
             '**/extensions/vscode-azure/src/**'
         ],
-        "exclude": [
-            "**/extensions/vscode-azure/src/test/**",
-        ]
-    }
+        exclude: [
+            '**/extensions/vscode-azure/src/test/**',
+        ],
+        reporter: ['html'],
+        output: 'coverage',
+    },
 });
