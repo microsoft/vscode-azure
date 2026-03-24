@@ -147,6 +147,16 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         WorkspaceFolder: 3,
     } satisfies typeof vscode.ConfigurationTarget;
 
+    // ── ThemeIcon / ThemeColor ───────────────────────────────
+
+    class MockThemeIcon {
+        constructor(public readonly id: string, public readonly color?: unknown) { }
+    }
+
+    class MockThemeColor {
+        constructor(public readonly id: string) { }
+    }
+
     // ── env ──────────────────────────────────────────────────
 
     const openExternal = mock.fn(
@@ -199,6 +209,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState,
         ConfigurationTarget,
+        ThemeIcon: MockThemeIcon,
+        ThemeColor: MockThemeColor,
         ...overrides,
     } as unknown as IVsCode;
 
