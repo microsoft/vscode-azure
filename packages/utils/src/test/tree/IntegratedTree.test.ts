@@ -32,10 +32,25 @@ interface TestViewItem {
     readonly label: string;
 }
 
-// "Load More" sentinel
-const LOAD_MORE_PREFIX = '__loadMore__:';
-function loadMoreKey(parentKey: string): string {
-    return `${LOAD_MORE_PREFIX}${parentKey}`;
+// "Load More" helpers
+
+function defaultLoadMoreOptions(): LoadMoreOptions<TestViewItem> {
+    const prefix = '__loadMore__:';
+    return {
+        isLoadMoreViewItem: vi => vi.key.startsWith(prefix),
+        getLoadMoreViewItem: parentKey => ({
+            key: `${prefix}${parentKey}`,
+            resourceKey: parentKey,
+            label: 'Load More...',
+        }),
+        getParentViewItem: vi => {
+            const parentKey = vi.key.slice(prefix.length);
+            return { key: parentKey, resourceKey: parentKey, label: parentKey };
+        },
+        getTreeItem: (_parent, loading): ITreeItem => ({
+            label: loading ? 'Loading...' : 'Load More...',
+        }),
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -77,22 +92,6 @@ function createPipelineWithLoadMore(): {
     const executor = createExecutor();
     const dataTree = new DataItemTree<TestResource>('integrated', executor, r => r.id, 60_000);
 
-    const loadMoreOptions: LoadMoreOptions<TestViewItem> = {
-        isLoadMoreViewItem: vi => vi.key.startsWith(LOAD_MORE_PREFIX),
-        getLoadMoreViewItem: parentKey => ({
-            key: loadMoreKey(parentKey),
-            resourceKey: parentKey,
-            label: 'Load More...',
-        }),
-        getParentViewItem: vi => {
-            const parentKey = vi.key.slice(LOAD_MORE_PREFIX.length);
-            return { key: parentKey, resourceKey: parentKey, label: parentKey };
-        },
-        getTreeItem: (_parent, loading): ITreeItem => ({
-            label: loading ? 'Loading...' : 'Load More...',
-        }),
-    };
-
     const options: ViewItemTreeOptions<TestViewItem, TestResource> = {
         dataItemTree: dataTree,
         toViewItem: r => ({ key: r.id, resourceKey: r.id, label: r.enrichedLabel ?? r.id }),
@@ -100,7 +99,7 @@ function createPipelineWithLoadMore(): {
         getResourceKey: vi => vi.resourceKey,
     };
 
-    const viewTree = new ViewItemTree<TestViewItem, TestResource>('integrated', executor, options, loadMoreOptions);
+    const viewTree = new ViewItemTree<TestViewItem, TestResource>('integrated', executor, options, defaultLoadMoreOptions());
     return { executor, dataTree, viewTree };
 }
 
@@ -183,7 +182,7 @@ function res(id: string, type: 'folder' | 'file' = 'folder'): TestResource {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Tree Integration Tests', () => {
+describe('Tree Integration Tests (integration)', () => {
 
     // -----------------------------------------------------------------------
     // Full pipeline: data flows from DataProvider through to ViewItemTree
@@ -422,12 +421,12 @@ describe('Tree Integration Tests', () => {
             // Invalidate only siblingA
             dataTree.invalidate(res('siblingA'));
 
-            // Re-fetch siblingA — should get the new data
+            // Re-fetch siblingA -- should get the new data
             const updatedA = await dataTree.getChildren(res('siblingA'));
             expect(updatedA.map(c => c.id)).to.deep.equal(['a-new']);
             expect(siblingACallCount).to.equal(2);
 
-            // siblingB's children should still be cached — no re-fetch
+            // siblingB's children should still be cached -- no re-fetch
             await dataTree.getChildren(res('siblingB'));
             expect(siblingBFetch.mock.callCount()).to.equal(1);
         });
@@ -451,7 +450,7 @@ describe('Tree Integration Tests', () => {
                 getChildren: grandchildFetch,
             });
 
-            // Load three levels: root → child → leaf
+            // Load three levels: root -> child -> leaf
             await dataTree.getChildren();
             await dataTree.getChildren(res('root'));
             await dataTree.getChildren(res('child'));
@@ -460,7 +459,7 @@ describe('Tree Integration Tests', () => {
             expect(dataTree.get('leaf')).to.not.be.undefined;
             expect(grandchildFetch.mock.callCount()).to.equal(1);
 
-            // Invalidate 'root' — its descendants (child, leaf) should be evicted
+            // Invalidate 'root' -- its descendants (child, leaf) should be evicted
             dataTree.invalidate(res('root'));
 
             expect(dataTree.get('child')).to.be.undefined;
@@ -497,7 +496,7 @@ describe('Tree Integration Tests', () => {
             // Change event should still fire
             expect(onChange.mock.callCount()).to.equal(1);
 
-            // Children are still cached — no re-fetch
+            // Children are still cached -- no re-fetch
             await dataTree.getChildren(res('parent'));
             expect(childFetch.mock.callCount()).to.equal(1);
             expect(dataTree.get('child')).to.not.be.undefined;
@@ -520,7 +519,7 @@ describe('Tree Integration Tests', () => {
             await dataTree.getChildren(res('parent'));
             expect(parentChildFetch.mock.callCount()).to.equal(1);
 
-            // Invalidate childA — parent's child list should stay cached
+            // Invalidate childA -- parent's child list should stay cached
             dataTree.invalidate(res('childA'));
 
             await dataTree.getChildren(res('parent'));
@@ -718,7 +717,7 @@ describe('Tree Integration Tests', () => {
             await dataTree.getChildren(res('parent'));
             expect(fetchCount.mock.callCount()).to.equal(1);
 
-            // Now let enrichment complete — it returns true, so children are invalidated
+            // Now let enrichment complete -- it returns true, so children are invalidated
             resolveEnrich();
             await dataTree.whenEnriched(dataTree.get('parent')!);
 
@@ -755,7 +754,7 @@ describe('Tree Integration Tests', () => {
 
             // Last item should be the Load More sentinel
             const lastItem = children[children.length - 1];
-            expect(lastItem.key).to.equal(loadMoreKey('parent'));
+            expect(lastItem.key).to.equal(defaultLoadMoreOptions().getLoadMoreViewItem('parent').key);
         });
 
         it('should load more pages via viewTree.loadMore', async () => {
@@ -777,11 +776,7 @@ describe('Tree Integration Tests', () => {
 
             await viewTree.getChildren();
 
-            const loadMoreItem: TestViewItem = {
-                key: loadMoreKey('parent'),
-                resourceKey: 'parent',
-                label: 'Load More...',
-            };
+            const loadMoreItem = defaultLoadMoreOptions().getLoadMoreViewItem('parent');
             await viewTree.loadMore(loadMoreItem);
 
             expect(dataTree.hasMore(res('parent'))).to.be.false;
@@ -793,11 +788,7 @@ describe('Tree Integration Tests', () => {
             viewTree.registerProvider(createRootViewProvider([vi('parent')]));
             await viewTree.getChildren();
 
-            const loadMoreItem: TestViewItem = {
-                key: loadMoreKey('parent'),
-                resourceKey: 'parent',
-                label: 'Load More...',
-            };
+            const loadMoreItem = defaultLoadMoreOptions().getLoadMoreViewItem('parent');
             const treeItem = await viewTree.getTreeItem(loadMoreItem);
             expect(treeItem.label).to.equal('Load More...');
         });
@@ -808,11 +799,7 @@ describe('Tree Integration Tests', () => {
             viewTree.registerProvider(createRootViewProvider([vi('parent')]));
             await viewTree.getChildren();
 
-            const loadMoreItem: TestViewItem = {
-                key: loadMoreKey('parent'),
-                resourceKey: 'parent',
-                label: 'Load More...',
-            };
+            const loadMoreItem = defaultLoadMoreOptions().getLoadMoreViewItem('parent');
             const parent = await viewTree.getParent(loadMoreItem);
             expect(parent?.key).to.equal('parent');
         });
