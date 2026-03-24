@@ -36,7 +36,7 @@ export function makeResponse(request: PipelineRequest, status?: number, bodyAsTe
     } as PipelineResponse;
 }
 
-export interface MockHttpClientOptions {
+interface MockHttpClientOptions {
     /** Handler called for each request. Return a response or throw. */
     handler: (request: PipelineRequest) => PipelineResponse | Promise<PipelineResponse>;
 }
