@@ -1068,5 +1068,65 @@ describe('Tree Integration Tests (integration)', () => {
             const parent = await viewTree.getParent(vi('deep-child'));
             expect(parent?.key).to.equal('computed-parent');
         });
+
+        it('should walk getParent up an unloaded chain to the root (reveal scenario)', async () => {
+            // Simulates what VS Code's TreeView.reveal() does: it calls
+            // getParent repeatedly from the target item up to the root,
+            // then expands downward. None of these nodes are cached.
+            const { dataTree, viewTree } = createPipeline();
+
+            // Data layer: root -> mid -> leaf (none loaded yet)
+            dataTree.registerProvider(createRootDataProvider([res('root')]));
+            dataTree.registerProvider(createBranchDataProvider(
+                new Map([
+                    ['root', [res('mid')]],
+                    ['mid', [res('leaf', 'file')]],
+                ]),
+            ));
+
+            // View layer with getParent that can compute the chain
+            // without anything being cached (the provider slow-path).
+            const parentMap = new Map([['leaf', 'mid'], ['mid', 'root']]);
+            const getParent = (item: TestViewItem) => {
+                const p = parentMap.get(item.key);
+                return p ? vi(p) : undefined;
+            };
+
+            viewTree.registerProvider(createRootViewProvider([vi('root')]));
+            viewTree.registerProvider(createBranchViewProvider(
+                new Map([
+                    ['root', [vi('mid')]],
+                    ['mid', [vi('leaf')]],
+                    ['leaf', []],
+                ]),
+                { getParent },
+            ));
+
+            // Nothing has been loaded -- the node map is empty.
+            // Walk getParent from leaf to root, just like reveal() would.
+            const midItem = await viewTree.getParent(vi('leaf'));
+            expect(midItem?.key).to.equal('mid');
+
+            const rootItem = await viewTree.getParent(vi('mid'));
+            expect(rootItem?.key).to.equal('root');
+
+            const aboveRoot = await viewTree.getParent(vi('root'));
+            expect(aboveRoot).to.be.undefined;
+
+            // Now expand downward (reveal loads each level in order)
+            const roots = await viewTree.getChildren();
+            expect(roots.map(r => r.key)).to.deep.equal(['root']);
+
+            const midChildren = await viewTree.getChildren(vi('root'));
+            expect(midChildren.map(r => r.key)).to.deep.equal(['mid']);
+
+            const leafChildren = await viewTree.getChildren(vi('mid'));
+            expect(leafChildren.map(r => r.key)).to.deep.equal(['leaf']);
+
+            // After the reveal walk, the items are now cached --
+            // getParent should use the fast path (node map) instead.
+            const cachedParent = await viewTree.getParent(vi('leaf'));
+            expect(cachedParent?.key).to.equal('mid');
+        });
     });
 });
