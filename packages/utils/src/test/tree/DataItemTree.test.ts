@@ -495,5 +495,86 @@ describe('DataItemTree (unit)', () => {
             const children = await tree.getChildren({ id: 'parent' });
             expect(children.map(c => c.id)).to.deep.equal(['a', 'c']);
         });
+
+        it('should not fire spurious change event when enrichment resolves after removal', async () => {
+            const tree = createTree();
+
+            let resolveEnrich!: () => void;
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => [{ id: 'item' }],
+                enrich: () => new Promise<boolean>(resolve => {
+                    resolveEnrich = () => { resolve(false); };
+                }),
+            });
+
+            await tree.getChildren();
+
+            // Remove the item while enrichment is still in flight
+            tree.removeItem({ id: 'item' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            // Now let enrichment resolve -- should be a no-op
+            resolveEnrich();
+            await new Promise(r => { setTimeout(r, 10); });
+
+            expect(onChange.mock.callCount()).to.equal(0);
+        });
+
+        it('should not re-insert children when loadMore resolves after removal', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+
+            let resolveNextPage!: () => void;
+            const pagePromise = new Promise<IteratorResult<Page<TestResource>>>(resolve => {
+                resolveNextPage = () => {
+                    resolve({
+                        done: false,
+                        value: { items: [{ id: 'orphan' }], hasMore: false },
+                    });
+                };
+            });
+
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'parent',
+                getChildren: () => ({
+                    [Symbol.asyncIterator]() {
+                        let firstPage = true;
+                        return {
+                            next() {
+                                if (firstPage) {
+                                    firstPage = false;
+                                    return Promise.resolve<IteratorResult<Page<TestResource>>>({
+                                        done: false,
+                                        value: { items: [{ id: 'p1' }], hasMore: true },
+                                    });
+                                }
+                                return pagePromise;
+                            },
+                        };
+                    },
+                }),
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+            expect(tree.hasMore({ id: 'parent' })).to.be.true;
+
+            // Start loading the next page (awaits the deferred promise)
+            const loadPromise = tree.loadMore({ id: 'parent' });
+
+            // Remove the parent while page load is in flight
+            tree.removeItem({ id: 'parent' });
+
+            // Resolve the page -- should be discarded
+            resolveNextPage();
+            await loadPromise;
+
+            expect(tree.get('orphan')).to.be.undefined;
+        });
     });
 });

@@ -370,6 +370,11 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
             if (next.done) {
                 node.pageIterator = undefined;
+            } else if (this.nodes.get(key) !== node) {
+                // The node was removed (e.g. via removeItem) while the
+                // page load was in flight--discard the results to avoid
+                // re-inserting orphaned children into the map.
+                node.pageIterator = undefined;
             } else {
                 node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items, node)];
                 if (!next.value.hasMore) {
