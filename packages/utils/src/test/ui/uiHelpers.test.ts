@@ -7,6 +7,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../ui/uiHelpers';
 import type { IVsCode } from '../../vscode/IVsCode';
+import { GoBackError } from '../../wizard/GoBackError';
 import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
 
 describe('uiHelpers (unit)', () => {
@@ -85,6 +86,18 @@ describe('uiHelpers (unit)', () => {
             ib.accept(); // second attempt -> passes
             const result = await resultPromise;
             expect(result).to.equal('good');
+        });
+
+        it('should reject with GoBackError when back button is pressed on input box', async () => {
+            const { ctx, mock } = createMockCodeContext();
+            respondToPrompts(mock, ['goBack']);
+
+            try {
+                await showSmartInputBox(ctx, { prompt: 'Enter value', showBack: true });
+                expect.fail('Expected GoBackError');
+            } catch (e) {
+                expect(GoBackError.test(e)).to.be.true;
+            }
         });
     });
 
@@ -214,6 +227,21 @@ describe('uiHelpers (unit)', () => {
             qp.activeItems = [qp.items[1]];
             qp.accept();
             await resultPromise;
+        });
+
+        it('should reject with GoBackError when back button is pressed on quick pick', async () => {
+            const { ctx, mock } = createMockCodeContext();
+            respondToPrompts(mock, ['goBack']);
+
+            try {
+                await showSmartQuickPick(ctx, [
+                    { label: 'A' },
+                    { label: 'B' },
+                ], { showBack: true });
+                expect.fail('Expected GoBackError');
+            } catch (e) {
+                expect(GoBackError.test(e)).to.be.true;
+            }
         });
     });
 
