@@ -30,7 +30,7 @@
         "vscode": "^1.106.0"
     },
     "devDependencies": {
-        "@microsoft/vscode-azext-eng": "^1.0.0-alpha.14",
+        "@microsoft/vscode-azext-eng": "^1.0.0-alpha.16",
         "@types/node": "^22.19.11",
         "@types/vscode": "1.106.0",
         "@typescript/native-preview": "^7.0.0-dev.20260305.1"
