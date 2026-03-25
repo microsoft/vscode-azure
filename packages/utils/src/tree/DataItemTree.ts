@@ -247,7 +247,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
                     })
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
-                        this.invalidate(resource, includeChildren);
+                        // Guard: if the node was removed (e.g. via removeItem) while
+                        // enrichment was in flight, skip the invalidation to avoid
+                        // spurious change events for items no longer in the tree.
+                        if (this.nodes.get(key)) {
+                            this.invalidate(resource, includeChildren);
+                        }
                     });
                 this.enrichmentPromises.set(key, promise);
                 // Attach a rejection handler so background rejections are not unhandled
@@ -419,9 +424,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
     /**
      * Remove a single item from the cache. Its subtree is evicted and the
-     * item is spliced out of the parent's children list. Fires
-     * {@link onDidChange} for the parent so the view re-renders without
-     * re-fetching siblings.
+     * item is spliced out of the parent's children list. For non-root items,
+     * fires {@link onDidChange} for the parent so the view re-renders without
+     * re-fetching siblings. For root items, fires {@link onDidChange} with
+     * `undefined` to signal a full refresh.
      *
      * If the item is not in the cache, this is a no-op.
      */
