@@ -20,6 +20,9 @@ interface TreeNode<T> {
     children: TreeNode<T>[] | undefined;  // undefined = not yet loaded
     staleAt: number;            // Date.now() after which children should be re-fetched
 
+    /** Back-pointer to the parent node, or `undefined` for root nodes. */
+    parent: TreeNode<T> | undefined;
+
     /**
      * If the provider returned an `AsyncIterable<Page<T>>`, the in-progress
      * iterator is stored here between page pulls. `undefined` means no
@@ -156,7 +159,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         });
 
         this.roots = resources.map(resource => {
-            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0 };
+            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
             this.nodes.set(this.getKey(resource), node);
             return node;
         });
@@ -211,7 +214,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             node.pageIterator = result[Symbol.asyncIterator]();
             await this.loadOnePage(resource);
         } else {
-            node.children = this.addChildNodes(result);
+            node.children = this.addChildNodes(result, node);
         }
 
         node.staleAt = Date.now() + this.ttl;
@@ -363,7 +366,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             if (next.done) {
                 node.pageIterator = undefined;
             } else {
-                node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items)];
+                node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items, node)];
                 if (!next.value.hasMore) {
                     node.pageIterator = undefined;
                 }
@@ -375,9 +378,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * Create {@link TreeNode}s for the given resources, register them in
      * the {@link NodeMap}, and kick off background enrichment.
      */
-    private addChildNodes(children: T[]): TreeNode<T>[] {
+    private addChildNodes(children: T[], parent: TreeNode<T>): TreeNode<T>[] {
         const nodes = children.map(child => {
-            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0 };
+            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0, parent };
             this.nodes.set(this.getKey(child), childNode);
             return childNode;
         });
@@ -412,6 +415,47 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             node.pageIterator = undefined;
         }
         this.changeEmitter.fire(resource);
+    }
+
+    /**
+     * Remove a single item from the cache. Its subtree is evicted and the
+     * item is spliced out of the parent's children list. Fires
+     * {@link onDidChange} for the parent so the view re-renders without
+     * re-fetching siblings.
+     *
+     * If the item is not in the cache, this is a no-op.
+     */
+    public removeItem(resource: T): void {
+        const key = this.getKey(resource);
+        const node = this.nodes.get(key);
+        if (!node) {
+            return;
+        }
+
+        // Remove the node and its entire subtree from the map
+        this.nodes.removeSubtrees([node]);
+        this.enrichmentPromises.delete(key);
+
+        const parent = node.parent;
+        if (parent) {
+            // Splice out of the parent's children array
+            const childIdx = parent.children?.indexOf(node) ?? -1;
+            if (childIdx !== -1) {
+                parent.children!.splice(childIdx, 1); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- indexOf succeeded
+            }
+            this.invalidate(parent.resource, false);
+        } else {
+            // Root item -- splice out of roots array
+            if (this.roots) {
+                const rootIdx = this.roots.indexOf(node);
+                if (rootIdx !== -1) {
+                    this.roots.splice(rootIdx, 1);
+                }
+            }
+
+            // Must directly fire the emitter; `invalidate()` at the root [or `invalidateAll()`] would evict the entire tree which is not what we want
+            this.changeEmitter.fire(undefined);
+        }
     }
 
     /**
