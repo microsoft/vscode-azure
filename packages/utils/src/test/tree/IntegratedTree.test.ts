@@ -11,7 +11,7 @@ import { NullTelemetryReporter } from '../../base/ITelemetryReporter';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider } from '../../tree/DataProvider';
-import { ViewItemTree, type LoadMoreOptions, type ViewItemTreeOptions, createDefaultLoadMoreOptions } from '../../tree/ViewItemTree';
+import { createDefaultLoadMoreOptions, ViewItemTree, type LoadMoreOptions, type ViewItemTreeOptions } from '../../tree/ViewItemTree';
 import type { ViewProvider } from '../../tree/ViewProvider';
 
 
@@ -591,6 +591,126 @@ describe('Tree Integration Tests (integration)', () => {
 
             const second = await dataTree.getChildren();
             expect(second.map(r => r.id)).to.deep.equal(['updated']);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // removeItem
+    // -----------------------------------------------------------------------
+    describe('removeItem', () => {
+        it('should remove a branch child and fire change for the parent', async () => {
+            const { dataTree } = createPipeline();
+
+            dataTree.registerProvider(createRootDataProvider([res('parent')]));
+            dataTree.registerProvider(createBranchDataProvider(
+                new Map([['parent', [res('a'), res('b'), res('c')]]]),
+            ));
+
+            await dataTree.getChildren();
+            await dataTree.getChildren(res('parent'));
+
+            expect(dataTree.get('a')).to.not.be.undefined;
+            expect(dataTree.get('b')).to.not.be.undefined;
+            expect(dataTree.get('c')).to.not.be.undefined;
+
+            const onChange = mock.fn();
+            dataTree.onDidChange(onChange);
+
+            dataTree.removeItem(res('b'));
+
+            // 'b' should be gone
+            expect(dataTree.get('b')).to.be.undefined;
+
+            // siblings should remain cached
+            expect(dataTree.get('a')).to.not.be.undefined;
+            expect(dataTree.get('c')).to.not.be.undefined;
+
+            // change event should fire for the parent
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('parent');
+        });
+
+        it('should evict descendants of the removed item', async () => {
+            const { dataTree } = createPipeline();
+
+            dataTree.registerProvider(createRootDataProvider([res('root')]));
+            dataTree.registerProvider(createBranchDataProvider(
+                new Map([
+                    ['root', [res('child')]],
+                    ['child', [res('grandchild', 'file')]],
+                ]),
+            ));
+
+            await dataTree.getChildren();
+            await dataTree.getChildren(res('root'));
+            await dataTree.getChildren(res('child'));
+
+            expect(dataTree.get('grandchild')).to.not.be.undefined;
+
+            dataTree.removeItem(res('child'));
+
+            expect(dataTree.get('child')).to.be.undefined;
+            expect(dataTree.get('grandchild')).to.be.undefined;
+        });
+
+        it('should remove a root item and fire undefined (full refresh)', async () => {
+            const { dataTree } = createPipeline();
+
+            dataTree.registerProvider(createRootDataProvider([res('r1'), res('r2')]));
+
+            await dataTree.getChildren();
+            expect(dataTree.get('r1')).to.not.be.undefined;
+            expect(dataTree.get('r2')).to.not.be.undefined;
+
+            const onChange = mock.fn();
+            dataTree.onDidChange(onChange);
+
+            dataTree.removeItem(res('r1'));
+
+            expect(dataTree.get('r1')).to.be.undefined;
+            expect(dataTree.get('r2')).to.not.be.undefined;
+
+            // root removal fires undefined (full refresh)
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onChange.mock.calls[0].arguments[0]).to.be.undefined;
+        });
+
+        it('should not re-fetch siblings after removal', async () => {
+            const { dataTree } = createPipeline();
+            const siblingFetch = mock.fn(() => [res('leaf', 'file')]);
+
+            dataTree.registerProvider(createRootDataProvider([res('parent')]));
+            dataTree.registerProvider(createBranchDataProvider(
+                new Map([['parent', [res('keep'), res('remove')]]]),
+            ));
+            dataTree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource =>
+                    typeof r === 'object' && r !== null && 'id' in r && (r as TestResource).id === 'keep',
+                getChildren: siblingFetch,
+            });
+
+            await dataTree.getChildren();
+            await dataTree.getChildren(res('parent'));
+            await dataTree.getChildren(res('keep'));
+            expect(siblingFetch.mock.callCount()).to.equal(1);
+
+            dataTree.removeItem(res('remove'));
+
+            // sibling's children should still be cached
+            await dataTree.getChildren(res('keep'));
+            expect(siblingFetch.mock.callCount()).to.equal(1);
+        });
+
+        it('should be a no-op for an item not in the cache', () => {
+            const dataTree = createDataTree();
+
+            const onChange = mock.fn();
+            dataTree.onDidChange(onChange);
+
+            dataTree.removeItem(res('nonexistent'));
+
+            expect(onChange.mock.callCount()).to.equal(0);
         });
     });
 
