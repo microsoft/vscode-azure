@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { AcrClient, DeploymentClient, ResourceClient } from '@microsoft/vscode-azure-azutils';
+import { AcrClient, DeploymentClient, IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, ResourceClient, SubscriptionClient } from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
     CommandRegistry,
@@ -23,7 +23,7 @@ import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { TempProjectManager } from './bicep/TempProjectManager';
 import { registerCommands } from './commands/registerCommands';
-import { IAcrClientProvider, IAzureSubscriptionProvider, IDeploymentClientProvider, IResourceClientProvider, ITempProjectManager, pushDisposable } from './services';
+import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 
 export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
@@ -93,6 +93,12 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         return (subscription) => AcrClient.create(ctx, executor, subscription);
+    });
+
+    container.bind(ISubscriptionClientProvider).toFactory(context => {
+        const ctx = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        return (subscription) => SubscriptionClient.create(ctx, executor, subscription);
     });
 
     return container;

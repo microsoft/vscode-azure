@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import type { ConcreteAzureNode, ConcreteAzureNodeTree, IAcrClient, IDeploymentClient, IResourceClient } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
@@ -16,22 +16,6 @@ export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProv
 /** Identifier for the {@linkcode TempProjectManager} service */
 export const ITempProjectManager: ServiceIdentifier<ITempProjectManager> = Symbol.for('ITempProjectManager');
 export type ITempProjectManager = import('./bicep/TempProjectManager').TempProjectManager;
-
-// #region Client provider identifiers
-
-/** Factory that creates an {@link IResourceClient} for a given subscription. */
-export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
-export type IResourceClientProvider = AsyncFactory<IResourceClient, [AzureSubscription]>;
-
-/** Factory that creates an {@link IDeploymentClient} for a given subscription. */
-export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');
-export type IDeploymentClientProvider = AsyncFactory<IDeploymentClient, [AzureSubscription]>;
-
-/** Factory that creates an {@link IAcrClient} for a given subscription. */
-export const IAcrClientProvider: ServiceIdentifier<IAcrClientProvider> = Symbol.for('IAcrClientProvider');
-export type IAcrClientProvider = AsyncFactory<IAcrClient, [AzureSubscription]>;
-
-// #endregion
 
 // #region Azure resource tree and view identifiers
 
@@ -75,11 +59,3 @@ export function pushDisposable<T>(context: ResolutionContext, injectable: T): T 
     }
     return injectable;
 }
-
-/**
- * A factory function that asynchronously creates a service instance.
- * Unlike inversify's `Factory<T>` (which returns `T | Promise<T>`),
- * this always returns a `Promise<T>` so callers know they must `await`
- * the result.
- */
-type AsyncFactory<T, TArgs extends unknown[]> = (...args: TArgs) => Promise<T>;

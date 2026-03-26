@@ -21,6 +21,11 @@ export default defineConfig([
             '@typescript-eslint/no-restricted-imports': ['error', {
                 paths: [
                     {
+                        name: 'inversify',
+                        message: 'Only type imports of ServiceIdentifier are allowed from inversify in this package. Use: import type { ServiceIdentifier } from \'inversify\';',
+                        allowImportNames: ['ServiceIdentifier'],
+                    },
+                    {
                         name: 'vscode',
                         message: 'VSCode should only be used for typings in this package. Pass it down from the caller as IVsCode.',
                         allowTypeImports: true,

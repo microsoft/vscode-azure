@@ -10,7 +10,8 @@ import type {
     ResourcesListOptionalParams
 } from '@azure/arm-resources';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { IActionExecutor, ICodeContext, Page } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext, Page } from '@microsoft/vscode-azure-utils';
+import type { ServiceIdentifier } from 'inversify';
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
 import { createAzureSubscriptionClient } from '../createAzureClient';
@@ -20,6 +21,10 @@ export const SiteType = 'Microsoft.Web/sites';
 export const FunctionAppLogicalType = `${SiteType}~functionapp`;
 export const WorkflowAppLogicalType = `${SiteType}~workflowapp`;
 export const AppServiceLogicalType = `${SiteType}~app`;
+
+/** Factory that creates an {@link IResourceClient} for a given subscription. */
+export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
+export type IResourceClientProvider = AsyncFactory<IResourceClient, [AzureSubscription]>;
 
 /**
  * Interface describing the resource management APIs we use.
