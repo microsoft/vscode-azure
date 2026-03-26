@@ -14,7 +14,8 @@ import type {
     ProvisioningState as SdkProvisioningState,
 } from '@azure/arm-resourcesdeployments';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { IActionExecutor, ICodeContext, Page, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext, Page, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { ServiceIdentifier } from 'inversify';
 import { createAzureSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
@@ -25,6 +26,10 @@ export type DeploymentExtended = WithRequired<SdkDeploymentExtended, 'id' | 'nam
 export type DeploymentOperation = SdkDeploymentOperation;
 export type ProvisioningOperation = SdkProvisioningOperation;
 export type ProvisioningState = SdkProvisioningState;
+
+/** Factory that creates an {@link IDeploymentClient} for a given subscription. */
+export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');
+export type IDeploymentClientProvider = AsyncFactory<IDeploymentClient, [AzureSubscription]>;
 
 /**
  * Interface describing the deployment APIs we use.

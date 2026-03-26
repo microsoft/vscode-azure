@@ -14,16 +14,15 @@ import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
 import { MFAChallengePolicy } from './pipeline/MFAChallengePolicy';
 import { RemoveBOMPolicy } from './pipeline/RemoveBOMPolicy';
 
-// TODO: uncomment or remove as needed
-// export function createAzureClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
-//     ctx: ICodeContext,
-//     executor: IActionExecutor,
-//     clientCtor: new (credential: TokenCredential, options?: TOptions) => TClient,
-//     credential: TokenCredential,
-//     options?: TOptions,
-// ): TClient {
-//     return new clientCtor(credential, applyDefaults(ctx, executor, options));
-// }
+export function createAzureClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
+    ctx: ICodeContext,
+    executor: IActionExecutor,
+    clientCtor: new (credential: TokenCredential, options?: TOptions) => TClient,
+    credential: TokenCredential,
+    options?: TOptions,
+): TClient {
+    return new clientCtor(credential, applyDefaults(ctx, executor, options));
+}
 
 export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
     ctx: ICodeContext,
