@@ -3,39 +3,35 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isResourceGroup, resourceGroupExperience } from '@microsoft/vscode-azure-azutils';
+import { isSubscription, subscriptionExperience } from '@microsoft/vscode-azure-azutils';
 import { type ICodeContext, PromptStep } from '@microsoft/vscode-azure-utils';
-import type { IAzureViewDataTree } from '../../../services';
+import type { IAzureViewDataTree, IAzureViewViewItemTree } from '../../../services';
 import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
 
 /**
- * Prompts the user to pick a resource group by drilling through
- * Account > Tenant > Subscription > Resource Group. Extracts the
- * subscription, resource group name, and region from the pick.
+ * Prompts the user to pick an Azure subscription by drilling through
+ * the resource tree (Account > Tenant > Subscription).
  */
-export class PickResourceGroupStep extends PromptStep<CreateFunctionAppContext> {
+export class PickSubscriptionStep extends PromptStep<CreateFunctionAppContext> {
     public constructor(
         private readonly ctx: ICodeContext,
         private readonly dataTree: IAzureViewDataTree,
+        private readonly viewItemTree: IAzureViewViewItemTree,
     ) {
         super();
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {
-        const key = await resourceGroupExperience({
+        const key = await subscriptionExperience({
             ...this.ctx,
-            dataItemTree: this.dataTree,
+            viewItemTree: this.viewItemTree,
         });
 
         const node = this.dataTree.get(key);
-        if (!node || !isResourceGroup(node)) {
-            throw new Error('No resource group was picked');
+        if (!node || !isSubscription(node)) {
+            throw new Error('No subscription was picked');
         }
 
-        return {
-            subscription: node.subscription,
-            resourceGroupName: node.name,
-            region: node.location,
-        };
+        return { subscription: node };
     }
 }

@@ -3,20 +3,22 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ChooseLocationStep, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { TempProjectManager } from '../../bicep/TempProjectManager';
-import { IAzureViewDataTree } from '../../services';
+import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
 import { DeployStep } from './steps/DeployStep';
 import { GenerateAzureYamlStep } from './steps/GenerateAzureYamlStep';
 import { GenerateBicepStep } from './steps/GenerateBicepStep';
+import { InputEnvironmentNameStep } from './steps/InputEnvironmentNameStep';
 import { InputFunctionAppNameStep } from './steps/InputFunctionAppNameStep';
 import { OfferSaveStep } from './steps/OfferSaveStep';
 import { PickHostingPlanStep } from './steps/PickHostingPlanStep';
-import { PickResourceGroupStep } from './steps/PickResourceGroupStep';
 import { PickRuntimeStep } from './steps/PickRuntimeStep';
+import { PickSubscriptionStep } from './steps/PickSubscriptionStep';
 import { SaveToWorkspaceStep } from './steps/SaveToWorkspaceStep';
 import { WriteAndOpenFilesStep } from './steps/WriteAndOpenFilesStep';
 
@@ -30,6 +32,8 @@ export class CreateFunctionApp implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
+        @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
+        @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
         @inject(TempProjectManager) private readonly tempManager: TempProjectManager,
     ) { }
 
@@ -37,7 +41,9 @@ export class CreateFunctionApp implements ManagedCommand {
         const wizard = new Wizard<CreateFunctionAppContext>(
             {} as CreateFunctionAppContext,
             [
-                new PickResourceGroupStep(this.ctx, this.dataTree),
+                new PickSubscriptionStep(this.ctx, this.dataTree, this.viewItemTree),
+                new ChooseLocationStep(this.ctx, this.subscriptionClientProvider),
+                new InputEnvironmentNameStep(this.ctx),
                 new InputFunctionAppNameStep(this.ctx),
                 new PickRuntimeStep(this.ctx),
                 new PickHostingPlanStep(this.ctx),

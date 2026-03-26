@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, PromptStep, QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type { FunctionAppHostingPlan } from '../../../bicep/BicepGenerator';
 import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
 
@@ -18,7 +18,7 @@ export class PickHostingPlanStep extends PromptStep<CreateFunctionAppContext> {
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {
-        const items: { label: string; description: string; data: FunctionAppHostingPlan }[] = [
+        const items: QuickPickItemWithData<FunctionAppHostingPlan>[] = [
             { label: this.ctx.code.l10n.t('Flex Consumption'), description: this.ctx.code.l10n.t('Modern serverless, auto-scale'), data: 'FlexConsumption' },
             { label: this.ctx.code.l10n.t('Premium'), description: this.ctx.code.l10n.t('Elastic Premium, pre-warmed instances'), data: 'Premium' },
             { label: this.ctx.code.l10n.t('App Service Plan'), description: this.ctx.code.l10n.t('Dedicated plan, predictable pricing'), data: 'AppServicePlan' },
