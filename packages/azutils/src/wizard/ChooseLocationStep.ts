@@ -12,7 +12,7 @@ interface ChooseLocationContext {
     readonly location?: Location;
 }
 
-export class ChooseLocationStep extends PromptStep<ChooseLocationContext> {
+export class ChooseLocationStep<TContext extends ChooseLocationContext> extends PromptStep<TContext> {
     public constructor(
         private readonly ctx: ICodeContext,
         private readonly subscriptionClientProvider: ISubscriptionClientProvider,
@@ -20,7 +20,7 @@ export class ChooseLocationStep extends PromptStep<ChooseLocationContext> {
         super();
     }
 
-    public async prompt(context: Readonly<ChooseLocationContext>): Promise<Partial<ChooseLocationContext>> {
+    public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
         const client = await this.subscriptionClientProvider(context.subscription);
         const locations = await client.subscriptions.listLocations(context.subscription.subscriptionId);
 
@@ -39,6 +39,6 @@ export class ChooseLocationStep extends PromptStep<ChooseLocationContext> {
             matchOnDescription: true,
         });
 
-        return { location: choice.data };
+        return { location: choice.data } as Partial<TContext>;
     }
 }
