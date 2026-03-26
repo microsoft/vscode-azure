@@ -9,4 +9,4 @@
  * this always returns a `Promise<T>` so callers know they must `await`
  * the result.
  */
-export type AsyncFactory<T, TArgs extends unknown[]> = (...args: TArgs) => Promise<T>
+export type AsyncFactory<T, TArgs extends unknown[]> = (...args: TArgs) => Promise<T>;

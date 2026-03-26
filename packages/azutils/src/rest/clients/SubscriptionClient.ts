@@ -57,7 +57,7 @@ export class SubscriptionClient implements ISubscriptionClient {
             ctx,
             executor,
             SubscriptionClient.sdk.SubscriptionClient,
-            subscription.credential,
+            subscription,
             options,
         );
         return new SubscriptionClient(inner);
