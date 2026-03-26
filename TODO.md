@@ -10,6 +10,8 @@
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
 
 ## Code hygiene
+- Reexport and use Azure client types from azutils, and eliminate dev deps on Azure packages in extension
+- Swap out `@link` for `@linkcode` in most places
 - JSDocs everywhere
 - Address all the TODOs in source
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
@@ -20,6 +22,7 @@
 - Product icon set for Azure resources
 
 ## Testing
+- Get code coverage back up to max
 - Test to verify high code coverage?
 - Test that enforces bundle size not growing out of control
 - Tests that enforce the view layer stays speedy quick (prefill the data cache?)

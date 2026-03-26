@@ -10,7 +10,8 @@ import { type ContainerRegistryManagementClientOptionalParams, type ContainerReg
 import { get as sdkGetRegistry } from '@azure/arm-containerregistry/api/registries';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { IActionExecutor, ICodeContext, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { ServiceIdentifier } from 'inversify';
 import { createAzureRestSubscriptionClient } from '../createAzureClient';
 
 /**
@@ -18,6 +19,10 @@ import { createAzureRestSubscriptionClient } from '../createAzureClient';
  */
 export type Registry = WithRequired<SdkRegistry, 'id' | 'name' | 'type' | 'location'>;
 export type Sku = SdkSku;
+
+/** Factory that creates an {@link IAcrClient} for a given subscription. */
+export const IAcrClientProvider: ServiceIdentifier<IAcrClientProvider> = Symbol.for('IAcrClientProvider');
+export type IAcrClientProvider = AsyncFactory<IAcrClient, [AzureSubscription]>;
 
 /**
  * Interface describing the container registry APIs we use.

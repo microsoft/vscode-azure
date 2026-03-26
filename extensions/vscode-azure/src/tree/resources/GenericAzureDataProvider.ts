@@ -5,12 +5,12 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
-    getNodeType, isAccount, isResourceGroup, isSubscription, isTenant,
+    getNodeType, IResourceClientProvider, isAccount, isResourceGroup, isSubscription, isTenant,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureSubscriptionProvider, IResourceClientProvider } from '../../services';
+import { IAzureSubscriptionProvider } from '../../services';
 
 /**
  * Default page size used when fetching paginated Azure resource lists.
