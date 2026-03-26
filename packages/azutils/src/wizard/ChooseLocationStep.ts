@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { type ICodeContext, PromptStep, QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type { ISubscriptionClientProvider, Location } from '../rest/clients/SubscriptionClient';
 
 interface ChooseLocationContext {
