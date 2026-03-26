@@ -264,6 +264,9 @@ export function createMockCodeContext(): MockCodeContextResult {
             id: 'test-publisher.test-extension',
             packageJSON: { version: '0.0.0-test' },
         },
+        extensionPath: '/mock/extension/path',
+        storageUri: { fsPath: '/mock/storage', scheme: 'file' },
+        globalStorageUri: { fsPath: '/mock/globalStorage', scheme: 'file' },
     } as unknown as IExtensionContext;
 
     return {

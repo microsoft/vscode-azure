@@ -11,5 +11,6 @@
     "commands.vscode-azure/activity/trackArmDeployment": "Track ARM Deployment",
     "commands.vscode-azure/activity/clearSuccessful": "Clear Successful",
     "commands.vscode-azure/activity/clearCompleted": "Clear Completed",
-    "commands.vscode-azure/activity/clearAll": "Clear All"
+    "commands.vscode-azure/activity/clearAll": "Clear All",
+    "commands.vscode-azure/functions/create": "Create Function App..."
 }

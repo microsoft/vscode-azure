@@ -13,6 +13,10 @@ import type { Activity } from './tree/activity/Activity';
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
 
+/** Identifier for the {@linkcode TempProjectManager} service */
+export const ITempProjectManager: ServiceIdentifier<ITempProjectManager> = Symbol.for('ITempProjectManager');
+export type ITempProjectManager = import('./bicep/TempProjectManager').TempProjectManager;
+
 // #region Client provider identifiers
 
 /** Factory that creates an {@link IResourceClient} for a given subscription. */

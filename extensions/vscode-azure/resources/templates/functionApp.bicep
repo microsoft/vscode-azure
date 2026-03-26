@@ -1,0 +1,43 @@
+targetScope = 'resourceGroup'
+
+@description('Name of the azd environment.')
+param environmentName string
+
+@description('Azure region for all resources.')
+param location string
+
+@description('Globally unique name for the function app.')
+param functionAppName string
+
+@description('Hosting plan.')
+@allowed(['FlexConsumption', 'Premium', 'AppServicePlan'])
+param hostingPlan string = 'FlexConsumption'
+
+@description('Language runtime.')
+param runtimeStack string = 'node'
+
+@description('Runtime version string (e.g. "Node|20", "Python|3.11").')
+param runtimeVersion string = 'Node|20'
+
+@description('Operating system.')
+@allowed(['linux', 'windows'])
+param operatingSystem string = 'linux'
+
+var tags = { 'azd-env-name': environmentName }
+
+module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.1' = {
+  name: 'functionApp'
+  params: {
+    functionAppName: functionAppName
+    location: location
+    hostingPlan: hostingPlan
+    runtimeStack: runtimeStack
+    runtimeVersion: runtimeVersion
+    operatingSystem: operatingSystem
+    tags: tags
+  }
+}
+
+output AZURE_FUNCTION_APP_NAME string = functionApp.outputs.functionAppName
+output AZURE_FUNCTION_APP_RESOURCE_ID string = functionApp.outputs.functionAppResourceId
+output AZURE_FUNCTION_APP_HOSTNAME string = functionApp.outputs.defaultHostname
