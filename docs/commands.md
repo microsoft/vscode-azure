@@ -129,11 +129,22 @@ Commands that operate on tree items accept an optional `key` parameter. When inv
 @injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
     public async execute(key?: string): Promise<void> {
+        let resource: ConcreteAzureNode | undefined;
         if (!key) {
-            key = await resourceExperience({ ...this.ctx, viewItemTree: this.viewTree, dataItemTree: this.cache });
+            resource = await resourceExperience({
+                ...this.ctx,
+                tree: this.viewTree,
+                dataItemTree: this.cache,
+                logicalType: AcrResourceType
+            });
+        } else {
+            resource = this.cache.get(key);
         }
 
-        const resource = this.cache.get(key);
+        if (!resource || !isAcrRegistry(resource)) {
+            return;
+        }
+
         const enriched = await withDelayedProgress(this.ctx.code, { ... },
             this.cache.whenEnriched<EnrichedAcrRegistry>(resource)
         );
@@ -141,6 +152,8 @@ export class DisableAcrAdminUser implements ManagedCommand {
     }
 }
 ```
+
+`resourceExperience` returns the picked resource object directly (typed via the generic parameter), rather than a string key. See the `Choose*Step` classes in `packages/azutils/src/wizard/` for use as composable wizard steps.
 
 ## Activity Commands
 
