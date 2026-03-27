@@ -160,4 +160,53 @@ describe('ChooseResourceStep (unit)', () => {
         expect(result.resource?.name).to.equal('site2');
         tracker.assertAllConsumed();
     });
+
+    it('should return multiple resources when canPickMany is true', async () => {
+        const { ctx, mock } = createMockCodeContext();
+
+        const viewItemTree = createMockViewItemTree({
+            '': [site1Id, site2Id, storageAccountId],
+        });
+
+        const dataItemTree = createMockDataItemTree([site1, site2, storageAccount]);
+
+        const tracker = respondToPrompts(mock, [
+            { pickMany: ['site1', 'site2'] },
+        ]);
+
+        const wizard = new Wizard<ChooseResourceContext>(
+            { picks: [] },
+            [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites', canPickMany: true })],
+        );
+        const result = await wizard.run();
+
+        expect(result.resources).to.have.length(2);
+        expect(result.resources?.map(r => r.name)).to.deep.equal(['site1', 'site2']);
+        tracker.assertAllConsumed();
+    });
+
+    it('should filter non-matching resources from multi-pick results', async () => {
+        const { ctx, mock } = createMockCodeContext();
+
+        // All items are terminal (sites match, storage doesn't) but canPickMany shows all terminal items
+        const viewItemTree = createMockViewItemTree({
+            '': [site1Id, storageAccountId],
+        });
+
+        const dataItemTree = createMockDataItemTree([site1, storageAccount]);
+
+        const tracker = respondToPrompts(mock, [
+            { pickMany: ['site1'] },
+        ]);
+
+        const wizard = new Wizard<ChooseResourceContext>(
+            { picks: [] },
+            [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites', canPickMany: true })],
+        );
+        const result = await wizard.run();
+
+        expect(result.resources).to.have.length(1);
+        expect(result.resources?.[0].name).to.equal('site1');
+        tracker.assertAllConsumed();
+    });
 });

@@ -41,4 +41,30 @@ describe('resourceExperience (unit)', () => {
         expect(result.name).to.equal('site1');
         expect(result.logicalType).to.equal('Microsoft.Web/sites');
     });
+
+    it('should return multiple resources when canPickMany is true', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const site2 = makeGenericResource({ name: 'site2', subscription, id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site2' });
+        const site2Id = AzureNodeId.from(site2).toString();
+
+        const tree = createMockViewItemTree({
+            '': [site1Id, site2Id],
+        });
+        const dataItemTree = createMockDataItemTree([site1, site2]);
+
+        respondToPrompts(mock, [
+            { pickMany: ['site1', 'site2'] },
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx,
+            tree: tree as never,
+            dataItemTree,
+            logicalType: 'Microsoft.Web/sites',
+            canPickMany: true,
+        });
+
+        expect(result).to.have.length(2);
+        expect(result.map(r => r.name)).to.deep.equal(['site1', 'site2']);
+    });
 });
