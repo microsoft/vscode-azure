@@ -7,7 +7,7 @@ import { Environment } from '@azure/ms-rest-azure-env';
 import type { AzureAccount, AzureSubscription, AzureSubscriptionProvider, AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import type { IAcrClient, IResourceClient } from '@microsoft/vscode-azure-azutils';
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
-import type { IAcrClientProvider, IResourceClientProvider } from '../services';
+import type { IAcrClientProvider, IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 
 // -- Fake Azure environment -----------------------------------------------
 
