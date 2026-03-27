@@ -16,7 +16,7 @@ export class RecursivePickStep<TItem, TOptions extends GenericPickOptions<TItem>
      */
     public constructor(
         options: TOptions & ExclusivePickManyOrCreate<TItem>,
-        private readonly recursiveClass: new (options: TOptions) => RecursivePickStep<TItem, TOptions> = RecursivePickStep,
+        private readonly recursiveClass: new (options: TOptions & ExclusivePickManyOrCreate<TItem>) => RecursivePickStep<TItem, TOptions> = RecursivePickStep,
     ) {
         super(options);
     }

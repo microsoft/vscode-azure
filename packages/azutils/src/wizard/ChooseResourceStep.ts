@@ -38,7 +38,7 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
             {
                 ...options,
                 classify: (item: string) => classifyForResource(AzureNodeId.parse(item), item, options),
-            } as ChooseResourceOptions,
+            } as ChooseResourceOptions & ExclusivePickManyOrCreate<string>,
             ChooseResourceStep
         );
     }
