@@ -49,7 +49,7 @@ export class ChooseResourceGroupStep<TContext extends ChooseResourceGroupContext
         // we need to get the last picked item and see if it's a resource group.
         // If it is, we can pull the subscription and resource group info from the node.
         const lastPick = getLastPick({ ...context, ...pickResult });
-        if (lastPick) {
+        if (lastPick && AzureNodeId.parse(lastPick.item).isResourceGroupNodeId()) {
             const node = this.options.dataItemTree.get(lastPick.item);
             if (node && isResourceGroup(node)) {
                 return {

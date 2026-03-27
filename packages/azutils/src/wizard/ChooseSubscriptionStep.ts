@@ -44,7 +44,7 @@ export class ChooseSubscriptionStep<TContext extends ChooseSubscriptionContext> 
         // we need to get the last picked item and see if it's a subscription.
         // If it is, we can pull the subscription info from the node.
         const lastPick = getLastPick({ ...context, ...pickResult });
-        if (lastPick) {
+        if (lastPick && AzureNodeId.parse(lastPick.item).isSubscriptionNodeId()) {
             const node = this.options.dataItemTree.get(lastPick.item);
             if (node && isSubscription(node)) {
                 return { ...pickResult, subscription: node } as Partial<TContext>;

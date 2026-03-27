@@ -55,7 +55,7 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
         }
 
         const lastPick = getLastPick(merged);
-        if (lastPick) {
+        if (lastPick && AzureNodeId.parse(lastPick.item).isGenericResourceNodeId()) {
             const node = this.options.dataItemTree.get(lastPick.item);
             if (node && isGenericResource(node) && node.logicalType.toLowerCase() === this.options.logicalType.toLowerCase()) {
                 return { ...pickResult, resource: node as TResource } as Partial<TContext>;
