@@ -3,23 +3,22 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ChooseLocationStep, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import { ChooseLocationStep, ChooseSubscriptionStep, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { TempProjectManager } from '../../bicep/TempProjectManager';
 import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
+import { AppNameStep } from '../../wizard/azd/AppNameStep';
+import { AzdProvisionStep } from '../../wizard/azd/AzdProvisionStep';
+import { EnvironmentNameStep } from '../../wizard/azd/EnvironmentNameStep';
+import { GenerateAzureYamlStep } from '../../wizard/azd/GenerateAzureYamlStep';
+import { GenerateBicepStep } from '../../wizard/azd/GenerateBicepStep';
+import { HydrateAzdInfoStep } from '../../wizard/azd/HydrateAzdInfoStep';
+import { OfferSaveStep } from '../../wizard/azd/OfferSaveStep';
+import { TempProjectManager } from '../../wizard/azd/TempProjectManager';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
-import { DeployStep } from './steps/DeployStep';
-import { GenerateAzureYamlStep } from './steps/GenerateAzureYamlStep';
-import { GenerateBicepStep } from './steps/GenerateBicepStep';
-import { InputEnvironmentNameStep } from './steps/InputEnvironmentNameStep';
-import { InputFunctionAppNameStep } from './steps/InputFunctionAppNameStep';
-import { OfferSaveStep } from './steps/OfferSaveStep';
 import { PickHostingPlanStep } from './steps/PickHostingPlanStep';
 import { PickRuntimeStep } from './steps/PickRuntimeStep';
-import { PickSubscriptionStep } from './steps/PickSubscriptionStep';
-import { WriteFilesStep } from './steps/WriteFilesStep';
 
 /**
  * Command that walks the user through creating an Azure Function App
@@ -38,21 +37,21 @@ export class CreateFunctionApp implements ManagedCommand {
 
     public async execute(): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
-            {} as CreateFunctionAppContext,
+            { picks: [] },
             [
-                new PickSubscriptionStep(this.ctx, this.dataTree, this.viewItemTree),
+                new HydrateAzdInfoStep(),
+                new ChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
                 new ChooseLocationStep(this.ctx, this.subscriptionClientProvider),
-                new InputEnvironmentNameStep(this.ctx),
-                new InputFunctionAppNameStep(this.ctx),
+                new EnvironmentNameStep(this.ctx),
+                new AppNameStep(this.ctx),
                 new PickRuntimeStep(this.ctx),
                 new PickHostingPlanStep(this.ctx),
-                new OfferSaveStep(this.ctx),
+                new OfferSaveStep(this.ctx, this.tempManager),
             ],
             [
                 new GenerateBicepStep(),
                 new GenerateAzureYamlStep(),
-                new WriteFilesStep(this.ctx.extensionContext.extensionPath, this.tempManager),
-                new DeployStep(this.ctx.code),
+                new AzdProvisionStep<CreateFunctionAppContext>(this.ctx.code),
             ],
         );
 

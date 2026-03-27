@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
-import type { FunctionAppRuntime } from '../../../bicep/BicepGenerator';
-import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
+import type { CreateFunctionAppContext, FunctionAppRuntime } from '../CreateFunctionAppContext';
 
 interface RuntimeItem {
     readonly label: string;
@@ -30,6 +29,10 @@ export class PickRuntimeStep extends PromptStep<CreateFunctionAppContext> {
         private readonly ctx: ICodeContext,
     ) {
         super();
+    }
+
+    public shouldPrompt(context: Readonly<CreateFunctionAppContext>): boolean {
+        return !context.runtime;
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {

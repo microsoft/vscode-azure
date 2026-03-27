@@ -8,7 +8,7 @@ import { type ICodeContext, PromptStep, type QuickPickItemWithData, showSmartQui
 import type { ISubscriptionClientProvider, Location } from '../rest/clients/SubscriptionClient';
 
 interface ChooseLocationContext {
-    readonly subscription: AzureSubscription;
+    readonly subscription?: AzureSubscription;
     readonly location?: Location;
 }
 
@@ -21,6 +21,10 @@ export class ChooseLocationStep<TContext extends ChooseLocationContext> extends 
     }
 
     public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
+        if (!context.subscription) {
+            throw new Error(this.ctx.code.l10n.t('Subscription is required to choose location'));
+        }
+
         const client = await this.subscriptionClientProvider(context.subscription);
         const locations = await client.subscriptions.listLocations(context.subscription.subscriptionId);
 

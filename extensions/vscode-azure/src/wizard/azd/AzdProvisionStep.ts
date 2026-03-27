@@ -4,27 +4,27 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep, type IVsCode } from '@microsoft/vscode-azure-utils';
-import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
+import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
  * Deploys the generated project by invoking the Azure Developer CLI
  * extension's `azure-dev.provision` command on the project directory.
  */
-export class DeployStep extends ExecuteStep<CreateFunctionAppContext> {
+export class AzdProvisionStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
         private readonly code: IVsCode,
     ) {
         super();
     }
 
-    public shouldExecute(context: Readonly<CreateFunctionAppContext>): boolean {
-        return context.deploy;
+    public shouldExecute(context: Readonly<TContext>): boolean {
+        return context.provision === true;
     }
 
-    public async execute(context: CreateFunctionAppContext): Promise<void> {
+    public async execute(context: TContext): Promise<void> {
         await this.code.commands.executeCommand(
             'azure-dev.commands.cli.provision',
-            this.code.Uri.file(context.projectDir),
+            this.code.Uri.file(context.iacFolder!), // eslint-disable-line @typescript-eslint/no-non-null-assertion
         );
     }
 }

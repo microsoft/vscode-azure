@@ -4,6 +4,7 @@
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
 - Setting for default page size
+- Make `picks` in `PickContext` optional so we don't have to init it all over the place
 
 ## Issues
 - Figure out why the token expired and wasn't refreshing

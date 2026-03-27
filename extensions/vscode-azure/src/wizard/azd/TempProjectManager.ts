@@ -17,14 +17,14 @@ import * as path from 'path';
 @injectable()
 export class TempProjectManager implements Disposable {
     private readonly projectDirs: string[] = [];
-    private readonly iacDir: string;
+    private readonly iacBaseDir: string;
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IExtensionContext) extensionContext: IExtensionContext,
     ) {
         const storageUri = extensionContext.storageUri ?? extensionContext.globalStorageUri;
-        this.iacDir = path.join(storageUri.fsPath, 'iac');
+        this.iacBaseDir = path.join(storageUri.fsPath, 'iac');
     }
 
     /**
@@ -32,8 +32,8 @@ export class TempProjectManager implements Disposable {
      * The directory is tracked for cleanup on dispose.
      */
     public async createProjectDir(): Promise<string> {
-        await fs.mkdir(this.iacDir, { recursive: true });
-        const dir = await fs.mkdtemp(path.join(this.iacDir, 'project-'));
+        await fs.mkdir(this.iacBaseDir, { recursive: true });
+        const dir = await fs.mkdtemp(path.join(this.iacBaseDir, 'project-'));
         this.projectDirs.push(dir);
         return dir;
     }

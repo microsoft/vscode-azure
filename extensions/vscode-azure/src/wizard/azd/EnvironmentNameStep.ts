@@ -4,20 +4,24 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ICodeContext, type IVsCode, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
-import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
+import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
  * Prompts the user for an azd environment name. This name is used
  * by the Azure Developer CLI to isolate state and resources.
  */
-export class InputEnvironmentNameStep extends PromptStep<CreateFunctionAppContext> {
+export class EnvironmentNameStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
         private readonly ctx: ICodeContext,
     ) {
         super();
     }
 
-    public async prompt(): Promise<Partial<CreateFunctionAppContext>> {
+    public shouldPrompt(context: Readonly<TContext>): boolean {
+        return !context.environmentName;
+    }
+
+    public async prompt(): Promise<Partial<TContext>> {
         const defaultName = getWorkspaceFolderName(this.ctx.code) ?? 'dev';
 
         const name = await showSmartInputBox(this.ctx, {
@@ -35,7 +39,7 @@ export class InputEnvironmentNameStep extends PromptStep<CreateFunctionAppContex
             },
         });
 
-        return { environmentName: name };
+        return { environmentName: name } as Partial<TContext>;
     }
 }
 

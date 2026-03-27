@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ICodeContext, PromptStep, QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
-import type { FunctionAppHostingPlan } from '../../../bicep/BicepGenerator';
-import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
+import type { CreateFunctionAppContext, FunctionAppHostingPlan } from '../CreateFunctionAppContext';
 
 /**
  * Prompts the user to pick a hosting plan.
@@ -15,6 +14,10 @@ export class PickHostingPlanStep extends PromptStep<CreateFunctionAppContext> {
         private readonly ctx: ICodeContext,
     ) {
         super();
+    }
+
+    public shouldPrompt(context: Readonly<CreateFunctionAppContext>): boolean {
+        return !context.hostingPlan;
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {
