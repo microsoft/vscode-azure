@@ -27,7 +27,7 @@ export async function subscriptionExperience(options: SubscriptionExperienceOpti
     const result = await wizard.run();
 
     if (!result.subscription) {
-        throw new Error('No subscription was picked');
+        throw new Error(options.code.l10n.t('No subscription was picked'));
     }
 
     return result.subscription;

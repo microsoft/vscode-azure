@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PromptStep } from '../../wizard/PromptStep';
-import { type FilteredChild, type GenericPickOptions, GenericPickStep } from './GenericPickStep';
+import { type ExclusivePickManyOrCreate, type FilteredChild, type GenericPickOptions, GenericPickStep } from './GenericPickStep';
 import { getLastPick, type PickContext } from './PickContext';
 
 export class RecursivePickStep<TItem, TOptions extends GenericPickOptions<TItem>> extends GenericPickStep<TItem, TOptions> {
@@ -15,7 +15,7 @@ export class RecursivePickStep<TItem, TOptions extends GenericPickOptions<TItem>
      *   their own class so recursion creates the correct type.
      */
     public constructor(
-        options: TOptions,
+        options: TOptions & ExclusivePickManyOrCreate<TItem>,
         private readonly recursiveClass: new (options: TOptions) => RecursivePickStep<TItem, TOptions> = RecursivePickStep,
     ) {
         super(options);

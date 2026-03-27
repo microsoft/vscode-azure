@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type GenericPickOptions, getLastPick, type PickClassification, type PickContext, RecursivePickStep } from '@microsoft/vscode-azure-utils';
-import { type ConcreteAzureNodeTree, isGenericResource } from '../models/AzureNode';
+import {
+    getLastPick, RecursivePickStep,
+    type ExclusivePickManyOrCreate, type GenericPickOptions, type PickClassification, type PickContext
+} from '@microsoft/vscode-azure-utils';
+import { isGenericResource, type ConcreteAzureNodeTree } from '../models/AzureNode';
 import { AzureNodeId } from '../models/AzureNodeId';
 import type { GenericResource } from '../models/GenericResource';
 
@@ -30,7 +33,7 @@ interface ChooseResourceOptions extends GenericPickOptions<string> {
  * Virtual groups matching the target type are auto-skipped.
  */
 export class ChooseResourceStep<TResource extends GenericResource, TContext extends ChooseResourceContext<TResource> = ChooseResourceContext<TResource>> extends RecursivePickStep<string, ChooseResourceOptions> {
-    public constructor(options: Omit<ChooseResourceOptions, 'classify'>) {
+    public constructor(options: Omit<ChooseResourceOptions, 'classify'> & ExclusivePickManyOrCreate<string>) {
         super(
             {
                 ...options,
@@ -68,8 +71,11 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
 
 function classifyForResource(nodeId: AzureNodeId, item: string, options: Omit<ChooseResourceOptions, 'classify'>): PickClassification {
     if (nodeId.isGenericResourceNodeId()) {
-        const node = options.dataItemTree.get(item) as GenericResource;
-        return node.logicalType.toLowerCase() === options.logicalType.toLowerCase() ? 'terminal' : false;
+        const node = options.dataItemTree.get(item);
+        if (node && isGenericResource(node) && node.logicalType.toLowerCase() === options.logicalType.toLowerCase()) {
+            return 'terminal';
+        }
+        return false;
     }
 
     if (nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, options.logicalType)) {

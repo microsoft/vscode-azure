@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, type PromptStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
 import type { GenericResource } from '../../models/GenericResource';
 import { type ChooseResourceContext, ChooseResourceStep } from '../../wizard/ChooseResourceStep';
@@ -31,25 +31,29 @@ export async function resourceExperience<T extends GenericResource>(
 export async function resourceExperience<T extends GenericResource>(
     options: ResourceExperienceOptions & { canPickMany?: boolean },
 ): Promise<T | T[]> {
+    const { canPickMany, ...rest } = options;
+    // Construct with the literal `canPickMany` value so TypeScript
+    // narrows the ExclusivePickManyOrCreate discriminated union.
+    const step = canPickMany
+        ? new ChooseResourceStep<T>({ ...rest, canPickMany: true })
+        : new ChooseResourceStep<T>({ ...rest });
+
     const wizard = new Wizard<ChooseResourceContext<T>>(
         { picks: [] },
-        [
-            new ChooseResourceStep<T>({
-                ...options,
-                logicalType: options.logicalType,
-                canPickMany: options.canPickMany,
-            }),
-        ],
+        // ChooseResourceStep inherits from PromptStep<PickContext<string>>;
+        // ChooseResourceContext<T> extends PickContext<string>, so this is
+        // safe at runtime--the override narrows, not widens.
+        [step as PromptStep<ChooseResourceContext<T>>],
     );
 
     const result = await wizard.run();
 
-    if (options.canPickMany) {
+    if (canPickMany) {
         return result.resources ?? [];
     }
 
     if (!result.resource) {
-        throw new Error('No resource was picked');
+        throw new Error(options.code.l10n.t('No resource was picked'));
     }
 
     return result.resource;

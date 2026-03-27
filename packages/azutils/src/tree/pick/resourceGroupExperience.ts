@@ -33,7 +33,7 @@ export async function resourceGroupExperience(options: ResourceGroupExperienceOp
     const result = await wizard.run();
 
     if (!result.subscription || !result.resourceGroup) {
-        throw new Error('No resource group was picked');
+        throw new Error(options.code.l10n.t('No resource group was picked'));
     }
 
     return {

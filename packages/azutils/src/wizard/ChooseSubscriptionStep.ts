@@ -4,7 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { getLastPick, RecursivePickStep, type GenericPickOptions, type PickClassification, type PickContext } from '@microsoft/vscode-azure-utils';
+import {
+    getLastPick, RecursivePickStep,
+    type ExclusivePickManyOrCreate, type GenericPickOptions, type PickClassification, type PickContext
+} from '@microsoft/vscode-azure-utils';
 import { isSubscription, type ConcreteAzureNodeTree } from '../models/AzureNode';
 import { AzureNodeId } from '../models/AzureNodeId';
 
@@ -32,7 +35,7 @@ export class ChooseSubscriptionStep<TContext extends ChooseSubscriptionContext> 
             {
                 ...options,
                 classify: (item: string) => classifyForSubscription(AzureNodeId.parse(item))
-            } as ChooseSubscriptionOptions,
+            } as ChooseSubscriptionOptions & ExclusivePickManyOrCreate<string>,
             ChooseSubscriptionStep,
         );
     }

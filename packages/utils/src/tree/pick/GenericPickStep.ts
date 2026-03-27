@@ -33,8 +33,8 @@ export interface GenericPickOptions<TItem> extends ICodeContext {
     readonly create?: CreateNewOption<TItem>;
 }
 
-/** This type ensures that either `canPickMany` or `create` is specified, but not both */
-type ExclusivePickManyOrCreate<TItem> = ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: never });
+/** This type ensures that `canPickMany` and `create` cannot both be specified at the same time */
+export type ExclusivePickManyOrCreate<TItem> = ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: never });
 
 export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem>> extends PromptStep<PickContext<TItem>> {
     public constructor(protected readonly options: TOptions & ExclusivePickManyOrCreate<TItem>) {

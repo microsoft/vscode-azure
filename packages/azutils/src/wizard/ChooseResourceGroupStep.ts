@@ -4,7 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { getLastPick, RecursivePickStep, type GenericPickOptions, type ITreeItem, type PickClassification, type PickContext } from '@microsoft/vscode-azure-utils';
+import {
+    getLastPick, RecursivePickStep,
+    type ExclusivePickManyOrCreate, type GenericPickOptions, type ITreeItem, type PickClassification, type PickContext
+} from '@microsoft/vscode-azure-utils';
 import { isAccount, isResourceGroup, isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../models/AzureNode';
 import { AzureNodeId } from '../models/AzureNodeId';
 import type { ResourceGroup } from '../models/Grouping';
@@ -37,7 +40,7 @@ export class ChooseResourceGroupStep<TContext extends ChooseResourceGroupContext
                 ...options,
                 classify: (key: string) => classifyForResourceGroup(AzureNodeId.parse(key)),
                 tree
-            } as ChooseResourceGroupOptions,
+            } as ChooseResourceGroupOptions & ExclusivePickManyOrCreate<string>,
             ChooseResourceGroupStep,
         );
     }
