@@ -11,6 +11,7 @@
 **/*.ts
 build/**
 dist/test/**
+dist/debug.bundle*
 docs/**
 gulp*
 node_modules/**

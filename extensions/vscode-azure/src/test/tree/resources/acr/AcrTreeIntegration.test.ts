@@ -6,11 +6,10 @@
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { AzureNodeId, type ConcreteAzureNode, type IAcrClient, type IAcrClientProvider, type IResourceClient, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor, DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
+import { ActionExecutor, DataItemTree, EventEmitter, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
@@ -55,24 +54,25 @@ describe('ACR Tree Integration (integration)', () => {
     // -- Factories --------------------------------------------------------
 
     function createMockSubscriptionProvider(): AzureSubscriptionProvider {
+        const emitter = new EventEmitter<unknown>();
         return {
-            signIn: mock.fn(() => Promise.resolve(true)),
-            getAccounts: mock.fn(() => Promise.resolve([account])),
-            getAvailableSubscriptions: mock.fn(() => Promise.resolve([subscription])),
-            getUnauthenticatedTenantsForAccount: mock.fn(() => Promise.resolve([])),
-            getTenantsForAccount: mock.fn(() => Promise.resolve([tenant])),
-            getSubscriptionsForTenant: mock.fn(() => Promise.resolve([subscription])),
-            onRefreshSuggested: mock.fn(),
+            onRefreshSuggested: emitter.event,
+            signIn: () => Promise.resolve(true),
+            getAccounts: () => Promise.resolve([account]),
+            getAvailableSubscriptions: () => Promise.resolve([subscription]),
+            getUnauthenticatedTenantsForAccount: () => Promise.resolve([]),
+            getTenantsForAccount: () => Promise.resolve([tenant]),
+            getSubscriptionsForTenant: () => Promise.resolve([subscription]),
         } as unknown as AzureSubscriptionProvider;
     }
 
     function createMockResourceClient(resources: ConcreteAzureNode[] = [acrRegistry, nonAcrResource]): IResourceClient {
         return {
             resourceGroups: {
-                list: mock.fn(() => [resourceGroup]),
+                list: () => [resourceGroup],
             },
             resources: {
-                listByResourceGroup: mock.fn(() => resources),
+                listByResourceGroup: () => resources,
             },
         } as unknown as IResourceClient;
     }
@@ -80,11 +80,11 @@ describe('ACR Tree Integration (integration)', () => {
     function createMockAcrClient(overrides?: Record<string, unknown>): IAcrClient {
         return {
             registries: {
-                get: mock.fn(() => Promise.resolve({
+                get: () => Promise.resolve({
                     loginServer: 'myreg.azurecr.io',
                     sku: { name: 'Basic', tier: 'Basic' },
                     adminUserEnabled: false,
-                })),
+                }),
             },
             ...overrides,
         } as unknown as IAcrClient;
@@ -341,11 +341,11 @@ describe('ACR Tree Integration (integration)', () => {
             const { viewTree, dataTree } = createPipeline({
                 acrClientOverrides: {
                     registries: {
-                        get: mock.fn(() => Promise.resolve({
+                        get: () => Promise.resolve({
                             loginServer: 'myreg.azurecr.io',
                             sku: { name: 'Basic', tier: 'Basic' },
                             adminUserEnabled: true,
-                        })),
+                        }),
                     },
                 },
             });

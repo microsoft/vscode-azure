@@ -9,20 +9,11 @@
 // so none of this code ends up in the main extension bundle.
 
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import type { IDeploymentClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import { EventEmitter } from '@microsoft/vscode-azure-utils';
 import type { Container } from 'inversify';
-import { IAzureSubscriptionProvider, pushDisposable } from '../services';
-
-// Service identifiers by their Symbol.for() keys. We avoid importing the
-// const+type combos from azutils (e.g. `IAcrClientProvider`) because that
-// would pull the full Azure SDK client modules into this debug bundle.
-const SIVsCode = Symbol.for('IVsCode');
-const SIResourceClientProvider = Symbol.for('IResourceClientProvider');
-const SIDeploymentClientProvider = Symbol.for('IDeploymentClientProvider');
-const SIAcrClientProvider = Symbol.for('IAcrClientProvider');
-const SISubscriptionClientProvider = Symbol.for('ISubscriptionClientProvider');
+import { IAzureSubscriptionProvider } from '../services';
 
 // -- Mock data ----------------------------------------------------------------
 
@@ -65,8 +56,8 @@ const registryDetails: Record<string, { loginServer: string; sku: { name: string
 
 // -- Mock providers -----------------------------------------------------------
 
-function createMockSubscriptionProvider(code: IVsCode): AzureSubscriptionProvider {
-    const emitter = new code.EventEmitter<unknown>();
+function createMockSubscriptionProvider(): AzureSubscriptionProvider {
+    const emitter = new EventEmitter<unknown>();
     return {
         onRefreshSuggested: emitter.event,
         signIn: () => Promise.resolve(true),
@@ -78,21 +69,21 @@ function createMockSubscriptionProvider(code: IVsCode): AzureSubscriptionProvide
     } as unknown as AzureSubscriptionProvider;
 }
 
-function createMockResourceClientProvider() {
+function createMockResourceClientProvider(): IResourceClientProvider {
     return (() => Promise.resolve({
         resourceGroups: { list: () => [demoRg, stagingRg] },
         resources: { listByResourceGroup: (rgName: string) => resourcesByGroup[rgName] ?? [] },
-    }));
+    })) as unknown as IResourceClientProvider;
 }
 
-function createMockAcrClientProvider() {
+function createMockAcrClientProvider(): IAcrClientProvider {
     return (() => Promise.resolve({
         registries: {
             get: (_rg: string, name: string) => Promise.resolve(
                 registryDetails[name] ?? { loginServer: '', sku: { name: 'Basic' }, adminUserEnabled: false },
             ),
         },
-    }));
+    })) as unknown as IAcrClientProvider;
 }
 
 // -- Public API ---------------------------------------------------------------
@@ -102,19 +93,17 @@ function createMockAcrClientProvider() {
  * Called from main.mjs when AZURE_MOCK_DATA=1.
  */
 export function applyMockBindings(container: Container): void {
-    const code = container.get<IVsCode>(SIVsCode);
+    container.rebind(IAzureSubscriptionProvider).toConstantValue(
+        createMockSubscriptionProvider(),
+    );
 
-    container.rebind(IAzureSubscriptionProvider).toDynamicValue(() => {
-        return createMockSubscriptionProvider(code);
-    }).inSingletonScope().onActivation(pushDisposable);
+    container.rebind(IResourceClientProvider).toConstantValue(createMockResourceClientProvider());
+    container.rebind(IAcrClientProvider).toConstantValue(createMockAcrClientProvider());
 
-    container.rebind(SIResourceClientProvider).toConstantValue(createMockResourceClientProvider());
-    container.rebind(SIAcrClientProvider).toConstantValue(createMockAcrClientProvider());
-
-    container.rebind(SIDeploymentClientProvider).toConstantValue(
+    container.rebind(IDeploymentClientProvider).toConstantValue(
         (() => Promise.reject(new Error('Mock mode: deployments not available'))) as unknown as IDeploymentClientProvider,
     );
-    container.rebind(SISubscriptionClientProvider).toConstantValue(
+    container.rebind(ISubscriptionClientProvider).toConstantValue(
         (() => Promise.reject(new Error('Mock mode: subscription client not available'))) as unknown as ISubscriptionClientProvider,
     );
 }
