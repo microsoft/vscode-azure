@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import { AzureNodeId, type ConcreteAzureNode, type IAcrClient, type IAcrClientProvider, type IResourceClient, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { ActionExecutor, DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
@@ -53,7 +54,7 @@ describe('ACR Tree Integration (integration)', () => {
 
     // -- Factories --------------------------------------------------------
 
-    function createMockSubscriptionProvider() {
+    function createMockSubscriptionProvider(): AzureSubscriptionProvider {
         return {
             signIn: mock.fn(() => Promise.resolve(true)),
             getAccounts: mock.fn(() => Promise.resolve([account])),
@@ -62,10 +63,10 @@ describe('ACR Tree Integration (integration)', () => {
             getTenantsForAccount: mock.fn(() => Promise.resolve([tenant])),
             getSubscriptionsForTenant: mock.fn(() => Promise.resolve([subscription])),
             onRefreshSuggested: mock.fn(),
-        };
+        } as unknown as AzureSubscriptionProvider;
     }
 
-    function createMockResourceClient(resources: ConcreteAzureNode[] = [acrRegistry, nonAcrResource]) {
+    function createMockResourceClient(resources: ConcreteAzureNode[] = [acrRegistry, nonAcrResource]): IResourceClient {
         return {
             resourceGroups: {
                 list: mock.fn(() => [resourceGroup]),
@@ -73,10 +74,10 @@ describe('ACR Tree Integration (integration)', () => {
             resources: {
                 listByResourceGroup: mock.fn(() => resources),
             },
-        };
+        } as unknown as IResourceClient;
     }
 
-    function createMockAcrClient(overrides?: Record<string, unknown>) {
+    function createMockAcrClient(overrides?: Record<string, unknown>): IAcrClient {
         return {
             registries: {
                 get: mock.fn(() => Promise.resolve({
@@ -86,7 +87,7 @@ describe('ACR Tree Integration (integration)', () => {
                 })),
             },
             ...overrides,
-        };
+        } as unknown as IAcrClient;
     }
 
     interface TestPipeline {
@@ -118,15 +119,18 @@ describe('ACR Tree Integration (integration)', () => {
         const resourceClient = createMockResourceClient(options?.resources);
         const acrClient = createMockAcrClient(options?.acrClientOverrides);
 
+        const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
+        const acrClientProvider: IAcrClientProvider = () => Promise.resolve(acrClient);
+
         const genericDataProvider = new GenericAzureDataProvider(
             executor,
-            mock.fn(() => Promise.resolve(resourceClient)) as never,
-            subProvider as never,
+            resourceClientProvider,
+            subProvider,
         );
 
         const acrDataProvider = new AcrDataProvider(
             executor,
-            mock.fn(() => Promise.resolve(acrClient)) as never,
+            acrClientProvider,
         );
 
         // Register in correct order: ACR first, generic fallback second
@@ -150,13 +154,13 @@ describe('ACR Tree Integration (integration)', () => {
         const acrViewProvider = new AcrViewProvider(
             code,
             executor,
-            dataTree as never,
+            dataTree,
         );
 
         const genericViewProvider = new GenericAzureViewProvider(
             code,
             executor,
-            dataTree as never,
+            dataTree,
         );
 
         // Register in correct order: ACR first, generic fallback second

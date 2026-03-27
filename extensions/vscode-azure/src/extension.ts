@@ -22,12 +22,15 @@ import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { registerCommands } from './commands/registerCommands';
-import { createMockAcrClientProvider, createMockResourceClientProvider, createMockSubscriptionProvider } from './debug/mockAzureData';
 import { IAzureSubscriptionProvider, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 
-export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
-    const container = setUpContainer(extensionContext);
+export async function activateInternal(
+    extensionContext: vscode.ExtensionContext,
+    perfStats: { loadStartTime: number, loadEndTime: number },
+    containerOverride?: Container,
+): Promise<void> {
+    const container = containerOverride ?? setUpContainer(extensionContext);
 
     return await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
@@ -42,7 +45,7 @@ export function deactivateInternal(): Promise<void> {
     return Promise.resolve();
 }
 
-function setUpContainer(extensionContext: IExtensionContext): Container {
+export function setUpContainer(extensionContext: IExtensionContext): Container {
     const container = new Container();
 
     // These three come in as constants (vscode by import, context from above)
@@ -71,16 +74,6 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         );
     }).inSingletonScope().onActivation(pushDisposable);
 
-    if (process.env.AZURE_MOCK_DATA === '1') {
-        bindMockProviders(container);
-    } else {
-        bindRealProviders(container);
-    }
-
-    return container;
-}
-
-function bindRealProviders(container: Container): void {
     container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
         return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
     }).inSingletonScope().onActivation(pushDisposable);
@@ -108,28 +101,6 @@ function bindRealProviders(container: Container): void {
         const executor = context.get(IActionExecutor);
         return (subscription) => SubscriptionClient.create(ctx, executor, subscription);
     });
-}
 
-function bindMockProviders(container: Container): void {
-    container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
-        return createMockSubscriptionProvider(context.get(IVsCode));
-    }).inSingletonScope();
-
-    container.bind(IResourceClientProvider).toConstantValue(
-        createMockResourceClientProvider(),
-    );
-
-    container.bind(IDeploymentClientProvider).toFactory(() => {
-        // Deployments are not used in mock mode
-        return () => Promise.reject(new Error('Mock mode: deployments not available'));
-    });
-
-    container.bind(IAcrClientProvider).toConstantValue(
-        createMockAcrClientProvider(),
-    );
-
-    container.bind(ISubscriptionClientProvider).toFactory(() => {
-        // Subscriptions are not used in mock mode
-        return () => Promise.reject(new Error('Mock mode: subscription client not available'));
-    });
+    return container;
 }
