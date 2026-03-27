@@ -104,9 +104,10 @@ Note: intermediate items in the pick step get ` $(chevron-right)` appended to th
 
 ### Shared Test Fixtures (azutils)
 
-`packages/azutils/src/test/` provides shared helpers:
-- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()` using `Environment.AzureCloud`
+`packages/azutils/src/test/` provides shared helpers, exported from the `@microsoft/vscode-azure-azutils/testing` barrel:
+- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()`, `makeResourceGroup()`, `makeGenericResource()` using `Environment.AzureCloud`
 - `mockPipeline.ts` — `makeRequest()`, `makeResponse()` (using SDK's `createHttpHeaders`), and `MockHttpClient` for injecting into Azure SDK clients
+- `tree/mockTree.ts` — `createMockViewItemTree()`, `createMockDataItemTree()`, `createMockHierarchicalDataItemTree()` for testing `Choose*Step` classes and pick-based wizards
 
 ### Integration Tests
 

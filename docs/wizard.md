@@ -107,3 +107,20 @@ const wizard = new Wizard(
 );
 const result = await wizard.run();
 ```
+
+## Reusable Azure Pick Steps
+
+`packages/azutils/src/wizard/` provides reusable prompt steps that extend `RecursivePickStep` for drilling through the Azure resource tree:
+
+| Step | Drills Through | Sets on Context |
+|------|---------------|-----------------|
+| `ChooseSubscriptionStep` | Account > Tenant > Subscription | `subscription` |
+| `ChooseResourceGroupStep` | Account > Tenant > Subscription > Resource Group | `subscription`, `resourceGroup` |
+| `ChooseResourceStep<T>` | Full tree, filtering by `logicalType` | `resource` (single) or `resources` (multi-pick) |
+| `ChooseLocationStep` | Flat list from ARM API | `location` |
+
+Each step defines a context interface (e.g. `ChooseSubscriptionContext`) that the caller's wizard context must extend. Steps omit `classify` (and sometimes `tree`) from their constructor options since they provide these internally.
+
+`RecursivePickStep` accepts a `recursiveClass` parameter so subclasses can ensure recursion creates instances of the correct type, preserving the overridden `prompt()` logic at every drill level.
+
+Convenience wrappers (`subscriptionExperience`, `resourceGroupExperience`, `resourceExperience`) run a single-step wizard and return the picked object directly, for use outside of larger wizard flows.
