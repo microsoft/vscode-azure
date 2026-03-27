@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -11,11 +13,11 @@ import type { AzdWizardContext } from './AzdWizardContext';
  */
 export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
     public async shouldExecute(context: Readonly<AzdWizardContext>): Promise<boolean> {
-        // Do not execute if an existing azure.yaml file is found or if `iacDir` is unset
-        return Promise.resolve(false); // TODO
+        // Do not execute if an existing azure.yaml file is found or if `iacFolder` is unset
+        return !!context.iacFolder && Promise.resolve(false); // TODO
     }
 
-    public execute(context: AzdWizardContext): void {
+    public async execute(context: AzdWizardContext): Promise<void> {
         const yaml = [
             `name: ${context.appName}`,
             'infra:',
@@ -24,7 +26,10 @@ export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
             '',
         ].join('\n');
 
-        // TODO: write the file
-        throw new Error('unimpl');
+        await fs.writeFile(
+            path.join(context.iacFolder!, 'azure.yaml'), // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            yaml,
+            { mode: 0o600 }
+        );
     }
 }

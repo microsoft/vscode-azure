@@ -32,46 +32,10 @@ export class TempProjectManager implements Disposable {
      * The directory is tracked for cleanup on dispose.
      */
     public async createProjectDir(): Promise<string> {
-        await fs.mkdir(this.iacBaseDir, { recursive: true });
-        const dir = await fs.mkdtemp(path.join(this.iacBaseDir, 'project-'));
+        await fs.mkdir(this.iacBaseDir, { recursive: true, mode: 0o700 });
+        const dir = await fs.mkdtemp(path.join(this.iacBaseDir, 'project-')); // TODO wrong
         this.projectDirs.push(dir);
         return dir;
-    }
-
-    /**
-     * Writes the Bicep project files into the given directory:
-     * - `infra/main.bicep` (copied from templates)
-     * - `infra/main.parameters.json` (generated)
-     * - `azure.yaml` (generated)
-     *
-     * The target directory can be either a temp dir from
-     * {@linkcode createProjectDir} or a workspace folder.
-     */
-    public async writeProjectFiles(
-        targetDir: string,
-        templateDir: string,
-        parametersContent: string,
-        azureYamlContent: string,
-    ): Promise<void> {
-        const infraDir = path.join(targetDir, 'infra');
-        await fs.mkdir(infraDir, { recursive: true });
-
-        await Promise.all([
-            fs.copyFile(path.join(templateDir, 'functionApp.bicep'), path.join(infraDir, 'main.bicep')),
-            fs.writeFile(path.join(infraDir, 'main.parameters.json'), parametersContent, 'utf-8'),
-            fs.writeFile(path.join(targetDir, 'azure.yaml'), azureYamlContent, 'utf-8'),
-        ]);
-    }
-
-    /**
-     * Opens the generated main Bicep file in a VS Code editor tab.
-     */
-    public async openBicepFile(dir: string): Promise<void> {
-        const bicepPath = path.join(dir, 'infra', 'main.bicep');
-        const doc = await this.code.workspace.openTextDocument(
-            this.code.Uri.file(bicepPath),
-        );
-        await this.code.window.showTextDocument(doc);
     }
 
     public dispose(): void {

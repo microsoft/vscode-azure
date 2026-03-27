@@ -49,9 +49,9 @@ export class CreateFunctionApp implements ManagedCommand {
                 new OfferSaveStep(this.ctx, this.tempManager),
             ],
             [
-                new GenerateBicepStep(),
+                new GenerateBicepStep(this.ctx.extensionContext, 'functionApp.bicep'),
                 new GenerateAzureYamlStep(),
-                new AzdProvisionStep<CreateFunctionAppContext>(this.ctx.code),
+                new AzdProvisionStep(this.ctx.code),
             ],
         );
 

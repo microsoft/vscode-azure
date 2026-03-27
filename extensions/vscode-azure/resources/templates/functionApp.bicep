@@ -1,8 +1,11 @@
-targetScope = 'resourceGroup'
+targetScope = 'subscription'
 
+@minLength(1)
+@maxLength(64)
 @description('Name of the azd environment.')
 param environmentName string
 
+@minLength(1)
 @description('Azure region for all resources.')
 param location string
 
@@ -25,7 +28,14 @@ param operatingSystem string = 'linux'
 
 var tags = { 'azd-env-name': environmentName }
 
+resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
+  name: 'rg-${environmentName}'
+  location: location
+  tags: tags
+}
+
 module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.1' = {
+  scope: rg
   name: 'functionApp'
   params: {
     functionAppName: functionAppName

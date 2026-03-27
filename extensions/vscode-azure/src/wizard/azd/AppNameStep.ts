@@ -11,6 +11,7 @@ import { AzdWizardContext } from './AzdWizardContext';
  */
 export class AppNameStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
+        // TODO: parameters for validation rules?
         private readonly ctx: ICodeContext,
     ) {
         super();
@@ -21,7 +22,7 @@ export class AppNameStep<TContext extends AzdWizardContext> extends PromptStep<T
     }
 
     public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
-        const defaultName = context.environmentName ? `func-${context.environmentName}` : undefined;
+        const defaultName = context.environmentName ? `app-${context.environmentName}` : undefined;
 
         const appName = await showSmartInputBox(this.ctx, {
             prompt: this.ctx.code.l10n.t('Enter an app name'),
