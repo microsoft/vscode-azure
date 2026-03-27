@@ -24,17 +24,20 @@ export interface CreateNewOption<TItem> {
  */
 export type PickClassification = 'intermediate' | 'skip' | 'terminal' | false;
 
-export type GenericPickOptions<TItem> = ICodeContext & {
+export interface GenericPickOptions<TItem> extends ICodeContext {
     readonly tree: TreeLike<TItem> | vscode.TreeDataProvider<TItem>;
 
     classify(item: TItem, treeItem: ITreeItem): PickClassification;
 
     readonly canPickMany?: boolean;
     readonly create?: CreateNewOption<TItem>;
-} & ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: never });
+}
 
-export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem> = GenericPickOptions<TItem>> extends PromptStep<PickContext<TItem>> {
-    public constructor(protected readonly options: TOptions) {
+/** This type ensures that either `canPickMany` or `create` is specified, but not both */
+type ExclusivePickManyOrCreate<TItem> = ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: never });
+
+export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem>> extends PromptStep<PickContext<TItem>> {
+    public constructor(protected readonly options: TOptions & ExclusivePickManyOrCreate<TItem>) {
         super();
     }
 
