@@ -57,6 +57,8 @@ describe('ACR Tree Integration (integration)', () => {
         return {
             signIn: mock.fn(() => Promise.resolve(true)),
             getAccounts: mock.fn(() => Promise.resolve([account])),
+            getAvailableSubscriptions: mock.fn(() => Promise.resolve([subscription])),
+            getUnauthenticatedTenantsForAccount: mock.fn(() => Promise.resolve([])),
             getTenantsForAccount: mock.fn(() => Promise.resolve([tenant])),
             getSubscriptionsForTenant: mock.fn(() => Promise.resolve([subscription])),
             onRefreshSuggested: mock.fn(),
