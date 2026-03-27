@@ -406,7 +406,7 @@ describe('ACR Tree Integration (integration)', () => {
 
         it('should handle a resource group with only ACR registries', async () => {
             const { viewTree } = createPipeline({
-                resources: [acrRegistry as ConcreteAzureNode],
+                resources: [acrRegistry],
             });
 
             const tree = await collectTree(viewTree);
@@ -419,7 +419,7 @@ describe('ACR Tree Integration (integration)', () => {
 
         it('should handle a resource group with no ACR registries', async () => {
             const { viewTree } = createPipeline({
-                resources: [nonAcrResource as ConcreteAzureNode],
+                resources: [nonAcrResource],
             });
 
             const tree = await collectTree(viewTree);
@@ -439,7 +439,7 @@ describe('ACR Tree Integration (integration)', () => {
             });
 
             const { viewTree } = createPipeline({
-                resources: [acrRegistry, secondRegistry] as ConcreteAzureNode[],
+                resources: [acrRegistry, secondRegistry],
             });
 
             const tree = await collectTree(viewTree);

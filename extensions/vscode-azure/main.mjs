@@ -17,7 +17,7 @@ const extension = await import('./dist/extension.bundle.mjs');
 export async function activate(ctx) {
     if (process.env.AZURE_MOCK_DATA === '1') {
         const container = extension.setUpContainer(ctx);
-        const { applyMockBindings } = await import('./debug/mockData.mjs');
+        const { applyMockBindings } = await import('./dist/debug.bundle.mjs');
         applyMockBindings(container);
         return await extension.activateInternal(ctx, perfStats, container);
     }
