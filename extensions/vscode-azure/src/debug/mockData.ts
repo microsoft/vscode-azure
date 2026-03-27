@@ -8,8 +8,8 @@
 // This file is compiled as a SEPARATE esbuild entry point (debug.bundle.mjs)
 // so none of this code ends up in the main extension bundle.
 
-import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscriptionProvider, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
+import { type IAcrClient, IAcrClientProvider, IDeploymentClientProvider, type IResourceClient, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { EventEmitter } from '@microsoft/vscode-azure-utils';
 import type { Container } from 'inversify';
@@ -56,34 +56,51 @@ const registryDetails: Record<string, { loginServer: string; sku: { name: string
 
 // -- Mock providers -----------------------------------------------------------
 
-function createMockSubscriptionProvider(): AzureSubscriptionProvider {
+export interface MockSubscriptionProviderOptions {
+    readonly accounts?: AzureSubscriptionProvider['getAccounts'] extends () => Promise<infer T> ? T : never;
+    readonly tenants?: AzureTenant[];
+    readonly subscriptions?: AzureSubscription[];
+}
+
+export function createMockSubscriptionProvider(options?: MockSubscriptionProviderOptions): AzureSubscriptionProvider {
+    const accounts = options?.accounts ?? [account];
+    const tenants = options?.tenants ?? [tenant];
+    const subscriptions = options?.subscriptions ?? [subscription];
     const emitter = new EventEmitter<unknown>();
     return {
         onRefreshSuggested: emitter.event,
         signIn: () => Promise.resolve(true),
-        getAccounts: () => Promise.resolve([account]),
-        getAvailableSubscriptions: () => Promise.resolve([subscription]),
+        getAccounts: () => Promise.resolve(accounts),
+        getAvailableSubscriptions: () => Promise.resolve(subscriptions),
         getUnauthenticatedTenantsForAccount: () => Promise.resolve([]),
-        getTenantsForAccount: () => Promise.resolve([tenant]),
-        getSubscriptionsForTenant: () => Promise.resolve([subscription]),
+        getTenantsForAccount: () => Promise.resolve(tenants),
+        getSubscriptionsForTenant: () => Promise.resolve(subscriptions),
     } as unknown as AzureSubscriptionProvider;
 }
 
-function createMockResourceClientProvider(): IResourceClientProvider {
-    return (() => Promise.resolve({
-        resourceGroups: { list: () => [demoRg, stagingRg] },
-        resources: { listByResourceGroup: (rgName: string) => resourcesByGroup[rgName] ?? [] },
-    })) as unknown as IResourceClientProvider;
+export function createMockResourceClient(
+    resourceGroups: unknown[] = [demoRg, stagingRg],
+    resourcesByRg: Record<string, unknown[]> | unknown[] = resourcesByGroup,
+): IResourceClient {
+    return {
+        resourceGroups: { list: () => resourceGroups },
+        resources: {
+            listByResourceGroup: Array.isArray(resourcesByRg)
+                ? () => resourcesByRg
+                : (rgName: string) => resourcesByRg[rgName] ?? [],
+        },
+    } as unknown as IResourceClient;
 }
 
-function createMockAcrClientProvider(): IAcrClientProvider {
-    return (() => Promise.resolve({
+export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrClient {
+    return {
         registries: {
             get: (_rg: string, name: string) => Promise.resolve(
                 registryDetails[name] ?? { loginServer: '', sku: { name: 'Basic' }, adminUserEnabled: false },
             ),
         },
-    })) as unknown as IAcrClientProvider;
+        ...overrides,
+    } as unknown as IAcrClient;
 }
 
 // -- Public API ---------------------------------------------------------------
@@ -97,8 +114,12 @@ export function applyMockBindings(container: Container): void {
         createMockSubscriptionProvider(),
     );
 
-    container.rebind(IResourceClientProvider).toConstantValue(createMockResourceClientProvider());
-    container.rebind(IAcrClientProvider).toConstantValue(createMockAcrClientProvider());
+    container.rebind(IResourceClientProvider).toConstantValue(
+        (() => Promise.resolve(createMockResourceClient())) as unknown as IResourceClientProvider,
+    );
+    container.rebind(IAcrClientProvider).toConstantValue(
+        (() => Promise.resolve(createMockAcrClient())) as unknown as IAcrClientProvider,
+    );
 
     container.rebind(IDeploymentClientProvider).toConstantValue(
         (() => Promise.reject(new Error('Mock mode: deployments not available'))) as unknown as IDeploymentClientProvider,

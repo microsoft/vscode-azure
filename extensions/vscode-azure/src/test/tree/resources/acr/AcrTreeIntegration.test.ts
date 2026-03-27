@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { AzureNodeId, type ConcreteAzureNode, type IAcrClient, type IAcrClientProvider, type IResourceClient, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, type ConcreteAzureNode, type IAcrClientProvider, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor, DataItemTree, EventEmitter, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
+import { ActionExecutor, DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
+import { createMockAcrClient, createMockResourceClient, createMockSubscriptionProvider } from '../../../../debug/mockData';
 import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
 import { AcrViewProvider } from '../../../../tree/resources/acr/AcrViewProvider';
@@ -53,43 +53,6 @@ describe('ACR Tree Integration (integration)', () => {
 
     // -- Factories --------------------------------------------------------
 
-    function createMockSubscriptionProvider(): AzureSubscriptionProvider {
-        const emitter = new EventEmitter<unknown>();
-        return {
-            onRefreshSuggested: emitter.event,
-            signIn: () => Promise.resolve(true),
-            getAccounts: () => Promise.resolve([account]),
-            getAvailableSubscriptions: () => Promise.resolve([subscription]),
-            getUnauthenticatedTenantsForAccount: () => Promise.resolve([]),
-            getTenantsForAccount: () => Promise.resolve([tenant]),
-            getSubscriptionsForTenant: () => Promise.resolve([subscription]),
-        } as unknown as AzureSubscriptionProvider;
-    }
-
-    function createMockResourceClient(resources: ConcreteAzureNode[] = [acrRegistry, nonAcrResource]): IResourceClient {
-        return {
-            resourceGroups: {
-                list: () => [resourceGroup],
-            },
-            resources: {
-                listByResourceGroup: () => resources,
-            },
-        } as unknown as IResourceClient;
-    }
-
-    function createMockAcrClient(overrides?: Record<string, unknown>): IAcrClient {
-        return {
-            registries: {
-                get: () => Promise.resolve({
-                    loginServer: 'myreg.azurecr.io',
-                    sku: { name: 'Basic', tier: 'Basic' },
-                    adminUserEnabled: false,
-                }),
-            },
-            ...overrides,
-        } as unknown as IAcrClient;
-    }
-
     interface TestPipeline {
         readonly dataTree: DataItemTree<ConcreteAzureNode>;
         readonly viewTree: ViewItemTree<string, ConcreteAzureNode>;
@@ -99,7 +62,7 @@ describe('ACR Tree Integration (integration)', () => {
     /**
      * Wire up the full tree pipeline with real providers and mock clients.
      */
-    function createPipeline(options?: {
+    function createTestPipeline(options?: {
         resources?: ConcreteAzureNode[];
         acrClientOverrides?: Record<string, unknown>;
     }): TestPipeline {
@@ -115,8 +78,13 @@ describe('ACR Tree Integration (integration)', () => {
             5 * 60 * 1000,
         );
 
-        const subProvider = createMockSubscriptionProvider();
-        const resourceClient = createMockResourceClient(options?.resources);
+        const subProvider = createMockSubscriptionProvider({
+            accounts: [account],
+            tenants: [tenant],
+            subscriptions: [subscription],
+        });
+        const resources = options?.resources ?? [acrRegistry, nonAcrResource];
+        const resourceClient = createMockResourceClient([resourceGroup], resources);
         const acrClient = createMockAcrClient(options?.acrClientOverrides);
 
         const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
@@ -221,7 +189,7 @@ describe('ACR Tree Integration (integration)', () => {
 
     describe('full tree rendering', () => {
         it('should render the complete tree from subscription down to ACR leaf items', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
 
@@ -265,7 +233,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
 
         it('should render the correct number of nodes at each level', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
 
@@ -284,7 +252,7 @@ describe('ACR Tree Integration (integration)', () => {
 
     describe('ACR-specific rendering', () => {
         it('should render ACR registry with package icon and correct context values', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
             const registry = findByLabel(tree, 'myReg');
@@ -297,7 +265,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
 
         it('should render non-ACR resource with generic icon and openInPortal context', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
             const site = findByLabel(tree, 'mySite');
@@ -310,7 +278,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
 
         it('should render Repositories as collapsed folder with acrCategory context', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
             const repos = findByLabel(tree, 'Repositories');
@@ -322,7 +290,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
 
         it('should render leaf items as non-collapsible with acrItem context', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
             const repo1 = findByLabel(tree, 'repo-1');
@@ -338,7 +306,7 @@ describe('ACR Tree Integration (integration)', () => {
 
     describe('enrichment', () => {
         it('should show warning icon when admin user is enabled after enrichment', async () => {
-            const { viewTree, dataTree } = createPipeline({
+            const { viewTree, dataTree } = createTestPipeline({
                 acrClientOverrides: {
                     registries: {
                         get: () => Promise.resolve({
@@ -368,7 +336,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
 
         it('should show description with logicalType after enrichment', async () => {
-            const { viewTree, dataTree } = createPipeline();
+            const { viewTree, dataTree } = createTestPipeline();
 
             await collectTree(viewTree);
 
@@ -385,7 +353,7 @@ describe('ACR Tree Integration (integration)', () => {
 
     describe('mixed provider dispatch', () => {
         it('should use ACR provider for ACR resources and generic provider for others', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
 
@@ -405,7 +373,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
 
         it('should handle a resource group with only ACR registries', async () => {
-            const { viewTree } = createPipeline({
+            const { viewTree } = createTestPipeline({
                 resources: [acrRegistry],
             });
 
@@ -418,7 +386,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
 
         it('should handle a resource group with no ACR registries', async () => {
-            const { viewTree } = createPipeline({
+            const { viewTree } = createTestPipeline({
                 resources: [nonAcrResource],
             });
 
@@ -438,7 +406,7 @@ describe('ACR Tree Integration (integration)', () => {
                 subscription,
             });
 
-            const { viewTree } = createPipeline({
+            const { viewTree } = createTestPipeline({
                 resources: [acrRegistry, secondRegistry],
             });
 
@@ -461,7 +429,7 @@ describe('ACR Tree Integration (integration)', () => {
 
     describe('tree structure', () => {
         it('should support getParent navigation back to the root', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
 
@@ -478,7 +446,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
 
         it('should skip account and tenant levels when there is only one of each', async () => {
-            const { viewTree } = createPipeline();
+            const { viewTree } = createTestPipeline();
 
             const roots = await viewTree.getChildren();
 
