@@ -7,9 +7,6 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { Location } from '@microsoft/vscode-azure-azutils';
 import type { FunctionAppHostingPlan, FunctionAppRuntime } from '../../bicep/BicepGenerator';
 
-/** User's choice at the "offer save" prompt step. */
-export type SaveOrDeployChoice = 'save' | 'deploy' | 'saveAndDeploy';
-
 /** Accumulated wizard context for Function App creation. */
 export interface CreateFunctionAppContext {
     readonly subscription: AzureSubscription;
@@ -18,8 +15,8 @@ export interface CreateFunctionAppContext {
     readonly functionAppName: string;
     readonly runtime: FunctionAppRuntime;
     readonly hostingPlan: FunctionAppHostingPlan;
-    readonly saveOrDeploy: SaveOrDeployChoice;
-    readonly parametersContent: string;
-    readonly azureYamlContent: string;
-    readonly projectDir: string;
+    readonly deploy: boolean;
+    parametersContent: string;
+    azureYamlContent: string;
+    projectDir: string;
 }

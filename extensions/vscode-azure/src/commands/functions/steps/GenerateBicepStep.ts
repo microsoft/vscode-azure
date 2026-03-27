@@ -20,6 +20,6 @@ export class GenerateBicepStep extends ExecuteStep<CreateFunctionAppContext> {
             hostingPlan: context.hostingPlan,
         });
 
-        (context as { parametersContent: string }).parametersContent = parameters;
+        context.parametersContent = parameters;
     }
 }

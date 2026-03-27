@@ -19,6 +19,6 @@ export class GenerateAzureYamlStep extends ExecuteStep<CreateFunctionAppContext>
             '',
         ].join('\n');
 
-        (context as { azureYamlContent: string }).azureYamlContent = yaml;
+        context.azureYamlContent = yaml;
     }
 }

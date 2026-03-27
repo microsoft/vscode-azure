@@ -28,50 +28,38 @@ export class TempProjectManager implements Disposable {
     }
 
     /**
-     * Creates a project directory under `storageUri/iac/` structured
-     * as an azd project:
-     * - `infra/main.bicep` (copied from templates)
-     * - `infra/main.parameters.json` (generated)
-     * - `azure.yaml` (generated)
-     *
-     * The main Bicep template references the function-app module from
-     * ACR, so no local module copy is needed.
+     * Creates a new project directory under `storageUri/iac/`.
+     * The directory is tracked for cleanup on dispose.
      */
-    public async writeProject(
-        templateDir: string,
-        parametersContent: string,
-        azureYamlContent: string,
-    ): Promise<string> {
+    public async createProjectDir(): Promise<string> {
         await fs.mkdir(this.iacDir, { recursive: true });
         const dir = await fs.mkdtemp(path.join(this.iacDir, 'project-'));
         this.projectDirs.push(dir);
-
-        const infraDir = path.join(dir, 'infra');
-        await fs.mkdir(infraDir);
-
-        await Promise.all([
-            fs.copyFile(path.join(templateDir, 'functionApp.bicep'), path.join(infraDir, 'main.bicep')),
-            fs.writeFile(path.join(infraDir, 'main.parameters.json'), parametersContent, 'utf-8'),
-            fs.writeFile(path.join(dir, 'azure.yaml'), azureYamlContent, 'utf-8'),
-        ]);
-
         return dir;
     }
 
     /**
-     * Copies the generated project files into the given workspace folder.
+     * Writes the Bicep project files into the given directory:
+     * - `infra/main.bicep` (copied from templates)
+     * - `infra/main.parameters.json` (generated)
+     * - `azure.yaml` (generated)
+     *
+     * The target directory can be either a temp dir from
+     * {@linkcode createProjectDir} or a workspace folder.
      */
-    public async saveToWorkspace(
-        sourceDir: string,
-        targetFolder: string,
+    public async writeProjectFiles(
+        targetDir: string,
+        templateDir: string,
+        parametersContent: string,
+        azureYamlContent: string,
     ): Promise<void> {
-        const targetInfra = path.join(targetFolder, 'infra');
-        await fs.mkdir(targetInfra, { recursive: true });
+        const infraDir = path.join(targetDir, 'infra');
+        await fs.mkdir(infraDir, { recursive: true });
 
         await Promise.all([
-            fs.copyFile(path.join(sourceDir, 'infra', 'main.bicep'), path.join(targetInfra, 'main.bicep')),
-            fs.copyFile(path.join(sourceDir, 'infra', 'main.parameters.json'), path.join(targetInfra, 'main.parameters.json')),
-            fs.copyFile(path.join(sourceDir, 'azure.yaml'), path.join(targetFolder, 'azure.yaml')),
+            fs.copyFile(path.join(templateDir, 'functionApp.bicep'), path.join(infraDir, 'main.bicep')),
+            fs.writeFile(path.join(infraDir, 'main.parameters.json'), parametersContent, 'utf-8'),
+            fs.writeFile(path.join(targetDir, 'azure.yaml'), azureYamlContent, 'utf-8'),
         ]);
     }
 

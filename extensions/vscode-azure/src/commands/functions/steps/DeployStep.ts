@@ -18,7 +18,7 @@ export class DeployStep extends ExecuteStep<CreateFunctionAppContext> {
     }
 
     public shouldExecute(context: Readonly<CreateFunctionAppContext>): boolean {
-        return context.saveOrDeploy === 'deploy' || context.saveOrDeploy === 'saveAndDeploy';
+        return context.deploy;
     }
 
     public async execute(context: CreateFunctionAppContext): Promise<void> {

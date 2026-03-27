@@ -19,8 +19,7 @@ import { OfferSaveStep } from './steps/OfferSaveStep';
 import { PickHostingPlanStep } from './steps/PickHostingPlanStep';
 import { PickRuntimeStep } from './steps/PickRuntimeStep';
 import { PickSubscriptionStep } from './steps/PickSubscriptionStep';
-import { SaveToWorkspaceStep } from './steps/SaveToWorkspaceStep';
-import { WriteAndOpenFilesStep } from './steps/WriteAndOpenFilesStep';
+import { WriteFilesStep } from './steps/WriteFilesStep';
 
 /**
  * Command that walks the user through creating an Azure Function App
@@ -52,8 +51,7 @@ export class CreateFunctionApp implements ManagedCommand {
             [
                 new GenerateBicepStep(),
                 new GenerateAzureYamlStep(),
-                new WriteAndOpenFilesStep(this.ctx.extensionContext.extensionPath, this.tempManager),
-                new SaveToWorkspaceStep(this.ctx.code, this.tempManager),
+                new WriteFilesStep(this.ctx.extensionContext.extensionPath, this.tempManager),
                 new DeployStep(this.ctx.code),
             ],
         );

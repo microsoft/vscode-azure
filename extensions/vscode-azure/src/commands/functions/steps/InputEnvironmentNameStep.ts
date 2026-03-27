@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, type IVsCode, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
 
 /**
@@ -18,9 +18,11 @@ export class InputEnvironmentNameStep extends PromptStep<CreateFunctionAppContex
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {
+        const defaultName = getWorkspaceFolderName(this.ctx.code) ?? 'dev';
+
         const name = await showSmartInputBox(this.ctx, {
             prompt: this.ctx.code.l10n.t('Enter an environment name for azd'),
-            placeHolder: 'dev',
+            value: defaultName,
             showBack: true,
             validateInput: (value) => {
                 if (!value) {
@@ -35,4 +37,12 @@ export class InputEnvironmentNameStep extends PromptStep<CreateFunctionAppContex
 
         return { environmentName: name };
     }
+}
+
+function getWorkspaceFolderName(code: IVsCode): string | undefined {
+    const folders = code.workspace.workspaceFolders;
+    if (folders && folders.length > 0) {
+        return folders[0].name;
+    }
+    return undefined;
 }

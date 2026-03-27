@@ -16,9 +16,12 @@ export class InputFunctionAppNameStep extends PromptStep<CreateFunctionAppContex
         super();
     }
 
-    public async prompt(): Promise<Partial<CreateFunctionAppContext>> {
+    public async prompt(context: Readonly<CreateFunctionAppContext>): Promise<Partial<CreateFunctionAppContext>> {
+        const defaultName = context.environmentName ? `func-${context.environmentName}` : undefined;
+
         const name = await showSmartInputBox(this.ctx, {
             prompt: this.ctx.code.l10n.t('Enter a globally unique Function App name'),
+            value: defaultName,
             placeHolder: 'my-function-app',
             showBack: true,
             validateInput: (value) => {
