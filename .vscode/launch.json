@@ -23,6 +23,24 @@
             "preLaunchTask": "Extension: ESBuild+Watch",
         },
         {
+            "name": "Extension: Run (Mock Data)",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-azure",
+                "--disable-extension",
+                "ms-azuretools.vscode-azureresourcegroups",
+            ],
+            "env": {
+                "DEBUGTELEMETRY": "1",
+                "AZURE_MOCK_DATA": "1",
+            },
+            "outFiles": [
+                "${workspaceFolder}/extensions/vscode-azure/dist/**/*.{js,mjs,cjs}",
+            ],
+            "preLaunchTask": "Extension: ESBuild+Watch",
+        },
+        {
             "name": "Extension: Run Tests",
             "type": "extensionHost",
             "request": "launch",

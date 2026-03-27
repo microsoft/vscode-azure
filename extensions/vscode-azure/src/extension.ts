@@ -22,6 +22,7 @@ import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { registerCommands } from './commands/registerCommands';
+import { createMockAcrClientProvider, createMockResourceClientProvider, createMockSubscriptionProvider } from './debug/mockAzureData';
 import { IAcrClientProvider, IAzureSubscriptionProvider, IDeploymentClientProvider, IResourceClientProvider, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 
@@ -70,6 +71,16 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         );
     }).inSingletonScope().onActivation(pushDisposable);
 
+    if (process.env.AZURE_MOCK_DATA === '1') {
+        bindMockProviders(container);
+    } else {
+        bindRealProviders(container);
+    }
+
+    return container;
+}
+
+function bindRealProviders(container: Container): void {
     container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
         return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
     }).inSingletonScope().onActivation(pushDisposable);
@@ -91,6 +102,23 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         const executor = context.get(IActionExecutor);
         return (subscription) => AcrClient.create(ctx, executor, subscription);
     });
+}
 
-    return container;
+function bindMockProviders(container: Container): void {
+    container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
+        return createMockSubscriptionProvider(context.get(IVsCode));
+    }).inSingletonScope();
+
+    container.bind(IResourceClientProvider).toConstantValue(
+        createMockResourceClientProvider(),
+    );
+
+    container.bind(IDeploymentClientProvider).toFactory(() => {
+        // Deployments are not used in mock mode
+        return () => Promise.reject(new Error('Mock mode: deployments not available'));
+    });
+
+    container.bind(IAcrClientProvider).toConstantValue(
+        createMockAcrClientProvider(),
+    );
 }
