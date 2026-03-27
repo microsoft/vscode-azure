@@ -12,6 +12,14 @@ extensionConfig.alias = {
     ...extensionConfig.alias,
     '@microsoft/vscode-azure-utils': '../../packages/utils/src/index.ts',
     '@microsoft/vscode-azure-azutils': '../../packages/azutils/src/index.ts',
+    '@microsoft/vscode-azure-azutils/testing': '../../packages/azutils/src/testing.ts',
 };
+
+// Add a separate entry point for the debug mock data bundle so it does not
+// pollute the main extension bundle.
+extensionConfig.entryPoints.push({
+    in: './src/debug/mockData.ts',
+    out: 'debug.bundle',
+});
 
 await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });

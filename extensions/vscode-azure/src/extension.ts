@@ -26,8 +26,12 @@ import { registerCommands } from './commands/registerCommands';
 import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 
-export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
-    const container = setUpContainer(extensionContext);
+export async function activateInternal(
+    extensionContext: vscode.ExtensionContext,
+    perfStats: { loadStartTime: number, loadEndTime: number },
+    containerOverride?: Container,
+): Promise<void> {
+    const container = containerOverride ?? setUpContainer(extensionContext);
 
     return await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
@@ -42,7 +46,7 @@ export function deactivateInternal(): Promise<void> {
     return Promise.resolve();
 }
 
-function setUpContainer(extensionContext: IExtensionContext): Container {
+export function setUpContainer(extensionContext: IExtensionContext): Container {
     const container = new Container();
 
     // These three come in as constants (vscode by import, context from above)
