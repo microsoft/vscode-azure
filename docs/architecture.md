@@ -41,7 +41,7 @@ Azure-specific models and helpers that build on `utils`:
 - **REST client wrappers**: `ResourceClient`, `DeploymentClient`, `AcrClient` — typed wrappers around Azure SDK clients. See [Azure Clients](azure-clients.md).
 - **Client factories**: `createAzureClient`, `createAzureSubscriptionClient`, `createAzureRestClient`, `createAzureRestSubscriptionClient` — inject custom pipeline policies (deduplication, correlation ID, accept language, MFA challenge, BOM removal)
 - **Pagination**: `toPages` — converts Azure SDK `PagedAsyncIterableIterator` to `AsyncIterable<Page<T>>`
-- **Tree pick**: `resourceExperience`, `resourceGroupExperience`, `subscriptionExperience` for resource selection UI
+- **Tree pick**: `ChooseSubscriptionStep`, `ChooseResourceGroupStep`, `ChooseResourceStep` — reusable wizard prompt steps for resource selection. Convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, `resourceExperience` run a single-step wizard and return the picked object directly.
 
 ### `extensions/vscode-azure` — The Extension
 

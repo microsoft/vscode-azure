@@ -107,6 +107,22 @@ interface IAcrClient {
 
 Unlike the other clients, ACR uses `createAzureRestSubscriptionClient` because the `@azure/arm-containerregistry` SDK follows the newer REST-style pattern with `createContainerRegistryManagement` and free function operations.
 
+### `SubscriptionClient`
+
+Wraps `@azure/arm-resources-subscriptions` (`SubscriptionClient`). Provides:
+
+```typescript
+interface ISubscriptionClient {
+    readonly subscriptions: {
+        listLocations(subscriptionId, options?): Promise<Location[]>;
+    };
+}
+```
+
+Key behaviors:
+- **Static location cache**: Location lists are cached by subscription ID in a static `Map` across all instances, since locations rarely change.
+- Used by `ChooseLocationStep` to populate the location picker.
+
 ## `toPages`
 
 Converts Azure SDK's `PagedAsyncIterableIterator` to the project-standard `AsyncIterable<Page<T>>`:
