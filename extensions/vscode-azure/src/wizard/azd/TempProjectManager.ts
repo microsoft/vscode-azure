@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Disposable, IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { type Disposable, IExtensionContext } from '@microsoft/vscode-azure-utils';
 import * as fs from 'fs/promises';
 import { inject, injectable } from 'inversify';
 import * as path from 'path';
@@ -20,7 +20,6 @@ export class TempProjectManager implements Disposable {
     private readonly iacBaseDir: string;
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IExtensionContext) extensionContext: IExtensionContext,
     ) {
         const storageUri = extensionContext.storageUri ?? extensionContext.globalStorageUri;
@@ -32,7 +31,7 @@ export class TempProjectManager implements Disposable {
      * The directory is tracked for cleanup on dispose.
      */
     public async createProjectDir(): Promise<string> {
-        await fs.mkdir(this.iacBaseDir, { recursive: true, mode: 0o700 });
+        await fs.mkdir(this.iacBaseDir, { recursive: true, mode: 0o700 }); // TODO: should we be setting mode at all? Here and elsewhere
         const dir = await fs.mkdtemp(path.join(this.iacBaseDir, 'project-')); // TODO wrong
         this.projectDirs.push(dir);
         return dir;
