@@ -49,18 +49,18 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
         const merged = { ...context, ...pickResult };
 
         if (merged.selectedTerminalPicks?.length) {
-            const logicalType = this.options.logicalType.toLowerCase();
+            // All multi-picked items were already classified as terminal,
+            // so just resolve each key to its data-layer node.
             const resources = merged.selectedTerminalPicks
                 .map(key => this.options.dataItemTree.get(key))
-                .filter((node): node is TResource =>
-                    !!node && isGenericResource(node) && node.logicalType.toLowerCase() === logicalType);
+                .filter((node): node is TResource => !!node);
             return { ...pickResult, resources } as Partial<TContext>;
         }
 
         const lastPick = getLastPick(merged);
-        if (lastPick && AzureNodeId.parse(lastPick.item).isGenericResourceNodeId()) {
+        if (lastPick && this.options.classify(lastPick.item, lastPick.treeItem) === 'terminal') {
             const node = this.options.dataItemTree.get(lastPick.item);
-            if (node && isGenericResource(node) && node.logicalType.toLowerCase() === this.options.logicalType.toLowerCase()) {
+            if (node) {
                 return { ...pickResult, resource: node as TResource } as Partial<TContext>;
             }
         }
