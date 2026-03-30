@@ -142,8 +142,8 @@ resource storageRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
   }
 }
 
-// Log Analytics Workspace (skipped for Flex Consumption)
-module logAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.11.0' = if (!isFlex) {
+// Log Analytics Workspace
+module logAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.11.0' = {
   name: 'logAnalytics-${uniqueString(resourceGroup().id, functionAppName)}'
   params: {
     name: 'log-${functionAppName}'
