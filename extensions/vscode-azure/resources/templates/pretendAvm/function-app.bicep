@@ -59,6 +59,9 @@ var functionAppKind = isLinux ? 'functionapp,linux' : 'functionapp'
 
 var planSkuName = isFlex ? 'FC1' : isPremium ? premiumSkuName : appServicePlanSkuName
 
+// Flex Consumption expects just the version number (e.g. '20'), not the linuxFxVersion format ('Node|20')
+var flexRuntimeVersion = contains(runtimeVersion, '|') ? split(runtimeVersion, '|')[1] : runtimeVersion
+
 // Storage connection helpers
 
 var storageEndpointSuffix = environment().suffixes.storage
@@ -106,7 +109,7 @@ var customAppSettings = union(
 
 var siteConfig = union(
   { alwaysOn: isAppServicePlan, use32BitWorkerProcess: false },
-  isLinux ? { linuxFxVersion: runtimeVersion } : {}
+  (isLinux && !isFlex) ? { linuxFxVersion: runtimeVersion } : {}
 )
 
 // ===========================================================================
@@ -214,7 +217,7 @@ module functionApp 'br/public:avm/res/web/site:0.15.0' = {
               }
             }
           }
-          runtime: { name: runtimeStack, version: runtimeVersion }
+          runtime: { name: runtimeStack, version: flexRuntimeVersion }
           scaleAndConcurrency: {
             maximumInstanceCount: flexMaximumInstanceCount
             instanceMemoryMB: flexInstanceMemoryMB

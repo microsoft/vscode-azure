@@ -34,7 +34,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   tags: tags
 }
 
-module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.2' = {
+module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.4' = {
   scope: rg
   name: 'functionApp'
   params: {
