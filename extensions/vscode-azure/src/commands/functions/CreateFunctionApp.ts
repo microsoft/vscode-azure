@@ -9,6 +9,7 @@ import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
 import { AppNameStep } from '../../wizard/azd/AppNameStep';
 import { AzdProvisionStep } from '../../wizard/azd/AzdProvisionStep';
+import { CreateAzdEnvStep } from '../../wizard/azd/CreateAzdEnvStep';
 import { EnvironmentNameStep } from '../../wizard/azd/EnvironmentNameStep';
 import { GenerateAzureYamlStep } from '../../wizard/azd/GenerateAzureYamlStep';
 import { GenerateBicepStep } from '../../wizard/azd/GenerateBicepStep';
@@ -51,6 +52,7 @@ export class CreateFunctionApp implements ManagedCommand {
             [
                 new GenerateBicepStep(this.ctx.extensionContext, 'functionApp.bicep', ['functionAppName', 'runtime', 'hostingPlan']),
                 new GenerateAzureYamlStep(),
+                new CreateAzdEnvStep(),
                 new AzdProvisionStep(this.ctx.code),
             ],
         );
