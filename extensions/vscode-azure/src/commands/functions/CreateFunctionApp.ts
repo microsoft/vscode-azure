@@ -39,7 +39,7 @@ export class CreateFunctionApp implements ManagedCommand {
         const wizard = new Wizard<CreateFunctionAppContext>(
             { picks: [] },
             [
-                new HydrateAzdInfoStep(),
+                new HydrateAzdInfoStep(this.ctx.code),
                 new ChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
                 new ChooseLocationStep(this.ctx, this.subscriptionClientProvider),
                 new EnvironmentNameStep(this.ctx),

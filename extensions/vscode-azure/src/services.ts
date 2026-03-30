@@ -9,13 +9,14 @@ import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } f
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { Activity } from './tree/activity/Activity';
+import type { TempProjectManager } from './wizard/azd/TempProjectManager';
 
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
 
 /** Identifier for the {@linkcode TempProjectManager} service */
 export const ITempProjectManager: ServiceIdentifier<ITempProjectManager> = Symbol.for('ITempProjectManager');
-export type ITempProjectManager = import('./bicep/TempProjectManager').TempProjectManager;
+export type ITempProjectManager = TempProjectManager;
 
 // #region Azure resource tree and view identifiers
 
