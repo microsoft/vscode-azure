@@ -12,21 +12,26 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * Generates infra files: copies `main.bicep` from the extension's
  * bundled templates and writes a `main.parameters.json` with the
  * user's chosen values.
+ *
+ * @param parameterKeys - Keys of the wizard context to emit as bicep
+ *   parameters (in addition to the always-included `environmentName`
+ *   and `location` azd placeholders).
  */
-export class GenerateBicepStep<T> extends ExecuteStep<AzdWizardContext<T>> {
+export class GenerateBicepStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
         private readonly extensionContext: IExtensionContext,
         private readonly templateName: 'functionApp.bicep', // | 'staticWebApp.bicep' | ...
+        private readonly parameterKeys: readonly (keyof TContext & string)[],
     ) {
         super();
     }
 
-    public async shouldExecute(context: Readonly<AzdWizardContext<T>>): Promise<boolean> {
+    public async shouldExecute(context: Readonly<TContext>): Promise<boolean> {
         // Look for existing infra and do not overwrite or if `iacFolder` is unset
         return !!context.iacFolder && Promise.resolve(true); // TODO
     }
 
-    public async execute(context: AzdWizardContext<T>): Promise<void> {
+    public async execute(context: TContext): Promise<void> {
         const templatePath = this.extensionContext.asAbsolutePath(path.join('resources', 'templates', this.templateName));
         const bicepFolder = path.join(context.iacFolder!, 'infra'); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
@@ -36,7 +41,7 @@ export class GenerateBicepStep<T> extends ExecuteStep<AzdWizardContext<T>> {
             parameters: {
                 environmentName: { value: '${AZURE_ENV_NAME}' }, // eslint-disable-line no-template-curly-in-string -- azd placeholder
                 location: { value: '${AZURE_LOCATION}' }, // eslint-disable-line no-template-curly-in-string -- azd placeholder
-                ...Object.entries(context.bicepOptions ?? {}).reduce((acc, [key, val]) => ({ ...acc, [key]: { value: val } }), {}),
+                ...this.pickParameters(context),
             },
         }, undefined, 4);
 
@@ -51,5 +56,16 @@ export class GenerateBicepStep<T> extends ExecuteStep<AzdWizardContext<T>> {
                 path.join(bicepFolder, 'main.bicep'),
             ),
         ]);
+    }
+
+    private pickParameters(context: TContext): Record<string, { value: unknown }> {
+        const result: Record<string, { value: unknown }> = {};
+        for (const key of this.parameterKeys) {
+            const value = context[key];
+            if (value !== undefined) {
+                result[key] = { value };
+            }
+        }
+        return result;
     }
 }

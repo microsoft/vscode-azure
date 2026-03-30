@@ -6,13 +6,12 @@
 import { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { Location } from '@microsoft/vscode-azure-azutils';
 
-export interface AzdWizardContext<T = unknown> {
+export interface AzdWizardContext {
     readonly subscription?: AzureSubscription;
     readonly location?: Location;
     readonly environmentName?: string;
 
     readonly appName?: string;
-    readonly bicepOptions?: T;
 
     readonly iacFolder?: string; // TODO: vscode.Uri?
     readonly provision?: boolean;
