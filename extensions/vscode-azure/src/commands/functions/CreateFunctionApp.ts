@@ -6,7 +6,7 @@
 import { ChooseLocationStep, ChooseSubscriptionStep, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
+import { IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
 import { AppNameStep } from '../../wizard/azd/AppNameStep';
 import { AzdProvisionStep } from '../../wizard/azd/AzdProvisionStep';
 import { EnvironmentNameStep } from '../../wizard/azd/EnvironmentNameStep';
@@ -32,7 +32,7 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
-        @inject(TempProjectManager) private readonly tempManager: TempProjectManager,
+        @inject(ITempProjectManager) private readonly tempManager: TempProjectManager,
     ) { }
 
     public async execute(): Promise<void> {

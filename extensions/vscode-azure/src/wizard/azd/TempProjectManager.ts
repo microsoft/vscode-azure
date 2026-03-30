@@ -31,7 +31,7 @@ export class TempProjectManager implements Disposable {
      * The directory is tracked for cleanup on dispose.
      */
     public async createProjectDir(): Promise<string> {
-        await fs.mkdir(this.iacBaseDir, { recursive: true, mode: 0o700 }); // TODO: should we be setting mode at all? Here and elsewhere
+        await fs.mkdir(this.iacBaseDir, { recursive: true });
         const dir = await fs.mkdtemp(path.join(this.iacBaseDir, 'project-')); // TODO wrong
         this.projectDirs.push(dir);
         return dir;

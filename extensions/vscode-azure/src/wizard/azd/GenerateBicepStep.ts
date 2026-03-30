@@ -40,17 +40,15 @@ export class GenerateBicepStep<T> extends ExecuteStep<AzdWizardContext<T>> {
             },
         }, undefined, 4);
 
-        await fs.mkdir(bicepFolder, { recursive: true, mode: 0o700 });
+        await fs.mkdir(bicepFolder, { recursive: true });
         await Promise.all([
             fs.writeFile(
                 path.join(bicepFolder, 'main.parameters.json'),
                 parameters,
-                { mode: 0o600 }
             ),
             fs.copyFile(
                 templatePath,
                 path.join(bicepFolder, 'main.bicep'),
-                0o600
             ),
         ]);
     }

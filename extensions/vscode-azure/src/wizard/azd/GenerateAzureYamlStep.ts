@@ -14,7 +14,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
 export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
     public async shouldExecute(context: Readonly<AzdWizardContext>): Promise<boolean> {
         // Do not execute if an existing azure.yaml file is found or if `iacFolder` is unset
-        return !!context.iacFolder && Promise.resolve(false); // TODO
+        return !!context.iacFolder && Promise.resolve(true); // TODO
     }
 
     public async execute(context: AzdWizardContext): Promise<void> {
@@ -29,7 +29,6 @@ export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
         await fs.writeFile(
             path.join(context.iacFolder!, 'azure.yaml'), // eslint-disable-line @typescript-eslint/no-non-null-assertion
             yaml,
-            { mode: 0o600 }
         );
     }
 }
