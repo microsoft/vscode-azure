@@ -577,4 +577,116 @@ describe('DataItemTree (unit)', () => {
             expect(tree.get('orphan')).to.be.undefined;
         });
     });
+
+    describe('node state tracking', () => {
+        it('should mark and check transient state', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            await tree.getChildren();
+
+            const resource = { id: 'a' };
+            expect(tree.hasState(resource, 'deleting')).to.be.false;
+
+            tree.markState(resource, 'deleting');
+            expect(tree.hasState(resource, 'deleting')).to.be.true;
+        });
+
+        it('should clear transient state', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            await tree.getChildren();
+
+            const resource = { id: 'a' };
+            tree.markState(resource, 'deleting');
+            tree.clearState(resource, 'deleting');
+            expect(tree.hasState(resource, 'deleting')).to.be.false;
+        });
+
+        it('should support multiple states on the same resource', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            await tree.getChildren();
+
+            const resource = { id: 'a' };
+            tree.markState(resource, 'deleting');
+            tree.markState(resource, 'updating');
+            expect(tree.hasState(resource, 'deleting')).to.be.true;
+            expect(tree.hasState(resource, 'updating')).to.be.true;
+
+            tree.clearState(resource, 'deleting');
+            expect(tree.hasState(resource, 'deleting')).to.be.false;
+            expect(tree.hasState(resource, 'updating')).to.be.true;
+        });
+
+        it('should fire onDidChange only on state transition', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            await tree.getChildren();
+
+            const resource = { id: 'a' };
+            const events: unknown[] = [];
+            tree.onDidChange(e => events.push(e));
+
+            tree.markState(resource, 'deleting');
+            expect(events).to.have.length(1);
+
+            // Marking the same state again should not fire
+            tree.markState(resource, 'deleting');
+            expect(events).to.have.length(1);
+
+            // Marking a different state should fire
+            tree.markState(resource, 'updating');
+            expect(events).to.have.length(2);
+        });
+
+        it('should clear states when removeItem is called', async () => {
+            const tree = createTree();
+            const childMap = new Map([['parent', [{ id: 'child' }]]]);
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+            tree.registerProvider(createBranchProvider(childMap));
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+
+            tree.markState({ id: 'parent' }, 'deleting');
+            tree.markState({ id: 'child' }, 'updating');
+
+            tree.removeItem({ id: 'parent' });
+
+            expect(tree.hasState({ id: 'parent' }, 'deleting')).to.be.false;
+            expect(tree.hasState({ id: 'child' }, 'updating')).to.be.false;
+        });
+
+        it('should clear descendant states on invalidate with includeChildren', async () => {
+            const tree = createTree();
+            const childMap = new Map([['parent', [{ id: 'child' }]]]);
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+            tree.registerProvider(createBranchProvider(childMap));
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+
+            tree.markState({ id: 'parent' }, 'updating');
+            tree.markState({ id: 'child' }, 'deleting');
+
+            tree.invalidate({ id: 'parent' }, true);
+
+            // Parent state should remain (invalidate only clears children)
+            expect(tree.hasState({ id: 'parent' }, 'updating')).to.be.true;
+            // Child state should be cleared
+            expect(tree.hasState({ id: 'child' }, 'deleting')).to.be.false;
+        });
+
+        it('should clear all states on invalidateAll', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }, { id: 'b' }]));
+            await tree.getChildren();
+
+            tree.markState({ id: 'a' }, 'deleting');
+            tree.markState({ id: 'b' }, 'updating');
+
+            tree.invalidateAll();
+
+            expect(tree.hasState({ id: 'a' }, 'deleting')).to.be.false;
+            expect(tree.hasState({ id: 'b' }, 'updating')).to.be.false;
+        });
+    });
 });

@@ -199,6 +199,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         }
 
         // Remove previously cached descendants that may no longer be present
+        this.clearSubtreeStates(node.children);
         this.nodes.removeSubtrees(node.children);
         node.children = [];
         node.pageIterator = undefined;
@@ -427,6 +428,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     public invalidate(resource: T, includeChildren = true): void {
         const node = this.nodes.get(this.getKey(resource));
         if (node && includeChildren) {
+            this.clearSubtreeStates(node.children);
             this.nodes.removeSubtrees(node.children);
             node.children = undefined;
             node.staleAt = 0;
@@ -452,9 +454,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         }
 
         // Remove the node and its entire subtree from the map
+        this.clearSubtreeStates([node]);
         this.nodes.removeSubtrees([node]);
         this.enrichmentPromises.delete(key);
-        this.nodeStates.delete(key);
 
         const parent = node.parent;
         if (parent) {
@@ -494,6 +496,19 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     // #region Transient node state
 
     /**
+     * Recursively clear all transient states for nodes and their descendants.
+     */
+    private clearSubtreeStates(nodes: TreeNode<T>[] | undefined): void {
+        if (!nodes) {
+            return;
+        }
+        for (const node of nodes) {
+            this.clearSubtreeStates(node.children);
+            this.nodeStates.delete(this.getKey(node.resource));
+        }
+    }
+
+    /**
      * Mark a resource with a transient state label (e.g. `'deleting'`,
      * `'updating'`). Fires {@link onDidChange} so that view providers
      * can re-render the node with visual feedback (spinner, dimmed label,
@@ -512,8 +527,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
             states = new Set();
             this.nodeStates.set(key, states);
         }
-        states.add(state);
-        this.changeEmitter.fire(resource);
+        if (!states.has(state)) {
+            states.add(state);
+            this.changeEmitter.fire(resource);
+        }
     }
 
     /**
