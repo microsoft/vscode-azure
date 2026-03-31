@@ -61,6 +61,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      */
     private readonly loadsInFlight = new InflightMap<void>();
 
+    /**
+     * Transient per-node state labels (e.g. `'deleting'`, `'updating'`).
+     * Keyed by resource key; each key maps to the set of active states.
+     * View providers can read these to render visual feedback for
+     * in-progress operations without coupling to specific data providers.
+     */
+    private readonly nodeStates = new Map<string, Set<string>>();
+
     /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
     private rootsStaleAt = 0;
@@ -446,6 +454,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         // Remove the node and its entire subtree from the map
         this.nodes.removeSubtrees([node]);
         this.enrichmentPromises.delete(key);
+        this.nodeStates.delete(key);
 
         const parent = node.parent;
         if (parent) {
@@ -476,8 +485,60 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     public invalidateAll(): void {
         this.nodes.clear();
         this.enrichmentPromises.clear();
+        this.nodeStates.clear();
         this.roots = undefined;
         this.rootsStaleAt = 0;
         this.changeEmitter.fire(undefined);
     }
+
+    // #region Transient node state
+
+    /**
+     * Mark a resource with a transient state label (e.g. `'deleting'`,
+     * `'updating'`). Fires {@link onDidChange} so that view providers
+     * can re-render the node with visual feedback (spinner, dimmed label,
+     * disabled commands, etc.).
+     *
+     * The state is purely advisory -- it does not affect caching or
+     * data fetching. Call {@link clearState} when the operation completes.
+     *
+     * @param resource - The resource to mark.
+     * @param state - An arbitrary label identifying the operation.
+     */
+    public markState(resource: T, state: string): void {
+        const key = this.getKey(resource);
+        let states = this.nodeStates.get(key);
+        if (!states) {
+            states = new Set();
+            this.nodeStates.set(key, states);
+        }
+        states.add(state);
+        this.changeEmitter.fire(resource);
+    }
+
+    /**
+     * Remove a transient state label from a resource. Does **not** fire
+     * {@link onDidChange} on its own -- callers are expected to follow
+     * up with {@link invalidate} or {@link removeItem} which will
+     * trigger re-rendering.
+     */
+    public clearState(resource: T, state: string): void {
+        const key = this.getKey(resource);
+        const states = this.nodeStates.get(key);
+        if (states) {
+            states.delete(state);
+            if (states.size === 0) {
+                this.nodeStates.delete(key);
+            }
+        }
+    }
+
+    /**
+     * Check whether a resource currently has a specific transient state.
+     */
+    public hasState(resource: T, state: string): boolean {
+        return this.nodeStates.get(this.getKey(resource))?.has(state) ?? false;
+    }
+
+    // #endregion
 }
