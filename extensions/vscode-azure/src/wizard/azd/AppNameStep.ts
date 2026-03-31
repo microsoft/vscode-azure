@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ICodeContext, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
-import { AzdWizardContext } from './AzdWizardContext';
+import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
  * Prompts the user for an app name.

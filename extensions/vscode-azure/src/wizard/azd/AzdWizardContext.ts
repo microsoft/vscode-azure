@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { Location } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import type { Location } from '@microsoft/vscode-azure-azutils';
 
 export interface AzdWizardContext {
     readonly subscription?: AzureSubscription;
