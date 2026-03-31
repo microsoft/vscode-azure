@@ -66,6 +66,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * Keyed by resource key; each key maps to the set of active states.
      * View providers can read these to render visual feedback for
      * in-progress operations without coupling to specific data providers.
+     *
+     * State is scoped to cached tree nodes: when a node (or an entire
+     * subtree) is evicted from the cache, its entry and all descendant
+     * entries are removed from this map. This includes subtree
+     * invalidation and branch refresh operations (e.g.
+     * `invalidate(..., includeChildren: true)` or `getChildren`
+     * refreshes). Callers should not assume state persists across such
+     * refreshes and must reapply any required state after nodes are
+     * reloaded.
      */
     private readonly nodeStates = new Map<string, Set<string>>();
 
@@ -522,6 +531,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      */
     public markState(resource: T, state: string): void {
         const key = this.getKey(resource);
+        if (!this.nodes.get(key)) {
+            return;
+        }
         let states = this.nodeStates.get(key);
         if (!states) {
             states = new Set();

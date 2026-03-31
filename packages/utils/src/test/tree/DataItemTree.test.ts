@@ -639,6 +639,20 @@ describe('DataItemTree (unit)', () => {
             expect(events).to.have.length(2);
         });
 
+        it('should ignore markState for resources not in the tree', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            await tree.getChildren();
+
+            const events: unknown[] = [];
+            tree.onDidChange(e => events.push(e));
+
+            // Resource 'unknown' is not in the tree
+            tree.markState({ id: 'unknown' }, 'deleting');
+            expect(tree.hasState({ id: 'unknown' }, 'deleting')).to.be.false;
+            expect(events).to.have.length(0);
+        });
+
         it('should clear states when removeItem is called', async () => {
             const tree = createTree();
             const childMap = new Map([['parent', [{ id: 'child' }]]]);
