@@ -14,8 +14,8 @@ const execFileAsync = promisify(execFile);
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public async execute(context: TContext): Promise<void> {
         const args = [
-            'env', 'new', context.environmentName!,  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            '--location', context.location!.name!,    // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            'env', 'new', context.environmentName!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            '--location', context.location!.name!,  // eslint-disable-line @typescript-eslint/no-non-null-assertion
             '--subscription', context.subscription!.subscriptionId, // eslint-disable-line @typescript-eslint/no-non-null-assertion
         ];
 
