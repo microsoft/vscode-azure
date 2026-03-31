@@ -10,6 +10,9 @@
 ## Issues
 - Figure out why the token expired and wasn't refreshing
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
+- Recently used label isn't appearing
+- Recent input isn't showing back up in input box
+- Sort the recently used item to the top
 
 ## Code hygiene
 - Reexport and use Azure client types from azutils, and eliminate dev deps on Azure packages in extension
