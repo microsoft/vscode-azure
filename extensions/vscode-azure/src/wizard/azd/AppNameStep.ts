@@ -27,7 +27,7 @@ export class AppNameStep<TContext extends AzdWizardContext> extends PromptStep<T
         const appName = await showSmartInputBox(this.ctx, {
             prompt: this.ctx.code.l10n.t('Enter an app name'),
             value: defaultName,
-            placeHolder: 'my-app',
+            placeHolder: this.ctx.code.l10n.t('my-app'),
             showBack: true,
             validateInput: (value) => {
                 if (!value) {
