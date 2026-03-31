@@ -8,7 +8,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
  * Deploys the generated project by invoking the Azure Developer CLI
- * extension's `azure-dev.provision` command on the project directory.
+ * extension's `azure-dev.commands.cli.provision` command on the project directory.
  */
 export class AzdProvisionStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(

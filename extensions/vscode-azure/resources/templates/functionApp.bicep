@@ -31,6 +31,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   tags: tags
 }
 
+// TODO: publish and reference an AVM pattern module
 module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.6' = {
   scope: rg
   name: 'functionApp'

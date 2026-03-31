@@ -50,7 +50,7 @@ export class OfferSaveStep<TContext extends AzdWizardContext> extends PromptStep
             if (folders?.length === 1) {
                 iacFolder = folders[0].uri.fsPath;
             } else {
-                throw new Error('unimpl');
+                throw new Error('unimpl'); // TODO
             }
         } else {
             iacFolder = await this.tempProjectManager.createProjectDir();
