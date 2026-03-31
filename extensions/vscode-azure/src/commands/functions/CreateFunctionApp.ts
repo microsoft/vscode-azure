@@ -15,7 +15,6 @@ import { GenerateAzureYamlStep } from '../../wizard/azd/GenerateAzureYamlStep';
 import { GenerateBicepStep } from '../../wizard/azd/GenerateBicepStep';
 import { HydrateAzdInfoStep } from '../../wizard/azd/HydrateAzdInfoStep';
 import { OfferSaveStep } from '../../wizard/azd/OfferSaveStep';
-import { TempProjectManager } from '../../wizard/azd/TempProjectManager';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
 import { PickHostingPlanStep } from './steps/PickHostingPlanStep';
@@ -33,7 +32,7 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
-        @inject(ITempProjectManager) private readonly tempManager: TempProjectManager,
+        @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
     ) { }
 
     public async execute(): Promise<void> {

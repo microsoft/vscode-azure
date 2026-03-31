@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, PromptStep, QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type { CreateFunctionAppContext, FunctionAppHostingPlan } from '../CreateFunctionAppContext';
 
 /**
