@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { StringDictionary, WebSiteManagementClientOptionalParams } from '@azure/arm-appservice';
+import type { WebSiteManagementClient } from '@azure/arm-appservice';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
@@ -34,7 +35,7 @@ export class WebAppClient implements IWebAppClient {
     private static sdk: typeof import('@azure/arm-appservice') | undefined;
 
     private constructor(
-        private readonly inner: import('@azure/arm-appservice').WebSiteManagementClient,
+        private readonly inner: WebSiteManagementClient,
     ) { }
 
     /**

@@ -8,6 +8,7 @@ import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { FunctionAppDataProvider } from '../../tree/resources/functionApp/FunctionAppDataProvider';
+import { appSettingsParentKey } from '../../tree/resources/functionApp/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -49,9 +50,7 @@ export class EditAppSetting implements ManagedCommand {
         await this.dataProvider.addOrUpdateSetting(resource.azureResource, settingKey, newValue);
 
         // Invalidate the parent "App Settings" node to refresh the tree
-        const parentResource = this.cache.get(
-            this.findAppSettingsParentKey(key)
-        );
+        const parentResource = this.cache.get(appSettingsParentKey(resource));
         if (parentResource) {
             this.cache.invalidate(parentResource);
         }
@@ -59,24 +58,5 @@ export class EditAppSetting implements ManagedCommand {
         void this.code.window.showInformationMessage(
             this.code.l10n.t('Updated app setting \'{0}\'.', settingKey)
         );
-    }
-
-    /**
-     * Find the parent "App Settings" category key from an individual setting key.
-     * The data tree tracks parent relationships, but we can construct the parent
-     * key by stripping the virtual fragment from the setting's AzureNodeId.
-     */
-    private findAppSettingsParentKey(settingKey: string): string {
-        // Individual settings are: azr://...#/functionApp.appSetting/KEY
-        // Their parent category is: azr://...#/functionApp.appSettings/App%20Settings
-        // Use AzureNodeId.parentNodeId which strips the virtual fragment back to the resource
-        // then look up the App Settings category in the cache
-        // Simpler: just strip the last fragment and rebuild
-        const hashIndex = settingKey.indexOf('#');
-        if (hashIndex === -1) {
-            return settingKey;
-        }
-        const base = settingKey.substring(0, hashIndex);
-        return `${base}#/functionApp.appSettings/${encodeURIComponent('App Settings')}`;
     }
 }

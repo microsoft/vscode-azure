@@ -8,6 +8,7 @@ import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { FunctionAppDataProvider } from '../../tree/resources/functionApp/FunctionAppDataProvider';
+import { appSettingsParentKey } from '../../tree/resources/functionApp/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -53,27 +54,17 @@ export class DeleteAppSetting implements ManagedCommand {
             await this.dataProvider.deleteSetting(resource.azureResource, settingKey);
         } finally {
             this.cache.clearState(resource, 'deleting');
-        }
 
-        // Invalidate the parent "App Settings" node to refresh the tree
-        const parentResource = this.cache.get(
-            this.findAppSettingsParentKey(key)
-        );
-        if (parentResource) {
-            this.cache.invalidate(parentResource);
+            // Always invalidate the parent to refresh the tree, even on
+            // error, so the deleting spinner is cleared in the UI
+            const parentResource = this.cache.get(appSettingsParentKey(resource));
+            if (parentResource) {
+                this.cache.invalidate(parentResource);
+            }
         }
 
         void this.code.window.showInformationMessage(
             this.code.l10n.t('Deleted app setting \'{0}\'.', settingKey)
         );
-    }
-
-    private findAppSettingsParentKey(settingKey: string): string {
-        const hashIndex = settingKey.indexOf('#');
-        if (hashIndex === -1) {
-            return settingKey;
-        }
-        const base = settingKey.substring(0, hashIndex);
-        return `${base}#/functionApp.appSettings/${encodeURIComponent('App Settings')}`;
     }
 }
