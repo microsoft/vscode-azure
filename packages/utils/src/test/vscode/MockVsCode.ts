@@ -108,6 +108,14 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(),
     );
 
+    const showOpenDialog = mock.fn(
+        () => Promise.resolve(undefined),
+    );
+
+    const showWorkspaceFolderPick = mock.fn(
+        () => Promise.resolve(undefined),
+    );
+
     // ── l10n ────────────────────────────────────────────────
 
     const t = mock.fn(
@@ -200,6 +208,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
             showInformationMessage,
             showWarningMessage,
             showErrorMessage,
+            showOpenDialog,
+            showWorkspaceFolderPick,
         },
         workspace: {
             getConfiguration,

@@ -8,6 +8,10 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { AzdWizardContext } from './AzdWizardContext';
 
+const InfraFolderName = 'infra';
+const MainBicepFileName = 'main.bicep';
+const MainParametersFileName = 'main.parameters.json';
+
 /**
  * Generates infra files: copies `main.bicep` from the extension's
  * bundled templates and writes a `main.parameters.json` with the
@@ -27,13 +31,28 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
     }
 
     public async shouldExecute(context: Readonly<TContext>): Promise<boolean> {
-        // Look for existing infra and do not overwrite or if `iacFolder` is unset
-        return !!context.iacFolder && Promise.resolve(true); // TODO
+        if (!context.iacFolder) {
+            return false;
+        }
+
+        const infraFolder = path.join(context.iacFolder, InfraFolderName);
+
+        for (const fileName of [MainBicepFileName, MainParametersFileName]) {
+            try {
+                await fs.access(path.join(infraFolder, fileName));
+                // File already exists; skip generation
+                return false;
+            } catch {
+                // File does not exist; continue checking
+            }
+        }
+
+        return true;
     }
 
     public async execute(context: TContext): Promise<void> {
         const templatePath = this.extensionContext.asAbsolutePath(path.join('resources', 'templates', this.templateName));
-        const bicepFolder = path.join(context.iacFolder!, 'infra'); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        const bicepFolder = path.join(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
         const parameters = JSON.stringify({
             $schema: 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#',
@@ -48,12 +67,12 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         await fs.mkdir(bicepFolder, { recursive: true });
         await Promise.all([
             fs.writeFile(
-                path.join(bicepFolder, 'main.parameters.json'),
+                path.join(bicepFolder, MainParametersFileName),
                 parameters,
             ),
             fs.copyFile(
                 templatePath,
-                path.join(bicepFolder, 'main.bicep'),
+                path.join(bicepFolder, MainBicepFileName),
             ),
         ]);
     }

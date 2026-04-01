@@ -8,13 +8,27 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { AzdWizardContext } from './AzdWizardContext';
 
+const AzureYamlFileName = 'azure.yaml';
+
 /**
  * Generates the `azure.yaml` stub for the project.
  */
 export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
     public async shouldExecute(context: Readonly<AzdWizardContext>): Promise<boolean> {
-        // Do not execute if an existing azure.yaml file is found or if `iacFolder` is unset
-        return !!context.iacFolder && Promise.resolve(true); // TODO
+        if (!context.iacFolder) {
+            return false;
+        }
+
+        const azureYamlPath = path.join(context.iacFolder, AzureYamlFileName);
+
+        try {
+            await fs.access(azureYamlPath);
+            // File exists; skip generation
+            return false;
+        } catch {
+            // File does not exist; proceed with generation
+            return true;
+        }
     }
 
     public async execute(context: AzdWizardContext): Promise<void> {
@@ -27,7 +41,7 @@ export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
         ].join('\n');
 
         await fs.writeFile(
-            path.join(context.iacFolder!, 'azure.yaml'), // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            path.join(context.iacFolder!, AzureYamlFileName), // eslint-disable-line @typescript-eslint/no-non-null-assertion
             yaml,
         );
     }

@@ -50,7 +50,15 @@ export class OfferSaveStep<TContext extends AzdWizardContext> extends PromptStep
             if (folders?.length === 1) {
                 iacFolder = folders[0].uri.fsPath;
             } else {
-                throw new Error('unimpl'); // TODO
+                const folder = await this.ctx.code.window.showWorkspaceFolderPick({
+                    placeHolder: this.ctx.code.l10n.t('Select a workspace folder to save the project'),
+                });
+
+                if (!folder) {
+                    throw new Error(this.ctx.code.l10n.t('A workspace folder is required to save the generated files.'));
+                }
+
+                iacFolder = folder.uri.fsPath;
             }
         } else {
             iacFolder = await this.tempProjectManager.createProjectDir();
