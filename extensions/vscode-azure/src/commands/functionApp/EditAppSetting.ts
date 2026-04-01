@@ -8,6 +8,7 @@ import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { FunctionAppDataProvider } from '../../tree/resources/functionApp/FunctionAppDataProvider';
+import { FunctionAppVirtualTypes } from '../../tree/resources/functionApp/functionAppConstants';
 import { appSettingsParentKey } from '../../tree/resources/functionApp/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 
@@ -31,7 +32,7 @@ export class EditAppSetting implements ManagedCommand {
         }
 
         const resource = this.cache.get(key);
-        if (!resource || !isVirtualResource(resource) || resource.virtualType !== 'functionApp.appSetting') {
+        if (!resource || !isVirtualResource(resource) || resource.virtualType !== FunctionAppVirtualTypes.AppSetting) {
             return;
         }
 

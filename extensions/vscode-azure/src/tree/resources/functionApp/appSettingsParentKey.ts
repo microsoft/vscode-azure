@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { FunctionAppLabels, FunctionAppVirtualTypes } from './functionAppConstants';
 
 /**
  * Construct the parent "App Settings" category key from an individual
@@ -14,8 +15,8 @@ import { AzureNodeId, type VirtualResource } from '@microsoft/vscode-azure-azuti
  */
 export function appSettingsParentKey(settingResource: VirtualResource): string {
     const parent: VirtualResource = {
-        virtualType: 'functionApp.appSettings',
-        virtualPath: 'App Settings',
+        virtualType: FunctionAppVirtualTypes.AppSettings,
+        virtualPath: FunctionAppLabels.AppSettings,
         azureResource: settingResource.azureResource,
     };
     return AzureNodeId.from(parent).toString();

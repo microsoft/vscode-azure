@@ -14,6 +14,7 @@ import { EditAppSetting } from '../../../commands/functionApp/EditAppSetting';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { isFunctionApp } from './FunctionApp';
+import { FunctionAppVirtualTypes } from './functionAppConstants';
 
 /**
  * View-layer provider for Azure Function Apps.
@@ -93,7 +94,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
     // #endregion
 
     private getVirtualTreeItem(key: string, resource: VirtualResource): ITreeItem {
-        const isCategory = resource.virtualType === 'functionApp.appSettings';
+        const isCategory = resource.virtualType === FunctionAppVirtualTypes.AppSettings;
         const label = resource.virtualPath;
 
         const collapsibleState = isCategory
@@ -116,7 +117,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
     }
 }
 
-const knownVirtualTypes = new Set(['functionApp.appSettings', 'functionApp.appSetting']);
+const knownVirtualTypes = new Set<string>([FunctionAppVirtualTypes.AppSettings, FunctionAppVirtualTypes.AppSetting]);
 
 function isFunctionAppVirtual(node: unknown): boolean {
     return isVirtualResource(node as VirtualResource)

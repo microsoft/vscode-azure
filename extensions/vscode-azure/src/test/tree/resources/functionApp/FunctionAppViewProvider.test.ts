@@ -15,12 +15,13 @@ import { AddAppSetting } from '../../../../commands/functionApp/AddAppSetting';
 import { DeleteAppSetting } from '../../../../commands/functionApp/DeleteAppSetting';
 import { EditAppSetting } from '../../../../commands/functionApp/EditAppSetting';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/FunctionAppViewProvider';
+import { FunctionAppLabels, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/functionAppConstants';
 import { makeFunctionApp } from './mockFunctionApp';
 
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {
     return makeVirtualResource({
-        virtualType: 'functionApp.appSettings',
-        virtualPath: 'App Settings',
+        virtualType: FunctionAppVirtualTypes.AppSettings,
+        virtualPath: FunctionAppLabels.AppSettings,
         azureResource: makeFunctionApp(),
         ...overrides,
     });
@@ -100,7 +101,7 @@ describe('FunctionAppViewProvider (unit)', () => {
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
-            expect(item.label).to.equal('App Settings');
+            expect(item.label).to.equal(FunctionAppLabels.AppSettings);
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
             expect(item.iconPath).to.deep.equal(new vscode.ThemeIcon('folder'));
             expect(item.contextValue).to.include(AddAppSetting.ContextValue);
@@ -108,7 +109,7 @@ describe('FunctionAppViewProvider (unit)', () => {
 
         it('should render individual app setting with symbol-key icon', () => {
             const vr = makeFunctionAppVirtual({
-                virtualType: 'functionApp.appSetting',
+                virtualType: FunctionAppVirtualTypes.AppSetting,
                 virtualPath: 'MY_KEY',
             });
             const key = AzureNodeId.from(vr).toString();

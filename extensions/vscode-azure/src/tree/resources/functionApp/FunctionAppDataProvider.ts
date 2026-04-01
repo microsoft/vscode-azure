@@ -10,6 +10,7 @@ import {
 import { IActionExecutor, InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { isFunctionApp } from './FunctionApp';
+import { FunctionAppLabels, FunctionAppVirtualTypes } from './functionAppConstants';
 
 /**
  * Data-layer provider for Azure Function Apps.
@@ -52,12 +53,12 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
         // Function App → category nodes
         if (isFunctionApp(resource)) {
             return [
-                { virtualType: 'functionApp.appSettings', virtualPath: 'App Settings', azureResource: resource },
+                { virtualType: FunctionAppVirtualTypes.AppSettings, virtualPath: FunctionAppLabels.AppSettings, azureResource: resource },
             ];
         }
 
         // App Settings category → individual settings
-        if (isVirtualResource(resource) && resource.virtualType === 'functionApp.appSettings') {
+        if (isVirtualResource(resource) && resource.virtualType === FunctionAppVirtualTypes.AppSettings) {
             return await this.listAppSettings(resource);
         }
 
@@ -114,7 +115,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
         this.settingsCache.set(resource.azureResource.id, { ...properties });
 
         return Object.keys(properties).sort().map(key => ({
-            virtualType: 'functionApp.appSetting',
+            virtualType: FunctionAppVirtualTypes.AppSetting,
             virtualPath: key,
             azureResource: resource.azureResource,
         }));

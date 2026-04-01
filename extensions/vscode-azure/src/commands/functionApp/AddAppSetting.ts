@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { isVirtualResource } from '@microsoft/vscode-azure-azutils';
+import { FunctionAppVirtualTypes } from '../../tree/resources/functionApp/functionAppConstants';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
@@ -30,7 +31,7 @@ export class AddAppSetting implements ManagedCommand {
         }
 
         const resource = this.cache.get(key);
-        if (!resource || !isVirtualResource(resource) || resource.virtualType !== 'functionApp.appSettings') {
+        if (!resource || !isVirtualResource(resource) || resource.virtualType !== FunctionAppVirtualTypes.AppSettings) {
             return;
         }
 

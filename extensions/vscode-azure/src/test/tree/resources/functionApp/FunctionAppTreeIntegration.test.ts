@@ -16,6 +16,7 @@ import { AddAppSetting } from '../../../../commands/functionApp/AddAppSetting';
 import { DeleteAppSetting } from '../../../../commands/functionApp/DeleteAppSetting';
 import { EditAppSetting } from '../../../../commands/functionApp/EditAppSetting';
 import { FunctionAppDataProvider } from '../../../../tree/resources/functionApp/FunctionAppDataProvider';
+import { FunctionAppLabels } from '../../../../tree/resources/functionApp/functionAppConstants';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
@@ -53,8 +54,8 @@ describe('Function App Tree Integration (integration)', () => {
 
     // -- Mock WebAppClient ------------------------------------------------
 
-    // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
     function createMockWebAppClient(initialSettings?: Record<string, string>): { client: IWebAppClient; settings: Record<string, string> } {
+        // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
         const settings = { ...initialSettings ?? { APP_KEY: 'app-value', DB_HOST: 'localhost' } };
         const client: IWebAppClient = {
             webApps: {
@@ -64,7 +65,9 @@ describe('Function App Tree Integration (integration)', () => {
                 updateApplicationSettings: mock.fn(
                     (_rg: string, _name: string, body: { properties?: Record<string, string> }) => {
                         // Synchronize the backing store so subsequent list calls reflect mutations
-                        Object.keys(settings).forEach(k => delete settings[k]);
+                        for (const k of Object.keys(settings)) {
+                            Reflect.deleteProperty(settings, k);
+                        }
                         Object.assign(settings, body.properties);
                         return Promise.resolve({ properties: { ...settings } });
                     },
@@ -202,7 +205,7 @@ describe('Function App Tree Integration (integration)', () => {
             const { viewTree } = createTestPipeline();
             const tree = await collectTree(viewTree);
 
-            const category = findByLabel(tree, 'App Settings');
+            const category = findByLabel(tree, FunctionAppLabels.AppSettings);
             expect(category, 'App Settings category').to.exist;
             expect((category!.item.iconPath as { id: string }).id).to.equal('folder');
             expect(category!.item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
@@ -241,10 +244,8 @@ describe('Function App Tree Integration (integration)', () => {
         });
 
         it('should render settings in alphabetical order', async () => {
-            const { viewTree } = createTestPipeline({
-                // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
-                initialSettings: { ZEBRA: 'z', ALPHA: 'a', MIDDLE: 'm' },
-            });
+            const initialSettings = { ZEBRA: 'z', ALPHA: 'a', MIDDLE: 'm' };
+            const { viewTree } = createTestPipeline({ initialSettings });
             const tree = await collectTree(viewTree);
 
             const settingNodes = filterByDepth(tree, 4);
@@ -276,7 +277,7 @@ describe('Function App Tree Integration (integration)', () => {
             const tree = await collectTree(viewTree);
 
             expect(findByLabel(tree, 'myFunc')).to.exist;
-            expect(findByLabel(tree, 'App Settings')).to.exist;
+            expect(findByLabel(tree, FunctionAppLabels.AppSettings)).to.exist;
             expect(findByLabel(tree, 'myStorage')).to.not.exist;
         });
 
@@ -286,7 +287,7 @@ describe('Function App Tree Integration (integration)', () => {
 
             expect(findByLabel(tree, 'myStorage')).to.exist;
             expect(findByLabel(tree, 'myFunc')).to.not.exist;
-            expect(findByLabel(tree, 'App Settings')).to.not.exist;
+            expect(findByLabel(tree, FunctionAppLabels.AppSettings)).to.not.exist;
         });
     });
 
@@ -353,7 +354,7 @@ describe('Function App Tree Integration (integration)', () => {
             expect(findByLabel(treeBefore, 'NEW_SETTING')).to.not.exist;
 
             // Find the App Settings category key
-            const categoryNode = findByLabel(treeBefore, 'App Settings')!;
+            const categoryNode = findByLabel(treeBefore, FunctionAppLabels.AppSettings)!;
 
             // Mock input boxes: first for key, second for value
             let inputCallCount = 0;
@@ -381,7 +382,7 @@ describe('Function App Tree Integration (integration)', () => {
             const code = mockVscode.vscode;
 
             const treeBefore = await collectTree(viewTree);
-            const categoryNode = findByLabel(treeBefore, 'App Settings')!;
+            const categoryNode = findByLabel(treeBefore, FunctionAppLabels.AppSettings)!;
 
             code.window.showInputBox = mock.fn(
                 () => Promise.resolve(undefined),
@@ -452,7 +453,7 @@ describe('Function App Tree Integration (integration)', () => {
             const categoryKey = await viewTree.getParent(appKey!.key);
             expect(categoryKey).to.exist;
             const categoryItem = await viewTree.getTreeItem(categoryKey!);
-            expect(categoryItem.label).to.equal('App Settings');
+            expect(categoryItem.label).to.equal(FunctionAppLabels.AppSettings);
 
             // Parent of category = Function App
             const funcKey = await viewTree.getParent(categoryKey!);
