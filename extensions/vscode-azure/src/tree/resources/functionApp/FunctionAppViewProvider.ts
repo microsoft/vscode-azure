@@ -116,6 +116,10 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
     }
 }
 
+const knownVirtualTypes = new Set(['functionApp.appSettings', 'functionApp.appSetting']);
+
 function isFunctionAppVirtual(node: unknown): boolean {
-    return isVirtualResource(node as VirtualResource) && isFunctionApp((node as VirtualResource).azureResource);
+    return isVirtualResource(node as VirtualResource)
+        && knownVirtualTypes.has((node as VirtualResource).virtualType)
+        && isFunctionApp((node as VirtualResource).azureResource);
 }

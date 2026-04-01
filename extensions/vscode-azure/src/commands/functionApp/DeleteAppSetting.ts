@@ -37,22 +37,26 @@ export class DeleteAppSetting implements ManagedCommand {
 
         const settingKey = resource.virtualPath;
 
+        const deleteLabel = this.code.l10n.t('Delete');
         const confirm = await this.code.window.showWarningMessage(
             this.code.l10n.t('Are you sure you want to delete app setting \'{0}\'?', settingKey),
             { modal: true },
-            this.code.l10n.t('Delete'),
+            deleteLabel,
         );
 
-        if (!confirm) {
+        if (confirm !== deleteLabel) {
             return;
         }
 
-        await this.dataProvider.deleteSetting(resource.azureResource, settingKey);
-
-        // Invalidate the parent to refresh the tree after deletion
-        const parentResource = this.cache.get(appSettingsParentKey(resource));
-        if (parentResource) {
-            this.cache.invalidate(parentResource);
+        try {
+            await this.dataProvider.deleteSetting(resource.azureResource, settingKey);
+        } finally {
+            // Always invalidate the parent to refresh the tree,
+            // even on error, so the UI stays in sync
+            const parentResource = this.cache.get(appSettingsParentKey(resource));
+            if (parentResource) {
+                this.cache.invalidate(parentResource);
+            }
         }
 
         void this.code.window.showInformationMessage(
