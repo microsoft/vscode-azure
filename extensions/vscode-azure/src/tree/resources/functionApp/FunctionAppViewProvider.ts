@@ -95,7 +95,9 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
 
     private getVirtualTreeItem(key: string, resource: VirtualResource): ITreeItem {
         const isCategory = resource.virtualType === FunctionAppVirtualTypes.AppSettings;
-        const label = resource.virtualPath;
+        const label = isCategory
+            ? this.code.l10n.t('App Settings')
+            : resource.virtualPath;
 
         const collapsibleState = isCategory
             ? this.code.TreeItemCollapsibleState.Collapsed
