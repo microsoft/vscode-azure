@@ -55,6 +55,5 @@
   - Settings migration?
 
 ## Ideas
-- Could we use a hardcoded Azure location list, along with a test case that makes sure we keep it up-to-date with real Azure? Would save a lot of location list step time. At a minimum we could do session-level caching.
 - Deep link support? Deep links to tree items etc.
 - Build with Turbo? `bmw/turbo` branch has a start on that

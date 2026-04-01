@@ -40,7 +40,7 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         for (const fileName of [MainBicepFileName, MainParametersFileName]) {
             try {
                 await fs.access(path.join(infraFolder, fileName));
-                // File already exists; skip generation
+                // At least one file already exists; skip generation
                 return false;
             } catch {
                 // File does not exist; continue checking

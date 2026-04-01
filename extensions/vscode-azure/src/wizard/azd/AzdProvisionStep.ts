@@ -18,7 +18,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public shouldExecute(context: Readonly<TContext>): boolean {
-        return context.provision === true;
+        return context.provision === true && !!context.iacFolder;
     }
 
     public async execute(context: TContext): Promise<void> {
