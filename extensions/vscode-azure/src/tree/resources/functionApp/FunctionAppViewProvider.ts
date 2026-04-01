@@ -96,15 +96,6 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         const isCategory = resource.virtualType === 'functionApp.appSettings';
         const label = resource.virtualPath;
 
-        // Individual setting in "deleting" state
-        if (!isCategory && this.cache.hasState(resource, 'deleting')) {
-            const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.None);
-            item.id = key;
-            item.description = this.code.l10n.t('Deleting...');
-            item.iconPath = new this.code.ThemeIcon('loading~spin');
-            return item;
-        }
-
         const collapsibleState = isCategory
             ? this.code.TreeItemCollapsibleState.Collapsed
             : this.code.TreeItemCollapsibleState.None;

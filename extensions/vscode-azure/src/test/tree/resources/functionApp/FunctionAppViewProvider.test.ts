@@ -29,14 +29,12 @@ function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualRe
 describe('FunctionAppViewProvider (unit)', () => {
     function createProvider(
         cache?: Map<string, ConcreteAzureNode>,
-        options?: { hasState?: (resource: ConcreteAzureNode, state: string) => boolean },
     ) {
         const executor = new ActionExecutor(new NullTelemetryReporter());
         const cacheMap = cache ?? new Map<string, ConcreteAzureNode>();
         const mockCache = {
             get: (key: string) => cacheMap.get(key),
             getChildren: (node: ConcreteAzureNode) => Promise.resolve([] as ConcreteAzureNode[]),
-            hasState: options?.hasState ?? (() => false),
         };
         return new FunctionAppViewProvider(vscode, executor, mockCache as never);
     }
@@ -125,23 +123,5 @@ describe('FunctionAppViewProvider (unit)', () => {
             expect(item.contextValue).to.include(DeleteAppSetting.ContextValue);
         });
 
-        it('should render deleting state with spinner icon', () => {
-            const vr = makeFunctionAppVirtual({
-                virtualType: 'functionApp.appSetting',
-                virtualPath: 'DELETING_KEY',
-            });
-            const key = AzureNodeId.from(vr).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, vr as ConcreteAzureNode]]);
-            const provider = createProvider(cache, {
-                hasState: (_resource, state) => state === 'deleting',
-            });
-
-            const item = provider.getTreeItem(key);
-            expect(item.label).to.equal('DELETING_KEY');
-            expect(item.description).to.include('Deleting');
-            expect(item.iconPath).to.deep.equal(new vscode.ThemeIcon('loading~spin'));
-            // Should not have edit/delete context values when deleting
-            expect(item.contextValue).to.be.undefined;
-        });
     });
 });

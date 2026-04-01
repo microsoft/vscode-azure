@@ -47,20 +47,12 @@ export class DeleteAppSetting implements ManagedCommand {
             return;
         }
 
-        // Show deleting state immediately while the API call is in flight
-        this.cache.markState(resource, 'deleting');
+        await this.dataProvider.deleteSetting(resource.azureResource, settingKey);
 
-        try {
-            await this.dataProvider.deleteSetting(resource.azureResource, settingKey);
-        } finally {
-            this.cache.clearState(resource, 'deleting');
-
-            // Always invalidate the parent to refresh the tree, even on
-            // error, so the deleting spinner is cleared in the UI
-            const parentResource = this.cache.get(appSettingsParentKey(resource));
-            if (parentResource) {
-                this.cache.invalidate(parentResource);
-            }
+        // Invalidate the parent to refresh the tree after deletion
+        const parentResource = this.cache.get(appSettingsParentKey(resource));
+        if (parentResource) {
+            this.cache.invalidate(parentResource);
         }
 
         void this.code.window.showInformationMessage(
