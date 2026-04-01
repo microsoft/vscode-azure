@@ -17,7 +17,7 @@ export class AppNameStep<TContext extends AzdWizardContext> extends PromptStep<T
         super();
     }
 
-    public shouldPrompt(context: Readonly<TContext>): boolean {
+    public override shouldPrompt(context: Readonly<TContext>): boolean {
         return !context.appName;
     }
 

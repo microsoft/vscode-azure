@@ -17,7 +17,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         super();
     }
 
-    public shouldExecute(context: Readonly<TContext>): boolean {
+    public override shouldExecute(context: Readonly<TContext>): boolean {
         return context.provision === true && !!context.iacFolder;
     }
 

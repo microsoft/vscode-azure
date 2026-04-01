@@ -14,7 +14,7 @@ const AzureYamlFileName = 'azure.yaml';
  * Generates the `azure.yaml` stub for the project.
  */
 export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
-    public async shouldExecute(context: Readonly<AzdWizardContext>): Promise<boolean> {
+    public override async shouldExecute(context: Readonly<AzdWizardContext>): Promise<boolean> {
         if (!context.iacFolder) {
             return false;
         }

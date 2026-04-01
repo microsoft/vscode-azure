@@ -6,7 +6,6 @@
 import type { PickContext } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from '../../wizard/azd/AzdWizardContext';
 
-
 /** Accumulated wizard context for Function App creation. */
 export interface CreateFunctionAppContext extends AzdWizardContext, PickContext<string> {
     readonly functionAppName?: string;

@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import { PromptStep } from '@microsoft/vscode-azure-utils';
 import { execFile } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { promisify } from 'util';
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
-import { PromptStep } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 const execFileAsync = promisify(execFile);
@@ -26,10 +26,6 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         super();
     }
 
-    public shouldPrompt(): boolean {
-        return true;
-    }
-
     public async prompt(): Promise<Partial<TContext>> {
         const workspaceRoot = this.getWorkspaceRoot();
         if (!workspaceRoot) {
@@ -39,7 +35,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         const result: Record<string, unknown> = {};
 
         // Check for azure.yaml to detect an existing azd project
-        const azureYamlPath = path.join(workspaceRoot, 'azure.yaml');
+        const azureYamlPath = path.join(workspaceRoot, 'azure.yaml'); // TODO: azure.yml too
         try {
             const yaml = await fs.readFile(azureYamlPath, 'utf-8');
             result.iacFolder = workspaceRoot;
@@ -63,7 +59,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
     private getWorkspaceRoot(): string | undefined {
         const folders = this.code.workspace.workspaceFolders;
-        if (folders && folders.length > 0) {
+        if (folders?.length) {
             return folders[0].uri.fsPath;
         }
         return undefined;
@@ -71,6 +67,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
     private async findDefaultEnvironment(cwd: string): Promise<string | undefined> {
         try {
+            // TODO: add an API to the AZD extension for this
             const { stdout } = await execFileAsync('azd', ['env', 'list', '--output', 'json'], { cwd });
             const envs: AzdEnvEntry[] = JSON.parse(stdout) as AzdEnvEntry[];
             const defaultEnv = envs.find(e => e.IsDefault);

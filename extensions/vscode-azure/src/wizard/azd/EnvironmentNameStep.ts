@@ -17,7 +17,7 @@ export class EnvironmentNameStep<TContext extends AzdWizardContext> extends Prom
         super();
     }
 
-    public shouldPrompt(context: Readonly<TContext>): boolean {
+    public override shouldPrompt(context: Readonly<TContext>): boolean {
         return !context.environmentName;
     }
 
@@ -31,8 +31,7 @@ export class EnvironmentNameStep<TContext extends AzdWizardContext> extends Prom
             validateInput: (value) => {
                 if (!value) {
                     return this.ctx.code.l10n.t('Environment name is required');
-                }
-                if (!/^[a-zA-Z0-9-]+$/.test(value)) {
+                } else if (!/^[a-zA-Z0-9-]+$/.test(value)) {
                     return this.ctx.code.l10n.t('Only letters, numbers, and hyphens are allowed');
                 }
                 return undefined;
@@ -45,7 +44,7 @@ export class EnvironmentNameStep<TContext extends AzdWizardContext> extends Prom
 
 function getWorkspaceFolderName(code: IVsCode): string | undefined {
     const folders = code.workspace.workspaceFolders;
-    if (folders && folders.length > 0) {
+    if (folders?.length) {
         return folders[0].name;
     }
     return undefined;

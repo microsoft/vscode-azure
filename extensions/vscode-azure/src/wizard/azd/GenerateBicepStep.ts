@@ -30,7 +30,7 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         super();
     }
 
-    public async shouldExecute(context: Readonly<TContext>): Promise<boolean> {
+    public override async shouldExecute(context: Readonly<TContext>): Promise<boolean> {
         if (!context.iacFolder) {
             return false;
         }

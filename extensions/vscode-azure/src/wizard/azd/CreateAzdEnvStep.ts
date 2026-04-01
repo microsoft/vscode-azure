@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile);
 
 // TODO: Replace with AZD extension API when available
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
-    public shouldExecute(context: Readonly<TContext>): boolean {
+    public override shouldExecute(context: Readonly<TContext>): boolean {
         return !!context.iacFolder && !!context.environmentName && !!context.location?.name && !!context.subscription;
     }
 

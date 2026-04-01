@@ -34,7 +34,7 @@ export class PickRuntimeStep extends PromptStep<CreateFunctionAppContext> {
         super();
     }
 
-    public shouldPrompt(context: Readonly<CreateFunctionAppContext>): boolean {
+    public override shouldPrompt(context: Readonly<CreateFunctionAppContext>): boolean {
         return !context.runtime;
     }
 
