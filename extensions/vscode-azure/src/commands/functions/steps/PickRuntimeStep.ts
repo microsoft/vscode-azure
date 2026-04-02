@@ -13,6 +13,7 @@ interface RuntimeItem {
     readonly data: FunctionAppRuntime;
 }
 
+// TODO: more runtimes/versions/split into runtime step and version step / etc.
 function getRuntimeItems(ctx: ICodeContext): RuntimeItem[] {
     return [
         { label: ctx.code.l10n.t('Node.js'), description: ctx.code.l10n.t('JavaScript / TypeScript'), data: 'node' },
