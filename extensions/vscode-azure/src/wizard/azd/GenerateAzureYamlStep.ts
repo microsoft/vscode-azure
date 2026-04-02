@@ -4,12 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { execAzd } from '../../utils/execAzd';
 import { isAzdProject } from '../../utils/isAzdProject';
 import type { AzdWizardContext } from './AzdWizardContext';
-
-const execFileAsync = promisify(execFile);
 
 /**
  * Generates the `azure.yaml` stub for the project.
@@ -24,6 +21,6 @@ export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
     }
 
     public async execute(context: AzdWizardContext): Promise<void> {
-        await execFileAsync('azd', ['init', '--minimal', '--no-prompt'], { cwd: context.iacFolder });
+        await execAzd(['init', '--minimal', '--no-prompt'], context.iacFolder);
     }
 }
