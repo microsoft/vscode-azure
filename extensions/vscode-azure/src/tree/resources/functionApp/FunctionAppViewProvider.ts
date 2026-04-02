@@ -5,7 +5,7 @@
 
 import { AzureNodeId, getNodeType, isGenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, ICodeContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
 import { AddOrEditAppSetting } from '../../../commands/functionApp/AddOrEditAppSetting';
@@ -32,8 +32,6 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
 
-    private get code(): IVsCode { return this.ctx.code; }
-
     // #region ViewProvider
 
     public canHandle(resource: unknown): resource is string {
@@ -48,7 +46,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
     public getTreeItem(key: string): ITreeItem {
         const resource = this.cache.get(key);
         if (!resource) {
-            return new this.code.TreeItem(key);
+            return new this.ctx.code.TreeItem(key);
         }
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
@@ -63,10 +61,10 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         }
 
         // Function App resource node
-        const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
+        const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = combineContextValues(OpenInPortal.ContextValue, FunctionAppViewProvider.ContextValue);
-        item.iconPath = getAzureIconUri(this.code, this.ctx.extensionContext, 'FunctionApp');
+        item.iconPath = getAzureIconUri(this.ctx.code, this.ctx.extensionContext, 'FunctionApp');
         item.description = resource.logicalType;
 
         return item;
@@ -97,23 +95,23 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
     private getVirtualTreeItem(key: string, resource: VirtualResource): ITreeItem {
         const isCategory = resource.virtualType === FunctionAppVirtualTypes.AppSettings;
         const label = isCategory
-            ? this.code.l10n.t('App Settings')
+            ? this.ctx.code.l10n.t('App Settings')
             : resource.virtualPath;
 
         const collapsibleState = isCategory
-            ? this.code.TreeItemCollapsibleState.Collapsed
-            : this.code.TreeItemCollapsibleState.None;
+            ? this.ctx.code.TreeItemCollapsibleState.Collapsed
+            : this.ctx.code.TreeItemCollapsibleState.None;
 
-        const item = new this.code.TreeItem(label, collapsibleState);
+        const item = new this.ctx.code.TreeItem(label, collapsibleState);
         item.id = key;
 
         if (isCategory) {
             item.contextValue = combineContextValues('functionAppSettings', AddOrEditAppSetting.AddContextValue);
-            item.iconPath = new this.code.ThemeIcon('folder');
+            item.iconPath = new this.ctx.code.ThemeIcon('folder');
         } else {
             // Individual app setting
             item.contextValue = combineContextValues('functionAppSetting', AddOrEditAppSetting.EditContextValue, DeleteAppSetting.ContextValue);
-            item.iconPath = new this.code.ThemeIcon('symbol-key');
+            item.iconPath = new this.ctx.code.ThemeIcon('symbol-key');
         }
 
         return item;
