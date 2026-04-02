@@ -44,6 +44,6 @@ export class PickRuntimeStep extends PromptStep<CreateFunctionAppContext> {
             showBack: true,
         });
 
-        return { runtime: picked.data, runtimeStack: picked.data, runtimeVersion: getRuntimeVersion(picked.data) };
+        return { runtime: picked.data, runtimeVersion: getRuntimeVersion(picked.data) };
     }
 }

@@ -13,9 +13,6 @@ param location string
 @allowed(['FlexConsumption', 'Premium', 'AppServicePlan'])
 param hostingPlan string = 'FlexConsumption'
 
-@description('Language runtime.')
-param runtimeStack string
-
 @description('Runtime version string (e.g. "Node|20", "Python|3.11").')
 param runtimeVersion string
 
@@ -32,14 +29,13 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
 }
 
 // TODO: publish and reference an AVM pattern module
-module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.6' = {
+module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.7' = {
   scope: rg
   name: 'functionApp'
   params: {
     functionAppName: '${environmentName}-func'
     location: location
     hostingPlan: hostingPlan
-    runtimeStack: runtimeStack
     runtimeVersion: runtimeVersion
     operatingSystem: operatingSystem
     tags: tags

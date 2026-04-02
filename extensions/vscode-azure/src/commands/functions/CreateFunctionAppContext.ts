@@ -10,7 +10,6 @@ import type { AzdWizardContext } from '../../wizard/azd/AzdWizardContext';
 export interface CreateFunctionAppContext extends AzdWizardContext, PickContext<string> {
     readonly functionAppName?: string;
     readonly runtime?: FunctionAppRuntime;
-    readonly runtimeStack?: string;
     readonly runtimeVersion?: string;
     readonly hostingPlan?: FunctionAppHostingPlan;
 }
