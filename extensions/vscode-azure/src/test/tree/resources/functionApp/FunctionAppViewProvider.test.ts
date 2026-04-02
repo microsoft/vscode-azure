@@ -5,7 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
+import { ActionExecutor, type IExtensionContext } from '@microsoft/vscode-azure-utils';
 import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -17,9 +17,9 @@ import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/FunctionApp';
 import { makeFunctionApp } from './mockFunctionApp';
 
-const mockExtensionContext = {
+const mockExtensionContext: IExtensionContext = {
     extensionUri: vscode.Uri.file('/test-extension'),
-} as vscode.ExtensionContext;
+} as IExtensionContext;
 
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {
     return makeVirtualResource({

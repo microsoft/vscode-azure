@@ -5,7 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor, DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
+import { ActionExecutor, DataItemTree, type IExtensionContext, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -21,9 +21,9 @@ import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzur
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
 
-const mockExtensionContext = {
+const mockExtensionContext: IExtensionContext = {
     extensionUri: vscode.Uri.file('/test-extension'),
-} as vscode.ExtensionContext;
+} as IExtensionContext;
 
 /**
  * Integration tests for the Function App tree rendering pipeline and CRUD commands.
@@ -96,7 +96,7 @@ describe('Function App Tree Integration (integration)', () => {
         initialSettings?: Record<string, string>;
     }): TestPipeline {
         const executor = new ActionExecutor(new NullTelemetryReporter());
-        const mockVscode = createMockVsCode({ Uri: vscode.Uri } as never);
+        const mockVscode = createMockVsCode({ Uri: vscode.Uri });
         const code = mockVscode.vscode;
 
         const { client: webAppClient, settings: backingSettings } = createMockWebAppClient(options?.initialSettings);
