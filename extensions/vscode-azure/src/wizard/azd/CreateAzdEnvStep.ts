@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import { execAzd } from '../../utils/execAzd';
+import { execAzd } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 // TODO: Replace with AZD extension API when available

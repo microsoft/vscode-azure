@@ -4,9 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { execFile } from 'child_process';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
+const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 /**
  * Executes the `azd` CLI with the given arguments. Throws an
@@ -26,4 +29,20 @@ export async function execAzd(args: string[], cwd?: string): Promise<{ stdout: s
         }
         throw error;
     }
+}
+
+/**
+ * Checks whether the given directory contains an `azure.yaml` or
+ * `azure.yml` file, indicating an existing azd project.
+ */
+export async function isAzdProject(directory: string): Promise<boolean> {
+    for (const name of AzureYamlFileNames) {
+        try {
+            await fs.access(path.join(directory, name));
+            return true;
+        } catch {
+            // file not found -- try next
+        }
+    }
+    return false;
 }

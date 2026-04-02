@@ -4,15 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import { execAzd } from '../../utils/execAzd';
-import { isAzdProject } from '../../utils/isAzdProject';
+import { execAzd, isAzdProject } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
  * Generates the `azure.yaml` stub for the project.
  */
-export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
-    public override async shouldExecute(context: Readonly<AzdWizardContext>): Promise<boolean> {
+export class GenerateAzureYamlStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
+    public override async shouldExecute(context: Readonly<TContext>): Promise<boolean> {
         if (!context.iacFolder) {
             return false;
         }
@@ -20,7 +19,7 @@ export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
         return !(await isAzdProject(context.iacFolder));
     }
 
-    public async execute(context: AzdWizardContext): Promise<void> {
+    public async execute(context: TContext): Promise<void> {
         await execAzd(['init', '--minimal', '--no-prompt'], context.iacFolder);
     }
 }

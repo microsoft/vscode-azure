@@ -5,8 +5,7 @@
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import { getWorkspaceFolder, PromptStep } from '@microsoft/vscode-azure-utils';
-import { execAzd } from '../../utils/execAzd';
-import { isAzdProject } from '../../utils/isAzdProject';
+import { execAzd, isAzdProject } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
