@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import { execAzd, isAzdProject } from '../../utils/azdUtils';
+import { execAzd, findAzureYaml } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -16,7 +16,7 @@ export class GenerateAzureYamlStep<TContext extends AzdWizardContext> extends Ex
             return false;
         }
 
-        return !(await isAzdProject(context.iacFolder));
+        return !(await findAzureYaml(context.iacFolder));
     }
 
     public async execute(context: TContext): Promise<void> {

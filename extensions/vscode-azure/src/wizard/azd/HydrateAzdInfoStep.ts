@@ -5,7 +5,7 @@
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import { getWorkspaceFolder, PromptStep } from '@microsoft/vscode-azure-utils';
-import { execAzd, isAzdProject } from '../../utils/azdUtils';
+import { execAzd, findAzureYaml } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -30,7 +30,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         const result: Record<string, unknown> = {};
 
         // Check for azure.yaml / azure.yml to detect an existing azd project
-        if (await isAzdProject(workspaceRoot)) {
+        if (await findAzureYaml(workspaceRoot)) {
             result.iacFolder = workspaceRoot;
         }
 

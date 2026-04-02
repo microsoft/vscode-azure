@@ -32,17 +32,18 @@ export async function execAzd(args: string[], cwd?: string): Promise<{ stdout: s
 }
 
 /**
- * Checks whether the given directory contains an `azure.yaml` or
- * `azure.yml` file, indicating an existing azd project.
+ * Returns the path to `azure.yaml` or `azure.yml` in the given
+ * directory, or `undefined` if neither exists.
  */
-export async function isAzdProject(directory: string): Promise<boolean> {
+export async function findAzureYaml(directory: string): Promise<string | undefined> {
     for (const name of AzureYamlFileNames) {
+        const filePath = path.join(directory, name);
         try {
-            await fs.access(path.join(directory, name));
-            return true;
+            await fs.access(filePath);
+            return filePath;
         } catch {
             // file not found -- try next
         }
     }
-    return false;
+    return undefined;
 }
