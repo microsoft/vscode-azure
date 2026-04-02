@@ -78,6 +78,11 @@
                 "command": "vscode-azure/functionApp/appSettings/delete",
                 "icon": "$(trash)",
                 "title": "%commands.vscode-azure/functionApp/appSettings/delete%"
+            },
+            {
+                "command": "vscode-azure/functions/create",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/functions/create%"
             }
         ],
         "menus": {

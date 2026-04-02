@@ -108,6 +108,14 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(),
     );
 
+    const showOpenDialog = mock.fn(
+        () => Promise.resolve(undefined),
+    );
+
+    const showWorkspaceFolderPick = mock.fn(
+        () => Promise.resolve(undefined),
+    );
+
     // ── l10n ────────────────────────────────────────────────
 
     const t = mock.fn(
@@ -200,6 +208,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
             showInformationMessage,
             showWarningMessage,
             showErrorMessage,
+            showOpenDialog,
+            showWorkspaceFolderPick,
         },
         workspace: {
             getConfiguration,
@@ -264,6 +274,9 @@ export function createMockCodeContext(): MockCodeContextResult {
             id: 'test-publisher.test-extension',
             packageJSON: { version: '0.0.0-test' },
         },
+        extensionPath: '/mock/extension/path',
+        storageUri: { fsPath: '/mock/storage', scheme: 'file' },
+        globalStorageUri: { fsPath: '/mock/globalStorage', scheme: 'file' },
     } as unknown as IExtensionContext;
 
     return {

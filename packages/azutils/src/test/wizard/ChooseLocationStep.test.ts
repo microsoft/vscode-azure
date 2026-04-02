@@ -90,4 +90,21 @@ describe('ChooseLocationStep (unit)', () => {
         expect(result.location?.name).to.equal('eastus');
         tracker.assertAllConsumed();
     });
+
+    it('should throw when subscription is missing', async () => {
+        const { ctx } = createMockCodeContext();
+        const provider = createMockSubscriptionClientProvider([eastus]);
+
+        const wizard = new Wizard<TestContext>(
+            { picks: [] } as unknown as TestContext,
+            [new ChooseLocationStep(ctx, provider)],
+        );
+
+        try {
+            await wizard.run();
+            expect.fail('Expected an error to be thrown');
+        } catch (e) {
+            expect((e as Error).message).to.equal('Subscription is required to choose location');
+        }
+    });
 });

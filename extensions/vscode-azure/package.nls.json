@@ -14,5 +14,6 @@
     "commands.vscode-azure/activity/clearAll": "Clear All",
     "commands.vscode-azure/functionApp/appSettings/add": "Add New Setting...",
     "commands.vscode-azure/functionApp/appSettings/edit": "Edit Value...",
-    "commands.vscode-azure/functionApp/appSettings/delete": "Delete Setting"
+    "commands.vscode-azure/functionApp/appSettings/delete": "Delete Setting",
+    "commands.vscode-azure/functions/create": "Create Function App..."
 }
