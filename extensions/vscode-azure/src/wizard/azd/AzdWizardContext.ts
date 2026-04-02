@@ -11,8 +11,6 @@ export interface AzdWizardContext {
     readonly location?: Location;
     readonly environmentName?: string;
 
-    readonly appName?: string;
-
     readonly iacFolder?: string; // TODO: vscode.Uri?
     readonly provision?: boolean;
 }

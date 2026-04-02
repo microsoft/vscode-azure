@@ -7,7 +7,6 @@ import { ChooseLocationStep, ChooseSubscriptionStep, ISubscriptionClientProvider
 import { ICodeContext, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
-import { AppNameStep } from '../../wizard/azd/AppNameStep';
 import { AzdProvisionStep } from '../../wizard/azd/AzdProvisionStep';
 import { CreateAzdEnvStep } from '../../wizard/azd/CreateAzdEnvStep';
 import { EnvironmentNameStep } from '../../wizard/azd/EnvironmentNameStep';
@@ -43,7 +42,6 @@ export class CreateFunctionApp implements ManagedCommand {
                 new ChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
                 new ChooseLocationStep(this.ctx, this.subscriptionClientProvider),
                 new EnvironmentNameStep(this.ctx),
-                new AppNameStep(this.ctx),
                 new PickRuntimeStep(this.ctx),
                 new PickHostingPlanStep(this.ctx),
                 new OfferSaveStep(this.ctx, this.tempManager),

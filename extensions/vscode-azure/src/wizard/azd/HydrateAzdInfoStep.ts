@@ -37,13 +37,8 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         // Check for azure.yaml to detect an existing azd project
         const azureYamlPath = path.join(workspaceRoot, 'azure.yaml'); // TODO: azure.yml too
         try {
-            const yaml = await fs.readFile(azureYamlPath, 'utf-8');
+            await fs.access(azureYamlPath);
             result.iacFolder = workspaceRoot;
-
-            const nameMatch = /^name:\s*(.+)$/m.exec(yaml);
-            if (nameMatch) {
-                result.appName = nameMatch[1].trim();
-            }
         } catch {
             // No azure.yaml — not an existing azd project
         }
