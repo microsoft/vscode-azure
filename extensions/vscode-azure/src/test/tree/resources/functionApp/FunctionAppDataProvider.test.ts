@@ -10,7 +10,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { FunctionAppDataProvider } from '../../../../tree/resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppLabels, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/functionAppConstants';
+import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/FunctionApp';
 import { makeFunctionApp } from './mockFunctionApp';
 
 describe('FunctionAppDataProvider (unit)', () => {
@@ -41,7 +41,7 @@ describe('FunctionAppDataProvider (unit)', () => {
             const { provider } = createProvider();
             const vr = makeVirtualResource({
                 virtualType: FunctionAppVirtualTypes.AppSettings,
-                virtualPath: FunctionAppLabels.AppSettings,
+                virtualPath: FunctionAppVirtualPaths.AppSettings,
                 azureResource: makeFunctionApp(),
             });
             expect(provider.canHandle(vr)).to.be.true;
@@ -72,14 +72,14 @@ describe('FunctionAppDataProvider (unit)', () => {
             expect(children).to.have.length(1);
             const child = children[0];
             expect('virtualType' in child && child.virtualType).to.equal(FunctionAppVirtualTypes.AppSettings);
-            expect('virtualPath' in child && child.virtualPath).to.equal(FunctionAppLabels.AppSettings);
+            expect('virtualPath' in child && child.virtualPath).to.equal(FunctionAppVirtualPaths.AppSettings);
         });
 
         it('should return individual setting items for an App Settings category', async () => {
             const { provider } = createProvider({ ALPHA: 'a', BETA: 'b' });
             const category = makeVirtualResource({
                 virtualType: FunctionAppVirtualTypes.AppSettings,
-                virtualPath: FunctionAppLabels.AppSettings,
+                virtualPath: FunctionAppVirtualPaths.AppSettings,
                 azureResource: makeFunctionApp(),
             });
             const children = await provider.getChildren(category);
@@ -107,7 +107,7 @@ describe('FunctionAppDataProvider (unit)', () => {
             const app = makeFunctionApp();
             const category = makeVirtualResource({
                 virtualType: FunctionAppVirtualTypes.AppSettings,
-                virtualPath: FunctionAppLabels.AppSettings,
+                virtualPath: FunctionAppVirtualPaths.AppSettings,
                 azureResource: app,
             });
             await provider.getChildren(category);

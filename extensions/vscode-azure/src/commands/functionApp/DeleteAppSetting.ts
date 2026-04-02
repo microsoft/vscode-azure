@@ -7,8 +7,8 @@ import { isVirtualResource } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
+import { FunctionAppVirtualTypes } from '../../tree/resources/functionApp/FunctionApp';
 import { FunctionAppDataProvider } from '../../tree/resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppVirtualTypes } from '../../tree/resources/functionApp/functionAppConstants';
 import { appSettingsParentKey } from '../../tree/resources/functionApp/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 

@@ -3,18 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, getNodeType, isGenericResource, isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, getNodeType, isGenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
-import { AddAppSetting } from '../../../commands/functionApp/AddAppSetting';
+import { AddOrEditAppSetting } from '../../../commands/functionApp/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../commands/functionApp/DeleteAppSetting';
-import { EditAppSetting } from '../../../commands/functionApp/EditAppSetting';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
-import { isFunctionApp } from './FunctionApp';
-import { FunctionAppVirtualTypes } from './functionAppConstants';
+import { isFunctionApp, isFunctionAppVirtual, FunctionAppVirtualTypes } from './FunctionApp';
 
 /**
  * View-layer provider for Azure Function Apps.
@@ -53,7 +51,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         this.executor.setTelProp('nodeType', getNodeType(resource));
 
         // Virtual sub-nodes (App Settings category and individual settings)
-        if (isVirtualResource(resource) && resource.virtualType.startsWith('functionApp.')) {
+        if (isFunctionAppVirtual(resource)) {
             return this.getVirtualTreeItem(key, resource);
         }
 
@@ -107,22 +105,14 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         item.id = key;
 
         if (isCategory) {
-            item.contextValue = combineContextValues('functionAppSettings', AddAppSetting.ContextValue);
+            item.contextValue = combineContextValues('functionAppSettings', AddOrEditAppSetting.AddContextValue);
             item.iconPath = new this.code.ThemeIcon('folder');
         } else {
             // Individual app setting
-            item.contextValue = combineContextValues('functionAppSetting', EditAppSetting.ContextValue, DeleteAppSetting.ContextValue);
+            item.contextValue = combineContextValues('functionAppSetting', AddOrEditAppSetting.EditContextValue, DeleteAppSetting.ContextValue);
             item.iconPath = new this.code.ThemeIcon('symbol-key');
         }
 
         return item;
     }
-}
-
-const knownVirtualTypes = new Set<string>([FunctionAppVirtualTypes.AppSettings, FunctionAppVirtualTypes.AppSetting]);
-
-function isFunctionAppVirtual(node: unknown): boolean {
-    return isVirtualResource(node as VirtualResource)
-        && knownVirtualTypes.has((node as VirtualResource).virtualType)
-        && isFunctionApp((node as VirtualResource).azureResource);
 }

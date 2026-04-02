@@ -9,8 +9,7 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { isFunctionApp } from './FunctionApp';
-import { FunctionAppLabels, FunctionAppVirtualTypes } from './functionAppConstants';
+import { isFunctionApp, FunctionAppVirtualPaths, FunctionAppVirtualTypes } from './FunctionApp';
 
 /**
  * Data-layer provider for Azure Function Apps.
@@ -53,7 +52,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
         // Function App → category nodes
         if (isFunctionApp(resource)) {
             return [
-                { virtualType: FunctionAppVirtualTypes.AppSettings, virtualPath: FunctionAppLabels.AppSettings, azureResource: resource },
+                { virtualType: FunctionAppVirtualTypes.AppSettings, virtualPath: FunctionAppVirtualPaths.AppSettings, azureResource: resource },
             ];
         }
 

@@ -12,11 +12,10 @@ import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import { createMockResourceClient, createMockSubscriptionProvider } from '../../../../debug/mockData';
-import { AddAppSetting } from '../../../../commands/functionApp/AddAppSetting';
+import { AddOrEditAppSetting } from '../../../../commands/functionApp/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../commands/functionApp/DeleteAppSetting';
-import { EditAppSetting } from '../../../../commands/functionApp/EditAppSetting';
 import { FunctionAppDataProvider } from '../../../../tree/resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppLabels } from '../../../../tree/resources/functionApp/functionAppConstants';
+import { FunctionAppVirtualPaths } from '../../../../tree/resources/functionApp/FunctionApp';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
@@ -205,11 +204,11 @@ describe('Function App Tree Integration (integration)', () => {
             const { viewTree } = createTestPipeline();
             const tree = await collectTree(viewTree);
 
-            const category = findByLabel(tree, FunctionAppLabels.AppSettings);
+            const category = findByLabel(tree, FunctionAppVirtualPaths.AppSettings);
             expect(category, 'App Settings category').to.exist;
             expect((category!.item.iconPath as { id: string }).id).to.equal('folder');
             expect(category!.item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
-            expect(category!.item.contextValue).to.include(AddAppSetting.ContextValue);
+            expect(category!.item.contextValue).to.include(AddOrEditAppSetting.AddContextValue);
         });
 
         it('should render individual settings as leaf nodes with symbol-key icon', async () => {
@@ -220,7 +219,7 @@ describe('Function App Tree Integration (integration)', () => {
             expect(appKey, 'APP_KEY setting').to.exist;
             expect((appKey!.item.iconPath as { id: string }).id).to.equal('symbol-key');
             expect(appKey!.item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.None);
-            expect(appKey!.item.contextValue).to.include(EditAppSetting.ContextValue);
+            expect(appKey!.item.contextValue).to.include(AddOrEditAppSetting.EditContextValue);
             expect(appKey!.item.contextValue).to.include(DeleteAppSetting.ContextValue);
 
             const dbHost = findByLabel(tree, 'DB_HOST');
@@ -277,7 +276,7 @@ describe('Function App Tree Integration (integration)', () => {
             const tree = await collectTree(viewTree);
 
             expect(findByLabel(tree, 'myFunc')).to.exist;
-            expect(findByLabel(tree, FunctionAppLabels.AppSettings)).to.exist;
+            expect(findByLabel(tree, FunctionAppVirtualPaths.AppSettings)).to.exist;
             expect(findByLabel(tree, 'myStorage')).to.not.exist;
         });
 
@@ -287,7 +286,7 @@ describe('Function App Tree Integration (integration)', () => {
 
             expect(findByLabel(tree, 'myStorage')).to.exist;
             expect(findByLabel(tree, 'myFunc')).to.not.exist;
-            expect(findByLabel(tree, FunctionAppLabels.AppSettings)).to.not.exist;
+            expect(findByLabel(tree, FunctionAppVirtualPaths.AppSettings)).to.not.exist;
         });
     });
 
@@ -344,7 +343,7 @@ describe('Function App Tree Integration (integration)', () => {
         });
     });
 
-    describe('AddAppSetting command', () => {
+    describe('AddOrEditAppSetting (add) command', () => {
         it('should add a setting and show it in the tree on refresh', async () => {
             const { viewTree, dataTree, mockVscode, funcDataProvider, backingSettings } = createTestPipeline();
             const code = mockVscode.vscode;
@@ -354,7 +353,7 @@ describe('Function App Tree Integration (integration)', () => {
             expect(findByLabel(treeBefore, 'NEW_SETTING')).to.not.exist;
 
             // Find the App Settings category key
-            const categoryNode = findByLabel(treeBefore, FunctionAppLabels.AppSettings)!;
+            const categoryNode = findByLabel(treeBefore, FunctionAppVirtualPaths.AppSettings)!;
 
             // Mock input boxes: first for key, second for value
             let inputCallCount = 0;
@@ -366,7 +365,7 @@ describe('Function App Tree Integration (integration)', () => {
                 return Promise.resolve('new-value');
             }) as never;
 
-            const command = new AddAppSetting(code, dataTree, funcDataProvider);
+            const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
             await command.execute(categoryNode.key);
 
             // Backing store should have the new setting
@@ -382,20 +381,20 @@ describe('Function App Tree Integration (integration)', () => {
             const code = mockVscode.vscode;
 
             const treeBefore = await collectTree(viewTree);
-            const categoryNode = findByLabel(treeBefore, FunctionAppLabels.AppSettings)!;
+            const categoryNode = findByLabel(treeBefore, FunctionAppVirtualPaths.AppSettings)!;
 
             code.window.showInputBox = mock.fn(
                 () => Promise.resolve(undefined),
             ) as never;
 
-            const command = new AddAppSetting(code, dataTree, funcDataProvider);
+            const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
             await command.execute(categoryNode.key);
 
             expect(backingSettings).to.not.have.property('NEW_SETTING');
         });
     });
 
-    describe('EditAppSetting command', () => {
+    describe('AddOrEditAppSetting (edit) command', () => {
         it('should update a setting value and reflect it in the data provider cache', async () => {
             const { viewTree, dataTree, mockVscode, funcDataProvider, backingSettings } = createTestPipeline();
             const code = mockVscode.vscode;
@@ -409,7 +408,7 @@ describe('Function App Tree Integration (integration)', () => {
                 () => Promise.resolve('updated-value'),
             ) as never;
 
-            const command = new EditAppSetting(code, dataTree, funcDataProvider);
+            const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
             await command.execute(appKeyNode.key);
 
             // Backing store should have the updated value
@@ -430,7 +429,7 @@ describe('Function App Tree Integration (integration)', () => {
                 () => Promise.resolve(undefined),
             ) as never;
 
-            const command = new EditAppSetting(code, dataTree, funcDataProvider);
+            const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
             await command.execute(appKeyNode.key);
 
             // Original value should remain
@@ -453,7 +452,7 @@ describe('Function App Tree Integration (integration)', () => {
             const categoryKey = await viewTree.getParent(appKey!.key);
             expect(categoryKey).to.exist;
             const categoryItem = await viewTree.getTreeItem(categoryKey!);
-            expect(categoryItem.label).to.equal(FunctionAppLabels.AppSettings);
+            expect(categoryItem.label).to.equal(FunctionAppVirtualPaths.AppSettings);
 
             // Parent of category = Function App
             const funcKey = await viewTree.getParent(categoryKey!);

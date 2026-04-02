@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { StringDictionary, WebSiteManagementClientOptionalParams } from '@azure/arm-appservice';
-import type { WebSiteManagementClient } from '@azure/arm-appservice';
+import type { StringDictionary, WebSiteManagementClient, WebSiteManagementClientOptionalParams } from '@azure/arm-appservice';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';

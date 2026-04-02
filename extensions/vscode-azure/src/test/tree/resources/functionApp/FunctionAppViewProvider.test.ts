@@ -11,17 +11,16 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
 import { OpenInPortal } from '../../../../commands/OpenInPortal';
-import { AddAppSetting } from '../../../../commands/functionApp/AddAppSetting';
+import { AddOrEditAppSetting } from '../../../../commands/functionApp/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../commands/functionApp/DeleteAppSetting';
-import { EditAppSetting } from '../../../../commands/functionApp/EditAppSetting';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/FunctionAppViewProvider';
-import { FunctionAppLabels, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/functionAppConstants';
+import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/FunctionApp';
 import { makeFunctionApp } from './mockFunctionApp';
 
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {
     return makeVirtualResource({
         virtualType: FunctionAppVirtualTypes.AppSettings,
-        virtualPath: FunctionAppLabels.AppSettings,
+        virtualPath: FunctionAppVirtualPaths.AppSettings,
         azureResource: makeFunctionApp(),
         ...overrides,
     });
@@ -101,10 +100,10 @@ describe('FunctionAppViewProvider (unit)', () => {
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
-            expect(item.label).to.equal(FunctionAppLabels.AppSettings);
+            expect(item.label).to.equal(FunctionAppVirtualPaths.AppSettings);
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
             expect(item.iconPath).to.deep.equal(new vscode.ThemeIcon('folder'));
-            expect(item.contextValue).to.include(AddAppSetting.ContextValue);
+            expect(item.contextValue).to.include(AddOrEditAppSetting.AddContextValue);
         });
 
         it('should render individual app setting with symbol-key icon', () => {
@@ -120,7 +119,7 @@ describe('FunctionAppViewProvider (unit)', () => {
             expect(item.label).to.equal('MY_KEY');
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.None);
             expect(item.iconPath).to.deep.equal(new vscode.ThemeIcon('symbol-key'));
-            expect(item.contextValue).to.include(EditAppSetting.ContextValue);
+            expect(item.contextValue).to.include(AddOrEditAppSetting.EditContextValue);
             expect(item.contextValue).to.include(DeleteAppSetting.ContextValue);
         });
 
