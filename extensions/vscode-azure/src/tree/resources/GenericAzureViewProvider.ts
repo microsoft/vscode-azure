@@ -7,11 +7,12 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
 import { IAzureViewDataTree } from '../../services';
 import { combineContextValues } from '../combineContextValues';
+import { getAzureIconUri } from '../iconPath';
 
 @injectable()
 export class GenericAzureViewProvider implements ViewProvider<string> {
@@ -42,6 +43,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
@@ -109,7 +111,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
                 const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = new this.code.ThemeIcon('archive');
+                item.iconPath = getAzureIconUri(this.code, this.ctx.extensionContext, 'ResourceGroup');
                 return item;
             }
 

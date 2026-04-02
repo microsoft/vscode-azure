@@ -38,7 +38,7 @@ describe('GenericAzureViewProvider (unit)', () => {
                 return Promise.resolve(children.get(node) ?? []);
             },
         };
-        return new GenericAzureViewProvider(vscode, executor, mockCache as never);
+        return new GenericAzureViewProvider(vscode, { code: vscode, extensionContext: {} as never }, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
