@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, type IVsCode, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, getWorkspaceFolder, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -22,7 +22,7 @@ export class EnvironmentNameStep<TContext extends AzdWizardContext> extends Prom
     }
 
     public async prompt(): Promise<Partial<TContext>> {
-        const defaultName = getWorkspaceFolderName(this.ctx.code) ?? 'dev';
+        const defaultName = (await getWorkspaceFolder(this.ctx.code))?.name ?? 'dev';
 
         const name = await showSmartInputBox(this.ctx, {
             prompt: this.ctx.code.l10n.t('Enter an environment name for azd'),
@@ -40,12 +40,4 @@ export class EnvironmentNameStep<TContext extends AzdWizardContext> extends Prom
 
         return { environmentName: name } as Partial<TContext>;
     }
-}
-
-function getWorkspaceFolderName(code: IVsCode): string | undefined {
-    const folders = code.workspace.workspaceFolders;
-    if (folders?.length) {
-        return folders[0].name;
-    }
-    return undefined;
 }

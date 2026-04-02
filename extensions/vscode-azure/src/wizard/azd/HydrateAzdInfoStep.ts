@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
-import { PromptStep } from '@microsoft/vscode-azure-utils';
+import { getWorkspaceFolder, PromptStep } from '@microsoft/vscode-azure-utils';
 import { execFile } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -27,7 +27,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
     }
 
     public async prompt(): Promise<Partial<TContext>> {
-        const workspaceRoot = this.getWorkspaceRoot();
+        const workspaceRoot = (await getWorkspaceFolder(this.code))?.uri.fsPath;
         if (!workspaceRoot) {
             return {} as Partial<TContext>;
         }
@@ -50,14 +50,6 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         }
 
         return result as Partial<TContext>;
-    }
-
-    private getWorkspaceRoot(): string | undefined {
-        const folders = this.code.workspace.workspaceFolders;
-        if (folders?.length) {
-            return folders[0].uri.fsPath;
-        }
-        return undefined;
     }
 
     private async findDefaultEnvironment(cwd: string): Promise<string | undefined> {

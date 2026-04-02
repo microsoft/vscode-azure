@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, getWorkspaceFolder, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from './AzdWizardContext';
 import type { TempProjectManager } from './TempProjectManager';
 
@@ -46,20 +46,13 @@ export class OfferSaveStep<TContext extends AzdWizardContext> extends PromptStep
 
         let iacFolder: string;
         if (picked.data.save) {
-            const folders = this.ctx.code.workspace.workspaceFolders;
-            if (folders?.length === 1) {
-                iacFolder = folders[0].uri.fsPath;
-            } else {
-                const folder = await this.ctx.code.window.showWorkspaceFolderPick({
-                    placeHolder: this.ctx.code.l10n.t('Select a workspace folder to save the project'),
-                });
+            const folder = await getWorkspaceFolder(this.ctx.code, this.ctx.code.l10n.t('Select a workspace folder to save the project'));
 
-                if (!folder) {
-                    throw new Error(this.ctx.code.l10n.t('A workspace folder is required to save the generated files.'));
-                }
-
-                iacFolder = folder.uri.fsPath;
+            if (!folder) {
+                throw new Error(this.ctx.code.l10n.t('A workspace folder is required to save the generated files.'));
             }
+
+            iacFolder = folder.uri.fsPath;
         } else {
             iacFolder = await this.tempProjectManager.createProjectDir();
         }
