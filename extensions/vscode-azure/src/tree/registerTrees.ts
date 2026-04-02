@@ -17,6 +17,8 @@ import { CodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvide
 import { GenericActivityDataProvider } from './activity/GenericActivityDataProvider';
 import { AcrDataProvider } from './resources/acr/AcrDataProvider';
 import { AcrViewProvider } from './resources/acr/AcrViewProvider';
+import { FunctionAppDataProvider } from './resources/functionApp/FunctionAppDataProvider';
+import { FunctionAppViewProvider } from './resources/functionApp/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 
@@ -90,6 +92,12 @@ function bindAzureViewDataProviders(container: Container): void {
     // Registration order matters: specific providers first, generic fallback last.
     // ProviderRegistry.findProvider() returns the first match.
     container.bind(IAzureViewDataProviders).to(AcrDataProvider).onActivation(pushDisposable);
+
+    // Bind FunctionAppDataProvider as a singleton so commands can inject it
+    // directly for cached setting reads/writes, then alias to the multi-bound ID.
+    container.bind(FunctionAppDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
+    container.bind(IAzureViewDataProviders).toService(FunctionAppDataProvider);
+
     container.bind(IAzureViewDataProviders).to(GenericAzureDataProvider).onActivation(pushDisposable);
 }
 
@@ -102,6 +110,7 @@ function bindAzureViewViewProviders(container: Container): void {
     // Registration order matters: specific providers first, generic fallback last.
     // ProviderRegistry.findProvider() returns the first match.
     container.bind(IAzureViewViewProviders).to(AcrViewProvider).onActivation(pushDisposable);
+    container.bind(IAzureViewViewProviders).to(FunctionAppViewProvider).onActivation(pushDisposable);
     container.bind(IAzureViewViewProviders).to(GenericAzureViewProvider).onActivation(pushDisposable);
 }
 

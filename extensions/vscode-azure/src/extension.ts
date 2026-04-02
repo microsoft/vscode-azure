@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { AcrClient, DeploymentClient, IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, ResourceClient, SubscriptionClient } from '@microsoft/vscode-azure-azutils';
+import { AcrClient, DeploymentClient, IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, IWebAppClientProvider, ResourceClient, SubscriptionClient, WebAppClient } from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
     CommandRegistry,
@@ -103,6 +103,12 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         return (subscription) => SubscriptionClient.create(ctx, executor, subscription);
+    });
+
+    container.bind(IWebAppClientProvider).toFactory(context => {
+        const ctx = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        return (subscription) => WebAppClient.create(ctx, executor, subscription);
     });
 
     return container;

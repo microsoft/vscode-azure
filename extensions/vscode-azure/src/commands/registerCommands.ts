@@ -8,6 +8,8 @@ import { Container } from 'inversify';
 import { LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
 import { ClearActivities } from './ClearActivities';
+import { AddOrEditAppSetting } from './functionApp/AddOrEditAppSetting';
+import { DeleteAppSetting } from './functionApp/DeleteAppSetting';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
 import { Hello } from './Hello';
 import { LoadMore } from './LoadMore';
@@ -24,6 +26,10 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
 
     registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
+
+    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting, 'add');
+    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
+    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
 
     registerManagedCommand(container, 'vscode-azure/activity/trackArmDeployment', TrackArmDeployment);
     registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
