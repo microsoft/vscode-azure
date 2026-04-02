@@ -103,7 +103,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
                 const item = new this.code.TreeItem(resource.name, this.isOneRootSub ? this.code.TreeItemCollapsibleState.Expanded : this.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = new this.code.ThemeIcon('key');
+                item.iconPath = getAzureIconUri(this.code, this.ctx.extensionContext, 'Subscription');
                 return item;
             }
 
