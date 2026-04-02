@@ -32,7 +32,7 @@ export class TempProjectManager implements Disposable {
      */
     public async createProjectDir(): Promise<string> {
         await fs.mkdir(this.iacBaseDir, { recursive: true });
-        const dir = await fs.mkdtemp(path.join(this.iacBaseDir, 'project-')); // TODO wrong
+        const dir = await fs.mkdtemp(path.join(this.iacBaseDir, 'project-'));
         this.projectDirs.push(dir);
         return dir;
     }
