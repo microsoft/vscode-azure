@@ -13,6 +13,19 @@ import { MockInputBox } from './input/MockInputBox';
 import { MockQuickPick } from './input/MockQuickPick';
 import { MockTreeItem } from './tree/MockTreeItem';
 
+export class MockUri {
+    constructor(
+        public readonly scheme: string,
+        public readonly path: string,
+        public readonly fsPath: string = path,
+    ) { }
+    toString() { return `${this.scheme}://${this.path}`; }
+    static file(path: string) { return new MockUri('file', path); }
+    static joinPath(base: MockUri, ...segments: string[]) {
+        return new MockUri(base.scheme, [base.path, ...segments].join('/'));
+    }
+}
+
 /**
  * Result of {@link createMockVsCode}. Provides both the injectable
  * `IVsCode` value and test-inspection surfaces.
@@ -221,6 +234,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         ConfigurationTarget,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
+        Uri: MockUri,
         ...overrides,
     } as unknown as IVsCode;
 
@@ -275,8 +289,9 @@ export function createMockCodeContext(): MockCodeContextResult {
             packageJSON: { version: '0.0.0-test' },
         },
         extensionPath: '/mock/extension/path',
-        storageUri: { fsPath: '/mock/storage', scheme: 'file' },
-        globalStorageUri: { fsPath: '/mock/globalStorage', scheme: 'file' },
+        extensionUri: MockUri.file('/mock/extension/path'),
+        storageUri: MockUri.file('/mock/storage'),
+        globalStorageUri: MockUri.file('/mock/globalStorage'),
     } as unknown as IExtensionContext;
 
     return {
