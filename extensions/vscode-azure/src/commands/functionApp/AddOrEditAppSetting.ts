@@ -7,17 +7,18 @@ import { isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
-import { FunctionAppVirtualTypes } from '../../tree/resources/functionApp/FunctionApp';
 import { FunctionAppDataProvider } from '../../tree/resources/functionApp/FunctionAppDataProvider';
 import { appSettingsParentKey } from '../../tree/resources/functionApp/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 
+type AppSettingMode = 'add' | 'edit';
+
 /**
- * Adds a new app setting or edits an existing one, depending on the
- * node that triggered the command.
+ * Adds a new app setting or edits an existing one.
  *
- * - Invoked on the "App Settings" category node: prompts for key + value (Add flow).
- * - Invoked on an individual app setting node: prompts for a new value (Edit flow).
+ * The mode is supplied as a prefix arg at registration time:
+ * - `'add'`  -- prompts for key + value (invoked on the "App Settings" category node).
+ * - `'edit'` -- prompts for a new value (invoked on an individual app setting node).
  */
 @injectable()
 export class AddOrEditAppSetting implements ManagedCommand {
@@ -30,7 +31,7 @@ export class AddOrEditAppSetting implements ManagedCommand {
         @inject(FunctionAppDataProvider) private readonly dataProvider: FunctionAppDataProvider,
     ) { }
 
-    public async execute(key?: string): Promise<void> {
+    public async execute(mode: AppSettingMode, key?: string): Promise<void> {
         if (!key) {
             return;
         }
@@ -40,10 +41,13 @@ export class AddOrEditAppSetting implements ManagedCommand {
             return;
         }
 
-        if (resource.virtualType === FunctionAppVirtualTypes.AppSettings) {
-            await this.addSetting(key, resource);
-        } else if (resource.virtualType === FunctionAppVirtualTypes.AppSetting) {
-            await this.editSetting(key, resource);
+        switch (mode) {
+            case 'add':
+                await this.addSetting(key, resource);
+                break;
+            case 'edit':
+                await this.editSetting(key, resource);
+                break;
         }
     }
 

@@ -366,7 +366,7 @@ describe('Function App Tree Integration (integration)', () => {
             }) as never;
 
             const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
-            await command.execute(categoryNode.key);
+            await command.execute('add', categoryNode.key);
 
             // Backing store should have the new setting
             expect(backingSettings).to.have.property('NEW_SETTING', 'new-value');
@@ -388,7 +388,7 @@ describe('Function App Tree Integration (integration)', () => {
             ) as never;
 
             const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
-            await command.execute(categoryNode.key);
+            await command.execute('add', categoryNode.key);
 
             expect(backingSettings).to.not.have.property('NEW_SETTING');
         });
@@ -409,7 +409,7 @@ describe('Function App Tree Integration (integration)', () => {
             ) as never;
 
             const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
-            await command.execute(appKeyNode.key);
+            await command.execute('edit', appKeyNode.key);
 
             // Backing store should have the updated value
             expect(backingSettings).to.have.property('APP_KEY', 'updated-value');
@@ -430,7 +430,7 @@ describe('Function App Tree Integration (integration)', () => {
             ) as never;
 
             const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
-            await command.execute(appKeyNode.key);
+            await command.execute('edit', appKeyNode.key);
 
             // Original value should remain
             expect(backingSettings).to.have.property('APP_KEY', 'app-value');

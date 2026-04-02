@@ -26,8 +26,8 @@ export function registerCommands(container: Container): void {
 
     registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
 
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting);
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting);
+    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting, 'add');
+    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
     registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
 
     registerManagedCommand(container, 'vscode-azure/activity/trackArmDeployment', TrackArmDeployment);
