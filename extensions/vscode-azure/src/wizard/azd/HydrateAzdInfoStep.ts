@@ -6,9 +6,8 @@
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import { getWorkspaceFolder, PromptStep } from '@microsoft/vscode-azure-utils';
 import { execFile } from 'child_process';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { promisify } from 'util';
+import { isAzdProject } from '../../utils/isAzdProject';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 const execFileAsync = promisify(execFile);
@@ -34,13 +33,9 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
         const result: Record<string, unknown> = {};
 
-        // Check for azure.yaml to detect an existing azd project
-        const azureYamlPath = path.join(workspaceRoot, 'azure.yaml'); // TODO: azure.yml too
-        try {
-            await fs.access(azureYamlPath);
+        // Check for azure.yaml / azure.yml to detect an existing azd project
+        if (await isAzdProject(workspaceRoot)) {
             result.iacFolder = workspaceRoot;
-        } catch {
-            // No azure.yaml — not an existing azd project
         }
 
         // Find the default azd environment via CLI
@@ -54,7 +49,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
     private async findDefaultEnvironment(cwd: string): Promise<string | undefined> {
         try {
-            // TODO: add an API to the AZD extension for this
+            // TODO: Replace with AZD extension API when available
             const { stdout } = await execFileAsync('azd', ['env', 'list', '--output', 'json'], { cwd });
             const envs: AzdEnvEntry[] = JSON.parse(stdout) as AzdEnvEntry[];
             const defaultEnv = envs.find(e => e.IsDefault);

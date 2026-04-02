@@ -5,13 +5,11 @@
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
 import { execFile } from 'child_process';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { promisify } from 'util';
+import { isAzdProject } from '../../utils/isAzdProject';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 const execFileAsync = promisify(execFile);
-const AzureYamlFileName = 'azure.yaml';
 
 /**
  * Generates the `azure.yaml` stub for the project.
@@ -22,16 +20,7 @@ export class GenerateAzureYamlStep extends ExecuteStep<AzdWizardContext> {
             return false;
         }
 
-        const azureYamlPath = path.join(context.iacFolder, AzureYamlFileName);
-
-        try {
-            await fs.access(azureYamlPath);
-            // File exists; skip generation
-            return false;
-        } catch {
-            // File does not exist; proceed with generation
-            return true;
-        }
+        return !(await isAzdProject(context.iacFolder));
     }
 
     public async execute(context: AzdWizardContext): Promise<void> {
