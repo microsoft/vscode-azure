@@ -5,7 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor, DataItemTree, type ICodeContext, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
+import { ActionExecutor, DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -93,10 +93,7 @@ describe('Function App Tree Integration (integration)', () => {
     }): TestPipeline {
         const executor = new ActionExecutor(new NullTelemetryReporter());
         const mockCtx = createMockCodeContext();
-        const ctx: ICodeContext = {
-            code: { ...mockCtx.ctx.code, Uri: vscode.Uri },
-            extensionContext: { ...mockCtx.ctx.extensionContext, extensionUri: vscode.Uri.file('/test-extension') },
-        };
+        const ctx = mockCtx.ctx;
         const code = ctx.code;
 
         const { client: webAppClient, settings: backingSettings } = createMockWebAppClient(options?.initialSettings);

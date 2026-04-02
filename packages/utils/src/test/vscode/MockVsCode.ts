@@ -188,6 +188,21 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(undefined),
     );
 
+    // ── Uri ─────────────────────────────────────────────────
+
+    class MockUri {
+        constructor(
+            public readonly scheme: string,
+            public readonly path: string,
+            public readonly fsPath: string = path,
+        ) { }
+        toString() { return `${this.scheme}://${this.path}`; }
+        static file(path: string) { return new MockUri('file', path); }
+        static joinPath(base: MockUri, ...segments: string[]) {
+            return new MockUri(base.scheme, [base.path, ...segments].join('/'));
+        }
+    }
+
     // ── Assemble ────────────────────────────────────────────
 
     const mockVsCode = {
@@ -221,6 +236,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         ConfigurationTarget,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
+        Uri: MockUri,
         ...overrides,
     } as unknown as IVsCode;
 
@@ -275,6 +291,7 @@ export function createMockCodeContext(): MockCodeContextResult {
             packageJSON: { version: '0.0.0-test' },
         },
         extensionPath: '/mock/extension/path',
+        extensionUri: { fsPath: '/mock/extension/path', path: '/mock/extension/path', scheme: 'file' },
         storageUri: { fsPath: '/mock/storage', scheme: 'file' },
         globalStorageUri: { fsPath: '/mock/globalStorage', scheme: 'file' },
     } as unknown as IExtensionContext;

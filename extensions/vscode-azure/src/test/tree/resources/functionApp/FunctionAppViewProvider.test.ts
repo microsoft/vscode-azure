@@ -32,16 +32,12 @@ describe('FunctionAppViewProvider (unit)', () => {
     ) {
         const executor = new ActionExecutor(new NullTelemetryReporter());
         const { ctx } = createMockCodeContext();
-        const mockCtx = {
-            code: { ...ctx.code, Uri: vscode.Uri },
-            extensionContext: { ...ctx.extensionContext, extensionUri: vscode.Uri.file('/test-extension') },
-        };
         const cacheMap = cache ?? new Map<string, ConcreteAzureNode>();
         const mockCache = {
             get: (key: string) => cacheMap.get(key),
             getChildren: (node: ConcreteAzureNode) => Promise.resolve([] as ConcreteAzureNode[]),
         };
-        return new FunctionAppViewProvider(mockCtx, executor, mockCache as never);
+        return new FunctionAppViewProvider(ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
