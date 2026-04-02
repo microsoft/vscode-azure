@@ -55,7 +55,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
             const defaultEnv = envs.find(e => e.IsDefault);
             return defaultEnv?.Name;
         } catch {
-            // azd not installed or no environments — ignore
+            // azd not installed or no environments -- ignore
         }
         return undefined;
     }

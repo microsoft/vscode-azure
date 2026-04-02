@@ -15,11 +15,11 @@ interface RuntimeItem {
 
 function getRuntimeItems(ctx: ICodeContext): RuntimeItem[] {
     return [
-        { label: 'Node.js', description: ctx.code.l10n.t('JavaScript / TypeScript'), data: 'node' },
-        { label: 'Python', description: ctx.code.l10n.t('Python 3.11'), data: 'python' },
-        { label: '.NET (isolated)', description: ctx.code.l10n.t('.NET 8 isolated worker'), data: 'dotnet-isolated' },
-        { label: 'Java', description: ctx.code.l10n.t('Java 17'), data: 'java' },
-        { label: 'PowerShell', description: ctx.code.l10n.t('PowerShell 7.4'), data: 'powershell' },
+        { label: ctx.code.l10n.t('Node.js'), description: ctx.code.l10n.t('JavaScript / TypeScript'), data: 'node' },
+        { label: ctx.code.l10n.t('Python'), description: ctx.code.l10n.t('Python 3.11'), data: 'python' },
+        { label: ctx.code.l10n.t('.NET (isolated)'), description: ctx.code.l10n.t('.NET 8 isolated worker'), data: 'dotnet-isolated' },
+        { label: ctx.code.l10n.t('Java'), description: ctx.code.l10n.t('Java 17'), data: 'java' },
+        { label: ctx.code.l10n.t('PowerShell'), description: ctx.code.l10n.t('PowerShell 7.4'), data: 'powershell' },
         { label: ctx.code.l10n.t('Custom'), description: ctx.code.l10n.t('Custom handler'), data: 'custom' },
     ];
 }

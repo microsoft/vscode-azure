@@ -8,9 +8,10 @@ import type { AzdWizardContext } from './AzdWizardContext';
 import type { TempProjectManager } from './TempProjectManager';
 
 /**
- * Asks the user whether to save to workspace and/or deploy.
- * Sets `projectDir` to the workspace folder if saving, and
- * sets the `deploy` flag.
+ * Asks the user whether to save the generated files to a workspace folder
+ * and whether to provision/deploy.
+ * Sets `iacFolder` to the selected workspace folder if saving, or to a
+ * temporary project directory if not, and sets the `provision` flag.
  */
 export class OfferSaveStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(

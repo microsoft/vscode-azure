@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 @minLength(1)
-@maxLength(64)
+@maxLength(48)
 @description('Name of the azd environment.')
 param environmentName string
 
