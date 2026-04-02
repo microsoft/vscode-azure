@@ -4,10 +4,15 @@
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
 - Setting for default page size
+- Make `picks` in `PickContext` optional so we don't have to init it all over the place
+- VSCode FS instead of `node:fs`
 
 ## Issues
 - Figure out why the token expired and wasn't refreshing
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
+- Recently used label isn't appearing
+- Recent input isn't showing back up in input box
+- Sort the recently used item to the top
 
 ## Code hygiene
 - Reexport and use Azure client types from azutils, and eliminate dev deps on Azure packages in extension
@@ -50,6 +55,5 @@
   - Settings migration?
 
 ## Ideas
-- Could we use a hardcoded Azure location list, along with a test case that makes sure we keep it up-to-date with real Azure? Would save a lot of location list step time. At a minimum we could do session-level caching.
 - Deep link support? Deep links to tree items etc.
 - Build with Turbo? `bmw/turbo` branch has a start on that
