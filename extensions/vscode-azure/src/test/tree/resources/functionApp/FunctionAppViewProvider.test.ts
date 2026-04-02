@@ -17,6 +17,10 @@ import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/FunctionApp';
 import { makeFunctionApp } from './mockFunctionApp';
 
+const mockExtensionContext = {
+    extensionUri: vscode.Uri.file('/test-extension'),
+} as vscode.ExtensionContext;
+
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {
     return makeVirtualResource({
         virtualType: FunctionAppVirtualTypes.AppSettings,
@@ -36,7 +40,7 @@ describe('FunctionAppViewProvider (unit)', () => {
             get: (key: string) => cacheMap.get(key),
             getChildren: (node: ConcreteAzureNode) => Promise.resolve([] as ConcreteAzureNode[]),
         };
-        return new FunctionAppViewProvider(vscode, executor, mockCache as never);
+        return new FunctionAppViewProvider(vscode, mockExtensionContext, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
@@ -79,7 +83,7 @@ describe('FunctionAppViewProvider (unit)', () => {
     });
 
     describe('getTreeItem', () => {
-        it('should render a Function App with symbol-event icon and Collapsed state', () => {
+        it('should render a Function App with FunctionApp icon and Collapsed state', () => {
             const app = makeFunctionApp();
             const key = AzureNodeId.from(app).toString();
             const cache = new Map<string, ConcreteAzureNode>([[key, app as ConcreteAzureNode]]);
@@ -88,7 +92,8 @@ describe('FunctionAppViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
             expect(item.label).to.equal('myFunc');
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
-            expect(item.iconPath).to.deep.equal(new vscode.ThemeIcon('symbol-event'));
+            expect(item.iconPath).to.be.instanceOf(vscode.Uri);
+            expect((item.iconPath as vscode.Uri).path).to.match(/FunctionApp\.svg$/);
             expect(item.contextValue).to.include(OpenInPortal.ContextValue);
             expect(item.contextValue).to.include(FunctionAppViewProvider.ContextValue);
         });

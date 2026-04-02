@@ -21,6 +21,10 @@ import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzur
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
 
+const mockExtensionContext = {
+    extensionUri: vscode.Uri.file('/test-extension'),
+} as vscode.ExtensionContext;
+
 /**
  * Integration tests for the Function App tree rendering pipeline and CRUD commands.
  *
@@ -92,7 +96,7 @@ describe('Function App Tree Integration (integration)', () => {
         initialSettings?: Record<string, string>;
     }): TestPipeline {
         const executor = new ActionExecutor(new NullTelemetryReporter());
-        const mockVscode = createMockVsCode();
+        const mockVscode = createMockVsCode({ Uri: vscode.Uri } as never);
         const code = mockVscode.vscode;
 
         const { client: webAppClient, settings: backingSettings } = createMockWebAppClient(options?.initialSettings);
@@ -136,7 +140,7 @@ describe('Function App Tree Integration (integration)', () => {
             viewOptions,
         );
 
-        const funcViewProvider = new FunctionAppViewProvider(code, executor, dataTree);
+        const funcViewProvider = new FunctionAppViewProvider(code, mockExtensionContext, executor, dataTree);
         const genericViewProvider = new GenericAzureViewProvider(code, executor, dataTree);
 
         viewTree.registerProvider(funcViewProvider);
@@ -190,13 +194,13 @@ describe('Function App Tree Integration (integration)', () => {
     // -- Tests: Tree rendering --------------------------------------------
 
     describe('full tree rendering', () => {
-        it('should render Function App with symbol-event icon under the resource group', async () => {
+        it('should render Function App with FunctionApp icon under the resource group', async () => {
             const { viewTree } = createTestPipeline();
             const tree = await collectTree(viewTree);
 
             const func = findByLabel(tree, 'myFunc');
             expect(func, 'Function App node').to.exist;
-            expect((func!.item.iconPath as { id: string }).id).to.equal('symbol-event');
+            expect((func!.item.iconPath as vscode.Uri).path).to.match(/FunctionApp\.svg$/);
             expect(func!.item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
         });
 
@@ -263,7 +267,7 @@ describe('Function App Tree Integration (integration)', () => {
             // Function App has specific icon
             const func = findByLabel(tree, 'myFunc');
             expect(func).to.exist;
-            expect((func!.item.iconPath as { id: string }).id).to.equal('symbol-event');
+            expect((func!.item.iconPath as vscode.Uri).path).to.match(/FunctionApp\.svg$/);
 
             // Non-func resource has generic icon
             const storage = findByLabel(tree, 'myStorage');

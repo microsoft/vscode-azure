@@ -5,13 +5,14 @@
 
 import { AzureNodeId, getNodeType, isGenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
 import { AddOrEditAppSetting } from '../../../commands/functionApp/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../commands/functionApp/DeleteAppSetting';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
+import { getAzureIconUri } from '../../iconPath';
 import { isFunctionApp, isFunctionAppVirtual, FunctionAppVirtualTypes } from './FunctionApp';
 
 /**
@@ -27,6 +28,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
@@ -63,7 +65,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = combineContextValues(OpenInPortal.ContextValue, FunctionAppViewProvider.ContextValue);
-        item.iconPath = new this.code.ThemeIcon('symbol-event');
+        item.iconPath = getAzureIconUri(this.code, this.extensionContext, 'FunctionApp');
         item.description = resource.logicalType;
 
         return item;
