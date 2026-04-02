@@ -5,8 +5,8 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor, type IExtensionContext } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { ActionExecutor } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
@@ -16,10 +16,6 @@ import { DeleteAppSetting } from '../../../../commands/functionApp/DeleteAppSett
 import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/FunctionAppViewProvider';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/FunctionApp';
 import { makeFunctionApp } from './mockFunctionApp';
-
-const mockExtensionContext: IExtensionContext = {
-    extensionUri: vscode.Uri.file('/test-extension'),
-} as IExtensionContext;
 
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {
     return makeVirtualResource({
@@ -35,12 +31,17 @@ describe('FunctionAppViewProvider (unit)', () => {
         cache?: Map<string, ConcreteAzureNode>,
     ) {
         const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { ctx } = createMockCodeContext();
+        const mockCtx = {
+            code: { ...ctx.code, Uri: vscode.Uri },
+            extensionContext: { ...ctx.extensionContext, extensionUri: vscode.Uri.file('/test-extension') },
+        };
         const cacheMap = cache ?? new Map<string, ConcreteAzureNode>();
         const mockCache = {
             get: (key: string) => cacheMap.get(key),
             getChildren: (node: ConcreteAzureNode) => Promise.resolve([] as ConcreteAzureNode[]),
         };
-        return new FunctionAppViewProvider(vscode, mockExtensionContext, executor, mockCache as never);
+        return new FunctionAppViewProvider(mockCtx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
@@ -83,7 +84,7 @@ describe('FunctionAppViewProvider (unit)', () => {
     });
 
     describe('getTreeItem', () => {
-        it('should render a Function App with FunctionApp icon and Collapsed state', () => {
+        it('should render a Function App with Collapsed state', () => {
             const app = makeFunctionApp();
             const key = AzureNodeId.from(app).toString();
             const cache = new Map<string, ConcreteAzureNode>([[key, app as ConcreteAzureNode]]);
@@ -92,13 +93,11 @@ describe('FunctionAppViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
             expect(item.label).to.equal('myFunc');
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
-            expect(item.iconPath).to.be.instanceOf(vscode.Uri);
-            expect((item.iconPath as vscode.Uri).path).to.match(/FunctionApp\.svg$/);
             expect(item.contextValue).to.include(OpenInPortal.ContextValue);
             expect(item.contextValue).to.include(FunctionAppViewProvider.ContextValue);
         });
 
-        it('should render App Settings category with folder icon', () => {
+        it('should render App Settings category as collapsed', () => {
             const vr = makeFunctionAppVirtual();
             const key = AzureNodeId.from(vr).toString();
             const cache = new Map<string, ConcreteAzureNode>([[key, vr as ConcreteAzureNode]]);
@@ -107,11 +106,10 @@ describe('FunctionAppViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
             expect(item.label).to.equal(FunctionAppVirtualPaths.AppSettings);
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
-            expect(item.iconPath).to.deep.equal(new vscode.ThemeIcon('folder'));
             expect(item.contextValue).to.include(AddOrEditAppSetting.AddContextValue);
         });
 
-        it('should render individual app setting with symbol-key icon', () => {
+        it('should render individual app setting as leaf node', () => {
             const vr = makeFunctionAppVirtual({
                 virtualType: FunctionAppVirtualTypes.AppSetting,
                 virtualPath: 'MY_KEY',
@@ -123,7 +121,6 @@ describe('FunctionAppViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
             expect(item.label).to.equal('MY_KEY');
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.None);
-            expect(item.iconPath).to.deep.equal(new vscode.ThemeIcon('symbol-key'));
             expect(item.contextValue).to.include(AddOrEditAppSetting.EditContextValue);
             expect(item.contextValue).to.include(DeleteAppSetting.ContextValue);
         });

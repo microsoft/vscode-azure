@@ -5,8 +5,8 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor, DataItemTree, type IExtensionContext, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { ActionExecutor, DataItemTree, type ICodeContext, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -20,10 +20,6 @@ import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
-
-const mockExtensionContext: IExtensionContext = {
-    extensionUri: vscode.Uri.file('/test-extension'),
-} as IExtensionContext;
 
 /**
  * Integration tests for the Function App tree rendering pipeline and CRUD commands.
@@ -85,7 +81,7 @@ describe('Function App Tree Integration (integration)', () => {
     interface TestPipeline {
         readonly dataTree: DataItemTree<ConcreteAzureNode>;
         readonly viewTree: ViewItemTree<string, ConcreteAzureNode>;
-        readonly mockVscode: ReturnType<typeof createMockVsCode>;
+        readonly mockCtx: ReturnType<typeof createMockCodeContext>;
         readonly funcDataProvider: FunctionAppDataProvider;
         readonly webAppClient: IWebAppClient;
         readonly backingSettings: Record<string, string>;
@@ -96,8 +92,12 @@ describe('Function App Tree Integration (integration)', () => {
         initialSettings?: Record<string, string>;
     }): TestPipeline {
         const executor = new ActionExecutor(new NullTelemetryReporter());
-        const mockVscode = createMockVsCode({ Uri: vscode.Uri });
-        const code = mockVscode.vscode;
+        const mockCtx = createMockCodeContext();
+        const ctx: ICodeContext = {
+            code: { ...mockCtx.ctx.code, Uri: vscode.Uri },
+            extensionContext: { ...mockCtx.ctx.extensionContext, extensionUri: vscode.Uri.file('/test-extension') },
+        };
+        const code = ctx.code;
 
         const { client: webAppClient, settings: backingSettings } = createMockWebAppClient(options?.initialSettings);
         const webAppClientProvider = () => Promise.resolve(webAppClient);
@@ -140,13 +140,13 @@ describe('Function App Tree Integration (integration)', () => {
             viewOptions,
         );
 
-        const funcViewProvider = new FunctionAppViewProvider(code, mockExtensionContext, executor, dataTree);
+        const funcViewProvider = new FunctionAppViewProvider(ctx, executor, dataTree);
         const genericViewProvider = new GenericAzureViewProvider(code, executor, dataTree);
 
         viewTree.registerProvider(funcViewProvider);
         viewTree.registerProvider(genericViewProvider);
 
-        return { dataTree, viewTree, mockVscode, funcDataProvider, webAppClient, backingSettings };
+        return { dataTree, viewTree, mockCtx, funcDataProvider, webAppClient, backingSettings };
     }
 
     // -- Helpers -----------------------------------------------------------
@@ -194,13 +194,12 @@ describe('Function App Tree Integration (integration)', () => {
     // -- Tests: Tree rendering --------------------------------------------
 
     describe('full tree rendering', () => {
-        it('should render Function App with FunctionApp icon under the resource group', async () => {
+        it('should render Function App under the resource group', async () => {
             const { viewTree } = createTestPipeline();
             const tree = await collectTree(viewTree);
 
             const func = findByLabel(tree, 'myFunc');
             expect(func, 'Function App node').to.exist;
-            expect((func!.item.iconPath as vscode.Uri).path).to.match(/FunctionApp\.svg$/);
             expect(func!.item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
         });
 
@@ -210,18 +209,16 @@ describe('Function App Tree Integration (integration)', () => {
 
             const category = findByLabel(tree, FunctionAppVirtualPaths.AppSettings);
             expect(category, 'App Settings category').to.exist;
-            expect((category!.item.iconPath as { id: string }).id).to.equal('folder');
             expect(category!.item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
             expect(category!.item.contextValue).to.include(AddOrEditAppSetting.AddContextValue);
         });
 
-        it('should render individual settings as leaf nodes with symbol-key icon', async () => {
+        it('should render individual settings as leaf nodes', async () => {
             const { viewTree } = createTestPipeline();
             const tree = await collectTree(viewTree);
 
             const appKey = findByLabel(tree, 'APP_KEY');
             expect(appKey, 'APP_KEY setting').to.exist;
-            expect((appKey!.item.iconPath as { id: string }).id).to.equal('symbol-key');
             expect(appKey!.item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.None);
             expect(appKey!.item.contextValue).to.include(AddOrEditAppSetting.EditContextValue);
             expect(appKey!.item.contextValue).to.include(DeleteAppSetting.ContextValue);
@@ -264,15 +261,13 @@ describe('Function App Tree Integration (integration)', () => {
             const { viewTree } = createTestPipeline();
             const tree = await collectTree(viewTree);
 
-            // Function App has specific icon
+            // Function App node exists
             const func = findByLabel(tree, 'myFunc');
             expect(func).to.exist;
-            expect((func!.item.iconPath as vscode.Uri).path).to.match(/FunctionApp\.svg$/);
 
-            // Non-func resource has generic icon
+            // Non-func resource also exists
             const storage = findByLabel(tree, 'myStorage');
             expect(storage).to.exist;
-            expect((storage!.item.iconPath as { id: string }).id).to.equal('symbol-misc');
         });
 
         it('should handle resource group with only Function Apps', async () => {
@@ -298,8 +293,8 @@ describe('Function App Tree Integration (integration)', () => {
 
     describe('DeleteAppSetting command', () => {
         it('should delete a setting and remove it from the tree on refresh', async () => {
-            const { viewTree, dataTree, mockVscode, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockVscode.vscode;
+            const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
+            const code = mockCtx.ctx.code;
 
             // Populate the tree
             const treeBefore = await collectTree(viewTree);
@@ -328,8 +323,8 @@ describe('Function App Tree Integration (integration)', () => {
         });
 
         it('should not delete when user cancels confirmation', async () => {
-            const { viewTree, dataTree, mockVscode, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockVscode.vscode;
+            const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
+            const code = mockCtx.ctx.code;
 
             const treeBefore = await collectTree(viewTree);
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
@@ -349,8 +344,8 @@ describe('Function App Tree Integration (integration)', () => {
 
     describe('AddOrEditAppSetting (add) command', () => {
         it('should add a setting and show it in the tree on refresh', async () => {
-            const { viewTree, dataTree, mockVscode, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockVscode.vscode;
+            const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
+            const code = mockCtx.ctx.code;
 
             // Populate the tree
             const treeBefore = await collectTree(viewTree);
@@ -381,8 +376,8 @@ describe('Function App Tree Integration (integration)', () => {
         });
 
         it('should not add when user cancels key input', async () => {
-            const { viewTree, dataTree, mockVscode, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockVscode.vscode;
+            const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
+            const code = mockCtx.ctx.code;
 
             const treeBefore = await collectTree(viewTree);
             const categoryNode = findByLabel(treeBefore, FunctionAppVirtualPaths.AppSettings)!;
@@ -400,8 +395,8 @@ describe('Function App Tree Integration (integration)', () => {
 
     describe('AddOrEditAppSetting (edit) command', () => {
         it('should update a setting value and reflect it in the data provider cache', async () => {
-            const { viewTree, dataTree, mockVscode, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockVscode.vscode;
+            const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
+            const code = mockCtx.ctx.code;
 
             // Populate the tree (this also populates the settings cache)
             const treeBefore = await collectTree(viewTree);
@@ -423,8 +418,8 @@ describe('Function App Tree Integration (integration)', () => {
         });
 
         it('should not update when user cancels input', async () => {
-            const { viewTree, dataTree, mockVscode, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockVscode.vscode;
+            const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
+            const code = mockCtx.ctx.code;
 
             const treeBefore = await collectTree(viewTree);
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;

@@ -5,7 +5,7 @@
 
 import { AzureNodeId, getNodeType, isGenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
 import { AddOrEditAppSetting } from '../../../commands/functionApp/AddOrEditAppSetting';
@@ -27,11 +27,12 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
     public static readonly ContextValue = 'functionApp';
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
+
+    private get code(): IVsCode { return this.ctx.code; }
 
     // #region ViewProvider
 
@@ -65,7 +66,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = combineContextValues(OpenInPortal.ContextValue, FunctionAppViewProvider.ContextValue);
-        item.iconPath = getAzureIconUri(this.code, this.extensionContext, 'FunctionApp');
+        item.iconPath = getAzureIconUri(this.code, this.ctx.extensionContext, 'FunctionApp');
         item.description = resource.logicalType;
 
         return item;
