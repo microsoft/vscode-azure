@@ -11,10 +11,10 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
 import { OpenInPortal } from '../../../../commands/OpenInPortal';
-import { AddOrEditAppSetting } from '../../../../commands/functionApp/AddOrEditAppSetting';
-import { DeleteAppSetting } from '../../../../commands/functionApp/DeleteAppSetting';
-import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/FunctionAppViewProvider';
-import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/FunctionApp';
+import { AddOrEditAppSetting } from '../../../../commands/functions/AddOrEditAppSetting';
+import { DeleteAppSetting } from '../../../../commands/functions/DeleteAppSetting';
+import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functions/FunctionApp';
+import { FunctionAppViewProvider } from '../../../../tree/resources/functions/FunctionAppViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
 
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {

@@ -17,8 +17,8 @@ import { CodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvide
 import { GenericActivityDataProvider } from './activity/GenericActivityDataProvider';
 import { AcrDataProvider } from './resources/acr/AcrDataProvider';
 import { AcrViewProvider } from './resources/acr/AcrViewProvider';
-import { FunctionAppDataProvider } from './resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppViewProvider } from './resources/functionApp/FunctionAppViewProvider';
+import { FunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
+import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 
