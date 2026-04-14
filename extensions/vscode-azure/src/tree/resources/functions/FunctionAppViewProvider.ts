@@ -8,12 +8,12 @@ import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
-import { AddOrEditAppSetting } from '../../../commands/functionApp/AddOrEditAppSetting';
-import { DeleteAppSetting } from '../../../commands/functionApp/DeleteAppSetting';
+import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSetting';
+import { DeleteAppSetting } from '../../../commands/functions/DeleteAppSetting';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { getAzureIconUri } from '../../iconPath';
-import { isFunctionApp, isFunctionAppVirtual, FunctionAppVirtualTypes } from './FunctionApp';
+import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './FunctionApp';
 
 /**
  * View-layer provider for Azure Function Apps.

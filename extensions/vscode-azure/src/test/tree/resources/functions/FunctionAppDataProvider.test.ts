@@ -9,8 +9,8 @@ import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
-import { FunctionAppDataProvider } from '../../../../tree/resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functionApp/FunctionApp';
+import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../tree/resources/functions/FunctionApp';
+import { FunctionAppDataProvider } from '../../../../tree/resources/functions/FunctionAppDataProvider';
 import { makeFunctionApp } from './mockFunctionApp';
 
 describe('FunctionAppDataProvider (unit)', () => {
