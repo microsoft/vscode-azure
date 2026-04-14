@@ -4,12 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    getNodeType, isVirtualResource, parseAzureResourceId,
+    getNodeType, IAcrClientProvider, isVirtualResource, parseAzureResourceId,
     type ConcreteAzureNode, type GenericResource, type IAcrClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAcrClientProvider } from '../../../services';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**

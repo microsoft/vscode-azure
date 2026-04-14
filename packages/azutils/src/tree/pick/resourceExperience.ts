@@ -3,79 +3,58 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type CreateNewOption, getLastPick, type ICodeContext, type PickClassification, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, type PromptStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
-import { AzureNodeId } from '../../models/AzureNodeId';
 import type { GenericResource } from '../../models/GenericResource';
+import { type ChooseResourceContext, ChooseResourceStep } from '../../wizard/ChooseResourceStep';
 
 interface ResourceExperienceOptions extends ICodeContext {
-    readonly viewItemTree: ViewItemTree<string, ConcreteAzureNode>;
+    readonly tree: ViewItemTree<string, ConcreteAzureNode>;
     readonly dataItemTree: ConcreteAzureNodeTree;
     readonly logicalType: string;
-    readonly canPickMany?: boolean;
-    readonly create?: CreateNewOption<string>;
 }
 
-export async function resourceExperience(options: ResourceExperienceOptions & { canPickMany?: false, create?: CreateNewOption<string> }): Promise<string>;
-export async function resourceExperience(options: ResourceExperienceOptions & { canPickMany: true, create?: never }): Promise<string[]>;
-export async function resourceExperience(options: ResourceExperienceOptions): Promise<string | string[]> {
-    const wizard = new Wizard<PickContext<string>>(
-        {
-            picks: [],
-        },
-        [
-            new RecursivePickStep<string>({
-                ...options,
-                classify: item => classifyForResource(AzureNodeId.parse(item), item, options),
-                tree: options.viewItemTree,
-            }),
-        ]
+/**
+ * Convenience function that runs a wizard with
+ * {@linkcode ChooseResourceStep} and returns the picked resource,
+ * cast to the caller-specified type.
+ *
+ * @typeParam T - The expected concrete resource type (must extend
+ *   {@linkcode GenericResource}).
+ */
+export async function resourceExperience<T extends GenericResource>(
+    options: ResourceExperienceOptions & { canPickMany: true },
+): Promise<T[]>;
+export async function resourceExperience<T extends GenericResource>(
+    options: ResourceExperienceOptions & { canPickMany?: false },
+): Promise<T>;
+export async function resourceExperience<T extends GenericResource>(
+    options: ResourceExperienceOptions & { canPickMany?: boolean },
+): Promise<T | T[]> {
+    const { canPickMany, ...rest } = options;
+    // Construct with the literal `canPickMany` value so TypeScript
+    // narrows the ExclusivePickManyOrCreate discriminated union.
+    const step = canPickMany
+        ? new ChooseResourceStep<T>({ ...rest, canPickMany: true })
+        : new ChooseResourceStep<T>({ ...rest });
+
+    const wizard = new Wizard<ChooseResourceContext<T>>(
+        { picks: [] },
+        // ChooseResourceStep inherits from PromptStep<PickContext<string>>;
+        // ChooseResourceContext<T> extends PickContext<string>, so this is
+        // safe at runtime--the override narrows, not widens.
+        [step as PromptStep<ChooseResourceContext<T>>],
     );
 
     const result = await wizard.run();
 
-    if (options.canPickMany) {
-        return result.selectedTerminalPicks ?? [];
-    } else {
-        const resourcePick = getLastPick(result);
-
-        if (!resourcePick) {
-            // TODO: unexpected state
-            throw new Error('No resource was picked');
-        }
-
-        return resourcePick.item;
-    }
-}
-
-function classifyForResource(nodeId: AzureNodeId, item: string, options: ResourceExperienceOptions): PickClassification {
-    if (nodeId.isGenericResourceNodeId()) {
-        const node = options.dataItemTree.get(item) as GenericResource;
-        return node.logicalType.toLowerCase() === options.logicalType.toLowerCase() ? 'terminal' : false;
+    if (canPickMany) {
+        return result.resources ?? [];
     }
 
-    // Virtual groupings that match the target resource type can be auto-skipped
-    if (nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, options)) {
-        return 'skip';
+    if (!result.resource) {
+        throw new Error(options.code.l10n.t('No resource was picked'));
     }
 
-    if (nodeId.isAccountNodeId()
-        || nodeId.isTenantNodeId()
-        || nodeId.isSubscriptionNodeId()
-        || nodeId.isResourceGroupNodeId()
-        || nodeId.isVirtualGroupNodeId()) {
-        return 'intermediate';
-    }
-
-    return false;
-}
-
-/**
- * Returns `true` when the virtual group node uses the `resourceType` strategy
- * and its value matches the resource type the caller is looking for.
- */
-function isMatchingResourceTypeGroup(nodeId: AzureNodeId, options: ResourceExperienceOptions): boolean {
-    const grouping = nodeId.getGrouping();
-    return grouping?.groupingStrategy === 'resourceType'
-        && grouping.groupingValue.toLowerCase() === options.logicalType.toLowerCase();
+    return result.resource;
 }

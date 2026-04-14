@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { AcrClient, DeploymentClient, ResourceClient } from '@microsoft/vscode-azure-azutils';
+import { AcrClient, DeploymentClient, IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, IWebAppClientProvider, ResourceClient, SubscriptionClient, WebAppClient } from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
     CommandRegistry,
@@ -22,11 +22,16 @@ import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { registerCommands } from './commands/registerCommands';
-import { IAcrClientProvider, IAzureSubscriptionProvider, IDeploymentClientProvider, IResourceClientProvider, pushDisposable } from './services';
+import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
+import { TempProjectManager } from './wizard/azd/TempProjectManager';
 
-export async function activateInternal(extensionContext: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number }): Promise<void> {
-    const container = setUpContainer(extensionContext);
+export async function activateInternal(
+    extensionContext: vscode.ExtensionContext,
+    perfStats: { loadStartTime: number, loadEndTime: number },
+    containerOverride?: Container,
+): Promise<void> {
+    const container = containerOverride ?? setUpContainer(extensionContext);
 
     return await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
@@ -41,7 +46,7 @@ export function deactivateInternal(): Promise<void> {
     return Promise.resolve();
 }
 
-function setUpContainer(extensionContext: IExtensionContext): Container {
+export function setUpContainer(extensionContext: IExtensionContext): Container {
     const container = new Container();
 
     // These three come in as constants (vscode by import, context from above)
@@ -74,6 +79,8 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
     }).inSingletonScope().onActivation(pushDisposable);
 
+    container.bind(ITempProjectManager).to(TempProjectManager).inSingletonScope().onActivation(pushDisposable);
+
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
@@ -90,6 +97,18 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         return (subscription) => AcrClient.create(ctx, executor, subscription);
+    });
+
+    container.bind(ISubscriptionClientProvider).toFactory(context => {
+        const ctx = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        return (subscription) => SubscriptionClient.create(ctx, executor, subscription);
+    });
+
+    container.bind(IWebAppClientProvider).toFactory(context => {
+        const ctx = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        return (subscription) => WebAppClient.create(ctx, executor, subscription);
     });
 
     return container;

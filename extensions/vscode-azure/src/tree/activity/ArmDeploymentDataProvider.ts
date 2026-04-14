@@ -4,13 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { DeploymentOperation, IDeploymentClient, ProvisioningOperation, ProvisioningState } from '@microsoft/vscode-azure-azutils';
+import {
+    IDeploymentClientProvider,
+    type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
+} from '@microsoft/vscode-azure-azutils';
 import {
     EventEmitter, flattenPages, IActionExecutor, InflightMap,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IDeploymentClientProvider } from '../../services';
 import { isActivity, isTerminalActivityStatus, type Activity } from './Activity';
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';

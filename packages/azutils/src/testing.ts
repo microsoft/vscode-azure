@@ -5,3 +5,4 @@
 
 export * from './test/mockAzure';
 export * from './test/mockPipeline';
+export * from './test/tree/mockTree';

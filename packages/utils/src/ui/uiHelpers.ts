@@ -353,6 +353,22 @@ function inputBoxRecentKey(options: ExtendedInputBoxOptions): string {
 const Pending: unique symbol = Symbol('Pending');
 
 /**
+ * Returns the single workspace folder, or prompts the user to pick one
+ * when multiple folders are open. Returns `undefined` if no folders are open
+ * or the user dismisses the picker.
+ */
+export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): Promise<vscode.WorkspaceFolder | undefined> {
+    const folders = code.workspace.workspaceFolders;
+    if (!folders?.length) {
+        return undefined;
+    } else if (folders.length === 1) {
+        return folders[0];
+    } else {
+        return code.window.showWorkspaceFolderPick({ placeHolder });
+    }
+}
+
+/**
  * Awaits a promise, showing a progress notification only if it doesn't
  * resolve within {@link delay} milliseconds. Avoids a brief flash of the
  * notification when the operation completes instantly (e.g. cache hit).

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { resourceExperience } from '@microsoft/vscode-azure-azutils';
+import { type ConcreteAzureNode, resourceExperience } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
@@ -25,16 +25,18 @@ export class DisableAcrAdminUser implements ManagedCommand {
     ) { }
 
     public async execute(key?: string): Promise<void> {
+        let resource: ConcreteAzureNode | undefined;
         if (!key) {
-            key = await resourceExperience({
+            resource = await resourceExperience({
                 ...this.ctx,
-                viewItemTree: this.viewTree,
+                tree: this.viewTree,
                 dataItemTree: this.cache,
                 logicalType: AcrResourceType
             });
+        } else {
+            resource = this.cache.get(key);
         }
 
-        const resource = this.cache.get(key);
         if (!resource || !isAcrRegistry(resource)) {
             return;
         }

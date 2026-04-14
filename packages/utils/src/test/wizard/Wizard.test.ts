@@ -28,7 +28,7 @@ class NameInputStep extends PromptStep<TestContext> {
     constructor(private readonly ctx: ICodeContext) { super(); }
 
     public async prompt(): Promise<Partial<TestContext>> {
-        const name = await showSmartInputBox(this.ctx, { prompt: 'Enter a name' });
+        const name = await showSmartInputBox(this.ctx, { prompt: 'Enter a name', showBack: true });
         return { name };
     }
 }
@@ -42,7 +42,7 @@ class ColorPickStep extends PromptStep<TestContext> {
             { label: 'Green' },
             { label: 'Blue' },
         ];
-        const picked = await showSmartQuickPick(this.ctx, items);
+        const picked = await showSmartQuickPick(this.ctx, items, { showBack: true });
         return { color: picked.label };
     }
 }
@@ -59,7 +59,7 @@ class ConditionalConfirmStep extends PromptStep<TestContext> {
             { label: 'Yes' },
             { label: 'No' },
         ];
-        const picked = await showSmartQuickPick(this.ctx, items);
+        const picked = await showSmartQuickPick(this.ctx, items, { showBack: true });
         return { confirmed: picked.label === 'Yes' };
     }
 }
@@ -282,7 +282,7 @@ describe('Wizard (unit)', () => {
                     { label: 'Red' },
                     { label: 'Blue' },
                 ];
-                const picked = await showSmartQuickPick(this.codeCtx, items);
+                const picked = await showSmartQuickPick(this.codeCtx, items, { showBack: true });
                 return { color: picked.label };
             }
 
@@ -367,7 +367,7 @@ describe('Wizard (unit)', () => {
 
             public async prompt(): Promise<Partial<TestContext>> {
                 const items: vscode.QuickPickItem[] = [{ label: 'Red' }, { label: 'Blue' }];
-                const picked = await showSmartQuickPick(this.codeCtx, items);
+                const picked = await showSmartQuickPick(this.codeCtx, items, { showBack: true });
                 return { color: picked.label };
             }
 

@@ -11,17 +11,21 @@ import { defaultLoadMoreOptions } from '../../commands/LoadMore';
 describe('defaultLoadMoreOptions (unit)', () => {
     const options = defaultLoadMoreOptions(vscode);
 
-    it('should identify load-more view items by suffix', () => {
-        expect(options.isLoadMoreViewItem('parent/~loadMore')).to.be.true;
-        expect(options.isLoadMoreViewItem('regular-item')).to.be.false;
+    it('should identify load-more keys by suffix', () => {
+        expect(options.isLoadMoreKey('parent/~loadMore')).to.be.true;
+        expect(options.isLoadMoreKey('regular-item')).to.be.false;
     });
 
     it('should generate a load-more key from a parent key', () => {
-        expect(options.getLoadMoreViewItem('parent')).to.equal('parent/~loadMore');
+        expect(options.getLoadMoreKey('parent')).to.equal('parent/~loadMore');
     });
 
     it('should derive the parent key from a load-more key', () => {
-        expect(options.getParentViewItem('parent/~loadMore')).to.equal('parent');
+        expect(options.getParentKey('parent/~loadMore')).to.equal('parent');
+    });
+
+    it('should create a view item from a load-more key', () => {
+        expect(options.createLoadMoreViewItem('parent/~loadMore')).to.equal('parent/~loadMore');
     });
 
     it('should return a tree item with Load More label when not loading', () => {

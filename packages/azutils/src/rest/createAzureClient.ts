@@ -14,16 +14,16 @@ import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
 import { MFAChallengePolicy } from './pipeline/MFAChallengePolicy';
 import { RemoveBOMPolicy } from './pipeline/RemoveBOMPolicy';
 
-// TODO: uncomment or remove as needed
-// export function createAzureClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
-//     ctx: ICodeContext,
-//     executor: IActionExecutor,
-//     clientCtor: new (credential: TokenCredential, options?: TOptions) => TClient,
-//     credential: TokenCredential,
-//     options?: TOptions,
-// ): TClient {
-//     return new clientCtor(credential, applyDefaults(ctx, executor, options));
-// }
+export function createAzureClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
+    ctx: ICodeContext,
+    executor: IActionExecutor,
+    clientCtor: new (credential: TokenCredential, options?: TOptions) => TClient,
+    credentialOrSubscription: TokenCredential | AzureSubscription,
+    options?: TOptions,
+): TClient {
+    const { credential, resolvedOptions } = resolveCredentialArgs<TOptions>(credentialOrSubscription, options);
+    return new clientCtor(credential, applyDefaults(ctx, executor, resolvedOptions));
+}
 
 export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
     ctx: ICodeContext,
@@ -93,6 +93,24 @@ export function createAzureRestSubscriptionClient<TClient extends RestClient, TO
 function isTokenCredential(value: TokenCredential | AzureSubscription): value is TokenCredential {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     return !!value && typeof value === 'object' && 'getToken' in value && typeof value.getToken === 'function';
+}
+
+function resolveCredentialArgs<TOptions>(
+    credentialOrSubscription: TokenCredential | AzureSubscription,
+    options?: TOptions,
+): { credential: TokenCredential; resolvedOptions: TOptions | undefined } {
+    if (isTokenCredential(credentialOrSubscription)) {
+        return { credential: credentialOrSubscription, resolvedOptions: options };
+    } else {
+        return {
+            credential: credentialOrSubscription.credential,
+            resolvedOptions: {
+                ...options,
+                // TODO: this won't work for non-ARM clients. Is that a problem? Probably not since only ARM clients care about subscriptions?
+                endpoint: credentialOrSubscription.environment.resourceManagerEndpointUrl.replace(/\/+$/, ''),
+            } as TOptions,
+        };
+    }
 }
 
 function resolveSubscriptionArgs<TOptions>(

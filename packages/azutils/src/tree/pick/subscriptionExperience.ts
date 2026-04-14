@@ -3,44 +3,32 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getLastPick, type ICodeContext, type PickClassification, type PickContext, RecursivePickStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
-import type { AzureNode } from '../../models/AzureNode';
-import { AzureNodeId } from '../../models/AzureNodeId';
+import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import { type ICodeContext, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
+import type { AzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
+import { type ChooseSubscriptionContext, ChooseSubscriptionStep } from '../../wizard/ChooseSubscriptionStep';
 
 interface SubscriptionExperienceOptions extends ICodeContext {
-    readonly viewItemTree: ViewItemTree<string, AzureNode>;
+    readonly tree: ViewItemTree<string, AzureNode>;
+    readonly dataItemTree: ConcreteAzureNodeTree;
 }
 
-export async function subscriptionExperience(options: SubscriptionExperienceOptions): Promise<string> {
-    const wizard = new Wizard<PickContext<string>>(
-        {
-            picks: [],
-        },
-        [
-            new RecursivePickStep<string>({
-                ...options,
-                classify: item => classifyForSubscription(AzureNodeId.parse(item)),
-                tree: options.viewItemTree,
-            }),
-        ]
+/**
+ * Convenience function that runs a wizard with
+ * {@linkcode ChooseSubscriptionStep} and returns the picked
+ * {@linkcode AzureSubscription}.
+ */
+export async function subscriptionExperience(options: SubscriptionExperienceOptions): Promise<AzureSubscription> {
+    const wizard = new Wizard<ChooseSubscriptionContext>(
+        { picks: [] },
+        [new ChooseSubscriptionStep(options)],
     );
 
     const result = await wizard.run();
-    const subscriptionPick = getLastPick(result);
 
-    if (!subscriptionPick) {
-        // TODO: unexpected state
-        throw new Error('No subscription was picked');
+    if (!result.subscription) {
+        throw new Error(options.code.l10n.t('No subscription was picked'));
     }
 
-    return subscriptionPick.item;
-}
-
-function classifyForSubscription(nodeId: AzureNodeId): PickClassification {
-    if (nodeId.isAccountNodeId() || nodeId.isTenantNodeId()) {
-        return 'intermediate';
-    } else if (nodeId.isSubscriptionNodeId()) {
-        return 'terminal';
-    }
-    return false;
+    return result.subscription;
 }

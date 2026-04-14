@@ -4,10 +4,23 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PromptStep } from '../../wizard/PromptStep';
-import { type FilteredChild, GenericPickStep } from './GenericPickStep';
+import { type ExclusivePickManyOrCreate, type FilteredChild, type GenericPickOptions, GenericPickStep } from './GenericPickStep';
 import { getLastPick, type PickContext } from './PickContext';
 
-export class RecursivePickStep<TItem> extends GenericPickStep<TItem> {
+export class RecursivePickStep<TItem, TOptions extends GenericPickOptions<TItem>> extends GenericPickStep<TItem, TOptions> {
+    /**
+     * @param options - Pick options (tree, classify, etc.)
+     * @param recursiveClass - Constructor for the next recursive step.
+     *   Defaults to {@linkcode RecursivePickStep}. Subclasses pass
+     *   their own class so recursion creates the correct type.
+     */
+    public constructor(
+        options: TOptions & ExclusivePickManyOrCreate<TItem>,
+        private readonly recursiveClass: new (options: TOptions & ExclusivePickManyOrCreate<TItem>) => RecursivePickStep<TItem, TOptions> = RecursivePickStep,
+    ) {
+        super(options);
+    }
+
     public override getSubPromptSteps(context: Readonly<PickContext<TItem>>): PromptStep<PickContext<TItem>>[] {
         if (context.selectedTerminalPicks?.length) {
             // If this is set, it means the user made a multi-pick selection, which can only happen if all of the items were terminal
@@ -20,6 +33,6 @@ export class RecursivePickStep<TItem> extends GenericPickStep<TItem> {
             return [];
         }
 
-        return [new RecursivePickStep<TItem>(this.options)];
+        return [new this.recursiveClass(this.options)];
     }
 }
