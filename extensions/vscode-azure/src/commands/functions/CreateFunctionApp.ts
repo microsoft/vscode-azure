@@ -36,7 +36,7 @@ export class CreateFunctionApp implements ManagedCommand {
 
     public async execute(): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
-            { picks: [] },
+            {},
             [
                 new HydrateAzdInfoStep(this.ctx.code),
                 new ChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
