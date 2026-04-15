@@ -45,7 +45,7 @@ describe('RecursivePickStep (unit)', () => {
         const result = await wizard.run();
 
         expect(result.picks).to.have.length(1);
-        expect(result.picks[0].item).to.equal('leaf-a');
+        expect(result.picks![0].item).to.equal('leaf-a');
         tracker.assertAllConsumed();
     });
 
@@ -73,8 +73,8 @@ describe('RecursivePickStep (unit)', () => {
         const result = await wizard.run();
 
         expect(result.picks).to.have.length(2);
-        expect(result.picks[0].item).to.equal('group');
-        expect(result.picks[1].item).to.equal('item-2');
+        expect(result.picks![0].item).to.equal('group');
+        expect(result.picks![1].item).to.equal('item-2');
         tracker.assertAllConsumed();
     });
 
@@ -101,8 +101,8 @@ describe('RecursivePickStep (unit)', () => {
         const result = await wizard.run();
 
         expect(result.picks).to.have.length(2);
-        expect(result.picks[0].item).to.equal('only-group');
-        expect(result.picks[1].item).to.equal('leaf');
+        expect(result.picks![0].item).to.equal('only-group');
+        expect(result.picks![1].item).to.equal('leaf');
         tracker.assertAllConsumed();
     });
 
@@ -126,7 +126,8 @@ describe('RecursivePickStep (unit)', () => {
 
         const result = await wizard.run();
 
-        expect(result.picks[0].item).to.equal('visible');
+        expect(result.picks).to.have.length(1);
+        expect(result.picks![0].item).to.equal('visible');
         tracker.assertAllConsumed();
     });
 
@@ -179,7 +180,7 @@ describe('RecursivePickStep (unit)', () => {
         const result = await wizard.run();
 
         expect(result.picks).to.have.length(4);
-        expect(result.picks[3].item).to.equal('leaf');
+        expect(result.picks![3].item).to.equal('leaf');
         tracker.assertAllConsumed();
     });
 
@@ -231,7 +232,7 @@ describe('RecursivePickStep (unit)', () => {
         const result = await wizard.run();
 
         expect(result.picks).to.have.length(1);
-        expect(result.picks[0].item).to.equal('newly-created');
+        expect(result.picks![0].item).to.equal('newly-created');
         tracker.assertAllConsumed();
     });
 });
