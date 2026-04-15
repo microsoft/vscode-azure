@@ -4,14 +4,12 @@
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
 - Setting for default page size
-- VSCode FS instead of `node:fs`
 
 ## Issues
 - Figure out why the token expired and wasn't refreshing
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
 
 ## Code hygiene
-- Reexport and use Azure client types from azutils, and eliminate dev deps on Azure packages in extension
 - Swap out `@link` for `@linkcode` in most places
 - JSDocs everywhere
 - Address all the TODOs in source
