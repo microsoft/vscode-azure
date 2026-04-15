@@ -31,7 +31,8 @@ Use the following DI interfaces instead of the built-in `vscode` types:
 | `vscode.EventEmitter` | `EventEmitter` |
 | `vscode.Disposable` | `Disposable` |
 
-Only `extension.ts` should import `vscode` directly.
+Only `extension.ts` should import `vscode` directly as a runtime/value dependency.
+Type-only imports from `vscode` (for example, `import type * as vscode from 'vscode'` to reference `vscode.Uri`) are allowed when needed.
 
 ## File System
 
