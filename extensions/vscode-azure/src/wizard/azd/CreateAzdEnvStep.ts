@@ -20,6 +20,6 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
             '--subscription', context.subscription!.subscriptionId, // eslint-disable-line @typescript-eslint/no-non-null-assertion
         ];
 
-        await execAzd(args, context.iacFolder);
+        await execAzd(args, context.iacFolder!.fsPath); // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 }

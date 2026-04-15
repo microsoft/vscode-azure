@@ -31,7 +31,18 @@ Use the following DI interfaces instead of the built-in `vscode` types:
 | `vscode.EventEmitter` | `EventEmitter` |
 | `vscode.Disposable` | `Disposable` |
 
-Only `extension.ts` should import `vscode` directly.
+Only `extension.ts` should import `vscode` directly as a runtime/value dependency.
+Type-only imports from `vscode` (for example, `import type * as vscode from 'vscode'` to reference `vscode.Uri`) are allowed when needed.
+
+## File System
+
+Use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` and string paths in product code. This ensures compatibility with virtual file systems and remote workspaces.
+
+- Use `vscode.Uri.joinPath()` instead of `path.join()`
+- Use `vscode.workspace.fs.stat()` to check for file existence (prefer over `workspace.findFiles()` which is workspace-scoped)
+- Use `extensionContext.extensionUri` with `Uri.joinPath()` instead of `extensionContext.asAbsolutePath()`
+- Pass `vscode.Uri` through interfaces instead of `string` file paths
+- `Uri.fsPath` is acceptable when an API requires a string path (e.g. `child_process` `cwd`)
 
 ## Localization
 

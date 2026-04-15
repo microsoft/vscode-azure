@@ -5,12 +5,13 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { Location } from '@microsoft/vscode-azure-azutils';
+import type * as vscode from 'vscode';
 
 export interface AzdWizardContext {
     readonly subscription?: AzureSubscription;
     readonly location?: Location;
     readonly environmentName?: string;
 
-    readonly iacFolder?: string; // TODO: vscode.Uri?
+    readonly iacFolder?: vscode.Uri;
     readonly provision?: boolean;
 }

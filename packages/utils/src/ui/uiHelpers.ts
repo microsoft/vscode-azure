@@ -80,6 +80,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                 recentItem.description = recentItem.description ?
                     ctx.code.l10n.t('{0} (recently selected)', recentItem.description) :
                     ctx.code.l10n.t('(recently selected)');
+                quickPick.items = [recentItem, ...items.filter(i => i !== recentItem)];
                 quickPick.activeItems = [recentItem];
             }
         }
@@ -98,6 +99,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                     ctx.code.l10n.t('{0} (recently selected)', item.description) :
                     ctx.code.l10n.t('(recently selected)');
             }
+            quickPick.items = [...recentItems, ...items.filter(item => !recentSet.has(item.label))];
             quickPick.selectedItems = recentItems;
         }
     }
@@ -175,6 +177,12 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
 
     /** An **asynchronous** validation function that runs only when the user accepts. The input is disabled and shows a busy indicator while this runs. */
     validateInputAsync?(value: string): Promise<string | vscode.InputBoxValidationMessage | undefined>;
+
+    /**
+     * Value to pre-fill when no recent input is available and no explicit {@link value} is set.
+     * Use this instead of {@link value} to allow the recently entered value to take precedence.
+     */
+    readonly fallbackValue?: string;
 }
 
 /**
@@ -220,6 +228,8 @@ export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxO
         const recentValue = ctx.extensionContext.workspaceState.get<string>(recentKey);
         if (recentValue) {
             input.value = recentValue;
+        } else if (options?.fallbackValue !== undefined) {
+            input.value = options.fallbackValue;
         }
     }
 
@@ -332,9 +342,9 @@ interface StepOptions {
 function quickPickRecentKey<TItem extends vscode.QuickPickItem>(items: TItem[], options: ExtendedQuickPickOptions<TItem> | undefined): string {
     const hash = crypto.createHash('sha256');
     // Sort a copy to avoid mutating the caller's array.
+    // Intentionally excludes `description` -- it may be mutated by the recently-selected label.
     for (const item of [...items].sort((a, b) => a.label.localeCompare(b.label))) {
         hash.update(item.label);
-        hash.update(item.description ?? '');
         hash.update('|');
     }
     hash.update(options?.stepName ?? options?.title ?? '');

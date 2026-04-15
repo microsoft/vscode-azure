@@ -4,18 +4,12 @@
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
 - Setting for default page size
-- Make `picks` in `PickContext` optional so we don't have to init it all over the place
-- VSCode FS instead of `node:fs`
 
 ## Issues
 - Figure out why the token expired and wasn't refreshing
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
-- Recently used label isn't appearing
-- Recent input isn't showing back up in input box
-- Sort the recently used item to the top
 
 ## Code hygiene
-- Reexport and use Azure client types from azutils, and eliminate dev deps on Azure packages in extension
 - JSDocs everywhere
 - Address all the TODOs in source
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating

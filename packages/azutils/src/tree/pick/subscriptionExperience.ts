@@ -20,7 +20,7 @@ interface SubscriptionExperienceOptions extends ICodeContext {
  */
 export async function subscriptionExperience(options: SubscriptionExperienceOptions): Promise<AzureSubscription> {
     const wizard = new Wizard<ChooseSubscriptionContext>(
-        { picks: [] },
+        {},
         [new ChooseSubscriptionStep(options)],
     );
 
