@@ -52,7 +52,7 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem>> 
             if (onlyPick.data !== CreateNew &&
                 onlyPick.data.isIntermediate &&
                 onlyPick.data.shouldSkip) {
-                return { picks: [...context.picks, onlyPick.data] };
+                return { picks: [...(context.picks ?? []), onlyPick.data] };
             }
         }
 
@@ -76,9 +76,9 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem>> 
             if (choice.data === CreateNew) {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 const newItem = await this.options.create!.createNewItem();
-                return { picks: [...context.picks, { item: newItem, treeItem: await this.options.tree.getTreeItem(newItem) }] };
+                return { picks: [...(context.picks ?? []), { item: newItem, treeItem: await this.options.tree.getTreeItem(newItem) }] };
             } else {
-                return { picks: [...context.picks, choice.data] };
+                return { picks: [...(context.picks ?? []), choice.data] };
             }
         }
     }

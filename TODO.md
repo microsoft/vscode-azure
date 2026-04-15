@@ -4,7 +4,6 @@
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
 - Setting for default page size
-- Make `picks` in `PickContext` optional so we don't have to init it all over the place
 - VSCode FS instead of `node:fs`
 
 ## Issues

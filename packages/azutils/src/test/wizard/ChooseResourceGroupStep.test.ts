@@ -34,7 +34,7 @@ describe('ChooseResourceGroupStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceGroupContext>(
-            { picks: [] },
+            {},
             [new ChooseResourceGroupStep({ ...ctx, dataItemTree })],
         );
         const result = await wizard.run();
@@ -62,7 +62,7 @@ describe('ChooseResourceGroupStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceGroupContext>(
-            { picks: [] },
+            {},
             [new ChooseResourceGroupStep({ ...ctx, dataItemTree })],
         );
         const result = await wizard.run();
