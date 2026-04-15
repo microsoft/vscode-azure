@@ -24,7 +24,7 @@ export interface ArmDeploymentActivity extends Activity {
     /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
     readonly scope: string;
     readonly deploymentName: string;
-    /** The ID of the user-initiated root deployment this belongs to. Equal to {@link id} for root deployments. */
+    /** The ID of the user-initiated root deployment this belongs to. Equal to {@linkcode id} for root deployments. */
     readonly rootDeploymentId: string;
     /** Operations discovered by enrichment. Populated asynchronously after the deployment is loaded. */
     operations?: ArmDeploymentOperationActivity[];
@@ -69,7 +69,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /**
      * Returns child **deployments** only. Leaf operations are stored on
-     * the deployment via {@link enrich} and injected by the view provider.
+     * the deployment via {@linkcode enrich} and injected by the view provider.
      */
     public getChildren(resource?: ArmDeploymentActivity): ArmDeploymentActivity[] {
         if (!resource) {
@@ -84,7 +84,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     /**
      * Fetch all operations for the deployment and store them in-place.
      * Starts polling for non-terminal deployments. Called automatically
-     * by {@link DataItemTree} after a resource is loaded.
+     * by {@linkcode DataItemTree} after a resource is loaded.
      */
     public async enrich(resource: ArmDeploymentActivity): Promise<boolean> {
         if (resource.abortController.signal.aborted) {
@@ -221,7 +221,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /**
      * Extract child deployments from a deployment's operations.
-     * Reuses existing objects from {@link knownDeployments} to preserve
+     * Reuses existing objects from {@linkcode knownDeployments} to preserve
      * reference stability across re-fetches (so polling mutates the same
      * instance the tree holds).
      */
@@ -347,7 +347,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /**
      * Remove a deployment and all its descendants from tracking maps.
-     * Uses {@link ArmDeploymentActivity.rootDeploymentId} to find descendants.
+     * Uses {@linkcode ArmDeploymentActivity.rootDeploymentId} to find descendants.
      */
     private cleanupDeploymentTree(rootId: string): void {
         for (const [id, deployment] of this.knownDeployments) {

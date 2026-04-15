@@ -12,8 +12,8 @@ import { EventEmitter } from '../../../vscode/EventEmitter';
  *
  * Production code interacts with this through the standard QuickPick
  * properties and events. Tests drive user interactions through the
- * helper methods: {@link accept}, {@link pressButton}, {@link triggerHide},
- * and {@link changeValue}.
+ * helper methods: {@linkcode accept}, {@linkcode pressButton}, {@linkcode triggerHide},
+ * and {@linkcode changeValue}.
  */
 export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.QuickPick<T> {
     // ── Properties (set by production code) ─────────────────

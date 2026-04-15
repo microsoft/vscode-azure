@@ -34,7 +34,7 @@ export function isVirtualGroup(node: AzureNode): node is VirtualGroup {
     return 'groupingStrategy' in node && node.groupingStrategy !== 'resourceGroup';
 }
 
-/** Narrows this node to a {@link GenericResource} node. {@link ResourceGroup} nodes do **not** match, though they do conform to `GenericResource`. */
+/** Narrows this node to a {@linkcode GenericResource} node. {@linkcode ResourceGroup} nodes do **not** match, though they do conform to `GenericResource`. */
 export function isGenericResource(node: AzureNode): node is GenericResource {
     return !isResourceGroup(node) && 'id' in node && 'name' in node && 'type' in node && 'logicalType' in node;
 }
@@ -45,8 +45,8 @@ export function isVirtualResource(node: AzureNode): node is VirtualResource {
 
 /**
  * Returns a consistent type string for any node in the tree, suitable for
- * telemetry. Uses {@link GenericResource.logicalType} for ARM resources,
- * {@link VirtualResource.virtualType} for virtual sub-resources, and
+ * telemetry. Uses {@linkcode GenericResource.logicalType} for ARM resources,
+ * {@linkcode VirtualResource.virtualType} for virtual sub-resources, and
  * well-known strings for account/tenant/subscription nodes.
  */
 export function getNodeType(node: ConcreteAzureNode): string {

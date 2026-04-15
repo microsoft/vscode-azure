@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Thrown by a {@link PromptStep} to signal that the user wants to
+ * Thrown by a {@linkcode PromptStep} to signal that the user wants to
  * navigate back to the previous prompt step in the wizard.
  *
  * The wizard catches this internally and re-runs the previous step.

@@ -10,7 +10,7 @@ import type { WithRequired } from '@microsoft/vscode-azure-utils';
 /**
  * Normalized representation of an Azure resource. Every ARM resource,
  * regardless of provider, satisfies this shape. Carries a reference to the
- * owning {@link AzureSubscription} for context (environment, credentials, etc.).
+ * owning {@linkcode AzureSubscription} for context (environment, credentials, etc.).
  */
 export interface GenericResource extends WithRequired<SdkGenericResource, 'id' | 'name' | 'type' | 'location'> {
     /** The subscription that owns this resource. */

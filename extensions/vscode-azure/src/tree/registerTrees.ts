@@ -84,7 +84,7 @@ function registerResourcesTree(container: Container): void {
 }
 
 /**
- * Identifier for the Azure view's {@link DataProvider}s.
+ * Identifier for the Azure view's {@linkcode DataProvider}s.
  * @internal - Not intended for use outside this file
  */
 const IAzureViewDataProviders: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IAzureViewDataProviders');
@@ -102,7 +102,7 @@ function bindAzureViewDataProviders(container: Container): void {
 }
 
 /**
- * Identifier for the Azure view's {@link ViewProvider}s.
+ * Identifier for the Azure view's {@linkcode ViewProvider}s.
  * @internal - Not intended for use outside this file
  */
 const IAzureViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IAzureViewViewProviders');

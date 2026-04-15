@@ -65,7 +65,7 @@ export interface TelemetryProperties extends Record<string, string | undefined> 
 }
 
 /**
- * Well-known writable telemetry property names. Used by {@link IActionExecutor.setTelProp}
+ * Well-known writable telemetry property names. Used by {@linkcode IActionExecutor.setTelProp}
  * to provide autocomplete for common keys while still allowing arbitrary strings.
  *
  * The `| (string & {})` hack causes intellisense to suggest the known keys but not restrict

@@ -21,7 +21,7 @@ import { isAcrRegistry } from './AcrRegistry';
  * be scoped via `when` clauses.
  *
  * Before enrichment completes the node is rendered with a generic label;
- * once {@link AcrDataProvider.enrich} has run and the tree fires
+ * once {@linkcode AcrDataProvider.enrich} has run and the tree fires
  * `onDidChange`, this provider re-renders the item with the full details.
  */
 @injectable()

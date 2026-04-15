@@ -9,7 +9,7 @@ import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vsc
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureSubscriptionClient } from '../createAzureClient';
 
-/** Factory that creates an {@link IWebAppClient} for a given subscription. */
+/** Factory that creates an {@linkcode IWebAppClient} for a given subscription. */
 export const IWebAppClientProvider: ServiceIdentifier<IWebAppClientProvider> = Symbol.for('IWebAppClientProvider');
 export type IWebAppClientProvider = AsyncFactory<IWebAppClient, [AzureSubscription]>;
 
@@ -27,7 +27,7 @@ export interface IWebAppClient {
  * Wrapper around `WebSiteManagementClient` that exposes only the methods
  * we use.
  *
- * Uses the classic SDK class pattern (like {@link ResourceClient}), with
+ * Uses the classic SDK class pattern (like {@linkcode ResourceClient}), with
  * lazy imports to keep load times down.
  */
 export class WebAppClient implements IWebAppClient {
@@ -38,7 +38,7 @@ export class WebAppClient implements IWebAppClient {
     ) { }
 
     /**
-     * Create a new {@link WebAppClient} instance. Lazily imports
+     * Create a new {@linkcode WebAppClient} instance. Lazily imports
      * `@azure/arm-appservice` on first call.
      */
     public static async create(

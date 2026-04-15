@@ -21,7 +21,7 @@ export class LoadMore implements ManagedCommand {
 }
 
 /**
- * Default {@link LoadMoreOptions} implementation for Azure resource trees
+ * Default {@linkcode LoadMoreOptions} implementation for Azure resource trees
  */
 export function defaultLoadMoreOptions(code: IVsCode): LoadMoreOptions<string> {
     return createDefaultLoadMoreOptions<string>({

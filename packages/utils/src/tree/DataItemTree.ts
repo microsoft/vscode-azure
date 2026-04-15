@@ -33,7 +33,7 @@ interface TreeNode<T> {
 
 /**
  * A lazily-loaded, cached tree of data items built up piecewise by
- * {@link DataProvider}s.
+ * {@linkcode DataProvider}s.
  *
  * Each node's children are loaded on first access and cached until stale.
  * The tree is the single source of truth for the data layer -- the
@@ -48,9 +48,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
     /**
      * Per-resource enrichment promises, keyed by resource key.
-     * Stored when {@link enrichAll} kicks off background enrichment so
+     * Stored when {@linkcode enrichAll} kicks off background enrichment so
      * that callers (e.g. commands) can await completion via
-     * {@link whenEnriched}.
+     * {@linkcode whenEnriched}.
      */
     private readonly enrichmentPromises = new Map<string, Promise<void>>();
 
@@ -72,10 +72,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      *   `'resources'`, `'activity'`). Stamped on every telemetry event as
      *   `properties.tree`.
      * @param executor - Action executor for wrapping provider calls in
-     *   telemetry scopes. Every {@link DataProvider.getChildren} and
-     *   {@link DataProvider.enrich} call runs inside
-     *   {@link IActionExecutor.callWithTelemetryAndErrorHandling}, which
-     *   establishes an {@link IActionContext} on the async call stack via
+     *   telemetry scopes. Every {@linkcode DataProvider.getChildren} and
+     *   {@linkcode DataProvider.enrich} call runs inside
+     *   {@linkcode IActionExecutor.callWithTelemetryAndErrorHandling}, which
+     *   establishes an {@linkcode IActionContext} on the async call stack via
      *   `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`)
      *   pick up this context automatically without any changes to provider
      *   or client signatures.
@@ -92,7 +92,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     }
 
     /**
-     * Register a provider. If the provider has an {@link DataProvider.onDidChange}
+     * Register a provider. If the provider has an {@linkcode DataProvider.onDidChange}
      * event, the tree automatically subscribes and invalidates accordingly.
      */
     public override registerProvider(provider: DataProvider<T>): Disposable {
@@ -224,11 +224,11 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
     /**
      * For each resource, find the provider that handles it and call
-     * {@link DataProvider.enrich enrich} if present. Enrichment runs in the
-     * background - each resolved call fires {@link onDidChange} for that resource.
+     * {@linkcode DataProvider.enrich enrich} if present. Enrichment runs in the
+     * background - each resolved call fires {@linkcode onDidChange} for that resource.
      *
      * The resulting promise for each resource is stored so that callers
-     * can await enrichment completion via {@link whenEnriched}.
+     * can await enrichment completion via {@linkcode whenEnriched}.
      */
     private enrichAll(resources: T[]): void {
         // TODO: concurrency limits
@@ -281,7 +281,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
      * registry.loginServer; // string (not string | undefined)
      * ```
      *
-     * If displaying a loading toast, it is suggested to use `{@link withDelayedProgress}`
+     * If displaying a loading toast, it is suggested to use `{@linkcode withDelayedProgress}`
      * instead of `vscode.window.withProgress` directly, to avoid flashing the
      * toast for fast operations.
      */
@@ -306,10 +306,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     /**
      * Pull the next page from the stored async iterator for the given
      * resource. The new children are appended to the cache and enriched.
-     * Fires {@link onDidChange} so the view refreshes automatically;
-     * callers should use {@link getChildren} to read the updated list.
+     * Fires {@linkcode onDidChange} so the view refreshes automatically;
+     * callers should use {@linkcode getChildren} to read the updated list.
      *
-     * @throws if {@link getChildren} has not been called for this resource yet.
+     * @throws if {@linkcode getChildren} has not been called for this resource yet.
      */
     public async loadMore(resource: T): Promise<void> {
         const key = this.getKey(resource);
@@ -324,10 +324,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
     /**
      * Pulls all remaining pages for the given resource until the iterator is
-     * exhausted. Fires {@link onDidChange} after all pages are loaded so the
+     * exhausted. Fires {@linkcode onDidChange} after all pages are loaded so the
      * view refreshes only once.
      *
-     * If children have not been loaded yet (i.e. {@link getChildren} was
+     * If children have not been loaded yet (i.e. {@linkcode getChildren} was
      * never called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
@@ -385,8 +385,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     }
 
     /**
-     * Create {@link TreeNode}s for the given resources, register them in
-     * the {@link NodeMap}, and kick off background enrichment.
+     * Create {@linkcode TreeNode}s for the given resources, register them in
+     * the {@linkcode NodeMap}, and kick off background enrichment.
      */
     private addChildNodes(children: T[], parent: TreeNode<T>): TreeNode<T>[] {
         const nodes = children.map(child => {
@@ -407,9 +407,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
     /**
      * Invalidate a specific resource, optionally including its cached
-     * children. Fires {@link onDidChange}.
+     * children. Fires {@linkcode onDidChange}.
      *
-     * @param resource - The resource to invalidate. {@link ViewItemTree}
+     * @param resource - The resource to invalidate. {@linkcode ViewItemTree}
      *   will see the event and re-render the corresponding tree item.
      * @param includeChildren - When `true` (default), cached children are
      *   removed from the tree and will be re-fetched on next access. When
@@ -430,8 +430,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
     /**
      * Remove a single item from the cache. Its subtree is evicted and the
      * item is spliced out of the parent's children list. For non-root items,
-     * fires {@link onDidChange} for the parent so the view re-renders without
-     * re-fetching siblings. For root items, fires {@link onDidChange} with
+     * fires {@linkcode onDidChange} for the parent so the view re-renders without
+     * re-fetching siblings. For root items, fires {@linkcode onDidChange} with
      * `undefined` to signal a full refresh.
      *
      * If the item is not in the cache, this is a no-op.
@@ -471,7 +471,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
 
     /**
      * Invalidate all cached data. Clears the entire node map and root cache.
-     * Fires {@link onDidChange} once with `undefined` (full refresh).
+     * Fires {@linkcode onDidChange} once with `undefined` (full refresh).
      */
     public invalidateAll(): void {
         this.nodes.clear();

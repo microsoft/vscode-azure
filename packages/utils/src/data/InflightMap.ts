@@ -37,7 +37,7 @@ export class InflightMap<T> {
     }
 
     /**
-     * Like {@link getOrRun}, but the entry is **kept** after the promise settles,
+     * Like {@linkcode getOrRun}, but the entry is **kept** after the promise settles,
      * so subsequent calls return the cached result without re-invoking `fn`.
      *
      * If the promise rejects, the error is propagated and the entry is deleted,

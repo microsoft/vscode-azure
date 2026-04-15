@@ -8,9 +8,9 @@ import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from './FunctionApp'
 
 /**
  * Construct the parent "App Settings" category key from an individual
- * app setting's {@link VirtualResource}.
+ * app setting's {@linkcode VirtualResource}.
  *
- * Uses {@link AzureNodeId.from} to produce the canonical key, avoiding
+ * Uses {@linkcode AzureNodeId.from} to produce the canonical key, avoiding
  * manual string/encoding manipulation.
  */
 export function appSettingsParentKey(settingResource: VirtualResource): string {

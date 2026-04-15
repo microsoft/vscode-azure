@@ -4,18 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * A single execute step in a {@link Wizard}.
+ * A single execute step in a {@linkcode Wizard}.
  *
  * Execute steps run after all prompt steps have completed, in the
  * order they were registered. Dynamically added steps (via
- * {@link getSubExecuteSteps}) run immediately after their parent.
+ * {@linkcode getSubExecuteSteps}) run immediately after their parent.
  *
  * @typeParam TContext - The shared wizard context type.
  */
 export abstract class ExecuteStep<TContext> {
     /**
      * Perform the operation using the fully-populated context.
-     * Modifying the {@link context} is allowed. // TODO: should we allow it? Or change to be consistent with `PromptStep`?
+     * Modifying the {@linkcode context} is allowed. // TODO: should we allow it? Or change to be consistent with `PromptStep`?
      */
     public abstract execute(context: TContext): void | Promise<void>;
 
@@ -29,7 +29,7 @@ export abstract class ExecuteStep<TContext> {
 
     /**
      * Return additional execute steps to insert immediately after
-     * this step. Called after {@link execute} completes successfully.
+     * this step. Called after {@linkcode execute} completes successfully.
      * Defaults to none when not overridden.
      */
     public getSubExecuteSteps(_context: Readonly<TContext>): readonly ExecuteStep<TContext>[] {

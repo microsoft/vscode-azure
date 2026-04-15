@@ -11,13 +11,13 @@ import type { DataProvider } from './DataProvider';
  * View-layer provider for a resource tree.
  *
  * Each implementation handles a specific subset of resources (identified by
- * {@link canHandle}) and knows how to render them as VS Code tree items.
+ * {@linkcode canHandle}) and knows how to render them as VS Code tree items.
  *
  * View providers are allowed to inject extra virtual children under the
  * resources they own, change order, group, filter, etc. but may not modify the
  * underlying data layer resources in any way.
  *
- * View providers always return plain arrays from {@link getChildren}
+ * View providers always return plain arrays from {@linkcode getChildren}
  * (never paginated `AsyncIterable`s). Pagination is a data-layer concern.
  *
  * @typeParam TResource - The base resource type this provider operates on.
@@ -39,9 +39,9 @@ export interface ViewProvider<TResource> extends DataProvider<TResource> {
      * Get the parent of a resource, or `undefined` if it is a root item.
      *
      * Implementing this method enables `TreeView.reveal()` for nodes that
-     * have not yet been loaded via {@link getChildren}. The tree will
+     * have not yet been loaded via {@linkcode getChildren}. The tree will
      * call this to walk up to the root, then walk back down via
-     * {@link getChildren} to load real data at each level.
+     * {@linkcode getChildren} to load real data at each level.
      */
     getParent?(resource: Readonly<TResource>): ProviderResult<TResource | undefined>;
 

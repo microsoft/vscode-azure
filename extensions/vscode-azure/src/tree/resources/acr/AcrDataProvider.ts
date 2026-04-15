@@ -17,7 +17,7 @@ import { isAcrRegistry } from './AcrRegistry';
  * - **`canHandle`**: matches `GenericResource` nodes whose ARM type is
  *   `Microsoft.ContainerRegistry/registries`.
  * - **`enrich`**: calls the ARM `get` operation to attach
- *   {@link AcrRegistry}-specific properties (`loginServer`, `sku`, etc.)
+ *   {@linkcode AcrRegistry}-specific properties (`loginServer`, `sku`, etc.)
  *   to the resource in-place.
  * - **`getChildren`**: stubbed — will return repositories and tags once
  *   the data-plane client is integrated.
@@ -121,7 +121,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
 }
 
 /**
- * Type guard for ACR-owned {@link VirtualResource} nodes.
+ * Type guard for ACR-owned {@linkcode VirtualResource} nodes.
  */
 function isAcrVirtualResource(node: unknown): node is VirtualResource {
     return !!node && typeof node === 'object'
