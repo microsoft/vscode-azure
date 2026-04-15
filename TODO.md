@@ -4,7 +4,6 @@
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
 - Setting for default page size
-- VSCode FS instead of `node:fs`
 
 ## Issues
 - Figure out why the token expired and wasn't refreshing

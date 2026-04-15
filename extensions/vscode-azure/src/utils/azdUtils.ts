@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import { execFile } from 'child_process';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { promisify } from 'util';
+import type * as vscode from 'vscode';
 
 const execFileAsync = promisify(execFile);
-const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 /**
  * Executes the `azd` CLI with the given arguments. Throws an
@@ -32,18 +31,11 @@ export async function execAzd(args: string[], cwd?: string): Promise<{ stdout: s
 }
 
 /**
- * Returns the path to `azure.yaml` or `azure.yml` in the given
+ * Returns the URI of `azure.yaml` or `azure.yml` in the given
  * directory, or `undefined` if neither exists.
  */
-export async function findAzureYaml(directory: string): Promise<string | undefined> {
-    for (const name of AzureYamlFileNames) {
-        const filePath = path.join(directory, name);
-        try {
-            await fs.access(filePath);
-            return filePath;
-        } catch {
-            // file not found -- try next
-        }
-    }
-    return undefined;
+export async function findAzureYaml(code: IVsCode, directory: vscode.Uri): Promise<vscode.Uri | undefined> {
+    const pattern = new code.RelativePattern(directory, '{azure.yaml,azure.yml}');
+    const files = await code.workspace.findFiles(pattern, undefined, 1);
+    return files[0];
 }

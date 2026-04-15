@@ -23,14 +23,14 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public async execute(context: TContext): Promise<void> {
-        const azureYamlPath = await findAzureYaml(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
-        if (!azureYamlPath) {
+        const azureYamlUri = await findAzureYaml(this.code, context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        if (!azureYamlUri) {
             throw new Error('Could not find azure.yaml or azure.yml in the project directory.');
         }
 
         await this.code.commands.executeCommand(
             'azure-dev.commands.cli.provision',
-            this.code.Uri.file(azureYamlPath),
+            azureYamlUri,
         );
     }
 }
