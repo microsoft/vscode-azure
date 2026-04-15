@@ -34,9 +34,18 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         }
 
         const infraFolder = this.ctx.code.Uri.joinPath(context.iacFolder, InfraFolderName);
-        const pattern = new this.ctx.code.RelativePattern(infraFolder, `{${MainBicepFileName},${MainParametersFileName}}`);
-        const existing = await this.ctx.code.workspace.findFiles(pattern, undefined, 1);
-        return existing.length === 0;
+
+        for (const fileName of [MainBicepFileName, MainParametersFileName]) {
+            try {
+                await this.ctx.code.workspace.fs.stat(this.ctx.code.Uri.joinPath(infraFolder, fileName));
+                // At least one file already exists; skip generation
+                return false;
+            } catch {
+                // File does not exist; continue checking
+            }
+        }
+
+        return true;
     }
 
     public async execute(context: TContext): Promise<void> {

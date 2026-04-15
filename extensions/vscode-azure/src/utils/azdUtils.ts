@@ -9,6 +9,7 @@ import { promisify } from 'util';
 import type * as vscode from 'vscode';
 
 const execFileAsync = promisify(execFile);
+const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 /**
  * Executes the `azd` CLI with the given arguments. Throws an
@@ -35,7 +36,14 @@ export async function execAzd(args: string[], cwd?: string): Promise<{ stdout: s
  * directory, or `undefined` if neither exists.
  */
 export async function findAzureYaml(code: IVsCode, directory: vscode.Uri): Promise<vscode.Uri | undefined> {
-    const pattern = new code.RelativePattern(directory, '{azure.yaml,azure.yml}');
-    const files = await code.workspace.findFiles(pattern, undefined, 1);
-    return files[0];
+    for (const name of AzureYamlFileNames) {
+        const fileUri = code.Uri.joinPath(directory, name);
+        try {
+            await code.workspace.fs.stat(fileUri);
+            return fileUri;
+        } catch {
+            // file not found -- try next
+        }
+    }
+    return undefined;
 }

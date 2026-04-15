@@ -39,7 +39,7 @@ Type-only imports from `vscode` (for example, `import type * as vscode from 'vsc
 Use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` and string paths in product code. This ensures compatibility with virtual file systems and remote workspaces.
 
 - Use `vscode.Uri.joinPath()` instead of `path.join()`
-- Use `vscode.workspace.findFiles()` to check for file existence
+- Use `vscode.workspace.fs.stat()` to check for file existence (prefer over `workspace.findFiles()` which is workspace-scoped)
 - Use `extensionContext.extensionUri` with `Uri.joinPath()` instead of `extensionContext.asAbsolutePath()`
 - Pass `vscode.Uri` through interfaces instead of `string` file paths
 - `Uri.fsPath` is acceptable when an API requires a string path (e.g. `child_process` `cwd`)
