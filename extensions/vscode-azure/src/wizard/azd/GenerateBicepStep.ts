@@ -71,6 +71,7 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
             this.ctx.code.workspace.fs.copy(
                 templateUri,
                 this.ctx.code.Uri.joinPath(bicepFolder, MainBicepFileName),
+                { overwrite: true }, // We shouldn't actually be overwriting, due to `shouldExecute()`'s guard, but just in case...
             ),
         ]);
     }
