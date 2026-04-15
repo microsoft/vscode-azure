@@ -26,7 +26,7 @@ export class EnvironmentNameStep<TContext extends AzdWizardContext> extends Prom
 
         const name = await showSmartInputBox(this.ctx, {
             prompt: this.ctx.code.l10n.t('Enter an environment name for azd'),
-            value: defaultName,
+            fallbackValue: defaultName,
             showBack: true,
             validateInput: (value) => {
                 if (!value) {
