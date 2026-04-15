@@ -34,7 +34,7 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         }
 
         const infraFolder = this.ctx.code.Uri.joinPath(context.iacFolder, InfraFolderName);
-        const pattern = new this.ctx.code.RelativePattern(infraFolder, `{${MainBicepFileName}, ${MainParametersFileName}}`);
+        const pattern = new this.ctx.code.RelativePattern(infraFolder, `{${MainBicepFileName},${MainParametersFileName}}`);
         const existing = await this.ctx.code.workspace.findFiles(pattern, undefined, 1);
         return existing.length === 0;
     }
