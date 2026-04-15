@@ -21,10 +21,10 @@ export abstract class ProviderRegistry<TResource, TProvider extends DataProvider
     protected readonly changeEmitter = new EventEmitter<TResource | undefined>();
 
     /**
-     * Register a provider. Returns a {@link Disposable} that
+     * Register a provider. Returns a {@linkcode Disposable} that
      * unregisters the provider when disposed.
      *
-     * **Registration order matters.** {@link findProvider} returns the
+     * **Registration order matters.** {@linkcode findProvider} returns the
      * first provider whose `canHandle` matches, so more-specific
      * providers must be registered before broader/fallback ones.
      */

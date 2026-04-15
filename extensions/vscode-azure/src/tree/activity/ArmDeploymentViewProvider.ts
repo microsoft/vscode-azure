@@ -12,7 +12,7 @@ import { type ArmDeploymentActivity, type ArmDeploymentOperationActivity, isNest
 /**
  * View provider for ARM deployment activities. Handles both deployment
  * nodes (from the data tree) and leaf operation nodes (injected from
- * the deployment's enriched {@link ArmDeploymentActivity.operations}).
+ * the deployment's enriched {@linkcode ArmDeploymentActivity.operations}).
  */
 @injectable()
 export class ArmDeploymentViewProvider implements ViewProvider<string> {

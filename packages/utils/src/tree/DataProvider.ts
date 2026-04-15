@@ -8,7 +8,7 @@ import type { Event } from '../vscode/EventEmitter';
 import type { ProviderResult } from '../vscode/ProviderResult';
 
 /**
- * Event fired by a {@link DataProvider} when its data changes externally
+ * Event fired by a {@linkcode DataProvider} when its data changes externally
  * (e.g. polling, user action). The tree subscribes to this automatically
  * when the provider is registered.
  */
@@ -20,12 +20,12 @@ export interface DataProviderChangeEvent<TResource> {
 }
 
 /**
- * The result of a {@link DataProvider.getChildren} call.
+ * The result of a {@linkcode DataProvider.getChildren} call.
  *
  * - A plain `TResource[]` for non-paginated results.
  * - An `AsyncIterable<Page<TResource>>` whose iterations each yield one page
  *   of children. Each page declares whether more pages are available via
- *   {@link Page.hasMore}. The tree pulls the first page on initial access
+ *   {@linkcode Page.hasMore}. The tree pulls the first page on initial access
  *   and subsequent pages on demand ("Load More").
  */
 export type ChildResult<TResource> = TResource[] | AsyncIterable<Page<TResource>>;
@@ -34,7 +34,7 @@ export type ChildResult<TResource> = TResource[] | AsyncIterable<Page<TResource>
  * Data-layer provider for a resource tree.
  *
  * Each implementation handles a specific subset of resources (identified by
- * {@link canHandle}) and knows how to fetch their children from the API.
+ * {@linkcode canHandle}) and knows how to fetch their children from the API.
  *
  * A provider with an `isRoot: true` property will also be called with no
  * argument to produce top-level resources for the tree.
@@ -55,7 +55,7 @@ export interface DataProvider<TResource> {
      *
      * Return a plain `TResource[]` for a non-paginated result, or an
      * `AsyncIterable<Page<TResource>>` (e.g. from an `async function*`
-     * generator) where each iteration yields a single {@link Page}. The
+     * generator) where each iteration yields a single {@linkcode Page}. The
      * tree will pull one page on first access and subsequent pages when
      * the user clicks "Load More".
      *
@@ -89,12 +89,12 @@ export interface DataProvider<TResource> {
     /**
      * Optional event fired when the provider's data changes externally.
      * The tree automatically subscribes when the provider is registered
-     * and calls {@link DataItemTree.invalidate} or {@link DataItemTree.invalidateAll}
+     * and calls {@linkcode DataItemTree.invalidate} or {@linkcode DataItemTree.invalidateAll}
      * accordingly.
      *
      * This is appropriate when the provider is aware of changes to its data that the
      * tree is not (e.g. polling, user action in another view, etc.). When practical,
-     * {@link DataItemTree.invalidate} should be used instead.
+     * {@linkcode DataItemTree.invalidate} should be used instead.
      */
     readonly onDidChange?: Event<DataProviderChangeEvent<TResource>>;
 }

@@ -9,7 +9,7 @@ import { CancellationError } from '../vscode/CancellationError';
 import type { ICodeContext, IVsCode } from '../vscode/IVsCode';
 import { GoBackError } from '../wizard/GoBackError';
 
-/** A {@link vscode.QuickPickItem} with associated underlying data */
+/** A {@linkcode vscode.QuickPickItem} with associated underlying data */
 export interface QuickPickItemWithData<T> extends vscode.QuickPickItem {
     readonly data: T;
 }
@@ -19,7 +19,7 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
     /** Predicate to determine which item should be pre-highlighted. The first matching item wins. */
     readonly isActiveItem?: (item: TItem) => boolean;
 
-    /** Predicate to determine which items are pre-selected when {@link vscode.QuickPickOptions.canPickMany} is true. */
+    /** Predicate to determine which items are pre-selected when {@linkcode vscode.QuickPickOptions.canPickMany} is true. */
     readonly isSelectedItem?: (item: TItem) => boolean;
 
     /** Preset filter string */
@@ -33,14 +33,14 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
  * Shows a quick pick with the given items and options.
  *
  * **Key features:**
- *   - If {@link ExtendedQuickPickOptions.isActiveItem} is not provided, the most recently picked item (based
+ *   - If {@linkcode ExtendedQuickPickOptions.isActiveItem} is not provided, the most recently picked item (based
  *     on `label`) will be pre-highlighted. For multi-select, recently picked items will be pre-checked.
- *   - If {@link ExtendedQuickPickOptions.showBack} is `true`, a back button will be shown that rejects with
- *     {@link GoBackError} when pressed.
- *   - If the user cancels the quick pick, it rejects with {@link CancellationError}.
- * @param ctx Dependencies ({@link IVsCode} and {@link IExtensionContext})
+ *   - If {@linkcode ExtendedQuickPickOptions.showBack} is `true`, a back button will be shown that rejects with
+ *     {@linkcode GoBackError} when pressed.
+ *   - If the user cancels the quick pick, it rejects with {@linkcode CancellationError}.
+ * @param ctx Dependencies ({@linkcode IVsCode} and {@linkcode IExtensionContext})
  * @param items The quick pick items to show
- * @param options Options for the quick pick. See {@link ExtendedQuickPickOptions}.
+ * @param options Options for the quick pick. See {@linkcode ExtendedQuickPickOptions}.
  */
 export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICodeContext, items: TItem[], options: ExtendedQuickPickOptions<TItem> & { canPickMany: true }): Promise<TItem[]>;
 export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICodeContext, items: TItem[], options?: ExtendedQuickPickOptions<TItem>): Promise<TItem>;
@@ -189,19 +189,19 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
  * Shows an input box with the given options.
  *
  * **Key features:**
- *   - If {@link ExtendedInputBoxOptions.validateInput} is provided, it runs on every keystroke and shows the
- *     returned `string` (or {@link vscode.InputBoxValidationMessage}) as a validation message if the input is
+ *   - If {@linkcode ExtendedInputBoxOptions.validateInput} is provided, it runs on every keystroke and shows the
+ *     returned `string` (or {@linkcode vscode.InputBoxValidationMessage}) as a validation message if the input is
  *     invalid. Because it runs on every keystroke, it needs to be very fast.
- *   - If {@link ExtendedInputBoxOptions.validateInputAsync} is provided, it runs when the user accepts. The
+ *   - If {@linkcode ExtendedInputBoxOptions.validateInputAsync} is provided, it runs when the user accepts. The
  *     input box is disabled and shows a busy indicator while the promise is pending. If the promise resolves
- *     to a `string` (or {@link vscode.InputBoxValidationMessage}), it is shown as a validation message and the
+ *     to a `string` (or {@linkcode vscode.InputBoxValidationMessage}), it is shown as a validation message and the
  *     input box is re-enabled. If the promise resolves to `undefined`, the input is accepted. If the promise
  *     rejects, the error is propagated.
- *   - If {@link ExtendedInputBoxOptions.showBack} is `true`, a back button will be shown that rejects with
- *     {@link GoBackError} when pressed.
- *   - If the user cancels the input box, it rejects with {@link CancellationError}.
- * @param ctx Dependencies ({@link IVsCode} and {@link IExtensionContext})
- * @param options Options for the input box. See {@link ExtendedInputBoxOptions}.
+ *   - If {@linkcode ExtendedInputBoxOptions.showBack} is `true`, a back button will be shown that rejects with
+ *     {@linkcode GoBackError} when pressed.
+ *   - If the user cancels the input box, it rejects with {@linkcode CancellationError}.
+ * @param ctx Dependencies ({@linkcode IVsCode} and {@linkcode IExtensionContext})
+ * @param options Options for the input box. See {@linkcode ExtendedInputBoxOptions}.
  */
 export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxOptions): Promise<string> {
     const showBack = options?.showBack ?? false;
@@ -326,7 +326,7 @@ export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxO
  * Options related to quick picks / inputs with steps and back buttons
  */
 interface StepOptions {
-    /** Optional name of the step (used in {@link CancellationError}'s `stepName`) */
+    /** Optional name of the step (used in {@linkcode CancellationError}'s `stepName`) */
     readonly stepName?: string;
 
     /** Optional current step number */
@@ -335,7 +335,7 @@ interface StepOptions {
     /** Optional total number of steps */
     readonly totalSteps?: number;
 
-    /** When `true`, shows a back button that throws {@link GoBackError} when pressed. Defaults to `false`. */
+    /** When `true`, shows a back button that throws {@linkcode GoBackError} when pressed. Defaults to `false`. */
     readonly showBack?: boolean;
 }
 
@@ -380,7 +380,7 @@ export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): P
 
 /**
  * Awaits a promise, showing a progress notification only if it doesn't
- * resolve within {@link delay} milliseconds. Avoids a brief flash of the
+ * resolve within {@linkcode delay} milliseconds. Avoids a brief flash of the
  * notification when the operation completes instantly (e.g. cache hit).
  *
  * @param code - The VS Code API surface.

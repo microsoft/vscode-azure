@@ -23,13 +23,13 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     public readonly isRoot = true;
 
     /**
-     * Lazy sign-in: resolved on first call to {@link getChildren}, skipped thereafter.
+     * Lazy sign-in: resolved on first call to {@linkcode getChildren}, skipped thereafter.
      */
     private signInPromise: Promise<boolean> | undefined;
 
     /**
      * Cached REST clients per subscription ID, so all calls for the same
-     * subscription share one pipeline (and thus one {@link DedupeRequestPolicy}).
+     * subscription share one pipeline (and thus one {@linkcode DedupeRequestPolicy}).
      */
     private readonly clientCache = new InflightMap<IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
@@ -87,7 +87,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     /**
      * Get or create a cached REST client for the given subscription.
      * All callers for the same subscription share the same client and pipeline,
-     * so {@link DedupeRequestPolicy} can deduplicate concurrent requests.
+     * so {@linkcode DedupeRequestPolicy} can deduplicate concurrent requests.
      */
     private getOrCreateClient(subscription: AzureSubscription): Promise<IResourceClient> {
         return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));

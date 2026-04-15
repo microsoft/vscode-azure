@@ -14,16 +14,16 @@ import type { PromptStep } from './PromptStep';
  * **Prompt phase** -- Steps run in order, each returning a partial
  * context that is merged into the accumulated state. Steps may
  * dynamically add further prompt steps by overriding
- * {@link PromptStep.getSubPromptSteps}. Back navigation is
- * supported: throwing {@link GoBackError} from a prompt step returns
+ * {@linkcode PromptStep.getSubPromptSteps}. Back navigation is
+ * supported: throwing {@linkcode GoBackError} from a prompt step returns
  * to the previous prompted step, automatically discarding its context
  * contribution and any dynamically added children.
  *
  * **Execute phase** -- After all prompts complete, execute steps run
  * in the order they were registered. Only steps whose
- * {@link ExecuteStep.shouldExecute} returns `true` (or is omitted)
+ * {@linkcode ExecuteStep.shouldExecute} returns `true` (or is omitted)
  * are run. Steps may add sub-steps via
- * {@link ExecuteStep.getSubExecuteSteps}; these run immediately after their
+ * {@linkcode ExecuteStep.getSubExecuteSteps}; these run immediately after their
  * parent.
  *
  * @typeParam TContext - The shared context object accumulated across
@@ -52,10 +52,10 @@ export class Wizard<TContext extends object> {
     /**
      * Run the wizard: prompt phase followed by execute phase.
      *
-     * @throws a {@link CancellationError} if the user cancels or goes back
+     * @throws a {@linkcode CancellationError} if the user cancels or goes back
      *   past the first step.
      * @returns The final accumulated context after both phases. Note that
-     *   this will be a new object, not the originally passed-in {@link baseContext}.
+     *   this will be a new object, not the originally passed-in {@linkcode baseContext}.
      */
     public async run(): Promise<TContext> {
         const context = await this.runPromptPhase();

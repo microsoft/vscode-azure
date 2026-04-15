@@ -12,12 +12,12 @@ import { isGenericResource } from '@microsoft/vscode-azure-azutils';
 export const AcrResourceType = 'Microsoft.ContainerRegistry/registries';
 
 /**
- * A {@link GenericResource} that has been enriched with ACR-specific
+ * A {@linkcode GenericResource} that has been enriched with ACR-specific
  * properties fetched from the ARM management API.
  *
- * Created by {@link AcrDataProvider.enrich} via `Object.assign`, so the
+ * Created by {@linkcode AcrDataProvider.enrich} via `Object.assign`, so the
  * underlying object remains the same reference stored in the
- * {@link DataItemTree}.
+ * {@linkcode DataItemTree}.
  */
 export interface AcrRegistry extends GenericResource {
     /** The URL that can be used to log into the container registry. */
@@ -29,10 +29,10 @@ export interface AcrRegistry extends GenericResource {
 }
 
 /**
- * An {@link AcrRegistry} whose enrichment has completed, guaranteeing
+ * An {@linkcode AcrRegistry} whose enrichment has completed, guaranteeing
  * that all service-specific properties are populated.
  *
- * Obtain this type by awaiting {@link DataItemTree.whenEnriched}:
+ * Obtain this type by awaiting {@linkcode DataItemTree.whenEnriched}:
  *
  * ```ts
  * const registry = await cache.whenEnriched<EnrichedAcrRegistry>(resource);
@@ -46,7 +46,7 @@ export interface EnrichedAcrRegistry extends GenericResource {
 }
 
 /**
- * Type guard that narrows an unknown value to an {@link AcrRegistry}.
+ * Type guard that narrows an unknown value to an {@linkcode AcrRegistry}.
  *
  * Returns `true` for `GenericResource` nodes whose `logicalType` matches
  * `Microsoft.ContainerRegistry/registries`. The node may or may not

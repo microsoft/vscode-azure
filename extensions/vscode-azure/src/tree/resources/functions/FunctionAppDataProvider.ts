@@ -135,7 +135,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
 }
 
 /**
- * Type guard for Function App-owned {@link VirtualResource} nodes.
+ * Type guard for Function App-owned {@linkcode VirtualResource} nodes.
  */
 function isFunctionAppVirtualResource(node: unknown): node is VirtualResource {
     return !!node && typeof node === 'object'

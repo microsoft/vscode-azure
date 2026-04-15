@@ -26,10 +26,10 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     /**
      * Tracks which hierarchy level the tree roots actually start at,
-     * after account/tenant skipping in {@link getRootChildren}.
-     * Used by {@link getParent} to return `undefined` for effective roots.
+     * after account/tenant skipping in {@linkcode getRootChildren}.
+     * Used by {@linkcode getParent} to return `undefined` for effective roots.
      *
-     * **Note:** This is only set after {@link getRootChildren} runs. If
+     * **Note:** This is only set after {@linkcode getRootChildren} runs. If
      * `TreeView.reveal()` is called before the tree has loaded, `getParent`
      * will use the default `'subscription'` value, which may be incorrect and
      * cause reveal to fail for nodes below skipped levels.
@@ -133,11 +133,11 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      *
      * **Important:** This method is intended for VS Code's internal tree
      * navigation (e.g., `TreeView.reveal()`). Application code should use
-     * {@link AzureNodeId.parentNodeId} directly, if needed.
+     * {@linkcode AzureNodeId.parentNodeId} directly, if needed.
      *
      * **Limitation:** Reveal is best-effort. If `TreeView.reveal()` is
      * called before the tree has ever loaded roots (before
-     * {@link getRootChildren} runs), `rootKind` will still be `'subscription'`
+     * {@linkcode getRootChildren} runs), `rootKind` will still be `'subscription'`
      * and this method may return parent keys for account/tenant nodes that
      * are actually skipped from the visible tree. This can cause reveal to
      * fail until the user has expanded the tree at least once.
@@ -256,7 +256,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     /**
      * Group all resources under a subscription according to
-     * {@link groupingStrategy}.
+     * {@linkcode groupingStrategy}.
      *
      * Returns a `Map` from group key to an array of resource keys.
      * For `'resourceGroup'` strategy the groups are the resource groups

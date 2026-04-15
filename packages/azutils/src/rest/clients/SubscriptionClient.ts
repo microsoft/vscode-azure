@@ -16,7 +16,7 @@ import { createAzureClient } from '../createAzureClient';
 
 export type { Location };
 
-/** Factory that creates an {@link ISubscriptionClient} for a given subscription. */
+/** Factory that creates an {@linkcode ISubscriptionClient} for a given subscription. */
 export const ISubscriptionClientProvider: ServiceIdentifier<ISubscriptionClientProvider> = Symbol.for('ISubscriptionClientProvider');
 export type ISubscriptionClientProvider = AsyncFactory<ISubscriptionClient, [AzureSubscription]>;
 
@@ -31,10 +31,10 @@ export interface ISubscriptionClient {
 }
 
 /**
- * Wrapper around the Azure SDK {@link SdkSubscriptionClient} that exposes
+ * Wrapper around the Azure SDK {@linkcode SdkSubscriptionClient} that exposes
  * only the methods we use.
  *
- * Use the static {@link create} factory to construct--it lazily imports the
+ * Use the static {@linkcode create} factory to construct--it lazily imports the
  * SDK to keep load times down.
  */
 export class SubscriptionClient implements ISubscriptionClient {
@@ -43,7 +43,7 @@ export class SubscriptionClient implements ISubscriptionClient {
     private constructor(private readonly inner: SdkSubscriptionClient) { }
 
     /**
-     * Create a new {@link SubscriptionClient} instance. Lazily imports
+     * Create a new {@linkcode SubscriptionClient} instance. Lazily imports
      * `@azure/arm-resources-subscriptions` on first call.
      */
     public static async create(

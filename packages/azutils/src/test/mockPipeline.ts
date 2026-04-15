@@ -7,8 +7,8 @@ import type { HttpClient, PipelineRequest, PipelineResponse } from '@azure/core-
 import { createHttpHeaders } from '@azure/core-rest-pipeline'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- Test utility
 
 /**
- * Creates a mock {@link PipelineRequest} with sensible defaults.
- * Headers are backed by SDK's real {@link createHttpHeaders}.
+ * Creates a mock {@linkcode PipelineRequest} with sensible defaults.
+ * Headers are backed by SDK's real {@linkcode createHttpHeaders}.
  */
 export function makeRequest(overrides?: Partial<PipelineRequest>): PipelineRequest {
     return {
@@ -25,7 +25,7 @@ export function makeRequest(overrides?: Partial<PipelineRequest>): PipelineReque
 }
 
 /**
- * Creates a mock {@link PipelineResponse} for a given request.
+ * Creates a mock {@linkcode PipelineResponse} for a given request.
  */
 export function makeResponse(request: PipelineRequest, status?: number, bodyAsText?: string | null, headers?: Record<string, string>): PipelineResponse {
     return {
@@ -42,7 +42,7 @@ interface MockHttpClientOptions {
 }
 
 /**
- * An {@link HttpClient} that delegates to a test-provided handler
+ * An {@linkcode HttpClient} that delegates to a test-provided handler
  * instead of making real network calls.
  */
 export class MockHttpClient implements HttpClient {
