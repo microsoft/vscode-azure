@@ -10,7 +10,6 @@
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
 
 ## Code hygiene
-- Reexport and use Azure client types from azutils, and eliminate dev deps on Azure packages in extension
 - Swap out `@link` for `@linkcode` in most places
 - JSDocs everywhere
 - Address all the TODOs in source
