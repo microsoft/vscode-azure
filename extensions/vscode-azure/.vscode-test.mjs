@@ -7,7 +7,8 @@ import { azExtSrcTestConfig } from '@microsoft/vscode-azext-eng/vscode-test'; //
 import { defineConfig } from '@vscode/test-cli';
 
 export default defineConfig({
-    tests: [azExtSrcTestConfig],
+    // TODO: remove version pin once the transient VS Code build issue is resolved
+    tests: [{ ...azExtSrcTestConfig, version: '1.116.0' }],
     coverage: {
         include: [
             '**/extensions/vscode-azure/src/**'

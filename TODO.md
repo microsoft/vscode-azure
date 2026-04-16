@@ -3,7 +3,6 @@
   - Also use `@azure/logger` to log to the output channel for SDK calls
 - Setting for node skipping behavior
 - Setting+commands for grouping behavior
-- Setting for default page size
 
 ## Issues
 - Figure out why the token expired and wasn't refreshing

@@ -117,7 +117,7 @@ describe('Function App Tree Integration (integration)', () => {
         const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
 
         const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider as never);
-        const genericDataProvider = new GenericAzureDataProvider(executor, resourceClientProvider, subProvider);
+        const genericDataProvider = new GenericAzureDataProvider(code, executor, resourceClientProvider, subProvider);
 
         // Register in correct order: Function App first, generic fallback second
         dataTree.registerProvider(funcDataProvider);

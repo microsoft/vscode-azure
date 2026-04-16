@@ -8,13 +8,13 @@ import {
     getNodeType, IResourceClientProvider, isAccount, isResourceGroup, isSubscription, isTenant,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, InflightMap, IVsCode, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { ConfigurationSection } from '../../constants';
 import { IAzureSubscriptionProvider } from '../../services';
 
 /**
  * Default page size used when fetching paginated Azure resource lists.
- * TODO: add override setting
  */
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -34,6 +34,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     private readonly clientCache = new InflightMap<IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
@@ -71,12 +72,12 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
             case isSubscription(resource): {
                 const client = await this.getOrCreateClient(resource);
-                return client.resourceGroups.list({ top: DEFAULT_PAGE_SIZE });
+                return client.resourceGroups.list({ top: this.pageSize });
             }
 
             case isResourceGroup(resource): {
                 const client = await this.getOrCreateClient(resource.subscription);
-                return client.resources.listByResourceGroup(resource.name, { top: DEFAULT_PAGE_SIZE });
+                return client.resources.listByResourceGroup(resource.name, { top: this.pageSize });
             }
 
             default:
@@ -91,5 +92,9 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private getOrCreateClient(subscription: AzureSubscription): Promise<IResourceClient> {
         return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
+    }
+
+    private get pageSize(): number {
+        return this.code.workspace.getConfiguration(ConfigurationSection).get('pageSize', DEFAULT_PAGE_SIZE);
     }
 }
