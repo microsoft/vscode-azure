@@ -5,6 +5,7 @@
 
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { Disposable } from '../../vscode/Disposable';
 import { DebugOutputChannel } from '../../vscode/IOutputChannel';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
@@ -226,6 +227,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
         workspace: {
             getConfiguration,
+            onDidChangeConfiguration: () => Disposable.None,
         },
         l10n: { t },
         QuickInputButtons,

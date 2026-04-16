@@ -7,14 +7,15 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { EventEmitter, IActionExecutor, IVsCode, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
+import { ConfigurationSection } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { combineContextValues } from '../combineContextValues';
 
 @injectable()
-export class GenericAzureViewProvider implements ViewProvider<string> {
+export class GenericAzureViewProvider implements ViewProvider<string>, Disposable {
     public readonly isRoot = true;
 
     /**
@@ -40,11 +41,22 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     private rootKind: 'account' | 'tenant' | 'subscription' = 'subscription';
     private isOneRootSub = false;
 
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<string>>();
+    private readonly disposables: Disposable[] = [this.changeEmitter];
+
+    public readonly onDidChange = this.changeEmitter.event;
+
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-    ) { }
+    ) {
+        this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)) {
+                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            }
+        }));
+    }
 
     // #region ViewProvider
 
@@ -201,12 +213,14 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         this.rootKind = 'account';
         this.isOneRootSub = false;
 
-        if (nodes.length === 1 && isAccount(nodes[0])) {
+        const skip = !this.code.workspace.getConfiguration(ConfigurationSection).get<boolean>('alwaysShowAccountNodes', false);
+
+        if (skip && nodes.length === 1 && isAccount(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'tenant';
         }
 
-        if (nodes.length === 1 && isTenant(nodes[0])) {
+        if (skip && nodes.length === 1 && isTenant(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'subscription';
 
@@ -311,6 +325,10 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     }
 
     // #endregion
+
+    public dispose(): void {
+        this.disposables.forEach(d => void d.dispose());
+    }
 }
 
 /**

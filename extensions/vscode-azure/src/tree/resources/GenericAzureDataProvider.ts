@@ -8,7 +8,10 @@ import {
     getNodeType, IResourceClientProvider, isAccount, isResourceGroup, isSubscription, isTenant,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, InflightMap, IVsCode, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
+import {
+    EventEmitter, IActionExecutor, InflightMap, IVsCode,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable
+} from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection } from '../../constants';
 import { IAzureSubscriptionProvider } from '../../services';
@@ -19,7 +22,7 @@ import { IAzureSubscriptionProvider } from '../../services';
 const DEFAULT_PAGE_SIZE = 50;
 
 @injectable()
-export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode> {
+export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
     public readonly isRoot = true;
 
     /**
@@ -33,12 +36,23 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private readonly clientCache = new InflightMap<IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
+    private readonly disposables: Disposable[] = [this.changeEmitter];
+
+    public readonly onDidChange = this.changeEmitter.event;
+
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
-    ) { }
+    ) {
+        this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration(`${ConfigurationSection}.pageSize`)) {
+                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            }
+        }));
+    }
 
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
         if (!resource || typeof resource !== 'object') {
@@ -96,5 +110,9 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
     private get pageSize(): number {
         return this.code.workspace.getConfiguration(ConfigurationSection).get('pageSize', DEFAULT_PAGE_SIZE);
+    }
+
+    public dispose(): void {
+        this.disposables.forEach(d => void d.dispose());
     }
 }

@@ -6,7 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
@@ -131,6 +131,40 @@ describe('GenericAzureViewProvider (unit)', () => {
             const provider = createProvider();
             const children = await provider.getChildren('azr://unknown@portal.azure.com');
             expect(children).to.deep.equal([]);
+        });
+
+        it('should not skip single account when alwaysShowAccountNodes is true', async () => {
+            const account = makeAccount();
+            const tenant = makeTenant();
+            const sub = makeSubscription();
+            const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                [account, [tenant]],
+                [tenant, [sub]],
+            ]);
+
+            const executor = new ActionExecutor(new NullTelemetryReporter());
+            const allNodes = [account, tenant, sub];
+            const cacheMap = new Map<string, ConcreteAzureNode>();
+            for (const n of allNodes) {
+                cacheMap.set(AzureNodeId.from(n).toString(), n);
+            }
+            const mockCache = {
+                get: (key: string) => cacheMap.get(key),
+                getChildren: (node?: ConcreteAzureNode) => {
+                    if (!node) {
+                        return Promise.resolve([account]);
+                    }
+                    return Promise.resolve(childrenMap.get(node) ?? []);
+                },
+            };
+
+            const mockVsCode = createMockVsCode();
+            mockVsCode.settings.set('vscode-azure.alwaysShowAccountNodes', true);
+            const provider = new GenericAzureViewProvider(mockVsCode.vscode as never, executor, mockCache as never);
+
+            const roots = await provider.getChildren();
+            expect(roots).to.have.length(1);
+            expect(AzureNodeId.parse(roots[0]).isAccountNodeId()).to.be.true;
         });
     });
 

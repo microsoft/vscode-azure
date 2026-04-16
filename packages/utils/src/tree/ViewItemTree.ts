@@ -9,6 +9,7 @@ import { InflightMap } from '../data/InflightMap';
 import type { Disposable } from '../vscode/Disposable';
 import type { ITreeItem } from '../vscode/IVsCode';
 import type { DataItemTree } from './DataItemTree';
+import type { DataProviderChangeEvent } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 import type { ViewProvider } from './ViewProvider';
@@ -116,7 +117,7 @@ export function createDefaultLoadMoreOptions<TViewItem>(adapter: LoadMoreAdapter
  * @typeParam TViewItem - The view item type stored in the tree.
  * @typeParam TResource - The resource type stored in the underlying {@linkcode DataItemTree}.
  */
-export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewItem, ViewProvider<TViewItem>> implements vscode.TreeDataProvider<TViewItem> {
+export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewItem, ViewProvider<TViewItem>> implements vscode.TreeDataProvider<TViewItem>, Disposable {
     /** Map from key to node for O(1) lookup. */
     private readonly nodes = new NodeMap<ViewNode<TViewItem>>(node => this.getKey(node.viewItem));
 
@@ -378,6 +379,11 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     public override dispose(): void {
         this.dataItemTreeSubscription.dispose();
         super.dispose();
+    }
+
+    protected override onProviderChanged(_event: DataProviderChangeEvent<TViewItem>): void {
+        this.roots = undefined;
+        this.changeEmitter.fire(undefined);
     }
 }
 

@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Disposable } from '../vscode/Disposable';
+import { Disposable } from '../vscode/Disposable';
 import { EventEmitter } from '../vscode/EventEmitter';
-import type { DataProvider } from './DataProvider';
+import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
 
 /**
  * Base class for trees that dispatch to multiple providers via `canHandle`.
@@ -24,21 +24,39 @@ export abstract class ProviderRegistry<TResource, TProvider extends DataProvider
      * Register a provider. Returns a {@linkcode Disposable} that
      * unregisters the provider when disposed.
      *
+     * If the provider has an {@linkcode DataProvider.onDidChange} event,
+     * the registry subscribes and calls {@linkcode onProviderChanged}
+     * when it fires.
+     *
      * **Registration order matters.** {@linkcode findProvider} returns the
      * first provider whose `canHandle` matches, so more-specific
      * providers must be registered before broader/fallback ones.
      */
     public registerProvider(provider: TProvider): Disposable {
         this.registrations.push(provider);
-        return {
-            dispose: () => {
-                const idx = this.registrations.indexOf(provider);
-                if (idx !== -1) {
-                    this.registrations.splice(idx, 1);
+
+        const providerChangeSubscription = provider.onDidChange?.((event) => {
+            this.onProviderChanged(event);
+        });
+
+        return Disposable.from(
+            {
+                dispose: () => {
+                    const idx = this.registrations.indexOf(provider);
+                    if (idx !== -1) {
+                        this.registrations.splice(idx, 1);
+                    }
                 }
             },
-        };
+            providerChangeSubscription ?? Disposable.None,
+        );
     }
+
+    /**
+     * Called when a registered provider fires its {@linkcode DataProvider.onDidChange} event.
+     * Subclasses override this to handle the change (e.g. invalidate cache, refresh view).
+     */
+    protected abstract onProviderChanged(_event: DataProviderChangeEvent<TResource>): void;
 
     /**
      * Find the first registered provider that can handle the given resource.

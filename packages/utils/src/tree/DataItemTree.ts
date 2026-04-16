@@ -7,7 +7,7 @@ import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
 import { isAsyncIterable, type Page } from '../data/Page';
 import { Disposable } from '../vscode/Disposable';
-import type { DataProvider } from './DataProvider';
+import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 
@@ -43,7 +43,7 @@ interface TreeNode<T> {
  *
  * @typeParam T - The data item type stored in the tree.
  */
-export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
+export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implements Disposable {
     private readonly nodes = new NodeMap<TreeNode<T>>(node => this.getKey(node.resource));
 
     /**
@@ -89,24 +89,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         private readonly ttl: number,
     ) {
         super();
-    }
-
-    /**
-     * Register a provider. If the provider has an {@linkcode DataProvider.onDidChange}
-     * event, the tree automatically subscribes and invalidates accordingly.
-     */
-    public override registerProvider(provider: DataProvider<T>): Disposable {
-        const registration = super.registerProvider(provider);
-
-        const changeSubscription = provider.onDidChange?.((event) => {
-            if (event.resource !== undefined && event.resource !== null) {
-                this.invalidate(event.resource, event.includeChildren);
-            } else {
-                this.invalidateAll();
-            }
-        });
-
-        return Disposable.from(registration, changeSubscription ?? Disposable.None);
     }
 
     /**
@@ -479,5 +461,17 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> {
         this.roots = undefined;
         this.rootsStaleAt = 0;
         this.changeEmitter.fire(undefined);
+    }
+
+    /**
+     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event by
+     * invalidating the changed resource or the entire cache.
+     */
+    protected override onProviderChanged(event: DataProviderChangeEvent<T>): void {
+        if (event.resource !== undefined && event.resource !== null) {
+            this.invalidate(event.resource, event.includeChildren);
+        } else {
+            this.invalidateAll();
+        }
     }
 }
