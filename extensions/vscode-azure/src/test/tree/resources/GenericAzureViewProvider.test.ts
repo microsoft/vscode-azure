@@ -3,19 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, NullTelemetryReporter, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import * as vscode from 'vscode';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
+import { ConfigurationSection } from '../../../constants';
 import { GenericAzureViewProvider } from '../../../tree/resources/GenericAzureViewProvider';
 
-// TODO: No coverage yet for other grouping strategies
-
 describe('GenericAzureViewProvider (unit)', () => {
+    const mockVsCode = createMockVsCode();
+
     function createProvider(
         nodes?: ConcreteAzureNode[],
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
@@ -37,8 +37,9 @@ describe('GenericAzureViewProvider (unit)', () => {
                 }
                 return Promise.resolve(children.get(node) ?? []);
             },
+            loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(vscode, executor, mockCache as never);
+        return new GenericAzureViewProvider(mockVsCode.vscode, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
@@ -142,27 +143,12 @@ describe('GenericAzureViewProvider (unit)', () => {
                 [tenant, [sub]],
             ]);
 
-            const executor = new ActionExecutor(new NullTelemetryReporter());
-            const allNodes = [account, tenant, sub];
-            const cacheMap = new Map<string, ConcreteAzureNode>();
-            for (const n of allNodes) {
-                cacheMap.set(AzureNodeId.from(n).toString(), n);
-            }
-            const mockCache = {
-                get: (key: string) => cacheMap.get(key),
-                getChildren: (node?: ConcreteAzureNode) => {
-                    if (!node) {
-                        return Promise.resolve([account]);
-                    }
-                    return Promise.resolve(childrenMap.get(node) ?? []);
-                },
-            };
+            const provider = createProvider(
+                [account, tenant, sub],
+                childrenMap,
+            );
 
-            const mockVsCode = createMockVsCode();
-            mockVsCode.settings.set('vscode-azure.alwaysShowAccountNodes', true);
-            const provider = new GenericAzureViewProvider(mockVsCode.vscode as never, executor, mockCache as never);
-
-            const roots = await provider.getChildren();
+            const roots = await withSettings(mockVsCode, { [`${ConfigurationSection}.alwaysShowAccountNodes`]: true }, () => provider.getChildren());
             expect(roots).to.have.length(1);
             expect(AzureNodeId.parse(roots[0]).isAccountNodeId()).to.be.true;
         });
@@ -263,6 +249,170 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             const parentKey = provider.getParent(accountKey);
             expect(parentKey).to.be.undefined;
+        });
+
+        it('should return virtual group parent for resource when grouping by resourceType', async () => {
+            const sub = makeSubscription();
+            const rg = makeResourceGroup();
+            const res = makeGenericResource();
+            const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                [sub, [rg]],
+                [rg, [res]],
+            ]);
+
+            const provider = createProvider(
+                [sub, rg, res],
+                childrenMap,
+            );
+
+            await withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+                await provider.getChildren();
+
+                const resKey = AzureNodeId.from(res).toString();
+                const parentKey = provider.getParent(resKey);
+                expect(parentKey).to.not.be.undefined;
+                expect(AzureNodeId.parse(parentKey!).isVirtualGroupNodeId()).to.be.true;
+            });
+        });
+    });
+
+    describe('grouping strategies', () => {
+        const sub = makeSubscription();
+        const rg1 = makeResourceGroup({ name: 'rg1', id: '/subscriptions/test-sub/resourceGroups/rg1' });
+        const rg2 = makeResourceGroup({ name: 'rg2', id: '/subscriptions/test-sub/resourceGroups/rg2' });
+
+        const webApp = makeGenericResource({
+            name: 'myWebApp',
+            type: 'Microsoft.Web/sites',
+            logicalType: 'Microsoft.Web/sites',
+            location: 'eastus',
+            id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/myWebApp',
+            tags: { env: 'prod', team: 'alpha' },
+        } as Partial<GenericResource>);
+
+        const storageAccount = makeGenericResource({
+            name: 'myStorage',
+            type: 'Microsoft.Storage/storageAccounts',
+            logicalType: 'Microsoft.Storage/storageAccounts',
+            location: 'westus',
+            id: '/subscriptions/test-sub/resourceGroups/rg2/providers/Microsoft.Storage/storageAccounts/myStorage',
+            tags: { env: 'dev' },
+        } as Partial<GenericResource>);
+
+        const untaggedResource = makeGenericResource({
+            name: 'myFunc',
+            type: 'Microsoft.Web/sites',
+            logicalType: 'Microsoft.Web/sites',
+            location: 'eastus',
+            id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/myFunc',
+        } as Partial<GenericResource>);
+
+        function createGroupingProvider(strategy: string, tagName?: string) {
+            const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                [sub, [rg1, rg2]],
+                [rg1, [webApp, untaggedResource]],
+                [rg2, [storageAccount]],
+            ]);
+
+            mockVsCode.settings.set(`${ConfigurationSection}.groupBy`, strategy);
+            if (tagName !== undefined) {
+                mockVsCode.settings.set(`${ConfigurationSection}.groupByTag`, tagName);
+            }
+
+            return createProvider(
+                [sub, rg1, rg2, webApp, storageAccount, untaggedResource],
+                childrenMap,
+            );
+        }
+
+        it('should group by resource type', async () => {
+            const provider = createGroupingProvider('resourceType');
+            const subKey = AzureNodeId.from(sub).toString();
+
+            const groups = await provider.getChildren(subKey);
+            expect(groups).to.have.length(2);
+
+            // All should be virtual group nodes
+            for (const key of groups) {
+                expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
+            }
+
+            // Check that expanding a group returns resources
+            const groupChildren = await provider.getChildren(groups[0]);
+            expect(groupChildren.length).to.be.greaterThan(0);
+        });
+
+        it('should group by location', async () => {
+            const provider = createGroupingProvider('location');
+            const subKey = AzureNodeId.from(sub).toString();
+
+            const groups = await provider.getChildren(subKey);
+            expect(groups).to.have.length(2); // eastus and westus
+
+            for (const key of groups) {
+                expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
+            }
+        });
+
+        it('should group by ARM tag', async () => {
+            const provider = createGroupingProvider('armTag', 'env');
+            const subKey = AzureNodeId.from(sub).toString();
+
+            const groups = await provider.getChildren(subKey);
+            expect(groups).to.have.length(3); // prod, dev, (untagged)
+
+            for (const key of groups) {
+                expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
+            }
+        });
+
+        it('should put untagged resources in an (untagged) bucket', async () => {
+            const provider = createGroupingProvider('armTag', 'team');
+            const subKey = AzureNodeId.from(sub).toString();
+
+            const groups = await provider.getChildren(subKey);
+            // webApp has team=alpha, storageAccount and untaggedResource do not
+            expect(groups).to.have.length(2); // alpha, (untagged)
+
+            const labels = groups.map(key => {
+                const item = provider.getTreeItem(key);
+                return item.label;
+            });
+            expect(labels).to.include('alpha');
+            expect(labels).to.include('(untagged)');
+        });
+
+        it('should return resource keys when expanding a virtual group', async () => {
+            const provider = createGroupingProvider('resourceType');
+            const subKey = AzureNodeId.from(sub).toString();
+
+            const groups = await provider.getChildren(subKey);
+
+            // Find the Microsoft.Web/sites group (has 2 resources)
+            let webGroupKey: string | undefined;
+            for (const key of groups) {
+                const item = provider.getTreeItem(key);
+                if (item.label === 'Microsoft.Web/sites') {
+                    webGroupKey = key;
+                    break;
+                }
+            }
+            expect(webGroupKey).to.not.be.undefined;
+
+            const resources = await provider.getChildren(webGroupKey);
+            expect(resources).to.have.length(2);
+        });
+
+        it('should still return resource groups when groupBy is resourceGroup', async () => {
+            const provider = createGroupingProvider('resourceGroup');
+            const subKey = AzureNodeId.from(sub).toString();
+
+            const groups = await provider.getChildren(subKey);
+            expect(groups).to.have.length(2);
+
+            for (const key of groups) {
+                expect(AzureNodeId.parse(key).isResourceGroupNodeId()).to.be.true;
+            }
         });
     });
 });
