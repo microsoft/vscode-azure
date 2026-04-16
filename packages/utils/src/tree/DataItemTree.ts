@@ -313,7 +313,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * never called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
-        const pagesLoaded = await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
+        const didLoad = await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
             context.telemetry.properties.tree = this.name;
@@ -337,7 +337,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             return loaded;
         });
 
-        if (pagesLoaded) {
+        if (didLoad) {
             this.changeEmitter.fire(resource);
         }
     }

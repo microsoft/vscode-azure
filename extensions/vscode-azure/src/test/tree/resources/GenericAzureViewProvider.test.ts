@@ -307,17 +307,12 @@ describe('GenericAzureViewProvider (unit)', () => {
             id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/myFunc',
         } as Partial<GenericResource>);
 
-        function createGroupingProvider(strategy: string, tagName?: string) {
+        function createGroupingProvider() {
             const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
                 [sub, [rg1, rg2]],
                 [rg1, [webApp, untaggedResource]],
                 [rg2, [storageAccount]],
             ]);
-
-            mockVsCode.settings.set(`${ConfigurationSection}.groupBy`, strategy);
-            if (tagName !== undefined) {
-                mockVsCode.settings.set(`${ConfigurationSection}.groupByTag`, tagName);
-            }
 
             return createProvider(
                 [sub, rg1, rg2, webApp, storageAccount, untaggedResource],
@@ -325,94 +320,106 @@ describe('GenericAzureViewProvider (unit)', () => {
             );
         }
 
-        it('should group by resource type', async () => {
-            const provider = createGroupingProvider('resourceType');
-            const subKey = AzureNodeId.from(sub).toString();
+        it('should group by resource type', () =>
+            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+                const provider = createGroupingProvider();
+                const subKey = AzureNodeId.from(sub).toString();
 
-            const groups = await provider.getChildren(subKey);
-            expect(groups).to.have.length(2);
+                const groups = await provider.getChildren(subKey);
+                expect(groups).to.have.length(2);
 
-            // All should be virtual group nodes
-            for (const key of groups) {
-                expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
-            }
-
-            // Check that expanding a group returns resources
-            const groupChildren = await provider.getChildren(groups[0]);
-            expect(groupChildren.length).to.be.greaterThan(0);
-        });
-
-        it('should group by location', async () => {
-            const provider = createGroupingProvider('location');
-            const subKey = AzureNodeId.from(sub).toString();
-
-            const groups = await provider.getChildren(subKey);
-            expect(groups).to.have.length(2); // eastus and westus
-
-            for (const key of groups) {
-                expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
-            }
-        });
-
-        it('should group by ARM tag', async () => {
-            const provider = createGroupingProvider('armTag', 'env');
-            const subKey = AzureNodeId.from(sub).toString();
-
-            const groups = await provider.getChildren(subKey);
-            expect(groups).to.have.length(3); // prod, dev, (untagged)
-
-            for (const key of groups) {
-                expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
-            }
-        });
-
-        it('should put untagged resources in an (untagged) bucket', async () => {
-            const provider = createGroupingProvider('armTag', 'team');
-            const subKey = AzureNodeId.from(sub).toString();
-
-            const groups = await provider.getChildren(subKey);
-            // webApp has team=alpha, storageAccount and untaggedResource do not
-            expect(groups).to.have.length(2); // alpha, (untagged)
-
-            const labels = groups.map(key => {
-                const item = provider.getTreeItem(key);
-                return item.label;
-            });
-            expect(labels).to.include('alpha');
-            expect(labels).to.include('(untagged)');
-        });
-
-        it('should return resource keys when expanding a virtual group', async () => {
-            const provider = createGroupingProvider('resourceType');
-            const subKey = AzureNodeId.from(sub).toString();
-
-            const groups = await provider.getChildren(subKey);
-
-            // Find the Microsoft.Web/sites group (has 2 resources)
-            let webGroupKey: string | undefined;
-            for (const key of groups) {
-                const item = provider.getTreeItem(key);
-                if (item.label === 'Microsoft.Web/sites') {
-                    webGroupKey = key;
-                    break;
+                // All should be virtual group nodes
+                for (const key of groups) {
+                    expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
                 }
-            }
-            expect(webGroupKey).to.not.be.undefined;
 
-            const resources = await provider.getChildren(webGroupKey);
-            expect(resources).to.have.length(2);
-        });
+                // Check that expanding a group returns resources
+                const groupChildren = await provider.getChildren(groups[0]);
+                expect(groupChildren.length).to.be.greaterThan(0);
+            }),
+        );
 
-        it('should still return resource groups when groupBy is resourceGroup', async () => {
-            const provider = createGroupingProvider('resourceGroup');
-            const subKey = AzureNodeId.from(sub).toString();
+        it('should group by location', () =>
+            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'location' }, async () => {
+                const provider = createGroupingProvider();
+                const subKey = AzureNodeId.from(sub).toString();
 
-            const groups = await provider.getChildren(subKey);
-            expect(groups).to.have.length(2);
+                const groups = await provider.getChildren(subKey);
+                expect(groups).to.have.length(2); // eastus and westus
 
-            for (const key of groups) {
-                expect(AzureNodeId.parse(key).isResourceGroupNodeId()).to.be.true;
-            }
-        });
+                for (const key of groups) {
+                    expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
+                }
+            }),
+        );
+
+        it('should group by ARM tag', () =>
+            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'armTag', [`${ConfigurationSection}.groupByTag`]: 'env' }, async () => {
+                const provider = createGroupingProvider();
+                const subKey = AzureNodeId.from(sub).toString();
+
+                const groups = await provider.getChildren(subKey);
+                expect(groups).to.have.length(3); // prod, dev, (No Tag)
+
+                for (const key of groups) {
+                    expect(AzureNodeId.parse(key).isVirtualGroupNodeId()).to.be.true;
+                }
+            }),
+        );
+
+        it('should put untagged resources in a no-tag bucket', () =>
+            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'armTag', [`${ConfigurationSection}.groupByTag`]: 'team' }, async () => {
+                const provider = createGroupingProvider();
+                const subKey = AzureNodeId.from(sub).toString();
+
+                const groups = await provider.getChildren(subKey);
+                // webApp has team=alpha, storageAccount and untaggedResource do not
+                expect(groups).to.have.length(2); // alpha, (No Tag)
+
+                const labels = groups.map(key => {
+                    const item = provider.getTreeItem(key);
+                    return item.label;
+                });
+                expect(labels).to.include('alpha');
+                expect(labels).to.include('(No Tag)');
+            }),
+        );
+
+        it('should return resource keys when expanding a virtual group', () =>
+            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+                const provider = createGroupingProvider();
+                const subKey = AzureNodeId.from(sub).toString();
+
+                const groups = await provider.getChildren(subKey);
+
+                // Find the Microsoft.Web/sites group (has 2 resources)
+                let webGroupKey: string | undefined;
+                for (const key of groups) {
+                    const item = provider.getTreeItem(key);
+                    if (item.label === 'Microsoft.Web/sites') {
+                        webGroupKey = key;
+                        break;
+                    }
+                }
+                expect(webGroupKey).to.not.be.undefined;
+
+                const resources = await provider.getChildren(webGroupKey);
+                expect(resources).to.have.length(2);
+            }),
+        );
+
+        it('should still return resource groups when groupBy is resourceGroup', () =>
+            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'resourceGroup' }, async () => {
+                const provider = createGroupingProvider();
+                const subKey = AzureNodeId.from(sub).toString();
+
+                const groups = await provider.getChildren(subKey);
+                expect(groups).to.have.length(2);
+
+                for (const key of groups) {
+                    expect(AzureNodeId.parse(key).isResourceGroupNodeId()).to.be.true;
+                }
+            }),
+        );
     });
 });
