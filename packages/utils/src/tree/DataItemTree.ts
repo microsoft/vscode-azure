@@ -313,6 +313,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * never called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
+        let pagesLoaded = false;
         await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
@@ -325,13 +326,19 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             // exhausting remaining pages.
             if (node?.children === undefined) {
                 await this.getChildren(resource);
+                pagesLoaded = true;
             }
 
             while (this.hasMore(resource)) {
                 await this.loadOnePage(resource);
+                pagesLoaded = true;
             }
         });
-        this.changeEmitter.fire(resource);
+
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
+        if (pagesLoaded) {
+            this.changeEmitter.fire(resource);
+        }
     }
 
     private async loadOnePage(resource: T): Promise<void> {
