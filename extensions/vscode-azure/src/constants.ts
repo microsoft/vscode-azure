@@ -6,3 +6,4 @@
 export const AzureResourceTreeViewId = 'vscode-azure/resources';
 export const ActivityTreeViewId = 'vscode-azure/activity';
 export const LoadMoreCommandId = 'vscode-azure/resources/loadMore';
+export const ConfigurationSection = 'vscode-azure';

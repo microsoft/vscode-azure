@@ -5,7 +5,7 @@
 
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -22,7 +22,8 @@ describe('GenericAzureDataProvider (unit)', () => {
             ...subscriptionProvider,
         };
         const createClient = clientFactory ?? mock.fn(() => Promise.resolve({}));
-        return new GenericAzureDataProvider(executor, createClient as never, subProvider as never);
+        const code = createMockVsCode();
+        return new GenericAzureDataProvider(code.vscode, executor, createClient as never, subProvider as never);
     }
 
     describe('canHandle', () => {
@@ -112,6 +113,31 @@ describe('GenericAzureDataProvider (unit)', () => {
             await provider.getChildren();
 
             expect(signIn.mock.callCount()).to.equal(1);
+        });
+
+        it('should pass configured page size to resource list calls', async () => {
+            const sub = makeSubscription();
+            let capturedOptions: Record<string, unknown> | undefined;
+            const mockClient = {
+                resourceGroups: {
+                    list: (options?: Record<string, unknown>) => { capturedOptions = options; return []; },
+                },
+            };
+            const code = createMockVsCode();
+            code.settings.set('vscode-azure.pageSize', 25);
+            const executor = new ActionExecutor(new NullTelemetryReporter());
+            const subProvider = {
+                signIn: mock.fn(() => Promise.resolve(true)),
+                getAccounts: mock.fn(() => Promise.resolve([])),
+                getTenantsForAccount: mock.fn(() => Promise.resolve([])),
+                getSubscriptionsForTenant: mock.fn(() => Promise.resolve([])),
+            };
+            const provider = new GenericAzureDataProvider(
+                code.vscode, executor, (() => Promise.resolve(mockClient)) as never, subProvider as never,
+            );
+
+            await provider.getChildren(sub);
+            expect(capturedOptions?.top).to.equal(25);
         });
     });
 });
