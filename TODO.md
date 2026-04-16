@@ -1,7 +1,6 @@
 ## TODO
 - Vastly more logging to the output channel (especially debug/trace)
   - Also use `@azure/logger` to log to the output channel for SDK calls
-- Setting+commands for grouping behavior
 
 ## Issues
 - Figure out why the token expired and wasn't refreshing

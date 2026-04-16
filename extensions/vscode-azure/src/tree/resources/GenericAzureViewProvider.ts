@@ -19,13 +19,6 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
     public readonly isRoot = true;
 
     /**
-     * Current grouping strategy for resources under subscriptions.
-     * Defaults to `'resourceGroup'` (mirrors the ARM hierarchy directly).
-     * TODO: make configurable
-     */
-    private readonly groupingStrategy: GroupingStrategy = 'resourceGroup';
-
-    /**
      * Tracks which hierarchy level the tree roots actually start at,
      * after account/tenant skipping in {@linkcode getRootChildren}.
      * Used by {@linkcode getParent} to return `undefined` for effective roots.
@@ -52,7 +45,9 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) {
         this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)) {
+            if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)
+                || e.affectsConfiguration(`${ConfigurationSection}.groupBy`)
+                || e.affectsConfiguration(`${ConfigurationSection}.groupByTag`)) {
                 this.changeEmitter.fire({ resource: undefined, includeChildren: true });
             }
         }));
@@ -79,7 +74,9 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         if (nodeId.isVirtualGroupNodeId()) {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
             const grouping = nodeId.getGrouping();
-            const label = grouping?.groupingValue ?? key;
+            const label = grouping?.groupingValue === untaggedSentinel
+                ? this.code.l10n.t('(No Tag)')
+                : grouping?.groupingValue ?? key;
             const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
             item.iconPath = new this.code.ThemeIcon('symbol-namespace');
@@ -168,11 +165,10 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         if (nodeId.isGenericResourceNodeId() && this.groupingStrategy !== 'resourceGroup') {
             const resource = this.cache.get(key);
             if (resource && isGenericResource(resource)) {
-                const value = groupingValue(this.groupingStrategy, resource);
                 const group: VirtualGroup = {
                     subscription: resource.subscription,
                     groupingStrategy: this.groupingStrategy satisfies VirtualGroup['groupingStrategy'],
-                    groupingValue: value,
+                    groupingValue: this.groupingValue(resource),
                 };
                 return toKey(group);
             }
@@ -305,11 +301,10 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         const groups = new Map<string, string[]>();
         for (const resource of allResources) {
-            const value = groupingValue(this.groupingStrategy, resource);
             const group: VirtualGroup = {
                 subscription,
                 groupingStrategy: this.groupingStrategy satisfies VirtualGroup['groupingStrategy'],
-                groupingValue: value,
+                groupingValue: this.groupingValue(resource),
             };
             const groupKey = toKey(group);
 
@@ -329,20 +324,29 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
     public dispose(): void {
         this.disposables.forEach(d => void d.dispose());
     }
-}
 
-/**
- * Derive the grouping value for a resource given a strategy.
- */
-function groupingValue(strategy: GroupingStrategy, resource: GenericResource): string {
-    switch (strategy) {
-        case 'resourceType':
-            return resource.logicalType;
-        case 'location':
-            return resource.location;
-        // TODO: armTag
-        default:
-            return resource.logicalType;
+    private get groupingStrategy(): GroupingStrategy {
+        return this.code.workspace.getConfiguration(ConfigurationSection).get<GroupingStrategy>('groupBy', 'resourceGroup');
+    }
+
+    private get groupByTag(): string {
+        return this.code.workspace.getConfiguration(ConfigurationSection).get<string>('groupByTag', '');
+    }
+
+    /**
+     * Derive the grouping value for a resource given the current strategy.
+     */
+    private groupingValue(resource: GenericResource): string {
+        switch (this.groupingStrategy) {
+            case 'resourceType':
+                return resource.logicalType;
+            case 'location':
+                return resource.location;
+            case 'armTag':
+                return resource.tags?.[this.groupByTag] || untaggedSentinel;
+            default:
+                return resource.logicalType;
+        }
     }
 }
 
@@ -352,3 +356,4 @@ function toKey(node: AzureNode): string {
 }
 
 const virtualGroupNodeType = 'virtualGroup';
+const untaggedSentinel = '__untagged__';

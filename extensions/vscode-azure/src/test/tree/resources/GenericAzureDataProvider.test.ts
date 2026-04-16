@@ -4,14 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { ActionExecutor, Disposable } from '@microsoft/vscode-azure-utils';
+import { createMockVsCode, NullTelemetryReporter, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
+import { ConfigurationSection } from '../../../constants';
 import { GenericAzureDataProvider } from '../../../tree/resources/GenericAzureDataProvider';
 
 describe('GenericAzureDataProvider (unit)', () => {
+    const code = createMockVsCode();
+
     function createProvider(subscriptionProvider?: Record<string, unknown>, clientFactory?: unknown) {
         const executor = new ActionExecutor(new NullTelemetryReporter());
         const subProvider = {
@@ -19,10 +22,10 @@ describe('GenericAzureDataProvider (unit)', () => {
             getAccounts: mock.fn(() => Promise.resolve([])),
             getTenantsForAccount: mock.fn(() => Promise.resolve([])),
             getSubscriptionsForTenant: mock.fn(() => Promise.resolve([])),
+            onRefreshSuggested: () => Disposable.None,
             ...subscriptionProvider,
         };
         const createClient = clientFactory ?? mock.fn(() => Promise.resolve({}));
-        const code = createMockVsCode();
         return new GenericAzureDataProvider(code.vscode, executor, createClient as never, subProvider as never);
     }
 
@@ -123,20 +126,9 @@ describe('GenericAzureDataProvider (unit)', () => {
                     list: (options?: Record<string, unknown>) => { capturedOptions = options; return []; },
                 },
             };
-            const code = createMockVsCode();
-            code.settings.set('vscode-azure.pageSize', 25);
-            const executor = new ActionExecutor(new NullTelemetryReporter());
-            const subProvider = {
-                signIn: mock.fn(() => Promise.resolve(true)),
-                getAccounts: mock.fn(() => Promise.resolve([])),
-                getTenantsForAccount: mock.fn(() => Promise.resolve([])),
-                getSubscriptionsForTenant: mock.fn(() => Promise.resolve([])),
-            };
-            const provider = new GenericAzureDataProvider(
-                code.vscode, executor, (() => Promise.resolve(mockClient)) as never, subProvider as never,
-            );
+            const provider = createProvider({}, () => Promise.resolve(mockClient));
 
-            await provider.getChildren(sub);
+            await withSettings(code, { [`${ConfigurationSection}.pageSize`]: 25 }, () => provider.getChildren(sub));
             expect(capturedOptions?.top).to.equal(25);
         });
     });

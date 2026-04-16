@@ -45,6 +45,11 @@
                 "title": "%commands.vscode-azure/resources/loadMore%"
             },
             {
+                "command": "vscode-azure/resources/groupBy",
+                "icon": "$(group-by-ref-type)",
+                "title": "%commands.vscode-azure/resources/groupBy%"
+            },
+            {
                 "command": "vscode-azure/activity/trackArmDeployment",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/activity/trackArmDeployment%"
@@ -104,6 +109,10 @@
                     "when": "false"
                 },
                 {
+                    "command": "vscode-azure/resources/groupBy",
+                    "when": "false"
+                },
+                {
                     "command": "vscode-azure/activity/clearSuccessful",
                     "when": "false"
                 },
@@ -130,9 +139,14 @@
             ],
             "view/title": [
                 {
+                    "command": "vscode-azure/resources/groupBy",
+                    "when": "view == vscode-azure/resources",
+                    "group": "navigation@1"
+                },
+                {
                     "command": "vscode-azure/resources/refresh",
                     "when": "view == vscode-azure/resources",
-                    "group": "navigation"
+                    "group": "navigation@2"
                 },
                 {
                     "command": "vscode-azure/activity/clearSuccessful",
@@ -223,6 +237,28 @@
                     "type": "boolean",
                     "default": false,
                     "description": "%settings.vscode-azure.alwaysShowAccountNodes%"
+                },
+                "vscode-azure.groupBy": {
+                    "type": "string",
+                    "default": "resourceGroup",
+                    "enum": [
+                        "resourceGroup",
+                        "resourceType",
+                        "location",
+                        "armTag"
+                    ],
+                    "enumDescriptions": [
+                        "%settings.vscode-azure.groupBy.resourceGroup%",
+                        "%settings.vscode-azure.groupBy.resourceType%",
+                        "%settings.vscode-azure.groupBy.location%",
+                        "%settings.vscode-azure.groupBy.armTag%"
+                    ],
+                    "description": "%settings.vscode-azure.groupBy%"
+                },
+                "vscode-azure.groupByTag": {
+                    "type": "string",
+                    "default": "",
+                    "description": "%settings.vscode-azure.groupByTag%"
                 }
             }
         }

@@ -8,6 +8,7 @@
     "commands.vscode-azure/resources/refresh": "Refresh",
     "commands.vscode-azure/resources/openInPortal": "Open in Azure Portal",
     "commands.vscode-azure/resources/loadMore": "Load More...",
+    "commands.vscode-azure/resources/groupBy": "Group By...",
     "commands.vscode-azure/activity/trackArmDeployment": "Track ARM Deployment",
     "commands.vscode-azure/activity/clearSuccessful": "Clear Successful",
     "commands.vscode-azure/activity/clearCompleted": "Clear Completed",
@@ -18,5 +19,11 @@
     "commands.vscode-azure/functions/create": "Create Function App...",
     "settings.title": "Azure",
     "settings.vscode-azure.pageSize": "Number of items to load per page when fetching Azure resources.",
-    "settings.vscode-azure.alwaysShowAccountNodes": "Always show account and tenant nodes in the Resources tree view, even when there is only one. By default, these nodes are hidden when there is a single account or tenant, and subscriptions are shown directly at the root."
+    "settings.vscode-azure.alwaysShowAccountNodes": "Always show account and tenant nodes in the Resources tree view, even when there is only one. By default, these nodes are hidden when there is a single account or tenant, and subscriptions are shown directly at the root.",
+    "settings.vscode-azure.groupBy": "Controls how resources are grouped under subscriptions in the Resources tree view.",
+    "settings.vscode-azure.groupBy.resourceGroup": "Group by resource group (default).",
+    "settings.vscode-azure.groupBy.resourceType": "Group by resource type.",
+    "settings.vscode-azure.groupBy.location": "Group by Azure region.",
+    "settings.vscode-azure.groupBy.armTag": "Group by an ARM tag. Specify the tag name with the 'Group By Tag' setting.",
+    "settings.vscode-azure.groupByTag": "The ARM tag name to group resources by when 'Group By' is set to 'armTag'."
 }
