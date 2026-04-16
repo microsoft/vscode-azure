@@ -52,6 +52,10 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
                 this.changeEmitter.fire({ resource: undefined, includeChildren: true });
             }
         }));
+
+        this.disposables.push(subscriptionProvider.onRefreshSuggested(() => {
+            this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+        }));
     }
 
     public canHandle(resource: unknown): resource is ConcreteAzureNode {

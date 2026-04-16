@@ -11,6 +11,7 @@ import { ClearActivities } from './ClearActivities';
 import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
 import { DeleteAppSetting } from './functions/DeleteAppSetting';
+import { GroupBy } from './GroupBy';
 import { Hello } from './Hello';
 import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';
@@ -22,6 +23,7 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'azure.hello', Hello);
 
     registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
+    registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
     registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
 
