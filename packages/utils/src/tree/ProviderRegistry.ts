@@ -19,6 +19,7 @@ import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
 export abstract class ProviderRegistry<TResource, TProvider extends DataProvider<TResource>> implements Disposable {
     protected readonly registrations: TProvider[] = [];
     protected readonly changeEmitter = new EventEmitter<TResource | undefined>();
+    private readonly providerSubscriptions: Disposable[] = [];
 
     /**
      * Register a provider. Returns a {@linkcode Disposable} that
@@ -39,17 +40,24 @@ export abstract class ProviderRegistry<TResource, TProvider extends DataProvider
             this.onProviderChanged(event);
         });
 
-        return Disposable.from(
+        const registration = Disposable.from(
             {
                 dispose: () => {
                     const idx = this.registrations.indexOf(provider);
                     if (idx !== -1) {
                         this.registrations.splice(idx, 1);
                     }
+                    const subIdx = this.providerSubscriptions.indexOf(registration);
+                    if (subIdx !== -1) {
+                        this.providerSubscriptions.splice(subIdx, 1);
+                    }
                 }
             },
             providerChangeSubscription ?? Disposable.None,
         );
+
+        this.providerSubscriptions.push(registration);
+        return registration;
     }
 
     /**
@@ -74,9 +82,14 @@ export abstract class ProviderRegistry<TResource, TProvider extends DataProvider
     }
 
     /**
-     * Dispose the change-notification emitter and clear all registrations.
+     * Dispose the change-notification emitter, all provider subscriptions,
+     * and clear all registrations.
      */
     public dispose(): void {
+        for (const sub of [...this.providerSubscriptions]) {
+            sub.dispose();
+        }
+        this.providerSubscriptions.length = 0;
         this.registrations.length = 0;
         this.changeEmitter.dispose();
     }

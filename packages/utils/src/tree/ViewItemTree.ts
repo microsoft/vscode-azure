@@ -382,6 +382,9 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     }
 
     protected override onProviderChanged(_event: DataProviderChangeEvent<TViewItem>): void {
+        if (this.roots) {
+            this.nodes.removeSubtrees(this.roots);
+        }
         this.roots = undefined;
         this.changeEmitter.fire(undefined);
     }
