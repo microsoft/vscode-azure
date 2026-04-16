@@ -313,29 +313,30 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * never called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
-        let pagesLoaded = false;
-        await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
+        const pagesLoaded = await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
             context.telemetry.properties.tree = this.name;
 
             const key = this.getKey(resource);
             const node = this.nodes.get(key);
+            let loaded = false;
 
             // Ensure children are initialized (first page pulled) before
             // exhausting remaining pages.
             if (node?.children === undefined) {
                 await this.getChildren(resource);
-                pagesLoaded = true;
+                loaded = true;
             }
 
             while (this.hasMore(resource)) {
                 await this.loadOnePage(resource);
-                pagesLoaded = true;
+                loaded = true;
             }
+
+            return loaded;
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- ESLint is just wrong about this one
         if (pagesLoaded) {
             this.changeEmitter.fire(resource);
         }

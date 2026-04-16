@@ -74,7 +74,9 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         if (nodeId.isVirtualGroupNodeId()) {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
             const grouping = nodeId.getGrouping();
-            const label = grouping?.groupingValue ?? key;
+            const label = grouping?.groupingValue === untaggedSentinel
+                ? this.code.l10n.t('(No Tag)')
+                : grouping?.groupingValue ?? key;
             const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
             item.iconPath = new this.code.ThemeIcon('symbol-namespace');
@@ -341,7 +343,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             case 'location':
                 return resource.location;
             case 'armTag':
-                return resource.tags?.[this.groupByTag] || this.code.l10n.t('(untagged)');
+                return resource.tags?.[this.groupByTag] || untaggedSentinel;
             default:
                 return resource.logicalType;
         }
@@ -354,3 +356,4 @@ function toKey(node: AzureNode): string {
 }
 
 const virtualGroupNodeType = 'virtualGroup';
+const untaggedSentinel = '__untagged__';

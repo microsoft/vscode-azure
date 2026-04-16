@@ -37,9 +37,10 @@ export class GroupBy implements ManagedCommand {
             const tagName = await showSmartInputBox(this.ctx, {
                 prompt: code.l10n.t('Enter the ARM tag name to group by'),
                 value: currentTag,
+                validateInput: (value: string) => value.trim() ? undefined : code.l10n.t('Tag name cannot be empty.'),
             });
 
-            await config.update('groupByTag', tagName, code.ConfigurationTarget.Global);
+            await config.update('groupByTag', tagName.trim(), code.ConfigurationTarget.Global);
         }
 
         await config.update('groupBy', selected.data, code.ConfigurationTarget.Global);
