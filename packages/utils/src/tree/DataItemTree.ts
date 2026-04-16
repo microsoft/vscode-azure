@@ -6,7 +6,7 @@
 import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
 import { isAsyncIterable, type Page } from '../data/Page';
-import { Disposable } from '../vscode/Disposable';
+import type { Disposable } from '../vscode/Disposable';
 import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';

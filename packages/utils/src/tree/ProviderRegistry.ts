@@ -86,7 +86,7 @@ export abstract class ProviderRegistry<TResource, TProvider extends DataProvider
      * and clear all registrations.
      */
     public dispose(): void {
-        for (const sub of this.providerSubscriptions) {
+        for (const sub of [...this.providerSubscriptions]) {
             sub.dispose();
         }
         this.providerSubscriptions.length = 0;
