@@ -9,12 +9,18 @@ import { inject, injectable } from 'inversify';
 import { ConfigurationSection } from '../constants';
 import type { ManagedCommand } from './ManagedCommand';
 
+/**
+ * Prompts the user to pick a grouping strategy for the Azure resource tree
+ * and persists the choice to global user settings. When the `armTag` strategy
+ * is chosen, also prompts for the tag name.
+ */
 @injectable()
 export class GroupBy implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
     ) { }
 
+    /** @inheritdoc */
     public async execute(): Promise<void> {
         const code = this.ctx.code;
         const config = code.workspace.getConfiguration(ConfigurationSection);

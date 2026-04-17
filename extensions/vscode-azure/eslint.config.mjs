@@ -3,6 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * ESLint configuration for the VS Code extension package.
+ *
+ * Extends the shared strict type-checked config and forbids direct runtime
+ * imports of the `vscode` module in product code -- the VS Code API must be
+ * passed down as `IVsCode` so shared packages remain runtime-independent of
+ * VS Code. Type-only imports are allowed.
+ */
+
 import { azExtEslintStrictTypeChecked } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
 import { defineConfig } from 'eslint/config';
 

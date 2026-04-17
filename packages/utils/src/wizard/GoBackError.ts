@@ -16,6 +16,11 @@ export class GoBackError extends Error {
         this.name = GoBackErrorName;
     }
 
+    /**
+     * Type guard that returns `true` when `error` is a {@linkcode GoBackError}.
+     * Also matches errors whose `name` is `'GoBackError'` (e.g. when the
+     * class identity is lost across module boundaries).
+     */
     public static test(error: unknown): error is GoBackError {
         return error instanceof GoBackError || (error instanceof Error && error.name === GoBackErrorName);
     }

@@ -10,8 +10,16 @@ import type { ProviderResult } from '../../vscode/ProviderResult';
 import { PromptStep } from '../../wizard/PromptStep';
 import { getLastPick, type PickContext, type PickPair } from './PickContext';
 
+/**
+ * A "Create new" sentinel entry that may be appended to a pick list.
+ *
+ * When selected, {@linkcode createNewItem} is invoked to produce a new
+ * item which is then used as the next pick in the wizard context.
+ */
 export interface CreateNewOption<TItem> {
+    /** Label shown for the "create" entry (automatically prefixed with a `$(add)` codicon). */
     readonly label: string;
+    /** Called when the user selects the "create" entry. Returns the newly created item. */
     createNewItem(): TItem | Promise<TItem>;
 }
 
@@ -24,23 +32,48 @@ export interface CreateNewOption<TItem> {
  */
 export type PickClassification = 'intermediate' | 'skip' | 'terminal' | false;
 
+/**
+ * Options shared by all generic pick steps.
+ *
+ * @typeParam TItem - The tree item type being picked.
+ */
 export interface GenericPickOptions<TItem> extends ICodeContext {
+    /** The tree (or {@linkcode vscode.TreeDataProvider}) whose items the user is picking from. */
     readonly tree: TreeLike<TItem> | vscode.TreeDataProvider<TItem>;
 
+    /**
+     * Classify a tree item as intermediate, terminal, skippable, or hidden.
+     * See {@linkcode PickClassification}.
+     */
     classify(item: TItem, treeItem: ITreeItem): PickClassification;
 
+    /** When `true`, the final level of the pick allows selecting multiple terminal items. */
     readonly canPickMany?: boolean;
+
+    /** When provided, appends a "Create new" entry to the pick list. Mutually exclusive with {@linkcode canPickMany}. */
     readonly create?: CreateNewOption<TItem>;
 }
 
 /** This type ensures that `canPickMany` and `create` cannot both be specified at the same time */
 export type ExclusivePickManyOrCreate<TItem> = ({ canPickMany: true } | { create: CreateNewOption<TItem> } | { canPickMany?: false, create?: never });
 
+/**
+ * A {@linkcode PromptStep} that shows one level of a tree as a quick pick.
+ *
+ * Intermediate picks are used to drill further into the tree (typically
+ * by {@linkcode RecursivePickStep}); terminal picks finish the selection.
+ * Items classified as `'skip'` are auto-selected when they are the only
+ * pick at that level.
+ *
+ * @typeParam TItem - The tree item type being picked.
+ * @typeParam TOptions - The pick options type.
+ */
 export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem>> extends PromptStep<PickContext<TItem>> {
     public constructor(protected readonly options: TOptions & ExclusivePickManyOrCreate<TItem>) {
         super();
     }
 
+    /** @inheritdoc */
     public async prompt(context: Readonly<PickContext<TItem>>): Promise<Partial<PickContext<TItem>>> {
         const lastPick = getLastPick(context);
         const children = await this.getPickItems(lastPick?.item);

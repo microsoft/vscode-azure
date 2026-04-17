@@ -17,6 +17,13 @@ import { isActivity, isTerminalActivityStatus, type Activity } from './Activity'
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
 
+/**
+ * An {@linkcode Activity} representing a single ARM deployment (root or nested).
+ *
+ * Deployments form a tree via the {@linkcode operations} list: nested deployment
+ * operations yield child {@linkcode ArmDeploymentActivity} nodes, while non-deployment
+ * operations become leaf {@linkcode ArmDeploymentOperationActivity} items.
+ */
 export interface ArmDeploymentActivity extends Activity {
     readonly type: 'armDeployment';
     readonly deploymentId: string;
@@ -32,6 +39,11 @@ export interface ArmDeploymentActivity extends Activity {
     readonly abortController: AbortController;
 }
 
+/**
+ * A leaf operation within an {@linkcode ArmDeploymentActivity}. Represents a
+ * single resource-level action (Create/Delete/Action/Read) performed during
+ * the deployment.
+ */
 export interface ArmDeploymentOperationActivity extends Activity {
     readonly type: 'armDeploymentOperation';
     readonly operationId: string;
@@ -43,6 +55,15 @@ export interface ArmDeploymentOperationActivity extends Activity {
     readonly provisioningState?: string;
 }
 
+/**
+ * Data-layer provider for ARM deployment activities in the activity tree.
+ *
+ * Tracks user-initiated root deployments (via {@linkcode trackDeployment}),
+ * enriches each deployment with its operations list, and polls non-terminal
+ * deployments until they reach a terminal state. Nested deployments are
+ * discovered from the operations list and reused across re-fetches to
+ * preserve object identity.
+ */
 @injectable()
 export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActivity>, Disposable {
     public readonly isRoot = true;
@@ -63,6 +84,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
     ) { }
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is ArmDeploymentActivity {
         return isActivity(resource) && resource.type === 'armDeployment';
     }
@@ -104,6 +126,12 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         return true;
     }
 
+    /**
+     * Begin tracking a user-initiated root deployment. Creates a new
+     * {@linkcode ArmDeploymentActivity}, registers it as a root, and fires
+     * an `onDidChange` so the tree picks it up. Enrichment (and polling)
+     * will start on first access by the tree.
+     */
     public trackDeployment(deploymentId: string, subscription: AzureSubscription): void {
         const { scope, deploymentName } = parseDeploymentId(deploymentId);
 
@@ -321,6 +349,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
     }
 
+    /**
+     * Remove all tracked root deployments matching `filter` and abort any
+     * in-flight polling for them (and their descendants).
+     */
     public clearActivities(filter: (activity: ArmDeploymentActivity) => boolean): void {
         let changed = false;
         for (const [id, activity] of this.trackedRoots) {
@@ -336,6 +368,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         }
     }
 
+    /** @inheritdoc */
     public dispose(): void {
         for (const activity of this.trackedRoots.values()) {
             activity.abortController.abort();

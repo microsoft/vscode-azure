@@ -31,6 +31,7 @@ export class AddOrEditAppSetting implements ManagedCommand {
         @inject(FunctionAppDataProvider) private readonly dataProvider: FunctionAppDataProvider,
     ) { }
 
+    /** @inheritdoc */
     public async execute(mode: AppSettingMode, key?: string): Promise<void> {
         if (!key) {
             return;

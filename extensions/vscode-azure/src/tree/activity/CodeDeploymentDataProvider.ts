@@ -12,6 +12,12 @@ interface CodeDeploymentActivity extends Activity {
     children?: CodeDeploymentActivity[];
 }
 
+/**
+ * Data-layer provider for "code deployment" activities (e.g. zip deploys,
+ * source control pushes). Supports nested children directly via the
+ * activity's {@linkcode CodeDeploymentActivity.children} array rather than
+ * through a separate data source.
+ */
 @injectable()
 export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentActivity>, Disposable {
     public readonly isRoot = true;
@@ -21,10 +27,12 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<CodeDeploymentActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is CodeDeploymentActivity {
         return isActivity(resource) && resource.type === 'codeDeployment';
     }
 
+    /** @inheritdoc */
     public getChildren(resource?: CodeDeploymentActivity): Promise<CodeDeploymentActivity[]> {
         if (!resource) {
             return Promise.resolve([...this.rootDeployments.values()]);
@@ -32,6 +40,10 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
         return Promise.resolve(resource.children ?? []);
     }
 
+    /**
+     * Register a new root code deployment. The `type` and `startTime`
+     * are assigned automatically. Returns the created activity.
+     */
     public trackDeployment(activity: Omit<CodeDeploymentActivity, 'type' | 'startTime'>): CodeDeploymentActivity {
         const full: CodeDeploymentActivity = {
             ...activity,
@@ -43,6 +55,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
         return full;
     }
 
+    /** Remove all root code deployments matching `filter`. */
     public clearActivities(filter: (activity: CodeDeploymentActivity) => boolean): void {
         let changed = false;
         for (const [id, activity] of this.rootDeployments) {
@@ -56,6 +69,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
         }
     }
 
+    /** @inheritdoc */
     public dispose(): void {
         this.onDidChangeEmitter.dispose();
     }

@@ -14,8 +14,17 @@ import type { ManagedCommand } from '../ManagedCommand';
 /* c8 ignore start */
 
 // TODO: remove this demonstration command
+/**
+ * Demonstration command that would disable the ACR admin user on a
+ * registry node. When invoked without a key (e.g., from the command
+ * palette) it prompts for a registry via {@linkcode resourceExperience}.
+ *
+ * Today it only displays an informational message instead of making
+ * the actual ARM call.
+ */
 @injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
+    /** Context value gating this command's visibility in the tree view. */
     public static ContextValue = 'disableAcrAdminUser';
 
     public constructor(
@@ -24,6 +33,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
         @inject(IAzureViewViewItemTree) private readonly viewTree: IAzureViewViewItemTree, // TODO: a single selector service that can accept pick options and give back the resolved resource (either from quick pick or from cache)?
     ) { }
 
+    /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
         let resource: ConcreteAzureNode | undefined;
         if (!key) {

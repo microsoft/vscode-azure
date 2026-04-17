@@ -17,9 +17,13 @@ import type { ResourceGroup } from '../../models/Grouping';
 import { createAzureSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
+/** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
 export const SiteType = 'Microsoft.Web/sites';
+/** Logical type assigned to function apps (`Microsoft.Web/sites` with `kind` containing `functionapp`). */
 export const FunctionAppLogicalType = `${SiteType}~functionapp`;
+/** Logical type assigned to Logic Apps (Standard) (`Microsoft.Web/sites` with `kind` containing `workflowapp`). */
 export const WorkflowAppLogicalType = `${SiteType}~workflowapp`;
+/** Logical type assigned to App Service web apps (any other `Microsoft.Web/sites` kind). */
 export const AppServiceLogicalType = `${SiteType}~app`;
 
 /** Factory that creates an {@linkcode IResourceClient} for a given subscription. */

@@ -14,7 +14,14 @@ import type { ManagedCommand } from './ManagedCommand';
 /* c8 ignore start */
 
 /**
- * TODO: This is a temporary command just to kick off tracking an existing ARM deployment
+ * Starts tracking an existing ARM deployment in the activity view.
+ *
+ * Prompts the user for either a raw ARM deployment resource ID or an
+ * Azure Portal deployment blade URL, resolves the owning subscription
+ * from the signed-in accounts, then hands the deployment off to
+ * {@linkcode ArmDeploymentDataProvider}.
+ *
+ * TODO: This is a temporary command just to kick off tracking an existing ARM deployment.
  */
 @injectable()
 export class TrackArmDeployment implements ManagedCommand {
@@ -25,6 +32,7 @@ export class TrackArmDeployment implements ManagedCommand {
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
     ) { }
 
+    /** @inheritdoc */
     public async execute(): Promise<void> {
         const rawInput = await this.code.window.showInputBox({
             prompt: this.code.l10n.t('Enter an ARM deployment resource ID or Azure Portal deployment URL'),

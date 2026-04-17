@@ -14,6 +14,14 @@ import { ConfigurationSection } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { combineContextValues } from '../combineContextValues';
 
+/**
+ * Root view-layer provider for the Azure resources tree.
+ *
+ * Renders accounts, tenants, subscriptions, resource groups, generic
+ * resources, and virtual grouping nodes (when grouping by resource type,
+ * location, or tag). Automatically collapses the hierarchy when there is
+ * a single account and/or tenant.
+ */
 @injectable()
 export class GenericAzureViewProvider implements ViewProvider<string>, Disposable {
     public readonly isRoot = true;
@@ -55,11 +63,13 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
     // #region ViewProvider
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is string {
         // TODO: need to not try to handle things below `GenericResource` level
         return typeof resource === 'string' && AzureNodeId.test(resource);
     }
 
+    /** @inheritdoc */
     public async getChildren(resource?: string): Promise<string[]> {
         if (resource === undefined) {
             return this.getRootChildren();
@@ -68,6 +78,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         return this.getBranchChildren(resource);
     }
 
+    /** @inheritdoc */
     public getTreeItem(key: string): ITreeItem {
         const nodeId = AzureNodeId.parse(key);
 
@@ -321,6 +332,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
     // #endregion
 
+    /** @inheritdoc */
     public dispose(): void {
         this.disposables.forEach(d => void d.dispose());
     }

@@ -45,6 +45,15 @@ export class ChooseResourceGroupStep<TContext extends ChooseResourceGroupContext
         );
     }
 
+    /**
+     * @inheritdoc
+     *
+     * In addition to the base recursive pick behavior, resolves the
+     * picked terminal resource group into the data-layer node and
+     * sets both {@linkcode ChooseResourceGroupContext.subscription}
+     * and {@linkcode ChooseResourceGroupContext.resourceGroup} on
+     * the context.
+     */
     public override async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
         const pickResult = await super.prompt(context);
 

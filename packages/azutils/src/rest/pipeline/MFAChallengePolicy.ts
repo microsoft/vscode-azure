@@ -11,15 +11,33 @@ const wwwAuthenticateHeaderName = 'WWW-Authenticate';
 const authorizationHeaderName = 'Authorization';
 const retriedRequests = new WeakSet<PipelineRequest>();
 
+/**
+ * Pipeline policy that handles MFA (step-up authentication) challenges.
+ *
+ * When a request returns `401` with a `WWW-Authenticate` header, this
+ * policy invokes the `getNewToken` callback to request a fresh token
+ * that satisfies the challenge, then retries the request exactly once.
+ * Records `challenge` and `challengeSuccess` telemetry properties on
+ * the current {@linkcode IActionExecutor.currentContext} when available.
+ */
 export class MFAChallengePolicy implements PipelinePolicy {
     public readonly name = 'MFAChallengePolicy';
 
+    /**
+     * @param executor - Used to look up the current action context for
+     *   telemetry tagging.
+     * @param getNewToken - Callback invoked with the
+     *   `WWW-Authenticate` header contents to obtain a stepped-up
+     *   session. Returning `undefined` means the challenge could not
+     *   be satisfied and the original 401 response is returned.
+     */
     public constructor(
         private readonly executor: IActionExecutor,
         private readonly getNewToken: (request: vscode.AuthenticationWwwAuthenticateRequest) => Promise<vscode.AuthenticationSession | undefined>,
     ) { }
 
     // TODO: could we instead use the builtin `bearerTokenAuthenticationPolicy` and just provide a custom `getToken` callback that handles MFA challenges?
+    /** @inheritdoc */
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
         const context = this.executor.currentContext;
         const initialResponse = await next(request);

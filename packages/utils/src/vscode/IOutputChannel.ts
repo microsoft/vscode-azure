@@ -10,8 +10,16 @@ import { Disposable } from './Disposable';
 import type { IVsCode } from './IVsCode';
 
 export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('OutputChannel');
+/** The extension's output channel. Currently aliased to VS Code's `LogOutputChannel`. */
 export type IOutputChannel = vscode.LogOutputChannel; // TODO: subset to what we actually use for easier mocking?
 
+/**
+ * Create an {@linkcode IOutputChannel} for the given name.
+ *
+ * When running under tests (`VSCODE_RUNNING_TESTS=1`), returns a
+ * {@linkcode DebugOutputChannel} that writes to `console.log` instead
+ * of calling into the VS Code window API.
+ */
 export function createOutputChannel(
     name: string,
     code: IVsCode
@@ -27,6 +35,11 @@ export function createOutputChannel(
 
 /* c8 ignore start */
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
+/**
+ * Test/debug {@linkcode IOutputChannel} that routes all log calls to
+ * `console.log`. Used when `VSCODE_RUNNING_TESTS` is set so that
+ * output produced by product code is visible in the test runner.
+ */
 export class DebugOutputChannel implements IOutputChannel {
     constructor(public readonly name: string) { }
 

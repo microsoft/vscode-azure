@@ -7,7 +7,6 @@
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
 
 ## Code hygiene
-- JSDocs everywhere
 - Address all the TODOs in source
 - Cleanup non-ASCII characters and the odd region markers that Copilot is creating
 - CODEOWNERS, but not yet to avoid email overload

@@ -22,6 +22,19 @@ import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewPr
 import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 
+/**
+ * Bind the Azure resources tree and activity tree into the DI container.
+ *
+ * Wires up the data layer ({@linkcode DataItemTree}), view layer
+ * ({@linkcode ViewItemTree}), and VS Code {@linkcode vscode.TreeView TreeView}
+ * for each tree, and registers the per-service {@linkcode DataProvider}s and
+ * {@linkcode ViewProvider}s. Provider registration order matters: specific
+ * providers are bound before the generic fallback so
+ * {@linkcode ProviderRegistry} dispatches to the most specific match.
+ *
+ * Both tree views are eagerly resolved so their construction kicks off
+ * the full subscription/resource load.
+ */
 export function registerTrees(container: Container): void {
     registerResourcesTree(container);
     registerActivityTree(container);

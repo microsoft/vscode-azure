@@ -34,6 +34,7 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
     ) { }
 
+    /** @inheritdoc */
     public async execute(): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
             {},

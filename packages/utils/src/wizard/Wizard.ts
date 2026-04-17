@@ -63,7 +63,7 @@ export class Wizard<TContext extends object> {
         return context;
     }
 
-    // ── Context helpers ─────────────────────────────────────────
+    // -- Context helpers --
 
     /**
      * Rebuild the accumulated context from the base context and all
@@ -82,7 +82,7 @@ export class Wizard<TContext extends object> {
         return merged;
     }
 
-    // ── Prompt phase ────────────────────────────────────────────
+    // -- Prompt phase --
 
     private async runPromptPhase(): Promise<TContext> {
         /** Steps that were actually prompted (not skipped), in order. */
@@ -165,7 +165,7 @@ export class Wizard<TContext extends object> {
         return this.buildContext(history);
     }
 
-    // ── Execute phase ───────────────────────────────────────────
+    // -- Execute phase --
 
     private async runExecutePhase(context: TContext): Promise<void> {
         let cursor = 0;

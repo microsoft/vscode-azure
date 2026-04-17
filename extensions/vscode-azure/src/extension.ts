@@ -26,6 +26,17 @@ import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from 
 import { registerTrees } from './tree/registerTrees';
 import { TempProjectManager } from './wizard/azd/TempProjectManager';
 
+/**
+ * Entry point called by the generated extension `activate` function.
+ *
+ * Builds the DI container (unless one is supplied via {@linkcode containerOverride}),
+ * then registers commands and tree views under a telemetry-wrapped `activate` event.
+ *
+ * @param extensionContext - The VS Code extension context.
+ * @param perfStats - Timestamps used to report activation duration telemetry.
+ * @param containerOverride - Optional pre-built container (used by tests and the
+ *   "Run (Mock Data)" debug entry point).
+ */
 export async function activateInternal(
     extensionContext: vscode.ExtensionContext,
     perfStats: { loadStartTime: number, loadEndTime: number },
@@ -42,10 +53,16 @@ export async function activateInternal(
     });
 }
 
+/** Entry point called by the generated extension `deactivate` function. */
 export function deactivateInternal(): Promise<void> {
     return Promise.resolve();
 }
 
+/**
+ * Builds the root inversify container with all extension-level bindings.
+ * Disposable services are registered with {@linkcode pushDisposable} so they
+ * are torn down with the extension context.
+ */
 export function setUpContainer(extensionContext: IExtensionContext): Container {
     const container = new Container();
 

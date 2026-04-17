@@ -36,16 +36,19 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
         @inject(IAcrClientProvider) private readonly createClient: IAcrClientProvider,
     ) { }
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
         return isAcrRegistry(resource) || isAcrVirtualResource(resource);
     }
 
     /**
-     * Enrich an ACR registry resource with management-plane details.
+     * @inheritdoc
      *
      * Fetches the full `Registry` via `registries.get()` and assigns
      * `loginServer`, `sku`, and `adminUserEnabled` onto the resource
      * so that view providers can render them without additional API calls.
+     *
+     * @throws if the resource's ARM ID does not contain a resource group segment.
      */
     public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
         if (!isAcrRegistry(resource)) {
@@ -72,7 +75,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
     }
 
     /**
-     * Get children for an ACR registry or virtual sub-node.
+     * @inheritdoc
      *
      * TODO: replace dummy data with real data-plane calls.
      */

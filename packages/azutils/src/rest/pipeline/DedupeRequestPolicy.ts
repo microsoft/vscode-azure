@@ -23,6 +23,7 @@ export class DedupeRequestPolicy implements PipelinePolicy {
 
     public readonly name = 'DedupeRequestPolicy';
 
+    /** @inheritdoc */
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
         // Skip dedup for non-GET requests (mutations must always execute) and for
         // streamed responses. `streamResponseStatusCodes` is the Azure SDK's pre-flight

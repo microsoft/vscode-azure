@@ -12,11 +12,20 @@ import type * as vscode from 'vscode';
  * a runtime import of the `vscode` module.
  */
 export class CancellationError extends Error implements vscode.CancellationError {
+    /**
+     * @param message Optional error message. Defaults to the name VS Code uses for its cancellation errors.
+     * @param stepName Optional name of the wizard step or operation that was cancelled, for diagnostics.
+     */
     public constructor(message?: string, public readonly stepName?: string) {
         super(message ?? CanceledName);
         this.name = CanceledName;
     }
 
+    /**
+     * Type guard that returns `true` if `error` is a cancellation --
+     * either a {@linkcode CancellationError} instance or a standard
+     * `Error` whose `name` matches the spelling VS Code uses.
+     */
     public static test(error: unknown): error is CancellationError {
         // TODO: add a test case to ensure VSCode team doesn't change their error's name?
         return error instanceof CancellationError || (error instanceof Error && (error.name === CanceledName || error.name === 'Cancelled'));
