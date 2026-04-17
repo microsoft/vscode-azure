@@ -49,9 +49,9 @@ export function registerCommands(container: Container): void {
 /**
  * Binds {@linkcode commandClass} onto the container (if not already bound) and
  * wires it up so VS Code can invoke it via {@linkcode commandId}. Each invocation
- * creates a child container with the current `IActionContext`, resolves the
- * command instance, and calls its `execute` method with {@linkcode prefixArgs}
- * followed by the arguments passed by VS Code.
+ * creates a child container with the current {@linkcode IActionContext}, resolves
+ * the command instance, and calls its {@linkcode ManagedCommand.execute execute}
+ * method with {@linkcode prefixArgs} followed by the arguments passed by VS Code.
  */
 function registerManagedCommand(
     container: Container,

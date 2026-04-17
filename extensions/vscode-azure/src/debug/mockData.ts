@@ -80,7 +80,7 @@ export function createMockSubscriptionProvider(options?: MockSubscriptionProvide
     } as unknown as AzureSubscriptionProvider;
 }
 
-/** Creates an `IResourceClient` that returns fixed resource groups and resources. */
+/** Creates an {@linkcode IResourceClient} that returns fixed resource groups and resources. */
 export function createMockResourceClient(
     resourceGroups: unknown[] = [demoRg, stagingRg],
     resourcesByRg: Record<string, unknown[]> | unknown[] = resourcesByGroup,
@@ -96,7 +96,7 @@ export function createMockResourceClient(
 }
 
 /**
- * Creates an `IAcrClient` whose `registries.get()` returns canned
+ * Creates an {@linkcode IAcrClient} whose `registries.get()` returns canned
  * details for the mock registries. Additional top-level methods can
  * be supplied via {@linkcode overrides}.
  */
@@ -115,7 +115,7 @@ export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrCl
 
 /**
  * Rebinds Azure providers on the given container with mock implementations.
- * Called from main.mjs when AZURE_MOCK_DATA=1.
+ * Called from `main.mjs` when `AZURE_MOCK_DATA=1`.
  */
 export function applyMockBindings(container: Container): void {
     container.rebind(IAzureSubscriptionProvider).toConstantValue(
