@@ -6,6 +6,12 @@
 import type * as vscode from 'vscode';
 import type { Satisfies } from '../types/Satisfies';
 
+/**
+ * The value a VS Code provider can return: a `T`, `null`, `undefined`,
+ * or a `Promise` of the same. Structurally equivalent to
+ * `vscode.ProviderResult<T>` but declared here so shared packages do
+ * not need to depend on the `vscode` module.
+ */
 export type ProviderResult<T> = T | undefined | null | Promise<T | undefined | null>;
 
 // Compile-time type checks

@@ -21,9 +21,17 @@ import type { ViewProvider } from './ViewProvider';
  * @typeParam TResource - The resource type stored in the underlying {@linkcode DataItemTree}.
  */
 export interface ViewItemTreeOptions<TViewItem, TResource> {
+    /** The underlying data tree that the view tree reads resources from. */
     readonly dataItemTree: DataItemTree<TResource>;
+    /** Map a data-layer resource to its corresponding view item. */
     readonly toViewItem: (resource: TResource) => TViewItem;
+    /** Extract the unique string key of a view item (used for caching and parent lookup). */
     readonly getKey: (viewItem: TViewItem) => string;
+    /**
+     * Extract the key of the underlying data resource that a view item
+     * represents. Used to map view items back to the {@linkcode DataItemTree}
+     * for pagination (hasMore / loadMore).
+     */
     readonly getResourceKey: (viewItem: TViewItem) => string;
 }
 

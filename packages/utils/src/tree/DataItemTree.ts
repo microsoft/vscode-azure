@@ -93,7 +93,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     /**
      * Get children for the given resource, or the root-level resources when
-     * called with `undefined` — mirroring VSCode's `TreeDataProvider.getChildren`.
+     * called with `undefined` -- mirroring VSCode's `TreeDataProvider.getChildren`.
      *
      * Results are lazily loaded and cached with TTL.
      */

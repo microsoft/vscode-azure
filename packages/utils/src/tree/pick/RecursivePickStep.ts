@@ -7,6 +7,19 @@ import type { PromptStep } from '../../wizard/PromptStep';
 import { type ExclusivePickManyOrCreate, type FilteredChild, type GenericPickOptions, GenericPickStep } from './GenericPickStep';
 import { getLastPick, type PickContext } from './PickContext';
 
+/**
+ * A {@linkcode GenericPickStep} that recursively drills into tree children
+ * until the user selects a terminal item (or a multi-select terminal pick
+ * is made).
+ *
+ * After each prompt, {@linkcode getSubPromptSteps} returns a new instance
+ * of itself (or a subclass supplied via the constructor) when the last
+ * pick is a non-terminal, intermediate item -- causing the wizard to
+ * prompt for the next level of the tree.
+ *
+ * @typeParam TItem - The tree item type being picked.
+ * @typeParam TOptions - The pick options type.
+ */
 export class RecursivePickStep<TItem, TOptions extends GenericPickOptions<TItem>> extends GenericPickStep<TItem, TOptions> {
     /**
      * @param options - Pick options (tree, classify, etc.)
@@ -21,6 +34,7 @@ export class RecursivePickStep<TItem, TOptions extends GenericPickOptions<TItem>
         super(options);
     }
 
+    /** @inheritdoc */
     public override getSubPromptSteps(context: Readonly<PickContext<TItem>>): PromptStep<PickContext<TItem>>[] {
         if (context.selectedTerminalPicks?.length) {
             // If this is set, it means the user made a multi-pick selection, which can only happen if all of the items were terminal
