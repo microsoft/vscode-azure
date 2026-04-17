@@ -25,7 +25,7 @@ export * from './ui/uiHelpers';
 export * from './vscode/CancellationError';
 export * from './vscode/Disposable';
 export * from './vscode/EventEmitter';
-export * from './vscode/IOutputChannel';
+export { IOutputChannel, createOutputChannel } from './vscode/IOutputChannel'; // Excluding `DebugOutputChannel` since it's only intended for testing
 export * from './vscode/IVsCode';
 export * from './vscode/ProviderResult';
 export * from './wizard/ExecuteStep';

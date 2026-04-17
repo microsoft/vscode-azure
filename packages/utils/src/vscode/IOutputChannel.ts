@@ -6,12 +6,13 @@
 import type { ServiceIdentifier } from 'inversify';
 import { format } from 'util';
 import type * as vscode from 'vscode';
-import { Disposable } from './Disposable';
+import type { Disposable } from './Disposable';
+import { EventEmitter } from './EventEmitter';
 import type { IVsCode } from './IVsCode';
 
 export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('OutputChannel');
 /** The extension's output channel. Currently aliased to VS Code's `LogOutputChannel`. */
-export type IOutputChannel = vscode.LogOutputChannel; // TODO: subset to what we actually use for easier mocking?
+export type IOutputChannel = vscode.LogOutputChannel & Disposable;
 
 /**
  * Create an {@linkcode IOutputChannel} for the given name.
@@ -43,9 +44,21 @@ export function createOutputChannel(
 export class DebugOutputChannel implements IOutputChannel {
     constructor(public readonly name: string) { }
 
-    public readonly logLevel = 1 satisfies vscode.LogLevel; // Avoiding the actual enum value to prevent a dependency on vscode, plus this is just a debug channel
+    /**
+     * Current log level. Assigning to this setter also fires
+     * {@linkcode onDidChangeLogLevel}, so tests can simulate the user changing
+     * the level from the Output panel gear menu via `output.logLevel = ...`.
+     */
+    public get logLevel(): vscode.LogLevel { return this._logLevel; }
+    public set logLevel(level: vscode.LogLevel) {
+        this._logLevel = level;
+        this.logLevelEmitter.fire(level);
+    }
+    private _logLevel: vscode.LogLevel = 1 satisfies vscode.LogLevel; // Avoiding the actual enum value to prevent a dependency on vscode, plus this is just a debug channel
 
-    public readonly onDidChangeLogLevel = () => { return Disposable.None; };
+    private readonly logLevelEmitter = new EventEmitter<vscode.LogLevel>();
+
+    public readonly onDidChangeLogLevel = this.logLevelEmitter.event;
 
     public trace(message: string, ...args: any[]): void {
         this.appendLine(`[TRACE] ${format(message, ...args)}`);
@@ -80,7 +93,10 @@ export class DebugOutputChannel implements IOutputChannel {
     public clear = noop;
     public show = noop;
     public hide = noop;
-    public dispose = noop;
+
+    public dispose(): void {
+        this.logLevelEmitter.dispose();
+    }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 
