@@ -153,4 +153,9 @@ const azureLevelToChannelMethod = {
     info: 'info',
     warning: 'warn',
     error: 'error',
-} as const satisfies Record<AzureLogLevel, 'debug' | 'info' | 'warn' | 'error'>;
+} as const satisfies Record<AzureLogLevel, LogMethodName>;
+
+/** Names of {@linkcode IOutputChannel} methods that accept a log message and format args. */
+type LogMethodName = {
+    [K in keyof IOutputChannel]: IOutputChannel[K] extends (message: string, ...args: never) => void ? K : never;
+}[keyof IOutputChannel];
