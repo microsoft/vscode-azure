@@ -4,7 +4,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { AcrClient, DeploymentClient, IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, IWebAppClientProvider, ResourceClient, SubscriptionClient, WebAppClient } from '@microsoft/vscode-azure-azutils';
+import {
+    AcrClient,
+    DeploymentClient,
+    IAcrClientProvider,
+    IDeploymentClientProvider,
+    IResourceClientProvider,
+    ISubscriptionClientProvider,
+    IWebAppClientProvider,
+    ResourceClient,
+    setUpAzureSdkLogging,
+    SubscriptionClient,
+    WebAppClient,
+} from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
     CommandRegistry,
@@ -83,7 +95,15 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
 
     container.bind(IOutputChannel).toDynamicValue(context => {
         return createOutputChannel('Azure', context.get(IVsCode));
-    }).inSingletonScope().onActivation(pushDisposable);
+    }).inSingletonScope().onActivation((context, output) => {
+        // Register the SDK-logging disposable first so it is disposed (and
+        // restores `AzureLogger.log`) before the output channel itself is
+        // torn down; otherwise a late SDK log line during deactivation would
+        // hit a disposed channel.
+        pushDisposable(context, setUpAzureSdkLogging(output));
+        pushDisposable(context, output);
+        return output;
+    });
 
     container.bind(ICommandRegistry).toDynamicValue(context => {
         return new CommandRegistry(

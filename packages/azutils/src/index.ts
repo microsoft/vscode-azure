@@ -8,6 +8,7 @@ export * from './models/AzureNodeId';
 export * from './models/GenericResource';
 export * from './models/Grouping';
 export * from './models/VirtualResource';
+export * from './rest/azureLoggerSetup';
 export * from './rest/clients/AcrClient';
 export * from './rest/clients/DeploymentClient';
 export * from './rest/clients/ResourceClient';
