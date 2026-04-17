@@ -38,6 +38,7 @@ export class TempProjectManager implements Disposable {
         return dir;
     }
 
+    /** @inheritdoc */
     public dispose(): void {
         for (const dir of this.projectDirs) {
             this.ctx.code.workspace.fs.delete(dir, { recursive: true }).then(() => { /* void */ }, () => { /* ignore */ });
