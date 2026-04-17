@@ -10,7 +10,8 @@ import type { Satisfies } from '../types/Satisfies';
  * The value a VS Code provider can return: a `T`, `null`, `undefined`,
  * or a `Promise` of the same. Structurally equivalent to
  * `vscode.ProviderResult<T>` but declared here so shared packages do
- * not need to depend on the `vscode` module.
+ * not take a runtime/value-side dependency on the `vscode` module
+ * (the `vscode` import below is type-only and is erased at compile time).
  */
 export type ProviderResult<T> = T | undefined | null | Promise<T | undefined | null>;
 
