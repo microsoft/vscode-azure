@@ -85,7 +85,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
         let session: vscode.AuthenticationSession | undefined;
         try {
             session = await this.options.authentication.getSession(provider, scopesArray, this.options);
-        } catch (error) {
+        } catch {
             this.options.output?.warn('[auth] getToken retry provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
             try {
                 session = await this.options.authentication.getSession(provider, scopesArray, this.options);

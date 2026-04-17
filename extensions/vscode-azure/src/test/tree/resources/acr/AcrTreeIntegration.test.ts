@@ -128,13 +128,13 @@ describe('ACR Tree Integration (integration)', () => {
         const acrViewProvider = new AcrViewProvider(
             code,
             executor,
-            output,
             dataTree,
         );
 
         const genericViewProvider = new GenericAzureViewProvider(
             code,
             executor,
+            output,
             dataTree,
         );
 

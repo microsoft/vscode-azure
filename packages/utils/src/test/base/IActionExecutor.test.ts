@@ -171,7 +171,7 @@ describe('ActionExecutor (unit)', () => {
             expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] %s done (result=%o)' && call.arguments[1] === 'successCallback')).to.be.true;
             expect(errorSpy.mock.calls.some(call =>
                 call.arguments[0] instanceof Error &&
-                (call.arguments[0] as Error).message === 'boom' &&
+                call.arguments[0].message === 'boom' &&
                 call.arguments[1] === '[cmd] %s failed' &&
                 call.arguments[2] === 'failingCallback')).to.be.true;
         });

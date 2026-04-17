@@ -99,15 +99,12 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(ICodeContext).toConstantValue({ code: vscode, extensionContext });
 
     traceBinding(output, 'IOutputChannel');
-    container.bind(IOutputChannel).toConstantValue(output).inSingletonScope().onActivation((context, boundOutput) => {
-        // Register the SDK-logging disposable first so it is disposed (and
-        // restores `AzureLogger.log`) before the output channel itself is
-        // torn down; otherwise a late SDK log line during deactivation would
-        // hit a disposed channel.
-        pushDisposable(context, setUpAzureSdkLogging(boundOutput));
-        pushDisposable(context, boundOutput);
-        return boundOutput;
-    });
+    // Register the SDK-logging disposable first so it is disposed (and
+    // restores `AzureLogger.log`) before the output channel itself is
+    // torn down; otherwise a late SDK log line during deactivation would
+    // hit a disposed channel.
+    extensionContext.subscriptions.push(setUpAzureSdkLogging(output), output);
+    container.bind(IOutputChannel).toConstantValue(output);
 
     // Dynamically created singletons, some of which are disposable, but we do
     // `pushDisposable()` on all of them because it's smart enough to distinguish
