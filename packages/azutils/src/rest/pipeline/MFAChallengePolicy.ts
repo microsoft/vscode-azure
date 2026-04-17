@@ -69,10 +69,8 @@ export class MFAChallengePolicy implements PipelinePolicy {
                 return next(request);
             } else if (context) {
                 context.telemetry.properties.challengeSuccess = 'false';
-                this.output?.warn('[rest] MFA challenge aborted');
-            } else {
-                this.output?.warn('[rest] MFA challenge aborted');
             }
+            this.output?.warn('[rest] MFA challenge aborted');
         }
 
         return initialResponse;
