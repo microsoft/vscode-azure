@@ -134,11 +134,17 @@ describe('setUpAzureSdkLogging (unit)', () => {
         const output = new DebugOutputChannel('test');
         output.logLevel = 3 as vscode.LogLevel;
         const disposable = setUpAzureSdkLogging(output);
+        try {
+            expect(AzureLogger.log).to.not.equal(sentinel);
 
-        expect(AzureLogger.log).to.not.equal(sentinel);
-
-        disposable.dispose();
-        expect(AzureLogger.log).to.equal(sentinel);
+            disposable.dispose();
+            expect(AzureLogger.log).to.equal(sentinel);
+        } finally {
+            // Safe to call twice; the second dispose is a no-op for the
+            // AzureLogger.log restore path but still clears internal state
+            // if the earlier dispose was skipped due to an assertion failure.
+            disposable.dispose();
+        }
     });
 
     it('restores the previous @azure/logger level on dispose', () => {
@@ -147,10 +153,14 @@ describe('setUpAzureSdkLogging (unit)', () => {
         const output = new DebugOutputChannel('test');
         output.logLevel = 1 as vscode.LogLevel; // Trace -> 'verbose'
         const disposable = setUpAzureSdkLogging(output);
-        expect(getLogLevel()).to.equal('verbose');
+        try {
+            expect(getLogLevel()).to.equal('verbose');
 
-        disposable.dispose();
-        expect(getLogLevel()).to.equal('warning');
+            disposable.dispose();
+            expect(getLogLevel()).to.equal('warning');
+        } finally {
+            disposable.dispose();
+        }
     });
 
     it('is a no-op when a previous setup is still active', () => {
