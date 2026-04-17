@@ -40,6 +40,13 @@ export class ChooseSubscriptionStep<TContext extends ChooseSubscriptionContext> 
         );
     }
 
+    /**
+     * @inheritdoc
+     *
+     * In addition to the base recursive pick behavior, resolves a
+     * picked terminal subscription into the data-layer
+     * {@linkcode AzureSubscription} and sets it on the context.
+     */
     public override async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
         const pickResult = await super.prompt(context);
 

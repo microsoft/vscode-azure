@@ -12,10 +12,11 @@ const execFileAsync = promisify(execFile);
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 /**
- * Executes the `azd` CLI with the given arguments. Throws an
- * actionable error when `azd` is not installed or not on PATH.
+ * Executes the `azd` CLI with the given arguments.
  *
- * TODO: replace with AZD extension API when available
+ * @throws {Error} when `azd` is not installed or not on PATH, wrapping
+ *   the underlying `ENOENT` with an actionable install hint. Any other
+ *   `execFile` error is rethrown as-is.
  */
 export async function execAzd(args: string[], cwd?: string): Promise<{ stdout: string; stderr: string }> {
     try {

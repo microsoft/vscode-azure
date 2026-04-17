@@ -26,6 +26,7 @@ export class DeleteAppSetting implements ManagedCommand {
         @inject(FunctionAppDataProvider) private readonly dataProvider: FunctionAppDataProvider,
     ) { }
 
+    /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
         if (!key) {
             return;
