@@ -32,7 +32,7 @@ let activeSink: ((...args: unknown[]) => void) | undefined;
  * delegating to the root `log`. We take advantage of that by parsing the
  * leading `azure:...:<level> ` token off the first arg so we can route each
  * message to the matching {@linkcode IOutputChannel} method
- * (`error`/`warn`/`info`/`debug`) and preserve the namespace as a readable
+ * (`error`/`warn`/`info`/`trace`) and preserve the namespace as a readable
  * prefix. Messages that don't match the expected shape (e.g. direct
  * `AzureLogger.log(...)` calls, or a future format change) fall back to
  * {@linkcode IOutputChannel.debug} with a generic `[azure-sdk]` prefix.
@@ -149,7 +149,7 @@ const namespacePrefix = /^(azure(?::[^:\s]+)*?):(verbose|info|warning|error) ([\
 
 /** Route each `@azure/logger` severity to the matching {@linkcode IOutputChannel} method. */
 const azureLevelToChannelMethod = {
-    verbose: 'debug',
+    verbose: 'trace',
     info: 'info',
     warning: 'warn',
     error: 'error',

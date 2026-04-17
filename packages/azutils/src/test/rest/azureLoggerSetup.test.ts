@@ -43,7 +43,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
         const errorSpy = mock.method(output, 'error');
         const warnSpy = mock.method(output, 'warn');
         const infoSpy = mock.method(output, 'info');
-        const debugSpy = mock.method(output, 'debug');
+        const traceSpy = mock.method(output, 'trace');
 
         const disposable = setUpAzureSdkLogging(output);
         try {
@@ -62,10 +62,10 @@ describe('setUpAzureSdkLogging (unit)', () => {
             expect(infoSpy.mock.callCount()).to.equal(1);
             expect(infoSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] fyi %s', 'z']);
 
-            // Only the verbose client call should reach the debug sink; the
+            // Only the verbose client call should reach the trace sink; the
             // plain `AzureLogger.log` fallback path is exercised separately.
-            expect(debugSpy.mock.callCount()).to.equal(1);
-            expect(debugSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] noise %s', 'w']);
+            expect(traceSpy.mock.callCount()).to.equal(1);
+            expect(traceSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] noise %s', 'w']);
         } finally {
             disposable.dispose();
         }
