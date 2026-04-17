@@ -8,6 +8,7 @@ import { describe, it } from 'mocha';
 import { mock, type Mock } from 'node:test';
 import { ActionExecutor } from '../../base/IActionExecutor';
 import type { ITelemetryReporter } from '../../base/ITelemetryReporter';
+import { DebugOutputChannel } from '../../vscode/IOutputChannel';
 import { CancellationError } from '../../vscode/CancellationError';
 
 // A mock reporter is necessary here to validate that the expected calls are made to the reporter
@@ -153,6 +154,26 @@ describe('ActionExecutor (unit)', () => {
 
             const props = reporter.sendTelemetryErrorEvent.mock.calls[0].arguments[1];
             expect(props?.isActivationEvent).to.be.undefined;
+        });
+
+        it('should log command lifecycle for success and failure', async () => {
+            const output = new DebugOutputChannel('test');
+            const debugSpy = mock.method(output, 'debug');
+            const errorSpy = mock.method(output, 'error');
+            const executor = new ActionExecutor(createReporter(), output);
+
+            await executor.callWithTelemetryAndErrorHandling('successCallback', () => 42);
+            await executor.callWithTelemetryAndErrorHandling('failingCallback', () => {
+                throw new Error('boom');
+            });
+
+            expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] %s start' && call.arguments[1] === 'successCallback')).to.be.true;
+            expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] %s done (result=%o)' && call.arguments[1] === 'successCallback')).to.be.true;
+            expect(errorSpy.mock.calls.some(call =>
+                call.arguments[0] instanceof Error &&
+                (call.arguments[0] as Error).message === 'boom' &&
+                call.arguments[1] === '[cmd] %s failed' &&
+                call.arguments[2] === 'failingCallback')).to.be.true;
         });
     });
 

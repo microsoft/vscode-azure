@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, DebugOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { ResourceClient } from '../../../rest/clients/ResourceClient';
@@ -15,6 +15,7 @@ describe('ResourceClient (unit)', () => {
     it('should list resource groups with metadata attached', async () => {
         const { ctx } = createMockCodeContext();
         const executor = new ActionExecutor(new NullTelemetryReporter());
+        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         const rgBody = JSON.stringify({
@@ -28,7 +29,7 @@ describe('ResourceClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, rgBody),
         });
 
-        const client = await ResourceClient.create(ctx, executor, subscription, { httpClient });
+        const client = await ResourceClient.create(ctx, executor, output, subscription, { httpClient });
         const pages = [];
         for await (const page of client.resourceGroups.list()) {
             pages.push(page);
@@ -46,6 +47,7 @@ describe('ResourceClient (unit)', () => {
     it('should list resources with logicalType attached', async () => {
         const { ctx } = createMockCodeContext();
         const executor = new ActionExecutor(new NullTelemetryReporter());
+        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         const resourcesBody = JSON.stringify({
@@ -58,7 +60,7 @@ describe('ResourceClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, resourcesBody),
         });
 
-        const client = await ResourceClient.create(ctx, executor, subscription, { httpClient });
+        const client = await ResourceClient.create(ctx, executor, output, subscription, { httpClient });
         const pages = [];
         for await (const page of client.resources.listByResourceGroup('rg1')) {
             pages.push(page);
@@ -75,6 +77,7 @@ describe('ResourceClient (unit)', () => {
     it('should map Microsoft.Web/sites with functionapp kind to FunctionApp logicalType', async () => {
         const { ctx } = createMockCodeContext();
         const executor = new ActionExecutor(new NullTelemetryReporter());
+        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         const resourcesBody = JSON.stringify({
@@ -89,7 +92,7 @@ describe('ResourceClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, resourcesBody),
         });
 
-        const client = await ResourceClient.create(ctx, executor, subscription, { httpClient });
+        const client = await ResourceClient.create(ctx, executor, output, subscription, { httpClient });
         const pages = [];
         for await (const page of client.resources.listByResourceGroup('rg1')) {
             pages.push(page);
@@ -104,6 +107,7 @@ describe('ResourceClient (unit)', () => {
     it('should set hasMore based on nextLink presence', async () => {
         const { ctx } = createMockCodeContext();
         const executor = new ActionExecutor(new NullTelemetryReporter());
+        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         let callCount = 0;
@@ -122,7 +126,7 @@ describe('ResourceClient (unit)', () => {
             },
         });
 
-        const client = await ResourceClient.create(ctx, executor, subscription, { httpClient });
+        const client = await ResourceClient.create(ctx, executor, output, subscription, { httpClient });
         const pages = [];
         for await (const page of client.resourceGroups.list()) {
             pages.push(page);

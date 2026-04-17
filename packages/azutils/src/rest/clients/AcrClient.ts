@@ -10,7 +10,7 @@ import { type ContainerRegistryManagementClientOptionalParams, type ContainerReg
 import { get as sdkGetRegistry } from '@azure/arm-containerregistry/api/registries';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext, IOutputChannel, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureRestSubscriptionClient } from '../createAzureClient';
 
@@ -55,6 +55,7 @@ export class AcrClient implements IAcrClient {
     public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
+        output: IOutputChannel,
         subscription: AzureSubscription,
         options?: ContainerRegistryManagementClientOptionalParams,
     ): Promise<AcrClient> {
@@ -64,6 +65,7 @@ export class AcrClient implements IAcrClient {
             createContainerRegistryManagement,
             subscription,
             options,
+            output,
         );
         return Promise.resolve(new AcrClient(context, sdkGetRegistry));
     }

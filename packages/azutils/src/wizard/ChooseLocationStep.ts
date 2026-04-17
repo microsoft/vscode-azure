@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { type ICodeContext, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, type IOutputChannel, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type { ISubscriptionClientProvider, Location } from '../rest/clients/SubscriptionClient';
 
 /**
@@ -26,6 +26,7 @@ export class ChooseLocationStep<TContext extends ChooseLocationContext> extends 
     public constructor(
         private readonly ctx: ICodeContext,
         private readonly subscriptionClientProvider: ISubscriptionClientProvider,
+        private readonly output?: IOutputChannel,
     ) {
         super();
     }
@@ -39,8 +40,10 @@ export class ChooseLocationStep<TContext extends ChooseLocationContext> extends 
             throw new Error(this.ctx.code.l10n.t('Subscription is required to choose location'));
         }
 
+        this.output?.debug('[wizard] fetch locations start subscription=%s', context.subscription.subscriptionId);
         const client = await this.subscriptionClientProvider(context.subscription);
         const locations = await client.subscriptions.listLocations(context.subscription.subscriptionId);
+        this.output?.debug('[wizard] fetch locations done subscription=%s count=%d', context.subscription.subscriptionId, locations.length);
 
         const picks: QuickPickItemWithData<Location>[] = locations
             .filter(l => l.name && l.displayName)

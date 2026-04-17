@@ -5,7 +5,7 @@
 
 import type { AccessToken, GetTokenOptions, TokenCredential } from '@azure/core-auth';
 import { Environment } from '@azure/ms-rest-azure-env';
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import type { IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
@@ -27,6 +27,9 @@ export interface VsCodeExtensionCredentialOptions extends vscode.AuthenticationG
      * (Optional) The Azure environment to authenticate to. Defaults to `Azure`, the public Azure cloud.
      */
     environment?: Environment;
+
+    /** (Optional) Output channel for auth lifecycle logging. */
+    output?: IOutputChannel;
 }
 
 const PublicProviderId = 'microsoft' as const;
@@ -42,6 +45,8 @@ const DefaultEnvironment = Environment.AzureCloud;
  * {@linkcode VsCodeExtensionCredentialOptions.environment}.
  */
 export class VsCodeExtensionCredential implements TokenCredential {
+    private readonly sessionCache = new Map<string, vscode.AuthenticationSession>();
+
     public constructor(private readonly options: VsCodeExtensionCredentialOptions) { }
 
     /**
@@ -64,11 +69,45 @@ export class VsCodeExtensionCredential implements TokenCredential {
             scopesArray.push(`VSCODE_TENANT_ID:${tenantId}`); // TODO: right magic scope?
         }
 
-        const session = await this.options.authentication.getSession(provider, scopesArray, this.options);
+        this.options.output?.debug('[auth] getToken start provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
+        const cacheKey = `${provider}|${scopesArray.join(' ')}`;
+        const cachedSession = this.sessionCache.get(cacheKey);
+        if (cachedSession) {
+            this.options.output?.debug('[auth] session cache hit provider=%s tenant=%s', provider, tenantId ?? '<default>');
+            return {
+                token: cachedSession.accessToken,
+                expiresOnTimestamp: 0,
+                refreshAfterTimestamp: 0,
+                tokenType: 'Bearer',
+            };
+        }
+
+        let session: vscode.AuthenticationSession | undefined;
+        try {
+            session = await this.options.authentication.getSession(provider, scopesArray, this.options);
+        } catch (error) {
+            this.options.output?.warn('[auth] getToken retry provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
+            try {
+                session = await this.options.authentication.getSession(provider, scopesArray, this.options);
+            } catch (retryError) {
+                this.options.output?.error(retryError instanceof Error ? retryError : new Error(String(retryError)));
+                throw retryError;
+            }
+        }
+
+        if (!session && !this.options.createIfNone) {
+            this.options.output?.info('[auth] interactive sign-in provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
+            session = await this.options.authentication.getSession(provider, scopesArray, {
+                ...this.options,
+                createIfNone: true,
+            });
+        }
 
         if (!session) {
             return null;
         } else {
+            this.sessionCache.set(cacheKey, session);
+            this.options.output?.info('[auth] token acquired provider=%s scopes=%o expiresOn=%d', provider, scopesArray, 0);
             return {
                 token: session.accessToken,
                 expiresOnTimestamp: 0, // TODO: get from ID token

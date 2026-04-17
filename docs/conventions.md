@@ -61,6 +61,26 @@ this.code.l10n.t('Resource: {0}, SKU: {1}', registry.name, registry.sku.name)
 
 Debug and trace output to the output channel is exempt from localization.
 
+## Logging
+
+Use `IOutputChannel` directly via DI for extension logging. Do not add a wrapper class, do not fold `IOutputChannel` into `IExtensionContext`, and do not add a log-level setting (users control this from VS Code's output-channel log level UI).
+
+- Prefix every line with a bracketed subsystem: `[activate]`, `[cmd]`, `[data]`, `[view]`, `[cache]`, `[rest]`, `[auth]`, `[wizard]`, `[activity]`
+- Use printf-style calls (for example `output.debug('[cmd] %s start', id)`)
+- Pass `Error` objects directly to `output.error(...)`
+- Levels:
+  - `error`: user-visible failure
+  - `warn`: unexpected but recovered
+  - `info`: coarse lifecycle landmarks
+  - `debug`: command/cache/wizard lifecycle
+  - `trace`: per-item / per-request detail
+- `info`/`warn`/`error` messages must use `IVsCode.l10n.t(...)`; `debug`/`trace` are English-only developer logs
+- Never log PII/secrets (tokens, auth secrets, request/response bodies, user emails/display names, file contents). Resource IDs/names are allowed.
+
+```typescript
+output.debug('[cmd] %s start', callbackId);
+```
+
 ## Promises
 
 - Prefix intentionally un-awaited promises with `void`

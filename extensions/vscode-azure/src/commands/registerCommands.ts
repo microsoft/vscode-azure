@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICommandRegistry, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import { LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
@@ -25,25 +25,45 @@ import { TrackArmDeployment } from './TrackArmDeployment';
  * once from `activateInternal()` during activation.
  */
 export function registerCommands(container: Container): void {
-    registerManagedCommand(container, 'azure.hello', Hello);
+    const output = container.get(IOutputChannel);
+    const code = container.get(IVsCode);
+    let commandCount = 0;
 
-    registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
-    registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
-    registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
-    registerManagedCommand(container, LoadMoreCommandId, LoadMore);
+    registerManagedCommand(container, output, 'azure.hello', Hello);
+    commandCount++;
 
-    registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
+    registerManagedCommand(container, output, 'vscode-azure/resources/refresh', RefreshResourcesView);
+    commandCount++;
+    registerManagedCommand(container, output, 'vscode-azure/resources/groupBy', GroupBy);
+    commandCount++;
+    registerManagedCommand(container, output, 'vscode-azure/resources/openInPortal', OpenInPortal);
+    commandCount++;
+    registerManagedCommand(container, output, LoadMoreCommandId, LoadMore);
+    commandCount++;
 
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting, 'add');
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
+    registerManagedCommand(container, output, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
+    commandCount++;
 
-    registerManagedCommand(container, 'vscode-azure/activity/trackArmDeployment', TrackArmDeployment);
-    registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
-    registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
-    registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
+    registerManagedCommand(container, output, 'vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting, 'add');
+    commandCount++;
+    registerManagedCommand(container, output, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
+    commandCount++;
+    registerManagedCommand(container, output, 'vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
+    commandCount++;
 
-    registerManagedCommand(container, 'vscode-azure/functions/create', CreateFunctionApp);
+    registerManagedCommand(container, output, 'vscode-azure/activity/trackArmDeployment', TrackArmDeployment);
+    commandCount++;
+    registerManagedCommand(container, output, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
+    commandCount++;
+    registerManagedCommand(container, output, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
+    commandCount++;
+    registerManagedCommand(container, output, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
+    commandCount++;
+
+    registerManagedCommand(container, output, 'vscode-azure/functions/create', CreateFunctionApp);
+    commandCount++;
+
+    output.info(code.l10n.t('[cmd] Registered {0} commands', commandCount));
 }
 
 /**
@@ -55,10 +75,12 @@ export function registerCommands(container: Container): void {
  */
 function registerManagedCommand(
     container: Container,
+    output: IOutputChannel,
     commandId: string,
     commandClass: new (...ctorArgs: any[]) => ManagedCommand, // eslint-disable-line @typescript-eslint/no-explicit-any
     ...prefixArgs: unknown[]
 ): void {
+    output.debug('[cmd] registering %s', commandId);
     // Bind the command class if not already bound
     if (!container.isBound(commandClass)) {
         container.bind(commandClass).toSelf();

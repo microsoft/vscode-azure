@@ -7,7 +7,7 @@ import type { Client as RestClient, ClientOptions as RestClientOptions } from '@
 import type { TokenCredential } from '@azure/core-auth';
 import type { ServiceClient, ServiceClientOptions } from '@azure/core-client';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
 import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
@@ -36,9 +36,11 @@ export function createAzureClient<TClient extends ServiceClient, TOptions extend
     clientCtor: new (credential: TokenCredential, options?: TOptions) => TClient,
     credentialOrSubscription: TokenCredential | AzureSubscription,
     options?: TOptions,
+    output?: IOutputChannel,
 ): TClient {
     const { credential, resolvedOptions } = resolveCredentialArgs<TOptions>(credentialOrSubscription, options);
-    return new clientCtor(credential, applyDefaults(ctx, executor, resolvedOptions));
+    output?.debug('[rest] create client %s', clientCtor.name);
+    return new clientCtor(credential, applyDefaults(ctx, executor, resolvedOptions, output));
 }
 
 /**
@@ -53,6 +55,7 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
     clientCtor: new (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
     subscription: AzureSubscription,
     options?: TOptions,
+    output?: IOutputChannel,
 ): TClient;
 export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
     ctx: ICodeContext,
@@ -61,6 +64,7 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
     credential: TokenCredential,
     subscriptionId: string,
     options?: TOptions,
+    output?: IOutputChannel,
 ): TClient;
 export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
     ctx: ICodeContext,
@@ -69,9 +73,12 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
     credentialOrSubscription: TokenCredential | AzureSubscription,
     subscriptionIdOrOptions?: string | TOptions,
     optionsOrUndefined?: TOptions,
+    outputOrUndefined?: IOutputChannel,
 ): TClient {
     const { credential, subscriptionId, resolvedOptions } = resolveSubscriptionArgs<TOptions>(credentialOrSubscription, subscriptionIdOrOptions, optionsOrUndefined);
-    return new clientCtor(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions));
+    const output = outputOrUndefined;
+    output?.debug('[rest] create subscription client %s subscription=%s', clientCtor.name, subscriptionId);
+    return new clientCtor(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions, output));
 }
 
 // TODO: uncomment or remove as needed
@@ -99,6 +106,7 @@ export function createAzureRestSubscriptionClient<TClient extends RestClient, TO
     getClient: (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
     subscription: AzureSubscription,
     options?: TOptions,
+    output?: IOutputChannel,
 ): TClient;
 export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
@@ -107,6 +115,7 @@ export function createAzureRestSubscriptionClient<TClient extends RestClient, TO
     credential: TokenCredential,
     subscriptionId: string,
     options?: TOptions,
+    output?: IOutputChannel,
 ): TClient;
 export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
@@ -115,9 +124,12 @@ export function createAzureRestSubscriptionClient<TClient extends RestClient, TO
     credentialOrSubscription: TokenCredential | AzureSubscription,
     subscriptionIdOrOptions?: string | TOptions,
     optionsOrUndefined?: TOptions,
+    outputOrUndefined?: IOutputChannel,
 ): TClient {
     const { credential, subscriptionId, resolvedOptions } = resolveSubscriptionArgs<TOptions>(credentialOrSubscription, subscriptionIdOrOptions, optionsOrUndefined);
-    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions));
+    const output = outputOrUndefined;
+    output?.debug('[rest] create rest subscription client %s subscription=%s', getClient.name, subscriptionId);
+    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions, output));
 }
 
 function isTokenCredential(value: TokenCredential | AzureSubscription): value is TokenCredential {
@@ -171,7 +183,12 @@ function resolveSubscriptionArgs<TOptions>(
     }
 }
 
-function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions>(ctx: ICodeContext, executor: IActionExecutor, options?: TOptions): TOptions {
+function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions>(
+    ctx: ICodeContext,
+    executor: IActionExecutor,
+    options?: TOptions,
+    output?: IOutputChannel,
+): TOptions {
     const extensionUserAgentPrefix = `${ctx.extensionContext.extension.id}/${(ctx.extensionContext.extension.packageJSON as { version: string }).version}`;
 
     return {
@@ -187,7 +204,7 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
                 position: 'perCall',
             },
             {
-                policy: new CorrelationIdPolicy(executor),
+                policy: new CorrelationIdPolicy(executor, output),
                 position: 'perCall',
             },
             {
@@ -195,7 +212,7 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
                 position: 'perCall',
             },
             {
-                policy: new MFAChallengePolicy(executor, () => Promise.resolve(undefined)), // TODO: pass in real get new token function
+                policy: new MFAChallengePolicy(executor, () => Promise.resolve(undefined), output), // TODO: pass in real get new token function
                 position: 'perRetry',
             },
             {

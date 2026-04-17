@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { type ICodeContext, Wizard } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, type IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import type { ConcreteAzureNodeTree } from '../../models/AzureNode';
 import type { ResourceGroup } from '../../models/Grouping';
 import { type ChooseResourceGroupContext, ChooseResourceGroupStep } from '../../wizard/ChooseResourceGroupStep';
 
 interface ResourceGroupExperienceOptions extends ICodeContext {
     readonly dataItemTree: ConcreteAzureNodeTree;
+    readonly output?: IOutputChannel;
 }
 
 interface ResourceGroupExperienceResult {
@@ -28,6 +29,8 @@ export async function resourceGroupExperience(options: ResourceGroupExperienceOp
     const wizard = new Wizard<ChooseResourceGroupContext>(
         {},
         [new ChooseResourceGroupStep(options)],
+        [],
+        options.output,
     );
 
     const result = await wizard.run();

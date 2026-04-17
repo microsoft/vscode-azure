@@ -151,7 +151,8 @@ Client providers are registered as factory bindings in `extension.ts`:
 container.bind(IResourceClientProvider).toFactory(context => {
     const ctx = context.get(ICodeContext);
     const executor = context.get(IActionExecutor);
-    return (subscription) => ResourceClient.create(ctx, executor, subscription);
+    const output = context.get(IOutputChannel);
+    return (subscription) => ResourceClient.create(ctx, executor, output, subscription);
 });
 ```
 

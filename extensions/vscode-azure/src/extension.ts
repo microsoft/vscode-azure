@@ -34,7 +34,7 @@ import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { registerCommands } from './commands/registerCommands';
-import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from './services';
+import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable, traceBinding } from './services';
 import { registerTrees } from './tree/registerTrees';
 import { TempProjectManager } from './wizard/azd/TempProjectManager';
 
@@ -55,14 +55,25 @@ export async function activateInternal(
     containerOverride?: Container,
 ): Promise<void> {
     const container = containerOverride ?? setUpContainer(extensionContext);
+    const output = container.get(IOutputChannel);
+    output.info(vscode.l10n.t('[activate] Starting Azure extension activation'));
 
-    return await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
-        activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
-        activateContext.telemetry.isUserEvent = false;
+    try {
+        await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
+            activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
+            activateContext.telemetry.isUserEvent = false;
 
-        registerCommands(container);
-        registerTrees(container);
-    });
+            output.debug('[activate] Registering commands');
+            registerCommands(container);
+            output.debug('[activate] Registering tree views');
+            registerTrees(container);
+        });
+        output.info(vscode.l10n.t('[activate] Azure extension is ready'));
+    } catch (error) {
+        output.error(vscode.l10n.t('[activate] Activation failed'));
+        output.error(error instanceof Error ? error : new Error(String(error)));
+        throw error;
+    }
 }
 
 /** Entry point called by the generated extension `deactivate` function. */
@@ -77,34 +88,40 @@ export function deactivateInternal(): Promise<void> {
  */
 export function setUpContainer(extensionContext: IExtensionContext): Container {
     const container = new Container();
+    const output = createOutputChannel('Azure', vscode);
 
     // These three come in as constants (vscode by import, context from above)
+    traceBinding(output, 'IVsCode');
     container.bind(IVsCode).toConstantValue(vscode);
+    traceBinding(output, 'IExtensionContext');
     container.bind(IExtensionContext).toConstantValue(extensionContext);
+    traceBinding(output, 'ICodeContext');
     container.bind(ICodeContext).toConstantValue({ code: vscode, extensionContext });
 
-    // Dynamically created singletons, some of which are disposable, but we do
-    // `pushDisposable()` on all of them because it's smart enough to distinguish
-    container.bind(IActionExecutor).toDynamicValue(context => {
-        return new ActionExecutor(context.get(ITelemetryReporter));
-    }).inSingletonScope().onActivation(pushDisposable);
-
-    container.bind(ITelemetryReporter).toDynamicValue(context => {
-        return createTelemetryReporter(context.get(IExtensionContext), TelemetryReporter);
-    }).inSingletonScope().onActivation(pushDisposable);
-
-    container.bind(IOutputChannel).toDynamicValue(context => {
-        return createOutputChannel('Azure', context.get(IVsCode));
-    }).inSingletonScope().onActivation((context, output) => {
+    traceBinding(output, 'IOutputChannel');
+    container.bind(IOutputChannel).toConstantValue(output).inSingletonScope().onActivation((context, boundOutput) => {
         // Register the SDK-logging disposable first so it is disposed (and
         // restores `AzureLogger.log`) before the output channel itself is
         // torn down; otherwise a late SDK log line during deactivation would
         // hit a disposed channel.
-        pushDisposable(context, setUpAzureSdkLogging(output));
-        pushDisposable(context, output);
-        return output;
+        pushDisposable(context, setUpAzureSdkLogging(boundOutput));
+        pushDisposable(context, boundOutput);
+        return boundOutput;
     });
 
+    // Dynamically created singletons, some of which are disposable, but we do
+    // `pushDisposable()` on all of them because it's smart enough to distinguish
+    traceBinding(output, 'IActionExecutor');
+    container.bind(IActionExecutor).toDynamicValue(context => {
+        return new ActionExecutor(context.get(ITelemetryReporter), context.get(IOutputChannel));
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    traceBinding(output, 'ITelemetryReporter');
+    container.bind(ITelemetryReporter).toDynamicValue(context => {
+        return createTelemetryReporter(context.get(IExtensionContext), TelemetryReporter);
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    traceBinding(output, 'ICommandRegistry');
     container.bind(ICommandRegistry).toDynamicValue(context => {
         return new CommandRegistry(
             context.get(IActionExecutor),
@@ -112,40 +129,52 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
         );
     }).inSingletonScope().onActivation(pushDisposable);
 
+    traceBinding(output, 'IAzureSubscriptionProvider');
     container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
         return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
     }).inSingletonScope().onActivation(pushDisposable);
 
+    traceBinding(output, 'ITempProjectManager');
     container.bind(ITempProjectManager).to(TempProjectManager).inSingletonScope().onActivation(pushDisposable);
 
+    traceBinding(output, 'IResourceClientProvider');
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => ResourceClient.create(ctx, executor, subscription);
+        const boundOutput = context.get(IOutputChannel);
+        return (subscription) => ResourceClient.create(ctx, executor, boundOutput, subscription);
     });
 
+    traceBinding(output, 'IDeploymentClientProvider');
     container.bind(IDeploymentClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => DeploymentClient.create(ctx, executor, subscription);
+        const boundOutput = context.get(IOutputChannel);
+        return (subscription) => DeploymentClient.create(ctx, executor, boundOutput, subscription);
     });
 
+    traceBinding(output, 'IAcrClientProvider');
     container.bind(IAcrClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => AcrClient.create(ctx, executor, subscription);
+        const boundOutput = context.get(IOutputChannel);
+        return (subscription) => AcrClient.create(ctx, executor, boundOutput, subscription);
     });
 
+    traceBinding(output, 'ISubscriptionClientProvider');
     container.bind(ISubscriptionClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => SubscriptionClient.create(ctx, executor, subscription);
+        const boundOutput = context.get(IOutputChannel);
+        return (subscription) => SubscriptionClient.create(ctx, executor, boundOutput, subscription);
     });
 
+    traceBinding(output, 'IWebAppClientProvider');
     container.bind(IWebAppClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => WebAppClient.create(ctx, executor, subscription);
+        const boundOutput = context.get(IOutputChannel);
+        return (subscription) => WebAppClient.create(ctx, executor, boundOutput, subscription);
     });
 
     return container;

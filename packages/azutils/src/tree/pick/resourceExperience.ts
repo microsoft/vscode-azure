@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, type PromptStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, type IOutputChannel, type PromptStep, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
 import type { GenericResource } from '../../models/GenericResource';
 import { type ChooseResourceContext, ChooseResourceStep } from '../../wizard/ChooseResourceStep';
@@ -12,6 +12,7 @@ interface ResourceExperienceOptions extends ICodeContext {
     readonly tree: ViewItemTree<string, ConcreteAzureNode>;
     readonly dataItemTree: ConcreteAzureNodeTree;
     readonly logicalType: string;
+    readonly output?: IOutputChannel;
 }
 
 /**
@@ -44,6 +45,8 @@ export async function resourceExperience<T extends GenericResource>(
         // ChooseResourceContext<T> extends PickContext<string>, so this is
         // safe at runtime--the override narrows, not widens.
         [step as PromptStep<ChooseResourceContext<T>>],
+        [],
+        options.output,
     );
 
     const result = await wizard.run();

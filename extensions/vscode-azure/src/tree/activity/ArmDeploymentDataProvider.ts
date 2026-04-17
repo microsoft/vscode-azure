@@ -9,7 +9,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, flattenPages, IActionExecutor, InflightMap,
+    EventEmitter, flattenPages, IActionExecutor, InflightMap, IOutputChannel,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -81,6 +81,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
+        @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
     ) { }
 
@@ -176,6 +177,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
             while (!abortSignal.aborted) {
                 let nextPollMs = 10 * 1000; // Default to 10s if server doesn't provide guidance
+                this.output.debug('[activity] poll cycle start deployment=%s', activity.id);
 
                 try {
                     await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
@@ -208,8 +210,12 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
                         const provisioningState = deployment.properties?.provisioningState;
                         if (provisioningState) {
+                            const previousStatus = activity.status;
                             activity.status = toActivityStatus(provisioningState);
                             activity.description = provisioningState;
+                            if (activity.status !== previousStatus) {
+                                this.output.info('[activity] deployment status transition deployment=%s status=%s', activity.id, activity.status);
+                            }
                         }
 
                         // Detect structural changes in operations
@@ -219,6 +225,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
                         if (isTerminalState(provisioningState)) {
                             activity.endTime = new Date();
+                            this.output.info('[activity] deployment reached terminal status deployment=%s status=%s', activity.id, activity.status);
                             this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
                             return;
                         }
@@ -230,9 +237,11 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     if (isTerminalActivityStatus(activity.status)) {
                         return;
                     }
-                } catch {
+                } catch (error) {
                     abortSignal.throwIfAborted();
                     // Swallow other probably-transient errors and retry on next poll
+                    const message = error instanceof Error ? error.message : String(error);
+                    this.output.warn('[activity] polling error deployment=%s message=%s', activity.id, message);
                 }
 
                 // Wait for the next poll interval

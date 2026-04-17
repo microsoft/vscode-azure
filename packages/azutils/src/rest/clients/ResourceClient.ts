@@ -10,7 +10,7 @@ import type {
     ResourcesListOptionalParams
 } from '@azure/arm-resources';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, Page } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext, IOutputChannel, Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
@@ -60,6 +60,7 @@ export class ResourceClient implements IResourceClient {
     private constructor(
         private readonly inner: ResourceManagementClient,
         private readonly subscription: AzureSubscription,
+        private readonly output: IOutputChannel,
     ) { }
 
     /**
@@ -69,6 +70,7 @@ export class ResourceClient implements IResourceClient {
     public static async create(
         ctx: ICodeContext,
         executor: IActionExecutor,
+        output: IOutputChannel,
         subscription: AzureSubscription,
         options?: ResourceManagementClientOptionalParams,
     ): Promise<ResourceClient> {
@@ -79,8 +81,9 @@ export class ResourceClient implements IResourceClient {
             ResourceClient.sdk.ResourceManagementClient,
             subscription,
             options,
+            output,
         );
-        return new ResourceClient(inner, subscription);
+        return new ResourceClient(inner, subscription, output);
     }
 
     public get resourceGroups(): IResourceClient['resourceGroups'] {
@@ -102,6 +105,7 @@ export class ResourceClient implements IResourceClient {
                     groupingValue: resourceGroup.name,
                 });
             },
+            this.output,
         );
     }
 
@@ -110,6 +114,7 @@ export class ResourceClient implements IResourceClient {
             this.inner.resources.listByResourceGroup(resourceGroupName, options),
             ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
             r => attachMetadata(r, this.subscription),
+            this.output,
         );
     }
 }
@@ -141,4 +146,3 @@ function logicalType(type: string, kind?: string): string {
             return type;
     }
 }
-
