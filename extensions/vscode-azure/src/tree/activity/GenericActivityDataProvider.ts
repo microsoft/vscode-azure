@@ -11,6 +11,14 @@ interface GenericActivity extends Activity {
     readonly type: 'generic';
 }
 
+/**
+ * Data-layer provider for simple, flat {@linkcode Activity} items that are
+ * pushed imperatively by commands (e.g. long-running CLI operations).
+ *
+ * Activities are tracked via {@linkcode trackActivity} and updated in-place
+ * via {@linkcode updateActivity}; change events are fired so the tree
+ * re-renders. These activities do not have children.
+ */
 @injectable()
 export class GenericActivityDataProvider implements DataProvider<GenericActivity>, Disposable {
     public readonly isRoot = true;
@@ -20,10 +28,12 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<GenericActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is GenericActivity {
         return isActivity(resource) && resource.type === 'generic';
     }
 
+    /** @inheritdoc */
     public getChildren(resource?: GenericActivity): Promise<GenericActivity[]> {
         if (!resource) {
             return Promise.resolve([...this.rootActivities.values()]);
@@ -31,6 +41,11 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
         return Promise.resolve([]);
     }
 
+    /**
+     * Add a new generic activity to the tree. The `type` and `startTime`
+     * are assigned automatically. Returns the fully-populated activity so
+     * callers can mutate it later (e.g. set `status`/`endTime`).
+     */
     public trackActivity(activity: Omit<GenericActivity, 'type' | 'startTime'>): GenericActivity {
         const full: GenericActivity = {
             ...activity,
@@ -42,6 +57,10 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
         return full;
     }
 
+    /**
+     * Apply a partial update to an existing activity and fire `onDidChange`
+     * so the tree re-renders. No-op if `id` is unknown.
+     */
     public updateActivity(id: string, changes: Partial<Pick<GenericActivity, 'status' | 'title' | 'description' | 'endTime'>>): void {
         const activity = this.rootActivities.get(id);
         if (activity) {
@@ -50,6 +69,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
         }
     }
 
+    /** Remove all root activities matching `filter`. */
     public clearActivities(filter: (activity: GenericActivity) => boolean): void {
         let changed = false;
         for (const [id, activity] of this.rootActivities) {
@@ -63,6 +83,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
         }
     }
 
+    /** @inheritdoc */
     public dispose(): void {
         this.onDidChangeEmitter.dispose();
     }

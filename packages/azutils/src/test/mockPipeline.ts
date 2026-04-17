@@ -36,6 +36,9 @@ export function makeResponse(request: PipelineRequest, status?: number, bodyAsTe
     } as PipelineResponse;
 }
 
+/**
+ * Options for {@linkcode MockHttpClient}.
+ */
 interface MockHttpClientOptions {
     /** Handler called for each request. Return a response or throw. */
     handler: (request: PipelineRequest) => PipelineResponse | Promise<PipelineResponse>;
@@ -44,12 +47,22 @@ interface MockHttpClientOptions {
 /**
  * An {@linkcode HttpClient} that delegates to a test-provided handler
  * instead of making real network calls.
+ *
+ * Inject into an Azure SDK client wrapper via its `create({ ..., httpClient })`
+ * option to run the full pipeline (policies, serialization) against
+ * deterministic canned responses. All observed requests are captured on
+ * {@linkcode requests} in the order they were sent.
  */
 export class MockHttpClient implements HttpClient {
+    /** Every request observed by {@linkcode sendRequest}, in the order received. */
     public readonly requests: PipelineRequest[] = [];
 
     constructor(private readonly options: MockHttpClientOptions) { }
 
+    /**
+     * Records the request and returns the result of
+     * {@linkcode MockHttpClientOptions.handler}.
+     */
     public sendRequest(request: PipelineRequest): Promise<PipelineResponse> {
         this.requests.push(request);
         return Promise.resolve(this.options.handler(request));

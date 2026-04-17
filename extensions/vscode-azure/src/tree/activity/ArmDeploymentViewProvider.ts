@@ -21,6 +21,7 @@ export class ArmDeploymentViewProvider implements ViewProvider<string> {
         @inject(IActivityViewDataTree) private readonly dataTree: IActivityViewDataTree,
     ) { }
 
+    /** @inheritdoc */
     public canHandle(activityId: unknown): activityId is string {
         if (typeof activityId !== 'string') {
             return false;
@@ -36,6 +37,7 @@ export class ArmDeploymentViewProvider implements ViewProvider<string> {
         return !!this.findOperation(activityId);
     }
 
+    /** @inheritdoc */
     public async getChildren(activityId?: string): Promise<string[]> {
         if (!activityId) {
             return [];
@@ -64,6 +66,10 @@ export class ArmDeploymentViewProvider implements ViewProvider<string> {
         return childIds;
     }
 
+    /**
+     * @inheritdoc
+     * @throws if neither a deployment activity nor a matching operation is found.
+     */
     public getTreeItem(activityId: string): ITreeItem {
         const activity = this.dataTree.get(activityId)
             ?? this.findOperation(activityId);

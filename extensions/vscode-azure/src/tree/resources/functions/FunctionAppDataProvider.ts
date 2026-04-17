@@ -38,10 +38,12 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
         @inject(IWebAppClientProvider) private readonly createClient: IWebAppClientProvider,
     ) { }
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
         return isFunctionApp(resource) || isFunctionAppVirtualResource(resource);
     }
 
+    /** @inheritdoc */
     public async getChildren(resource?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> {
         if (!resource) {
             return [];
@@ -73,9 +75,10 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
     }
 
     /**
-     * Add or update an app setting. Merges into the remote settings,
-     * updates the cache, and returns the resource group + site info
-     * needed by callers to invalidate the tree.
+     * Add or update an app setting. Merges into the remote settings and
+     * refreshes the local cache.
+     *
+     * @throws if the resource's ARM ID does not contain a resource group segment.
      */
     public async addOrUpdateSetting(resource: GenericResource, key: string, value: string): Promise<void> {
         const { client, resourceGroupName } = await this.resolveClient(resource);
@@ -90,6 +93,8 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
 
     /**
      * Delete an app setting by key.
+     *
+     * @throws if the resource's ARM ID does not contain a resource group segment.
      */
     public async deleteSetting(resource: GenericResource, key: string): Promise<void> {
         const { client, resourceGroupName } = await this.resolveClient(resource);

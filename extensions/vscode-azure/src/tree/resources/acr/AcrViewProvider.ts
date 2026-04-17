@@ -35,6 +35,7 @@ export class AcrViewProvider implements ViewProvider<string> {
 
     // #region ViewProvider
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is string {
         if (typeof resource !== 'string' || !AzureNodeId.test(resource)) {
             return false;
@@ -44,6 +45,10 @@ export class AcrViewProvider implements ViewProvider<string> {
         return !!node && (isAcrRegistry(node) || (isVirtualResource(node) && isAcrRegistry(node.azureResource)));
     }
 
+    /**
+     * @inheritdoc
+     * @throws if a non-virtual resource is passed that is not a {@linkcode GenericResource}.
+     */
     public getTreeItem(key: string): ITreeItem {
         const resource = this.cache.get(key);
         if (!resource) {
@@ -114,6 +119,7 @@ export class AcrViewProvider implements ViewProvider<string> {
         return children.map(child => AzureNodeId.from(child).toString());
     }
 
+    /** @inheritdoc */
     public getParent(key: string): string | undefined {
         return AzureNodeId.parse(key).parentNodeId()?.toString();
     }

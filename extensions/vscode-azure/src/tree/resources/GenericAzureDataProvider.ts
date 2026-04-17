@@ -21,6 +21,17 @@ import { IAzureSubscriptionProvider } from '../../services';
  */
 const DEFAULT_PAGE_SIZE = 50;
 
+/**
+ * Root data-layer provider for the Azure resources tree.
+ *
+ * Drives the top of the hierarchy -- accounts, tenants, subscriptions, and
+ * resource groups -- using the shared {@linkcode AzureSubscriptionProvider}
+ * and ARM {@linkcode IResourceClient}. Service-specific providers (e.g.
+ * {@linkcode AcrDataProvider}) handle children below the resource group level.
+ *
+ * Fires {@linkcode onDidChange} when configuration affecting pagination
+ * changes, or when the subscription provider suggests a refresh.
+ */
 @injectable()
 export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
     public readonly isRoot = true;
@@ -58,6 +69,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         }));
     }
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
         if (!resource || typeof resource !== 'object') {
             return false;
@@ -67,6 +79,10 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         return isAccount(node) || isTenant(node) || isSubscription(node) || isResourceGroup(node);
     }
 
+    /**
+     * @inheritdoc
+     * @throws if `resource` is not an account, tenant, subscription, or resource group.
+     */
     public async getChildren(resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> {
         // Ensure sign-in has been initiated (lazy, only once)
         this.signInPromise ??= this.subscriptionProvider.signIn(); // TODO: handle sign out?
@@ -116,6 +132,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         return this.code.workspace.getConfiguration(ConfigurationSection).get('pageSize', DEFAULT_PAGE_SIZE);
     }
 
+    /** @inheritdoc */
     public dispose(): void {
         this.disposables.forEach(d => void d.dispose());
     }
