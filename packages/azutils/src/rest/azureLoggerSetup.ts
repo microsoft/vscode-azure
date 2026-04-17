@@ -135,7 +135,7 @@ const vsCodeLogLevelToAzureLevel = {
     3: 'info',    // Info
     4: 'warning', // Warning
     5: 'error',   // Error
-} satisfies Record<vscode.LogLevel, AzureLogLevel | undefined>;
+} as const satisfies Record<vscode.LogLevel, AzureLogLevel | undefined>;
 
 /**
  * Matches the `<namespace>:<level> <message>` prefix that the runtime's
