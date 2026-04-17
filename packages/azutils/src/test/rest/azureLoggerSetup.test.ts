@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- Test needs direct access to the global AzureLogger / getLogLevel helpers.
-import { AzureLogger, getLogLevel, setLogLevel } from '@azure/logger';
+import { AzureLogger, createClientLogger, getLogLevel, setLogLevel } from '@azure/logger';
 import { DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { afterEach, describe, it } from 'mocha';
@@ -30,7 +30,42 @@ describe('setUpAzureSdkLogging (unit)', () => {
             AzureLogger.log('hello %s', 'world');
 
             expect(debugSpy.mock.callCount()).to.equal(1);
-            expect(debugSpy.mock.calls[0].arguments).to.deep.equal(['[azure-sdk]', 'hello %s', 'world']);
+            expect(debugSpy.mock.calls[0].arguments).to.deep.equal(['[azure-sdk] hello %s', 'world']);
+        } finally {
+            disposable.dispose();
+        }
+    });
+
+    it('routes per-severity client logger messages to the matching output method', () => {
+        const output = new DebugOutputChannel('test');
+        output.logLevel = 1 as vscode.LogLevel; // Trace -> 'verbose' so all levels fire
+
+        const errorSpy = mock.method(output, 'error');
+        const warnSpy = mock.method(output, 'warn');
+        const infoSpy = mock.method(output, 'info');
+        const debugSpy = mock.method(output, 'debug');
+
+        const disposable = setUpAzureSdkLogging(output);
+        try {
+            const client = createClientLogger('test-routing');
+            client.error('boom %s', 'x');
+            client.warning('careful %s', 'y');
+            client.info('fyi %s', 'z');
+            client.verbose('noise %s', 'w');
+
+            expect(errorSpy.mock.callCount()).to.equal(1);
+            expect(errorSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] boom %s', 'x']);
+
+            expect(warnSpy.mock.callCount()).to.equal(1);
+            expect(warnSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] careful %s', 'y']);
+
+            expect(infoSpy.mock.callCount()).to.equal(1);
+            expect(infoSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] fyi %s', 'z']);
+
+            // Only the verbose client call should reach the debug sink; the
+            // plain `AzureLogger.log` fallback path is exercised separately.
+            expect(debugSpy.mock.callCount()).to.equal(1);
+            expect(debugSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] noise %s', 'w']);
         } finally {
             disposable.dispose();
         }
@@ -73,6 +108,20 @@ describe('setUpAzureSdkLogging (unit)', () => {
         const disposable = setUpAzureSdkLogging(output);
         try {
             expect(getLogLevel()).to.equal(undefined);
+        } finally {
+            disposable.dispose();
+        }
+    });
+
+    it('falls back to the least-verbose level for an unknown LogLevel', () => {
+        const output = new DebugOutputChannel('test');
+        // Use a value outside the known vscode.LogLevel range (Off..Error = 0..5)
+        // to exercise the fallback branch in `toAzureLogLevel`.
+        output.logLevel = 99 as vscode.LogLevel;
+
+        const disposable = setUpAzureSdkLogging(output);
+        try {
+            expect(getLogLevel()).to.equal('error');
         } finally {
             disposable.dispose();
         }
