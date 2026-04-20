@@ -280,7 +280,6 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             this.output?.debug(`[view] ${this.name} inject loadMore parent=${viewKey} key=${loadMoreKey}`);
             return [...childItems, this.loadMoreOptions.createLoadMoreViewItem(loadMoreKey)];
         }
-        this.output?.debug(`[view] ${this.name} no loadMore injection key=${this.getKey(viewItem)}`);
 
         return childItems;
     }
