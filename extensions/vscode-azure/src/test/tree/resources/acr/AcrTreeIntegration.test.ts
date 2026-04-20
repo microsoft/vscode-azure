@@ -127,7 +127,6 @@ describe('ACR Tree Integration (integration)', () => {
         );
 
         const genericViewProvider = new GenericAzureViewProvider(
-            code,
             mockCtx.ctx,
             executor,
             dataTree,

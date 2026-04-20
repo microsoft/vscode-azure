@@ -7,7 +7,7 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, ICodeContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
 import { IAzureViewDataTree } from '../../services';
@@ -42,7 +42,6 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     private isOneRootSub = false;
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
@@ -70,62 +69,62 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
             const grouping = nodeId.getGrouping();
             const label = grouping?.groupingValue ?? key;
-            const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
+            const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
-            item.iconPath = new this.code.ThemeIcon('symbol-namespace');
+            item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
             return item;
         }
 
         const resource = this.cache.get(key);
         if (!resource) {
-            return new this.code.TreeItem(key); // TODO: throw?
+            return new this.ctx.code.TreeItem(key); // TODO: throw?
         }
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
 
         switch (true) {
             case isAccount(resource): {
-                const item = new this.code.TreeItem(resource.label, this.code.TreeItemCollapsibleState.Collapsed);
+                const item = new this.ctx.code.TreeItem(resource.label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.iconPath = new this.code.ThemeIcon('account');
+                item.iconPath = new this.ctx.code.ThemeIcon('account');
                 return item;
             }
 
             case isTenant(resource): {
                 const label = resource.displayName ?? resource.tenantId;
-                const item = new this.code.TreeItem(label, this.code.TreeItemCollapsibleState.Collapsed);
+                const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.iconPath = new this.code.ThemeIcon('organization');
+                item.iconPath = new this.ctx.code.ThemeIcon('organization');
                 return item;
             }
 
             case isSubscription(resource): {
-                const item = new this.code.TreeItem(resource.name, this.isOneRootSub ? this.code.TreeItemCollapsibleState.Expanded : this.code.TreeItemCollapsibleState.Collapsed);
+                const item = new this.ctx.code.TreeItem(resource.name, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = getAzureIconUri(this.code, this.ctx.extensionContext, 'Subscription');
+                item.iconPath = getAzureIconUri(this.ctx.code, this.ctx.extensionContext, 'Subscription');
                 return item;
             }
 
             case isResourceGroup(resource): {
-                const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
+                const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = getAzureIconUri(this.code, this.ctx.extensionContext, 'ResourceGroup');
+                item.iconPath = getAzureIconUri(this.ctx.code, this.ctx.extensionContext, 'ResourceGroup');
                 return item;
             }
 
             case isGenericResource(resource): {
-                const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.None);
+                const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.None);
                 item.id = key;
                 item.description = resource.logicalType;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = new this.code.ThemeIcon('symbol-misc');
+                item.iconPath = new this.ctx.code.ThemeIcon('symbol-misc');
                 return item;
             }
 
             default: {
-                return new this.code.TreeItem(key);
+                return new this.ctx.code.TreeItem(key);
             }
         }
     }

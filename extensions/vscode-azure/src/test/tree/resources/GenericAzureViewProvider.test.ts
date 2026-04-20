@@ -39,7 +39,7 @@ describe('GenericAzureViewProvider (unit)', () => {
                 return Promise.resolve(children.get(node) ?? []);
             },
         };
-        return new GenericAzureViewProvider(ctx.code, ctx, executor, mockCache as never);
+        return new GenericAzureViewProvider(ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
