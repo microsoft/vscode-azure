@@ -67,24 +67,24 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(scopes).to.deep.equal(['scope1', 'scope2']);
         });
 
-        it('should add VSCODE_TENANT_ID scope when tenantId is set in options', async () => {
+        it('should add VSCODE_TENANT scope when tenantId is set in options', async () => {
             const { credential, getSession } = createCredential({ tenantId: 'my-tenant' });
             getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
 
             const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            expect(scopes).to.include('VSCODE_TENANT_ID:my-tenant');
+            expect(scopes).to.include('VSCODE_TENANT:my-tenant');
         });
 
-        it('should add VSCODE_TENANT_ID scope from GetTokenOptions.tenantId over constructor tenantId', async () => {
+        it('should add VSCODE_TENANT scope from GetTokenOptions.tenantId over constructor tenantId', async () => {
             const { credential, getSession } = createCredential({ tenantId: 'default-tenant' });
             getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1', { tenantId: 'override-tenant' });
 
             const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            expect(scopes).to.include('VSCODE_TENANT_ID:override-tenant');
+            expect(scopes).to.include('VSCODE_TENANT:override-tenant');
         });
 
         it('should return null if getSession returns undefined', async () => {
@@ -115,7 +115,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
             await credential.getToken('scope1');
 
             const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            const hasTenantScope = scopes.some(s => s.startsWith('VSCODE_TENANT_ID:'));
+            const hasTenantScope = scopes.some(s => s.startsWith('VSCODE_TENANT:'));
             expect(hasTenantScope).to.be.false;
         });
     });

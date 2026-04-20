@@ -67,7 +67,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
 
         const tenantId = options?.tenantId || this.options.tenantId;
         if (tenantId) {
-            scopesArray.push(`VSCODE_TENANT_ID:${tenantId}`); // TODO: right magic scope?
+            scopesArray.push(`VSCODE_TENANT:${tenantId}`);
         }
 
         this.options.output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} scopes=${JSON.stringify(scopesArray)}`);

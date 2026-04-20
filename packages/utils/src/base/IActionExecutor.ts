@@ -105,13 +105,18 @@ export class ActionExecutor implements IActionExecutor {
             } catch (error) {
                 // TODO: toast error message + report issue button
                 if (CancellationError.test(error)) {
-                    properties.result = 'Canceled'; // TODO: Verify spelling is the same as existing
-                    // TODO: cancel step
+                    properties.result = 'Canceled';
+                    properties.lastStep = error.stepName;
                 } else {
-                    // TODO: error/cancellation handling plus telemetry
                     properties.result = 'Failed';
                     const loggedError = error instanceof Error ? error : new Error(String(error));
                     this.output?.error(loggedError, `[cmd] ${telemetryId} failed`);
+
+                    if (error instanceof Error) {
+                        properties.error = error.name;
+                        properties.errorMessage = error.message;
+                        properties.stack = error.stack;
+                    }
                 }
 
                 if (context.errorHandling.rethrow) {

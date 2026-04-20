@@ -26,13 +26,13 @@ export class CorrelationIdPolicy implements PipelinePolicy {
     public constructor(
         private readonly executor: IActionExecutor,
         private readonly output?: IOutputChannel,
-    ) {}
+    ) { }
 
     /** @inheritdoc */
     public sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
         const context = this.executor.currentContext;
         if (context) {
-            const correlationId = context.telemetry.properties.correlationId;
+            const correlationId = context.telemetry.properties['x-ms-correlation-request-id'];
             request.headers.set(correlationIdHeaderName, correlationId);
             this.output?.trace(`[rest] attached correlation id=${correlationId}`);
         }

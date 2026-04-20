@@ -65,7 +65,7 @@ export function createActionContext(telemetryId: string, correlationId?: string)
         telemetry: {
             id: telemetryId,
             properties: {
-                correlationId: correlationId ?? randomUUID(),
+                'x-ms-correlation-request-id': correlationId ?? randomUUID(),
             },
             measurements: {},
         },
@@ -79,9 +79,9 @@ export function createActionContext(telemetryId: string, correlationId?: string)
  * autocomplete and consistency across the codebase.
  */
 export interface TelemetryProperties extends Record<string, string | undefined> {
-    // TODO: All these need to match existing property names
-    readonly result?: 'Succeeded' | 'Failed' | 'Canceled'; // TODO: Provisionally readonly? If we want to allow callers to set this, have to take away readonly
-    readonly correlationId: string; // TODO: I think existing property name is 'x-ms-correlation-request-id', same as the header name
+    readonly result?: 'Succeeded' | 'Failed' | 'Canceled';
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- Keeping existing property name
+    readonly 'x-ms-correlation-request-id': string;
     isActivationEvent?: 'true' | 'false';
     readonly error?: string;
     readonly errorMessage?: string;

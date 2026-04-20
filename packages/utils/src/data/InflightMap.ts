@@ -7,8 +7,6 @@
  * Deduplicates concurrent async operations by key. If a call comes in for a key
  * that already has an in-flight promise, the existing promise is returned instead
  * of starting a new operation.
- *
- * TODO: add tests
  */
 export class InflightMap<T> {
     private readonly inflight = new Map<string, Promise<T>>();
