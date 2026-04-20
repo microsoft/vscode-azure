@@ -373,8 +373,8 @@ describe('Wizard (unit)', () => {
 
         const tracker = respondToPrompts(mock, [
             { input: 'first' },
-            { pick: 'Red' },       // StepWithSub picks Red → adds ConditionalConfirmStep
-            'goBack',              // Go back from ConditionalConfirmStep → removes it
+            { pick: 'Red' },       // StepWithSub picks Red -> adds ConditionalConfirmStep
+            'goBack',              // Go back from ConditionalConfirmStep -> removes it
             { pick: 'Blue' },      // Re-pick StepWithSub with Blue -> no sub-steps
         ]);
 

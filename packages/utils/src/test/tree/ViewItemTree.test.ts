@@ -230,7 +230,7 @@ describe('ViewItemTree (unit)', () => {
             const onChange = mock.fn();
             viewTree.onDidChangeTreeData(onChange);
 
-            // Invalidate in the data tree → should propagate to view
+            // Invalidate in the data tree -> should propagate to view
             dataTree.invalidate({ id: 'a' });
 
             expect(onChange.mock.callCount()).to.be.greaterThan(0);
