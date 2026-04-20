@@ -186,6 +186,21 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(result!.refreshAfterTimestamp).to.equal(exp * 1000);
         });
 
+        it('should decode base64url-encoded idToken payloads', async () => {
+            const { credential, getSession } = createCredential();
+            const exp = Math.floor(Date.now() / 1000) + 3600;
+            const json = JSON.stringify({ exp });
+            // Encode using base64url: replace +→-, /→_, strip padding
+            const payload = Buffer.from(json).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            const idToken = `header.${payload}.signature`;
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            expect(result!.expiresOnTimestamp).to.equal(exp * 1000);
+        });
+
         it('should not add tenant scope when no tenantId is provided anywhere', async () => {
             const { credential, getSession } = createCredential();
             getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));

@@ -110,8 +110,9 @@ function getTokenExpiry(idToken: string | undefined): { expiresOnTimestamp: numb
             return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
         }
 
+        // JWT payloads use base64url encoding; Node's Buffer handles this natively
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const payload: { exp?: number } = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+        const payload: { exp?: number } = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
         if (typeof payload.exp !== 'number') {
             return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
         }
