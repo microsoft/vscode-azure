@@ -102,8 +102,6 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const quickPicks: MockQuickPick<vscode.QuickPickItem>[] = [];
     const inputBoxes: MockInputBox[] = [];
 
-    // ── window ──────────────────────────────────────────────
-
     const createQuickPick = mock.fn(() => {
         const qp = new MockQuickPick<vscode.QuickPickItem>();
         quickPicks.push(qp);
@@ -140,8 +138,6 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(undefined),
     );
 
-    // ── l10n ────────────────────────────────────────────────
-
     const t = mock.fn(
         (message: string, ...args: unknown[]) => {
             // eslint-disable-next-line @typescript-eslint/no-base-to-string
@@ -149,13 +145,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         }
     );
 
-    // ── QuickInputButtons ───────────────────────────────────
-
     const QuickInputButtons = {
         Back: { iconPath: { id: 'arrow-left' } } satisfies vscode.QuickInputButton,
     };
-
-    // ── TreeItemCollapsibleState ─────────────────────────────
 
     const TreeItemCollapsibleState = {
         None: 0,
@@ -163,23 +155,17 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         Expanded: 2,
     } satisfies typeof vscode.TreeItemCollapsibleState;
 
-    // ── workspace.getConfiguration ──────────────────────────
-
     const settings = new Map<string, unknown>();
 
     const getConfiguration = mock.fn(
         (section?: string) => new MockWorkspaceConfiguration(settings, section),
     );
 
-    // ── ConfigurationTarget ─────────────────────────────────
-
     const ConfigurationTarget = {
         Global: 1,
         Workspace: 2,
         WorkspaceFolder: 3,
     } satisfies typeof vscode.ConfigurationTarget;
-
-    // ── ThemeIcon / ThemeColor ───────────────────────────────
 
     class MockThemeIcon {
         constructor(public readonly id: string, public readonly color?: unknown) { }
@@ -189,13 +175,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         constructor(public readonly id: string) { }
     }
 
-    // ── env ──────────────────────────────────────────────────
-
     const openExternal = mock.fn(
         () => Promise.resolve(true),
     );
-
-    // ── commands ─────────────────────────────────────────────
 
     const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
 
@@ -206,13 +188,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
     );
 
-    // ── authentication ──────────────────────────────────────
-
     const getSession = mock.fn(
         () => Promise.resolve(undefined),
     );
-
-    // ── Assemble ────────────────────────────────────────────
 
     const mockVsCode = {
         authentication: {

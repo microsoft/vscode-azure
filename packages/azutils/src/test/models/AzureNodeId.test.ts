@@ -13,8 +13,6 @@ describe('AzureNodeId (unit)', () => {
         AzureNodeId.clearParseCache();
     });
 
-    // ── test() ──────────────────────────────────────────────────
-
     describe('test', () => {
         it('should return true for azr:// URIs', () => {
             expect(AzureNodeId.test('azr://user1@portal.azure.com')).to.be.true;
@@ -28,8 +26,6 @@ describe('AzureNodeId (unit)', () => {
             expect(AzureNodeId.test('')).to.be.false;
         });
     });
-
-    // ── parse() and toString() ──────────────────────────────────
 
     describe('parse + toString', () => {
         it('should round-trip an account node ID', () => {
@@ -82,8 +78,6 @@ describe('AzureNodeId (unit)', () => {
         });
     });
 
-    // ── parse() error cases ─────────────────────────────────────
-
     describe('parse errors', () => {
         it('should throw for non-azr:// URIs', () => {
             expect(() => AzureNodeId.parse('https://portal.azure.com')).to.throw('Not an azr://');
@@ -100,8 +94,6 @@ describe('AzureNodeId (unit)', () => {
             )).to.throw('Invalid azr:// URI fragment');
         });
     });
-
-    // ── parse() caching ─────────────────────────────────────────
 
     describe('parse caching', () => {
         it('should return the same instance for repeated parse calls', () => {
@@ -127,8 +119,6 @@ describe('AzureNodeId (unit)', () => {
             expect(a).to.not.equal(b);
         });
     });
-
-    // ── from() ──────────────────────────────────────────────────
 
     describe('from', () => {
         it('should create a node ID from an account', () => {
@@ -195,8 +185,6 @@ describe('AzureNodeId (unit)', () => {
         });
     });
 
-    // ── kind narrowing methods ──────────────────────────────────
-
     describe('narrowing methods', () => {
         it('account node ID has only isAccountNodeId true', () => {
             const nodeId = AzureNodeId.parse('azr://user1@portal.azure.com');
@@ -224,8 +212,6 @@ describe('AzureNodeId (unit)', () => {
         });
     });
 
-    // ── getGrouping() ───────────────────────────────────────────
-
     describe('getGrouping', () => {
         it('should return grouping data for resource group nodes', () => {
             const uri = 'azr://u@portal.azure.com/tenants/t/subscriptions/s/resourceGroups/myRg';
@@ -252,8 +238,6 @@ describe('AzureNodeId (unit)', () => {
             expect(nodeId.getGrouping()).to.be.undefined;
         });
     });
-
-    // ── toPortalUrl() ───────────────────────────────────────────
 
     describe('toPortalUrl', () => {
         it('should generate a portal URL for a subscription', () => {
@@ -298,8 +282,6 @@ describe('AzureNodeId (unit)', () => {
             expect(() => nodeId.toPortalUrl()).to.throw('Cannot create a portal URL for a virtual grouping');
         });
     });
-
-    // ── parentNodeId() ──────────────────────────────────────────
 
     describe('parentNodeId', () => {
         it('should return undefined for account nodes', () => {
