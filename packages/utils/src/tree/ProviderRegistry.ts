@@ -70,7 +70,6 @@ export abstract class ProviderRegistry<TResource, TProvider extends DataProvider
      * Find the first registered provider that can handle the given resource.
      */
     protected findProvider(resource: unknown): TProvider | undefined {
-        // TODO: for view providers, we are reparsing the AzureNodeId every call to `canHandle`...should improve that
         return this.registrations.find(r => r.canHandle(resource));
     }
 

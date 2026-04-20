@@ -5,8 +5,8 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import {
-    getLastPick, type IOutputChannel, RecursivePickStep,
-    type ExclusivePickManyOrCreate, type GenericPickOptions, type ITreeItem, type PickClassification, type PickContext
+    getLastPick, RecursivePickStep,
+    type ExclusivePickManyOrCreate, type GenericPickOptions, type IOutputChannel, type ITreeItem, type PickClassification, type PickContext
 } from '@microsoft/vscode-azure-utils';
 import { isAccount, isResourceGroup, isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../models/AzureNode';
 import { AzureNodeId } from '../models/AzureNodeId';
@@ -89,7 +89,6 @@ function classifyForResourceGroup(nodeId: AzureNodeId): PickClassification {
 /**
  * Creates a tree adapter for resource group picking that reads
  * from a {@linkcode ConcreteAzureNodeTree}.
- * TODO: is this terrible?
  */
 class ResourceGroupViewItemTree {
     public constructor(

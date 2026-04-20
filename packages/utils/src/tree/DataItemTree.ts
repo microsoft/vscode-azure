@@ -41,8 +41,6 @@ interface TreeNode<T> {
  * The tree is the single source of truth for the data layer -- the
  * `TreeDataProvider`s are view-only and read from it.
  *
- * TODO: add tests
- *
  * @typeParam T - The data item type stored in the tree.
  */
 export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implements Disposable {

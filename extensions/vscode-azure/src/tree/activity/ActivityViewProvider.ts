@@ -39,7 +39,6 @@ export class ActivityViewProvider implements ViewProvider<string> {
             parentActivity = this.dataTree.get(activityId);
 
             if (!parentActivity) {
-                // TODO: unexpected
                 throw new Error(`Activity with ID ${activityId} not found in cache`);
             }
         }
@@ -56,7 +55,6 @@ export class ActivityViewProvider implements ViewProvider<string> {
         const activity = this.dataTree.get(activityId);
 
         if (!activity) {
-            // TODO: unexpected
             throw new Error(`Activity with ID ${activityId} not found`);
         }
 

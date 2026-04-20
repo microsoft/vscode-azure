@@ -99,7 +99,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         const resource = this.cache.get(key);
         if (!resource) {
-            return new this.ctx.code.TreeItem(key); // TODO: throw?
+            throw new Error(`Resource with key ${key} not found in cache`);
         }
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
@@ -372,7 +372,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
     }
 }
 
-// TODO: can we eliminate this? Make the providers all return `AzureNodeId`?
+// TODO: future: can we eliminate this? Make the providers all return `AzureNodeId`?
 function toKey(node: AzureNode): string {
     return AzureNodeId.from(node).toString();
 }

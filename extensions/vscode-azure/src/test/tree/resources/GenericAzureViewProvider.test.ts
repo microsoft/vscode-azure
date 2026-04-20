@@ -216,12 +216,11 @@ describe('GenericAzureViewProvider (unit)', () => {
             expect(item.label).to.equal('Microsoft.Web/sites');
         });
 
-        it('should return a fallback tree item for an unknown key', () => {
+        it('should throw for an unknown key not in cache', () => {
             const provider = createProvider();
             const key = 'azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Web/sites/unknown';
 
-            const item = provider.getTreeItem(key);
-            expect(item.label).to.equal(key);
+            expect(() => provider.getTreeItem(key)).to.throw('not found in cache');
         });
     });
 

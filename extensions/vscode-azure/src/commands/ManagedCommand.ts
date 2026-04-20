@@ -11,5 +11,5 @@
  * prefix args followed by the args from VS Code.
  */
 export interface ManagedCommand<T = unknown> {
-    execute(...args: unknown[]): T | Promise<T>; // TODO: should we just pass IActionContext into this instead of the command constructor?
+    execute(...args: unknown[]): T | Promise<T>;
 }

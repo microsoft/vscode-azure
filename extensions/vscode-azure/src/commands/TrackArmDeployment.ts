@@ -5,7 +5,7 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
 import { ArmDeploymentDataProvider, parseDeploymentId } from '../tree/activity/ArmDeploymentDataProvider';
@@ -48,8 +48,7 @@ export class TrackArmDeployment implements ManagedCommand {
         });
 
         if (!rawInput) {
-            this.context.telemetry.properties.cancelStep = 'deploymentId';
-            return;
+            throw new CancellationError('Canceled', 'deploymentId');
         }
 
         const deploymentId = extractDeploymentId(rawInput);

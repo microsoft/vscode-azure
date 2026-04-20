@@ -21,6 +21,8 @@ import { isAcrRegistry } from './AcrRegistry';
  *   to the resource in-place.
  * - **`getChildren`**: stubbed -- will return repositories and tags once
  *   the data-plane client is integrated.
+ *
+ * TODO: this is a demonstration provider and needs to be removed
  */
 @injectable()
 export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
@@ -29,7 +31,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * Cached ARM management clients per subscription ID, so all calls for
      * the same subscription share one client instance.
      */
-    private readonly clientCache = new InflightMap<IAcrClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
+    private readonly clientCache = new InflightMap<IAcrClient>();
 
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
@@ -76,8 +78,6 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
 
     /**
      * @inheritdoc
-     *
-     * TODO: replace dummy data with real data-plane calls.
      */
     public getChildren(resource?: ConcreteAzureNode): ConcreteAzureNode[] {
         if (!resource) {

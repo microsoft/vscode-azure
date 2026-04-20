@@ -13,7 +13,6 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * information found in the workspace root (azure.yaml and
  * `azd env list`). Never actually prompts the user.
  */
-// TODO: Replace with AZD extension API when available
 export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
         private readonly code: IVsCode,

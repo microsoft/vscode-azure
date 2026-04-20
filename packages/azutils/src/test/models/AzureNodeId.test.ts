@@ -103,14 +103,6 @@ describe('AzureNodeId (unit)', () => {
             expect(a).to.equal(b);
         });
 
-        it('should return a fresh instance after evict()', () => {
-            const uri = 'azr://user1@portal.azure.com/tenants/t1';
-            const a = AzureNodeId.parse(uri);
-            AzureNodeId.evict(uri);
-            const b = AzureNodeId.parse(uri);
-            expect(a).to.not.equal(b);
-        });
-
         it('should return fresh instances after clearParseCache()', () => {
             const uri = 'azr://user1@portal.azure.com/tenants/t1';
             const a = AzureNodeId.parse(uri);

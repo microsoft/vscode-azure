@@ -25,7 +25,6 @@ const virtualGroupingPrefix = '~' as const;
  *  - Resource: `azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}`
  *  - Virtual Resource: `azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}#/{virtualType}/{virtualPath}`
  */
-// TODO: add tests for this class, especially the parsing logic
 export class AzureNodeId {
     private static readonly parseCache = new Map<string, AzureNodeId>();
 
@@ -55,17 +54,7 @@ export class AzureNodeId {
     }
 
     /**
-     * Removes a previously cached parse result. Call when a node is
-     * evicted from the tree so the cache does not grow without bound.
-     * // TODO: do we even need this?
-     */
-    public static evict(key: string): void {
-        AzureNodeId.parseCache.delete(key);
-    }
-
-    /**
      * Clears all cached parse results.
-     * // TODO: call on tree refresh? Do we even need this?
      */
     public static clearParseCache(): void {
         AzureNodeId.parseCache.clear();

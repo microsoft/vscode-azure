@@ -54,7 +54,6 @@ export class VsCodeExtensionCredential implements TokenCredential {
      * Acquire an access token for the given scopes via the VS Code
      * authentication API. Returns `null` when no session is available.
      */
-    // TODO: handle interactive challenge request (by pipeline? or errors?)
     public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
         const scopesArray = Array.isArray(scopes) ? scopes : [scopes];
 
@@ -67,7 +66,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
 
         const tenantId = options?.tenantId || this.options.tenantId;
         if (tenantId) {
-            scopesArray.push(`VSCODE_TENANT_ID:${tenantId}`); // TODO: right magic scope?
+            scopesArray.push(`VSCODE_TENANT:${tenantId}`);
         }
 
         this.options.output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} scopes=${JSON.stringify(scopesArray)}`);
@@ -76,19 +75,55 @@ export class VsCodeExtensionCredential implements TokenCredential {
         if (!session) {
             return null;
         } else {
+            const { expiresOnTimestamp, refreshAfterTimestamp } = getTokenExpiry(session.idToken);
+
             const scopes = JSON.stringify(scopesArray);
-            const msg = this.options.code?.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn=0', provider, scopes) // TODO: expiresOn
-                ?? `[auth] token acquired provider=${provider} scopes=${scopes} expiresOn=0`; // TODO: expiresOn
+            const msg = this.options.code?.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn={2}', provider, scopes, expiresOnTimestamp)
+                ?? `[auth] token acquired provider=${provider} scopes=${scopes} expiresOn=${expiresOnTimestamp}`;
             this.options.output?.info(msg);
 
             return {
                 token: session.accessToken,
-                expiresOnTimestamp: 0, // TODO: get from ID token
-                refreshAfterTimestamp: 0, // TODO: get?
+                expiresOnTimestamp,
+                refreshAfterTimestamp,
                 tokenType: 'Bearer',
             };
         }
     }
 
-    // TODO: interactive sign in method?
+    // TODO: future: interactive sign in method?
+}
+
+/**
+ * Best-effort extraction of `exp` from a JWT ID token. Returns `expiresOnTimestamp`
+ * in milliseconds and `refreshAfterTimestamp` at 2/3 of the remaining lifetime.
+ * Falls back to `0` for both if the token is missing or unparseable.
+ */
+function getTokenExpiry(idToken: string | undefined): { expiresOnTimestamp: number; refreshAfterTimestamp: number } {
+    if (!idToken) {
+        return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+    }
+
+    try {
+        const parts = idToken.split('.');
+        if (parts.length < 2 || !parts[1]) {
+            return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+        }
+
+        // JWT payloads use base64url encoding; Node's Buffer handles this natively
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const payload: { exp?: number } = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+        if (typeof payload.exp !== 'number') {
+            return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+        }
+
+        const expiresOnTimestamp = payload.exp * 1000;
+        const now = Date.now();
+        const remaining = expiresOnTimestamp - now;
+        const refreshAfterTimestamp = remaining > 0 ? now + Math.floor(remaining * 2 / 3) : expiresOnTimestamp;
+
+        return { expiresOnTimestamp, refreshAfterTimestamp };
+    } catch {
+        return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+    }
 }

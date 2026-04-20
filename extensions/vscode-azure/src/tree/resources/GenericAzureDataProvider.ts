@@ -45,7 +45,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      * Cached REST clients per subscription ID, so all calls for the same
      * subscription share one pipeline (and thus one {@linkcode DedupeRequestPolicy}).
      */
-    private readonly clientCache = new InflightMap<IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
+    private readonly clientCache = new InflightMap<IResourceClient>();
 
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];

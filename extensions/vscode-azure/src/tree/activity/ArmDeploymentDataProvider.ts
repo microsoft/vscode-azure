@@ -74,7 +74,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
     private readonly activePolls = new Set<string>();
-    private readonly clientCache = new InflightMap<IDeploymentClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
+    private readonly clientCache = new InflightMap<IDeploymentClient>();
 
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<ArmDeploymentActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
@@ -403,7 +403,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 }
 
 function toActivityStatus(provisioningState: ProvisioningState | undefined): Activity['status'] {
-    // TODO: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
+    // TODO: future: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
     switch (provisioningState?.toLowerCase()) {
         case 'succeeded':
             return 'Completed';
@@ -425,7 +425,7 @@ function toActivityStatus(provisioningState: ProvisioningState | undefined): Act
 
 function isTerminalState(provisioningState: ProvisioningState | undefined): boolean {
     const lower = provisioningState?.toLowerCase();
-    // TODO: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
+    // TODO: future: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
     return lower === 'succeeded' || lower === 'failed' || lower === 'canceled';
 }
 

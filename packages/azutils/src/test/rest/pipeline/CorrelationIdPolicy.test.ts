@@ -24,7 +24,7 @@ describe('CorrelationIdPolicy (unit)', () => {
         await executor.callWithTelemetryAndErrorHandling('test', async (context) => {
             const request = makeRequest();
             await policy.sendRequest(request, (req) => Promise.resolve(makeResponse(req)));
-            expect(request.headers.get('x-ms-correlation-request-id')).to.equal(context.telemetry.properties.correlationId);
+            expect(request.headers.get('x-ms-correlation-request-id')).to.equal(context.telemetry.properties['x-ms-correlation-request-id']);
         });
     });
 
