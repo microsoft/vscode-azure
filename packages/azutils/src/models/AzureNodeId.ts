@@ -54,17 +54,7 @@ export class AzureNodeId {
     }
 
     /**
-     * Removes a previously cached parse result. Call when a node is
-     * evicted from the tree so the cache does not grow without bound.
-     * // TODO: do we even need this?
-     */
-    public static evict(key: string): void {
-        AzureNodeId.parseCache.delete(key);
-    }
-
-    /**
      * Clears all cached parse results.
-     * // TODO: call on tree refresh? Do we even need this?
      */
     public static clearParseCache(): void {
         AzureNodeId.parseCache.clear();

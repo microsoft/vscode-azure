@@ -110,6 +110,5 @@ export type KnownTelemetryProperty = 'tree' | 'provider' | 'nodeType' | (string 
  * by {@linkcode IActionExecutor.callWithTelemetryAndErrorHandling}.
  */
 export interface TelemetryMeasurements extends Record<string, number | undefined> {
-    // TODO: All these need to match existing property names
     readonly duration?: number;
 }
