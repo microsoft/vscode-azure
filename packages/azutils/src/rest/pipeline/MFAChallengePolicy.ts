@@ -46,7 +46,7 @@ export class MFAChallengePolicy implements PipelinePolicy {
         if (initialResponse.status === 401 &&
             initialResponse.headers.has(wwwAuthenticateHeaderName) &&
             !retriedRequests.has(request)) {
-            this.output?.info('[rest] MFA challenge start');
+            this.output?.debug('[rest] MFA challenge start');
 
             if (context) {
                 context.telemetry.properties.challenge = 'true';
@@ -65,12 +65,12 @@ export class MFAChallengePolicy implements PipelinePolicy {
                     context.telemetry.properties.challengeSuccess = 'true';
                 }
                 request.headers.set(authorizationHeaderName, `Bearer ${newSession.accessToken}`);
-                this.output?.info('[rest] MFA challenge complete');
+                this.output?.debug('[rest] MFA challenge complete');
                 return next(request);
             } else if (context) {
                 context.telemetry.properties.challengeSuccess = 'false';
             }
-            this.output?.warn('[rest] MFA challenge aborted');
+            this.output?.debug('[rest] MFA challenge aborted');
         }
 
         return initialResponse;

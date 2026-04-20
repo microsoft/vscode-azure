@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionContext, ICommandRegistry, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICommandRegistry, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import { LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
@@ -26,44 +26,26 @@ import { TrackArmDeployment } from './TrackArmDeployment';
  */
 export function registerCommands(container: Container): void {
     const output = container.get(IOutputChannel);
-    const code = container.get(IVsCode);
-    let commandCount = 0;
 
     registerManagedCommand(container, output, 'azure.hello', Hello);
-    commandCount++;
 
     registerManagedCommand(container, output, 'vscode-azure/resources/refresh', RefreshResourcesView);
-    commandCount++;
     registerManagedCommand(container, output, 'vscode-azure/resources/groupBy', GroupBy);
-    commandCount++;
     registerManagedCommand(container, output, 'vscode-azure/resources/openInPortal', OpenInPortal);
-    commandCount++;
     registerManagedCommand(container, output, LoadMoreCommandId, LoadMore);
-    commandCount++;
 
     registerManagedCommand(container, output, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
-    commandCount++;
 
     registerManagedCommand(container, output, 'vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting, 'add');
-    commandCount++;
     registerManagedCommand(container, output, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
-    commandCount++;
     registerManagedCommand(container, output, 'vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
-    commandCount++;
 
     registerManagedCommand(container, output, 'vscode-azure/activity/trackArmDeployment', TrackArmDeployment);
-    commandCount++;
     registerManagedCommand(container, output, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
-    commandCount++;
     registerManagedCommand(container, output, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
-    commandCount++;
     registerManagedCommand(container, output, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
-    commandCount++;
 
     registerManagedCommand(container, output, 'vscode-azure/functions/create', CreateFunctionApp);
-    commandCount++;
-
-    output.info(code.l10n.t('[cmd] Registered {0} commands', commandCount));
 }
 
 /**

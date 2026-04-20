@@ -101,20 +101,17 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         if (!resource) {
             // Root: return all signed-in accounts
             const accounts = await this.subscriptionProvider.getAccounts() as ConcreteAzureNode[];
-            this.output.debug('[data] discovered accounts count=%d', accounts.length);
             return accounts;
         }
 
         switch (true) {
             case isAccount(resource): {
                 const tenants = await this.subscriptionProvider.getTenantsForAccount(resource);
-                this.output.debug('[data] discovered tenants account=%s count=%d', resource.id, tenants.length);
                 return tenants;
             }
 
             case isTenant(resource): {
                 const subscriptions = await this.subscriptionProvider.getSubscriptionsForTenant(resource);
-                this.output.debug('[data] discovered subscriptions tenant=%s count=%d', resource.tenantId, subscriptions.length);
                 return subscriptions;
             }
 

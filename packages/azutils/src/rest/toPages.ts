@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PagedAsyncIterableIterator } from '@azure/core-paging';
-import type { IOutputChannel, Page } from '@microsoft/vscode-azure-utils';
+import type { Page } from '@microsoft/vscode-azure-utils';
 
 /**
  * Converts a `PagedAsyncIterableIterator<T>` from an Azure SDK into an
@@ -18,7 +18,6 @@ import type { IOutputChannel, Page } from '@microsoft/vscode-azure-utils';
 export function toPages<T>(
     iterator: PagedAsyncIterableIterator<T, T[]>,
     getContinuationToken: (page: unknown) => string | undefined,
-    output?: IOutputChannel,
 ): AsyncIterable<Page<T>>;
 
 /**
@@ -35,25 +34,17 @@ export function toPages<T, U>(
     iterator: PagedAsyncIterableIterator<T, T[]>,
     getContinuationToken: (page: unknown) => string | undefined,
     map: (item: T) => U,
-    output?: IOutputChannel,
 ): AsyncIterable<Page<U>>;
 
 export async function* toPages<T, U>(
     iterator: PagedAsyncIterableIterator<T, T[]>,
     getContinuationToken: (page: unknown) => string | undefined,
-    mapOrOutput?: ((item: T) => U) | IOutputChannel,
-    outputOrUndefined?: IOutputChannel,
+    map?: (item: T) => U,
 ): AsyncIterable<Page<T | U>> {
-    const map = typeof mapOrOutput === 'function' ? mapOrOutput : undefined;
-    const output = typeof mapOrOutput === 'function' ? outputOrUndefined : mapOrOutput;
-    let pageIndex = 0;
     for await (const items of iterator.byPage()) {
-        const continuationToken = getContinuationToken(items);
-        output?.trace('[rest] page index=%d count=%d hasContinuation=%o', pageIndex, items.length, !!continuationToken);
         yield {
             items: map ? items.map(map) : items,
-            hasMore: !!continuationToken,
+            hasMore: !!getContinuationToken(items),
         };
-        pageIndex++;
     }
 }

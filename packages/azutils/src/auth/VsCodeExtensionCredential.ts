@@ -45,8 +45,6 @@ const DefaultEnvironment = Environment.AzureCloud;
  * {@linkcode VsCodeExtensionCredentialOptions.environment}.
  */
 export class VsCodeExtensionCredential implements TokenCredential {
-    private readonly sessionCache = new Map<string, vscode.AuthenticationSession>();
-
     public constructor(private readonly options: VsCodeExtensionCredentialOptions) { }
 
     /**
@@ -70,17 +68,6 @@ export class VsCodeExtensionCredential implements TokenCredential {
         }
 
         this.options.output?.debug('[auth] getToken start provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
-        const cacheKey = `${provider}|${scopesArray.join(' ')}`;
-        const cachedSession = this.sessionCache.get(cacheKey);
-        if (cachedSession) {
-            this.options.output?.debug('[auth] session cache hit provider=%s tenant=%s', provider, tenantId ?? '<default>');
-            return {
-                token: cachedSession.accessToken,
-                expiresOnTimestamp: 0,
-                refreshAfterTimestamp: 0,
-                tokenType: 'Bearer',
-            };
-        }
 
         let session: vscode.AuthenticationSession | undefined;
         try {
@@ -108,7 +95,6 @@ export class VsCodeExtensionCredential implements TokenCredential {
         if (!session) {
             return null;
         } else {
-            this.sessionCache.set(cacheKey, session);
             this.options.output?.info('[auth] token acquired provider=%s scopes=%o expiresOn=%d', provider, scopesArray, 0);
             return {
                 token: session.accessToken,

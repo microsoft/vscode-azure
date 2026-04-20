@@ -54,10 +54,7 @@ export interface IDeploymentClient {
 export class DeploymentClient implements IDeploymentClient {
     private static sdk: typeof import('@azure/arm-resourcesdeployments') | undefined;
 
-    private constructor(
-        private readonly inner: DeploymentsClient,
-        private readonly output: IOutputChannel,
-    ) { }
+    private constructor(private readonly inner: DeploymentsClient) { }
 
     /**
      * Create a new {@linkcode DeploymentClient} instance. Lazily imports
@@ -79,7 +76,7 @@ export class DeploymentClient implements IDeploymentClient {
             options,
             output,
         );
-        return new DeploymentClient(client, output);
+        return new DeploymentClient(client);
     }
 
     public get deployments(): IDeploymentClient['deployments'] {
@@ -94,7 +91,6 @@ export class DeploymentClient implements IDeploymentClient {
         return toPages(
             this.inner.deploymentOperations.listAtScope(scope, deploymentName, options),
             DeploymentClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
-            this.output,
         );
     }
 }

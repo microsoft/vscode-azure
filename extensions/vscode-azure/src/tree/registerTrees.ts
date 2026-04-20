@@ -39,18 +39,17 @@ export function registerTrees(container: Container): void {
     const output = container.get(IOutputChannel);
     const code = container.get(IVsCode);
     output.debug('[view] register resources tree');
-    registerResourcesTree(container, output);
+    registerResourcesTree(container);
     output.debug('[view] register activity tree');
-    registerActivityTree(container, output);
+    registerActivityTree(container);
     output.info(code.l10n.t('[view] Registered {0} tree views', 2));
 }
 
 // #region Resources tree
 
-function registerResourcesTree(container: Container, output: IOutputChannel): void {
+function registerResourcesTree(container: Container): void {
     // Resources view: data layer
-    bindAzureViewDataProviders(container, output);
-    output.debug('[view] bind %s', 'IAzureViewDataTree');
+    bindAzureViewDataProviders(container);
     container.bind(IAzureViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<ConcreteAzureNode>(
             AzureResourceTreeViewId,
@@ -68,8 +67,7 @@ function registerResourcesTree(container: Container, output: IOutputChannel): vo
     }).inSingletonScope().onActivation(pushDisposable);
 
     // Resources view: view layer
-    bindAzureViewViewProviders(container, output);
-    output.debug('[view] bind %s', 'IAzureViewViewItemTree');
+    bindAzureViewViewProviders(container);
     container.bind(IAzureViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, ConcreteAzureNode>(
             AzureResourceTreeViewId,
@@ -92,7 +90,6 @@ function registerResourcesTree(container: Container, output: IOutputChannel): vo
     }).inSingletonScope().onActivation(pushDisposable);
 
     // Resources view: VSCode tree view
-    output.debug('[view] bind %s', 'IAzureResourceTreeView');
     container.bind(IAzureResourceTreeView).toDynamicValue(context => {
         const code = context.get(IVsCode);
         return code.window.createTreeView(AzureResourceTreeViewId, {
@@ -111,19 +108,16 @@ function registerResourcesTree(container: Container, output: IOutputChannel): vo
  * @internal - Not intended for use outside this file
  */
 const IAzureViewDataProviders: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IAzureViewDataProviders');
-function bindAzureViewDataProviders(container: Container, output: IOutputChannel): void {
+function bindAzureViewDataProviders(container: Container): void {
     // Registration order matters: specific providers first, generic fallback last.
     // ProviderRegistry.findProvider() returns the first match.
-    output.debug('[view] register data provider %s', AcrDataProvider.name);
     container.bind(IAzureViewDataProviders).to(AcrDataProvider).onActivation(pushDisposable);
 
     // Bind FunctionAppDataProvider as a singleton so commands can inject it
     // directly for cached setting reads/writes, then alias to the multi-bound ID.
-    output.debug('[view] register data provider %s', FunctionAppDataProvider.name);
     container.bind(FunctionAppDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
     container.bind(IAzureViewDataProviders).toService(FunctionAppDataProvider);
 
-    output.debug('[view] register data provider %s', GenericAzureDataProvider.name);
     container.bind(IAzureViewDataProviders).to(GenericAzureDataProvider).onActivation(pushDisposable);
 }
 
@@ -132,14 +126,11 @@ function bindAzureViewDataProviders(container: Container, output: IOutputChannel
  * @internal - Not intended for use outside this file
  */
 const IAzureViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IAzureViewViewProviders');
-function bindAzureViewViewProviders(container: Container, output: IOutputChannel): void {
+function bindAzureViewViewProviders(container: Container): void {
     // Registration order matters: specific providers first, generic fallback last.
     // ProviderRegistry.findProvider() returns the first match.
-    output.debug('[view] register view provider %s', AcrViewProvider.name);
     container.bind(IAzureViewViewProviders).to(AcrViewProvider).onActivation(pushDisposable);
-    output.debug('[view] register view provider %s', FunctionAppViewProvider.name);
     container.bind(IAzureViewViewProviders).to(FunctionAppViewProvider).onActivation(pushDisposable);
-    output.debug('[view] register view provider %s', GenericAzureViewProvider.name);
     container.bind(IAzureViewViewProviders).to(GenericAzureViewProvider).onActivation(pushDisposable);
 }
 
@@ -147,11 +138,10 @@ function bindAzureViewViewProviders(container: Container, output: IOutputChannel
 
 // #region Activity tree
 
-function registerActivityTree(container: Container, output: IOutputChannel): void {
+function registerActivityTree(container: Container): void {
     // Activity view: data layer
     // Bind each provider as a singleton to its own class so commands can inject them directly.
-    bindActivityViewDataProviders(container, output);
-    output.debug('[view] bind %s', 'IActivityViewDataTree');
+    bindActivityViewDataProviders(container);
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
             ActivityTreeViewId,
@@ -169,8 +159,7 @@ function registerActivityTree(container: Container, output: IOutputChannel): voi
     }).inSingletonScope().onActivation(pushDisposable);
 
     // Activity view: view layer
-    bindActivityViewViewProviders(container, output);
-    output.debug('[view] bind %s', 'IActivityViewViewItemTree');
+    bindActivityViewViewProviders(container);
     container.bind(IActivityViewViewItemTree).toDynamicValue(context => {
         const viewItemTree = new ViewItemTree<string, Activity>(
             ActivityTreeViewId,
@@ -193,7 +182,6 @@ function registerActivityTree(container: Container, output: IOutputChannel): voi
     }).inSingletonScope().onActivation(pushDisposable);
 
     // Activity view: VSCode tree view
-    output.debug('[view] bind %s', 'IActivityTreeView');
     container.bind(IActivityTreeView).toDynamicValue(context => {
         const code = context.get(IVsCode);
         return code.window.createTreeView(ActivityTreeViewId, {
@@ -208,29 +196,24 @@ function registerActivityTree(container: Container, output: IOutputChannel): voi
 }
 
 const IActivityViewDataProviders: ServiceIdentifier<DataProvider<Activity>> = Symbol.for('IActivityViewDataProviders');
-function bindActivityViewDataProviders(container: Container, output: IOutputChannel): void {
+function bindActivityViewDataProviders(container: Container): void {
     // Bind each provider as a singleton to its own class first, then alias
     // to IActivityViewDataProviders so they can be resolved both individually
     // (for commands that call track methods) and collectively (for the data tree).
-    output.debug('[view] register data provider %s', ArmDeploymentDataProvider.name);
     container.bind(ArmDeploymentDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
     container.bind(IActivityViewDataProviders).toService(ArmDeploymentDataProvider);
 
-    output.debug('[view] register data provider %s', CodeDeploymentDataProvider.name);
     container.bind(CodeDeploymentDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
     container.bind(IActivityViewDataProviders).toService(CodeDeploymentDataProvider);
 
-    output.debug('[view] register data provider %s', GenericActivityDataProvider.name);
     container.bind(GenericActivityDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
     container.bind(IActivityViewDataProviders).toService(GenericActivityDataProvider);
 }
 
 const IActivityViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IActivityViewViewProviders');
-function bindActivityViewViewProviders(container: Container, output: IOutputChannel): void {
+function bindActivityViewViewProviders(container: Container): void {
     // Registration order matters: specific providers first, generic fallback last.
-    output.debug('[view] register view provider %s', ArmDeploymentViewProvider.name);
     container.bind(IActivityViewViewProviders).to(ArmDeploymentViewProvider).onActivation(pushDisposable);
-    output.debug('[view] register view provider %s', ActivityViewProvider.name);
     container.bind(IActivityViewViewProviders).to(ActivityViewProvider).onActivation(pushDisposable);
 }
 

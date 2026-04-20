@@ -60,7 +60,6 @@ export class ResourceClient implements IResourceClient {
     private constructor(
         private readonly inner: ResourceManagementClient,
         private readonly subscription: AzureSubscription,
-        private readonly output: IOutputChannel,
     ) { }
 
     /**
@@ -83,7 +82,7 @@ export class ResourceClient implements IResourceClient {
             options,
             output,
         );
-        return new ResourceClient(inner, subscription, output);
+        return new ResourceClient(inner, subscription);
     }
 
     public get resourceGroups(): IResourceClient['resourceGroups'] {
@@ -105,7 +104,6 @@ export class ResourceClient implements IResourceClient {
                     groupingValue: resourceGroup.name,
                 });
             },
-            this.output,
         );
     }
 
@@ -114,7 +112,6 @@ export class ResourceClient implements IResourceClient {
             this.inner.resources.listByResourceGroup(resourceGroupName, options),
             ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
             r => attachMetadata(r, this.subscription),
-            this.output,
         );
     }
 }

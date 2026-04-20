@@ -219,7 +219,6 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
      */
     private async getRootChildren(): Promise<string[]> {
         let nodes = await this.cache.getChildren(undefined);
-        this.output.debug('[view] root discovery accounts count=%d', nodes.length);
         this.rootKind = 'account';
         this.isOneRootSub = false;
 
@@ -229,14 +228,12 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             this.output.debug('[view] skipping account level');
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'tenant';
-            this.output.debug('[view] root discovery tenants count=%d', nodes.length);
         }
 
         if (skip && nodes.length === 1 && isTenant(nodes[0])) {
             this.output.debug('[view] skipping tenant level');
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'subscription';
-            this.output.debug('[view] root discovery subscriptions count=%d', nodes.length);
 
             if (nodes.length === 1) {
                 this.isOneRootSub = true;

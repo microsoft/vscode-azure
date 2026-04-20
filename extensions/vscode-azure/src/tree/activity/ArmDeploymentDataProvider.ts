@@ -214,7 +214,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                             activity.status = toActivityStatus(provisioningState);
                             activity.description = provisioningState;
                             if (activity.status !== previousStatus) {
-                                this.output.info('[activity] deployment status transition deployment=%s status=%s', activity.id, activity.status);
+                                this.output.debug('[activity] deployment status transition deployment=%s status=%s', activity.id, activity.status);
                             }
                         }
 
@@ -225,7 +225,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
                         if (isTerminalState(provisioningState)) {
                             activity.endTime = new Date();
-                            this.output.info('[activity] deployment reached terminal status deployment=%s status=%s', activity.id, activity.status);
+                            this.output.debug('[activity] deployment reached terminal status deployment=%s status=%s', activity.id, activity.status);
                             this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
                             return;
                         }

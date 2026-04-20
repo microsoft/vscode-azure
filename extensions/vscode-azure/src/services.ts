@@ -5,7 +5,7 @@
 
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
-import { type DataItemTree, Disposable, IExtensionContext, type IOutputChannel, type ViewItemTree } from '@microsoft/vscode-azure-utils';
+import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { Activity } from './tree/activity/Activity';
@@ -59,9 +59,4 @@ export function pushDisposable<T>(context: ResolutionContext, injectable: T): T 
         context.get(IExtensionContext).subscriptions.push(injectable);
     }
     return injectable;
-}
-
-/** Emits a trace line for a DI binding registration. */
-export function traceBinding(output: IOutputChannel, bindingName: string): void {
-    output.trace('[activate] binding %s', bindingName);
 }
