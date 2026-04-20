@@ -34,7 +34,7 @@ export class CorrelationIdPolicy implements PipelinePolicy {
         if (context) {
             const correlationId = context.telemetry.properties.correlationId;
             request.headers.set(correlationIdHeaderName, correlationId);
-            this.output?.trace('[rest] attached correlation id=%s', correlationId);
+            this.output?.trace(`[rest] attached correlation id=${correlationId}`);
         }
         return next(request);
     }

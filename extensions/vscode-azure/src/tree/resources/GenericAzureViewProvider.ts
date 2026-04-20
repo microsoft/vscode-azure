@@ -255,7 +255,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 return [];
             }
             const groups = await this.groupResources(subscription);
-            this.output.debug('[view] grouped subscription=%s strategy=%s groups=%d', subscription.subscriptionId, this.groupingStrategy, groups.size);
+            this.output.debug(`[view] grouped subscription=${subscription.subscriptionId} strategy=${this.groupingStrategy} groups=${groups.size}`);
             return [...groups.keys()].sort();
         }
 
@@ -268,7 +268,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 return [];
             }
             const groups = await this.groupResources(subscription);
-            this.output.debug('[view] virtual group children subscription=%s group=%s count=%d', subscription.subscriptionId, key, groups.get(key)?.length ?? 0);
+            this.output.debug(`[view] virtual group children subscription=${subscription.subscriptionId} group=${key} count=${groups.get(key)?.length ?? 0}`);
             return groups.get(key) ?? [];
         }
 
@@ -298,7 +298,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         // the cache on the next expansion -- no flattening needed.
         if (this.groupingStrategy === 'resourceGroup') {
             const resourceGroups = await this.cache.getChildren(sub);
-            this.output.debug('[view] resource-group discovery subscription=%s count=%d', subscription.subscriptionId, resourceGroups.length);
+            this.output.debug(`[view] resource-group discovery subscription=${subscription.subscriptionId} count=${resourceGroups.length}`);
             const groups = new Map<string, string[]>();
             for (const rg of resourceGroups) {
                 groups.set(toKey(rg), []);
@@ -310,7 +310,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         // (exhausting pagination) so the complete set can be bucketed.
         await this.cache.loadAll(sub);
         const resourceGroups = await this.cache.getChildren(sub);
-        this.output.debug('[view] flattened resource groups subscription=%s count=%d', subscription.subscriptionId, resourceGroups.length);
+        this.output.debug(`[view] flattened resource groups subscription=${subscription.subscriptionId} count=${resourceGroups.length}`);
 
         // TODO: concurrency limits
         await Promise.all(resourceGroups.map(rg => this.cache.loadAll(rg)));
@@ -318,7 +318,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         const allResources = (
             await Promise.all(resourceGroups.map(rg => this.cache.getChildren(rg)))
         ).flat().filter((r): r is GenericResource => isGenericResource(r) && !isResourceGroup(r));
-        this.output.debug('[view] flattened resources subscription=%s count=%d strategy=%s', subscription.subscriptionId, allResources.length, this.groupingStrategy);
+        this.output.debug(`[view] flattened resources subscription=${subscription.subscriptionId} count=${allResources.length} strategy=${this.groupingStrategy}`);
 
         const groups = new Map<string, string[]>();
         for (const resource of allResources) {

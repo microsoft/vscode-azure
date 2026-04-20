@@ -98,7 +98,7 @@ class ResourceGroupViewItemTree {
     ) { }
 
     public async getChildren(key?: string): Promise<string[]> {
-        this.output?.debug('[wizard] fetch resource-group picker children start key=%s', key ?? '<root>');
+        this.output?.debug(`[wizard] fetch resource-group picker children start key=${key ?? '<root>'}`);
         let node: ConcreteAzureNode | undefined = undefined;
         if (key) {
             node = this.dataItemTree.get(key);
@@ -107,7 +107,7 @@ class ResourceGroupViewItemTree {
             }
         }
         const children = (await this.dataItemTree.getChildren(node)).map(child => AzureNodeId.from(child).toString());
-        this.output?.debug('[wizard] fetch resource-group picker children done key=%s count=%d', key ?? '<root>', children.length);
+        this.output?.debug(`[wizard] fetch resource-group picker children done key=${key ?? '<root>'} count=${children.length}`);
         return children;
     }
 

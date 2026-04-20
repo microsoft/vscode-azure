@@ -177,7 +177,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
             while (!abortSignal.aborted) {
                 let nextPollMs = 10 * 1000; // Default to 10s if server doesn't provide guidance
-                this.output.debug('[activity] poll cycle start deployment=%s', activity.id);
+                this.output.debug(`[activity] poll cycle start deployment=${activity.id}`);
 
                 try {
                     await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
@@ -214,7 +214,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                             activity.status = toActivityStatus(provisioningState);
                             activity.description = provisioningState;
                             if (activity.status !== previousStatus) {
-                                this.output.debug('[activity] deployment status transition deployment=%s status=%s', activity.id, activity.status);
+                                this.output.debug(`[activity] deployment status transition deployment=${activity.id} status=${activity.status}`);
                             }
                         }
 
@@ -225,7 +225,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
                         if (isTerminalState(provisioningState)) {
                             activity.endTime = new Date();
-                            this.output.debug('[activity] deployment reached terminal status deployment=%s status=%s', activity.id, activity.status);
+                            this.output.debug(`[activity] deployment reached terminal status deployment=${activity.id} status=${activity.status}`);
                             this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
                             return;
                         }
@@ -241,7 +241,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     abortSignal.throwIfAborted();
                     // Swallow other probably-transient errors and retry on next poll
                     const message = error instanceof Error ? error.message : String(error);
-                    this.output.warn('[activity] polling error deployment=%s message=%s', activity.id, message);
+                    this.output.warn(`[activity] polling error deployment=${activity.id} message=${message}`);
                 }
 
                 // Wait for the next poll interval

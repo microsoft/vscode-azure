@@ -39,7 +39,7 @@ export function createAzureClient<TClient extends ServiceClient, TOptions extend
     output?: IOutputChannel,
 ): TClient {
     const { credential, resolvedOptions } = resolveCredentialArgs<TOptions>(credentialOrSubscription, options);
-    output?.debug('[rest] create client %s', clientCtor.name);
+    output?.debug(`[rest] create client ${clientCtor.name}`);
     return new clientCtor(credential, applyDefaults(ctx, executor, resolvedOptions, output));
 }
 
@@ -77,7 +77,7 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
 ): TClient {
     const { credential, subscriptionId, resolvedOptions } = resolveSubscriptionArgs<TOptions>(credentialOrSubscription, subscriptionIdOrOptions, optionsOrUndefined);
     const output = outputOrUndefined;
-    output?.debug('[rest] create subscription client %s subscription=%s', clientCtor.name, subscriptionId);
+    output?.debug(`[rest] create subscription client ${clientCtor.name} subscription=${subscriptionId}`);
     return new clientCtor(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions, output));
 }
 
@@ -128,7 +128,7 @@ export function createAzureRestSubscriptionClient<TClient extends RestClient, TO
 ): TClient {
     const { credential, subscriptionId, resolvedOptions } = resolveSubscriptionArgs<TOptions>(credentialOrSubscription, subscriptionIdOrOptions, optionsOrUndefined);
     const output = outputOrUndefined;
-    output?.debug('[rest] create rest subscription client %s subscription=%s', getClient.name, subscriptionId);
+    output?.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
     return getClient(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions, output));
 }
 

@@ -112,13 +112,13 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
             case isSubscription(resource): {
                 const client = await this.getOrCreateClient(resource);
-                this.output.debug('[data] discover resource groups subscription=%s pageSize=%d', resource.subscriptionId, this.pageSize);
+                this.output.debug(`[data] discover resource groups subscription=${resource.subscriptionId} pageSize=${this.pageSize}`);
                 return client.resourceGroups.list({ top: this.pageSize });
             }
 
             case isResourceGroup(resource): {
                 const client = await this.getOrCreateClient(resource.subscription);
-                this.output.debug('[data] discover resources resourceGroup=%s/%s pageSize=%d', resource.subscription.subscriptionId, resource.name, this.pageSize);
+                this.output.debug(`[data] discover resources resourceGroup=${resource.subscription.subscriptionId}/${resource.name} pageSize=${this.pageSize}`);
                 return client.resources.listByResourceGroup(resource.name, { top: this.pageSize });
             }
 

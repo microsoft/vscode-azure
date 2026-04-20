@@ -66,7 +66,7 @@ Debug and trace output to the output channel is exempt from localization.
 Use `IOutputChannel` directly via DI for extension logging. Do not add a wrapper class, do not fold `IOutputChannel` into `IExtensionContext`, and do not add a log-level setting (users control this from VS Code's output-channel log level UI).
 
 - Prefix every line with a bracketed subsystem: `[activate]`, `[cmd]`, `[data]`, `[view]`, `[cache]`, `[rest]`, `[auth]`, `[wizard]`, `[activity]`
-- Use printf-style calls (for example `output.debug('[cmd] %s start', id)`)
+- Use supported string interpolation (for example `output.debug(\`[cmd] ${id} start\`)`)
 - Pass `Error` objects directly to `output.error(...)`
 - Levels:
   - `error`: user-visible failure
@@ -78,7 +78,7 @@ Use `IOutputChannel` directly via DI for extension logging. Do not add a wrapper
 - Never log PII/secrets (tokens, auth secrets, request/response bodies, user emails/display names, file contents). Resource IDs/names are allowed.
 
 ```typescript
-output.debug('[cmd] %s start', callbackId);
+output.debug(`[cmd] ${callbackId} start`);
 ```
 
 ## Promises

@@ -118,9 +118,9 @@ function createLoggedTree(
     return {
         ...tree,
         getChildren: async (key?: string) => {
-            output?.debug('[wizard] fetch resource picker children start key=%s', key ?? '<root>');
+            output?.debug(`[wizard] fetch resource picker children start key=${key ?? '<root>'}`);
             const children = await tree.getChildren(key) ?? [];
-            output?.debug('[wizard] fetch resource picker children done key=%s count=%d', key ?? '<root>', children.length);
+            output?.debug(`[wizard] fetch resource picker children done key=${key ?? '<root>'} count=${children.length}`);
             return children;
         },
     };

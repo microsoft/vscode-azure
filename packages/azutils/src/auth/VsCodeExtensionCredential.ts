@@ -67,13 +67,13 @@ export class VsCodeExtensionCredential implements TokenCredential {
             scopesArray.push(`VSCODE_TENANT_ID:${tenantId}`); // TODO: right magic scope?
         }
 
-        this.options.output?.debug('[auth] getToken start provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
+        this.options.output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} scopes=${JSON.stringify(scopesArray)}`);
         const session = await this.options.authentication.getSession(provider, scopesArray, this.options);
 
         if (!session) {
             return null;
         } else {
-            this.options.output?.info('[auth] token acquired provider=%s scopes=%o expiresOn=%d', provider, scopesArray, 0);
+            this.options.output?.info(`[auth] token acquired provider=${provider} scopes=${JSON.stringify(scopesArray)} expiresOn=0`);
             return {
                 token: session.accessToken,
                 expiresOnTimestamp: 0, // TODO: get from ID token
