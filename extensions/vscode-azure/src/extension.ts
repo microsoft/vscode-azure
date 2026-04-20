@@ -55,7 +55,8 @@ export async function activateInternal(
     containerOverride?: Container,
 ): Promise<void> {
     const container = containerOverride ?? setUpContainer(extensionContext);
-    await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
+
+    return await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
         activateContext.telemetry.isUserEvent = false;
 

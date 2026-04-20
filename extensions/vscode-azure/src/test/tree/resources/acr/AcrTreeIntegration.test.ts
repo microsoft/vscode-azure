@@ -6,7 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode, type IAcrClientProvider, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { ActionExecutor, DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, DebugOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createMockVsCode, DebugOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
@@ -69,6 +69,7 @@ describe('ACR Tree Integration (integration)', () => {
         const executor = new ActionExecutor(new NullTelemetryReporter());
         const output = new DebugOutputChannel('test');
         const mockVscode = createMockVsCode();
+        const mockCtx = createMockCodeContext();
         const code = mockVscode.vscode;
 
         // Data layer
@@ -132,7 +133,7 @@ describe('ACR Tree Integration (integration)', () => {
         );
 
         const genericViewProvider = new GenericAzureViewProvider(
-            code,
+            mockCtx.ctx,
             executor,
             output,
             dataTree,

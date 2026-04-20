@@ -6,7 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, DebugOutputChannel, NullTelemetryReporter, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, DebugOutputChannel, NullTelemetryReporter, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
@@ -14,7 +14,7 @@ import { ConfigurationSection } from '../../../constants';
 import { GenericAzureViewProvider } from '../../../tree/resources/GenericAzureViewProvider';
 
 describe('GenericAzureViewProvider (unit)', () => {
-    const mockVsCode = createMockVsCode();
+    const mockCodeContext = createMockCodeContext();
 
     function createProvider(
         nodes?: ConcreteAzureNode[],
@@ -40,7 +40,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(mockVsCode.vscode, executor, output, mockCache as never);
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, output, mockCache as never);
     }
 
     describe('canHandle', () => {
@@ -149,7 +149,7 @@ describe('GenericAzureViewProvider (unit)', () => {
                 childrenMap,
             );
 
-            const roots = await withSettings(mockVsCode, { [`${ConfigurationSection}.alwaysShowAccountNodes`]: true }, () => provider.getChildren());
+            const roots = await withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.alwaysShowAccountNodes`]: true }, () => provider.getChildren());
             expect(roots).to.have.length(1);
             expect(AzureNodeId.parse(roots[0]).isAccountNodeId()).to.be.true;
         });
@@ -266,7 +266,7 @@ describe('GenericAzureViewProvider (unit)', () => {
                 childrenMap,
             );
 
-            await withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+            await withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
                 await provider.getChildren();
 
                 const resKey = AzureNodeId.from(res).toString();
@@ -322,7 +322,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         }
 
         it('should group by resource type', () =>
-            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+            withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
                 const provider = createGroupingProvider();
                 const subKey = AzureNodeId.from(sub).toString();
 
@@ -341,7 +341,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         );
 
         it('should group by location', () =>
-            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'location' }, async () => {
+            withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'location' }, async () => {
                 const provider = createGroupingProvider();
                 const subKey = AzureNodeId.from(sub).toString();
 
@@ -355,7 +355,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         );
 
         it('should group by ARM tag', () =>
-            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'armTag', [`${ConfigurationSection}.groupByTag`]: 'env' }, async () => {
+            withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'armTag', [`${ConfigurationSection}.groupByTag`]: 'env' }, async () => {
                 const provider = createGroupingProvider();
                 const subKey = AzureNodeId.from(sub).toString();
 
@@ -369,7 +369,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         );
 
         it('should put untagged resources in a no-tag bucket', () =>
-            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'armTag', [`${ConfigurationSection}.groupByTag`]: 'team' }, async () => {
+            withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'armTag', [`${ConfigurationSection}.groupByTag`]: 'team' }, async () => {
                 const provider = createGroupingProvider();
                 const subKey = AzureNodeId.from(sub).toString();
 
@@ -387,7 +387,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         );
 
         it('should return resource keys when expanding a virtual group', () =>
-            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+            withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
                 const provider = createGroupingProvider();
                 const subKey = AzureNodeId.from(sub).toString();
 
@@ -410,7 +410,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         );
 
         it('should still return resource groups when groupBy is resourceGroup', () =>
-            withSettings(mockVsCode, { [`${ConfigurationSection}.groupBy`]: 'resourceGroup' }, async () => {
+            withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'resourceGroup' }, async () => {
                 const provider = createGroupingProvider();
                 const subKey = AzureNodeId.from(sub).toString();
 
