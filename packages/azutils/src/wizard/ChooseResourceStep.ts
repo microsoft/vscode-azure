@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    getLastPick, type IOutputChannel, RecursivePickStep,
+    getLastPick, RecursivePickStep,
     type ExclusivePickManyOrCreate, type GenericPickOptions, type PickClassification, type PickContext
 } from '@microsoft/vscode-azure-utils';
 import { isGenericResource, type ConcreteAzureNodeTree } from '../models/AzureNode';
@@ -25,7 +25,6 @@ export interface ChooseResourceContext<T extends GenericResource = GenericResour
 interface ChooseResourceOptions extends GenericPickOptions<string> {
     readonly dataItemTree: ConcreteAzureNodeTree;
     readonly logicalType: string;
-    readonly output?: IOutputChannel;
 }
 
 /**
@@ -35,11 +34,9 @@ interface ChooseResourceOptions extends GenericPickOptions<string> {
  */
 export class ChooseResourceStep<TResource extends GenericResource, TContext extends ChooseResourceContext<TResource> = ChooseResourceContext<TResource>> extends RecursivePickStep<string, ChooseResourceOptions> {
     public constructor(options: Omit<ChooseResourceOptions, 'classify'> & ExclusivePickManyOrCreate<string>) {
-        const tree = createLoggedTree(options.tree, options.output);
         super(
             {
                 ...options,
-                tree,
                 classify: (item: string) => classifyForResource(AzureNodeId.parse(item), item, options),
             } as ChooseResourceOptions & ExclusivePickManyOrCreate<string>,
             ChooseResourceStep
@@ -109,19 +106,4 @@ function isMatchingResourceTypeGroup(nodeId: AzureNodeId, logicalType: string): 
     const grouping = nodeId.getGrouping();
     return grouping?.groupingStrategy === 'resourceType'
         && grouping.groupingValue.toLowerCase() === logicalType.toLowerCase();
-}
-
-function createLoggedTree(
-    tree: GenericPickOptions<string>['tree'],
-    output?: IOutputChannel,
-): GenericPickOptions<string>['tree'] {
-    return {
-        ...tree,
-        getChildren: async (key?: string) => {
-            output?.debug(`[wizard] fetch resource picker children start key=${key ?? '<root>'}`);
-            const children = await tree.getChildren(key) ?? [];
-            output?.debug(`[wizard] fetch resource picker children done key=${key ?? '<root>'} count=${children.length}`);
-            return children;
-        },
-    };
 }
