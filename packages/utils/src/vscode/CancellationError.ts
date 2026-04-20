@@ -27,7 +27,6 @@ export class CancellationError extends Error implements vscode.CancellationError
      * `Error` whose `name` matches the spelling VS Code uses.
      */
     public static test(error: unknown): error is CancellationError {
-        // TODO: add a test case to ensure VSCode team doesn't change their error's name?
         return error instanceof CancellationError || (error instanceof Error && (error.name === CanceledName || error.name === 'Cancelled'));
     }
 }
