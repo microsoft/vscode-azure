@@ -138,13 +138,14 @@ This makes code testable — unit tests can provide a mock `IVsCode` with only t
 
 ## Factory Bindings for Azure Clients
 
-Azure SDK client providers use `.toFactory()` bindings. Each factory captures `ICodeContext` and `IActionExecutor`, then returns an async function that creates the client for a given subscription:
+Azure SDK client providers use `.toFactory()` bindings. Each factory captures `ICodeContext`, `IActionExecutor`, and `IOutputChannel`, then returns an async function that creates the client for a given subscription:
 
 ```typescript
 container.bind(IResourceClientProvider).toFactory(context => {
     const ctx = context.get(ICodeContext);
     const executor = context.get(IActionExecutor);
-    return (subscription) => ResourceClient.create(ctx, executor, subscription);
+    const output = context.get(IOutputChannel);
+    return (subscription) => ResourceClient.create(ctx, executor, output, subscription);
 });
 ```
 

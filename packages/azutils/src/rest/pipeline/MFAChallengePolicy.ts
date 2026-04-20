@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
-import type { IActionExecutor } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 const wwwAuthenticateHeaderName = 'WWW-Authenticate';
@@ -34,6 +34,7 @@ export class MFAChallengePolicy implements PipelinePolicy {
     public constructor(
         private readonly executor: IActionExecutor,
         private readonly getNewToken: (request: vscode.AuthenticationWwwAuthenticateRequest) => Promise<vscode.AuthenticationSession | undefined>,
+        private readonly output?: IOutputChannel,
     ) { }
 
     // TODO: could we instead use the builtin `bearerTokenAuthenticationPolicy` and just provide a custom `getToken` callback that handles MFA challenges?
@@ -45,6 +46,7 @@ export class MFAChallengePolicy implements PipelinePolicy {
         if (initialResponse.status === 401 &&
             initialResponse.headers.has(wwwAuthenticateHeaderName) &&
             !retriedRequests.has(request)) {
+            this.output?.debug('[rest] MFA challenge start');
 
             if (context) {
                 context.telemetry.properties.challenge = 'true';
@@ -63,10 +65,12 @@ export class MFAChallengePolicy implements PipelinePolicy {
                     context.telemetry.properties.challengeSuccess = 'true';
                 }
                 request.headers.set(authorizationHeaderName, `Bearer ${newSession.accessToken}`);
+                this.output?.debug('[rest] MFA challenge complete');
                 return next(request);
             } else if (context) {
                 context.telemetry.properties.challengeSuccess = 'false';
             }
+            this.output?.debug('[rest] MFA challenge aborted');
         }
 
         return initialResponse;

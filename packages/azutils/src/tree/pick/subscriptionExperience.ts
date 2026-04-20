@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { type ICodeContext, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, type IOutputChannel, type ViewItemTree, Wizard } from '@microsoft/vscode-azure-utils';
 import type { AzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
 import { type ChooseSubscriptionContext, ChooseSubscriptionStep } from '../../wizard/ChooseSubscriptionStep';
 
 interface SubscriptionExperienceOptions extends ICodeContext {
     readonly tree: ViewItemTree<string, AzureNode>;
     readonly dataItemTree: ConcreteAzureNodeTree;
+    readonly output?: IOutputChannel;
 }
 
 /**
@@ -22,6 +23,8 @@ export async function subscriptionExperience(options: SubscriptionExperienceOpti
     const wizard = new Wizard<ChooseSubscriptionContext>(
         {},
         [new ChooseSubscriptionStep(options)],
+        [],
+        options.output,
     );
 
     const result = await wizard.run();

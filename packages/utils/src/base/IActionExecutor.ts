@@ -7,6 +7,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import type { ServiceIdentifier } from 'inversify';
 import type { AsWritable } from '../types/AsWritable';
 import { CancellationError } from '../vscode/CancellationError';
+import type { IOutputChannel } from '../vscode/IOutputChannel';
 import { createActionContext, type IActionContext, type KnownTelemetryProperty, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 
@@ -55,7 +56,8 @@ export class ActionExecutor implements IActionExecutor {
     private readonly storage = new AsyncLocalStorage<IActionContext>();
 
     public constructor(
-        private readonly telemetryReporter: ITelemetryReporter
+        private readonly telemetryReporter: ITelemetryReporter,
+        private readonly output?: IOutputChannel,
     ) { }
 
     /** @inheritdoc */
@@ -94,7 +96,9 @@ export class ActionExecutor implements IActionExecutor {
 
         return this.storage.run(context, async () => {
             try {
+                this.output?.debug(`[cmd] ${telemetryId} start`);
                 const result = await callback(context);
+                this.output?.debug(`[cmd] ${telemetryId} done`);
 
                 properties.result = 'Succeeded';
                 return result;
@@ -106,6 +110,8 @@ export class ActionExecutor implements IActionExecutor {
                 } else {
                     // TODO: error/cancellation handling plus telemetry
                     properties.result = 'Failed';
+                    const loggedError = error instanceof Error ? error : new Error(String(error));
+                    this.output?.error(loggedError, `[cmd] ${telemetryId} failed`);
                 }
 
                 if (context.errorHandling.rethrow) {

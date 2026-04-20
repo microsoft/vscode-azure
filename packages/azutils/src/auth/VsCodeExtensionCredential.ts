@@ -5,7 +5,7 @@
 
 import type { AccessToken, GetTokenOptions, TokenCredential } from '@azure/core-auth';
 import { Environment } from '@azure/ms-rest-azure-env';
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import type { IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
@@ -27,6 +27,12 @@ export interface VsCodeExtensionCredentialOptions extends vscode.AuthenticationG
      * (Optional) The Azure environment to authenticate to. Defaults to `Azure`, the public Azure cloud.
      */
     environment?: Environment;
+
+    /** (Optional) Output channel for auth lifecycle logging. */
+    output?: IOutputChannel;
+
+    /** (Optional) The VS Code namespace, used for localizing log messages. */
+    code?: IVsCode;
 }
 
 const PublicProviderId = 'microsoft' as const;
@@ -64,11 +70,17 @@ export class VsCodeExtensionCredential implements TokenCredential {
             scopesArray.push(`VSCODE_TENANT_ID:${tenantId}`); // TODO: right magic scope?
         }
 
+        this.options.output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} scopes=${JSON.stringify(scopesArray)}`);
         const session = await this.options.authentication.getSession(provider, scopesArray, this.options);
 
         if (!session) {
             return null;
         } else {
+            const scopes = JSON.stringify(scopesArray);
+            const msg = this.options.code?.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn=0', provider, scopes) // TODO: expiresOn
+                ?? `[auth] token acquired provider=${provider} scopes=${scopes} expiresOn=0`; // TODO: expiresOn
+            this.options.output?.info(msg);
+
             return {
                 token: session.accessToken,
                 expiresOnTimestamp: 0, // TODO: get from ID token
