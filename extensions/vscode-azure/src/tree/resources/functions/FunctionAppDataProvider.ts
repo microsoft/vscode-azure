@@ -51,14 +51,14 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
 
-        // Function App → category nodes
+        // Function App -> category nodes
         if (isFunctionApp(resource)) {
             return [
                 { virtualType: FunctionAppVirtualTypes.AppSettings, virtualPath: FunctionAppVirtualPaths.AppSettings, azureResource: resource },
             ];
         }
 
-        // App Settings category → individual settings
+        // App Settings category -> individual settings
         if (isVirtualResource(resource) && resource.virtualType === FunctionAppVirtualTypes.AppSettings) {
             return await this.listAppSettings(resource);
         }

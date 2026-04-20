@@ -19,7 +19,7 @@ import { isAcrRegistry } from './AcrRegistry';
  * - **`enrich`**: calls the ARM `get` operation to attach
  *   {@linkcode AcrRegistry}-specific properties (`loginServer`, `sku`, etc.)
  *   to the resource in-place.
- * - **`getChildren`**: stubbed — will return repositories and tags once
+ * - **`getChildren`**: stubbed -- will return repositories and tags once
  *   the data-plane client is integrated.
  */
 @injectable()
@@ -86,7 +86,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
 
-        // Registry → category nodes (Repositories, Webhooks)
+        // Registry -> category nodes (Repositories, Webhooks)
         if (isAcrRegistry(resource)) {
             return [
                 { virtualType: 'acr.repositories', virtualPath: 'Repositories', azureResource: resource },

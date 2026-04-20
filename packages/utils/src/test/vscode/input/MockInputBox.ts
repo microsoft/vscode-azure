@@ -16,7 +16,7 @@ import { EventEmitter } from '../../../vscode/EventEmitter';
  * and {@linkcode changeValue}.
  */
 export class MockInputBox implements vscode.InputBox {
-    // ── Properties ──────────────────────────────────────────
+    // #region Properties
     value = '';
     valueSelection: readonly [number, number] | undefined;
     placeholder: string | undefined;
@@ -30,25 +30,29 @@ export class MockInputBox implements vscode.InputBox {
     ignoreFocusOut = false;
     step: number | undefined;
     totalSteps: number | undefined;
+    // #endregion
 
-    // ── Internal emitters ───────────────────────────────────
+    // #region Internal emitters
     private readonly _onDidAccept = new EventEmitter<void>();
     private readonly _onDidHide = new EventEmitter<void>();
     private readonly _onDidTriggerButton = new EventEmitter<vscode.QuickInputButton>();
     private readonly _onDidChangeValue = new EventEmitter<string>();
+    // #endregion
 
-    // ── Event subscriptions ─────────────────────────────────
+    // #region Event subscriptions
     readonly onDidAccept = this._onDidAccept.event;
     readonly onDidHide = this._onDidHide.event;
     readonly onDidTriggerButton = this._onDidTriggerButton.event;
     readonly onDidChangeValue = this._onDidChangeValue.event;
+    // #endregion
 
-    // ── Tracked methods ─────────────────────────────────────
+    // #region Tracked methods
     readonly show = mock.fn(noop);
     readonly hide = mock.fn(noop);
     readonly dispose = mock.fn(noop);
+    // #endregion
 
-    // ── Test helpers ────────────────────────────────────────
+    // #region Test helpers
 
     /** Simulate the user pressing Enter / accepting the current value. */
     accept(): void {
@@ -70,6 +74,7 @@ export class MockInputBox implements vscode.InputBox {
         this.value = newValue;
         this._onDidChangeValue.fire(newValue);
     }
+    // #endregion
 }
 
 const noop = () => { /* noop */ };

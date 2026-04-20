@@ -14,15 +14,11 @@ import { PromptStep } from '../../wizard/PromptStep';
 import { Wizard } from '../../wizard/Wizard';
 import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
 
-// ── Test context type ──────────────────────────────────────
-
 interface TestContext {
     name?: string;
     color?: string;
     confirmed?: boolean;
 }
-
-// ── Reusable prompt steps ──────────────────────────────────
 
 class NameInputStep extends PromptStep<TestContext> {
     constructor(private readonly ctx: ICodeContext) { super(); }
@@ -64,8 +60,6 @@ class ConditionalConfirmStep extends PromptStep<TestContext> {
     }
 }
 
-// ── Reusable execute step ──────────────────────────────────
-
 class RecordingExecuteStep extends ExecuteStep<TestContext> {
     public executed = false;
     public receivedContext: TestContext | undefined;
@@ -75,8 +69,6 @@ class RecordingExecuteStep extends ExecuteStep<TestContext> {
         this.receivedContext = { ...context };
     }
 }
-
-// ── Tests ──────────────────────────────────────────────────
 
 describe('Wizard (unit)', () => {
 
@@ -381,8 +373,8 @@ describe('Wizard (unit)', () => {
 
         const tracker = respondToPrompts(mock, [
             { input: 'first' },
-            { pick: 'Red' },       // StepWithSub picks Red → adds ConditionalConfirmStep
-            'goBack',              // Go back from ConditionalConfirmStep → removes it
+            { pick: 'Red' },       // StepWithSub picks Red -> adds ConditionalConfirmStep
+            'goBack',              // Go back from ConditionalConfirmStep -> removes it
             { pick: 'Blue' },      // Re-pick StepWithSub with Blue -> no sub-steps
         ]);
 
