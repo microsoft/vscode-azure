@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Thrown by a {@link PromptStep} to signal that the user wants to
+ * Thrown by a {@linkcode PromptStep} to signal that the user wants to
  * navigate back to the previous prompt step in the wizard.
  *
  * The wizard catches this internally and re-runs the previous step.
@@ -16,6 +16,11 @@ export class GoBackError extends Error {
         this.name = GoBackErrorName;
     }
 
+    /**
+     * Type guard that returns `true` when `error` is a {@linkcode GoBackError}.
+     * Also matches errors whose `name` is `'GoBackError'` (e.g. when the
+     * class identity is lost across module boundaries).
+     */
     public static test(error: unknown): error is GoBackError {
         return error instanceof GoBackError || (error instanceof Error && error.name === GoBackErrorName);
     }

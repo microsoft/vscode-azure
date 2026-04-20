@@ -7,30 +7,32 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { EventEmitter, IActionExecutor, ICodeContext, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
+import { ConfigurationSection } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { combineContextValues } from '../combineContextValues';
 import { getAzureIconUri } from '../iconPath';
 
+/**
+ * Root view-layer provider for the Azure resources tree.
+ *
+ * Renders accounts, tenants, subscriptions, resource groups, generic
+ * resources, and virtual grouping nodes (when grouping by resource type,
+ * location, or tag). Automatically collapses the hierarchy when there is
+ * a single account and/or tenant.
+ */
 @injectable()
-export class GenericAzureViewProvider implements ViewProvider<string> {
+export class GenericAzureViewProvider implements ViewProvider<string>, Disposable {
     public readonly isRoot = true;
 
     /**
-     * Current grouping strategy for resources under subscriptions.
-     * Defaults to `'resourceGroup'` (mirrors the ARM hierarchy directly).
-     * TODO: make configurable
-     */
-    private readonly groupingStrategy: GroupingStrategy = 'resourceGroup';
-
-    /**
      * Tracks which hierarchy level the tree roots actually start at,
-     * after account/tenant skipping in {@link getRootChildren}.
-     * Used by {@link getParent} to return `undefined` for effective roots.
+     * after account/tenant skipping in {@linkcode getRootChildren}.
+     * Used by {@linkcode getParent} to return `undefined` for effective roots.
      *
-     * **Note:** This is only set after {@link getRootChildren} runs. If
+     * **Note:** This is only set after {@linkcode getRootChildren} runs. If
      * `TreeView.reveal()` is called before the tree has loaded, `getParent`
      * will use the default `'subscription'` value, which may be incorrect and
      * cause reveal to fail for nodes below skipped levels.
@@ -41,19 +43,34 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     private rootKind: 'account' | 'tenant' | 'subscription' = 'subscription';
     private isOneRootSub = false;
 
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<string>>();
+    private readonly disposables: Disposable[] = [this.changeEmitter];
+
+    public readonly onDidChange = this.changeEmitter.event;
+
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-    ) { }
+    ) {
+        this.disposables.push(ctx.code.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)
+                || e.affectsConfiguration(`${ConfigurationSection}.groupBy`)
+                || e.affectsConfiguration(`${ConfigurationSection}.groupByTag`)) {
+                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            }
+        }));
+    }
 
     // #region ViewProvider
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is string {
         // TODO: need to not try to handle things below `GenericResource` level
         return typeof resource === 'string' && AzureNodeId.test(resource);
     }
 
+    /** @inheritdoc */
     public async getChildren(resource?: string): Promise<string[]> {
         if (resource === undefined) {
             return this.getRootChildren();
@@ -62,13 +79,16 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         return this.getBranchChildren(resource);
     }
 
+    /** @inheritdoc */
     public getTreeItem(key: string): ITreeItem {
         const nodeId = AzureNodeId.parse(key);
 
         if (nodeId.isVirtualGroupNodeId()) {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
             const grouping = nodeId.getGrouping();
-            const label = grouping?.groupingValue ?? key;
+            const label = grouping?.groupingValue === untaggedSentinel
+                ? this.ctx.code.l10n.t('(No Tag)')
+                : grouping?.groupingValue ?? key;
             const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
             item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
@@ -134,11 +154,11 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
      *
      * **Important:** This method is intended for VS Code's internal tree
      * navigation (e.g., `TreeView.reveal()`). Application code should use
-     * {@link AzureNodeId.parentNodeId} directly, if needed.
+     * {@linkcode AzureNodeId.parentNodeId} directly, if needed.
      *
      * **Limitation:** Reveal is best-effort. If `TreeView.reveal()` is
      * called before the tree has ever loaded roots (before
-     * {@link getRootChildren} runs), `rootKind` will still be `'subscription'`
+     * {@linkcode getRootChildren} runs), `rootKind` will still be `'subscription'`
      * and this method may return parent keys for account/tenant nodes that
      * are actually skipped from the visible tree. This can cause reveal to
      * fail until the user has expanded the tree at least once.
@@ -157,11 +177,10 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         if (nodeId.isGenericResourceNodeId() && this.groupingStrategy !== 'resourceGroup') {
             const resource = this.cache.get(key);
             if (resource && isGenericResource(resource)) {
-                const value = groupingValue(this.groupingStrategy, resource);
                 const group: VirtualGroup = {
                     subscription: resource.subscription,
                     groupingStrategy: this.groupingStrategy satisfies VirtualGroup['groupingStrategy'],
-                    groupingValue: value,
+                    groupingValue: this.groupingValue(resource),
                 };
                 return toKey(group);
             }
@@ -202,12 +221,14 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
         this.rootKind = 'account';
         this.isOneRootSub = false;
 
-        if (nodes.length === 1 && isAccount(nodes[0])) {
+        const skip = !this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<boolean>('alwaysShowAccountNodes', false);
+
+        if (skip && nodes.length === 1 && isAccount(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'tenant';
         }
 
-        if (nodes.length === 1 && isTenant(nodes[0])) {
+        if (skip && nodes.length === 1 && isTenant(nodes[0])) {
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'subscription';
 
@@ -257,7 +278,7 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
     /**
      * Group all resources under a subscription according to
-     * {@link groupingStrategy}.
+     * {@linkcode groupingStrategy}.
      *
      * Returns a `Map` from group key to an array of resource keys.
      * For `'resourceGroup'` strategy the groups are the resource groups
@@ -292,11 +313,10 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
 
         const groups = new Map<string, string[]>();
         for (const resource of allResources) {
-            const value = groupingValue(this.groupingStrategy, resource);
             const group: VirtualGroup = {
                 subscription,
                 groupingStrategy: this.groupingStrategy satisfies VirtualGroup['groupingStrategy'],
-                groupingValue: value,
+                groupingValue: this.groupingValue(resource),
             };
             const groupKey = toKey(group);
 
@@ -312,20 +332,34 @@ export class GenericAzureViewProvider implements ViewProvider<string> {
     }
 
     // #endregion
-}
 
-/**
- * Derive the grouping value for a resource given a strategy.
- */
-function groupingValue(strategy: GroupingStrategy, resource: GenericResource): string {
-    switch (strategy) {
-        case 'resourceType':
-            return resource.logicalType;
-        case 'location':
-            return resource.location;
-        // TODO: armTag
-        default:
-            return resource.logicalType;
+    /** @inheritdoc */
+    public dispose(): void {
+        this.disposables.forEach(d => void d.dispose());
+    }
+
+    private get groupingStrategy(): GroupingStrategy {
+        return this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<GroupingStrategy>('groupBy', 'resourceGroup');
+    }
+
+    private get groupByTag(): string {
+        return this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<string>('groupByTag', '');
+    }
+
+    /**
+     * Derive the grouping value for a resource given the current strategy.
+     */
+    private groupingValue(resource: GenericResource): string {
+        switch (this.groupingStrategy) {
+            case 'resourceType':
+                return resource.logicalType;
+            case 'location':
+                return resource.location;
+            case 'armTag':
+                return resource.tags?.[this.groupByTag] || untaggedSentinel;
+            default:
+                return resource.logicalType;
+        }
     }
 }
 
@@ -335,3 +369,4 @@ function toKey(node: AzureNode): string {
 }
 
 const virtualGroupNodeType = 'virtualGroup';
+const untaggedSentinel = '__untagged__';

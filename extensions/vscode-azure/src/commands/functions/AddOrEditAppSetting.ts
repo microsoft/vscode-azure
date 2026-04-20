@@ -7,8 +7,8 @@ import { isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
-import { FunctionAppDataProvider } from '../../tree/resources/functionApp/FunctionAppDataProvider';
-import { appSettingsParentKey } from '../../tree/resources/functionApp/appSettingsParentKey';
+import { FunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
+import { appSettingsParentKey } from '../../tree/resources/functions/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 
 type AppSettingMode = 'add' | 'edit';
@@ -31,6 +31,7 @@ export class AddOrEditAppSetting implements ManagedCommand {
         @inject(FunctionAppDataProvider) private readonly dataProvider: FunctionAppDataProvider,
     ) { }
 
+    /** @inheritdoc */
     public async execute(mode: AppSettingMode, key?: string): Promise<void> {
         if (!key) {
             return;

@@ -5,8 +5,10 @@
 
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import type { DataProvider } from '../../tree/DataProvider';
+import { mock } from 'node:test';
+import type { DataProvider, DataProviderChangeEvent } from '../../tree/DataProvider';
 import { ProviderRegistry } from '../../tree/ProviderRegistry';
+import { EventEmitter } from '../../vscode/EventEmitter';
 
 interface TestResource {
     readonly type: string;
@@ -17,6 +19,12 @@ type TestProvider = DataProvider<TestResource>;
 
 // Concrete subclass since ProviderRegistry is abstract
 class TestRegistry extends ProviderRegistry<TestResource, TestProvider> {
+    public readonly onProviderChangedFn = mock.fn<(event: DataProviderChangeEvent<TestResource>) => void>();
+
+    protected override onProviderChanged(event: DataProviderChangeEvent<TestResource>): void {
+        this.onProviderChangedFn(event);
+    }
+
     // Expose protected methods for testing
     public find(resource: unknown): TestProvider | undefined {
         return this.findProvider(resource);
@@ -95,5 +103,38 @@ describe('ProviderRegistry (unit)', () => {
         registry.dispose();
         expect(registry.find({})).to.be.undefined;
         expect(registry.roots()).to.have.length(0);
+    });
+
+    it('should subscribe to provider onDidChange and call onProviderChanged', () => {
+        const registry = new TestRegistry();
+        const emitter = new EventEmitter<DataProviderChangeEvent<TestResource>>();
+        const provider: TestProvider = {
+            canHandle: (_r: unknown): _r is TestResource => true,
+            getChildren: () => [],
+            onDidChange: emitter.event,
+        };
+
+        registry.registerProvider(provider);
+        const event: DataProviderChangeEvent<TestResource> = { resource: undefined, includeChildren: true };
+        emitter.fire(event);
+
+        expect(registry.onProviderChangedFn.mock.callCount()).to.equal(1);
+        expect(registry.onProviderChangedFn.mock.calls[0].arguments[0]).to.equal(event);
+    });
+
+    it('should dispose provider onDidChange subscription when registration is disposed', () => {
+        const registry = new TestRegistry();
+        const emitter = new EventEmitter<DataProviderChangeEvent<TestResource>>();
+        const provider: TestProvider = {
+            canHandle: (_r: unknown): _r is TestResource => true,
+            getChildren: () => [],
+            onDidChange: emitter.event,
+        };
+
+        const registration = registry.registerProvider(provider);
+        registration.dispose();
+
+        emitter.fire({ resource: undefined, includeChildren: true });
+        expect(registry.onProviderChangedFn.mock.callCount()).to.equal(0);
     });
 });

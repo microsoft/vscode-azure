@@ -32,7 +32,7 @@ export const FunctionAppVirtualPaths = {
 } as const;
 
 /**
- * Type guard that narrows an unknown value to a Function App {@link GenericResource}.
+ * Type guard that narrows an unknown value to a Function App {@linkcode GenericResource}.
  *
  * Returns `true` for `GenericResource` nodes whose `logicalType` matches
  * `Microsoft.Web/sites~functionapp` (case-insensitive).
@@ -43,7 +43,7 @@ export function isFunctionApp(node: unknown): node is GenericResource {
 }
 
 /**
- * Type guard for Function App-owned {@link VirtualResource} nodes
+ * Type guard for Function App-owned {@linkcode VirtualResource} nodes
  * with a known virtual type.
  */
 export function isFunctionAppVirtual(node: unknown): node is VirtualResource {

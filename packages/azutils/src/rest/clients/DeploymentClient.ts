@@ -20,14 +20,14 @@ import { createAzureSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 /**
- * Subset of {@link SdkDeploymentExtended} with fields that the ARM API always returns.
+ * Subset of {@linkcode SdkDeploymentExtended} with fields that the ARM API always returns.
  */
 export type DeploymentExtended = WithRequired<SdkDeploymentExtended, 'id' | 'name' | 'type'>;
 export type DeploymentOperation = SdkDeploymentOperation;
 export type ProvisioningOperation = SdkProvisioningOperation;
 export type ProvisioningState = SdkProvisioningState;
 
-/** Factory that creates an {@link IDeploymentClient} for a given subscription. */
+/** Factory that creates an {@linkcode IDeploymentClient} for a given subscription. */
 export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');
 export type IDeploymentClientProvider = AsyncFactory<IDeploymentClient, [AzureSubscription]>;
 
@@ -45,10 +45,10 @@ export interface IDeploymentClient {
 }
 
 /**
- * Wrapper around {@link DeploymentsClient} that exposes only the methods
+ * Wrapper around {@linkcode DeploymentsClient} that exposes only the methods
  * we use, with corrected return types.
  *
- * Use the static {@link create} factory to construct--it lazily imports
+ * Use the static {@linkcode create} factory to construct--it lazily imports
  * the SDK to keep load times down.
  */
 export class DeploymentClient implements IDeploymentClient {
@@ -57,7 +57,7 @@ export class DeploymentClient implements IDeploymentClient {
     private constructor(private readonly inner: DeploymentsClient) { }
 
     /**
-     * Create a new {@link DeploymentClient} instance. Lazily imports
+     * Create a new {@linkcode DeploymentClient} instance. Lazily imports
      * `@azure/arm-resourcesdeployments` on first call.
      */
     public static async create(

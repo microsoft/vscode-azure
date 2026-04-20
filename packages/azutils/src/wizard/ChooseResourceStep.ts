@@ -43,6 +43,15 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
         );
     }
 
+    /**
+     * @inheritdoc
+     *
+     * In addition to the base recursive pick behavior, resolves the
+     * picked terminal resource (or resources, when
+     * `canPickMany: true`) into the data-layer node(s) and sets
+     * {@linkcode ChooseResourceContext.resource} /
+     * {@linkcode ChooseResourceContext.resources} on the context.
+     */
     public override async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
         const pickResult = await super.prompt(context);
 

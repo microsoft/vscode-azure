@@ -11,8 +11,8 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
 import { createMockAcrClient, createMockResourceClient, createMockSubscriptionProvider } from '../../../../debug/mockData';
-import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
+import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../tree/resources/acr/AcrViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
@@ -92,6 +92,7 @@ describe('ACR Tree Integration (integration)', () => {
         const acrClientProvider: IAcrClientProvider = () => Promise.resolve(acrClient);
 
         const genericDataProvider = new GenericAzureDataProvider(
+            mockVscode.vscode,
             executor,
             resourceClientProvider,
             subProvider,

@@ -8,6 +8,10 @@ import { execAzd } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 // TODO: Replace with AZD extension API when available
+/**
+ * Creates a new azd environment (`azd env new`) in {@linkcode AzdWizardContext.iacFolder}
+ * using the selected subscription, location, and environment name.
+ */
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public override shouldExecute(context: Readonly<TContext>): boolean {
         return !!context.iacFolder && !!context.environmentName && !!context.location?.name && !!context.subscription;
@@ -20,6 +24,6 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
             '--subscription', context.subscription!.subscriptionId, // eslint-disable-line @typescript-eslint/no-non-null-assertion
         ];
 
-        await execAzd(args, context.iacFolder);
+        await execAzd(args, context.iacFolder!.fsPath); // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 }

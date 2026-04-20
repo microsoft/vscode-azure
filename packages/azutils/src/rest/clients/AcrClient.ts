@@ -15,12 +15,12 @@ import type { ServiceIdentifier } from 'inversify';
 import { createAzureRestSubscriptionClient } from '../createAzureClient';
 
 /**
- * Subset of {@link Registry} with fields that the ARM API always returns.
+ * Subset of {@linkcode Registry} with fields that the ARM API always returns.
  */
 export type Registry = WithRequired<SdkRegistry, 'id' | 'name' | 'type' | 'location'>;
 export type Sku = SdkSku;
 
-/** Factory that creates an {@link IAcrClient} for a given subscription. */
+/** Factory that creates an {@linkcode IAcrClient} for a given subscription. */
 export const IAcrClientProvider: ServiceIdentifier<IAcrClientProvider> = Symbol.for('IAcrClientProvider');
 export type IAcrClientProvider = AsyncFactory<IAcrClient, [AzureSubscription]>;
 
@@ -41,7 +41,7 @@ export interface IAcrClient {
  * Wrapper around the `@azure/arm-containerregistry` REST-style SDK that
  * adapts free functions into the `client.registries.get()` pattern.
  *
- * Use the static {@link create} factory to construct
+ * Use the static {@linkcode create} factory to construct
  */
 export class AcrClient implements IAcrClient {
     private constructor(
@@ -50,7 +50,7 @@ export class AcrClient implements IAcrClient {
     ) { }
 
     /**
-     * Create a new {@link AcrClient} instance.
+     * Create a new {@linkcode AcrClient} instance.
      */
     public static create(
         ctx: ICodeContext,

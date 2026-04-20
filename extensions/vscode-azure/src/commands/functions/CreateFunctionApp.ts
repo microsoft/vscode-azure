@@ -34,9 +34,10 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
     ) { }
 
+    /** @inheritdoc */
     public async execute(): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
-            { picks: [] },
+            {},
             [
                 new HydrateAzdInfoStep(this.ctx.code),
                 new ChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
@@ -47,8 +48,8 @@ export class CreateFunctionApp implements ManagedCommand {
                 new OfferSaveStep(this.ctx, this.tempManager),
             ],
             [
-                new GenerateBicepStep(this.ctx.extensionContext, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']),
-                new GenerateAzureYamlStep(),
+                new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']),
+                new GenerateAzureYamlStep(this.ctx.code),
                 new CreateAzdEnvStep(),
                 new AzdProvisionStep(this.ctx.code),
             ],

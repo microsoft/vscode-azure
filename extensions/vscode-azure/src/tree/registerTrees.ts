@@ -17,11 +17,24 @@ import { CodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvide
 import { GenericActivityDataProvider } from './activity/GenericActivityDataProvider';
 import { AcrDataProvider } from './resources/acr/AcrDataProvider';
 import { AcrViewProvider } from './resources/acr/AcrViewProvider';
-import { FunctionAppDataProvider } from './resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppViewProvider } from './resources/functionApp/FunctionAppViewProvider';
+import { FunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
+import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 
+/**
+ * Bind the Azure resources tree and activity tree into the DI container.
+ *
+ * Wires up the data layer ({@linkcode DataItemTree}), view layer
+ * ({@linkcode ViewItemTree}), and VS Code {@linkcode vscode.TreeView TreeView}
+ * for each tree, and registers the per-service {@linkcode DataProvider}s and
+ * {@linkcode ViewProvider}s. Provider registration order matters: specific
+ * providers are bound before the generic fallback so
+ * {@linkcode ProviderRegistry} dispatches to the most specific match.
+ *
+ * Both tree views are eagerly resolved so their construction kicks off
+ * the full subscription/resource load.
+ */
 export function registerTrees(container: Container): void {
     registerResourcesTree(container);
     registerActivityTree(container);
@@ -84,7 +97,7 @@ function registerResourcesTree(container: Container): void {
 }
 
 /**
- * Identifier for the Azure view's {@link DataProvider}s.
+ * Identifier for the Azure view's {@linkcode DataProvider}s.
  * @internal - Not intended for use outside this file
  */
 const IAzureViewDataProviders: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IAzureViewDataProviders');
@@ -102,7 +115,7 @@ function bindAzureViewDataProviders(container: Container): void {
 }
 
 /**
- * Identifier for the Azure view's {@link ViewProvider}s.
+ * Identifier for the Azure view's {@linkcode ViewProvider}s.
  * @internal - Not intended for use outside this file
  */
 const IAzureViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IAzureViewViewProviders');

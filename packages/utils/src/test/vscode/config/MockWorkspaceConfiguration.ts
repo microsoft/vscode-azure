@@ -5,6 +5,17 @@
 
 import type * as vscode from 'vscode';
 
+/**
+ * In-memory implementation of {@linkcode vscode.WorkspaceConfiguration}
+ * for tests.
+ *
+ * Returned by the mock `workspace.getConfiguration(section)`. Reads and
+ * writes go through a shared `Map` keyed by the fully-qualified setting
+ * name (e.g. `'myExtension.featureFlag'`), so multiple sections can share
+ * the same backing store and tests can assert on the raw values via
+ * {@linkcode MockVsCodeResult.settings} or scope overrides with
+ * {@linkcode withSettings}.
+ */
 export class MockWorkspaceConfiguration implements vscode.WorkspaceConfiguration {
     constructor(
         private readonly store: Map<string, unknown>,

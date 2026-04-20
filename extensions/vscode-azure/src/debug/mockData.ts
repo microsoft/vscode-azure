@@ -56,12 +56,14 @@ const registryDetails: Record<string, { loginServer: string; sku: { name: string
 
 // -- Mock providers -----------------------------------------------------------
 
+/** Options for overriding {@linkcode createMockSubscriptionProvider} defaults. */
 export interface MockSubscriptionProviderOptions {
     readonly accounts?: AzureSubscriptionProvider['getAccounts'] extends () => Promise<infer T> ? T : never;
     readonly tenants?: AzureTenant[];
     readonly subscriptions?: AzureSubscription[];
 }
 
+/** Creates an in-memory {@linkcode AzureSubscriptionProvider} backed by canned account/tenant/subscription data. */
 export function createMockSubscriptionProvider(options?: MockSubscriptionProviderOptions): AzureSubscriptionProvider {
     const accounts = options?.accounts ?? [account];
     const tenants = options?.tenants ?? [tenant];
@@ -78,6 +80,7 @@ export function createMockSubscriptionProvider(options?: MockSubscriptionProvide
     } as unknown as AzureSubscriptionProvider;
 }
 
+/** Creates an {@linkcode IResourceClient} that returns fixed resource groups and resources. */
 export function createMockResourceClient(
     resourceGroups: unknown[] = [demoRg, stagingRg],
     resourcesByRg: Record<string, unknown[]> | unknown[] = resourcesByGroup,
@@ -92,6 +95,11 @@ export function createMockResourceClient(
     } as unknown as IResourceClient;
 }
 
+/**
+ * Creates an {@linkcode IAcrClient} whose `registries.get()` returns canned
+ * details for the mock registries. Additional top-level methods can
+ * be supplied via {@linkcode overrides}.
+ */
 export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrClient {
     return {
         registries: {
@@ -107,7 +115,7 @@ export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrCl
 
 /**
  * Rebinds Azure providers on the given container with mock implementations.
- * Called from main.mjs when AZURE_MOCK_DATA=1.
+ * Called from `main.mjs` when `AZURE_MOCK_DATA=1`.
  */
 export function applyMockBindings(container: Container): void {
     container.rebind(IAzureSubscriptionProvider).toConstantValue(

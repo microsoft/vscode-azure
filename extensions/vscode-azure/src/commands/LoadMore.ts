@@ -9,19 +9,24 @@ import { LoadMoreCommandId } from '../constants';
 import { IAzureViewViewItemTree } from '../services';
 import type { ManagedCommand } from './ManagedCommand';
 
+/**
+ * Loads the next page of children for a paginated parent node in the
+ * Azure resource view. Bound to the "Load More..." tree item.
+ */
 @injectable()
 export class LoadMore implements ManagedCommand {
     public constructor(
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
     ) { }
 
+    /** @inheritdoc */
     public async execute(parentViewItem: string): Promise<void> {
         await this.viewItemTree.loadMore(parentViewItem);
     }
 }
 
 /**
- * Default {@link LoadMoreOptions} implementation for Azure resource trees
+ * Default {@linkcode LoadMoreOptions} implementation for Azure resource trees
  */
 export function defaultLoadMoreOptions(code: IVsCode): LoadMoreOptions<string> {
     return createDefaultLoadMoreOptions<string>({

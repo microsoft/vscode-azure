@@ -9,7 +9,7 @@ import type { Page } from '@microsoft/vscode-azure-utils';
 /**
  * Converts a `PagedAsyncIterableIterator<T>` from an Azure SDK into an
  * `AsyncIterable<Page<T>>`, using `.byPage()` for page-level iteration
- * and `getContinuationToken` to set {@link Page.hasMore}.
+ * and `getContinuationToken` to set {@linkcode Page.hasMore}.
  *
  * @param iterator - The Azure SDK paged iterator.
  * @param getContinuationToken - The SDK's `getContinuationToken` function
@@ -23,7 +23,7 @@ export function toPages<T>(
 /**
  * Converts a `PagedAsyncIterableIterator<T>` from an Azure SDK into an
  * `AsyncIterable<Page<U>>`, using `.byPage()` for page-level iteration
- * and `getContinuationToken` to set {@link Page.hasMore}.
+ * and `getContinuationToken` to set {@linkcode Page.hasMore}.
  *
  * @param iterator - The Azure SDK paged iterator.
  * @param getContinuationToken - The SDK's `getContinuationToken` function

@@ -12,8 +12,8 @@ import { EventEmitter } from '../../../vscode/EventEmitter';
  *
  * Production code interacts with this through the standard InputBox
  * properties and events. Tests drive user interactions through the
- * helper methods: {@link accept}, {@link pressButton}, {@link triggerHide},
- * and {@link changeValue}.
+ * helper methods: {@linkcode accept}, {@linkcode pressButton}, {@linkcode triggerHide},
+ * and {@linkcode changeValue}.
  */
 export class MockInputBox implements vscode.InputBox {
     // ── Properties ──────────────────────────────────────────

@@ -39,7 +39,7 @@ export async function resourceExperience<T extends GenericResource>(
         : new ChooseResourceStep<T>({ ...rest });
 
     const wizard = new Wizard<ChooseResourceContext<T>>(
-        { picks: [] },
+        {},
         // ChooseResourceStep inherits from PromptStep<PickContext<string>>;
         // ChooseResourceContext<T> extends PickContext<string>, so this is
         // safe at runtime--the override narrows, not widens.

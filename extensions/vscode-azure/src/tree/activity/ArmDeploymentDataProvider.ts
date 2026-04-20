@@ -17,6 +17,13 @@ import { isActivity, isTerminalActivityStatus, type Activity } from './Activity'
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
 
+/**
+ * An {@linkcode Activity} representing a single ARM deployment (root or nested).
+ *
+ * Deployments form a tree via the {@linkcode operations} list: nested deployment
+ * operations yield child {@linkcode ArmDeploymentActivity} nodes, while non-deployment
+ * operations become leaf {@linkcode ArmDeploymentOperationActivity} items.
+ */
 export interface ArmDeploymentActivity extends Activity {
     readonly type: 'armDeployment';
     readonly deploymentId: string;
@@ -24,7 +31,7 @@ export interface ArmDeploymentActivity extends Activity {
     /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
     readonly scope: string;
     readonly deploymentName: string;
-    /** The ID of the user-initiated root deployment this belongs to. Equal to {@link id} for root deployments. */
+    /** The ID of the user-initiated root deployment this belongs to. Equal to {@linkcode id} for root deployments. */
     readonly rootDeploymentId: string;
     /** Operations discovered by enrichment. Populated asynchronously after the deployment is loaded. */
     operations?: ArmDeploymentOperationActivity[];
@@ -32,6 +39,11 @@ export interface ArmDeploymentActivity extends Activity {
     readonly abortController: AbortController;
 }
 
+/**
+ * A leaf operation within an {@linkcode ArmDeploymentActivity}. Represents a
+ * single resource-level action (Create/Delete/Action/Read) performed during
+ * the deployment.
+ */
 export interface ArmDeploymentOperationActivity extends Activity {
     readonly type: 'armDeploymentOperation';
     readonly operationId: string;
@@ -43,6 +55,15 @@ export interface ArmDeploymentOperationActivity extends Activity {
     readonly provisioningState?: string;
 }
 
+/**
+ * Data-layer provider for ARM deployment activities in the activity tree.
+ *
+ * Tracks user-initiated root deployments (via {@linkcode trackDeployment}),
+ * enriches each deployment with its operations list, and polls non-terminal
+ * deployments until they reach a terminal state. Nested deployments are
+ * discovered from the operations list and reused across re-fetches to
+ * preserve object identity.
+ */
 @injectable()
 export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActivity>, Disposable {
     public readonly isRoot = true;
@@ -63,13 +84,14 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
     ) { }
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is ArmDeploymentActivity {
         return isActivity(resource) && resource.type === 'armDeployment';
     }
 
     /**
      * Returns child **deployments** only. Leaf operations are stored on
-     * the deployment via {@link enrich} and injected by the view provider.
+     * the deployment via {@linkcode enrich} and injected by the view provider.
      */
     public getChildren(resource?: ArmDeploymentActivity): ArmDeploymentActivity[] {
         if (!resource) {
@@ -84,7 +106,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     /**
      * Fetch all operations for the deployment and store them in-place.
      * Starts polling for non-terminal deployments. Called automatically
-     * by {@link DataItemTree} after a resource is loaded.
+     * by {@linkcode DataItemTree} after a resource is loaded.
      */
     public async enrich(resource: ArmDeploymentActivity): Promise<boolean> {
         if (resource.abortController.signal.aborted) {
@@ -104,6 +126,12 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         return true;
     }
 
+    /**
+     * Begin tracking a user-initiated root deployment. Creates a new
+     * {@linkcode ArmDeploymentActivity}, registers it as a root, and fires
+     * an `onDidChange` so the tree picks it up. Enrichment (and polling)
+     * will start on first access by the tree.
+     */
     public trackDeployment(deploymentId: string, subscription: AzureSubscription): void {
         const { scope, deploymentName } = parseDeploymentId(deploymentId);
 
@@ -221,7 +249,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /**
      * Extract child deployments from a deployment's operations.
-     * Reuses existing objects from {@link knownDeployments} to preserve
+     * Reuses existing objects from {@linkcode knownDeployments} to preserve
      * reference stability across re-fetches (so polling mutates the same
      * instance the tree holds).
      */
@@ -321,6 +349,10 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
     }
 
+    /**
+     * Remove all tracked root deployments matching `filter` and abort any
+     * in-flight polling for them (and their descendants).
+     */
     public clearActivities(filter: (activity: ArmDeploymentActivity) => boolean): void {
         let changed = false;
         for (const [id, activity] of this.trackedRoots) {
@@ -336,6 +368,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         }
     }
 
+    /** @inheritdoc */
     public dispose(): void {
         for (const activity of this.trackedRoots.values()) {
             activity.abortController.abort();
@@ -347,7 +380,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
     /**
      * Remove a deployment and all its descendants from tracking maps.
-     * Uses {@link ArmDeploymentActivity.rootDeploymentId} to find descendants.
+     * Uses {@linkcode ArmDeploymentActivity.rootDeploymentId} to find descendants.
      */
     private cleanupDeploymentTree(rootId: string): void {
         for (const [id, deployment] of this.knownDeployments) {

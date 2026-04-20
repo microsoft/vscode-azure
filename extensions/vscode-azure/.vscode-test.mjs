@@ -3,11 +3,23 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * `@vscode/test-cli` configuration for running integration tests against a
+ * downloaded VS Code. Coverage is collected for `src/**` excluding the test
+ * folder and emitted as HTML.
+ */
+
 import { azExtSrcTestConfig } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
 import { defineConfig } from '@vscode/test-cli';
 
 export default defineConfig({
-    tests: [azExtSrcTestConfig],
+    // TODO: remove version pin once the transient VS Code build issue is resolved
+    tests: [{
+        ...azExtSrcTestConfig,
+        version: '1.116.0',
+        download: { timeout: 120_000 },
+    }],
+    // tests: [azExtSrcTestConfig],
     coverage: {
         include: [
             '**/extensions/vscode-azure/src/**'

@@ -11,12 +11,12 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
+import { AddOrEditAppSetting } from '../../../../commands/functions/AddOrEditAppSetting';
+import { DeleteAppSetting } from '../../../../commands/functions/DeleteAppSetting';
 import { createMockResourceClient, createMockSubscriptionProvider } from '../../../../debug/mockData';
-import { AddOrEditAppSetting } from '../../../../commands/functionApp/AddOrEditAppSetting';
-import { DeleteAppSetting } from '../../../../commands/functionApp/DeleteAppSetting';
-import { FunctionAppDataProvider } from '../../../../tree/resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppVirtualPaths } from '../../../../tree/resources/functionApp/FunctionApp';
-import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/FunctionAppViewProvider';
+import { FunctionAppVirtualPaths } from '../../../../tree/resources/functions/FunctionApp';
+import { FunctionAppDataProvider } from '../../../../tree/resources/functions/FunctionAppDataProvider';
+import { FunctionAppViewProvider } from '../../../../tree/resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
@@ -117,7 +117,7 @@ describe('Function App Tree Integration (integration)', () => {
         const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
 
         const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider as never);
-        const genericDataProvider = new GenericAzureDataProvider(executor, resourceClientProvider, subProvider);
+        const genericDataProvider = new GenericAzureDataProvider(code, executor, resourceClientProvider, subProvider);
 
         // Register in correct order: Function App first, generic fallback second
         dataTree.registerProvider(funcDataProvider);

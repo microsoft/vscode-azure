@@ -10,3 +10,4 @@ export * from './test/vscode/input/MockInputBox';
 export * from './test/vscode/input/MockQuickPick';
 export * from './test/vscode/MockVsCode';
 export * from './test/vscode/tree/MockTreeItem';
+export { DebugOutputChannel } from './vscode/IOutputChannel';

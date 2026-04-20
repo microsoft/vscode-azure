@@ -8,37 +8,68 @@ import {
     getNodeType, IResourceClientProvider, isAccount, isResourceGroup, isSubscription, isTenant,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, InflightMap, type ChildResult, type DataProvider } from '@microsoft/vscode-azure-utils';
+import {
+    EventEmitter, IActionExecutor, InflightMap, IVsCode,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable
+} from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { ConfigurationSection } from '../../constants';
 import { IAzureSubscriptionProvider } from '../../services';
 
 /**
  * Default page size used when fetching paginated Azure resource lists.
- * TODO: add override setting
  */
 const DEFAULT_PAGE_SIZE = 50;
 
+/**
+ * Root data-layer provider for the Azure resources tree.
+ *
+ * Drives the top of the hierarchy -- accounts, tenants, subscriptions, and
+ * resource groups -- using the shared {@linkcode AzureSubscriptionProvider}
+ * and ARM {@linkcode IResourceClient}. Service-specific providers (e.g.
+ * {@linkcode AcrDataProvider}) handle children below the resource group level.
+ *
+ * Fires {@linkcode onDidChange} when configuration affecting pagination
+ * changes, or when the subscription provider suggests a refresh.
+ */
 @injectable()
-export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode> {
+export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
     public readonly isRoot = true;
 
     /**
-     * Lazy sign-in: resolved on first call to {@link getChildren}, skipped thereafter.
+     * Lazy sign-in: resolved on first call to {@linkcode getChildren}, skipped thereafter.
      */
     private signInPromise: Promise<boolean> | undefined;
 
     /**
      * Cached REST clients per subscription ID, so all calls for the same
-     * subscription share one pipeline (and thus one {@link DedupeRequestPolicy}).
+     * subscription share one pipeline (and thus one {@linkcode DedupeRequestPolicy}).
      */
     private readonly clientCache = new InflightMap<IResourceClient>(); // TODO: are these clients long-lived enough to warrant caching? Will they break on later calls?
 
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
+    private readonly disposables: Disposable[] = [this.changeEmitter];
+
+    public readonly onDidChange = this.changeEmitter.event;
+
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
-    ) { }
+    ) {
+        this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration(`${ConfigurationSection}.pageSize`)) {
+                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            }
+        }));
 
+        this.disposables.push(subscriptionProvider.onRefreshSuggested(() => {
+            this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+        }));
+    }
+
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
         if (!resource || typeof resource !== 'object') {
             return false;
@@ -48,6 +79,10 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         return isAccount(node) || isTenant(node) || isSubscription(node) || isResourceGroup(node);
     }
 
+    /**
+     * @inheritdoc
+     * @throws if `resource` is not an account, tenant, subscription, or resource group.
+     */
     public async getChildren(resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> {
         // Ensure sign-in has been initiated (lazy, only once)
         this.signInPromise ??= this.subscriptionProvider.signIn(); // TODO: handle sign out?
@@ -71,12 +106,12 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
             case isSubscription(resource): {
                 const client = await this.getOrCreateClient(resource);
-                return client.resourceGroups.list({ top: DEFAULT_PAGE_SIZE });
+                return client.resourceGroups.list({ top: this.pageSize });
             }
 
             case isResourceGroup(resource): {
                 const client = await this.getOrCreateClient(resource.subscription);
-                return client.resources.listByResourceGroup(resource.name, { top: DEFAULT_PAGE_SIZE });
+                return client.resources.listByResourceGroup(resource.name, { top: this.pageSize });
             }
 
             default:
@@ -87,9 +122,18 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     /**
      * Get or create a cached REST client for the given subscription.
      * All callers for the same subscription share the same client and pipeline,
-     * so {@link DedupeRequestPolicy} can deduplicate concurrent requests.
+     * so {@linkcode DedupeRequestPolicy} can deduplicate concurrent requests.
      */
     private getOrCreateClient(subscription: AzureSubscription): Promise<IResourceClient> {
         return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
+    }
+
+    private get pageSize(): number {
+        return this.code.workspace.getConfiguration(ConfigurationSection).get('pageSize', DEFAULT_PAGE_SIZE);
+    }
+
+    /** @inheritdoc */
+    public dispose(): void {
+        this.disposables.forEach(d => void d.dispose());
     }
 }

@@ -7,8 +7,8 @@ import type { HttpClient, PipelineRequest, PipelineResponse } from '@azure/core-
 import { createHttpHeaders } from '@azure/core-rest-pipeline'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- Test utility
 
 /**
- * Creates a mock {@link PipelineRequest} with sensible defaults.
- * Headers are backed by SDK's real {@link createHttpHeaders}.
+ * Creates a mock {@linkcode PipelineRequest} with sensible defaults.
+ * Headers are backed by SDK's real {@linkcode createHttpHeaders}.
  */
 export function makeRequest(overrides?: Partial<PipelineRequest>): PipelineRequest {
     return {
@@ -25,7 +25,7 @@ export function makeRequest(overrides?: Partial<PipelineRequest>): PipelineReque
 }
 
 /**
- * Creates a mock {@link PipelineResponse} for a given request.
+ * Creates a mock {@linkcode PipelineResponse} for a given request.
  */
 export function makeResponse(request: PipelineRequest, status?: number, bodyAsText?: string | null, headers?: Record<string, string>): PipelineResponse {
     return {
@@ -36,20 +36,33 @@ export function makeResponse(request: PipelineRequest, status?: number, bodyAsTe
     } as PipelineResponse;
 }
 
+/**
+ * Options for {@linkcode MockHttpClient}.
+ */
 interface MockHttpClientOptions {
     /** Handler called for each request. Return a response or throw. */
     handler: (request: PipelineRequest) => PipelineResponse | Promise<PipelineResponse>;
 }
 
 /**
- * An {@link HttpClient} that delegates to a test-provided handler
+ * An {@linkcode HttpClient} that delegates to a test-provided handler
  * instead of making real network calls.
+ *
+ * Inject into an Azure SDK client wrapper via its `create({ ..., httpClient })`
+ * option to run the full pipeline (policies, serialization) against
+ * deterministic canned responses. All observed requests are captured on
+ * {@linkcode requests} in the order they were sent.
  */
 export class MockHttpClient implements HttpClient {
+    /** Every request observed by {@linkcode sendRequest}, in the order received. */
     public readonly requests: PipelineRequest[] = [];
 
     constructor(private readonly options: MockHttpClientOptions) { }
 
+    /**
+     * Records the request and returns the result of
+     * {@linkcode MockHttpClientOptions.handler}.
+     */
     public sendRequest(request: PipelineRequest): Promise<PipelineResponse> {
         this.requests.push(request);
         return Promise.resolve(this.options.handler(request));

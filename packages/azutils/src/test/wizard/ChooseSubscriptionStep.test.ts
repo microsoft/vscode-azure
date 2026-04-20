@@ -35,7 +35,7 @@ describe('ChooseSubscriptionStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseSubscriptionContext>(
-            { picks: [] },
+            {},
             [new ChooseSubscriptionStep({ ...ctx, tree: viewItemTree, dataItemTree })],
         );
         const result = await wizard.run();
@@ -59,7 +59,7 @@ describe('ChooseSubscriptionStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseSubscriptionContext>(
-            { picks: [] },
+            {},
             [new ChooseSubscriptionStep({ ...ctx, tree: viewItemTree, dataItemTree })],
         );
         const result = await wizard.run();

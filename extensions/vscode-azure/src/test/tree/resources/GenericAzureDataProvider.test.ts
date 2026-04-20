@@ -4,14 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { ActionExecutor, Disposable } from '@microsoft/vscode-azure-utils';
+import { createMockVsCode, NullTelemetryReporter, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
+import { ConfigurationSection } from '../../../constants';
 import { GenericAzureDataProvider } from '../../../tree/resources/GenericAzureDataProvider';
 
 describe('GenericAzureDataProvider (unit)', () => {
+    const code = createMockVsCode();
+
     function createProvider(subscriptionProvider?: Record<string, unknown>, clientFactory?: unknown) {
         const executor = new ActionExecutor(new NullTelemetryReporter());
         const subProvider = {
@@ -19,10 +22,11 @@ describe('GenericAzureDataProvider (unit)', () => {
             getAccounts: mock.fn(() => Promise.resolve([])),
             getTenantsForAccount: mock.fn(() => Promise.resolve([])),
             getSubscriptionsForTenant: mock.fn(() => Promise.resolve([])),
+            onRefreshSuggested: () => Disposable.None,
             ...subscriptionProvider,
         };
         const createClient = clientFactory ?? mock.fn(() => Promise.resolve({}));
-        return new GenericAzureDataProvider(executor, createClient as never, subProvider as never);
+        return new GenericAzureDataProvider(code.vscode, executor, createClient as never, subProvider as never);
     }
 
     describe('canHandle', () => {
@@ -112,6 +116,20 @@ describe('GenericAzureDataProvider (unit)', () => {
             await provider.getChildren();
 
             expect(signIn.mock.callCount()).to.equal(1);
+        });
+
+        it('should pass configured page size to resource list calls', async () => {
+            const sub = makeSubscription();
+            let capturedOptions: Record<string, unknown> | undefined;
+            const mockClient = {
+                resourceGroups: {
+                    list: (options?: Record<string, unknown>) => { capturedOptions = options; return []; },
+                },
+            };
+            const provider = createProvider({}, () => Promise.resolve(mockClient));
+
+            await withSettings(code, { [`${ConfigurationSection}.pageSize`]: 25 }, () => provider.getChildren(sub));
+            expect(capturedOptions?.top).to.equal(25);
         });
     });
 });

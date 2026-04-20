@@ -14,6 +14,22 @@ import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
 import { MFAChallengePolicy } from './pipeline/MFAChallengePolicy';
 import { RemoveBOMPolicy } from './pipeline/RemoveBOMPolicy';
 
+/**
+ * Create a classic `ServiceClient`-style Azure SDK client with the
+ * standard set of pipeline policies applied (see {@linkcode DedupeRequestPolicy},
+ * {@linkcode CorrelationIdPolicy}, {@linkcode AcceptLanguagePolicy},
+ * {@linkcode MFAChallengePolicy}, {@linkcode RemoveBOMPolicy}) and a
+ * user-agent prefix derived from the extension id/version.
+ *
+ * @param ctx - Code context, used for environment/user-agent and `accept-language`.
+ * @param executor - Action executor, used by context-aware policies.
+ * @param clientCtor - Constructor of the SDK client class.
+ * @param credentialOrSubscription - Either a raw {@linkcode TokenCredential}
+ *   or an {@linkcode AzureSubscription} (whose credential + environment are
+ *   used).
+ * @param options - Optional SDK client options; pipeline policies and
+ *   user-agent prefix are merged in.
+ */
 export function createAzureClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
@@ -25,6 +41,12 @@ export function createAzureClient<TClient extends ServiceClient, TOptions extend
     return new clientCtor(credential, applyDefaults(ctx, executor, resolvedOptions));
 }
 
+/**
+ * Subscription-scoped variant of {@linkcode createAzureClient} for SDK
+ * clients that take `(credential, subscriptionId, options?)` in their
+ * constructor. Accepts either an {@linkcode AzureSubscription} or an
+ * explicit `(credential, subscriptionId)` pair.
+ */
 export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
@@ -63,6 +85,14 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
 //     return getClient(credential, applyDefaults(ctx, executor, options));
 // }
 
+/**
+ * REST-style (`@azure-rest/core-client`) subscription-scoped factory.
+ *
+ * Equivalent to {@linkcode createAzureSubscriptionClient} but for the
+ * newer SDKs that export a `create*Management(credential, subscriptionId, options?)`
+ * free function instead of a class constructor (e.g.
+ * `@azure/arm-containerregistry`).
+ */
 export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,

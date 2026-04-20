@@ -26,7 +26,7 @@ interface ResourceGroupExperienceResult {
  */
 export async function resourceGroupExperience(options: ResourceGroupExperienceOptions): Promise<ResourceGroupExperienceResult> {
     const wizard = new Wizard<ChooseResourceGroupContext>(
-        { picks: [] },
+        {},
         [new ChooseResourceGroupStep(options)],
     );
 

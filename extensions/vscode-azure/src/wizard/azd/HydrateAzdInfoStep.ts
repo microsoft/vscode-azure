@@ -22,20 +22,20 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
     }
 
     public async prompt(): Promise<Partial<TContext>> {
-        const workspaceRoot = (await getWorkspaceFolder(this.code))?.uri.fsPath;
-        if (!workspaceRoot) {
+        const workspaceFolder = await getWorkspaceFolder(this.code);
+        if (!workspaceFolder) {
             return {} as Partial<TContext>;
         }
 
         const result: Record<string, unknown> = {};
 
         // Check for azure.yaml / azure.yml to detect an existing azd project
-        if (await findAzureYaml(workspaceRoot)) {
-            result.iacFolder = workspaceRoot;
+        if (await findAzureYaml(this.code, workspaceFolder.uri)) {
+            result.iacFolder = workspaceFolder.uri;
         }
 
         // Find the default azd environment via CLI
-        const envName = await this.findDefaultEnvironment(workspaceRoot);
+        const envName = await this.findDefaultEnvironment(workspaceFolder.uri.fsPath);
         if (envName) {
             result.environmentName = envName;
         }

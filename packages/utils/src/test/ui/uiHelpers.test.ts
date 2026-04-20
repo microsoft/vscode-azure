@@ -99,6 +99,44 @@ describe('uiHelpers (unit)', () => {
                 expect(GoBackError.test(e)).to.be.true;
             }
         });
+
+        it('should restore recently entered value on subsequent calls', async () => {
+            const { ctx, mock } = createMockCodeContext();
+
+            // First call: enter 'hello' to store it as recent
+            respondToPrompts(mock, [{ input: 'hello' }]);
+            await showSmartInputBox(ctx, { prompt: 'Enter value' });
+
+            // Second call: accept the default (which should be the recent value)
+            respondToPrompts(mock, ['acceptDefault']);
+            const result = await showSmartInputBox(ctx, { prompt: 'Enter value' });
+            expect(result).to.equal('hello');
+        });
+
+        it('should use fallbackValue when no recent input is available', async () => {
+            const { ctx, mock } = createMockCodeContext();
+
+            respondToPrompts(mock, ['acceptDefault']);
+            const result = await showSmartInputBox(ctx, {
+                prompt: 'Enter value',
+                fallbackValue: 'default-val',
+            });
+
+            expect(result).to.equal('default-val');
+        });
+
+        it('should prefer recent input over fallbackValue', async () => {
+            const { ctx, mock } = createMockCodeContext();
+
+            // First call: enter 'hello' to store it as recent
+            respondToPrompts(mock, [{ input: 'hello' }]);
+            await showSmartInputBox(ctx, { prompt: 'Enter value', fallbackValue: 'default-val' });
+
+            // Second call: accept the default (should be 'hello', not 'default-val')
+            respondToPrompts(mock, ['acceptDefault']);
+            const result = await showSmartInputBox(ctx, { prompt: 'Enter value', fallbackValue: 'default-val' });
+            expect(result).to.equal('hello');
+        });
     });
 
     describe('showSmartQuickPick', () => {
@@ -144,6 +182,40 @@ describe('uiHelpers (unit)', () => {
             const qp = mock.quickPicks[1];
             const bItem = qp.items.find(i => i.label === 'B');
             expect(bItem?.description).to.include('recently selected');
+        });
+
+        it('should find recently selected item even when items array is reused', async () => {
+            const { ctx, mock } = createMockCodeContext();
+            const items = [{ label: 'A' }, { label: 'B' }, { label: 'C' }];
+
+            // First pick: choose 'B' with the same array
+            respondToPrompts(mock, [{ pick: 'B' }]);
+            await showSmartQuickPick(ctx, items);
+
+            // Second pick: reuse the SAME items array (descriptions are now mutated)
+            respondToPrompts(mock, [{ pick: 'A' }]);
+            await showSmartQuickPick(ctx, items);
+
+            const qp = mock.quickPicks[1];
+            const bItem = qp.items.find(i => i.label === 'B');
+            expect(bItem?.description).to.include('recently selected');
+        });
+
+        it('should sort recently selected item to the top', async () => {
+            const { ctx, mock } = createMockCodeContext();
+
+            // First pick: choose 'C' (last item)
+            respondToPrompts(mock, [{ pick: 'C' }]);
+            await showSmartQuickPick(ctx, [{ label: 'A' }, { label: 'B' }, { label: 'C' }]);
+
+            // Second pick: 'C' should appear first in the list
+            respondToPrompts(mock, [{ pick: 'A' }]);
+            await showSmartQuickPick(ctx, [{ label: 'A' }, { label: 'B' }, { label: 'C' }]);
+
+            const qp = mock.quickPicks[1];
+            expect(qp.items[0].label).to.equal('C');
+            expect(qp.items[1].label).to.equal('A');
+            expect(qp.items[2].label).to.equal('B');
         });
 
         it('should pre-check recently selected items in multi-select mode', async () => {

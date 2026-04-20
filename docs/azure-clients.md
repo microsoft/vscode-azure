@@ -166,3 +166,25 @@ const resources = client.resources.listByResourceGroup(rgName);
 ```
 
 Each client wrapper exposes an interface (`IResourceClient`, `IDeploymentClient`, `IAcrClient`) that can be mocked in unit tests without needing the real Azure SDK.
+
+## Type Re-exports
+
+Client wrappers **re-export** any Azure SDK types that appear in their public API (return types, interface fields) so that consumers import them from the wrapper — never directly from `@azure/*` packages. This isolates the rest of the codebase from SDK changes.
+
+```typescript
+// In AcrClient.ts — re-export SDK types under stable names
+export type Registry = SdkRegistry;
+export type Sku = SdkSku;
+
+// In SubscriptionClient.ts — direct re-export
+export type { Location } from '@azure/arm-resources-subscriptions';
+```
+
+When adding a new client or exposing a new SDK type:
+
+1. Import the SDK type in the client wrapper file
+2. Re-export it (with an alias if the SDK name is awkward)
+3. Re-export the client file from `packages/azutils/src/index.ts` (already done via `export * from './rest/clients/...'`)
+4. Consumers import from `@microsoft/vscode-azure-azutils`, never from `@azure/*`
+
+The extension has **zero direct `@azure/*` imports** — all Azure SDK access flows through these wrappers.

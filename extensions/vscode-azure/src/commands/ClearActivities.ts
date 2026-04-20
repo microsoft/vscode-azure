@@ -12,6 +12,13 @@ import type { ManagedCommand } from './ManagedCommand';
 
 type ClearMode = 'completed' | 'successful' | 'all';
 
+/**
+ * Clears activities from all activity tree providers. The prefix arg
+ * supplied at registration selects the set to clear:
+ * - `'completed'`  -- any activity in a terminal status (success or failure).
+ * - `'successful'` -- only activities that completed successfully.
+ * - `'all'`        -- every activity, including still-running ones.
+ */
 @injectable()
 export class ClearActivities implements ManagedCommand {
     public constructor(

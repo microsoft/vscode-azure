@@ -35,7 +35,9 @@ For detailed documentation on the project architecture and patterns, see the `do
 * Use `void` prefix for intentionally un-awaited promises, unless they have a `.then()` with two arguments (for resolve and reject), or a `.catch()` handler
 * Use scoped `eslint-disable` comments on specific lines, avoid file-wide unless it requires repeating the same disable many times
 * Strings that will be seen by the user must use `IVsCode.l10n.t()` for localization (debug and trace output to the output channel is exempt from this requirement)
+* In product code, use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` and string paths. Use `Uri.fsPath` only when an API requires a string (e.g., `child_process` `cwd`). Use `vscode.workspace.fs.stat()` to check file existence (prefer over `workspace.findFiles()` which is workspace-scoped). Use `extensionContext.extensionUri` with `Uri.joinPath()` instead of `extensionContext.asAbsolutePath()`.
 * Any time ARM resource types (`GenericResource.type`) or logical types (`GenericResource.logicalType`) are checked, they should be compared **case-insensitively** to a constant (e.g., `AcrResourceType`) rather than a string literal
+* Azure SDK types used in client wrapper public APIs must be re-exported from the wrapper file in `packages/azutils/src/rest/clients/`. The extension and other consumers import these types from `@microsoft/vscode-azure-azutils`, never directly from `@azure/*` packages.
 * Commands that act on tree items should define a static `ContextValue` property. The view provider should use that in the tree item's `contextValue`. In `package.json`, the command's `when` clause should check for the context value with a regex (e.g., `viewItem =~ /\\bmyContextValue\\b/i`) rather than an equality check, to allow for multiple context values. The `\b` in the regex is important to prevent unintended matches (e.g., `myContextValue` matching `myContextValueWithSuffix`).
 
 
@@ -67,6 +69,19 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 * `GenericAzureDataProvider` (extension layer) is a `DataProvider` that fetches Azure accounts, tenants, subscriptions, and resource groups via the Azure SDK.
 * `GenericAzureViewProvider` (extension layer) is a `ViewProvider` that maps Azure resources to tree items with icons, context values, grouping strategies, etc.
 * Service-specific providers (e.g. ACR) handle narrower resource types and are registered alongside the generic ones.
+
+
+## Writing JSDocs
+
+* Add JSDoc comments to exported symbols (classes, interfaces, types, functions, and notable members) so consumers can understand intent and contracts without reading the implementation. Internal/private helpers only need JSDoc when their behavior is non-obvious.
+* Focus on **why / contract / side effects** -- preconditions, postconditions, thrown errors, lifetime/ownership, threading, caching, and mutation behavior. Don't restate what the signature already says.
+* Reference other symbols with `{@linkcode Symbol}` (or `{@linkcode Namespace.Symbol DisplayName}` for qualified names, e.g. `{@linkcode vscode.TreeView TreeView}`, `{@linkcode vscode.TreeDataProvider.getChildren TreeDataProvider.getChildren}`). Prefer `{@linkcode ...}` over plain backticks whenever the target is an actual importable/reachable symbol, because it renders as code **and** gives you a clickable cross-reference in hover/IntelliSense.
+* Use plain backticks (`` `...` ``) for things that are **not** resolvable symbols: file names (`main.mjs`), environment variables (`AZURE_MOCK_DATA=1`), CLI flags, JSON keys, shell commands, and literal code fragments.
+* Use standard tags where appropriate: `@param`, `@returns`, `@throws`, `@example`, `@remarks`, `@see`, `@deprecated`. Don't add a `@param`/`@returns` tag that just repeats the type -- omit it or add meaningful prose.
+* Keep claims in JSDoc **honest and verifiable** against the code. If a file still imports `vscode` for types, don't claim it "doesn't depend on vscode" -- qualify it (e.g. "no runtime/value-side dependency; the import is type-only and erased at compile time").
+* When documenting an `@example`, make sure the example package / API actually matches the function's contract (e.g. don't show a class-based SDK as an example for a REST-style helper).
+* Prefer a single concise summary line, followed by a blank line and more detail if needed. Wrap long paragraphs at a reasonable width for readability in hover tooltips.
+* Don't duplicate the copyright header as JSDoc; the file header comment is separate from symbol-level documentation.
 
 
 ## How to Lint, Build, and Test
