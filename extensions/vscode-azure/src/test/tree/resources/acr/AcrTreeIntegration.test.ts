@@ -74,6 +74,7 @@ describe('ACR Tree Integration (integration)', () => {
 
         // Data layer
         const dataTree = new DataItemTree<ConcreteAzureNode>(
+            code,
             'test-acr-tree',
             executor,
             resource => AzureNodeId.from(resource).toString(),

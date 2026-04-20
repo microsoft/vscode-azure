@@ -8,6 +8,7 @@ import { InflightMap } from '../data/InflightMap';
 import { isAsyncIterable, type Page } from '../data/Page';
 import type { Disposable } from '../vscode/Disposable';
 import type { IOutputChannel } from '../vscode/IOutputChannel';
+import type { IVsCode } from '../vscode/IVsCode';
 import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -84,6 +85,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * @param ttl - Time-to-live in milliseconds for cached children.
      */
     public constructor(
+        private readonly code: IVsCode,
         private readonly name: string,
         private readonly executor: IActionExecutor,
         private readonly getKey: (resource: T) => string,
@@ -110,10 +112,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     private async getRootChildren(): Promise<T[]> {
         if (this.roots !== undefined && Date.now() < this.rootsStaleAt) {
-            this.output?.trace('[cache] %s root cache hit (count=%d)', this.name, this.roots.length);
+            this.output?.trace(`[cache] ${this.name} root cache hit (count=${this.roots.length})`);
             return this.roots.map(n => n.resource);
         }
-        this.output?.trace('[cache] %s root cache miss', this.name);
+        this.output?.trace(`[cache] ${this.name} root cache miss`);
 
         // Clear all cached nodes when recomputing roots since the whole tree may have changed
         this.nodes.clear();
@@ -123,7 +125,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         // Each root provider gets its own telemetry scope so that
         // concurrent calls don't overwrite shared mutable properties.
         const rootProviders = this.getRootProviders();
-        this.output?.debug('[data] %s root fetch start (providers=%d)', this.name, rootProviders.length);
+        this.output?.debug(`[data] ${this.name} root fetch start (providers=${rootProviders.length})`);
         const results = await Promise.all(
             rootProviders
                 .map(async p => this.executor.callWithTelemetryAndErrorHandling('tree.getRootChildren', (context) => {
@@ -151,11 +153,11 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
             const resourceKey = this.getKey(resource);
             this.nodes.set(resourceKey, node);
-            this.output?.trace('[cache] %s root child key=%s', this.name, resourceKey);
+            this.output?.trace(`[cache] ${this.name} root child key=${resourceKey}`);
             return node;
         });
         this.rootsStaleAt = Date.now() + this.ttl;
-        this.output?.debug('[data] %s root fetch done (providers=%d count=%d)', this.name, rootProviders.length, resources.length);
+        this.output?.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
 
         this.enrichAll(resources);
 
@@ -171,17 +173,17 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
 
         if (node.children !== undefined && Date.now() < node.staleAt) {
-            this.output?.trace('[cache] %s branch cache hit key=%s count=%d', this.name, key, node.children.length);
+            this.output?.trace(`[cache] ${this.name} branch cache hit key=${key} count=${node.children.length}`);
             return node.children.map(n => n.resource);
         }
-        this.output?.trace('[cache] %s branch cache miss key=%s', this.name, key);
+        this.output?.trace(`[cache] ${this.name} branch cache miss key=${key}`);
 
         // Find the provider that handles this resource
         const provider = this.findProvider(resource);
         if (!provider) {
             node.children = [];
             node.staleAt = Date.now() + this.ttl;
-            this.output?.debug('[data] %s branch fetch done key=%s count=%d provider=<none>', this.name, key, 0);
+            this.output?.debug(`[data] ${this.name} branch fetch done key=${key} count=0 provider=<none>`);
             return [];
         }
 
@@ -189,7 +191,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         this.nodes.removeSubtrees(node.children);
         node.children = [];
         node.pageIterator = undefined;
-        this.output?.debug('[data] %s branch fetch start key=%s provider=%s', this.name, key, provider.constructor.name);
+        this.output?.debug(`[data] ${this.name} branch fetch start key=${key} provider=${provider.constructor.name}`);
 
         const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
             context.telemetry.isUserEvent = false;
@@ -214,7 +216,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
 
         node.staleAt = Date.now() + this.ttl;
-        this.output?.debug('[data] %s branch fetch done key=%s count=%d provider=%s', this.name, key, node.children.length, provider.constructor.name);
+        this.output?.debug(`[data] ${this.name} branch fetch done key=${key} count=${node.children.length} provider=${provider.constructor.name}`);
 
         return node.children.map(n => n.resource);
     }
@@ -233,7 +235,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             const provider = this.findProvider(resource);
             if (provider?.enrich) {
                 const key = this.getKey(resource);
-                this.output?.debug('[data] %s enrich start key=%s provider=%s', this.name, key, provider.constructor.name);
+                this.output?.debug(`[data] ${this.name} enrich start key=${key} provider=${provider.constructor.name}`);
                 const promise = this.executor
                     .callWithTelemetryAndErrorHandling('tree.enrich', (context) => {
                         context.telemetry.isUserEvent = false;
@@ -245,7 +247,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                     })
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
-                        this.output?.debug('[data] %s enrich done key=%s includeChildren=%o', this.name, key, includeChildren);
+                        this.output?.debug(`[data] ${this.name} enrich done key=${key} includeChildren=${includeChildren}`);
                         // Guard: if the node was removed (e.g. via removeItem) while
                         // enrichment was in flight, skip the invalidation to avoid
                         // spurious change events for items no longer in the tree.
@@ -255,7 +257,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                     })
                     .catch((error: unknown) => {
                         const message = error instanceof Error ? error.message : String(error);
-                        this.output?.warn('[data] %s enrich failed key=%s provider=%s message=%s', this.name, key, provider.constructor.name, message);
+                        this.output?.warn(this.code.l10n.t('[data] {0} enrich failed key={1} provider={2} message={3}', this.name, key, provider.constructor.name, message));
                         throw error;
                     });
                 this.enrichmentPromises.set(key, promise);
@@ -405,7 +407,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0, parent };
             const childKey = this.getKey(child);
             this.nodes.set(childKey, childNode);
-            this.output?.trace('[cache] %s child key=%s parent=%s', this.name, childKey, this.getKey(parent.resource));
+            this.output?.trace(`[cache] ${this.name} child key=${childKey} parent=${this.getKey(parent.resource)}`);
             return childNode;
         });
         this.enrichAll(children);
@@ -431,7 +433,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      *   will hit the cache, avoiding a re-fetch (unless they are stale).
      */
     public invalidate(resource: T, includeChildren = true): void {
-        this.output?.debug('[cache] %s invalidate key=%s includeChildren=%o', this.name, this.getKey(resource), includeChildren);
+        this.output?.debug(`[cache] ${this.name} invalidate key=${this.getKey(resource)} includeChildren=${includeChildren}`);
         const node = this.nodes.get(this.getKey(resource));
         if (node && includeChildren) {
             this.nodes.removeSubtrees(node.children);
@@ -489,7 +491,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * Fires {@linkcode onDidChange} once with `undefined` (full refresh).
      */
     public invalidateAll(): void {
-        this.output?.debug('[cache] %s invalidate all', this.name);
+        this.output?.debug(`[cache] ${this.name} invalidate all`);
         this.nodes.clear();
         this.enrichmentPromises.clear();
         this.roots = undefined;

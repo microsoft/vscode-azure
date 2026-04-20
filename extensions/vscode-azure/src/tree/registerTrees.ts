@@ -47,6 +47,7 @@ function registerResourcesTree(container: Container): void {
     bindAzureViewDataProviders(container);
     container.bind(IAzureViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<ConcreteAzureNode>(
+            context.get(IVsCode),
             AzureResourceTreeViewId,
             context.get(IActionExecutor),
             resource => AzureNodeId.from(resource).toString(),
@@ -139,6 +140,7 @@ function registerActivityTree(container: Container): void {
     bindActivityViewDataProviders(container);
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
+            context.get(IVsCode),
             ActivityTreeViewId,
             context.get(IActionExecutor),
             activity => activity.id,

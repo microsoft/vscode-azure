@@ -11,6 +11,7 @@ import { NullTelemetryReporter } from '../../base/ITelemetryReporter';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider } from '../../tree/DataProvider';
+import { createMockVsCode } from '../vscode/MockVsCode';
 
 interface TestResource {
     id: string;
@@ -22,7 +23,8 @@ const canHandleNone = (_r: unknown): _r is TestResource => false;
 
 function createTree(ttl = 60_000) {
     const executor = new ActionExecutor(new NullTelemetryReporter());
-    return new DataItemTree<TestResource>('test', executor, r => r.id, ttl);
+    const { vscode } = createMockVsCode();
+    return new DataItemTree<TestResource>(vscode, 'test', executor, r => r.id, ttl);
 }
 
 function createRootProvider(children: TestResource[]): DataProvider<TestResource> {

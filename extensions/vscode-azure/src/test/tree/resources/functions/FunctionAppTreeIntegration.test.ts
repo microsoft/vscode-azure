@@ -102,6 +102,7 @@ describe('Function App Tree Integration (integration)', () => {
 
         // Data layer
         const dataTree = new DataItemTree<ConcreteAzureNode>(
+            code,
             'test-func-tree',
             executor,
             resource => AzureNodeId.from(resource).toString(),

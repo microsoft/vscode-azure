@@ -12,6 +12,7 @@ import { DataItemTree } from '../../tree/DataItemTree';
 import { ViewItemTree } from '../../tree/ViewItemTree';
 import type { ViewProvider } from '../../tree/ViewProvider';
 import type { ITreeItem } from '../../vscode/IVsCode';
+import { createMockVsCode } from '../vscode/MockVsCode';
 
 interface TestResource {
     id: string;
@@ -25,7 +26,8 @@ const canHandleNoResources = (_r: unknown): _r is TestResource => false;
 
 function createSetup() {
     const executor = new ActionExecutor(new NullTelemetryReporter());
-    const dataTree = new DataItemTree<TestResource>('test', executor, r => r.id, 60_000);
+    const { vscode } = createMockVsCode();
+    const dataTree = new DataItemTree<TestResource>(vscode, 'test', executor, r => r.id, 60_000);
 
     const viewTree = new ViewItemTree<TestViewItem, TestResource>('test', executor, {
         dataItemTree: dataTree,
@@ -180,7 +182,8 @@ describe('ViewItemTree (unit)', () => {
 
         it('should return the parent for a load-more view item', async () => {
             const executor = new ActionExecutor(new NullTelemetryReporter());
-            const dataTree = new DataItemTree<TestResource>('test', executor, r => r.id, 60_000);
+            const { vscode } = createMockVsCode();
+            const dataTree = new DataItemTree<TestResource>(vscode, 'test', executor, r => r.id, 60_000);
 
             dataTree.registerProvider({
                 isRoot: true,
@@ -254,7 +257,8 @@ describe('ViewItemTree (unit)', () => {
     describe('load more', () => {
         it('should inject a load-more node when data has more pages', async () => {
             const executor = new ActionExecutor(new NullTelemetryReporter());
-            const dataTree = new DataItemTree<TestResource>('test', executor, r => r.id, 60_000);
+            const { vscode } = createMockVsCode();
+            const dataTree = new DataItemTree<TestResource>(vscode, 'test', executor, r => r.id, 60_000);
 
             dataTree.registerProvider({
                 isRoot: true,
@@ -339,7 +343,8 @@ describe('ViewItemTree (unit)', () => {
 
         it('should trigger loadMore on the data tree via viewTree.loadMore', async () => {
             const executor = new ActionExecutor(new NullTelemetryReporter());
-            const dataTree = new DataItemTree<TestResource>('test', executor, r => r.id, 60_000);
+            const { vscode } = createMockVsCode();
+            const dataTree = new DataItemTree<TestResource>(vscode, 'test', executor, r => r.id, 60_000);
 
             dataTree.registerProvider({
                 isRoot: true,

@@ -30,6 +30,9 @@ export interface VsCodeExtensionCredentialOptions extends vscode.AuthenticationG
 
     /** (Optional) Output channel for auth lifecycle logging. */
     output?: IOutputChannel;
+
+    /** (Optional) The VS Code namespace, used for localizing log messages. */
+    code?: IVsCode;
 }
 
 const PublicProviderId = 'microsoft' as const;
@@ -73,7 +76,11 @@ export class VsCodeExtensionCredential implements TokenCredential {
         if (!session) {
             return null;
         } else {
-            this.options.output?.info(`[auth] token acquired provider=${provider} scopes=${JSON.stringify(scopesArray)} expiresOn=0`);
+            const scopes = JSON.stringify(scopesArray);
+            const msg = this.options.code?.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn=0', provider, scopes) // TODO: expiresOn
+                ?? `[auth] token acquired provider=${provider} scopes=${scopes} expiresOn=0`; // TODO: expiresOn
+            this.options.output?.info(msg);
+
             return {
                 token: session.accessToken,
                 expiresOnTimestamp: 0, // TODO: get from ID token
