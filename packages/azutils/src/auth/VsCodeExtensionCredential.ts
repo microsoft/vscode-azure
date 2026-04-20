@@ -68,29 +68,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
         }
 
         this.options.output?.debug('[auth] getToken start provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
-
-        let session: vscode.AuthenticationSession | undefined;
-        try {
-            session = await this.options.authentication.getSession(provider, scopesArray, this.options);
-        } catch (error) {
-            const firstErrorMessage = error instanceof Error ? error.message : String(error);
-            this.options.output?.warn('[auth] getToken first attempt failed provider=%s tenant=%s message=%s', provider, tenantId ?? '<default>', firstErrorMessage);
-            this.options.output?.warn('[auth] getToken retry provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
-            try {
-                session = await this.options.authentication.getSession(provider, scopesArray, this.options);
-            } catch (retryError) {
-                this.options.output?.error(retryError instanceof Error ? retryError : new Error(String(retryError)));
-                throw retryError;
-            }
-        }
-
-        if (!session && !this.options.createIfNone) {
-            this.options.output?.info('[auth] interactive sign-in provider=%s tenant=%s scopes=%o', provider, tenantId ?? '<default>', scopesArray);
-            session = await this.options.authentication.getSession(provider, scopesArray, {
-                ...this.options,
-                createIfNone: true,
-            });
-        }
+        const session = await this.options.authentication.getSession(provider, scopesArray, this.options);
 
         if (!session) {
             return null;

@@ -36,13 +36,8 @@ import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
  * the full subscription/resource load.
  */
 export function registerTrees(container: Container): void {
-    const output = container.get(IOutputChannel);
-    const code = container.get(IVsCode);
-    output.debug('[view] register resources tree');
     registerResourcesTree(container);
-    output.debug('[view] register activity tree');
     registerActivityTree(container);
-    output.info(code.l10n.t('[view] Registered {0} tree views', 2));
 }
 
 // #region Resources tree

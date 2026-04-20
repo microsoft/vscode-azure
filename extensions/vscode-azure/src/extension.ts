@@ -55,25 +55,13 @@ export async function activateInternal(
     containerOverride?: Container,
 ): Promise<void> {
     const container = containerOverride ?? setUpContainer(extensionContext);
-    const output = container.get(IOutputChannel);
-    output.info(vscode.l10n.t('[activate] Starting Azure extension activation'));
+    await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
+        activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
+        activateContext.telemetry.isUserEvent = false;
 
-    try {
-        await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
-            activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
-            activateContext.telemetry.isUserEvent = false;
-
-            output.debug('[activate] Registering commands');
-            registerCommands(container);
-            output.debug('[activate] Registering tree views');
-            registerTrees(container);
-        });
-        output.info(vscode.l10n.t('[activate] Azure extension is ready'));
-    } catch (error) {
-        output.error(vscode.l10n.t('[activate] Activation failed'));
-        output.error(error instanceof Error ? error : new Error(String(error)));
-        throw error;
-    }
+        registerCommands(container);
+        registerTrees(container);
+    });
 }
 
 /** Entry point called by the generated extension `deactivate` function. */
@@ -128,36 +116,31 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        const boundOutput = context.get(IOutputChannel);
-        return (subscription) => ResourceClient.create(ctx, executor, boundOutput, subscription);
+        return (subscription) => ResourceClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     container.bind(IDeploymentClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        const boundOutput = context.get(IOutputChannel);
-        return (subscription) => DeploymentClient.create(ctx, executor, boundOutput, subscription);
+        return (subscription) => DeploymentClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     container.bind(IAcrClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        const boundOutput = context.get(IOutputChannel);
-        return (subscription) => AcrClient.create(ctx, executor, boundOutput, subscription);
+        return (subscription) => AcrClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     container.bind(ISubscriptionClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        const boundOutput = context.get(IOutputChannel);
-        return (subscription) => SubscriptionClient.create(ctx, executor, boundOutput, subscription);
+        return (subscription) => SubscriptionClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     container.bind(IWebAppClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        const boundOutput = context.get(IOutputChannel);
-        return (subscription) => WebAppClient.create(ctx, executor, boundOutput, subscription);
+        return (subscription) => WebAppClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     return container;

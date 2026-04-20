@@ -90,7 +90,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         // Ensure sign-in has been initiated (lazy, only once)
         if (!this.signInPromise) {
             this.output.debug('[auth] lazy sign-in start');
-            this.signInPromise = this.subscriptionProvider.signIn();
+            this.signInPromise = this.subscriptionProvider.signIn(); // TODO: handle sign out?
         }
         await this.signInPromise;
 
@@ -100,20 +100,15 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
         if (!resource) {
             // Root: return all signed-in accounts
-            const accounts = await this.subscriptionProvider.getAccounts() as ConcreteAzureNode[];
-            return accounts;
+            return await this.subscriptionProvider.getAccounts() as ConcreteAzureNode[];
         }
 
         switch (true) {
-            case isAccount(resource): {
-                const tenants = await this.subscriptionProvider.getTenantsForAccount(resource);
-                return tenants;
-            }
+            case isAccount(resource):
+                return await this.subscriptionProvider.getTenantsForAccount(resource);
 
-            case isTenant(resource): {
-                const subscriptions = await this.subscriptionProvider.getSubscriptionsForTenant(resource);
-                return subscriptions;
-            }
+            case isTenant(resource):
+                return await this.subscriptionProvider.getSubscriptionsForTenant(resource);
 
             case isSubscription(resource): {
                 const client = await this.getOrCreateClient(resource);
