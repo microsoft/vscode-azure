@@ -190,7 +190,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
             const { credential, getSession } = createCredential();
             const exp = Math.floor(Date.now() / 1000) + 3600;
             const json = JSON.stringify({ exp });
-            // Encode using base64url: replace +→-, /→_, strip padding
+            // Encode using base64url: replace + with -, / with _, strip padding
             const payload = Buffer.from(json).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
             const idToken = `header.${payload}.signature`;
             getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
