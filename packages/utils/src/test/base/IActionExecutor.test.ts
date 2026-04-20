@@ -167,13 +167,12 @@ describe('ActionExecutor (unit)', () => {
                 throw new Error('boom');
             });
 
-            expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] %s start' && call.arguments[1] === 'successCallback')).to.be.true;
-            expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] %s done (result=%o)' && call.arguments[1] === 'successCallback')).to.be.true;
+            expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] successCallback start')).to.be.true;
+            expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] successCallback done')).to.be.true;
             expect(errorSpy.mock.calls.some(call =>
                 call.arguments[0] instanceof Error &&
                 call.arguments[0].message === 'boom' &&
-                call.arguments[1] === '[cmd] %s failed' &&
-                call.arguments[2] === 'failingCallback')).to.be.true;
+                call.arguments[1] === '[cmd] failingCallback failed')).to.be.true;
         });
     });
 

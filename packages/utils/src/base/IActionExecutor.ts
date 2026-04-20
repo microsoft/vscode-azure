@@ -96,15 +96,13 @@ export class ActionExecutor implements IActionExecutor {
 
         return this.storage.run(context, async () => {
             try {
-                this.output?.debug('[cmd] %s start', telemetryId);
+                this.output?.debug(`[cmd] ${telemetryId} start`);
                 const result = await callback(context);
-                this.output?.debug('[cmd] %s done (result=%o)', telemetryId, result);
+                this.output?.debug(`[cmd] ${telemetryId} done`);
 
                 properties.result = 'Succeeded';
                 return result;
             } catch (error) {
-                const loggedError = error instanceof Error ? error : new Error(String(error));
-                this.output?.error(loggedError, '[cmd] %s failed', telemetryId);
                 // TODO: toast error message + report issue button
                 if (CancellationError.test(error)) {
                     properties.result = 'Canceled'; // TODO: Verify spelling is the same as existing
@@ -112,6 +110,8 @@ export class ActionExecutor implements IActionExecutor {
                 } else {
                     // TODO: error/cancellation handling plus telemetry
                     properties.result = 'Failed';
+                    const loggedError = error instanceof Error ? error : new Error(String(error));
+                    this.output?.error(loggedError, `[cmd] ${telemetryId} failed`);
                 }
 
                 if (context.errorHandling.rethrow) {

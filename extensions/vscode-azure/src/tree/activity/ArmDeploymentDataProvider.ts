@@ -9,7 +9,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, flattenPages, IActionExecutor, InflightMap, IOutputChannel,
+    EventEmitter, flattenPages, IActionExecutor, InflightMap, IOutputChannel, IVsCode,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -80,6 +80,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
@@ -241,7 +242,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     abortSignal.throwIfAborted();
                     // Swallow other probably-transient errors and retry on next poll
                     const message = error instanceof Error ? error.message : String(error);
-                    this.output.warn(`[activity] polling error deployment=${activity.id} message=${message}`);
+                    this.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
                 }
 
                 // Wait for the next poll interval
