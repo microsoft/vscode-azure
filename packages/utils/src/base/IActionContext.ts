@@ -6,7 +6,7 @@
 import { randomUUID } from 'crypto';
 import type { ServiceIdentifier } from 'inversify';
 
-export const IActionContext: ServiceIdentifier<IActionContext> = Symbol.for('IActionContext'); // TODO: do we need a service identifier for this?
+export const IActionContext: ServiceIdentifier<IActionContext> = Symbol.for('IActionContext');
 
 /**
  * Per-invocation context shared by an action (command, wizard step,

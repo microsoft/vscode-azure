@@ -38,7 +38,6 @@ export function createTelemetryReporter(
             throw new Error('AI key is required for telemetry reporter');
         }
 
-        // TODO extension ID that's part of event name?
         // TODO replacement options to scrub PII?
         return new reporterCtor(aiKey);
         /* c8 ignore next 5 */

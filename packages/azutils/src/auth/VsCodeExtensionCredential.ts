@@ -54,7 +54,6 @@ export class VsCodeExtensionCredential implements TokenCredential {
      * Acquire an access token for the given scopes via the VS Code
      * authentication API. Returns `null` when no session is available.
      */
-    // TODO: handle interactive challenge request (by pipeline? or errors?)
     public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
         const scopesArray = Array.isArray(scopes) ? scopes : [scopes];
 
