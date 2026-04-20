@@ -81,7 +81,7 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
     return new clientCtor(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions, output));
 }
 
-// TODO: uncomment or remove as needed
+// TODO: future: uncomment or remove as needed
 // export function createAzureRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
 //     ctx: ICodeContext,
 //     executor: IActionExecutor,
@@ -148,7 +148,7 @@ function resolveCredentialArgs<TOptions>(
             credential: credentialOrSubscription.credential,
             resolvedOptions: {
                 ...options,
-                // TODO: this won't work for non-ARM clients. Is that a problem? Probably not since only ARM clients care about subscriptions?
+                // TODO: future: this won't work for non-ARM clients. Is that a problem? Probably not since only ARM clients care about subscriptions?
                 endpoint: credentialOrSubscription.environment.resourceManagerEndpointUrl.replace(/\/+$/, ''),
             } as TOptions,
         };
@@ -176,7 +176,7 @@ function resolveSubscriptionArgs<TOptions>(
             subscriptionId: credentialOrSubscription.subscriptionId,
             resolvedOptions: {
                 ...subscriptionIdOrOptions as TOptions | undefined,
-                // TODO: this won't work for non-ARM clients. Is that a problem? Probably not since only ARM clients care about subscriptions?
+                // TODO: future: this won't work for non-ARM clients. Is that a problem? Probably not since only ARM clients care about subscriptions?
                 endpoint: credentialOrSubscription.environment.resourceManagerEndpointUrl.replace(/\/+$/, ''),
             } as TOptions,
         };
@@ -223,6 +223,6 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
     } satisfies (RestClientOptions | ServiceClientOptions) as TOptions;
 }
 
-// TODO: Other policies we (maybe) need from before:
+// TODO: future: Other policies we (maybe) need from before:
 // - missing content type?
 // - Status code?

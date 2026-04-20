@@ -75,19 +75,54 @@ export class VsCodeExtensionCredential implements TokenCredential {
         if (!session) {
             return null;
         } else {
+            const { expiresOnTimestamp, refreshAfterTimestamp } = getTokenExpiry(session.idToken);
+
             const scopes = JSON.stringify(scopesArray);
-            const msg = this.options.code?.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn=0', provider, scopes) // TODO: expiresOn
-                ?? `[auth] token acquired provider=${provider} scopes=${scopes} expiresOn=0`; // TODO: expiresOn
+            const msg = this.options.code?.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn={2}', provider, scopes, expiresOnTimestamp)
+                ?? `[auth] token acquired provider=${provider} scopes=${scopes} expiresOn=${expiresOnTimestamp}`;
             this.options.output?.info(msg);
 
             return {
                 token: session.accessToken,
-                expiresOnTimestamp: 0, // TODO: get from ID token
-                refreshAfterTimestamp: 0, // TODO: get?
+                expiresOnTimestamp,
+                refreshAfterTimestamp,
                 tokenType: 'Bearer',
             };
         }
     }
 
-    // TODO: interactive sign in method?
+    // TODO: future: interactive sign in method?
+}
+
+/**
+ * Best-effort extraction of `exp` from a JWT ID token. Returns `expiresOnTimestamp`
+ * in milliseconds and `refreshAfterTimestamp` at 2/3 of the remaining lifetime.
+ * Falls back to `0` for both if the token is missing or unparseable.
+ */
+function getTokenExpiry(idToken: string | undefined): { expiresOnTimestamp: number; refreshAfterTimestamp: number } {
+    if (!idToken) {
+        return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+    }
+
+    try {
+        const parts = idToken.split('.');
+        if (parts.length < 2 || !parts[1]) {
+            return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const payload: { exp?: number } = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+        if (typeof payload.exp !== 'number') {
+            return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+        }
+
+        const expiresOnTimestamp = payload.exp * 1000;
+        const now = Date.now();
+        const remaining = expiresOnTimestamp - now;
+        const refreshAfterTimestamp = remaining > 0 ? now + Math.floor(remaining * 2 / 3) : expiresOnTimestamp;
+
+        return { expiresOnTimestamp, refreshAfterTimestamp };
+    } catch {
+        return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+    }
 }

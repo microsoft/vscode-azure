@@ -15,7 +15,7 @@
 export abstract class ExecuteStep<TContext> {
     /**
      * Perform the operation using the fully-populated context.
-     * Modifying the {@linkcode context} is allowed. // TODO: should we allow it? Or change to be consistent with `PromptStep`?
+     * Modifying the {@linkcode context} is allowed. // TODO: future: should we allow it? Or change to be consistent with `PromptStep`?
      */
     public abstract execute(context: TContext): void | Promise<void>;
 

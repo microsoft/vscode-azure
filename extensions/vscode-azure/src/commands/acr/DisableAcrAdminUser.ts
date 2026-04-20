@@ -30,7 +30,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(IAzureViewViewItemTree) private readonly viewTree: IAzureViewViewItemTree, // TODO: a single selector service that can accept pick options and give back the resolved resource (either from quick pick or from cache)?
+        @inject(IAzureViewViewItemTree) private readonly viewTree: IAzureViewViewItemTree, // TODO: future: a single selector service that can accept pick options and give back the resolved resource (either from quick pick or from cache)?
     ) { }
 
     /** @inheritdoc */

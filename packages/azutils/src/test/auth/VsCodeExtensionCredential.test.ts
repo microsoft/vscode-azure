@@ -108,6 +108,84 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(result!.expiresOnTimestamp).to.equal(0);
         });
 
+        it('should extract expiresOnTimestamp from idToken exp claim', async () => {
+            const { credential, getSession } = createCredential();
+            const exp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+            const payload = Buffer.from(JSON.stringify({ exp })).toString('base64');
+            const idToken = `header.${payload}.signature`;
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            expect(result!.expiresOnTimestamp).to.equal(exp * 1000);
+        });
+
+        it('should set refreshAfterTimestamp to 2/3 of remaining lifetime', async () => {
+            const { credential, getSession } = createCredential();
+            const now = Date.now();
+            const exp = Math.floor(now / 1000) + 3600;
+            const payload = Buffer.from(JSON.stringify({ exp })).toString('base64');
+            const idToken = `header.${payload}.signature`;
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            const remaining = exp * 1000 - now;
+            const expectedRefresh = now + Math.floor(remaining * 2 / 3);
+            expect(result!.refreshAfterTimestamp).to.be.closeTo(expectedRefresh, 1000);
+        });
+
+        it('should fall back to 0 when idToken is undefined', async () => {
+            const { credential, getSession } = createCredential();
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
+
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            expect(result!.expiresOnTimestamp).to.equal(0);
+            expect(result!.refreshAfterTimestamp).to.equal(0);
+        });
+
+        it('should fall back to 0 when idToken is malformed', async () => {
+            const { credential, getSession } = createCredential();
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken: 'not-a-jwt' } as never));
+
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            expect(result!.expiresOnTimestamp).to.equal(0);
+            expect(result!.refreshAfterTimestamp).to.equal(0);
+        });
+
+        it('should fall back to 0 when idToken payload has no exp claim', async () => {
+            const { credential, getSession } = createCredential();
+            const payload = Buffer.from(JSON.stringify({ sub: 'user' })).toString('base64');
+            const idToken = `header.${payload}.signature`;
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            expect(result!.expiresOnTimestamp).to.equal(0);
+            expect(result!.refreshAfterTimestamp).to.equal(0);
+        });
+
+        it('should handle an already-expired token by setting refreshAfterTimestamp to expiresOnTimestamp', async () => {
+            const { credential, getSession } = createCredential();
+            const exp = Math.floor(Date.now() / 1000) - 60; // expired 1 minute ago
+            const payload = Buffer.from(JSON.stringify({ exp })).toString('base64');
+            const idToken = `header.${payload}.signature`;
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            expect(result!.expiresOnTimestamp).to.equal(exp * 1000);
+            expect(result!.refreshAfterTimestamp).to.equal(exp * 1000);
+        });
+
         it('should not add tenant scope when no tenantId is provided anywhere', async () => {
             const { credential, getSession } = createCredential();
             getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));

@@ -12,7 +12,7 @@ export const IVsCode: ServiceIdentifier<IVsCode> = Symbol.for('IVsCode');
  * substitute a mock. Prefer this over importing `vscode` directly in
  * product code.
  */
-export type IVsCode = typeof vscode; // TODO: subset to what we actually use for easier mocking? Could use Pick<> for making that easy
+export type IVsCode = typeof vscode;
 
 export const IExtensionContext: ServiceIdentifier<IExtensionContext> = Symbol.for('IExtensionContext');
 /** The activating extension's `ExtensionContext`. */

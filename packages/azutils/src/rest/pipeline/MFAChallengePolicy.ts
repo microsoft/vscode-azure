@@ -37,7 +37,7 @@ export class MFAChallengePolicy implements PipelinePolicy {
         private readonly output?: IOutputChannel,
     ) { }
 
-    // TODO: could we instead use the builtin `bearerTokenAuthenticationPolicy` and just provide a custom `getToken` callback that handles MFA challenges?
+    // TODO: future: could we instead use the builtin `bearerTokenAuthenticationPolicy` and just provide a custom `getToken` callback that handles MFA challenges?
     /** @inheritdoc */
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
         const context = this.executor.currentContext;
