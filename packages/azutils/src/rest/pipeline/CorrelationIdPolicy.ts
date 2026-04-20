@@ -12,7 +12,7 @@ const correlationIdHeaderName = 'x-ms-correlation-request-id';
  * Pipeline policy that stamps every outgoing request with the
  * `x-ms-correlation-request-id` header drawn from the ambient
  * {@linkcode IActionExecutor.currentContext}'s
- * `telemetry.properties.correlationId`.
+ * `telemetry.properties['x-ms-correlation-request-id']`.
  *
  * This links ARM requests back to the VS Code command or tree
  * operation that initiated them. The current context is established
