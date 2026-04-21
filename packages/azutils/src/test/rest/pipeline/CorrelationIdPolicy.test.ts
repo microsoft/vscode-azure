@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { CorrelationIdPolicy } from '../../../rest/pipeline/CorrelationIdPolicy';
@@ -12,13 +11,13 @@ import { makeRequest, makeResponse } from '../../mockPipeline';
 
 describe('CorrelationIdPolicy (unit)', () => {
     it('should have the name "CorrelationIdPolicy"', () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new CorrelationIdPolicy(executor);
         expect(policy.name).to.equal('CorrelationIdPolicy');
     });
 
     it('should set x-ms-correlation-request-id header when a context is active', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new CorrelationIdPolicy(executor);
 
         await executor.callWithTelemetryAndErrorHandling('test', async (context) => {
@@ -29,7 +28,7 @@ describe('CorrelationIdPolicy (unit)', () => {
     });
 
     it('should not set the header when no context is active', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new CorrelationIdPolicy(executor);
         const request = makeRequest();
 
@@ -39,7 +38,7 @@ describe('CorrelationIdPolicy (unit)', () => {
     });
 
     it('should pass through to next and return the response', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new CorrelationIdPolicy(executor);
         const request = makeRequest();
         const expectedResponse = makeResponse(request);

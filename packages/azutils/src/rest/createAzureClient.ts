@@ -14,6 +14,8 @@ import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
 import { MFAChallengePolicy } from './pipeline/MFAChallengePolicy';
 import { RemoveBOMPolicy } from './pipeline/RemoveBOMPolicy';
 
+let azureAuth: typeof import('@microsoft/vscode-azext-azureauth') | undefined;
+
 /**
  * Create a classic `ServiceClient`-style Azure SDK client with the
  * standard set of pipeline policies applied (see {@linkcode DedupeRequestPolicy},
@@ -212,7 +214,10 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
                 position: 'perCall',
             },
             {
-                policy: new MFAChallengePolicy(executor, () => Promise.resolve(undefined), output), // TODO: pass in real get new token function
+                policy: new MFAChallengePolicy(executor, async (request) => {
+                    azureAuth ??= await import('@microsoft/vscode-azext-azureauth');
+                    return azureAuth.getSessionFromVSCode(request);
+                }, options?.endpoint, output),
                 position: 'perRetry',
             },
             {

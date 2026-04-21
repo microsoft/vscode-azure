@@ -38,6 +38,8 @@ export class ChooseResourceGroupStep<TContext extends ChooseResourceGroupContext
         const tree = new ResourceGroupViewItemTree(options.dataItemTree, options.output);
         super(
             {
+                title: options.code.l10n.t('Select Resource Group'),
+                stepName: 'resourceGroup',
                 ...options,
                 classify: (key: string) => classifyForResourceGroup(AzureNodeId.parse(key)),
                 tree

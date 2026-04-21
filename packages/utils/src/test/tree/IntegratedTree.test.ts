@@ -6,13 +6,13 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
-import { ActionExecutor } from '../../base/IActionExecutor';
-import { NullTelemetryReporter } from '../../base/ITelemetryReporter';
+import type { ActionExecutor } from '../../base/IActionExecutor';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider } from '../../tree/DataProvider';
 import { createDefaultLoadMoreOptions, ViewItemTree, type LoadMoreOptions, type ViewItemTreeOptions } from '../../tree/ViewItemTree';
 import type { ViewProvider } from '../../tree/ViewProvider';
+import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
 
@@ -48,13 +48,9 @@ function defaultLoadMoreOptions(): LoadMoreOptions<TestViewItem> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createExecutor() {
-    return new ActionExecutor(new NullTelemetryReporter());
-}
-
 function createDataTree(ttl = 60_000) {
     const { vscode } = createMockVsCode();
-    return new DataItemTree<TestResource>(vscode, 'integrated', createExecutor(), r => r.id, ttl);
+    return new DataItemTree<TestResource>(vscode, 'integrated', createTestActionExecutor().executor, r => r.id, ttl);
 }
 
 function createPipeline(ttl = 60_000, loadMoreOptions?: LoadMoreOptions<TestViewItem>): {
@@ -62,7 +58,7 @@ function createPipeline(ttl = 60_000, loadMoreOptions?: LoadMoreOptions<TestView
     dataTree: DataItemTree<TestResource>;
     viewTree: ViewItemTree<TestViewItem, TestResource>;
 } {
-    const executor = createExecutor();
+    const { executor } = createTestActionExecutor();
     const { vscode } = createMockVsCode();
     const dataTree = new DataItemTree<TestResource>(vscode, 'integrated', executor, r => r.id, ttl);
 
@@ -886,7 +882,7 @@ describe('Tree Integration Tests (integration)', () => {
         });
 
         it('should use resourceKey (not viewKey) when loading more pages', async () => {
-            const executor = createExecutor();
+            const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
             const dataTree = new DataItemTree<TestResource>(vscode, 'integrated', executor, r => r.id, 60_000);
 

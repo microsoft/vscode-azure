@@ -7,6 +7,7 @@ import type * as vscode from 'vscode';
 import { type ExtendedQuickPickOptions, type QuickPickItemWithData, showSmartQuickPick } from '../../ui/uiHelpers';
 import type { ICodeContext, ITreeItem } from '../../vscode/IVsCode';
 import type { ProviderResult } from '../../vscode/ProviderResult';
+import { GoBackError } from '../../wizard/GoBackError';
 import { PromptStep } from '../../wizard/PromptStep';
 import { getLastPick, type PickContext, type PickPair } from './PickContext';
 
@@ -52,6 +53,15 @@ export interface GenericPickOptions<TItem> extends ICodeContext {
 
     /** When provided, appends a "Create new" entry to the pick list. Mutually exclusive with {@linkcode canPickMany}. */
     readonly create?: CreateNewOption<TItem>;
+
+    /** Optional title shown at the top of the quick pick. */
+    readonly title?: string;
+
+    /** Optional placeholder text shown in the quick pick input. */
+    readonly placeHolder?: string;
+
+    /** Optional step name used in {@linkcode CancellationError} when the user dismisses the pick. Defaults to {@linkcode title} if not set. */
+    readonly stepName?: string;
 }
 
 /** This type ensures that `canPickMany` and `create` cannot both be specified at the same time */
@@ -96,14 +106,18 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem>> 
             const choices = await showSmartQuickPick(this.options, picks, {
                 ...DefaultQuickPickOptions,
                 canPickMany: true,
-                // TODO: more options, e.g. step name, etc.
+                title: this.options.title,
+                placeHolder: this.options.placeHolder,
+                stepName: this.options.stepName ?? this.options.title,
             }) as QuickPickItemWithData<FilteredChild<TItem>>[]; // Can't be `CreateNew` since create isn't allowed with `canPickMany`
 
             return { selectedTerminalPicks: choices.map(c => c.data.item) };
         } else {
             const choice = await showSmartQuickPick(this.options, picks, {
                 ...DefaultQuickPickOptions,
-                // TODO: more options, e.g. step name, etc.
+                title: this.options.title,
+                placeHolder: this.options.placeHolder,
+                stepName: this.options.stepName ?? this.options.title,
             });
 
             if (choice.data === CreateNew) {
@@ -162,7 +176,9 @@ export class GenericPickStep<TItem, TOptions extends GenericPickOptions<TItem>> 
         }
 
         if (children.length === 0) {
-            // TODO: Throw only if no items at the root? Otherwise allow for go-back?
+            if (parentItem) {
+                throw new GoBackError();
+            }
             throw new Error(this.options.code.l10n.t('No items found.'));
         }
 

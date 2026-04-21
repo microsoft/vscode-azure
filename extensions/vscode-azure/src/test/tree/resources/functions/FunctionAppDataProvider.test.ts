@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -15,7 +14,7 @@ import { makeFunctionApp } from './mockFunctionApp';
 
 describe('FunctionAppDataProvider (unit)', () => {
     function createProvider(settingsOverride?: Record<string, string>) {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
         const settings = settingsOverride ?? { MY_KEY: 'my-value', OTHER: 'other-value' };
         const mockClient = {

@@ -68,6 +68,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
         this.disposables.push(subscriptionProvider.onRefreshSuggested(() => {
             this.output.debug('[data] resources refresh suggested by subscription provider');
+            this.signInPromise = undefined;
             this.changeEmitter.fire({ resource: undefined, includeChildren: true });
         }));
     }
@@ -90,7 +91,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         // Ensure sign-in has been initiated (lazy, only once)
         if (!this.signInPromise) {
             this.output.debug('[auth] lazy sign-in start');
-            this.signInPromise = this.subscriptionProvider.signIn(); // TODO: handle sign out?
+            this.signInPromise = this.subscriptionProvider.signIn();
         }
         await this.signInPromise;
 
