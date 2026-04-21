@@ -197,7 +197,7 @@ describe('RecursivePickStep (unit)', () => {
             [new RecursivePickStep({
                 ...ctx,
                 tree,
-                classify: () => 'terminal' as PickClassification,
+                classify: () => 'terminal',
                 canPickMany: true,
             })],
         );
@@ -221,7 +221,7 @@ describe('RecursivePickStep (unit)', () => {
             [new GenericPickStep({
                 ...ctx,
                 tree,
-                classify: () => 'terminal' as PickClassification,
+                classify: () => 'terminal',
                 create: {
                     label: 'Create New',
                     createNewItem: () => 'newly-created',

@@ -43,7 +43,7 @@ describe('FunctionAppViewProvider (unit)', () => {
         it('should return true for Function App keys in the cache', () => {
             const app = makeFunctionApp();
             const key = AzureNodeId.from(app).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, app as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, app]]);
             const provider = createProvider(cache);
 
             expect(provider.canHandle(key)).to.be.true;
@@ -52,7 +52,7 @@ describe('FunctionAppViewProvider (unit)', () => {
         it('should return true for virtual resources owned by a Function App', () => {
             const vr = makeFunctionAppVirtual();
             const key = AzureNodeId.from(vr).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, vr as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, vr]]);
             const provider = createProvider(cache);
 
             expect(provider.canHandle(key)).to.be.true;
@@ -61,7 +61,7 @@ describe('FunctionAppViewProvider (unit)', () => {
         it('should return false for non-Function App keys', () => {
             const resource = makeGenericResource();
             const key = AzureNodeId.from(resource).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, resource as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, resource]]);
             const provider = createProvider(cache);
 
             expect(provider.canHandle(key)).to.be.false;
@@ -82,7 +82,7 @@ describe('FunctionAppViewProvider (unit)', () => {
         it('should render a Function App with Collapsed state', () => {
             const app = makeFunctionApp();
             const key = AzureNodeId.from(app).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, app as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, app]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
@@ -95,7 +95,7 @@ describe('FunctionAppViewProvider (unit)', () => {
         it('should render App Settings category as collapsed', () => {
             const vr = makeFunctionAppVirtual();
             const key = AzureNodeId.from(vr).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, vr as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, vr]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
@@ -110,7 +110,7 @@ describe('FunctionAppViewProvider (unit)', () => {
                 virtualPath: 'MY_KEY',
             });
             const key = AzureNodeId.from(vr).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, vr as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, vr]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);

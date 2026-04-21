@@ -31,12 +31,14 @@
         "build": "tsgo",
         "package": "npm pack",
         "test": "mocha",
-        "testcov": "npx c8 --reporter=html --exclude=\"**/test/**\" mocha",
+        "testcov": "npx c8 --clean --reporter=html --exclude=\"**/test/**\" mocha",
         "clean": "node ../../scripts/clean.mjs"
     },
     "mocha": {
         "node-option": [
-            "import=tsx"
+            "experimental-transform-types",
+            "disable-warning=ExperimentalWarning",
+            "import=@microsoft/vscode-azext-eng/mocha"
         ],
         "spec": [
             "src/test/**/*.test.ts"

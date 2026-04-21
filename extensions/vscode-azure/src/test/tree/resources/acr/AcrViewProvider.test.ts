@@ -42,7 +42,7 @@ describe('AcrViewProvider (unit)', () => {
         it('should return true for ACR registry keys in the cache', () => {
             const registry = makeAcrRegistry();
             const key = AzureNodeId.from(registry).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, registry as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, registry]]);
             const provider = createProvider(cache);
 
             expect(provider.canHandle(key)).to.be.true;
@@ -51,7 +51,7 @@ describe('AcrViewProvider (unit)', () => {
         it('should return true for virtual resources whose azureResource is an ACR registry', () => {
             const vr = makeAcrVirtualResource();
             const key = AzureNodeId.from(vr).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, vr as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, vr]]);
             const provider = createProvider(cache);
 
             expect(provider.canHandle(key)).to.be.true;
@@ -60,7 +60,7 @@ describe('AcrViewProvider (unit)', () => {
         it('should return false for non-ACR keys', () => {
             const resource = makeGenericResource();
             const key = AzureNodeId.from(resource).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, resource as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, resource]]);
             const provider = createProvider(cache);
 
             expect(provider.canHandle(key)).to.be.false;
@@ -86,7 +86,7 @@ describe('AcrViewProvider (unit)', () => {
         it('should render an ACR registry with package icon and both context values', () => {
             const registry = makeAcrRegistry();
             const key = AzureNodeId.from(registry).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, registry as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, registry]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
@@ -99,7 +99,7 @@ describe('AcrViewProvider (unit)', () => {
         it('should show description with logicalType for enriched registry', () => {
             const registry = makeAcrRegistry();
             const key = AzureNodeId.from(registry).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, registry as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, registry]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
@@ -109,7 +109,7 @@ describe('AcrViewProvider (unit)', () => {
         it('should show a warning icon when admin user is enabled', () => {
             const registry = makeAcrRegistry({ adminUserEnabled: true });
             const key = AzureNodeId.from(registry).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, registry as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, registry]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
@@ -121,7 +121,7 @@ describe('AcrViewProvider (unit)', () => {
         it('should render a category virtual resource as collapsed', () => {
             const vr = makeAcrVirtualResource({ virtualPath: 'Repositories' });
             const key = AzureNodeId.from(vr).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, vr as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, vr]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
@@ -133,7 +133,7 @@ describe('AcrViewProvider (unit)', () => {
         it('should render a leaf virtual resource as non-collapsible', () => {
             const vr = makeAcrVirtualResource({ virtualPath: 'myimage' });
             const key = AzureNodeId.from(vr).toString();
-            const cache = new Map<string, ConcreteAzureNode>([[key, vr as ConcreteAzureNode]]);
+            const cache = new Map<string, ConcreteAzureNode>([[key, vr]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
@@ -170,10 +170,10 @@ describe('AcrViewProvider (unit)', () => {
             const regKey = AzureNodeId.from(registry).toString();
             const childKey = AzureNodeId.from(child).toString();
             const cache = new Map<string, ConcreteAzureNode>([
-                [regKey, registry as ConcreteAzureNode],
-                [childKey, child as ConcreteAzureNode],
+                [regKey, registry],
+                [childKey, child],
             ]);
-            const provider = createProvider(cache, () => [child as ConcreteAzureNode]);
+            const provider = createProvider(cache, () => [child]);
 
             const children = await provider.getChildren(regKey);
             expect(children).to.have.length(1);

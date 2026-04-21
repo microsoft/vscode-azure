@@ -123,16 +123,16 @@ export function applyMockBindings(container: Container): void {
     );
 
     container.rebind(IResourceClientProvider).toConstantValue(
-        (() => Promise.resolve(createMockResourceClient())) as unknown as IResourceClientProvider,
+        () => Promise.resolve(createMockResourceClient()),
     );
     container.rebind(IAcrClientProvider).toConstantValue(
-        (() => Promise.resolve(createMockAcrClient())) as unknown as IAcrClientProvider,
+        () => Promise.resolve(createMockAcrClient()),
     );
 
     container.rebind(IDeploymentClientProvider).toConstantValue(
-        (() => Promise.reject(new Error('Mock mode: deployments not available'))) as unknown as IDeploymentClientProvider,
+        () => Promise.reject(new Error('Mock mode: deployments not available')),
     );
     container.rebind(ISubscriptionClientProvider).toConstantValue(
-        (() => Promise.reject(new Error('Mock mode: subscription client not available'))) as unknown as ISubscriptionClientProvider,
+        () => Promise.reject(new Error('Mock mode: subscription client not available')),
     );
 }

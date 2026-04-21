@@ -249,7 +249,7 @@ describe('ActionExecutor (unit)', () => {
 
             // Simulate user clicking "Report Issue"
             showErrorMessage.mock.mockImplementation(
-                ((...args: unknown[]) => Promise.resolve(args[1])) as never,
+                ((...args: unknown[]) => Promise.resolve(args[1])),
             );
 
             await executor.callWithTelemetryAndErrorHandling('test', () => {
