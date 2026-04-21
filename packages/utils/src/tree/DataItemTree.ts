@@ -5,6 +5,7 @@
 
 import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
+import { Limiter } from '../data/Limiter';
 import { isAsyncIterable, type Page } from '../data/Page';
 import type { Disposable } from '../vscode/Disposable';
 import type { IOutputChannel } from '../vscode/IOutputChannel';
@@ -119,21 +120,21 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         this.nodes.clear();
         this.roots = undefined;
 
-        // TODO: concurrency limits
         // Each root provider gets its own telemetry scope so that
         // concurrent calls don't overwrite shared mutable properties.
         const rootProviders = this.getRootProviders();
         this.output?.debug(`[data] ${this.name} root fetch start (providers=${rootProviders.length})`);
+        const limiter = new Limiter<T[] | null | undefined>(5);
         const results = await Promise.all(
             rootProviders
-                .map(async p => this.executor.callWithTelemetryAndErrorHandling('tree.getRootChildren', (context) => {
+                .map(p => limiter.queue(() => this.executor.callWithTelemetryAndErrorHandling<T[]>('tree.getRootChildren', (context) => {
                     context.telemetry.isUserEvent = false;
                     context.errorHandling.rethrow = true;
                     context.telemetry.properties.tree = this.name;
                     context.telemetry.properties.provider = p.constructor.name;
 
-                    return Promise.resolve(p.getChildren());
-                })),
+                    return Promise.resolve(p.getChildren()) as Promise<T[]>;
+                }))),
         );
 
         // Root providers always return plain arrays (pagination at root
@@ -228,13 +229,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * can await enrichment completion via {@linkcode whenEnriched}.
      */
     private enrichAll(resources: T[]): void {
-        // TODO: concurrency limits
+        const limiter = new Limiter<boolean | undefined>(5);
         for (const resource of resources) {
             const provider = this.findProvider(resource);
             if (provider?.enrich) {
                 const key = this.getKey(resource);
                 this.output?.debug(`[data] ${this.name} enrich start key=${key} provider=${provider.constructor.name}`);
-                const promise = this.executor
+                const promise = limiter.queue(() => this.executor
                     .callWithTelemetryAndErrorHandling('tree.enrich', (context) => {
                         context.telemetry.isUserEvent = false;
                         context.telemetry.suppress = 'onSuccess';
@@ -242,7 +243,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         context.telemetry.properties.tree = this.name;
                         context.telemetry.properties.provider = provider.constructor.name;
                         return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
-                    })
+                    }))
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
                         this.output?.debug(`[data] ${this.name} enrich done key=${key} includeChildren=${includeChildren}`);

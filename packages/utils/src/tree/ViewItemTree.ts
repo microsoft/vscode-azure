@@ -6,6 +6,7 @@
 import type * as vscode from 'vscode';
 import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
+import { Limiter } from '../data/Limiter';
 import type { Disposable } from '../vscode/Disposable';
 import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { ITreeItem } from '../vscode/IVsCode';
@@ -213,18 +214,18 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
     private async getRootChildren(): Promise<TViewItem[]> {
         this.output?.trace(`[view] ${this.name} dispatch getRootChildren providers=${this.getRootProviders().length}`);
-        // TODO: concurrency limits
         // Each root provider gets its own telemetry scope so that
         // concurrent calls don't overwrite shared mutable properties.
+        const limiter = new Limiter<TViewItem[] | null | undefined>(5);
         const results = await Promise.all(
             this.getRootProviders()
-                .map(async p => this.executor.callWithTelemetryAndErrorHandling('view.getRootChildren', (context) => {
+                .map(p => limiter.queue(() => this.executor.callWithTelemetryAndErrorHandling('view.getRootChildren', (context) => {
                     context.telemetry.suppress = 'onSuccess';
                     context.errorHandling.rethrow = true;
                     context.telemetry.properties.tree = this.name;
                     context.telemetry.properties.provider = p.constructor.name;
                     return Promise.resolve(p.getChildren());
-                })),
+                }))),
         );
         const viewItems = results.flatMap(r => r ?? []);
 

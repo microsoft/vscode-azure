@@ -7,7 +7,7 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { EventEmitter, IActionExecutor, ICodeContext, IOutputChannel, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
+import { EventEmitter, IActionExecutor, ICodeContext, IOutputChannel, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
 import { ConfigurationSection } from '../../constants';
@@ -312,8 +312,8 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         const resourceGroups = await this.cache.getChildren(sub);
         this.output.debug(`[view] flattened resource groups subscription=${subscription.subscriptionId} count=${resourceGroups.length}`);
 
-        // TODO: concurrency limits
-        await Promise.all(resourceGroups.map(rg => this.cache.loadAll(rg)));
+        const limiter = new Limiter<void>(5);
+        await Promise.all(resourceGroups.map(rg => limiter.queue(() => this.cache.loadAll(rg))));
 
         const allResources = (
             await Promise.all(resourceGroups.map(rg => this.cache.getChildren(rg)))
