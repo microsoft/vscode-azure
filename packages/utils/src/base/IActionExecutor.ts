@@ -8,6 +8,7 @@ import type { ServiceIdentifier } from 'inversify';
 import type { AsWritable } from '../types/AsWritable';
 import { CancellationError } from '../vscode/CancellationError';
 import type { IOutputChannel } from '../vscode/IOutputChannel';
+import type { IVsCode } from '../vscode/IVsCode';
 import { createActionContext, type IActionContext, type KnownTelemetryProperty, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 
@@ -56,7 +57,9 @@ export class ActionExecutor implements IActionExecutor {
     private readonly storage = new AsyncLocalStorage<IActionContext>();
 
     public constructor(
+        private readonly code: IVsCode,
         private readonly telemetryReporter: ITelemetryReporter,
+        private readonly extensionId: string,
         private readonly output?: IOutputChannel,
     ) { }
 
@@ -103,19 +106,22 @@ export class ActionExecutor implements IActionExecutor {
                 properties.result = 'Succeeded';
                 return result;
             } catch (error) {
-                // TODO: toast error message + report issue button
                 if (CancellationError.test(error)) {
                     properties.result = 'Canceled';
                     properties.lastStep = error.stepName;
                 } else {
                     properties.result = 'Failed';
                     const loggedError = error instanceof Error ? error : new Error(String(error));
-                    this.output?.error(loggedError, `[cmd] ${telemetryId} failed`);
+                    this.output?.error(loggedError, this.code.l10n.t('[cmd] {0} failed', telemetryId));
 
                     if (error instanceof Error) {
                         properties.error = error.name;
                         properties.errorMessage = error.message;
                         properties.stack = error.stack;
+                    }
+
+                    if (!context.errorHandling.suppressDisplay) {
+                        void this.showErrorToast(context, loggedError);
                     }
                 }
 
@@ -139,5 +145,30 @@ export class ActionExecutor implements IActionExecutor {
                 }
             }
         });
+    }
+
+    private async showErrorToast(context: IActionContext, error: Error): Promise<void> {
+        const reportIssue = context.errorHandling.suppressReportIssue
+            ? undefined
+            : this.code.l10n.t('Report Issue');
+
+        const items = reportIssue ? [reportIssue] : [];
+        const choice = await this.code.window.showErrorMessage(error.message, ...items);
+
+        if (choice === reportIssue) {
+            const data = [
+                `App Host: ${this.code.env.appHost}`,
+                `Remote Name: ${this.code.env.remoteName ?? '<none>'}`,
+                `Language: ${this.code.env.language}`,
+                '', // Some extra newlines since VSCode doesn't automatically add them
+                '',
+            ].join('\n');
+
+            void this.code.commands.executeCommand('vscode.openIssueReporter', {
+                extensionId: this.extensionId,
+                issueBody: undefined,
+                data,
+            });
+        }
     }
 }

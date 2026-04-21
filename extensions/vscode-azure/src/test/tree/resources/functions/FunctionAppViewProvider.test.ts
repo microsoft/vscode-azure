@@ -5,8 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
@@ -30,7 +29,7 @@ describe('FunctionAppViewProvider (unit)', () => {
     function createProvider(
         cache?: Map<string, ConcreteAzureNode>,
     ) {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const { ctx } = createMockCodeContext();
         const cacheMap = cache ?? new Map<string, ConcreteAzureNode>();
         const mockCache = {

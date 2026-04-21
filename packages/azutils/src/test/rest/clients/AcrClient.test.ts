@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, DebugOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { AcrClient } from '../../../rest/clients/AcrClient';
@@ -14,7 +13,7 @@ import { makeResponse, MockHttpClient } from '../../mockPipeline';
 describe('AcrClient (unit)', () => {
     it('should create a client and fetch a registry via registries.get', async () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 

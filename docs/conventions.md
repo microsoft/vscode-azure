@@ -146,11 +146,11 @@ Mark interface properties as `readonly` by default.
 Label test cases with `(unit)` or `(integration)` **after** the name in the root `describe` description:
 
 ```typescript
-describe('Hello command (unit)', () => {
-    it('should set telemetry property', async () => { ... });
+describe('RefreshResourcesView (unit)', () => {
+    it('should invalidate the cache', async () => { ... });
 });
 
-describe('Hello command (integration)', () => {
+describe('RefreshResourcesView (integration)', () => {
     it('should execute without error', async () => { ... });
 });
 ```

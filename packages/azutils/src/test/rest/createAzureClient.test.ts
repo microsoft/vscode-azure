@@ -5,8 +5,7 @@
 
 import type { TokenCredential } from '@azure/core-auth';
 import type { ServiceClient, ServiceClientOptions } from '@azure/core-client';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { createAzureSubscriptionClient } from '../../rest/createAzureClient';
@@ -28,7 +27,7 @@ class FakeClient {
 describe('createAzureSubscriptionClient (unit)', () => {
     it('should accept an AzureSubscription and extract credential + subscriptionId', () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const subscription = makeSubscription();
 
         const client = createAzureSubscriptionClient(
@@ -44,7 +43,7 @@ describe('createAzureSubscriptionClient (unit)', () => {
 
     it('should accept a TokenCredential + subscriptionId string', () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
 
         const client = createAzureSubscriptionClient(
@@ -61,7 +60,7 @@ describe('createAzureSubscriptionClient (unit)', () => {
 
     it('should throw if TokenCredential is provided with an empty subscription ID string', () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
 
         expect(() =>
@@ -77,7 +76,7 @@ describe('createAzureSubscriptionClient (unit)', () => {
 
     it('should set the endpoint from AzureSubscription.environment', () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const subscription = makeSubscription();
 
         const client = createAzureSubscriptionClient(
@@ -92,7 +91,7 @@ describe('createAzureSubscriptionClient (unit)', () => {
 
     it('should add pipeline policies via additionalPolicies', () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const subscription = makeSubscription();
 
         const client = createAzureSubscriptionClient(
@@ -114,7 +113,7 @@ describe('createAzureSubscriptionClient (unit)', () => {
 
     it('should set user agent prefix with extension ID and version', () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const subscription = makeSubscription();
 
         const client = createAzureSubscriptionClient(

@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor, Disposable } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, DebugOutputChannel, NullTelemetryReporter, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { Disposable } from '@microsoft/vscode-azure-utils';
+import { createMockVsCode, createTestActionExecutor, DebugOutputChannel, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -16,7 +16,7 @@ describe('GenericAzureDataProvider (unit)', () => {
     const code = createMockVsCode();
 
     function createProvider(subscriptionProvider?: Record<string, unknown>, clientFactory?: unknown) {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const subProvider = {
             signIn: mock.fn(() => Promise.resolve(true)),

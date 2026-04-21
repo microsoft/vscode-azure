@@ -46,8 +46,6 @@ Commands are registered in `registerCommands.ts` using `registerManagedCommand`:
 
 ```typescript
 export function registerCommands(container: Container): void {
-    registerManagedCommand(container, 'azure.hello', Hello);
-
     registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
     registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
 

@@ -44,7 +44,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
     private async findDefaultEnvironment(cwd: string): Promise<string | undefined> {
         try {
-            // TODO: Replace with AZD extension API when available
+            // TODO: future: Replace with AZD extension API when available
             const { stdout } = await execAzd(['env', 'list', '--output', 'json'], cwd);
             const envs: AzdEnvEntry[] = JSON.parse(stdout) as AzdEnvEntry[];
             const defaultEnv = envs.find(e => e.IsDefault);

@@ -7,7 +7,7 @@ import { ExecuteStep } from '@microsoft/vscode-azure-utils';
 import { execAzd } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
-// TODO: Replace with AZD extension API when available
+// TODO: future: Replace with AZD extension API when available
 /**
  * Creates a new azd environment (`azd env new`) in {@linkcode AzdWizardContext.iacFolder}
  * using the selected subscription, location, and environment name.

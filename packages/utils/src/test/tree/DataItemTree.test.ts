@@ -6,11 +6,10 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
-import { ActionExecutor } from '../../base/IActionExecutor';
-import { NullTelemetryReporter } from '../../base/ITelemetryReporter';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider } from '../../tree/DataProvider';
+import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
 interface TestResource {
@@ -22,7 +21,7 @@ const canHandleAll = (_r: unknown): _r is TestResource => true;
 const canHandleNone = (_r: unknown): _r is TestResource => false;
 
 function createTree(ttl = 60_000) {
-    const executor = new ActionExecutor(new NullTelemetryReporter());
+    const { executor } = createTestActionExecutor();
     const { vscode } = createMockVsCode();
     return new DataItemTree<TestResource>(vscode, 'test', executor, r => r.id, ttl);
 }

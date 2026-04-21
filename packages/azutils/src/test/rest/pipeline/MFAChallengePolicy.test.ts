@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelineRequest } from '@azure/core-rest-pipeline';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { MFAChallengePolicy } from '../../../rest/pipeline/MFAChallengePolicy';
@@ -13,13 +12,13 @@ import { makeRequest, makeResponse } from '../../mockPipeline';
 
 describe('MFAChallengePolicy (unit)', () => {
     it('should have the name "MFAChallengePolicy"', () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new MFAChallengePolicy(executor, () => Promise.resolve(undefined));
         expect(policy.name).to.equal('MFAChallengePolicy');
     });
 
     it('should pass through non-401 responses without challenge', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new MFAChallengePolicy(executor, () => Promise.resolve(undefined));
         const request = makeRequest();
         const response = makeResponse(request, 200);
@@ -31,7 +30,7 @@ describe('MFAChallengePolicy (unit)', () => {
     });
 
     it('should pass through 401 without WWW-Authenticate header', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new MFAChallengePolicy(executor, () => Promise.resolve(undefined));
         const request = makeRequest();
         const response = makeResponse(request, 401);
@@ -43,7 +42,7 @@ describe('MFAChallengePolicy (unit)', () => {
     });
 
     it('should retry with new token on 401 + WWW-Authenticate when getNewToken succeeds', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         let retryCalled = false;
 
         const getNewToken = () => Promise.resolve({
@@ -75,7 +74,7 @@ describe('MFAChallengePolicy (unit)', () => {
     });
 
     it('should return the 401 response when getNewToken returns undefined', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new MFAChallengePolicy(executor, () => Promise.resolve(undefined));
 
         await executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
@@ -91,7 +90,7 @@ describe('MFAChallengePolicy (unit)', () => {
     });
 
     it('should not retry the same request more than once (prevent infinite loop)', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         let callCount = 0;
 
         const getNewToken = () => Promise.resolve({
@@ -118,7 +117,7 @@ describe('MFAChallengePolicy (unit)', () => {
     });
 
     it('should work without a current context (no telemetry)', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const policy = new MFAChallengePolicy(
             executor,
             () => Promise.resolve({
@@ -141,5 +140,60 @@ describe('MFAChallengePolicy (unit)', () => {
 
         const result = await policy.sendRequest(request, next);
         expect(result.status).to.equal(200);
+    });
+
+    it('should pass fallback scopes derived from endpoint to getNewToken', async () => {
+        const { executor } = createTestActionExecutor();
+        let capturedRequest: { wwwAuthenticate: string; fallbackScopes?: readonly string[] } | undefined;
+
+        const getNewToken = (request: { wwwAuthenticate: string; fallbackScopes?: readonly string[] }) => {
+            capturedRequest = request;
+            return Promise.resolve(undefined);
+        };
+
+        const policy = new MFAChallengePolicy(executor, getNewToken, 'https://management.azure.com');
+        const request = makeRequest();
+        const response = makeResponse(request, 401, '{}', { 'WWW-Authenticate': 'Bearer claims="..."' });
+
+        await policy.sendRequest(request, () => Promise.resolve(response));
+
+        expect(capturedRequest).to.not.be.undefined;
+        expect(capturedRequest!.fallbackScopes).to.deep.equal(['https://management.azure.com/.default']);
+    });
+
+    it('should strip trailing slashes from endpoint before deriving fallback scopes', async () => {
+        const { executor } = createTestActionExecutor();
+        let capturedRequest: { wwwAuthenticate: string; fallbackScopes?: readonly string[] } | undefined;
+
+        const getNewToken = (request: { wwwAuthenticate: string; fallbackScopes?: readonly string[] }) => {
+            capturedRequest = request;
+            return Promise.resolve(undefined);
+        };
+
+        const policy = new MFAChallengePolicy(executor, getNewToken, 'https://management.azure.com///');
+        const request = makeRequest();
+        const response = makeResponse(request, 401, '{}', { 'WWW-Authenticate': 'Bearer claims="..."' });
+
+        await policy.sendRequest(request, () => Promise.resolve(response));
+
+        expect(capturedRequest!.fallbackScopes).to.deep.equal(['https://management.azure.com/.default']);
+    });
+
+    it('should use default ARM endpoint for fallback scopes when no endpoint is provided', async () => {
+        const { executor } = createTestActionExecutor();
+        let capturedRequest: { wwwAuthenticate: string; fallbackScopes?: readonly string[] } | undefined;
+
+        const getNewToken = (request: { wwwAuthenticate: string; fallbackScopes?: readonly string[] }) => {
+            capturedRequest = request;
+            return Promise.resolve(undefined);
+        };
+
+        const policy = new MFAChallengePolicy(executor, getNewToken);
+        const request = makeRequest();
+        const response = makeResponse(request, 401, '{}', { 'WWW-Authenticate': 'Bearer claims="..."' });
+
+        await policy.sendRequest(request, () => Promise.resolve(response));
+
+        expect(capturedRequest!.fallbackScopes).to.deep.equal(['https://management.azure.com/.default']);
     });
 });

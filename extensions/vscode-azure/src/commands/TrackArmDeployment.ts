@@ -21,7 +21,7 @@ import type { ManagedCommand } from './ManagedCommand';
  * from the signed-in accounts, then hands the deployment off to
  * {@linkcode ArmDeploymentDataProvider}.
  *
- * TODO: This is a temporary command just to kick off tracking an existing ARM deployment.
+ * TODO: This is a temporary demonstration command just to kick off tracking an existing ARM deployment.
  */
 @injectable()
 export class TrackArmDeployment implements ManagedCommand {

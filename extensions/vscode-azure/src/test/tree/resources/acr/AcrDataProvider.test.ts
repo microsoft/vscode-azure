@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -14,7 +13,7 @@ import { makeAcrRegistry } from './mockAcr';
 
 describe('AcrDataProvider (unit)', () => {
     function createProvider(clientOverrides?: Record<string, unknown>) {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const mockClient = {
             registries: {
                 get: mock.fn(() => Promise.resolve({
