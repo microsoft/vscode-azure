@@ -65,5 +65,3 @@ export class DisableAcrAdminUser implements ManagedCommand {
         );
     }
 }
-
-/* c8 ignore stop */

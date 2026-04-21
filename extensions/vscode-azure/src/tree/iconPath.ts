@@ -7,7 +7,7 @@ import type { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
- * Returns a `vscode.Uri` pointing to an Azure resource icon SVG file
+ * Returns a {@linkcode vscode.Uri} pointing to an Azure resource icon SVG file
  * located under `resources/icons/`.
  */
 export function getAzureIconUri(code: IVsCode, extensionContext: IExtensionContext, iconName: string): vscode.Uri {

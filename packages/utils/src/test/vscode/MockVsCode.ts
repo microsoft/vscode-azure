@@ -38,6 +38,67 @@ export class MockUri {
 }
 
 /**
+ * In-memory mock of `vscode.workspace.fs`.
+ *
+ * All operations work against an internal `Map<string, Uint8Array>`
+ * keyed by the URI's {@linkcode MockUri.path path}.
+ *
+ * Tests can pre-populate the file system via {@linkcode addFile} or
+ * inspect it via {@linkcode files}. Every method is a `mock.fn()`
+ * for call-count assertions.
+ */
+export class MockFileSystem {
+    /** Backing store keyed by URI path. */
+    readonly files = new Map<string, Uint8Array>();
+    /** Tracks directories created via {@linkcode createDirectory}. */
+    readonly directories = new Set<string>();
+
+    /** Pre-populate a file so {@linkcode stat} and {@linkcode readFile} find it. */
+    addFile(uri: MockUri, content: Uint8Array | string = new Uint8Array()): void {
+        this.files.set(uri.path, typeof content === 'string' ? Buffer.from(content) : content);
+    }
+
+    readonly stat = mock.fn((uri: MockUri) => {
+        if (this.files.has(uri.path) || this.directories.has(uri.path)) {
+            return Promise.resolve({ type: 1, ctime: 0, mtime: 0, size: this.files.get(uri.path)?.byteLength ?? 0 });
+        }
+        return Promise.reject(new Error(`File not found: ${uri.path}`));
+    });
+
+    readonly readFile = mock.fn((uri: MockUri) => {
+        const data = this.files.get(uri.path);
+        if (data) {
+            return Promise.resolve(data);
+        }
+        return Promise.reject(new Error(`File not found: ${uri.path}`));
+    });
+
+    readonly writeFile = mock.fn((uri: MockUri, content: Uint8Array) => {
+        this.files.set(uri.path, content);
+        return Promise.resolve();
+    });
+
+    readonly createDirectory = mock.fn((uri: MockUri) => {
+        this.directories.add(uri.path);
+        return Promise.resolve();
+    });
+
+    readonly copy = mock.fn((source: MockUri, target: MockUri) => {
+        const data = this.files.get(source.path);
+        if (data) {
+            this.files.set(target.path, data);
+        }
+        return Promise.resolve();
+    });
+
+    readonly delete = mock.fn((uri: MockUri) => {
+        this.files.delete(uri.path);
+        this.directories.delete(uri.path);
+        return Promise.resolve();
+    });
+}
+
+/**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
  * `IVsCode` value and test-inspection surfaces.
  *
@@ -72,6 +133,30 @@ export interface MockVsCodeResult {
 
     /** Commands registered via `vscode.commands.registerCommand`. Keyed by command ID. */
     readonly registeredCommands: Map<string, (...args: unknown[]) => unknown>;
+
+    /** The in-memory file system backing `workspace.fs`. */
+    readonly fs: MockFileSystem;
+
+    /**
+     * The workspace folders list backing `workspace.workspaceFolders`.
+     * Mutate this array to simulate single- or multi-root workspaces.
+     */
+    readonly workspaceFolders: vscode.WorkspaceFolder[];
+
+    /** The mock `authentication` namespace -- access `.getSession.mock` for assertions. */
+    readonly authentication: typeof vscode.authentication;
+
+    /** The mock `commands` namespace -- access `.executeCommand.mock` etc. for assertions. */
+    readonly commands: typeof vscode.commands;
+
+    /** The mock `env` namespace -- access `.openExternal.mock` for assertions. */
+    readonly env: typeof vscode.env;
+
+    /** The mock `window` namespace -- access `.showWarningMessage.mock` etc. for assertions. */
+    readonly window: typeof vscode.window;
+
+    /** The mock `workspace` namespace -- access `.getConfiguration.mock` etc. for assertions. */
+    readonly workspace: typeof vscode.workspace;
 }
 
 /**
@@ -196,34 +281,44 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(undefined),
     );
 
+    const fs = new MockFileSystem();
+    const workspaceFolders: vscode.WorkspaceFolder[] = [];
+    const authentication = {
+        getSession,
+    };
+    const commands = {
+        executeCommand,
+        registerCommand,
+    };
+    const env = {
+        appHost: 'desktop',
+        language: 'en',
+        openExternal,
+        remoteName: undefined,
+    };
+    const window = {
+        createQuickPick,
+        createInputBox,
+        createOutputChannel,
+        showInformationMessage,
+        showWarningMessage,
+        showErrorMessage,
+        showOpenDialog,
+        showWorkspaceFolderPick,
+    };
+    const workspace = {
+        getConfiguration,
+        onDidChangeConfiguration: () => Disposable.None,
+        get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
+        fs,
+    };
+
     const mockVsCode = {
-        authentication: {
-            getSession,
-        },
-        commands: {
-            executeCommand,
-            registerCommand,
-        },
-        env: {
-            appHost: 'desktop',
-            language: 'en',
-            openExternal,
-            remoteName: undefined,
-        },
-        window: {
-            createQuickPick,
-            createInputBox,
-            createOutputChannel,
-            showInformationMessage,
-            showWarningMessage,
-            showErrorMessage,
-            showOpenDialog,
-            showWorkspaceFolderPick,
-        },
-        workspace: {
-            getConfiguration,
-            onDidChangeConfiguration: () => Disposable.None,
-        },
+        authentication,
+        commands,
+        env,
+        window,
+        workspace,
         l10n: { t },
         QuickInputButtons,
         TreeItem: MockTreeItem,
@@ -241,7 +336,14 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         inputBoxes,
         settings,
         registeredCommands,
-    };
+        fs,
+        workspaceFolders,
+        authentication,
+        commands,
+        env,
+        window,
+        workspace,
+    } as unknown as MockVsCodeResult;
 }
 
 /**
