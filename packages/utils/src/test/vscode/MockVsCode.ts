@@ -157,6 +157,27 @@ export interface MockVsCodeResult {
 
     /** The mock `workspace` namespace -- access `.getConfiguration.mock` etc. for assertions. */
     readonly workspace: typeof vscode.workspace;
+
+    /**
+     * Pre-programmed responses for `showInformationMessage`,
+     * `showWarningMessage`, and `showErrorMessage`.
+     *
+     * Push button labels (e.g. `'Delete'`) to simulate the user
+     * clicking a button. Push `undefined` to simulate dismissal
+     * (the default when the queue is empty).
+     *
+     * Responses are consumed in order across all three message types.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * m.messageResponses.push('Delete');
+     *
+     * // code under test calls showWarningMessage('Sure?', 'Delete', 'Cancel')
+     * // => resolves to 'Delete'
+     * ```
+     */
+    readonly messageResponses: (string | undefined)[];
 }
 
 /**
@@ -203,17 +224,12 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         (name: string) => new DebugOutputChannel(name),
     );
 
-    const showInformationMessage = mock.fn(
-        () => Promise.resolve(),
-    );
+    const messageResponses: (string | undefined)[] = [];
+    const nextMessageResponse = () => Promise.resolve(messageResponses.shift());
 
-    const showWarningMessage = mock.fn(
-        () => Promise.resolve(),
-    );
-
-    const showErrorMessage = mock.fn(
-        () => Promise.resolve(),
-    );
+    const showInformationMessage = mock.fn(nextMessageResponse);
+    const showWarningMessage = mock.fn(nextMessageResponse);
+    const showErrorMessage = mock.fn(nextMessageResponse);
 
     const showOpenDialog = mock.fn(
         () => Promise.resolve(undefined),
@@ -343,6 +359,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         env,
         window,
         workspace,
+        messageResponses,
     } as unknown as MockVsCodeResult;
 }
 

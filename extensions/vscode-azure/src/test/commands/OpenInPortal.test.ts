@@ -12,22 +12,22 @@ import { OpenInPortal } from '../../commands/OpenInPortal';
 
 describe('OpenInPortal (unit)', () => {
     it('should open the portal URL for a subscription node', () => {
-        const { vscode: code } = createMockVsCode({ Uri: vscode.Uri });
+        const mockResult = createMockVsCode({ Uri: vscode.Uri });
 
-        const cmd = new OpenInPortal(code);
+        const cmd = new OpenInPortal(mockResult.vscode);
         cmd.execute('azr://user1@portal.azure.com/tenants/t1/subscriptions/sub-1');
 
-        const openExternal = code.env.openExternal as unknown as Mock<typeof code.env.openExternal>;
+        const openExternal = mockResult.env.openExternal as unknown as Mock<typeof vscode.env.openExternal>;
         expect(openExternal.mock.callCount()).to.equal(1);
     });
 
     it('should open the portal URL for a resource node', () => {
-        const { vscode: code } = createMockVsCode({ Uri: vscode.Uri });
+        const mockResult = createMockVsCode({ Uri: vscode.Uri });
 
-        const cmd = new OpenInPortal(code);
+        const cmd = new OpenInPortal(mockResult.vscode);
         cmd.execute('azr://user1@portal.azure.com/tenants/t1/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Web/sites/site1');
 
-        const openExternal = code.env.openExternal as unknown as Mock<typeof code.env.openExternal>;
+        const openExternal = mockResult.env.openExternal as unknown as Mock<typeof vscode.env.openExternal>;
         expect(openExternal.mock.callCount()).to.equal(1);
     });
 });

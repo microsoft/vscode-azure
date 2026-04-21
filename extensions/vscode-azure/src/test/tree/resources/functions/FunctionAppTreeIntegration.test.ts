@@ -6,7 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -307,9 +307,7 @@ describe('Function App Tree Integration (integration)', () => {
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
 
             // Mock the confirmation dialog to return 'Delete'
-            code.window.showWarningMessage = mock.fn(
-                () => Promise.resolve('Delete'),
-            );
+            mockCtx.mock.messageResponses.push('Delete');
 
             const command = new DeleteAppSetting(code, dataTree, funcDataProvider);
             await command.execute(appKeyNode.key);
@@ -331,10 +329,7 @@ describe('Function App Tree Integration (integration)', () => {
             const treeBefore = await collectTree(viewTree);
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
 
-            // Mock the confirmation dialog to return undefined (cancel)
-            code.window.showWarningMessage = mock.fn(
-                () => Promise.resolve(undefined),
-            );
+            // Simulate dismissal (no button clicked)
 
             const command = new DeleteAppSetting(code, dataTree, funcDataProvider);
             await command.execute(appKeyNode.key);
@@ -347,7 +342,6 @@ describe('Function App Tree Integration (integration)', () => {
     describe('AddOrEditAppSetting (add) command', () => {
         it('should add a setting and show it in the tree on refresh', async () => {
             const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockCtx.ctx.code;
 
             // Populate the tree
             const treeBefore = await collectTree(viewTree);
@@ -356,17 +350,13 @@ describe('Function App Tree Integration (integration)', () => {
             // Find the App Settings category key
             const categoryNode = findByLabel(treeBefore, FunctionAppVirtualPaths.AppSettings)!;
 
-            // Mock input boxes: first for key, second for value
-            let inputCallCount = 0;
-            code.window.showInputBox = mock.fn(() => {
-                inputCallCount++;
-                if (inputCallCount === 1) {
-                    return Promise.resolve('NEW_SETTING');
-                }
-                return Promise.resolve('new-value');
-            });
+            // Respond to the two input boxes: key then value
+            respondToPrompts(mockCtx.mock, [
+                { input: 'NEW_SETTING' },
+                { input: 'new-value' },
+            ]);
 
-            const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
+            const command = new AddOrEditAppSetting(mockCtx.ctx, dataTree, funcDataProvider);
             await command.execute('add', categoryNode.key);
 
             // Backing store should have the new setting
@@ -379,17 +369,21 @@ describe('Function App Tree Integration (integration)', () => {
 
         it('should not add when user cancels key input', async () => {
             const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockCtx.ctx.code;
 
             const treeBefore = await collectTree(viewTree);
             const categoryNode = findByLabel(treeBefore, FunctionAppVirtualPaths.AppSettings)!;
 
-            code.window.showInputBox = mock.fn(
-                () => Promise.resolve(undefined),
-            );
+            respondToPrompts(mockCtx.mock, [
+                'cancel',
+            ]);
 
-            const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
-            await command.execute('add', categoryNode.key);
+            const command = new AddOrEditAppSetting(mockCtx.ctx, dataTree, funcDataProvider);
+
+            try {
+                await command.execute('add', categoryNode.key);
+            } catch {
+                // CancellationError is expected
+            }
 
             expect(backingSettings).to.not.have.property('NEW_SETTING');
         });
@@ -398,18 +392,17 @@ describe('Function App Tree Integration (integration)', () => {
     describe('AddOrEditAppSetting (edit) command', () => {
         it('should update a setting value and reflect it in the data provider cache', async () => {
             const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockCtx.ctx.code;
 
             // Populate the tree (this also populates the settings cache)
             const treeBefore = await collectTree(viewTree);
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
 
-            // Mock input box to return the new value
-            code.window.showInputBox = mock.fn(
-                () => Promise.resolve('updated-value'),
-            );
+            // Respond with the new value
+            respondToPrompts(mockCtx.mock, [
+                { input: 'updated-value' },
+            ]);
 
-            const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
+            const command = new AddOrEditAppSetting(mockCtx.ctx, dataTree, funcDataProvider);
             await command.execute('edit', appKeyNode.key);
 
             // Backing store should have the updated value
@@ -421,17 +414,21 @@ describe('Function App Tree Integration (integration)', () => {
 
         it('should not update when user cancels input', async () => {
             const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
-            const code = mockCtx.ctx.code;
 
             const treeBefore = await collectTree(viewTree);
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
 
-            code.window.showInputBox = mock.fn(
-                () => Promise.resolve(undefined),
-            );
+            respondToPrompts(mockCtx.mock, [
+                'cancel',
+            ]);
 
-            const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
-            await command.execute('edit', appKeyNode.key);
+            const command = new AddOrEditAppSetting(mockCtx.ctx, dataTree, funcDataProvider);
+
+            try {
+                await command.execute('edit', appKeyNode.key);
+            } catch {
+                // CancellationError is expected
+            }
 
             // Original value should remain
             expect(backingSettings).to.have.property('APP_KEY', 'app-value');
