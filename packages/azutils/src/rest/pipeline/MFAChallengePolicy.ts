@@ -30,10 +30,15 @@ export class MFAChallengePolicy implements PipelinePolicy {
      *   `WWW-Authenticate` header contents to obtain a stepped-up
      *   session. Returning `undefined` means the challenge could not
      *   be satisfied and the original 401 response is returned.
+     * @param endpoint - The Azure resource endpoint (e.g.
+     *   `https://management.azure.com`). Used to derive fallback
+     *   scopes for the MFA challenge.
+     * @param output - Optional output channel for debug logging.
      */
     public constructor(
         private readonly executor: IActionExecutor,
         private readonly getNewToken: (request: vscode.AuthenticationWwwAuthenticateRequest) => Promise<vscode.AuthenticationSession | undefined>,
+        private readonly endpoint?: string,
         private readonly output?: IOutputChannel,
     ) { }
 
@@ -54,10 +59,12 @@ export class MFAChallengePolicy implements PipelinePolicy {
 
             retriedRequests.add(request); // Prevent infinite challenge loop
 
+            const fallbackScope = `${(this.endpoint ?? 'https://management.azure.com').replace(/\/+$/, '')}/.default`;
+
             const newSession = await this.getNewToken({
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 wwwAuthenticate: initialResponse.headers.get(wwwAuthenticateHeaderName)!,
-                // TODO: set fallback scopes?
+                fallbackScopes: [fallbackScope],
             });
 
             if (newSession) {

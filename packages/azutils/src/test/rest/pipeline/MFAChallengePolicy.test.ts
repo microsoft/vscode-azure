@@ -141,4 +141,59 @@ describe('MFAChallengePolicy (unit)', () => {
         const result = await policy.sendRequest(request, next);
         expect(result.status).to.equal(200);
     });
+
+    it('should pass fallback scopes derived from endpoint to getNewToken', async () => {
+        const { executor } = createTestActionExecutor();
+        let capturedRequest: { wwwAuthenticate: string; fallbackScopes?: readonly string[] } | undefined;
+
+        const getNewToken = (request: { wwwAuthenticate: string; fallbackScopes?: readonly string[] }) => {
+            capturedRequest = request;
+            return Promise.resolve(undefined);
+        };
+
+        const policy = new MFAChallengePolicy(executor, getNewToken, 'https://management.azure.com');
+        const request = makeRequest();
+        const response = makeResponse(request, 401, '{}', { 'WWW-Authenticate': 'Bearer claims="..."' });
+
+        await policy.sendRequest(request, () => Promise.resolve(response));
+
+        expect(capturedRequest).to.not.be.undefined;
+        expect(capturedRequest!.fallbackScopes).to.deep.equal(['https://management.azure.com/.default']);
+    });
+
+    it('should strip trailing slashes from endpoint before deriving fallback scopes', async () => {
+        const { executor } = createTestActionExecutor();
+        let capturedRequest: { wwwAuthenticate: string; fallbackScopes?: readonly string[] } | undefined;
+
+        const getNewToken = (request: { wwwAuthenticate: string; fallbackScopes?: readonly string[] }) => {
+            capturedRequest = request;
+            return Promise.resolve(undefined);
+        };
+
+        const policy = new MFAChallengePolicy(executor, getNewToken, 'https://management.azure.com///');
+        const request = makeRequest();
+        const response = makeResponse(request, 401, '{}', { 'WWW-Authenticate': 'Bearer claims="..."' });
+
+        await policy.sendRequest(request, () => Promise.resolve(response));
+
+        expect(capturedRequest!.fallbackScopes).to.deep.equal(['https://management.azure.com/.default']);
+    });
+
+    it('should use default ARM endpoint for fallback scopes when no endpoint is provided', async () => {
+        const { executor } = createTestActionExecutor();
+        let capturedRequest: { wwwAuthenticate: string; fallbackScopes?: readonly string[] } | undefined;
+
+        const getNewToken = (request: { wwwAuthenticate: string; fallbackScopes?: readonly string[] }) => {
+            capturedRequest = request;
+            return Promise.resolve(undefined);
+        };
+
+        const policy = new MFAChallengePolicy(executor, getNewToken);
+        const request = makeRequest();
+        const response = makeResponse(request, 401, '{}', { 'WWW-Authenticate': 'Bearer claims="..."' });
+
+        await policy.sendRequest(request, () => Promise.resolve(response));
+
+        expect(capturedRequest!.fallbackScopes).to.deep.equal(['https://management.azure.com/.default']);
+    });
 });
