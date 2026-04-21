@@ -57,7 +57,7 @@
         "node-option": [
             "experimental-transform-types",
             "disable-warning=ExperimentalWarning",
-            "import=../../scripts/register-hooks.mjs"
+            "import=@microsoft/vscode-azext-eng/mocha"
         ],
         "spec": [
             "src/test/**/*.test.ts"
