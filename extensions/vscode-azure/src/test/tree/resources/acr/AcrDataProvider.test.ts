@@ -70,7 +70,7 @@ describe('AcrDataProvider (unit)', () => {
             const provider = createProvider();
             const registry = makeAcrRegistry();
 
-            await provider.enrich(registry as never);
+            await provider.enrich(registry);
 
             expect(registry.loginServer).to.equal('myreg.azurecr.io');
             expect(registry.sku).to.deep.equal({ name: 'Basic', tier: 'Basic' });
@@ -81,7 +81,7 @@ describe('AcrDataProvider (unit)', () => {
             const provider = createProvider();
             const resource = makeGenericResource();
 
-            const changed = await provider.enrich(resource as never);
+            const changed = await provider.enrich(resource);
             expect(changed).to.be.false;
         });
 
@@ -96,7 +96,7 @@ describe('AcrDataProvider (unit)', () => {
             });
             const registry = makeAcrRegistry();
 
-            await provider.enrich(registry as never);
+            await provider.enrich(registry);
 
             expect(registry.loginServer).to.equal('');
             expect(registry.adminUserEnabled).to.equal(true);
@@ -114,7 +114,7 @@ describe('AcrDataProvider (unit)', () => {
             const provider = createProvider();
             const registry = makeAcrRegistry();
 
-            const children = provider.getChildren(registry as never);
+            const children = provider.getChildren(registry);
 
             expect(children).to.have.length(2);
             expect(children[0]).to.have.property('virtualPath', 'Repositories');
@@ -132,7 +132,7 @@ describe('AcrDataProvider (unit)', () => {
                 azureResource: registry,
             });
 
-            const children = provider.getChildren(category as never);
+            const children = provider.getChildren(category);
 
             expect(children).to.have.length(3);
             expect(children[0]).to.have.property('virtualPath', 'repo-1');
@@ -147,7 +147,7 @@ describe('AcrDataProvider (unit)', () => {
                 azureResource: registry,
             });
 
-            const children = provider.getChildren(category as never);
+            const children = provider.getChildren(category);
 
             expect(children).to.have.length(3);
             expect(children[0]).to.have.property('virtualPath', 'webhook-1');
@@ -161,7 +161,7 @@ describe('AcrDataProvider (unit)', () => {
                 azureResource: makeAcrRegistry(),
             });
 
-            const children = provider.getChildren(vr as never);
+            const children = provider.getChildren(vr);
             expect(children).to.deep.equal([]);
         });
 
@@ -169,7 +169,7 @@ describe('AcrDataProvider (unit)', () => {
             const provider = createProvider();
             const resource = makeGenericResource();
 
-            const children = provider.getChildren(resource as never);
+            const children = provider.getChildren(resource);
             expect(children).to.deep.equal([]);
         });
     });

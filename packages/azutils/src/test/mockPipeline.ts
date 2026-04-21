@@ -19,9 +19,9 @@ export function makeRequest(overrides?: Partial<PipelineRequest>): PipelineReque
         timeout: 0,
         withCredentials: false,
         requestId: '1',
-        abortSignal: undefined as never,
+        abortSignal: undefined,
         ...overrides,
-    } as PipelineRequest;
+    };
 }
 
 /**
@@ -33,7 +33,7 @@ export function makeResponse(request: PipelineRequest, status?: number, bodyAsTe
         status: status ?? 200,
         headers: createHttpHeaders(headers),
         bodyAsText: bodyAsText ?? null,
-    } as PipelineResponse;
+    };
 }
 
 /**

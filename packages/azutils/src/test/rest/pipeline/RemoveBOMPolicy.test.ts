@@ -48,7 +48,7 @@ describe('RemoveBOMPolicy (unit)', () => {
         const policy = new RemoveBOMPolicy();
         const request = makeRequest();
         const response = makeResponse(request);
-        response.bodyAsText = undefined as unknown as string;
+        response.bodyAsText = undefined;
 
         const result = await policy.sendRequest(request, () => Promise.resolve(response));
 

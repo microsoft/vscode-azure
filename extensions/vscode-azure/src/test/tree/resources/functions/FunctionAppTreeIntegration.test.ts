@@ -119,7 +119,7 @@ describe('Function App Tree Integration (integration)', () => {
         const resourceClient = createMockResourceClient([resourceGroup], resources);
         const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
 
-        const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider as never);
+        const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider);
         const genericDataProvider = new GenericAzureDataProvider(code, executor, output, resourceClientProvider, subProvider);
 
         // Register in correct order: Function App first, generic fallback second
@@ -309,7 +309,7 @@ describe('Function App Tree Integration (integration)', () => {
             // Mock the confirmation dialog to return 'Delete'
             code.window.showWarningMessage = mock.fn(
                 () => Promise.resolve('Delete'),
-            ) as never;
+            );
 
             const command = new DeleteAppSetting(code, dataTree, funcDataProvider);
             await command.execute(appKeyNode.key);
@@ -334,7 +334,7 @@ describe('Function App Tree Integration (integration)', () => {
             // Mock the confirmation dialog to return undefined (cancel)
             code.window.showWarningMessage = mock.fn(
                 () => Promise.resolve(undefined),
-            ) as never;
+            );
 
             const command = new DeleteAppSetting(code, dataTree, funcDataProvider);
             await command.execute(appKeyNode.key);
@@ -364,7 +364,7 @@ describe('Function App Tree Integration (integration)', () => {
                     return Promise.resolve('NEW_SETTING');
                 }
                 return Promise.resolve('new-value');
-            }) as never;
+            });
 
             const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
             await command.execute('add', categoryNode.key);
@@ -386,7 +386,7 @@ describe('Function App Tree Integration (integration)', () => {
 
             code.window.showInputBox = mock.fn(
                 () => Promise.resolve(undefined),
-            ) as never;
+            );
 
             const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
             await command.execute('add', categoryNode.key);
@@ -407,7 +407,7 @@ describe('Function App Tree Integration (integration)', () => {
             // Mock input box to return the new value
             code.window.showInputBox = mock.fn(
                 () => Promise.resolve('updated-value'),
-            ) as never;
+            );
 
             const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
             await command.execute('edit', appKeyNode.key);
@@ -428,7 +428,7 @@ describe('Function App Tree Integration (integration)', () => {
 
             code.window.showInputBox = mock.fn(
                 () => Promise.resolve(undefined),
-            ) as never;
+            );
 
             const command = new AddOrEditAppSetting(code, dataTree, funcDataProvider);
             await command.execute('edit', appKeyNode.key);

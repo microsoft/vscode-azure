@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -287,7 +287,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             location: 'eastus',
             id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/myWebApp',
             tags: { env: 'prod', team: 'alpha' },
-        } as Partial<GenericResource>);
+        });
 
         const storageAccount = makeGenericResource({
             name: 'myStorage',
@@ -296,7 +296,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             location: 'westus',
             id: '/subscriptions/test-sub/resourceGroups/rg2/providers/Microsoft.Storage/storageAccounts/myStorage',
             tags: { env: 'dev' },
-        } as Partial<GenericResource>);
+        });
 
         const untaggedResource = makeGenericResource({
             name: 'myFunc',
@@ -304,7 +304,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             logicalType: 'Microsoft.Web/sites',
             location: 'eastus',
             id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/myFunc',
-        } as Partial<GenericResource>);
+        });
 
         function createGroupingProvider() {
             const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([

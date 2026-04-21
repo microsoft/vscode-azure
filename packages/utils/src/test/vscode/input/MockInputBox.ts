@@ -56,7 +56,7 @@ export class MockInputBox implements vscode.InputBox {
 
     /** Simulate the user pressing Enter / accepting the current value. */
     accept(): void {
-        this._onDidAccept.fire(undefined as never);
+        this._onDidAccept.fire(undefined);
     }
 
     /** Simulate the user pressing a button (e.g. Back). */
@@ -66,7 +66,7 @@ export class MockInputBox implements vscode.InputBox {
 
     /** Simulate the input box being hidden. */
     triggerHide(): void {
-        this._onDidHide.fire(undefined as never);
+        this._onDidHide.fire(undefined);
     }
 
     /** Simulate the user typing a new value. */

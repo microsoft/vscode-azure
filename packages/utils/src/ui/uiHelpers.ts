@@ -395,7 +395,7 @@ export async function withDelayedProgress<T>(code: IVsCode, options: vscode.Prog
     ]);
 
     if (raceResult !== Pending) {
-        return raceResult as T;
+        return raceResult;
     }
 
     return code.window.withProgress(options, () => { return promise; });

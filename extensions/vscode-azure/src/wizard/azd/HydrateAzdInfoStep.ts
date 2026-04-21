@@ -23,7 +23,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
     public async prompt(): Promise<Partial<TContext>> {
         const workspaceFolder = await getWorkspaceFolder(this.code);
         if (!workspaceFolder) {
-            return {} as Partial<TContext>;
+            return {};
         }
 
         const result: Record<string, unknown> = {};

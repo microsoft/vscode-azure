@@ -23,7 +23,7 @@ export function makeAccount(overrides?: Partial<AzureAccount>): AzureAccount {
         label: 'Test Account',
         environment: defaultEnvironment,
         ...overrides,
-    } as AzureAccount;
+    };
 }
 
 /**
@@ -36,7 +36,7 @@ export function makeTenant(overrides?: Partial<AzureTenant>): AzureTenant {
         displayName: 'Test Tenant',
         account: makeAccount(),
         ...overrides,
-    } as AzureTenant;
+    };
 }
 
 /**
@@ -74,7 +74,7 @@ export function makeResourceGroup(overrides?: Partial<ResourceGroup>): ResourceG
         groupingStrategy: 'resourceGroup',
         groupingValue: 'rg1',
         ...overrides,
-    } as ResourceGroup;
+    };
 }
 
 /**
@@ -90,7 +90,7 @@ export function makeGenericResource(overrides?: Partial<GenericResource>): Gener
         logicalType: 'Microsoft.Web/sites',
         subscription: makeSubscription(),
         ...overrides,
-    } as GenericResource;
+    };
 }
 
 /**
@@ -103,7 +103,7 @@ export function makeVirtualGroup(overrides?: Partial<VirtualGroup>): VirtualGrou
         groupingValue: 'Microsoft.Web/sites',
         subscription: makeSubscription(),
         ...overrides,
-    } as VirtualGroup;
+    };
 }
 
 /**
@@ -117,5 +117,5 @@ export function makeVirtualResource(overrides?: Partial<VirtualResource>): Virtu
         virtualPath: 'myrepo',
         azureResource: makeGenericResource(),
         ...overrides,
-    } as VirtualResource;
+    };
 }

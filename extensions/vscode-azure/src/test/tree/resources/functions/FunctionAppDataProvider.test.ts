@@ -26,7 +26,7 @@ describe('FunctionAppDataProvider (unit)', () => {
             },
         };
         const createClient = mock.fn(() => Promise.resolve(mockClient));
-        const provider = new FunctionAppDataProvider(executor, createClient as never);
+        const provider = new FunctionAppDataProvider(executor, createClient);
         return { provider, mockClient, createClient };
     }
 
@@ -127,7 +127,7 @@ describe('FunctionAppDataProvider (unit)', () => {
             await provider.addOrUpdateSetting(app, 'NEW_KEY', 'new-value');
 
             const updateCall = mockClient.webApps.updateApplicationSettings.mock.calls[0];
-            const body = updateCall.arguments[2] as { properties?: Record<string, string> };
+            const body = updateCall.arguments[2];
             expect(body.properties).to.have.property('NEW_KEY', 'new-value');
             expect(body.properties).to.have.property('EXISTING', 'val');
 
@@ -144,7 +144,7 @@ describe('FunctionAppDataProvider (unit)', () => {
             await provider.deleteSetting(app, 'REMOVE');
 
             const updateCall = mockClient.webApps.updateApplicationSettings.mock.calls[0];
-            const body = updateCall.arguments[2] as { properties?: Record<string, string> };
+            const body = updateCall.arguments[2];
             expect(body.properties).to.have.property('KEEP', 'yes');
             expect(body.properties).to.not.have.property('REMOVE');
 
