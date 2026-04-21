@@ -5,8 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
@@ -30,7 +29,7 @@ describe('AcrViewProvider (unit)', () => {
         cache?: Map<string, ConcreteAzureNode>,
         childrenFn?: (node: ConcreteAzureNode) => ConcreteAzureNode[],
     ) {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const cacheMap = cache ?? new Map<string, ConcreteAzureNode>();
         const mockCache = {
             get: (key: string) => cacheMap.get(key),

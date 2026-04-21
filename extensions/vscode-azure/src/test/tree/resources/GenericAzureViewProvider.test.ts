@@ -5,8 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, DebugOutputChannel, NullTelemetryReporter, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
@@ -20,7 +19,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         nodes?: ConcreteAzureNode[],
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
     ) {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const allNodes = nodes ?? [];
         const cacheMap = new Map<string, ConcreteAzureNode>();

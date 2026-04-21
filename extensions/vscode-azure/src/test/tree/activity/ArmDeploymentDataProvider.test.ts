@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, DebugOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -131,7 +130,7 @@ describe('isNestedDeploymentOp (unit)', () => {
 
 describe('ArmDeploymentDataProvider (unit)', () => {
     function createProvider(clientOrFactory?: unknown) {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const { vscode } = createMockVsCode();
         const createClientFn = clientOrFactory

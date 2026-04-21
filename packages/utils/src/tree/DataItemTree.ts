@@ -237,7 +237,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                 const promise = this.executor
                     .callWithTelemetryAndErrorHandling('tree.enrich', (context) => {
                         context.telemetry.isUserEvent = false;
-                        context.telemetry.suppress = 'onSuccess'; // TODO: should we be suppressing?
+                        context.telemetry.suppress = 'onSuccess';
                         context.errorHandling.rethrow = true;
                         context.telemetry.properties.tree = this.name;
                         context.telemetry.properties.provider = provider.constructor.name;

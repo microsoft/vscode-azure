@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, DebugOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { afterEach, describe, it } from 'mocha';
 import { SubscriptionClient } from '../../../rest/clients/SubscriptionClient';
@@ -19,7 +18,7 @@ describe('SubscriptionClient (unit)', () => {
 
     it('should list locations for a subscription', async () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
@@ -45,7 +44,7 @@ describe('SubscriptionClient (unit)', () => {
 
     it('should cache locations across multiple calls', async () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 

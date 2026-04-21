@@ -181,6 +181,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 
     const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
 
+    const executeCommand = mock.fn(
+        () => Promise.resolve(undefined),
+    );
+
     const registerCommand = mock.fn(
         (id: string, handler: (...args: unknown[]) => unknown) => {
             registeredCommands.set(id, handler);
@@ -197,6 +201,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
             getSession,
         },
         commands: {
+            executeCommand,
             registerCommand,
         },
         env: {

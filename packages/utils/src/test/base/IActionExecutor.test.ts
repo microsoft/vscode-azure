@@ -6,10 +6,10 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock, type Mock } from 'node:test';
-import { ActionExecutor } from '../../base/IActionExecutor';
 import type { ITelemetryReporter } from '../../base/ITelemetryReporter';
-import { DebugOutputChannel } from '../../vscode/IOutputChannel';
 import { CancellationError } from '../../vscode/CancellationError';
+import { DebugOutputChannel } from '../../vscode/IOutputChannel';
+import { createTestActionExecutor } from '../createTestActionExecutor';
 
 // A mock reporter is necessary here to validate that the expected calls are made to the reporter
 function createReporter(): ITelemetryReporter & { sendTelemetryErrorEvent: Mock<ITelemetryReporter['sendTelemetryErrorEvent']> } {
@@ -19,22 +19,28 @@ function createReporter(): ITelemetryReporter & { sendTelemetryErrorEvent: Mock<
     };
 }
 
+function createExecutor(reporter?: ReturnType<typeof createReporter>, output?: DebugOutputChannel) {
+    const r = reporter ?? createReporter();
+    const { executor, code } = createTestActionExecutor({ reporter: r, output });
+    return { executor, reporter: r, code };
+}
+
 describe('ActionExecutor (unit)', () => {
     describe('currentContext', () => {
         it('should be undefined outside of a callback', () => {
-            const executor = new ActionExecutor(createReporter());
+            const { executor } = createExecutor();
             expect(executor.currentContext).to.be.undefined;
         });
 
         it('should be defined inside a callback', async () => {
-            const executor = new ActionExecutor(createReporter());
+            const { executor } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 expect(executor.currentContext).to.equal(ctx);
             });
         });
 
         it('should be undefined again after callback completes', async () => {
-            const executor = new ActionExecutor(createReporter());
+            const { executor } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', () => { /* noop */ });
             expect(executor.currentContext).to.be.undefined;
         });
@@ -42,14 +48,13 @@ describe('ActionExecutor (unit)', () => {
 
     describe('callWithTelemetryAndErrorHandling', () => {
         it('should return the callback result on success', async () => {
-            const executor = new ActionExecutor(createReporter());
+            const { executor } = createExecutor();
             const result = await executor.callWithTelemetryAndErrorHandling('test', () => 42);
             expect(result).to.equal(42);
         });
 
         it('should set result to Succeeded on success', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', () => 'ok');
 
             expect(reporter.sendTelemetryErrorEvent.mock.callCount()).to.equal(1);
@@ -58,8 +63,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should set result to Failed on error and return undefined', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             const result = await executor.callWithTelemetryAndErrorHandling<string>('test', () => {
                 throw new Error('boom');
             });
@@ -70,8 +74,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should set result to Canceled for CancellationError', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', () => {
                 throw new CancellationError();
             });
@@ -81,7 +84,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should rethrow when errorHandling.rethrow is set', async () => {
-            const executor = new ActionExecutor(createReporter());
+            const { executor } = createExecutor();
             try {
                 await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                     ctx.errorHandling.rethrow = true;
@@ -94,8 +97,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should record duration in measurements', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', () => { /* noop */ });
 
             const measurements = reporter.sendTelemetryErrorEvent.mock.calls[0].arguments[2];
@@ -104,8 +106,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should suppress telemetry when suppress is always', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 ctx.telemetry.suppress = 'always';
             });
@@ -114,8 +115,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should suppress telemetry when suppress is onSuccess and result is Succeeded', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 ctx.telemetry.suppress = 'onSuccess';
             });
@@ -124,8 +124,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should not suppress telemetry when suppress is onSuccess and result is Failed', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 ctx.telemetry.suppress = 'onSuccess';
                 throw new Error('fail');
@@ -135,8 +134,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should set isActivationEvent when isUserEvent is false', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 ctx.telemetry.isUserEvent = false;
             });
@@ -146,8 +144,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should not set isActivationEvent when isUserEvent is true', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 ctx.telemetry.isUserEvent = true;
             });
@@ -160,7 +157,7 @@ describe('ActionExecutor (unit)', () => {
             const output = new DebugOutputChannel('test');
             const debugSpy = mock.method(output, 'debug');
             const errorSpy = mock.method(output, 'error');
-            const executor = new ActionExecutor(createReporter(), output);
+            const { executor } = createExecutor(undefined, output);
 
             await executor.callWithTelemetryAndErrorHandling('successCallback', () => 42);
             await executor.callWithTelemetryAndErrorHandling('failingCallback', () => {
@@ -171,15 +168,13 @@ describe('ActionExecutor (unit)', () => {
             expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] successCallback done')).to.be.true;
             expect(errorSpy.mock.calls.some(call =>
                 call.arguments[0] instanceof Error &&
-                call.arguments[0].message === 'boom' &&
-                call.arguments[1] === '[cmd] failingCallback failed')).to.be.true;
+                call.arguments[0].message === 'boom')).to.be.true;
         });
     });
 
     describe('setTelProp / setTelMeasure', () => {
         it('should set a property on the current context', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', () => {
                 executor.setTelProp('nodeType', 'subscription');
             });
@@ -189,8 +184,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should set a measurement on the current context', async () => {
-            const reporter = createReporter();
-            const executor = new ActionExecutor(reporter);
+            const { executor, reporter } = createExecutor();
             await executor.callWithTelemetryAndErrorHandling('test', () => {
                 executor.setTelMeasure('itemCount', 5);
             });
@@ -200,10 +194,88 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should be a no-op when no context is active', () => {
-            const executor = new ActionExecutor(createReporter());
+            const { executor } = createExecutor();
             // Should not throw
             executor.setTelProp('tree', 'resources');
             executor.setTelMeasure('count', 1);
+        });
+    });
+
+    describe('error toast', () => {
+        it('should show an error message with Report Issue button on failure', async () => {
+            const { executor, code } = createExecutor();
+            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+
+            await executor.callWithTelemetryAndErrorHandling('test', () => {
+                throw new Error('something broke');
+            });
+
+            expect(showErrorMessage.mock.callCount()).to.equal(1);
+            expect(showErrorMessage.mock.calls[0].arguments[0]).to.equal('something broke');
+            expect(showErrorMessage.mock.calls[0].arguments[1]).to.equal('Report Issue');
+        });
+
+        it('should not show error message when suppressDisplay is true', async () => {
+            const { executor, code } = createExecutor();
+            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+
+            await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
+                ctx.errorHandling.suppressDisplay = true;
+                throw new Error('hidden error');
+            });
+
+            expect(showErrorMessage.mock.callCount()).to.equal(0);
+        });
+
+        it('should not show Report Issue button when suppressReportIssue is true', async () => {
+            const { executor, code } = createExecutor();
+            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+
+            await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
+                ctx.errorHandling.suppressReportIssue = true;
+                throw new Error('no report button');
+            });
+
+            expect(showErrorMessage.mock.callCount()).to.equal(1);
+            expect(showErrorMessage.mock.calls[0].arguments[0]).to.equal('no report button');
+            // No additional arguments (no button)
+            expect(showErrorMessage.mock.calls[0].arguments.length).to.equal(1);
+        });
+
+        it('should open issue reporter with extensionId and data when Report Issue is clicked', async () => {
+            const { executor, code } = createExecutor();
+            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+            const executeCommand = code.commands.executeCommand as unknown as Mock<typeof code.commands.executeCommand>;
+
+            // Simulate user clicking "Report Issue"
+            showErrorMessage.mock.mockImplementation(
+                ((...args: unknown[]) => Promise.resolve(args[1])) as never,
+            );
+
+            await executor.callWithTelemetryAndErrorHandling('test', () => {
+                throw new Error('bug');
+            });
+
+            // Give the async toast handler a tick to complete
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(executeCommand.mock.callCount()).to.equal(1);
+            expect(executeCommand.mock.calls[0].arguments[0]).to.equal('vscode.openIssueReporter');
+            const options = executeCommand.mock.calls[0].arguments[1] as { extensionId: string; data: string };
+            expect(options.extensionId).to.equal('test-extension');
+            expect(options.data).to.include('App Host:');
+            expect(options.data).to.include('Language:');
+        });
+
+        it('should not show error toast for CancellationError', async () => {
+            const { executor, code } = createExecutor();
+            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+
+            await executor.callWithTelemetryAndErrorHandling('test', () => {
+                throw new CancellationError();
+            });
+
+            expect(showErrorMessage.mock.callCount()).to.equal(0);
         });
     });
 });

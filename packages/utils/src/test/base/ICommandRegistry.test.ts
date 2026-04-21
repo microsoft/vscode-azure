@@ -5,14 +5,13 @@
 
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { ActionExecutor } from '../../base/IActionExecutor';
 import { CommandRegistry } from '../../base/ICommandRegistry';
-import { NullTelemetryReporter } from '../../base/ITelemetryReporter';
+import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
 describe('CommandRegistry (unit)', () => {
     it('should register a command that invokes the callback within telemetry', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const { vscode: code, registeredCommands } = createMockVsCode();
         const registry = new CommandRegistry(executor, code);
 
@@ -25,7 +24,7 @@ describe('CommandRegistry (unit)', () => {
     });
 
     it('should pass arguments through to the callback', async () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const { vscode: code, registeredCommands } = createMockVsCode();
         const registry = new CommandRegistry(executor, code);
 
@@ -37,7 +36,7 @@ describe('CommandRegistry (unit)', () => {
     });
 
     it('should dispose all registered commands', () => {
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const { vscode: code, registeredCommands } = createMockVsCode();
         const registry = new CommandRegistry(executor, code);
 

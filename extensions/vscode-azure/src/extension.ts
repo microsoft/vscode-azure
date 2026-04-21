@@ -94,7 +94,12 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
     // Dynamically created singletons, some of which are disposable, but we do
     // `pushDisposable()` on all of them because it's smart enough to distinguish
     container.bind(IActionExecutor).toDynamicValue(context => {
-        return new ActionExecutor(context.get(ITelemetryReporter), context.get(IOutputChannel));
+        return new ActionExecutor(
+            context.get(IVsCode),
+            context.get(ITelemetryReporter),
+            context.get(IExtensionContext).extension.id,
+            context.get(IOutputChannel)
+        );
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ITelemetryReporter).toDynamicValue(context => {

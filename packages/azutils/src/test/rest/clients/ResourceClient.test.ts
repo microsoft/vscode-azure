@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, DebugOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { ResourceClient } from '../../../rest/clients/ResourceClient';
@@ -14,7 +13,7 @@ import { makeResponse, MockHttpClient } from '../../mockPipeline';
 describe('ResourceClient (unit)', () => {
     it('should list resource groups with metadata attached', async () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
@@ -46,7 +45,7 @@ describe('ResourceClient (unit)', () => {
 
     it('should list resources with logicalType attached', async () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
@@ -76,7 +75,7 @@ describe('ResourceClient (unit)', () => {
 
     it('should map Microsoft.Web/sites with functionapp kind to FunctionApp logicalType', async () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
@@ -106,7 +105,7 @@ describe('ResourceClient (unit)', () => {
 
     it('should set hasMore based on nextLink presence', async () => {
         const { ctx } = createMockCodeContext();
-        const executor = new ActionExecutor(new NullTelemetryReporter());
+        const { executor } = createTestActionExecutor();
         const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
