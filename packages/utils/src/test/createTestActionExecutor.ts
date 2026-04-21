@@ -20,11 +20,12 @@ import { createMockVsCode } from './vscode/MockVsCode';
 export function createTestActionExecutor(options?: {
     reporter?: ITelemetryReporter;
     output?: IOutputChannel;
-}): { executor: ActionExecutor; code: IVsCode } {
+}): { executor: ActionExecutor; code: IVsCode; reporter: ITelemetryReporter } {
     const { vscode: code } = createMockVsCode();
     const reporter = options?.reporter ?? new NullTelemetryReporter();
     return {
         executor: new ActionExecutor(code, reporter, 'test-extension', options?.output),
         code,
+        reporter,
     };
 }

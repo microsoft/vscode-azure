@@ -205,8 +205,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
             registerCommand,
         },
         env: {
+            appHost: 'desktop',
             language: 'en',
             openExternal,
+            remoteName: undefined,
         },
         window: {
             createQuickPick,
