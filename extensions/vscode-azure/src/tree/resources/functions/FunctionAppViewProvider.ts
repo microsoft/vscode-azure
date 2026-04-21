@@ -8,12 +8,12 @@ import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
-import { AddOrEditAppSetting } from '../../../commands/functionApp/AddOrEditAppSetting';
-import { DeleteAppSetting } from '../../../commands/functionApp/DeleteAppSetting';
+import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSetting';
+import { DeleteAppSetting } from '../../../commands/functions/DeleteAppSetting';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { getAzureIconUri } from '../../iconPath';
-import { isFunctionApp, isFunctionAppVirtual, FunctionAppVirtualTypes } from './FunctionApp';
+import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './FunctionApp';
 
 /**
  * View-layer provider for Azure Function Apps.
@@ -24,6 +24,7 @@ import { isFunctionApp, isFunctionAppVirtual, FunctionAppVirtualTypes } from './
 @injectable()
 export class FunctionAppViewProvider implements ViewProvider<string> {
 
+    /** Context value applied to Function App tree items. */
     public static readonly ContextValue = 'functionApp';
 
     public constructor(
@@ -34,6 +35,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
 
     // #region ViewProvider
 
+    /** @inheritdoc */
     public canHandle(resource: unknown): resource is string {
         if (typeof resource !== 'string' || !AzureNodeId.test(resource)) {
             return false;
@@ -43,6 +45,10 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         return !!node && (isFunctionApp(node) || isFunctionAppVirtual(node));
     }
 
+    /**
+     * @inheritdoc
+     * @throws if a non-virtual resource is passed that is not a {@linkcode GenericResource}.
+     */
     public getTreeItem(key: string): ITreeItem {
         const resource = this.cache.get(key);
         if (!resource) {
@@ -70,6 +76,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         return item;
     }
 
+    /** @inheritdoc */
     public async getChildren(key?: string): Promise<string[]> {
         if (!key) {
             return [];
@@ -86,6 +93,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         return children.map(child => AzureNodeId.from(child).toString());
     }
 
+    /** @inheritdoc */
     public getParent(key: string): string | undefined {
         return AzureNodeId.parse(key).parentNodeId()?.toString();
     }

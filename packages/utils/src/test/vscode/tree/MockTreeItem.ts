@@ -6,6 +6,12 @@
 import type * as vscode from 'vscode';
 import type { ITreeItem } from '../../../vscode/IVsCode';
 
+/**
+ * Minimal stand-in for `vscode.TreeItem` used by tests and the mock
+ * `IVsCode.TreeItem` constructor. Implements both {@linkcode vscode.TreeItem}
+ * and the extension's {@linkcode ITreeItem} shape, supporting construction
+ * from either a label string or a `Uri`.
+ */
 export class MockTreeItem implements vscode.TreeItem, ITreeItem {
     label?: string | vscode.TreeItemLabel;
     id?: string;

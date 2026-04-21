@@ -7,6 +7,7 @@ import { IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { ManagedCommand } from './ManagedCommand';
 
+/** Demo command that shows a greeting. Useful as a smoke test for activation. */
 @injectable()
 export class Hello implements ManagedCommand {
     public constructor(
@@ -14,6 +15,7 @@ export class Hello implements ManagedCommand {
         @inject(IVsCode) private readonly code: IVsCode
     ) { }
 
+    /** @inheritdoc */
     public async execute(): Promise<void> {
         this.context.telemetry.properties.hello = 'world';
         void this.code.window.showInformationMessage(this.code.l10n.t('Hello, from the Azure extension!'));

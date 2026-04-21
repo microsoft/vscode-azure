@@ -4,7 +4,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { AcrClient, DeploymentClient, IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, IWebAppClientProvider, ResourceClient, SubscriptionClient, WebAppClient } from '@microsoft/vscode-azure-azutils';
+import {
+    AcrClient,
+    DeploymentClient,
+    IAcrClientProvider,
+    IDeploymentClientProvider,
+    IResourceClientProvider,
+    ISubscriptionClientProvider,
+    IWebAppClientProvider,
+    ResourceClient,
+    setUpAzureSdkLogging,
+    SubscriptionClient,
+    WebAppClient,
+} from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
     CommandRegistry,
@@ -26,6 +38,17 @@ import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from 
 import { registerTrees } from './tree/registerTrees';
 import { TempProjectManager } from './wizard/azd/TempProjectManager';
 
+/**
+ * Entry point called by the generated extension `activate` function.
+ *
+ * Builds the DI container (unless one is supplied via {@linkcode containerOverride}),
+ * then registers commands and tree views under a telemetry-wrapped `activate` event.
+ *
+ * @param extensionContext - The VS Code extension context.
+ * @param perfStats - Timestamps used to report activation duration telemetry.
+ * @param containerOverride - Optional pre-built container (used by tests and the
+ *   "Run (Mock Data)" debug entry point).
+ */
 export async function activateInternal(
     extensionContext: vscode.ExtensionContext,
     perfStats: { loadStartTime: number, loadEndTime: number },
@@ -42,30 +65,40 @@ export async function activateInternal(
     });
 }
 
+/** Entry point called by the generated extension `deactivate` function. */
 export function deactivateInternal(): Promise<void> {
     return Promise.resolve();
 }
 
+/**
+ * Builds the root inversify container with all extension-level bindings.
+ * Disposable services are registered with {@linkcode pushDisposable} so they
+ * are torn down with the extension context.
+ */
 export function setUpContainer(extensionContext: IExtensionContext): Container {
     const container = new Container();
+    const output = createOutputChannel('Azure', vscode);
 
     // These three come in as constants (vscode by import, context from above)
     container.bind(IVsCode).toConstantValue(vscode);
     container.bind(IExtensionContext).toConstantValue(extensionContext);
     container.bind(ICodeContext).toConstantValue({ code: vscode, extensionContext });
 
+    // Register the SDK-logging disposable first so it is disposed (and
+    // restores `AzureLogger.log`) before the output channel itself is
+    // torn down; otherwise a late SDK log line during deactivation would
+    // hit a disposed channel.
+    extensionContext.subscriptions.push(setUpAzureSdkLogging(output), output);
+    container.bind(IOutputChannel).toConstantValue(output);
+
     // Dynamically created singletons, some of which are disposable, but we do
     // `pushDisposable()` on all of them because it's smart enough to distinguish
     container.bind(IActionExecutor).toDynamicValue(context => {
-        return new ActionExecutor(context.get(ITelemetryReporter));
+        return new ActionExecutor(context.get(ITelemetryReporter), context.get(IOutputChannel));
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ITelemetryReporter).toDynamicValue(context => {
         return createTelemetryReporter(context.get(IExtensionContext), TelemetryReporter);
-    }).inSingletonScope().onActivation(pushDisposable);
-
-    container.bind(IOutputChannel).toDynamicValue(context => {
-        return createOutputChannel('Azure', context.get(IVsCode));
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ICommandRegistry).toDynamicValue(context => {
@@ -84,31 +117,31 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => ResourceClient.create(ctx, executor, subscription);
+        return (subscription) => ResourceClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     container.bind(IDeploymentClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => DeploymentClient.create(ctx, executor, subscription);
+        return (subscription) => DeploymentClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     container.bind(IAcrClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => AcrClient.create(ctx, executor, subscription);
+        return (subscription) => AcrClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     container.bind(ISubscriptionClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => SubscriptionClient.create(ctx, executor, subscription);
+        return (subscription) => SubscriptionClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     container.bind(IWebAppClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => WebAppClient.create(ctx, executor, subscription);
+        return (subscription) => WebAppClient.create(ctx, executor, context.get(IOutputChannel), subscription);
     });
 
     return container;

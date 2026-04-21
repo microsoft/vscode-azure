@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError } from '../vscode/CancellationError';
+import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { ExecuteStep } from './ExecuteStep';
 import { GoBackError } from './GoBackError';
 import type { PromptStep } from './PromptStep';
@@ -14,16 +15,16 @@ import type { PromptStep } from './PromptStep';
  * **Prompt phase** -- Steps run in order, each returning a partial
  * context that is merged into the accumulated state. Steps may
  * dynamically add further prompt steps by overriding
- * {@link PromptStep.getSubPromptSteps}. Back navigation is
- * supported: throwing {@link GoBackError} from a prompt step returns
+ * {@linkcode PromptStep.getSubPromptSteps}. Back navigation is
+ * supported: throwing {@linkcode GoBackError} from a prompt step returns
  * to the previous prompted step, automatically discarding its context
  * contribution and any dynamically added children.
  *
  * **Execute phase** -- After all prompts complete, execute steps run
  * in the order they were registered. Only steps whose
- * {@link ExecuteStep.shouldExecute} returns `true` (or is omitted)
+ * {@linkcode ExecuteStep.shouldExecute} returns `true` (or is omitted)
  * are run. Steps may add sub-steps via
- * {@link ExecuteStep.getSubExecuteSteps}; these run immediately after their
+ * {@linkcode ExecuteStep.getSubExecuteSteps}; these run immediately after their
  * parent.
  *
  * @typeParam TContext - The shared context object accumulated across
@@ -42,7 +43,8 @@ export class Wizard<TContext extends object> {
     public constructor(
         private readonly baseContext: TContext,
         promptSteps: PromptStep<TContext>[],
-        executeSteps: ExecuteStep<TContext>[] = []
+        executeSteps: ExecuteStep<TContext>[] = [],
+        private readonly output?: IOutputChannel,
     ) {
         // Make shallow copies of step arrays
         this.promptSteps = [...promptSteps];
@@ -52,10 +54,10 @@ export class Wizard<TContext extends object> {
     /**
      * Run the wizard: prompt phase followed by execute phase.
      *
-     * @throws a {@link CancellationError} if the user cancels or goes back
+     * @throws a {@linkcode CancellationError} if the user cancels or goes back
      *   past the first step.
      * @returns The final accumulated context after both phases. Note that
-     *   this will be a new object, not the originally passed-in {@link baseContext}.
+     *   this will be a new object, not the originally passed-in {@linkcode baseContext}.
      */
     public async run(): Promise<TContext> {
         const context = await this.runPromptPhase();
@@ -63,7 +65,7 @@ export class Wizard<TContext extends object> {
         return context;
     }
 
-    // ── Context helpers ─────────────────────────────────────────
+    // -- Context helpers --
 
     /**
      * Rebuild the accumulated context from the base context and all
@@ -82,7 +84,7 @@ export class Wizard<TContext extends object> {
         return merged;
     }
 
-    // ── Prompt phase ────────────────────────────────────────────
+    // -- Prompt phase --
 
     private async runPromptPhase(): Promise<TContext> {
         /** Steps that were actually prompted (not skipped), in order. */
@@ -122,6 +124,7 @@ export class Wizard<TContext extends object> {
             }
 
             try {
+                this.output?.debug(`[wizard] prompt enter step=${step.constructor.name}`);
                 const stepResult = await step.prompt(context);
 
                 const record: PromptRecord<TContext> = {
@@ -134,9 +137,11 @@ export class Wizard<TContext extends object> {
 
                 // Collect dynamically added child steps
                 record.childPrompts = step.getSubPromptSteps(updatedContext);
+                this.output?.debug(`[wizard] prompt exit step=${step.constructor.name}`);
 
                 // Insert child prompt steps after current
                 if (record.childPrompts.length > 0) {
+                    this.output?.debug(`[wizard] inject prompt substeps parent=${step.constructor.name} count=${record.childPrompts.length}`);
                     this.promptSteps.splice(cursor + 1, 0, ...record.childPrompts);
                 }
 
@@ -144,6 +149,7 @@ export class Wizard<TContext extends object> {
                 cursor++;
             } catch (error) {
                 if (GoBackError.test(error)) {
+                    this.output?.debug(`[wizard] back navigation from step=${step.constructor.name}`);
                     // Pop the previous prompted step
                     const prevRecord = history.pop();
                     if (!prevRecord) {
@@ -165,7 +171,7 @@ export class Wizard<TContext extends object> {
         return this.buildContext(history);
     }
 
-    // ── Execute phase ───────────────────────────────────────────
+    // -- Execute phase --
 
     private async runExecutePhase(context: TContext): Promise<void> {
         let cursor = 0;
@@ -177,11 +183,14 @@ export class Wizard<TContext extends object> {
                 continue;
             }
 
+            this.output?.debug(`[wizard] execute enter step=${step.constructor.name}`);
             await step.execute(context);
+            this.output?.debug(`[wizard] execute exit step=${step.constructor.name}`);
 
             // Insert dynamically added sub-steps immediately after current
             const subSteps = step.getSubExecuteSteps(context);
             if (subSteps.length > 0) {
+                this.output?.debug(`[wizard] inject execute substeps parent=${step.constructor.name} count=${subSteps.length}`);
                 this.executeSteps.splice(cursor + 1, 0, ...subSteps);
             }
 

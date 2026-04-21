@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, IActionExecutor, IOutputChannel, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
@@ -17,11 +17,24 @@ import { CodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvide
 import { GenericActivityDataProvider } from './activity/GenericActivityDataProvider';
 import { AcrDataProvider } from './resources/acr/AcrDataProvider';
 import { AcrViewProvider } from './resources/acr/AcrViewProvider';
-import { FunctionAppDataProvider } from './resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppViewProvider } from './resources/functionApp/FunctionAppViewProvider';
+import { FunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
+import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 
+/**
+ * Bind the Azure resources tree and activity tree into the DI container.
+ *
+ * Wires up the data layer ({@linkcode DataItemTree}), view layer
+ * ({@linkcode ViewItemTree}), and VS Code {@linkcode vscode.TreeView TreeView}
+ * for each tree, and registers the per-service {@linkcode DataProvider}s and
+ * {@linkcode ViewProvider}s. Provider registration order matters: specific
+ * providers are bound before the generic fallback so
+ * {@linkcode ProviderRegistry} dispatches to the most specific match.
+ *
+ * Both tree views are eagerly resolved so their construction kicks off
+ * the full subscription/resource load.
+ */
 export function registerTrees(container: Container): void {
     registerResourcesTree(container);
     registerActivityTree(container);
@@ -34,10 +47,12 @@ function registerResourcesTree(container: Container): void {
     bindAzureViewDataProviders(container);
     container.bind(IAzureViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<ConcreteAzureNode>(
+            context.get(IVsCode),
             AzureResourceTreeViewId,
             context.get(IActionExecutor),
             resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000, // 5 minute TTL
+            context.get(IOutputChannel),
         );
 
         for (const provider of context.getAll(IAzureViewDataProviders)) {
@@ -60,6 +75,7 @@ function registerResourcesTree(container: Container): void {
                 getResourceKey: key => key, // Identity mapping since both view and data items use the same key
             },
             defaultLoadMoreOptions(context.get(IVsCode)),
+            context.get(IOutputChannel),
         );
 
         for (const provider of context.getAll(IAzureViewViewProviders)) {
@@ -84,7 +100,7 @@ function registerResourcesTree(container: Container): void {
 }
 
 /**
- * Identifier for the Azure view's {@link DataProvider}s.
+ * Identifier for the Azure view's {@linkcode DataProvider}s.
  * @internal - Not intended for use outside this file
  */
 const IAzureViewDataProviders: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IAzureViewDataProviders');
@@ -102,7 +118,7 @@ function bindAzureViewDataProviders(container: Container): void {
 }
 
 /**
- * Identifier for the Azure view's {@link ViewProvider}s.
+ * Identifier for the Azure view's {@linkcode ViewProvider}s.
  * @internal - Not intended for use outside this file
  */
 const IAzureViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IAzureViewViewProviders');
@@ -124,10 +140,12 @@ function registerActivityTree(container: Container): void {
     bindActivityViewDataProviders(container);
     container.bind(IActivityViewDataTree).toDynamicValue(context => {
         const cache = new DataItemTree<Activity>(
+            context.get(IVsCode),
             ActivityTreeViewId,
             context.get(IActionExecutor),
             activity => activity.id,
             Infinity, // Providers manage freshness via polling and change events
+            context.get(IOutputChannel),
         );
 
         for (const provider of context.getAll(IActivityViewDataProviders)) {
@@ -149,6 +167,8 @@ function registerActivityTree(container: Container): void {
                 getKey: key => key,
                 getResourceKey: key => key,
             },
+            undefined,
+            context.get(IOutputChannel),
         );
 
         for (const provider of context.getAll(IActivityViewViewProviders)) {

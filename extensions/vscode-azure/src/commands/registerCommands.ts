@@ -8,9 +8,10 @@ import { Container } from 'inversify';
 import { LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
 import { ClearActivities } from './ClearActivities';
-import { AddOrEditAppSetting } from './functionApp/AddOrEditAppSetting';
-import { DeleteAppSetting } from './functionApp/DeleteAppSetting';
+import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
+import { DeleteAppSetting } from './functions/DeleteAppSetting';
+import { GroupBy } from './GroupBy';
 import { Hello } from './Hello';
 import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';
@@ -18,10 +19,16 @@ import { OpenInPortal } from './OpenInPortal';
 import { RefreshResourcesView } from './RefreshResourcesView';
 import { TrackArmDeployment } from './TrackArmDeployment';
 
+/**
+ * Registers every {@linkcode ManagedCommand} exposed by the extension
+ * against the {@linkcode ICommandRegistry} bound on the container. Called
+ * once from `activateInternal()` during activation.
+ */
 export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'azure.hello', Hello);
 
     registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
+    registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
     registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
 
@@ -39,6 +46,13 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/functions/create', CreateFunctionApp);
 }
 
+/**
+ * Binds {@linkcode commandClass} onto the container (if not already bound) and
+ * wires it up so VS Code can invoke it via {@linkcode commandId}. Each invocation
+ * creates a child container with the current {@linkcode IActionContext}, resolves
+ * the command instance, and calls its {@linkcode ManagedCommand.execute execute}
+ * method with {@linkcode prefixArgs} followed by the arguments passed by VS Code.
+ */
 function registerManagedCommand(
     container: Container,
     commandId: string,

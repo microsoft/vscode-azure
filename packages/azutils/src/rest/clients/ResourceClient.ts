@@ -10,19 +10,23 @@ import type {
     ResourcesListOptionalParams
 } from '@azure/arm-resources';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, Page } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext, IOutputChannel, Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
 import { createAzureSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
+/** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
 export const SiteType = 'Microsoft.Web/sites';
+/** Logical type assigned to function apps (`Microsoft.Web/sites` with `kind` containing `functionapp`). */
 export const FunctionAppLogicalType = `${SiteType}~functionapp`;
+/** Logical type assigned to Logic Apps (Standard) (`Microsoft.Web/sites` with `kind` containing `workflowapp`). */
 export const WorkflowAppLogicalType = `${SiteType}~workflowapp`;
+/** Logical type assigned to App Service web apps (any other `Microsoft.Web/sites` kind). */
 export const AppServiceLogicalType = `${SiteType}~app`;
 
-/** Factory that creates an {@link IResourceClient} for a given subscription. */
+/** Factory that creates an {@linkcode IResourceClient} for a given subscription. */
 export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
 export type IResourceClientProvider = AsyncFactory<IResourceClient, [AzureSubscription]>;
 
@@ -43,11 +47,11 @@ export interface IResourceClient {
 }
 
 /**
- * Wrapper around {@link ResourceManagementClient} that exposes only the
+ * Wrapper around {@linkcode ResourceManagementClient} that exposes only the
  * methods we use, with results converted to `AsyncIterable<Page<T>>` and
  * metadata attached.
  *
- * Use the static {@link create} factory to construct--it lazily imports the
+ * Use the static {@linkcode create} factory to construct--it lazily imports the
  * SDK to keep load times down.
  */
 export class ResourceClient implements IResourceClient {
@@ -59,12 +63,13 @@ export class ResourceClient implements IResourceClient {
     ) { }
 
     /**
-     * Create a new {@link ResourceClient} instance. Lazily imports
+     * Create a new {@linkcode ResourceClient} instance. Lazily imports
      * `@azure/arm-resources` on first call.
      */
     public static async create(
         ctx: ICodeContext,
         executor: IActionExecutor,
+        output: IOutputChannel,
         subscription: AzureSubscription,
         options?: ResourceManagementClientOptionalParams,
     ): Promise<ResourceClient> {
@@ -75,6 +80,7 @@ export class ResourceClient implements IResourceClient {
             ResourceClient.sdk.ResourceManagementClient,
             subscription,
             options,
+            output,
         );
         return new ResourceClient(inner, subscription);
     }
@@ -137,4 +143,3 @@ function logicalType(type: string, kind?: string): string {
             return type;
     }
 }
-

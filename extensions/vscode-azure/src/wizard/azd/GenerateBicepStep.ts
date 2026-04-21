@@ -3,9 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, type IExtensionContext } from '@microsoft/vscode-azure-utils';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { ExecuteStep, type ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 const InfraFolderName = 'infra';
@@ -23,7 +21,7 @@ const MainParametersFileName = 'main.parameters.json';
  */
 export class GenerateBicepStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly extensionContext: IExtensionContext,
+        private readonly ctx: ICodeContext,
         private readonly templateName: 'functionApp.bicep', // | 'staticWebApp.bicep' | ...
         private readonly parameterKeys: readonly (keyof TContext & string)[],
     ) {
@@ -35,11 +33,11 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
             return false;
         }
 
-        const infraFolder = path.join(context.iacFolder, InfraFolderName);
+        const infraFolder = this.ctx.code.Uri.joinPath(context.iacFolder, InfraFolderName);
 
         for (const fileName of [MainBicepFileName, MainParametersFileName]) {
             try {
-                await fs.access(path.join(infraFolder, fileName));
+                await this.ctx.code.workspace.fs.stat(this.ctx.code.Uri.joinPath(infraFolder, fileName));
                 // At least one file already exists; skip generation
                 return false;
             } catch {
@@ -51,8 +49,8 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
     }
 
     public async execute(context: TContext): Promise<void> {
-        const templatePath = this.extensionContext.asAbsolutePath(path.join('resources', 'templates', this.templateName));
-        const bicepFolder = path.join(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        const templateUri = this.ctx.code.Uri.joinPath(this.ctx.extensionContext.extensionUri, 'resources', 'templates', this.templateName);
+        const bicepFolder = this.ctx.code.Uri.joinPath(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
         const parameters = JSON.stringify({
             $schema: 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#',
@@ -64,15 +62,16 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
             },
         }, undefined, 4);
 
-        await fs.mkdir(bicepFolder, { recursive: true });
+        await this.ctx.code.workspace.fs.createDirectory(bicepFolder);
         await Promise.all([
-            fs.writeFile(
-                path.join(bicepFolder, MainParametersFileName),
-                parameters,
+            this.ctx.code.workspace.fs.writeFile(
+                this.ctx.code.Uri.joinPath(bicepFolder, MainParametersFileName),
+                Buffer.from(parameters),
             ),
-            fs.copyFile(
-                templatePath,
-                path.join(bicepFolder, MainBicepFileName),
+            this.ctx.code.workspace.fs.copy(
+                templateUri,
+                this.ctx.code.Uri.joinPath(bicepFolder, MainBicepFileName),
+                { overwrite: true }, // We shouldn't actually be overwriting, due to `shouldExecute()`'s guard, but just in case...
             ),
         ]);
     }

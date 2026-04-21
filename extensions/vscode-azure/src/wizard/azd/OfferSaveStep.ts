@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ICodeContext, getWorkspaceFolder, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import type * as vscode from 'vscode';
 import type { AzdWizardContext } from './AzdWizardContext';
 import type { TempProjectManager } from './TempProjectManager';
 
@@ -45,7 +46,7 @@ export class OfferSaveStep<TContext extends AzdWizardContext> extends PromptStep
             showBack: true,
         });
 
-        let iacFolder: string;
+        let iacFolder: vscode.Uri;
         if (picked.data.save) {
             const folder = await getWorkspaceFolder(this.ctx.code, this.ctx.code.l10n.t('Select a workspace folder to save the project'));
 
@@ -53,7 +54,7 @@ export class OfferSaveStep<TContext extends AzdWizardContext> extends PromptStep
                 throw new Error(this.ctx.code.l10n.t('A workspace folder is required to save the generated files.'));
             }
 
-            iacFolder = folder.uri.fsPath;
+            iacFolder = folder.uri;
         } else {
             iacFolder = await this.tempProjectManager.createProjectDir();
         }

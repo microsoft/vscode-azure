@@ -14,7 +14,7 @@ describe('ClearActivities (unit)', () => {
     function createProviders() {
         const generic = new GenericActivityDataProvider();
         const code = new CodeDeploymentDataProvider();
-        // Minimal ARM provider mock — just needs clearActivities
+        // Minimal ARM provider mock -- just needs clearActivities
         const arm = { clearActivities: mock.fn() };
         return { generic, code, arm };
     }

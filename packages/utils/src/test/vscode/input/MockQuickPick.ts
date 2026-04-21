@@ -12,11 +12,11 @@ import { EventEmitter } from '../../../vscode/EventEmitter';
  *
  * Production code interacts with this through the standard QuickPick
  * properties and events. Tests drive user interactions through the
- * helper methods: {@link accept}, {@link pressButton}, {@link triggerHide},
- * and {@link changeValue}.
+ * helper methods: {@linkcode accept}, {@linkcode pressButton}, {@linkcode triggerHide},
+ * and {@linkcode changeValue}.
  */
 export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.QuickPick<T> {
-    // ── Properties (set by production code) ─────────────────
+    // #region Properties (set by production code)
     items: readonly T[] = [];
     activeItems: readonly T[] = [];
     selectedItems: readonly T[] = [];
@@ -33,8 +33,9 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
     step: number | undefined;
     totalSteps: number | undefined;
     keepScrollPosition?: boolean;
+    // #endregion
 
-    // ── Internal emitters ───────────────────────────────────
+    // #region Internal emitters
     private readonly _onDidAccept = new EventEmitter<void>();
     private readonly _onDidHide = new EventEmitter<void>();
     private readonly _onDidTriggerButton = new EventEmitter<vscode.QuickInputButton>();
@@ -42,8 +43,9 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
     private readonly _onDidChangeValue = new EventEmitter<string>();
     private readonly _onDidChangeActive = new EventEmitter<readonly T[]>();
     private readonly _onDidChangeSelection = new EventEmitter<readonly T[]>();
+    // #endregion
 
-    // ── Event subscriptions (used by production code) ───────
+    // #region Event subscriptions (used by production code)
     readonly onDidAccept = this._onDidAccept.event;
     readonly onDidHide = this._onDidHide.event;
     readonly onDidTriggerButton = this._onDidTriggerButton.event;
@@ -51,13 +53,15 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
     readonly onDidChangeValue = this._onDidChangeValue.event;
     readonly onDidChangeActive = this._onDidChangeActive.event;
     readonly onDidChangeSelection = this._onDidChangeSelection.event;
+    // #endregion
 
-    // ── Tracked methods ─────────────────────────────────────
+    // #region Tracked methods
     readonly show = mock.fn(noop);
     readonly hide = mock.fn(noop);
     readonly dispose = mock.fn(noop);
+    // #endregion
 
-    // ── Test helpers ────────────────────────────────────────
+    // #region Test helpers
 
     /** Simulate the user accepting the current selection. */
     accept(): void {
@@ -84,6 +88,7 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
         this.value = newValue;
         this._onDidChangeValue.fire(newValue);
     }
+    // #endregion
 }
 
 const noop = () => { /* noop */ };

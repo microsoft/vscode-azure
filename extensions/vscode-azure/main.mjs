@@ -14,6 +14,15 @@ const perfStats = {
 
 const extension = await import('./dist/extension.bundle.mjs');
 
+/**
+ * VS Code extension activation entry point.
+ *
+ * When `AZURE_MOCK_DATA=1` is set and the extension is running in Development
+ * mode, mock bindings from `debug.bundle.mjs` are applied to the DI container
+ * before activation so the tree views render deterministic fake data.
+ *
+ * @param {import('vscode').ExtensionContext} ctx
+ */
 export async function activate(ctx) {
     // ExtensionMode.Development === 2
     if (process.env.AZURE_MOCK_DATA === '1' && ctx.extensionMode === 2) {
@@ -26,6 +35,12 @@ export async function activate(ctx) {
     return await extension.activateInternal(ctx, perfStats);
 }
 
+/**
+ * VS Code extension deactivation entry point. Delegates to the bundled
+ * extension's `deactivateInternal`.
+ *
+ * @param {import('vscode').ExtensionContext} ctx
+ */
 export async function deactivate(ctx) {
     return await extension.deactivateInternal(ctx);
 }

@@ -8,8 +8,23 @@ import type { ServiceIdentifier } from 'inversify';
 import type { IExtensionContext } from '../vscode/IVsCode';
 
 export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
+/**
+ * Subset of `@vscode/extension-telemetry`'s `TelemetryReporter` that the
+ * extension actually uses. Narrowed for easier mocking in tests.
+ */
 export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEvent' | 'dispose'>; // Subset of what we actually use
 
+/**
+ * Create a telemetry reporter appropriate for the current runtime.
+ *
+ * - When `DEBUGTELEMETRY` / `VSCODE_RUNNING_TESTS` is set to a truthy
+ *   non-verbose value, returns a {@linkcode NullTelemetryReporter}.
+ * - When set to `v` / `verbose`, returns a console-logging debug reporter.
+ * - Otherwise, constructs a real reporter using the `aiKey` from the
+ *   extension's `package.json`.
+ *
+ * @throws When a real reporter is needed but the extension manifest has no `aiKey`.
+ */
 export function createTelemetryReporter(
     context: Readonly<IExtensionContext>,
     reporterCtor: new (connectionString: string) => ITelemetryReporter,
@@ -23,7 +38,6 @@ export function createTelemetryReporter(
             throw new Error('AI key is required for telemetry reporter');
         }
 
-        // TODO extension ID that's part of event name?
         // TODO replacement options to scrub PII?
         return new reporterCtor(aiKey);
         /* c8 ignore next 5 */
@@ -35,11 +49,17 @@ export function createTelemetryReporter(
 }
 
 /* c8 ignore start */
+/**
+ * No-op {@linkcode ITelemetryReporter}. Intended for tests and for
+ * disabling telemetry in dev/debug environments.
+ */
 export class NullTelemetryReporter implements ITelemetryReporter {
+    /** @inheritdoc */
     public sendTelemetryErrorEvent(): void {
         // noop
     }
 
+    /** @inheritdoc */
     public dispose(): Promise<void> {
         return Promise.resolve();
     }

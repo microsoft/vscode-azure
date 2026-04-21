@@ -31,7 +31,18 @@ Use the following DI interfaces instead of the built-in `vscode` types:
 | `vscode.EventEmitter` | `EventEmitter` |
 | `vscode.Disposable` | `Disposable` |
 
-Only `extension.ts` should import `vscode` directly.
+Only `extension.ts` should import `vscode` directly as a runtime/value dependency.
+Type-only imports from `vscode` (for example, `import type * as vscode from 'vscode'` to reference `vscode.Uri`) are allowed when needed.
+
+## File System
+
+Use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` and string paths in product code. This ensures compatibility with virtual file systems and remote workspaces.
+
+- Use `vscode.Uri.joinPath()` instead of `path.join()`
+- Use `vscode.workspace.fs.stat()` to check for file existence (prefer over `workspace.findFiles()` which is workspace-scoped)
+- Use `extensionContext.extensionUri` with `Uri.joinPath()` instead of `extensionContext.asAbsolutePath()`
+- Pass `vscode.Uri` through interfaces instead of `string` file paths
+- `Uri.fsPath` is acceptable when an API requires a string path (e.g. `child_process` `cwd`)
 
 ## Localization
 
@@ -49,6 +60,26 @@ this.code.l10n.t('Resource: {0}, SKU: {1}', registry.name, registry.sku.name)
 ```
 
 Debug and trace output to the output channel is exempt from localization.
+
+## Logging
+
+Use `IOutputChannel` directly via DI for extension logging. Do not add a wrapper class, do not fold `IOutputChannel` into `IExtensionContext`, and do not add a log-level setting (users control this from VS Code's output-channel log level UI).
+
+- Prefix every line with a bracketed subsystem: `[activate]`, `[cmd]`, `[data]`, `[view]`, `[cache]`, `[rest]`, `[auth]`, `[wizard]`, `[activity]`
+- Use supported string interpolation (for example `output.debug(\`[cmd] ${id} start\`)`)
+- Pass `Error` objects directly to `output.error(...)`
+- Levels:
+  - `error`: user-visible failure
+  - `warn`: unexpected but recovered
+  - `info`: coarse lifecycle landmarks
+  - `debug`: command/cache/wizard lifecycle
+  - `trace`: per-item / per-request detail
+- `info`/`warn`/`error` messages must use `IVsCode.l10n.t(...)`; `debug`/`trace` are English-only developer logs
+- Never log PII/secrets (tokens, auth secrets, request/response bodies, user emails/display names, file contents). Resource IDs/names are allowed.
+
+```typescript
+output.debug(`[cmd] ${callbackId} start`);
+```
 
 ## Promises
 

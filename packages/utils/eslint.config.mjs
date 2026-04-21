@@ -3,6 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * ESLint configuration for the `utils` package.
+ *
+ * Extends the shared strict type-checked config and enforces:
+ * - Only `ServiceIdentifier` type imports from `inversify` (keeps the
+ *   package DI-agnostic at runtime).
+ * - Only type imports of `vscode` and `@vscode/extension-telemetry` (these
+ *   are passed down from the extension so shared code stays runtime-free
+ *   of VS Code).
+ * - `@azure/*` packages must be lazily imported inside functions to reduce
+ *   extension activation time (except `@azure/ms-rest-azure-env`).
+ */
+
 import { azExtEslintStrictTypeChecked } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
 import { defineConfig } from 'eslint/config';
 

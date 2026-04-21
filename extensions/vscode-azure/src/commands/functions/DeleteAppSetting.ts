@@ -7,9 +7,9 @@ import { isVirtualResource } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
-import { FunctionAppVirtualTypes } from '../../tree/resources/functionApp/FunctionApp';
-import { FunctionAppDataProvider } from '../../tree/resources/functionApp/FunctionAppDataProvider';
-import { appSettingsParentKey } from '../../tree/resources/functionApp/appSettingsParentKey';
+import { FunctionAppVirtualTypes } from '../../tree/resources/functions/FunctionApp';
+import { FunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
+import { appSettingsParentKey } from '../../tree/resources/functions/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -26,6 +26,7 @@ export class DeleteAppSetting implements ManagedCommand {
         @inject(FunctionAppDataProvider) private readonly dataProvider: FunctionAppDataProvider,
     ) { }
 
+    /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
         if (!key) {
             return;

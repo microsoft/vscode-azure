@@ -5,6 +5,7 @@
 
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { Disposable } from '../../vscode/Disposable';
 import { DebugOutputChannel } from '../../vscode/IOutputChannel';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
@@ -13,21 +14,31 @@ import { MockInputBox } from './input/MockInputBox';
 import { MockQuickPick } from './input/MockQuickPick';
 import { MockTreeItem } from './tree/MockTreeItem';
 
+/**
+ * Minimal stand-in for `vscode.Uri` used by {@linkcode createMockVsCode}.
+ *
+ * Only implements the subset of `Uri` relied on by code under test:
+ * `scheme`, `path`, `fsPath`, `toString()`, and the static `file` /
+ * `joinPath` factories.
+ */
 export class MockUri {
     constructor(
         public readonly scheme: string,
         public readonly path: string,
         public readonly fsPath: string = path,
     ) { }
+    /** Returns `scheme://path`. */
     toString() { return `${this.scheme}://${this.path}`; }
+    /** Creates a `file:` scheme {@linkcode MockUri} for the given path. */
     static file(path: string) { return new MockUri('file', path); }
+    /** Joins additional path segments onto `base` using `/` as separator. */
     static joinPath(base: MockUri, ...segments: string[]) {
         return new MockUri(base.scheme, [base.path, ...segments].join('/'));
     }
 }
 
 /**
- * Result of {@link createMockVsCode}. Provides both the injectable
+ * Result of {@linkcode createMockVsCode}. Provides both the injectable
  * `IVsCode` value and test-inspection surfaces.
  *
  * All tracked methods on the `IVsCode` are Node.js `mock.fn()` instances.
@@ -38,24 +49,24 @@ export class MockUri {
  * expect(fn.mock.callCount()).to.equal(1);
  * ```
  *
- * Or use the collected {@link quickPicks} / {@link inputBoxes} arrays to
+ * Or use the collected {@linkcode quickPicks} / {@linkcode inputBoxes} arrays to
  * inspect and drive the created UI elements directly.
  */
 export interface MockVsCodeResult {
-    /** The mock suitable for DI injection as {@link IVsCode}. */
+    /** The mock suitable for DI injection as {@linkcode IVsCode}. */
     readonly vscode: IVsCode;
 
-    /** All {@link MockQuickPick} instances created so far, in creation order. */
+    /** All {@linkcode MockQuickPick} instances created so far, in creation order. */
     readonly quickPicks: readonly MockQuickPick<vscode.QuickPickItem>[];
 
-    /** All {@link MockInputBox} instances created so far, in creation order. */
+    /** All {@linkcode MockInputBox} instances created so far, in creation order. */
     readonly inputBoxes: readonly MockInputBox[];
 
     /**
      * The backing store for `workspace.getConfiguration()`. Keyed by
      * fully-qualified setting name (e.g. `'myExtension.featureFlag'`).
      *
-     * Mutate directly or use {@link withSettings} for scoped overrides.
+     * Mutate directly or use {@linkcode withSettings} for scoped overrides.
      */
     readonly settings: Map<string, unknown>;
 
@@ -90,8 +101,6 @@ export interface MockVsCodeResult {
 export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult {
     const quickPicks: MockQuickPick<vscode.QuickPickItem>[] = [];
     const inputBoxes: MockInputBox[] = [];
-
-    // ── window ──────────────────────────────────────────────
 
     const createQuickPick = mock.fn(() => {
         const qp = new MockQuickPick<vscode.QuickPickItem>();
@@ -129,8 +138,6 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(undefined),
     );
 
-    // ── l10n ────────────────────────────────────────────────
-
     const t = mock.fn(
         (message: string, ...args: unknown[]) => {
             // eslint-disable-next-line @typescript-eslint/no-base-to-string
@@ -138,13 +145,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         }
     );
 
-    // ── QuickInputButtons ───────────────────────────────────
-
     const QuickInputButtons = {
         Back: { iconPath: { id: 'arrow-left' } } satisfies vscode.QuickInputButton,
     };
-
-    // ── TreeItemCollapsibleState ─────────────────────────────
 
     const TreeItemCollapsibleState = {
         None: 0,
@@ -152,23 +155,17 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         Expanded: 2,
     } satisfies typeof vscode.TreeItemCollapsibleState;
 
-    // ── workspace.getConfiguration ──────────────────────────
-
     const settings = new Map<string, unknown>();
 
     const getConfiguration = mock.fn(
         (section?: string) => new MockWorkspaceConfiguration(settings, section),
     );
 
-    // ── ConfigurationTarget ─────────────────────────────────
-
     const ConfigurationTarget = {
         Global: 1,
         Workspace: 2,
         WorkspaceFolder: 3,
     } satisfies typeof vscode.ConfigurationTarget;
-
-    // ── ThemeIcon / ThemeColor ───────────────────────────────
 
     class MockThemeIcon {
         constructor(public readonly id: string, public readonly color?: unknown) { }
@@ -178,13 +175,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         constructor(public readonly id: string) { }
     }
 
-    // ── env ──────────────────────────────────────────────────
-
     const openExternal = mock.fn(
         () => Promise.resolve(true),
     );
-
-    // ── commands ─────────────────────────────────────────────
 
     const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
 
@@ -195,13 +188,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
     );
 
-    // ── authentication ──────────────────────────────────────
-
     const getSession = mock.fn(
         () => Promise.resolve(undefined),
     );
-
-    // ── Assemble ────────────────────────────────────────────
 
     const mockVsCode = {
         authentication: {
@@ -226,6 +215,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
         workspace: {
             getConfiguration,
+            onDidChangeConfiguration: () => Disposable.None,
         },
         l10n: { t },
         QuickInputButtons,
@@ -248,19 +238,19 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 }
 
 /**
- * Result of {@link createMockCodeContext}. Bundles a ready-to-use
+ * Result of {@linkcode createMockCodeContext}. Bundles a ready-to-use
  * `ICodeContext` with the underlying mock for test assertions.
  */
 export interface MockCodeContextResult {
     /** The `ICodeContext` ready for `showSmartQuickPick`, `showSmartInputBox`, etc. */
     readonly ctx: ICodeContext;
 
-    /** The underlying {@link MockVsCodeResult} for assertions and event control. */
+    /** The underlying {@linkcode MockVsCodeResult} for assertions and event control. */
     readonly mock: MockVsCodeResult;
 }
 
 /**
- * Convenience factory that builds a mock {@link ICodeContext} ready
+ * Convenience factory that builds a mock {@linkcode ICodeContext} ready
  * for use with `showSmartQuickPick`, `showSmartInputBox`, and the
  * wizard pick steps.
  *
@@ -362,14 +352,14 @@ export function withSettings<T>(
 }
 
 /**
- * A single queued response for {@link respondToPrompts}.
+ * A single queued response for {@linkcode respondToPrompts}.
  *
  * - `{ pick: 'label' }` -- select a QuickPick item by its label
  * - `{ pickMany: ['a', 'b'] }` -- select multiple QuickPick items by label
  * - `{ input: 'text' }` -- type a value into an InputBox and accept
  * - `'acceptDefault'` -- accept the current value without changes
- * - `'goBack'` -- press the Back button (rejects with {@link GoBackError})
- * - `'cancel'` -- dismiss the UI (rejects with {@link CancellationError})
+ * - `'goBack'` -- press the Back button (rejects with {@linkcode GoBackError})
+ * - `'cancel'` -- dismiss the UI (rejects with {@linkcode CancellationError})
  */
 export type WizardResponse =
     | { readonly pick: string }
@@ -380,7 +370,7 @@ export type WizardResponse =
     | 'cancel';
 
 /**
- * Returned by {@link respondToPrompts} for post-run assertions.
+ * Returned by {@linkcode respondToPrompts} for post-run assertions.
  */
 export interface ResponseTracker {
     /** Number of responses remaining in the queue. */

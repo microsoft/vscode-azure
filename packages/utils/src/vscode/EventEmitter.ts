@@ -29,7 +29,7 @@ export class EventEmitter<T> implements Disposable {
 
     /**
      * The event that listeners subscribe to. Calling `this.event(fn)` registers
-     * `fn` and returns a {@link Disposable} that removes it.
+     * `fn` and returns a {@linkcode Disposable} that removes it.
      */
     public readonly event: vscode.Event<T> = (
         listener: (e: T) => void,

@@ -7,35 +7,65 @@ import { AsyncLocalStorage } from 'async_hooks';
 import type { ServiceIdentifier } from 'inversify';
 import type { AsWritable } from '../types/AsWritable';
 import { CancellationError } from '../vscode/CancellationError';
+import type { IOutputChannel } from '../vscode/IOutputChannel';
 import { createActionContext, type IActionContext, type KnownTelemetryProperty, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 
 export const IActionExecutor: ServiceIdentifier<IActionExecutor> = Symbol.for('IActionExecutor');
+
+/**
+ * Runs action callbacks inside a per-invocation {@linkcode IActionContext},
+ * reporting telemetry and handling errors uniformly.
+ *
+ * The context is stored in an `AsyncLocalStorage` so that code deep in
+ * the call stack can access it via {@linkcode currentContext} without
+ * having to thread the context through every call.
+ */
 export interface IActionExecutor {
+    /** The {@linkcode IActionContext} for the currently executing action, or `undefined` if none. */
     readonly currentContext: IActionContext | undefined;
     /** Set a telemetry property on the current context, if one exists. No-op otherwise. */
     setTelProp(name: KnownTelemetryProperty, value: string): void;
     /** Set a telemetry measurement on the current context, if one exists. No-op otherwise. */
     setTelMeasure(name: string, value: number): void;
+    /**
+     * Run `callback` inside a new {@linkcode IActionContext}, report
+     * telemetry, and handle errors.
+     *
+     * Returns the callback's result on success, or `undefined` if the
+     * callback threw (and `context.errorHandling.rethrow` was not set).
+     *
+     * @throws Rethrows the callback's error when `context.errorHandling.rethrow` is `true`.
+     */
     callWithTelemetryAndErrorHandling<T>(
         telemetryId: string,
         callback: ActionCallback<T>
     ): Promise<T | undefined>;
 }
 
+/**
+ * Callback signature accepted by
+ * {@linkcode IActionExecutor.callWithTelemetryAndErrorHandling} and
+ * command registrations. Receives the fresh {@linkcode IActionContext}
+ * and any additional command arguments.
+ */
 export type ActionCallback<T> = (context: IActionContext, ...args: unknown[]) => T | Promise<T>;
 
+/** Default {@linkcode IActionExecutor} implementation backed by `AsyncLocalStorage`. */
 export class ActionExecutor implements IActionExecutor {
     private readonly storage = new AsyncLocalStorage<IActionContext>();
 
     public constructor(
-        private readonly telemetryReporter: ITelemetryReporter
+        private readonly telemetryReporter: ITelemetryReporter,
+        private readonly output?: IOutputChannel,
     ) { }
 
+    /** @inheritdoc */
     public get currentContext(): IActionContext | undefined {
         return this.storage.getStore();
     }
 
+    /** @inheritdoc */
     public setTelProp(name: KnownTelemetryProperty, value: string): void {
         const context = this.currentContext;
         if (context) {
@@ -43,6 +73,7 @@ export class ActionExecutor implements IActionExecutor {
         }
     }
 
+    /** @inheritdoc */
     public setTelMeasure(name: string, value: number): void {
         const context = this.currentContext;
         if (context) {
@@ -50,6 +81,7 @@ export class ActionExecutor implements IActionExecutor {
         }
     }
 
+    /** @inheritdoc */
     public async callWithTelemetryAndErrorHandling<T>(
         telemetryId: string,
         callback: ActionCallback<T>
@@ -64,18 +96,27 @@ export class ActionExecutor implements IActionExecutor {
 
         return this.storage.run(context, async () => {
             try {
+                this.output?.debug(`[cmd] ${telemetryId} start`);
                 const result = await callback(context);
+                this.output?.debug(`[cmd] ${telemetryId} done`);
 
                 properties.result = 'Succeeded';
                 return result;
             } catch (error) {
                 // TODO: toast error message + report issue button
                 if (CancellationError.test(error)) {
-                    properties.result = 'Canceled'; // TODO: Verify spelling is the same as existing
-                    // TODO: cancel step
+                    properties.result = 'Canceled';
+                    properties.lastStep = error.stepName;
                 } else {
-                    // TODO: error/cancellation handling plus telemetry
                     properties.result = 'Failed';
+                    const loggedError = error instanceof Error ? error : new Error(String(error));
+                    this.output?.error(loggedError, `[cmd] ${telemetryId} failed`);
+
+                    if (error instanceof Error) {
+                        properties.error = error.name;
+                        properties.errorMessage = error.message;
+                        properties.stack = error.stack;
+                    }
                 }
 
                 if (context.errorHandling.rethrow) {

@@ -6,17 +6,17 @@
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { ActionExecutor, DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, DebugOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
+import { AddOrEditAppSetting } from '../../../../commands/functions/AddOrEditAppSetting';
+import { DeleteAppSetting } from '../../../../commands/functions/DeleteAppSetting';
 import { createMockResourceClient, createMockSubscriptionProvider } from '../../../../debug/mockData';
-import { AddOrEditAppSetting } from '../../../../commands/functionApp/AddOrEditAppSetting';
-import { DeleteAppSetting } from '../../../../commands/functionApp/DeleteAppSetting';
-import { FunctionAppDataProvider } from '../../../../tree/resources/functionApp/FunctionAppDataProvider';
-import { FunctionAppVirtualPaths } from '../../../../tree/resources/functionApp/FunctionApp';
-import { FunctionAppViewProvider } from '../../../../tree/resources/functionApp/FunctionAppViewProvider';
+import { FunctionAppVirtualPaths } from '../../../../tree/resources/functions/FunctionApp';
+import { FunctionAppDataProvider } from '../../../../tree/resources/functions/FunctionAppDataProvider';
+import { FunctionAppViewProvider } from '../../../../tree/resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
@@ -92,6 +92,7 @@ describe('Function App Tree Integration (integration)', () => {
         initialSettings?: Record<string, string>;
     }): TestPipeline {
         const executor = new ActionExecutor(new NullTelemetryReporter());
+        const output = new DebugOutputChannel('test');
         const mockCtx = createMockCodeContext();
         const ctx = mockCtx.ctx;
         const code = ctx.code;
@@ -101,10 +102,12 @@ describe('Function App Tree Integration (integration)', () => {
 
         // Data layer
         const dataTree = new DataItemTree<ConcreteAzureNode>(
+            code,
             'test-func-tree',
             executor,
             resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000,
+            output,
         );
 
         const subProvider = createMockSubscriptionProvider({
@@ -117,7 +120,7 @@ describe('Function App Tree Integration (integration)', () => {
         const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
 
         const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider as never);
-        const genericDataProvider = new GenericAzureDataProvider(executor, resourceClientProvider, subProvider);
+        const genericDataProvider = new GenericAzureDataProvider(code, executor, output, resourceClientProvider, subProvider);
 
         // Register in correct order: Function App first, generic fallback second
         dataTree.registerProvider(funcDataProvider);
@@ -135,10 +138,12 @@ describe('Function App Tree Integration (integration)', () => {
             'test-func-tree',
             executor,
             viewOptions,
+            undefined,
+            output,
         );
 
         const funcViewProvider = new FunctionAppViewProvider(ctx, executor, dataTree);
-        const genericViewProvider = new GenericAzureViewProvider(code, executor, dataTree);
+        const genericViewProvider = new GenericAzureViewProvider(ctx, executor, output, dataTree);
 
         viewTree.registerProvider(funcViewProvider);
         viewTree.registerProvider(genericViewProvider);

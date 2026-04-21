@@ -25,7 +25,6 @@ const virtualGroupingPrefix = '~' as const;
  *  - Resource: `azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}`
  *  - Virtual Resource: `azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}#/{virtualType}/{virtualPath}`
  */
-// TODO: add tests for this class, especially the parsing logic
 export class AzureNodeId {
     private static readonly parseCache = new Map<string, AzureNodeId>();
 
@@ -39,7 +38,7 @@ export class AzureNodeId {
     }
 
     /**
-     * Parses an `azr://` URI string into an {@link AzureNodeId}.
+     * Parses an `azr://` URI string into an {@linkcode AzureNodeId}.
      * Returns a cached instance if the same string was parsed before.
      * Throws if the string is not a valid node ID.
      */
@@ -55,17 +54,7 @@ export class AzureNodeId {
     }
 
     /**
-     * Removes a previously cached parse result. Call when a node is
-     * evicted from the tree so the cache does not grow without bound.
-     * // TODO: do we even need this?
-     */
-    public static evict(key: string): void {
-        AzureNodeId.parseCache.delete(key);
-    }
-
-    /**
      * Clears all cached parse results.
-     * // TODO: call on tree refresh? Do we even need this?
      */
     public static clearParseCache(): void {
         AzureNodeId.parseCache.clear();
@@ -169,8 +158,8 @@ export class AzureNodeId {
     }
 
     /**
-     * Creates an {@link AzureNodeId} from an {@link AzureNode} by extracting the necessary information
-     * @param node An {@link AzureNode} to create a node ID for
+     * Creates an {@linkcode AzureNodeId} from an {@linkcode AzureNode} by extracting the necessary information
+     * @param node An {@linkcode AzureNode} to create a node ID for
      */
     public static from(node: AzureNode): AzureNodeId {
         let result: AzureNodeId;
@@ -252,7 +241,7 @@ export class AzureNodeId {
 
     /**
      * Serializes this node ID to its canonical `azr://` URI string.
-     * Roundtrips with {@link AzureNodeId.parse}: `parse(id.toString())` will
+     * Roundtrips with {@linkcode AzureNodeId.parse}: `parse(id.toString())` will
      * produce an equivalent node ID.
      */
     public toString(): string {
@@ -303,7 +292,7 @@ export class AzureNodeId {
 
     /**
      * Returns this node's parent identifier in the
-     * **ARM structural hierarchy** as an {@link AzureNodeId}, or `undefined` for root (account) nodes.
+     * **ARM structural hierarchy** as an {@linkcode AzureNodeId}, or `undefined` for root (account) nodes.
      *
      * This always reflects the ARM resource model:
      *  - Virtual resource  -> its parent generic resource
@@ -374,40 +363,40 @@ export class AzureNodeId {
         }
     }
 
-    /** Narrows this node ID to an {@link AzureAccount} node ID. */
+    /** Narrows this node ID to an {@linkcode AzureAccount} node ID. */
     public isAccountNodeId(): boolean {
         return this.data.kind === 'account';
     }
 
-    /** Narrows this node ID to an {@link AzureTenant} node ID. */
+    /** Narrows this node ID to an {@linkcode AzureTenant} node ID. */
     public isTenantNodeId(): boolean {
         return this.data.kind === 'tenant';
     }
 
-    /** Narrows this node ID to an {@link AzureSubscription} node ID. */
+    /** Narrows this node ID to an {@linkcode AzureSubscription} node ID. */
     public isSubscriptionNodeId(): boolean {
         return this.data.kind === 'subscription';
     }
 
-    /** Narrows this node ID to a {@link VirtualGroup} node ID (non-RG grouping). */
+    /** Narrows this node ID to a {@linkcode VirtualGroup} node ID (non-RG grouping). */
     public isVirtualGroupNodeId(): boolean {
         return this.data.kind === 'grouping' && this.data.grouping.groupingStrategy !== 'resourceGroup';
     }
 
     /**
-     * Narrows this node ID to a {@link ResourceGroup} node ID.
+     * Narrows this node ID to a {@linkcode ResourceGroup} node ID.
      * A resource group is a grouping node whose strategy is `'resourceGroup'`.
      */
     public isResourceGroupNodeId(): boolean {
         return this.data.kind === 'grouping' && this.data.grouping.groupingStrategy === 'resourceGroup';
     }
 
-    /** Narrows this node ID to a {@link GenericResource} node ID. {@link ResourceGroup} node IDs do **not** match, though they do conform to `GenericResource`. */
+    /** Narrows this node ID to a {@linkcode GenericResource} node ID. {@linkcode ResourceGroup} node IDs do **not** match, though they do conform to `GenericResource`. */
     public isGenericResourceNodeId(): boolean {
         return this.data.kind === 'resource';
     }
 
-    /** Narrows this node ID to a {@link VirtualResource} node ID. */
+    /** Narrows this node ID to a {@linkcode VirtualResource} node ID. */
     public isVirtualResourceNodeId(): boolean {
         return this.data.kind === 'virtual';
     }
@@ -424,7 +413,7 @@ export class AzureNodeId {
 
 /**
  * Extracts the portal hostname (e.g. `"portal.azure.com"`) from an
- * {@link AzureSubscription.environment}'s `portalUrl`.
+ * {@linkcode AzureSubscription.environment}'s `portalUrl`.
  */
 function portalHost(account: AzureAccount): string {
     return new URL(account.environment.portalUrl).hostname;

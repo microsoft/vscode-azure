@@ -23,17 +23,22 @@ export class ActivityViewProvider implements ViewProvider<string> {
         @inject(IActivityViewDataTree) private readonly dataTree: IActivityViewDataTree,
     ) { }
 
+    /** @inheritdoc */
     public canHandle(activityId: unknown): activityId is string {
         return typeof activityId === 'string';
     }
 
+    /**
+     * @inheritdoc
+     * @throws if `activityId` is supplied but the matching activity is not
+     * present in the data tree cache.
+     */
     public async getChildren(activityId?: string): Promise<string[]> {
         let parentActivity: Activity | undefined;
         if (activityId) {
             parentActivity = this.dataTree.get(activityId);
 
             if (!parentActivity) {
-                // TODO: unexpected
                 throw new Error(`Activity with ID ${activityId} not found in cache`);
             }
         }
@@ -42,11 +47,14 @@ export class ActivityViewProvider implements ViewProvider<string> {
         return children.map(activity => activity.id);
     }
 
+    /**
+     * @inheritdoc
+     * @throws if the activity is not found in the data tree cache.
+     */
     public getTreeItem(activityId: string): ITreeItem {
         const activity = this.dataTree.get(activityId);
 
         if (!activity) {
-            // TODO: unexpected
             throw new Error(`Activity with ID ${activityId} not found`);
         }
 

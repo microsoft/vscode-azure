@@ -5,9 +5,15 @@
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
 
+/**
+ * Pipeline policy that strips a leading UTF-8 BOM (`U+FEFF`) from
+ * `response.bodyAsText`, which some Azure endpoints include and which
+ * breaks JSON parsers.
+ */
 export class RemoveBOMPolicy implements PipelinePolicy {
     public readonly name = 'RemoveBOMPolicy';
 
+    /** @inheritdoc */
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
         const response = await next(request);
         if (response.bodyAsText?.charCodeAt(0) === 0xFEFF) {

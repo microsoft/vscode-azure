@@ -6,7 +6,7 @@
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import {
     getLastPick, RecursivePickStep,
-    type ExclusivePickManyOrCreate, type GenericPickOptions, type ITreeItem, type PickClassification, type PickContext
+    type ExclusivePickManyOrCreate, type GenericPickOptions, type IOutputChannel, type ITreeItem, type PickClassification, type PickContext
 } from '@microsoft/vscode-azure-utils';
 import { isAccount, isResourceGroup, isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../models/AzureNode';
 import { AzureNodeId } from '../models/AzureNodeId';
@@ -23,6 +23,7 @@ export interface ChooseResourceGroupContext extends PickContext<string> {
 
 interface ChooseResourceGroupOptions extends Omit<GenericPickOptions<string>, 'canPickMany'> {
     readonly dataItemTree: ConcreteAzureNodeTree;
+    readonly output?: IOutputChannel;
 }
 
 /**
@@ -34,7 +35,7 @@ interface ChooseResourceGroupOptions extends Omit<GenericPickOptions<string>, 'c
  */
 export class ChooseResourceGroupStep<TContext extends ChooseResourceGroupContext> extends RecursivePickStep<string, ChooseResourceGroupOptions> {
     public constructor(options: Omit<ChooseResourceGroupOptions, 'classify' | 'tree'>) {
-        const tree = new ResourceGroupViewItemTree(options.dataItemTree);
+        const tree = new ResourceGroupViewItemTree(options.dataItemTree, options.output);
         super(
             {
                 ...options,
@@ -45,6 +46,15 @@ export class ChooseResourceGroupStep<TContext extends ChooseResourceGroupContext
         );
     }
 
+    /**
+     * @inheritdoc
+     *
+     * In addition to the base recursive pick behavior, resolves the
+     * picked terminal resource group into the data-layer node and
+     * sets both {@linkcode ChooseResourceGroupContext.subscription}
+     * and {@linkcode ChooseResourceGroupContext.resourceGroup} on
+     * the context.
+     */
     public override async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
         const pickResult = await super.prompt(context);
 
@@ -79,12 +89,15 @@ function classifyForResourceGroup(nodeId: AzureNodeId): PickClassification {
 /**
  * Creates a tree adapter for resource group picking that reads
  * from a {@linkcode ConcreteAzureNodeTree}.
- * TODO: is this terrible?
  */
 class ResourceGroupViewItemTree {
-    public constructor(private readonly dataItemTree: ConcreteAzureNodeTree) { }
+    public constructor(
+        private readonly dataItemTree: ConcreteAzureNodeTree,
+        private readonly output?: IOutputChannel,
+    ) { }
 
     public async getChildren(key?: string): Promise<string[]> {
+        this.output?.debug(`[wizard] fetch resource-group picker children start key=${key ?? '<root>'}`);
         let node: ConcreteAzureNode | undefined = undefined;
         if (key) {
             node = this.dataItemTree.get(key);
@@ -92,7 +105,9 @@ class ResourceGroupViewItemTree {
                 throw new Error(`Could not find node for key: ${key}`);
             }
         }
-        return (await this.dataItemTree.getChildren(node)).map(child => AzureNodeId.from(child).toString());
+        const children = (await this.dataItemTree.getChildren(node)).map(child => AzureNodeId.from(child).toString());
+        this.output?.debug(`[wizard] fetch resource-group picker children done key=${key ?? '<root>'} count=${children.length}`);
+        return children;
     }
 
     public getTreeItem(key: string): ITreeItem {

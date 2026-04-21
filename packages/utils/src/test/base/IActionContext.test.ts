@@ -15,13 +15,13 @@ describe('createActionContext (unit)', () => {
 
     it('should generate a correlationId if none is provided', () => {
         const ctx = createActionContext('test');
-        expect(ctx.telemetry.properties.correlationId).to.be.a('string');
-        expect(ctx.telemetry.properties.correlationId.length).to.be.greaterThan(0);
+        expect(ctx.telemetry.properties['x-ms-correlation-request-id']).to.be.a('string');
+        expect(ctx.telemetry.properties['x-ms-correlation-request-id'].length).to.be.greaterThan(0);
     });
 
     it('should use the provided correlationId', () => {
         const ctx = createActionContext('test', 'my-corr-id');
-        expect(ctx.telemetry.properties.correlationId).to.equal('my-corr-id');
+        expect(ctx.telemetry.properties['x-ms-correlation-request-id']).to.equal('my-corr-id');
     });
 
     it('should initialize with empty measurements', () => {

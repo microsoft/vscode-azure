@@ -5,7 +5,7 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
 import { ArmDeploymentDataProvider, parseDeploymentId } from '../tree/activity/ArmDeploymentDataProvider';
@@ -14,7 +14,14 @@ import type { ManagedCommand } from './ManagedCommand';
 /* c8 ignore start */
 
 /**
- * TODO: This is a temporary command just to kick off tracking an existing ARM deployment
+ * Starts tracking an existing ARM deployment in the activity view.
+ *
+ * Prompts the user for either a raw ARM deployment resource ID or an
+ * Azure Portal deployment blade URL, resolves the owning subscription
+ * from the signed-in accounts, then hands the deployment off to
+ * {@linkcode ArmDeploymentDataProvider}.
+ *
+ * TODO: This is a temporary command just to kick off tracking an existing ARM deployment.
  */
 @injectable()
 export class TrackArmDeployment implements ManagedCommand {
@@ -25,6 +32,7 @@ export class TrackArmDeployment implements ManagedCommand {
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
     ) { }
 
+    /** @inheritdoc */
     public async execute(): Promise<void> {
         const rawInput = await this.code.window.showInputBox({
             prompt: this.code.l10n.t('Enter an ARM deployment resource ID or Azure Portal deployment URL'),
@@ -40,8 +48,7 @@ export class TrackArmDeployment implements ManagedCommand {
         });
 
         if (!rawInput) {
-            this.context.telemetry.properties.cancelStep = 'deploymentId';
-            return;
+            throw new CancellationError('Canceled', 'deploymentId');
         }
 
         const deploymentId = extractDeploymentId(rawInput);

@@ -13,6 +13,7 @@ import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider } from '../../tree/DataProvider';
 import { createDefaultLoadMoreOptions, ViewItemTree, type LoadMoreOptions, type ViewItemTreeOptions } from '../../tree/ViewItemTree';
 import type { ViewProvider } from '../../tree/ViewProvider';
+import { createMockVsCode } from '../vscode/MockVsCode';
 
 
 // ---------------------------------------------------------------------------
@@ -52,7 +53,8 @@ function createExecutor() {
 }
 
 function createDataTree(ttl = 60_000) {
-    return new DataItemTree<TestResource>('integrated', createExecutor(), r => r.id, ttl);
+    const { vscode } = createMockVsCode();
+    return new DataItemTree<TestResource>(vscode, 'integrated', createExecutor(), r => r.id, ttl);
 }
 
 function createPipeline(ttl = 60_000, loadMoreOptions?: LoadMoreOptions<TestViewItem>): {
@@ -61,7 +63,8 @@ function createPipeline(ttl = 60_000, loadMoreOptions?: LoadMoreOptions<TestView
     viewTree: ViewItemTree<TestViewItem, TestResource>;
 } {
     const executor = createExecutor();
-    const dataTree = new DataItemTree<TestResource>('integrated', executor, r => r.id, ttl);
+    const { vscode } = createMockVsCode();
+    const dataTree = new DataItemTree<TestResource>(vscode, 'integrated', executor, r => r.id, ttl);
 
     const options: ViewItemTreeOptions<TestViewItem, TestResource> = {
         dataItemTree: dataTree,
@@ -884,7 +887,8 @@ describe('Tree Integration Tests (integration)', () => {
 
         it('should use resourceKey (not viewKey) when loading more pages', async () => {
             const executor = createExecutor();
-            const dataTree = new DataItemTree<TestResource>('integrated', executor, r => r.id, 60_000);
+            const { vscode } = createMockVsCode();
+            const dataTree = new DataItemTree<TestResource>(vscode, 'integrated', executor, r => r.id, 60_000);
 
             // View items where key differs from resourceKey
             const prefixedVi = (id: string): TestViewItem => ({

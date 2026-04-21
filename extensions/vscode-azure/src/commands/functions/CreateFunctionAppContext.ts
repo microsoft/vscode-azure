@@ -14,9 +14,16 @@ export interface CreateFunctionAppContext extends AzdWizardContext, PickContext<
     readonly hostingPlan?: FunctionAppHostingPlan;
 }
 
+/** Hosting plan flavors offered by {@linkcode PickHostingPlanStep}. */
 export type FunctionAppHostingPlan = 'FlexConsumption' | 'Premium' | 'AppServicePlan';
 
+/** Runtime stacks offered by {@linkcode PickRuntimeStep}. */
 export type FunctionAppRuntime = 'dotnet-isolated' | 'node' | 'python' | 'java' | 'powershell' | 'custom';
+
+/**
+ * Returns the `runtimeVersion` string expected by the Function App bicep
+ * template for the given runtime (e.g., `Node|20`, `Python|3.11`).
+ */
 export function getRuntimeVersion(runtime: FunctionAppRuntime): string {
     switch (runtime) {
         case 'node': return 'Node|20';

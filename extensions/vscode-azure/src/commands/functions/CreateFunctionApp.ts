@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ChooseLocationStep, ChooseSubscriptionStep, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, Wizard } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
 import { AzdProvisionStep } from '../../wizard/azd/AzdProvisionStep';
@@ -28,30 +28,33 @@ import { PickRuntimeStep } from './steps/PickRuntimeStep';
 export class CreateFunctionApp implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
         @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
     ) { }
 
+    /** @inheritdoc */
     public async execute(): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
-            { picks: [] },
+            {},
             [
                 new HydrateAzdInfoStep(this.ctx.code),
                 new ChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
-                new ChooseLocationStep(this.ctx, this.subscriptionClientProvider),
+                new ChooseLocationStep(this.ctx, this.subscriptionClientProvider, this.output),
                 new EnvironmentNameStep(this.ctx),
                 new PickRuntimeStep(this.ctx),
                 new PickHostingPlanStep(this.ctx),
                 new OfferSaveStep(this.ctx, this.tempManager),
             ],
             [
-                new GenerateBicepStep(this.ctx.extensionContext, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']),
-                new GenerateAzureYamlStep(),
+                new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']),
+                new GenerateAzureYamlStep(this.ctx.code),
                 new CreateAzdEnvStep(),
                 new AzdProvisionStep(this.ctx.code),
             ],
+            this.output,
         );
 
         await wizard.run();

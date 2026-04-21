@@ -7,22 +7,32 @@ import type * as vscode from 'vscode';
 import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
 import type { Disposable } from '../vscode/Disposable';
+import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { ITreeItem } from '../vscode/IVsCode';
 import type { DataItemTree } from './DataItemTree';
+import type { DataProviderChangeEvent } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 import type { ViewProvider } from './ViewProvider';
 
 /**
- * Options for constructing a {@link ViewItemTree}.
+ * Options for constructing a {@linkcode ViewItemTree}.
  *
  * @typeParam TViewItem - The view item type stored in the tree.
- * @typeParam TResource - The resource type stored in the underlying {@link DataItemTree}.
+ * @typeParam TResource - The resource type stored in the underlying {@linkcode DataItemTree}.
  */
 export interface ViewItemTreeOptions<TViewItem, TResource> {
+    /** The underlying data tree that the view tree reads resources from. */
     readonly dataItemTree: DataItemTree<TResource>;
+    /** Map a data-layer resource to its corresponding view item. */
     readonly toViewItem: (resource: TResource) => TViewItem;
+    /** Extract the unique string key of a view item (used for caching and parent lookup). */
     readonly getKey: (viewItem: TViewItem) => string;
+    /**
+     * Extract the key of the underlying data resource that a view item
+     * represents. Used to map view items back to the {@linkcode DataItemTree}
+     * for pagination (hasMore / loadMore).
+     */
     readonly getResourceKey: (viewItem: TViewItem) => string;
 }
 
@@ -33,7 +43,7 @@ export interface ViewItemTreeOptions<TViewItem, TResource> {
  * view item to any branch whose data-layer provider has more pages.
  *
  * All parent-child relationships are expressed as **string keys** so
- * that {@link ViewItemTree} can resolve the real cached view item
+ * that {@linkcode ViewItemTree} can resolve the real cached view item
  * instead of fabricating a new object (which would break reference
  * equality for non-string view item types).
  *
@@ -52,7 +62,7 @@ export interface LoadMoreOptions<TViewItem> {
 
     /**
      * Derive the parent key from a "Load More" key.
-     * Inverse of {@link getLoadMoreKey}.
+     * Inverse of {@linkcode getLoadMoreKey}.
      */
     readonly getParentKey: (loadMoreKey: string) => string;
 
@@ -73,7 +83,7 @@ export interface LoadMoreOptions<TViewItem> {
 
 /**
  * Adapters for creating synthetic "Load More" view items,
- * used by {@link createDefaultLoadMoreOptions}.
+ * used by {@linkcode createDefaultLoadMoreOptions}.
  */
 export interface LoadMoreAdapter<TViewItem> {
     /** Create a synthetic "Load More" view item from a key. */
@@ -85,11 +95,11 @@ export interface LoadMoreAdapter<TViewItem> {
 const loadMoreSuffix = '/~loadMore';
 
 /**
- * Creates a default {@link LoadMoreOptions} implementation using a
+ * Creates a default {@linkcode LoadMoreOptions} implementation using a
  * suffix-based key convention. The "Load More" view item for a parent
  * with key `'foo'` will have key `'foo/~loadMore'`.
  *
- * Callers provide a {@link LoadMoreAdapter} to bridge between the
+ * Callers provide a {@linkcode LoadMoreAdapter} to bridge between the
  * generic key strings and their concrete view item type.
  */
 export function createDefaultLoadMoreOptions<TViewItem>(adapter: LoadMoreAdapter<TViewItem>): LoadMoreOptions<TViewItem> {
@@ -103,20 +113,20 @@ export function createDefaultLoadMoreOptions<TViewItem>(adapter: LoadMoreAdapter
 }
 
 /**
- * A view-layer tree built on top of a {@link DataItemTree}.
+ * A view-layer tree built on top of a {@linkcode DataItemTree}.
  *
- * Registered {@link ViewProvider}s control how resources are presented:
+ * Registered {@linkcode ViewProvider}s control how resources are presented:
  * they may inject virtual nodes (nodes that do not exist in the underlying
- * {@link DataItemTree}), filter, group, sort, or otherwise transform the
+ * {@linkcode DataItemTree}), filter, group, sort, or otherwise transform the
  * children returned for each resource -- without modifying the data layer.
  *
  * Parent relationships are tracked internally so that
- * {@link getParent} works for both real and virtual nodes.
+ * {@linkcode getParent} works for both real and virtual nodes.
  *
  * @typeParam TViewItem - The view item type stored in the tree.
- * @typeParam TResource - The resource type stored in the underlying {@link DataItemTree}.
+ * @typeParam TResource - The resource type stored in the underlying {@linkcode DataItemTree}.
  */
-export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewItem, ViewProvider<TViewItem>> implements vscode.TreeDataProvider<TViewItem> {
+export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewItem, ViewProvider<TViewItem>> implements vscode.TreeDataProvider<TViewItem>, Disposable {
     /** Map from key to node for O(1) lookup. */
     private readonly nodes = new NodeMap<ViewNode<TViewItem>>(node => this.getKey(node.viewItem));
 
@@ -126,7 +136,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     /** Cached root nodes. */
     private roots: ViewNode<TViewItem>[] | undefined;
 
-    /** Subscription to the underlying {@link DataItemTree}'s change event. */
+    /** Subscription to the underlying {@linkcode DataItemTree}'s change event. */
     private readonly dataItemTreeSubscription: Disposable;
 
     public readonly onDidChangeTreeData = this.changeEmitter.event;
@@ -140,7 +150,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * @param name - A short identifier for this tree instance (e.g.
      *   `'resources'`, `'activity'`). Stamped on every telemetry event as
      *   `properties.tree`.
-     * @param executor - The {@link IActionExecutor} to use for telemetry and error handling when calling view providers.
+     * @param executor - The {@linkcode IActionExecutor} to use for telemetry and error handling when calling view providers.
      * @param options - Configuration for the view item tree.
      * @param loadMoreOptions - Optional. When provided, enables automatic "Load More" node
      * injection for paginated branches.
@@ -150,6 +160,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         private readonly executor: IActionExecutor,
         options: ViewItemTreeOptions<TViewItem, TResource>,
         private readonly loadMoreOptions?: LoadMoreOptions<TViewItem>,
+        private readonly output?: IOutputChannel,
     ) {
         super();
 
@@ -187,18 +198,21 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * Get children for the given resource, or root-level resources when
      * called with `undefined` -- mirroring `TreeDataProvider.getChildren`.
      *
-     * Delegates to registered {@link ViewProvider}s, which may inject virtual
+     * Delegates to registered {@linkcode ViewProvider}s, which may inject virtual
      * nodes, filter, reorder, or group the results as they see fit.
      */
     public async getChildren(viewItem?: TViewItem): Promise<TViewItem[]> {
         if (viewItem === undefined) {
+            this.output?.trace(`[view] ${this.name} getChildren(root)`);
             return this.getRootChildren();
         }
 
+        this.output?.trace(`[view] ${this.name} getChildren key=${this.getKey(viewItem)}`);
         return this.getBranchChildren(viewItem);
     }
 
     private async getRootChildren(): Promise<TViewItem[]> {
+        this.output?.trace(`[view] ${this.name} dispatch getRootChildren providers=${this.getRootProviders().length}`);
         // TODO: concurrency limits
         // Each root provider gets its own telemetry scope so that
         // concurrent calls don't overwrite shared mutable properties.
@@ -226,6 +240,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     }
 
     private async getBranchChildren(viewItem: TViewItem): Promise<TViewItem[]> {
+        this.output?.trace(`[view] ${this.name} dispatch getBranchChildren key=${this.getKey(viewItem)}`);
         const parentNode = this.nodes.get(this.getKey(viewItem));
         if (!parentNode) {
             return [];
@@ -262,6 +277,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         if (this.loadMoreOptions && this.hasMoreData(resourceKey)) {
             const viewKey = this.getKey(viewItem);
             const loadMoreKey = this.loadMoreOptions.getLoadMoreKey(viewKey);
+            this.output?.debug(`[view] ${this.name} inject loadMore parent=${viewKey} key=${loadMoreKey}`);
             return [...childItems, this.loadMoreOptions.createLoadMoreViewItem(loadMoreKey)];
         }
 
@@ -270,9 +286,10 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
     /**
      * Get the VS Code tree item representation for the given resource by
-     * delegating to the {@link ViewProvider} that handles it.
+     * delegating to the {@linkcode ViewProvider} that handles it.
      */
     public async getTreeItem(viewItem: TViewItem): Promise<ITreeItem> {
+        this.output?.trace(`[view] ${this.name} dispatch getTreeItem key=${this.getKey(viewItem)}`);
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
         return (await this.executor.callWithTelemetryAndErrorHandling('view.getTreeItem', (context) => {
             context.telemetry.suppress = 'onSuccess';
@@ -302,11 +319,12 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * Get the parent of a view item, or `undefined` if it is a root item.
      *
      * Uses the cached node map for nodes that have been loaded via
-     * {@link getChildren}. Falls back to the owning {@link ViewProvider}'s
+     * {@linkcode getChildren}. Falls back to the owning {@linkcode ViewProvider}'s
      * `getParent` method (if implemented) so that `TreeView.reveal()`
      * works for nodes that have not yet been loaded.
      */
     public async getParent(viewItem: TViewItem): Promise<TViewItem | undefined> {
+        this.output?.trace(`[view] ${this.name} dispatch getParent key=${this.getKey(viewItem)}`);
         return await this.executor.callWithTelemetryAndErrorHandling('view.getParent', async (context) => {
             context.telemetry.suppress = 'onSuccess';
             context.telemetry.isUserEvent = false;
@@ -341,10 +359,10 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * Trigger the data layer to pull the next page.
      *
      * Accepts either a "Load More" view item (from which the parent key is
-     * derived via {@link LoadMoreOptions.getParentKey}) or a direct
+     * derived via {@linkcode LoadMoreOptions.getParentKey}) or a direct
      * parent view item.
      *
-     * The data tree fires {@link DataItemTree.onDidChange} which
+     * The data tree fires {@linkcode DataItemTree.onDidChange} which
      * automatically refreshes the view, causing the new children (and
      * possibly a new "Load More" node) to appear.
      */
@@ -378,6 +396,14 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     public override dispose(): void {
         this.dataItemTreeSubscription.dispose();
         super.dispose();
+    }
+
+    protected override onProviderChanged(_event: DataProviderChangeEvent<TViewItem>): void {
+        if (this.roots) {
+            this.nodes.removeSubtrees(this.roots);
+        }
+        this.roots = undefined;
+        this.changeEmitter.fire(undefined);
     }
 }
 

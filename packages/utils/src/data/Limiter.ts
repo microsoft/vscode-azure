@@ -13,12 +13,24 @@ interface ILimitedTaskFactory<T> {
     readonly e: (error?: unknown) => void;
 }
 
+/**
+ * Limits the number of promises that may run concurrently.
+ *
+ * Tasks are queued via {@linkcode queue} and run as soon as the number
+ * of currently-running promises drops below {@linkcode maxDegreeOfParallelism}.
+ *
+ * Lifted from the VSCode git extension with small adaptations.
+ */
 export class Limiter<T> {
 
     private runningPromises: number;
     private maxDegreeOfParallelism: number;
     private outstandingPromises: ILimitedTaskFactory<T>[];
 
+    /**
+     * @param maxDegreeOfParallelism - Maximum number of promises that may run concurrently. Must be at least 1.
+     * @throws if `maxDegreeOfParallelism` is less than 1.
+     */
     constructor(maxDegreeOfParallelism: number) {
         if (maxDegreeOfParallelism < 1) {
             throw new Error('maxDegreeOfParallelism must be at least 1');
@@ -29,6 +41,10 @@ export class Limiter<T> {
         this.runningPromises = 0;
     }
 
+    /**
+     * Queue a task to run when a slot is available. Returns a promise that
+     * resolves (or rejects) with the result of `factory()`.
+     */
     queue(factory: () => Promise<T>): Promise<T> {
         return new Promise<T>((c, e) => {
             this.outstandingPromises.push({ factory, c, e });

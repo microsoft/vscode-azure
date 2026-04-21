@@ -3,6 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * esbuild build script for the VS Code extension.
+ *
+ * Aliases the workspace-local `@microsoft/vscode-azure-utils` and
+ * `@microsoft/vscode-azure-azutils` packages so esbuild resolves them from
+ * source (no prebuild step required), and adds a secondary `debug.bundle`
+ * entry point that ships the mock-data bindings separately from the main
+ * extension bundle.
+ */
+
 import { autoEsbuildOrWatch, autoSelectEsbuildConfig } from '@microsoft/vscode-azext-eng/esbuild';
 
 const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig(true);
