@@ -16,7 +16,13 @@ export default defineConfig({
     tests: [azExtSrcTestConfig],
     coverage: {
         include: [
-            '**/extensions/vscode-azure/src/**'
+            '**/extensions/vscode-azure/src/**',
+            // '**/extensions/vscode-azure/dist/extension.bundle.*',
+            // Uncommenting above, to include the bundle, scans more source files (e.g. extension.ts)
+            // that aren't covered by unit tests, however, it also includes a lot of dependency files,
+            // and `exclude` doesn't seem to filter those out
+            // It is also necessary to ensure source maps are enabled, and minification disabled in
+            // the esbuild config (see esbuild.mjs)
         ],
         exclude: [
             '**/extensions/vscode-azure/src/debug/**',

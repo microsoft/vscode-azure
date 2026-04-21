@@ -119,5 +119,3 @@ function extractDeploymentId(input: string): string {
     }
     return trimmed;
 }
-
-/* c8 ignore stop */
