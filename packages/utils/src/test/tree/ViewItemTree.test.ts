@@ -7,8 +7,10 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { DataItemTree } from '../../tree/DataItemTree';
+import type { DataProviderChangeEvent } from '../../tree/DataProvider';
 import { ViewItemTree } from '../../tree/ViewItemTree';
 import type { ViewProvider } from '../../tree/ViewProvider';
+import { EventEmitter } from '../../vscode/EventEmitter';
 import type { ITreeItem } from '../../vscode/IVsCode';
 import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
@@ -250,6 +252,38 @@ describe('ViewItemTree (unit)', () => {
                 c => c.arguments[0] === undefined,
             );
             expect(firedUndefined).to.be.true;
+        });
+
+        it('should fire full refresh when a view provider fires onDidChange', async () => {
+            const { viewTree } = createSetup();
+            const changeEmitter = new EventEmitter<DataProviderChangeEvent<TestViewItem>>();
+
+            viewTree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => ['a', 'b'],
+                getTreeItem: (vi) => ({ label: vi, id: vi }),
+                onDidChange: changeEmitter.event,
+            });
+
+            // Load roots so the tree has cached state
+            await viewTree.getChildren();
+
+            const onChange = mock.fn();
+            viewTree.onDidChangeTreeData(onChange);
+
+            // Fire provider change
+            changeEmitter.fire({ resource: undefined, includeChildren: true });
+
+            // Should fire a full refresh (undefined)
+            const firedUndefined = onChange.mock.calls.some(
+                c => c.arguments[0] === undefined,
+            );
+            expect(firedUndefined).to.be.true;
+
+            // Roots should be reset -- next getChildren should re-fetch
+            const children = await viewTree.getChildren();
+            expect(children).to.deep.equal(['a', 'b']);
         });
     });
 

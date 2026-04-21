@@ -90,8 +90,10 @@ const minUsernameLength = 4;
  * Builds {@linkcode ReplacementOption}s that redact the OS username from
  * telemetry values. Returns an empty array if the username is too short
  * to mask safely (to avoid false-positive replacements).
+ *
+ * @internal Exported for testing only.
  */
-function getUsernameReplacementOptions(): ReplacementOption[] {
+export function getUsernameReplacementOptions(): ReplacementOption[] {
     try {
         const username = os.userInfo().username;
         if (username.length < minUsernameLength) {

@@ -72,4 +72,23 @@ describe('CreateAzdEnvStep (unit)', () => {
             expect(step.shouldExecute({})).to.be.false;
         });
     });
+
+    describe('execute', () => {
+        it('should throw a helpful error when azd is not installed', async () => {
+            const step = new CreateAzdEnvStep();
+            const context: Partial<AzdWizardContext> = {
+                iacFolder: MockUri.file('/project') as never,
+                environmentName: 'dev',
+                location: { name: 'eastus' },
+                subscription: { subscriptionId: 'sub-1' } as never,
+            };
+
+            try {
+                await step.execute(context);
+                expect.fail('Expected an error');
+            } catch (e) {
+                expect((e as Error).message).to.include('Azure Developer CLI (azd) was not found');
+            }
+        });
+    });
 });

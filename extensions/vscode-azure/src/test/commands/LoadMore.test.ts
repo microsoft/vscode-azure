@@ -5,8 +5,9 @@
 
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
+import { mock } from 'node:test';
 import * as vscode from 'vscode';
-import { defaultLoadMoreOptions } from '../../commands/LoadMore';
+import { defaultLoadMoreOptions, LoadMore } from '../../commands/LoadMore';
 
 describe('defaultLoadMoreOptions (unit)', () => {
     const options = defaultLoadMoreOptions(vscode);
@@ -39,5 +40,18 @@ describe('defaultLoadMoreOptions (unit)', () => {
         expect(item.label).to.include('Loading');
         expect(item.command).to.be.undefined;
         expect(item.iconPath).to.not.be.undefined;
+    });
+});
+
+describe('LoadMore (unit)', () => {
+    it('should call viewItemTree.loadMore with the parent key', async () => {
+        const loadMore = mock.fn(() => Promise.resolve());
+        const viewItemTree = { loadMore } as never;
+
+        const cmd = new LoadMore(viewItemTree);
+        await cmd.execute('parent-key');
+
+        expect(loadMore.mock.callCount()).to.equal(1);
+        expect(loadMore.mock.calls[0].arguments[0]).to.equal('parent-key');
     });
 });

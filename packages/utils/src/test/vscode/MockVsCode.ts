@@ -5,7 +5,7 @@
 
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { Disposable } from '../../vscode/Disposable';
+import { EventEmitter } from '../../vscode/EventEmitter';
 import { DebugOutputChannel } from '../../vscode/IOutputChannel';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
@@ -178,6 +178,19 @@ export interface MockVsCodeResult {
      * ```
      */
     readonly messageResponses: (string | undefined)[];
+
+    /**
+     * Fire this emitter to simulate a workspace configuration change.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * m.configChangeEmitter.fire({
+     *     affectsConfiguration: (s) => s === 'mySection.mySetting',
+     * });
+     * ```
+     */
+    readonly configChangeEmitter: EventEmitter<{ affectsConfiguration(section: string): boolean }>;
 }
 
 /**
@@ -322,9 +335,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showOpenDialog,
         showWorkspaceFolderPick,
     };
+    const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const workspace = {
         getConfiguration,
-        onDidChangeConfiguration: () => Disposable.None,
+        onDidChangeConfiguration: configChangeEmitter.event,
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
     };
@@ -360,6 +374,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         window,
         workspace,
         messageResponses,
+        configChangeEmitter,
     } as unknown as MockVsCodeResult;
 }
 

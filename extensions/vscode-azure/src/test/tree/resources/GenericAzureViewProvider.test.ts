@@ -8,6 +8,7 @@ import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, 
 import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
+import { mock } from 'node:test';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
 import { ConfigurationSection } from '../../../constants';
 import { GenericAzureViewProvider } from '../../../tree/resources/GenericAzureViewProvider';
@@ -420,5 +421,62 @@ describe('GenericAzureViewProvider (unit)', () => {
                 }
             }),
         );
+    });
+
+    describe('dispose', () => {
+        it('should not throw when disposed', () => {
+            const provider = createProvider();
+            expect(() => { provider.dispose(); }).to.not.throw;
+        });
+    });
+
+    describe('configuration change listener', () => {
+        it('should fire onDidChange when groupBy setting changes', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: (s: string) => s === `${ConfigurationSection}.groupBy`,
+            });
+
+            expect(listener.mock.callCount()).to.equal(1);
+        });
+
+        it('should fire onDidChange when groupByTag setting changes', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: (s: string) => s === `${ConfigurationSection}.groupByTag`,
+            });
+
+            expect(listener.mock.callCount()).to.equal(1);
+        });
+
+        it('should fire onDidChange when alwaysShowAccountNodes setting changes', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: (s: string) => s === `${ConfigurationSection}.alwaysShowAccountNodes`,
+            });
+
+            expect(listener.mock.callCount()).to.equal(1);
+        });
+
+        it('should not fire onDidChange for unrelated settings', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: () => false,
+            });
+
+            expect(listener.mock.callCount()).to.equal(0);
+        });
     });
 });
