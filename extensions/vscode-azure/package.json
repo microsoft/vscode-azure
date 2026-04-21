@@ -21,11 +21,6 @@
     "contributes": {
         "commands": [
             {
-                "command": "azure.hello",
-                "category": "%commands.category.azure%",
-                "title": "Hello World!"
-            },
-            {
                 "command": "vscode-azure/resources/refresh",
                 "icon": "$(refresh)",
                 "title": "%commands.vscode-azure/resources/refresh%"

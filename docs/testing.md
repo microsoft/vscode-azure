@@ -19,7 +19,7 @@ describe('AzureNodeId (unit)', () => {
     it('should round-trip a subscription node ID', () => { ... });
 });
 
-describe('Hello command (integration)', () => {
+describe('RefreshResourcesView (integration)', () => {
     it('should execute without error', async () => { ... });
 });
 ```
@@ -43,14 +43,12 @@ Unit tests instantiate classes directly with mocked dependencies. Use `createMoc
 ```typescript
 import { createActionContext, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 
-it('(unit) should set telemetry property', async () => {
-    const context = createActionContext('test');
-    const { vscode: mockVsCode } = createMockVsCode();
+it('(unit) should invalidate the cache', async () => {
+    const mockCache = { invalidateAll: mock.fn() };
+    const command = new RefreshResourcesView(mockCache);
+    command.execute();
 
-    const hello = new Hello(context, mockVsCode);
-    await hello.execute();
-
-    expect(context.telemetry.properties.hello).to.equal('world');
+    expect(mockCache.invalidateAll.mock.callCount()).to.equal(1);
 });
 ```
 
@@ -115,7 +113,7 @@ Integration tests use the real VS Code API and extension infrastructure:
 
 ```typescript
 it('(integration) should execute without error', async () => {
-    await vscode.commands.executeCommand('azure.hello');
+    await vscode.commands.executeCommand('vscode-azure/resources/refresh');
 });
 ```
 
