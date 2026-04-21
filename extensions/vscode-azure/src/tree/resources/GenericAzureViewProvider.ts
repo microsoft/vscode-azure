@@ -68,8 +68,14 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is string {
-        // TODO: need to not try to handle things below `GenericResource` level
-        return typeof resource === 'string' && AzureNodeId.test(resource);
+        if (typeof resource !== 'string' || !AzureNodeId.test(resource)) {
+            return false;
+        }
+
+        // Exclude virtual resources (e.g. ACR repositories) -- those are
+        // handled by service-specific view providers.
+        const nodeId = AzureNodeId.parse(resource);
+        return !nodeId.isVirtualResourceNodeId();
     }
 
     /** @inheritdoc */

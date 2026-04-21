@@ -71,7 +71,8 @@ export class SubscriptionClient implements ISubscriptionClient {
 
     private static readonly locationsCache = new Map<string, Location[]>();
     private async listLocations(subscriptionId: string, options?: SubscriptionsListLocationsOptionalParams): Promise<Location[]> {
-        const cacheKey = subscriptionId.toLowerCase(); // TODO: options as part of cache key? Needed for custom/extended locations to work?
+        const extendedSuffix = options?.includeExtendedLocations ? ':ext' : '';
+        const cacheKey = `${subscriptionId.toLowerCase()}${extendedSuffix}`;
         if (SubscriptionClient.locationsCache.has(cacheKey)) {
             return SubscriptionClient.locationsCache.get(cacheKey)!; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- checked above
         }

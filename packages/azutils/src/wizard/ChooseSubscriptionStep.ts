@@ -33,6 +33,8 @@ export class ChooseSubscriptionStep<TContext extends ChooseSubscriptionContext> 
     public constructor(options: Omit<ChooseSubscriptionOptions, 'classify'>) {
         super(
             {
+                title: options.code.l10n.t('Select Subscription'),
+                stepName: 'subscription',
                 ...options,
                 classify: (item: string) => classifyForSubscription(AzureNodeId.parse(item))
             } as ChooseSubscriptionOptions & ExclusivePickManyOrCreate<string>,

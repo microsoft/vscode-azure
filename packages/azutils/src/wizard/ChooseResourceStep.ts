@@ -36,6 +36,8 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
     public constructor(options: Omit<ChooseResourceOptions, 'classify'> & ExclusivePickManyOrCreate<string>) {
         super(
             {
+                title: options.code.l10n.t('Select Resource'),
+                stepName: 'resource',
                 ...options,
                 classify: (item: string) => classifyForResource(AzureNodeId.parse(item), item, options),
             } as ChooseResourceOptions & ExclusivePickManyOrCreate<string>,
