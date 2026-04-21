@@ -5,7 +5,7 @@
 
 import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { it } from 'mocha';
+import { describe, it } from 'mocha';
 import { WebAppClient } from '../../../rest/clients/WebAppClient';
 import { makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
