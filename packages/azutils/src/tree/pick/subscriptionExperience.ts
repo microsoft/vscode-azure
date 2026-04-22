@@ -11,7 +11,7 @@ import { type ChooseSubscriptionContext, ChooseSubscriptionStep } from '../../wi
 interface SubscriptionExperienceOptions extends ICodeContext {
     readonly tree: ViewItemTree<string, AzureNode>;
     readonly dataItemTree: ConcreteAzureNodeTree;
-    readonly output?: IOutputChannel;
+    readonly output: IOutputChannel;
 }
 
 /**
@@ -21,10 +21,9 @@ interface SubscriptionExperienceOptions extends ICodeContext {
  */
 export async function subscriptionExperience(options: SubscriptionExperienceOptions): Promise<AzureSubscription> {
     const wizard = new Wizard<ChooseSubscriptionContext>(
+        options.output,
         {},
         [new ChooseSubscriptionStep(options)],
-        [],
-        options.output,
     );
 
     const result = await wizard.run();

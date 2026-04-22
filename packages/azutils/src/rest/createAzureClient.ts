@@ -7,7 +7,7 @@ import type { Client as RestClient, ClientOptions as RestClientOptions } from '@
 import type { TokenCredential } from '@azure/core-auth';
 import type { ServiceClient, ServiceClientOptions } from '@azure/core-client';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
 import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
@@ -38,11 +38,10 @@ export function createAzureClient<TClient extends ServiceClient, TOptions extend
     clientCtor: new (credential: TokenCredential, options?: TOptions) => TClient,
     credentialOrSubscription: TokenCredential | AzureSubscription,
     options?: TOptions,
-    output?: IOutputChannel,
 ): TClient {
     const { credential, resolvedOptions } = resolveCredentialArgs<TOptions>(credentialOrSubscription, options);
-    output?.debug(`[rest] create client ${clientCtor.name}`);
-    return new clientCtor(credential, applyDefaults(ctx, executor, resolvedOptions, output));
+    executor.output.debug(`[rest] create client ${clientCtor.name}`);
+    return new clientCtor(credential, applyDefaults(ctx, executor, resolvedOptions));
 }
 
 /**
@@ -57,7 +56,6 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
     clientCtor: new (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
     subscription: AzureSubscription,
     options?: TOptions,
-    output?: IOutputChannel,
 ): TClient;
 export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
     ctx: ICodeContext,
@@ -66,7 +64,6 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
     credential: TokenCredential,
     subscriptionId: string,
     options?: TOptions,
-    output?: IOutputChannel,
 ): TClient;
 export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
     ctx: ICodeContext,
@@ -75,12 +72,10 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
     credentialOrSubscription: TokenCredential | AzureSubscription,
     subscriptionIdOrOptions?: string | TOptions,
     optionsOrUndefined?: TOptions,
-    outputOrUndefined?: IOutputChannel,
 ): TClient {
     const { credential, subscriptionId, resolvedOptions } = resolveSubscriptionArgs<TOptions>(credentialOrSubscription, subscriptionIdOrOptions, optionsOrUndefined);
-    const output = outputOrUndefined;
-    output?.debug(`[rest] create subscription client ${clientCtor.name} subscription=${subscriptionId}`);
-    return new clientCtor(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions, output));
+    executor.output.debug(`[rest] create subscription client ${clientCtor.name} subscription=${subscriptionId}`);
+    return new clientCtor(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions));
 }
 
 // TODO: future: uncomment or remove as needed
@@ -108,7 +103,6 @@ export function createAzureRestSubscriptionClient<TClient extends RestClient, TO
     getClient: (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
     subscription: AzureSubscription,
     options?: TOptions,
-    output?: IOutputChannel,
 ): TClient;
 export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
@@ -117,7 +111,6 @@ export function createAzureRestSubscriptionClient<TClient extends RestClient, TO
     credential: TokenCredential,
     subscriptionId: string,
     options?: TOptions,
-    output?: IOutputChannel,
 ): TClient;
 export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
@@ -126,12 +119,10 @@ export function createAzureRestSubscriptionClient<TClient extends RestClient, TO
     credentialOrSubscription: TokenCredential | AzureSubscription,
     subscriptionIdOrOptions?: string | TOptions,
     optionsOrUndefined?: TOptions,
-    outputOrUndefined?: IOutputChannel,
 ): TClient {
     const { credential, subscriptionId, resolvedOptions } = resolveSubscriptionArgs<TOptions>(credentialOrSubscription, subscriptionIdOrOptions, optionsOrUndefined);
-    const output = outputOrUndefined;
-    output?.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
-    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions, output));
+    executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
+    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions));
 }
 
 function isTokenCredential(value: TokenCredential | AzureSubscription): value is TokenCredential {
@@ -189,7 +180,6 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
     ctx: ICodeContext,
     executor: IActionExecutor,
     options?: TOptions,
-    output?: IOutputChannel,
 ): TOptions {
     const extensionUserAgentPrefix = `${ctx.extensionContext.extension.id}/${(ctx.extensionContext.extension.packageJSON as { version: string }).version}`;
 
@@ -206,7 +196,7 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
                 position: 'perCall',
             },
             {
-                policy: new CorrelationIdPolicy(executor, output),
+                policy: new CorrelationIdPolicy(executor),
                 position: 'perCall',
             },
             {
@@ -217,7 +207,7 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
                 policy: new MFAChallengePolicy(executor, async (request) => {
                     azureAuth ??= await import('@microsoft/vscode-azext-azureauth');
                     return azureAuth.getSessionFromVSCode(request);
-                }, options?.endpoint, output),
+                }, options?.endpoint),
                 position: 'perRetry',
             },
             {

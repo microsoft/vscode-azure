@@ -5,10 +5,11 @@
 
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../ui/uiHelpers';
+import { getWorkspaceFolder, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../ui/uiHelpers';
 import type { IVsCode } from '../../vscode/IVsCode';
 import { GoBackError } from '../../wizard/GoBackError';
-import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
+import { MockUri } from '../vscode/MockUri';
+import { createMockCodeContext, createMockVsCode, respondToPrompts } from '../vscode/MockVsCode';
 
 describe('uiHelpers (unit)', () => {
     describe('showSmartInputBox', () => {
@@ -339,6 +340,58 @@ describe('uiHelpers (unit)', () => {
             const result = await withDelayedProgress(code, { location: 1 }, slow, 0);
             expect(result).to.equal('slow');
             expect(progressCalled).to.be.true;
+        });
+    });
+
+    describe('getWorkspaceFolder', () => {
+        it('should return undefined when there are no workspace folders', async () => {
+            const { vscode: code } = createMockVsCode();
+
+            const result = await getWorkspaceFolder(code);
+
+            expect(result).to.be.undefined;
+        });
+
+        it('should return the single folder when there is exactly one', async () => {
+            const { vscode: code, workspaceFolders } = createMockVsCode();
+            const folder = { uri: MockUri.file('/project'), name: 'project', index: 0 };
+            workspaceFolders.push(folder as never);
+
+            const result = await getWorkspaceFolder(code);
+
+            expect(result).to.equal(folder);
+        });
+
+        it('should call showWorkspaceFolderPick when there are multiple folders', async () => {
+            const folder1 = { uri: MockUri.file('/project1'), name: 'project1', index: 0 };
+            const folder2 = { uri: MockUri.file('/project2'), name: 'project2', index: 1 };
+
+            const mockResult = createMockVsCode();
+            mockResult.workspaceFolders.push(folder1 as never, folder2 as never);
+
+            const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
+            showPick.mock.mockImplementation(() => Promise.resolve(folder2));
+
+            const result = await getWorkspaceFolder(mockResult.vscode);
+
+            expect(result).to.equal(folder2);
+            expect(showPick.mock.callCount()).to.equal(1);
+        });
+
+        it('should pass placeHolder to showWorkspaceFolderPick', async () => {
+            const folder1 = { uri: MockUri.file('/a'), name: 'a', index: 0 };
+            const folder2 = { uri: MockUri.file('/b'), name: 'b', index: 1 };
+
+            const mockResult = createMockVsCode();
+            mockResult.workspaceFolders.push(folder1 as never, folder2 as never);
+
+            const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
+            showPick.mock.mockImplementation(() => Promise.resolve(folder1));
+
+            await getWorkspaceFolder(mockResult.vscode, 'Pick a folder');
+
+            const opts = showPick.mock.calls[0].arguments[0] as { placeHolder?: string };
+            expect(opts.placeHolder).to.equal('Pick a folder');
         });
     });
 });

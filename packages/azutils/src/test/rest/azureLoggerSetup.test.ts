@@ -5,10 +5,9 @@
 
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- Test needs direct access to the global AzureLogger / getLogLevel helpers.
 import { AzureLogger, createClientLogger, getLogLevel, setLogLevel } from '@azure/logger';
-import { DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { afterEach, describe, it } from 'mocha';
-import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { setUpAzureSdkLogging } from '../../rest/azureLoggerSetup';
 
@@ -21,29 +20,23 @@ describe('setUpAzureSdkLogging (unit)', () => {
     });
 
     it('forwards AzureLogger.log to output.debug with [azure-sdk] prefix', () => {
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
         output.logLevel = 2; // Debug
-        const debugSpy = mock.method(output, 'debug');
 
         const disposable = setUpAzureSdkLogging(output);
         try {
             AzureLogger.log('hello %s', 'world');
 
-            expect(debugSpy.mock.callCount()).to.equal(1);
-            expect(debugSpy.mock.calls[0].arguments).to.deep.equal(['[azure-sdk] hello %s', 'world']);
+            expect(output.debug.mock.callCount()).to.equal(1);
+            expect(output.debug.mock.calls[0].arguments).to.deep.equal(['[azure-sdk] hello %s', 'world']);
         } finally {
             disposable.dispose();
         }
     });
 
     it('routes per-severity client logger messages to the matching output method', () => {
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
         output.logLevel = 1; // Trace -> 'verbose' so all levels fire
-
-        const errorSpy = mock.method(output, 'error');
-        const warnSpy = mock.method(output, 'warn');
-        const infoSpy = mock.method(output, 'info');
-        const debugSpy = mock.method(output, 'debug');
 
         const disposable = setUpAzureSdkLogging(output);
         try {
@@ -53,26 +46,26 @@ describe('setUpAzureSdkLogging (unit)', () => {
             client.info('fyi %s', 'z');
             client.verbose('noise %s', 'w');
 
-            expect(errorSpy.mock.callCount()).to.equal(1);
-            expect(errorSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] boom %s', 'x']);
+            expect(output.error.mock.callCount()).to.equal(1);
+            expect(output.error.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] boom %s', 'x']);
 
-            expect(warnSpy.mock.callCount()).to.equal(1);
-            expect(warnSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] careful %s', 'y']);
+            expect(output.warn.mock.callCount()).to.equal(1);
+            expect(output.warn.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] careful %s', 'y']);
 
-            expect(infoSpy.mock.callCount()).to.equal(1);
-            expect(infoSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] fyi %s', 'z']);
+            expect(output.info.mock.callCount()).to.equal(1);
+            expect(output.info.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] fyi %s', 'z']);
 
             // Only the verbose client call should reach the debug sink; the
             // plain `AzureLogger.log` fallback path is exercised separately.
-            expect(debugSpy.mock.callCount()).to.equal(1);
-            expect(debugSpy.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] noise %s', 'w']);
+            expect(output.debug.mock.callCount()).to.equal(1);
+            expect(output.debug.mock.calls[0].arguments).to.deep.equal(['[azure:test-routing] noise %s', 'w']);
         } finally {
             disposable.dispose();
         }
     });
 
     it('applies the initial log level based on the output channel logLevel', () => {
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
         output.logLevel = 3; // Info
 
         const disposable = setUpAzureSdkLogging(output);
@@ -84,7 +77,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
     });
 
     it('re-applies the log level when onDidChangeLogLevel fires', () => {
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
         output.logLevel = 3; // Info
 
         const disposable = setUpAzureSdkLogging(output);
@@ -102,7 +95,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
     });
 
     it('maps LogLevel.Off to undefined (disables Azure SDK logging)', () => {
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
         output.logLevel = 0; // Off
 
         const disposable = setUpAzureSdkLogging(output);
@@ -114,7 +107,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
     });
 
     it('falls back to the least-verbose level for an unknown LogLevel', () => {
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
         // Use a value outside the known vscode.LogLevel range (Off..Error = 0..5)
         // to exercise the fallback branch in `toAzureLogLevel`.
         output.logLevel = 99 as vscode.LogLevel;
@@ -131,7 +124,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
         const sentinel = () => { /* previous sink */ };
         AzureLogger.log = sentinel;
 
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
         output.logLevel = 3;
         const disposable = setUpAzureSdkLogging(output);
         try {
@@ -150,7 +143,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
     it('restores the previous @azure/logger level on dispose', () => {
         setLogLevel('warning');
 
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
         output.logLevel = 1; // Trace -> 'verbose'
         const disposable = setUpAzureSdkLogging(output);
         try {
@@ -164,30 +157,28 @@ describe('setUpAzureSdkLogging (unit)', () => {
     });
 
     it('is a no-op when a previous setup is still active', () => {
-        const output1 = new DebugOutputChannel('first');
+        const output1 = new MockOutputChannel('first');
         output1.logLevel = 2; // Debug
-        const debug1 = mock.method(output1, 'debug');
 
         const first = setUpAzureSdkLogging(output1);
         try {
-            const output2 = new DebugOutputChannel('second');
+            const output2 = new MockOutputChannel('second');
             output2.logLevel = 2;
-            const debug2 = mock.method(output2, 'debug');
 
             const second = setUpAzureSdkLogging(output2);
             try {
                 // Second call should not have replaced the first sink.
                 AzureLogger.log('hello');
-                expect(debug1.mock.callCount()).to.equal(1);
-                expect(debug2.mock.callCount()).to.equal(0);
+                expect(output1.debug.mock.callCount()).to.equal(1);
+                expect(output2.debug.mock.callCount()).to.equal(0);
             } finally {
                 // Disposing the no-op should not break the first setup.
                 second.dispose();
             }
 
             AzureLogger.log('again');
-            expect(debug1.mock.callCount()).to.equal(2);
-            expect(debug2.mock.callCount()).to.equal(0);
+            expect(output1.debug.mock.callCount()).to.equal(2);
+            expect(output2.debug.mock.callCount()).to.equal(0);
         } finally {
             first.dispose();
         }

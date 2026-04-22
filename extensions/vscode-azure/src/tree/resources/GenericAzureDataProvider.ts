@@ -9,7 +9,7 @@ import {
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, IActionExecutor, InflightMap, IOutputChannel, IVsCode,
+    EventEmitter, IActionExecutor, InflightMap, IVsCode,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -55,19 +55,18 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-        @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
     ) {
         this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.pageSize`)) {
-                this.output.debug('[data] resources config changed: pageSize');
+                this.executor.output.debug('[data] resources config changed: pageSize');
                 this.changeEmitter.fire({ resource: undefined, includeChildren: true });
             }
         }));
 
         this.disposables.push(subscriptionProvider.onRefreshSuggested(() => {
-            this.output.debug('[data] resources refresh suggested by subscription provider');
+            this.executor.output.debug('[data] resources refresh suggested by subscription provider');
             this.signInPromise = undefined;
             this.changeEmitter.fire({ resource: undefined, includeChildren: true });
         }));
@@ -90,7 +89,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
     public async getChildren(resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> {
         // Ensure sign-in has been initiated (lazy, only once)
         if (!this.signInPromise) {
-            this.output.debug('[auth] lazy sign-in start');
+            this.executor.output.debug('[auth] lazy sign-in start');
             this.signInPromise = this.subscriptionProvider.signIn();
         }
         await this.signInPromise;
@@ -113,13 +112,13 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
             case isSubscription(resource): {
                 const client = await this.getOrCreateClient(resource);
-                this.output.debug(`[data] discover resource groups subscription=${resource.subscriptionId} pageSize=${this.pageSize}`);
+                this.executor.output.debug(`[data] discover resource groups subscription=${resource.subscriptionId} pageSize=${this.pageSize}`);
                 return client.resourceGroups.list({ top: this.pageSize });
             }
 
             case isResourceGroup(resource): {
                 const client = await this.getOrCreateClient(resource.subscription);
-                this.output.debug(`[data] discover resources resourceGroup=${resource.subscription.subscriptionId}/${resource.name} pageSize=${this.pageSize}`);
+                this.executor.output.debug(`[data] discover resources resourceGroup=${resource.subscription.subscriptionId}/${resource.name} pageSize=${this.pageSize}`);
                 return client.resources.listByResourceGroup(resource.name, { top: this.pageSize });
             }
 

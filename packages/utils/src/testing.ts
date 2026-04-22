@@ -4,11 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 export { NullTelemetryReporter } from './base/ITelemetryReporter';
-export { createTestActionExecutor } from './test/createTestActionExecutor';
+export * from './test/createTestActionExecutor';
 export * from './test/vscode/config/MockMemento';
 export * from './test/vscode/config/MockWorkspaceConfiguration';
 export * from './test/vscode/input/MockInputBox';
 export * from './test/vscode/input/MockQuickPick';
+export * from './test/vscode/MockFileSystem';
+export * from './test/vscode/MockOutputChannel';
+export * from './test/vscode/MockUri';
 export * from './test/vscode/MockVsCode';
 export * from './test/vscode/tree/MockTreeItem';
 export { DebugOutputChannel } from './vscode/IOutputChannel';

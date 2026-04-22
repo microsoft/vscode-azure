@@ -53,29 +53,71 @@ it('(unit) should invalidate the cache', async () => {
 ```
 
 `createMockVsCode()` returns a `MockVsCodeResult` with:
-- `vscode` — an `IVsCode` mock with tracked methods (`window.showInformationMessage`, `l10n.t`, `window.createQuickPick`, `commands.registerCommand`, `authentication.getSession`, etc.)
+- `vscode` — an `IVsCode` mock with tracked methods, suitable for DI injection
 - `quickPicks` — all `MockQuickPick` instances created, for driving and asserting user interactions
 - `inputBoxes` — all `MockInputBox` instances created
 - `settings` — backing store for `workspace.getConfiguration()`
 - `registeredCommands` — commands registered via `commands.registerCommand`
+- `fs` — a `MockFileSystem` (in-memory `workspace.fs`; see below)
+- `workspaceFolders` — mutable array backing `workspace.workspaceFolders`
+- `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`
+- `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
 
 All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior.
+
+#### MockFileSystem
+
+`MockFileSystem` is an in-memory implementation of `workspace.fs` with `stat`, `readFile`, `writeFile`, `createDirectory`, `copy`, and `delete`. Pre-populate files with `addFile()`:
+
+```typescript
+const { vscode: code, fs } = createMockVsCode();
+fs.addFile(MockUri.file('/project/azure.yaml'));
+fs.addFile(MockUri.file('/project/config.json'), '{"key": "value"}');
+
+// code.workspace.fs.stat() now resolves for those paths
+// code.workspace.fs.readFile() returns the content
+```
+
+Every method is a `mock.fn()` so you can assert call counts (e.g. `fs.createDirectory.mock.callCount()`).
+
+#### Workspace Folders
+
+Push entries to `workspaceFolders` to simulate a workspace. When the array is empty, `workspace.workspaceFolders` returns `undefined` (matching real VS Code behavior):
+
+```typescript
+const { vscode: code, workspaceFolders } = createMockVsCode();
+workspaceFolders.push({ uri: MockUri.file('/workspace'), name: 'my-project', index: 0 } as never);
+```
+
+#### Message Responses
+
+Push button labels to `messageResponses` to simulate the user clicking a button on notification messages. Responses are consumed in order across all three message types. When the queue is empty the mock returns `undefined` (dismissal):
+
+```typescript
+const mockResult = createMockVsCode();
+mockResult.messageResponses.push('Delete');  // first show*Message call returns 'Delete'
+// second call returns undefined (dismissed)
+```
 
 For tests that also need an `ICodeContext`, use `createMockCodeContext()`:
 
 ```typescript
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 
-const { ctx: codeContext, mock: mockResult } = createMockCodeContext();
-// codeContext has both .code (IVsCode) and .extensionContext (IExtensionContext)
-// extensionContext includes extension.id and extension.packageJSON
+const { ctx, mock: mockResult } = createMockCodeContext();
+// ctx has both .code (IVsCode) and .extensionContext (IExtensionContext)
+// extensionContext includes extensionUri, storageUri, globalStorageUri, etc.
+// mockResult is the full MockVsCodeResult with fs, workspaceFolders, messageResponses, etc.
 ```
 
 Key patterns:
 - Prefer `createMockVsCode()` / `createMockCodeContext()` over hand-rolled mocks for consistency and completeness
-- Use real implementations (`ActionExecutor`, `createActionContext`) instead of mocking them — they work fine in tests
+- Use the built-in `fs`, `workspaceFolders`, and `messageResponses` on the result instead of passing `overrides` or using `mockImplementation` to set up workspace/fs/message state
+- Access namespace objects directly from the result (e.g. `mockResult.commands.executeCommand`) for call-count assertions instead of casting from `code.commands.executeCommand as unknown as Mock<...>`
+- Use real implementations (`ActionExecutor`, `createActionContext`, `TempProjectManager`) instead of mocking them when they work against `MockVsCode` — they often do
 - Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` for the `ActionExecutor` constructor
 - Use `Mock` from `node:test` to track call counts and arguments — prefer over manual `let callCount = 0` patterns
+- Use `makeVirtualResource()` from `@microsoft/vscode-azure-azutils/testing` instead of hand-rolling `VirtualResource` objects
 - For Azure environments in azutils tests, use `Environment.AzureCloud` from `@azure/ms-rest-azure-env` instead of hand-rolled environment objects
 
 ### Driving Wizard UI in Tests
@@ -103,7 +145,7 @@ Note: intermediate items in the pick step get ` $(chevron-right)` appended to th
 ### Shared Test Fixtures (azutils)
 
 `packages/azutils/src/test/` provides shared helpers, exported from the `@microsoft/vscode-azure-azutils/testing` barrel:
-- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()`, `makeResourceGroup()`, `makeGenericResource()` using `Environment.AzureCloud`
+- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()`, `makeResourceGroup()`, `makeGenericResource()`, `makeVirtualGroup()`, `makeVirtualResource()` using `Environment.AzureCloud`
 - `mockPipeline.ts` — `makeRequest()`, `makeResponse()` (using SDK's `createHttpHeaders`), and `MockHttpClient` for injecting into Azure SDK clients
 - `tree/mockTree.ts` — `createMockViewItemTree()`, `createMockDataItemTree()`, `createMockHierarchicalDataItemTree()` for testing `Choose*Step` classes and pick-based wizards
 

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Wizard } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { AzureNodeId } from '../../models/AzureNodeId';
@@ -31,6 +31,7 @@ const site2Id = AzureNodeId.from(site2).toString();
 const storageAccountId = AzureNodeId.from(storageAccount).toString();
 
 describe('ChooseResourceStep (unit)', () => {
+    const output = new MockOutputChannel('test');
     it('should pick a resource matching the target logicalType', async () => {
         const { ctx, mock } = createMockCodeContext();
 
@@ -47,6 +48,7 @@ describe('ChooseResourceStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceContext>(
+            output,
             { picks: [] },
             [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites' })],
         );
@@ -70,6 +72,7 @@ describe('ChooseResourceStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceContext>(
+            output,
             { picks: [] },
             [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites' })],
         );
@@ -99,6 +102,7 @@ describe('ChooseResourceStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceContext>(
+            output,
             { picks: [] },
             [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites' })],
         );
@@ -126,6 +130,7 @@ describe('ChooseResourceStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceContext>(
+            output,
             { picks: [] },
             [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites' })],
         );
@@ -152,6 +157,7 @@ describe('ChooseResourceStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceContext>(
+            output,
             { picks: [] },
             [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites' })],
         );
@@ -175,6 +181,7 @@ describe('ChooseResourceStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceContext>(
+            output,
             { picks: [] },
             [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites', canPickMany: true })],
         );
@@ -200,6 +207,7 @@ describe('ChooseResourceStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseResourceContext>(
+            output,
             { picks: [] },
             [new ChooseResourceStep({ ...ctx, tree: viewItemTree, dataItemTree, logicalType: 'Microsoft.Web/sites', canPickMany: true })],
         );

@@ -12,7 +12,7 @@ interface ResourceExperienceOptions extends ICodeContext {
     readonly tree: ViewItemTree<string, ConcreteAzureNode>;
     readonly dataItemTree: ConcreteAzureNodeTree;
     readonly logicalType: string;
-    readonly output?: IOutputChannel;
+    readonly output: IOutputChannel;
 }
 
 /**
@@ -40,13 +40,12 @@ export async function resourceExperience<T extends GenericResource>(
         : new ChooseResourceStep<T>({ ...rest });
 
     const wizard = new Wizard<ChooseResourceContext<T>>(
+        options.output,
         {},
         // ChooseResourceStep inherits from PromptStep<PickContext<string>>;
         // ChooseResourceContext<T> extends PickContext<string>, so this is
         // safe at runtime--the override narrows, not widens.
         [step],
-        [],
-        options.output,
     );
 
     const result = await wizard.run();

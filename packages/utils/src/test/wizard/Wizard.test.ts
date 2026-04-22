@@ -8,6 +8,7 @@ import { describe, it } from 'mocha';
 import type * as vscode from 'vscode';
 import { showSmartInputBox, showSmartQuickPick } from '../../ui/uiHelpers';
 import { CancellationError } from '../../vscode/CancellationError';
+import { MockOutputChannel } from '../vscode/MockOutputChannel';
 import type { ICodeContext } from '../../vscode/IVsCode';
 import { ExecuteStep } from '../../wizard/ExecuteStep';
 import { PromptStep } from '../../wizard/PromptStep';
@@ -71,6 +72,7 @@ class RecordingExecuteStep extends ExecuteStep<TestContext> {
 }
 
 describe('Wizard (unit)', () => {
+    const output = new MockOutputChannel('test');
 
     it('should complete a single-step wizard with an input box', async () => {
         const { ctx, mock } = createMockCodeContext();
@@ -79,6 +81,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx)],
         );
@@ -94,6 +97,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new ColorPickStep(ctx)],
         );
@@ -110,6 +114,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx), new ColorPickStep(ctx)],
         );
@@ -129,6 +134,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx), new ColorPickStep(ctx), new ConditionalConfirmStep(ctx)],
         );
@@ -149,6 +155,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx), new ColorPickStep(ctx), new ConditionalConfirmStep(ctx)],
         );
@@ -167,6 +174,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx)],
         );
@@ -186,6 +194,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx)],
         );
@@ -208,6 +217,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx), new ColorPickStep(ctx)],
         );
@@ -226,6 +236,7 @@ describe('Wizard (unit)', () => {
 
         const executeStep = new RecordingExecuteStep();
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx)],
             [executeStep],
@@ -250,6 +261,7 @@ describe('Wizard (unit)', () => {
 
         const executeStep = new SkippedExecuteStep();
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx)],
             [executeStep],
@@ -288,6 +300,7 @@ describe('Wizard (unit)', () => {
 
         // ConditionalConfirmStep.shouldPrompt checks color === 'Red', which is true
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new ColorWithSubStep(ctx)],
         );
@@ -305,6 +318,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             { name: 'preset-name' },
             [new ColorPickStep(ctx)],
         );
@@ -317,6 +331,7 @@ describe('Wizard (unit)', () => {
     it('should run a wizard with no prompt steps', async () => {
         const executeStep = new RecordingExecuteStep();
         const wizard = new Wizard<TestContext>(
+            output,
             { name: 'pre-filled' },
             [],
             [executeStep],
@@ -342,6 +357,7 @@ describe('Wizard (unit)', () => {
         }
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [],
             [new ParentExecuteStep()],
@@ -379,6 +395,7 @@ describe('Wizard (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             {},
             [new NameInputStep(ctx), new StepWithSub(ctx)],
         );

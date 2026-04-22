@@ -5,37 +5,16 @@
 
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { Disposable } from '../../vscode/Disposable';
-import { DebugOutputChannel } from '../../vscode/IOutputChannel';
+import { EventEmitter } from '../../vscode/EventEmitter';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
 import { MockWorkspaceConfiguration } from './config/MockWorkspaceConfiguration';
 import { MockInputBox } from './input/MockInputBox';
 import { MockQuickPick } from './input/MockQuickPick';
+import { MockFileSystem } from './MockFileSystem';
+import { MockOutputChannel } from './MockOutputChannel';
+import { MockUri } from './MockUri';
 import { MockTreeItem } from './tree/MockTreeItem';
-
-/**
- * Minimal stand-in for `vscode.Uri` used by {@linkcode createMockVsCode}.
- *
- * Only implements the subset of `Uri` relied on by code under test:
- * `scheme`, `path`, `fsPath`, `toString()`, and the static `file` /
- * `joinPath` factories.
- */
-export class MockUri {
-    constructor(
-        public readonly scheme: string,
-        public readonly path: string,
-        public readonly fsPath: string = path,
-    ) { }
-    /** Returns `scheme://path`. */
-    toString() { return `${this.scheme}://${this.path}`; }
-    /** Creates a `file:` scheme {@linkcode MockUri} for the given path. */
-    static file(path: string) { return new MockUri('file', path); }
-    /** Joins additional path segments onto `base` using `/` as separator. */
-    static joinPath(base: MockUri, ...segments: string[]) {
-        return new MockUri(base.scheme, [base.path, ...segments].join('/'));
-    }
-}
 
 /**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
@@ -72,6 +51,64 @@ export interface MockVsCodeResult {
 
     /** Commands registered via `vscode.commands.registerCommand`. Keyed by command ID. */
     readonly registeredCommands: Map<string, (...args: unknown[]) => unknown>;
+
+    /** The in-memory file system backing `workspace.fs`. */
+    readonly fs: MockFileSystem;
+
+    /**
+     * The workspace folders list backing `workspace.workspaceFolders`.
+     * Mutate this array to simulate single- or multi-root workspaces.
+     */
+    readonly workspaceFolders: vscode.WorkspaceFolder[];
+
+    /** The mock `authentication` namespace -- access `.getSession.mock` for assertions. */
+    readonly authentication: typeof vscode.authentication;
+
+    /** The mock `commands` namespace -- access `.executeCommand.mock` etc. for assertions. */
+    readonly commands: typeof vscode.commands;
+
+    /** The mock `env` namespace -- access `.openExternal.mock` for assertions. */
+    readonly env: typeof vscode.env;
+
+    /** The mock `window` namespace -- access `.showWarningMessage.mock` etc. for assertions. */
+    readonly window: typeof vscode.window;
+
+    /** The mock `workspace` namespace -- access `.getConfiguration.mock` etc. for assertions. */
+    readonly workspace: typeof vscode.workspace;
+
+    /**
+     * Pre-programmed responses for `showInformationMessage`,
+     * `showWarningMessage`, and `showErrorMessage`.
+     *
+     * Push button labels (e.g. `'Delete'`) to simulate the user
+     * clicking a button. Push `undefined` to simulate dismissal
+     * (the default when the queue is empty).
+     *
+     * Responses are consumed in order across all three message types.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * m.messageResponses.push('Delete');
+     *
+     * // code under test calls showWarningMessage('Sure?', 'Delete', 'Cancel')
+     * // => resolves to 'Delete'
+     * ```
+     */
+    readonly messageResponses: (string | undefined)[];
+
+    /**
+     * Fire this emitter to simulate a workspace configuration change.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * m.configChangeEmitter.fire({
+     *     affectsConfiguration: (s) => s === 'mySection.mySetting',
+     * });
+     * ```
+     */
+    readonly configChangeEmitter: EventEmitter<{ affectsConfiguration(section: string): boolean }>;
 }
 
 /**
@@ -115,20 +152,15 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     });
 
     const createOutputChannel = mock.fn(
-        (name: string) => new DebugOutputChannel(name),
+        (name: string) => new MockOutputChannel(name),
     );
 
-    const showInformationMessage = mock.fn(
-        () => Promise.resolve(),
-    );
+    const messageResponses: (string | undefined)[] = [];
+    const nextMessageResponse = () => Promise.resolve(messageResponses.shift());
 
-    const showWarningMessage = mock.fn(
-        () => Promise.resolve(),
-    );
-
-    const showErrorMessage = mock.fn(
-        () => Promise.resolve(),
-    );
+    const showInformationMessage = mock.fn(nextMessageResponse);
+    const showWarningMessage = mock.fn(nextMessageResponse);
+    const showErrorMessage = mock.fn(nextMessageResponse);
 
     const showOpenDialog = mock.fn(
         () => Promise.resolve(undefined),
@@ -196,34 +228,45 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(undefined),
     );
 
+    const fs = new MockFileSystem();
+    const workspaceFolders: vscode.WorkspaceFolder[] = [];
+    const authentication = {
+        getSession,
+    };
+    const commands = {
+        executeCommand,
+        registerCommand,
+    };
+    const env = {
+        appHost: 'desktop',
+        language: 'en',
+        openExternal,
+        remoteName: undefined,
+    };
+    const window = {
+        createQuickPick,
+        createInputBox,
+        createOutputChannel,
+        showInformationMessage,
+        showWarningMessage,
+        showErrorMessage,
+        showOpenDialog,
+        showWorkspaceFolderPick,
+    };
+    const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
+    const workspace = {
+        getConfiguration,
+        onDidChangeConfiguration: configChangeEmitter.event,
+        get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
+        fs,
+    };
+
     const mockVsCode = {
-        authentication: {
-            getSession,
-        },
-        commands: {
-            executeCommand,
-            registerCommand,
-        },
-        env: {
-            appHost: 'desktop',
-            language: 'en',
-            openExternal,
-            remoteName: undefined,
-        },
-        window: {
-            createQuickPick,
-            createInputBox,
-            createOutputChannel,
-            showInformationMessage,
-            showWarningMessage,
-            showErrorMessage,
-            showOpenDialog,
-            showWorkspaceFolderPick,
-        },
-        workspace: {
-            getConfiguration,
-            onDidChangeConfiguration: () => Disposable.None,
-        },
+        authentication,
+        commands,
+        env,
+        window,
+        workspace,
         l10n: { t },
         QuickInputButtons,
         TreeItem: MockTreeItem,
@@ -241,7 +284,16 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         inputBoxes,
         settings,
         registeredCommands,
-    };
+        fs,
+        workspaceFolders,
+        authentication,
+        commands,
+        env,
+        window,
+        workspace,
+        messageResponses,
+        configChangeEmitter,
+    } as unknown as MockVsCodeResult;
 }
 
 /**

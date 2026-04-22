@@ -10,7 +10,7 @@ import type {
     ResourcesListOptionalParams
 } from '@azure/arm-resources';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, IOutputChannel, Page } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext, Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
@@ -69,7 +69,6 @@ export class ResourceClient implements IResourceClient {
     public static async create(
         ctx: ICodeContext,
         executor: IActionExecutor,
-        output: IOutputChannel,
         subscription: AzureSubscription,
         options?: ResourceManagementClientOptionalParams,
     ): Promise<ResourceClient> {
@@ -80,7 +79,6 @@ export class ResourceClient implements IResourceClient {
             ResourceClient.sdk.ResourceManagementClient,
             subscription,
             options,
-            output,
         );
         return new ResourceClient(inner, subscription);
     }

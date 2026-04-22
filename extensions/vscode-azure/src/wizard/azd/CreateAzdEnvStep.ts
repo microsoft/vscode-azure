@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import { execAzd } from '../../utils/azdUtils';
+import { execAzd, type IExecAzd } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 // TODO: future: Replace with AZD extension API when available
@@ -13,6 +13,12 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * using the selected subscription, location, and environment name.
  */
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
+    public constructor(
+        private readonly exec: IExecAzd = execAzd,
+    ) {
+        super();
+    }
+
     public override shouldExecute(context: Readonly<TContext>): boolean {
         return !!context.iacFolder && !!context.environmentName && !!context.location?.name && !!context.subscription;
     }
@@ -24,6 +30,6 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
             '--subscription', context.subscription!.subscriptionId, // eslint-disable-line @typescript-eslint/no-non-null-assertion
         ];
 
-        await execAzd(args, context.iacFolder!.fsPath); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        await this.exec(args, context.iacFolder!.fsPath); // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 }

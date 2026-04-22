@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { Disposable } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, createTestActionExecutor, DebugOutputChannel, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
+import { createMockVsCode, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -17,7 +17,6 @@ describe('GenericAzureDataProvider (unit)', () => {
 
     function createProvider(subscriptionProvider?: Record<string, unknown>, clientFactory?: unknown) {
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const subProvider = {
             signIn: mock.fn(() => Promise.resolve(true)),
             getAccounts: mock.fn(() => Promise.resolve([])),
@@ -27,7 +26,7 @@ describe('GenericAzureDataProvider (unit)', () => {
             ...subscriptionProvider,
         };
         const createClient = clientFactory ?? mock.fn(() => Promise.resolve({}));
-        return new GenericAzureDataProvider(code.vscode, executor, output, createClient as never, subProvider as never);
+        return new GenericAzureDataProvider(code.vscode, executor, createClient as never, subProvider as never);
     }
 
     describe('canHandle', () => {
@@ -131,6 +130,67 @@ describe('GenericAzureDataProvider (unit)', () => {
 
             await withSettings(code, { [`${ConfigurationSection}.pageSize`]: 25 }, () => provider.getChildren(sub));
             expect(capturedOptions?.top).to.equal(25);
+        });
+    });
+
+    describe('dispose', () => {
+        it('should not throw when disposed', () => {
+            const provider = createProvider();
+            expect(() => { provider.dispose(); }).to.not.throw;
+        });
+    });
+
+    describe('configuration change listener', () => {
+        it('should fire onDidChange when pageSize setting changes', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            code.configChangeEmitter.fire({
+                affectsConfiguration: (s: string) => s === `${ConfigurationSection}.pageSize`,
+            });
+
+            expect(listener.mock.callCount()).to.equal(1);
+        });
+
+        it('should not fire onDidChange for unrelated settings', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            code.configChangeEmitter.fire({
+                affectsConfiguration: () => false,
+            });
+
+            expect(listener.mock.callCount()).to.equal(0);
+        });
+    });
+
+    describe('subscription provider refresh', () => {
+        it('should fire onDidChange and clear signInPromise when refresh is suggested', async () => {
+            const refreshEmitter = new EventEmitter<void>();
+            const signIn = mock.fn(() => Promise.resolve(true));
+            const provider = createProvider({
+                signIn,
+                getAccounts: () => Promise.resolve([]),
+                onRefreshSuggested: refreshEmitter.event,
+            });
+
+            // First call triggers sign-in
+            await provider.getChildren();
+            expect(signIn.mock.callCount()).to.equal(1);
+
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            // Fire refresh suggested
+            refreshEmitter.fire();
+
+            expect(listener.mock.callCount()).to.equal(1);
+
+            // Next getChildren should trigger sign-in again
+            await provider.getChildren();
+            expect(signIn.mock.callCount()).to.equal(2);
         });
     });
 });

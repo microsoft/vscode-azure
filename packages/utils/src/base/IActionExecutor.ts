@@ -23,6 +23,8 @@ export const IActionExecutor: ServiceIdentifier<IActionExecutor> = Symbol.for('I
  * having to thread the context through every call.
  */
 export interface IActionExecutor {
+    /** The extension's output channel, used for debug and trace logging. */
+    readonly output: IOutputChannel;
     /** The {@linkcode IActionContext} for the currently executing action, or `undefined` if none. */
     readonly currentContext: IActionContext | undefined;
     /** Set a telemetry property on the current context, if one exists. No-op otherwise. */
@@ -60,7 +62,7 @@ export class ActionExecutor implements IActionExecutor {
         private readonly code: IVsCode,
         private readonly telemetryReporter: ITelemetryReporter,
         private readonly extensionId: string,
-        private readonly output?: IOutputChannel,
+        public readonly output: IOutputChannel,
     ) { }
 
     /** @inheritdoc */
@@ -99,9 +101,9 @@ export class ActionExecutor implements IActionExecutor {
 
         return this.storage.run(context, async () => {
             try {
-                this.output?.debug(`[cmd] ${telemetryId} start`);
+                this.output.debug(`[cmd] ${telemetryId} start`);
                 const result = await callback(context);
-                this.output?.debug(`[cmd] ${telemetryId} done`);
+                this.output.debug(`[cmd] ${telemetryId} done`);
 
                 properties.result = 'Succeeded';
                 return result;
@@ -112,7 +114,7 @@ export class ActionExecutor implements IActionExecutor {
                 } else {
                     properties.result = 'Failed';
                     const loggedError = error instanceof Error ? error : new Error(String(error));
-                    this.output?.error(loggedError, this.code.l10n.t('[cmd] {0} failed', telemetryId));
+                    this.output.error(loggedError, this.code.l10n.t('[cmd] {0} failed', telemetryId));
 
                     if (error instanceof Error) {
                         properties.error = error.name;

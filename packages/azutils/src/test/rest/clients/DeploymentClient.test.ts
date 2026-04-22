@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { DeploymentClient } from '../../../rest/clients/DeploymentClient';
@@ -14,7 +14,6 @@ describe('DeploymentClient (unit)', () => {
     it('should create a client and fetch a deployment via deployments.getAtScope', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         const deploymentBody = JSON.stringify({
@@ -30,7 +29,7 @@ describe('DeploymentClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, deploymentBody),
         });
 
-        const client = await DeploymentClient.create(ctx, executor, output, subscription, { httpClient });
+        const client = await DeploymentClient.create(ctx, executor, subscription, { httpClient });
         const deployment = await client.deployments.getAtScope(
             '/subscriptions/test-sub/resourceGroups/rg1',
             'myDeploy',
@@ -44,7 +43,6 @@ describe('DeploymentClient (unit)', () => {
     it('should list deployment operations as pages', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         const operationsBody = JSON.stringify({
@@ -58,7 +56,7 @@ describe('DeploymentClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, operationsBody),
         });
 
-        const client = await DeploymentClient.create(ctx, executor, output, subscription, { httpClient });
+        const client = await DeploymentClient.create(ctx, executor, subscription, { httpClient });
         const pages: unknown[][] = [];
         for await (const page of client.deploymentOperations.listAtScope(
             '/subscriptions/test-sub/resourceGroups/rg1',

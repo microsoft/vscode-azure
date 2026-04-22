@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { ConcreteAzureNode } from '../../../models/AzureNode';
@@ -15,6 +15,7 @@ const subscription = makeSubscription();
 const rg1 = makeResourceGroup({ name: 'rg1', groupingValue: 'rg1' });
 
 describe('resourceGroupExperience (unit)', () => {
+    const output = new MockOutputChannel('test');
     it('should return the picked ResourceGroup and subscription', async () => {
         const { ctx, mock } = createMockCodeContext();
         const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>();
@@ -26,7 +27,7 @@ describe('resourceGroupExperience (unit)', () => {
             { pick: 'rg1' },
         ]);
 
-        const result = await resourceGroupExperience({ ...ctx, dataItemTree });
+        const result = await resourceGroupExperience({ ...ctx, dataItemTree, output });
 
         expect(result.resourceGroup.name).to.equal('rg1');
         expect(result.subscription.subscriptionId).to.equal(subscription.subscriptionId);

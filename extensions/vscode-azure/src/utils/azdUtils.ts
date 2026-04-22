@@ -11,6 +11,9 @@ import type * as vscode from 'vscode';
 const execFileAsync = promisify(execFile);
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
+/** Function signature for executing the `azd` CLI. */
+export type IExecAzd = (args: string[], cwd?: string) => Promise<{ stdout: string; stderr: string }>;
+
 /**
  * Executes the `azd` CLI with the given arguments.
  *

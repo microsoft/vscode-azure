@@ -122,31 +122,31 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => ResourceClient.create(ctx, executor, context.get(IOutputChannel), subscription);
+        return (subscription) => ResourceClient.create(ctx, executor, subscription);
     });
 
     container.bind(IDeploymentClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => DeploymentClient.create(ctx, executor, context.get(IOutputChannel), subscription);
+        return (subscription) => DeploymentClient.create(ctx, executor, subscription);
     });
 
     container.bind(IAcrClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => AcrClient.create(ctx, executor, context.get(IOutputChannel), subscription);
+        return (subscription) => AcrClient.create(ctx, executor, subscription);
     });
 
     container.bind(ISubscriptionClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => SubscriptionClient.create(ctx, executor, context.get(IOutputChannel), subscription);
+        return (subscription) => SubscriptionClient.create(ctx, executor, subscription);
     });
 
     container.bind(IWebAppClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => WebAppClient.create(ctx, executor, context.get(IOutputChannel), subscription);
+        return (subscription) => WebAppClient.create(ctx, executor, subscription);
     });
 
     return container;

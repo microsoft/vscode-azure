@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -131,12 +131,11 @@ describe('isNestedDeploymentOp (unit)', () => {
 describe('ArmDeploymentDataProvider (unit)', () => {
     function createProvider(clientOrFactory?: unknown) {
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const { vscode } = createMockVsCode();
         const createClientFn = clientOrFactory
             ? mock.fn(() => Promise.resolve(clientOrFactory))
             : mock.fn(() => Promise.resolve({}));
-        return new ArmDeploymentDataProvider(vscode, executor, output, createClientFn as never);
+        return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never);
     }
 
     describe('canHandle', () => {

@@ -5,7 +5,7 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
 import { ArmDeploymentDataProvider, parseDeploymentId } from '../tree/activity/ArmDeploymentDataProvider';
@@ -27,29 +27,25 @@ import type { ManagedCommand } from './ManagedCommand';
 export class TrackArmDeployment implements ManagedCommand {
     public constructor(
         @inject(IActionContext) private readonly context: IActionContext,
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(ArmDeploymentDataProvider) private readonly armProvider: ArmDeploymentDataProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
     ) { }
 
     /** @inheritdoc */
     public async execute(): Promise<void> {
-        const rawInput = await this.code.window.showInputBox({
-            prompt: this.code.l10n.t('Enter an ARM deployment resource ID or Azure Portal deployment URL'),
+        const rawInput = await showSmartInputBox(this.ctx, {
+            prompt: this.ctx.code.l10n.t('Enter an ARM deployment resource ID or Azure Portal deployment URL'),
             placeHolder: '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Resources/deployments/{name}',
             validateInput: (value) => {
                 try {
                     parseDeploymentId(extractDeploymentId(value));
                     return undefined;
                 } catch {
-                    return this.code.l10n.t('Must be an ARM deployment resource ID or Azure Portal deployment URL');
+                    return this.ctx.code.l10n.t('Must be an ARM deployment resource ID or Azure Portal deployment URL');
                 }
             },
         });
-
-        if (!rawInput) {
-            throw new CancellationError('Canceled', 'deploymentId');
-        }
 
         const deploymentId = extractDeploymentId(rawInput);
 
@@ -61,8 +57,8 @@ export class TrackArmDeployment implements ManagedCommand {
         }
 
         if (!subscriptionId) {
-            void this.code.window.showErrorMessage(
-                this.code.l10n.t('Only subscription-scoped and resource-group-scoped deployments are supported at this time'),
+            void this.ctx.code.window.showErrorMessage(
+                this.ctx.code.l10n.t('Only subscription-scoped and resource-group-scoped deployments are supported at this time'),
             );
             return;
         }
@@ -70,8 +66,8 @@ export class TrackArmDeployment implements ManagedCommand {
         const subscription = await this.resolveSubscription(subscriptionId);
 
         if (!subscription) {
-            void this.code.window.showErrorMessage(
-                this.code.l10n.t('Could not find a signed-in subscription matching "{0}"', subscriptionId),
+            void this.ctx.code.window.showErrorMessage(
+                this.ctx.code.l10n.t('Could not find a signed-in subscription matching "{0}"', subscriptionId),
             );
             return;
         }
@@ -79,8 +75,8 @@ export class TrackArmDeployment implements ManagedCommand {
         this.armProvider.trackDeployment(deploymentId, subscription);
 
         const { deploymentName } = parseDeploymentId(deploymentId);
-        void this.code.window.showInformationMessage(
-            this.code.l10n.t('Tracking deployment: {0}', deploymentName),
+        void this.ctx.code.window.showInformationMessage(
+            this.ctx.code.l10n.t('Tracking deployment: {0}', deploymentName),
         );
     }
 

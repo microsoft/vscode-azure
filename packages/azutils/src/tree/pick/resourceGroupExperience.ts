@@ -11,7 +11,7 @@ import { type ChooseResourceGroupContext, ChooseResourceGroupStep } from '../../
 
 interface ResourceGroupExperienceOptions extends ICodeContext {
     readonly dataItemTree: ConcreteAzureNodeTree;
-    readonly output?: IOutputChannel;
+    readonly output: IOutputChannel;
 }
 
 interface ResourceGroupExperienceResult {
@@ -27,10 +27,9 @@ interface ResourceGroupExperienceResult {
  */
 export async function resourceGroupExperience(options: ResourceGroupExperienceOptions): Promise<ResourceGroupExperienceResult> {
     const wizard = new Wizard<ChooseResourceGroupContext>(
+        options.output,
         {},
         [new ChooseResourceGroupStep(options)],
-        [],
-        options.output,
     );
 
     const result = await wizard.run();

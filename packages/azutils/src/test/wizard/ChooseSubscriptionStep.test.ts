@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Wizard } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { AzureNodeId } from '../../models/AzureNodeId';
@@ -23,6 +23,7 @@ const sub1Id = AzureNodeId.from(sub1).toString();
 const sub2Id = AzureNodeId.from(sub2).toString();
 
 describe('ChooseSubscriptionStep (unit)', () => {
+    const output = new MockOutputChannel('test');
     it('should return the picked subscription when directly at root', async () => {
         const { ctx, mock } = createMockCodeContext();
         const viewItemTree = createMockViewItemTree({
@@ -35,6 +36,7 @@ describe('ChooseSubscriptionStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseSubscriptionContext>(
+            output,
             {},
             [new ChooseSubscriptionStep({ ...ctx, tree: viewItemTree, dataItemTree })],
         );
@@ -59,6 +61,7 @@ describe('ChooseSubscriptionStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<ChooseSubscriptionContext>(
+            output,
             {},
             [new ChooseSubscriptionStep({ ...ctx, tree: viewItemTree, dataItemTree })],
         );

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { FunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
@@ -26,7 +26,7 @@ export class AddOrEditAppSetting implements ManagedCommand {
     public static readonly EditContextValue = 'editFunctionAppSetting';
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
         @inject(FunctionAppDataProvider) private readonly dataProvider: FunctionAppDataProvider,
     ) { }
@@ -53,35 +53,27 @@ export class AddOrEditAppSetting implements ManagedCommand {
     }
 
     private async addSetting(key: string, resource: VirtualResource): Promise<void> {
-        const settingKey = await this.code.window.showInputBox({
-            prompt: this.code.l10n.t('Enter the app setting name'),
-            placeHolder: this.code.l10n.t('e.g., MY_SETTING'),
+        const settingKey = await showSmartInputBox(this.ctx, {
+            prompt: this.ctx.code.l10n.t('Enter the app setting name'),
+            placeHolder: this.ctx.code.l10n.t('e.g., MY_SETTING'),
             validateInput: (value) => {
                 if (!value.trim()) {
-                    return this.code.l10n.t('Setting name cannot be empty');
+                    return this.ctx.code.l10n.t('Setting name cannot be empty');
                 }
                 return undefined;
             },
         });
 
-        if (!settingKey) {
-            return;
-        }
-
-        const settingValue = await this.code.window.showInputBox({
-            prompt: this.code.l10n.t('Enter the value for \'{0}\'', settingKey),
-            placeHolder: this.code.l10n.t('Setting value'),
+        const settingValue = await showSmartInputBox(this.ctx, {
+            prompt: this.ctx.code.l10n.t('Enter the value for \'{0}\'', settingKey),
+            placeHolder: this.ctx.code.l10n.t('Setting value'),
         });
-
-        if (settingValue === undefined) {
-            return;
-        }
 
         await this.dataProvider.addOrUpdateSetting(resource.azureResource, settingKey, settingValue);
         this.cache.invalidate(resource);
 
-        void this.code.window.showInformationMessage(
-            this.code.l10n.t('Added app setting \'{0}\'.', settingKey)
+        void this.ctx.code.window.showInformationMessage(
+            this.ctx.code.l10n.t('Added app setting \'{0}\'.', settingKey)
         );
     }
 
@@ -89,12 +81,12 @@ export class AddOrEditAppSetting implements ManagedCommand {
         const settingKey = resource.virtualPath;
         const currentValue = this.dataProvider.getSettingValue(resource.azureResource.id, settingKey) ?? '';
 
-        const newValue = await this.code.window.showInputBox({
-            prompt: this.code.l10n.t('Enter new value for \'{0}\'', settingKey),
+        const newValue = await showSmartInputBox(this.ctx, {
+            prompt: this.ctx.code.l10n.t('Enter new value for \'{0}\'', settingKey),
             value: currentValue,
         });
 
-        if (newValue === undefined || newValue === currentValue) {
+        if (newValue === currentValue) {
             return;
         }
 
@@ -106,8 +98,8 @@ export class AddOrEditAppSetting implements ManagedCommand {
             this.cache.invalidate(parentResource);
         }
 
-        void this.code.window.showInformationMessage(
-            this.code.l10n.t('Updated app setting \'{0}\'.', settingKey)
+        void this.ctx.code.window.showInformationMessage(
+            this.ctx.code.l10n.t('Updated app setting \'{0}\'.', settingKey)
         );
     }
 }

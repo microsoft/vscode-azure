@@ -5,7 +5,7 @@
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import { getWorkspaceFolder, PromptStep } from '@microsoft/vscode-azure-utils';
-import { execAzd, findAzureYaml } from '../../utils/azdUtils';
+import { execAzd, findAzureYaml, type IExecAzd } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -16,6 +16,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
 export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
         private readonly code: IVsCode,
+        private readonly exec: IExecAzd = execAzd,
     ) {
         super();
     }
@@ -45,7 +46,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
     private async findDefaultEnvironment(cwd: string): Promise<string | undefined> {
         try {
             // TODO: future: Replace with AZD extension API when available
-            const { stdout } = await execAzd(['env', 'list', '--output', 'json'], cwd);
+            const { stdout } = await this.exec(['env', 'list', '--output', 'json'], cwd);
             const envs: AzdEnvEntry[] = JSON.parse(stdout) as AzdEnvEntry[];
             const defaultEnv = envs.find(e => e.IsDefault);
             return defaultEnv?.Name;

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
-import type { IActionExecutor, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 const wwwAuthenticateHeaderName = 'WWW-Authenticate';
@@ -25,7 +25,8 @@ export class MFAChallengePolicy implements PipelinePolicy {
 
     /**
      * @param executor - Used to look up the current action context for
-     *   telemetry tagging.
+     *   telemetry tagging. Also provides the output channel for debug logging
+     *   via {@linkcode IActionExecutor.output}.
      * @param getNewToken - Callback invoked with the
      *   `WWW-Authenticate` header contents to obtain a stepped-up
      *   session. Returning `undefined` means the challenge could not
@@ -33,13 +34,11 @@ export class MFAChallengePolicy implements PipelinePolicy {
      * @param endpoint - The Azure resource endpoint (e.g.
      *   `https://management.azure.com`). Used to derive fallback
      *   scopes for the MFA challenge.
-     * @param output - Optional output channel for debug logging.
      */
     public constructor(
         private readonly executor: IActionExecutor,
         private readonly getNewToken: (request: vscode.AuthenticationWwwAuthenticateRequest) => Promise<vscode.AuthenticationSession | undefined>,
         private readonly endpoint?: string,
-        private readonly output?: IOutputChannel,
     ) { }
 
     // TODO: future: could we instead use the builtin `bearerTokenAuthenticationPolicy` and just provide a custom `getToken` callback that handles MFA challenges?
@@ -51,7 +50,7 @@ export class MFAChallengePolicy implements PipelinePolicy {
         if (initialResponse.status === 401 &&
             initialResponse.headers.has(wwwAuthenticateHeaderName) &&
             !retriedRequests.has(request)) {
-            this.output?.debug('[rest] MFA challenge start');
+            this.executor.output.debug('[rest] MFA challenge start');
 
             if (context) {
                 context.telemetry.properties.challenge = 'true';
@@ -72,12 +71,12 @@ export class MFAChallengePolicy implements PipelinePolicy {
                     context.telemetry.properties.challengeSuccess = 'true';
                 }
                 request.headers.set(authorizationHeaderName, `Bearer ${newSession.accessToken}`);
-                this.output?.debug('[rest] MFA challenge complete');
+                this.executor.output.debug('[rest] MFA challenge complete');
                 return next(request);
             } else if (context) {
                 context.telemetry.properties.challengeSuccess = 'false';
             }
-            this.output?.debug('[rest] MFA challenge aborted');
+            this.executor.output.debug('[rest] MFA challenge aborted');
         }
 
         return initialResponse;

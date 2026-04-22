@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { afterEach, describe, it } from 'mocha';
 import { SubscriptionClient } from '../../../rest/clients/SubscriptionClient';
@@ -19,7 +19,6 @@ describe('SubscriptionClient (unit)', () => {
     it('should list locations for a subscription', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         const locationsBody = JSON.stringify({
@@ -33,7 +32,7 @@ describe('SubscriptionClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, locationsBody),
         });
 
-        const client = await SubscriptionClient.create(ctx, executor, output, subscription, { httpClient });
+        const client = await SubscriptionClient.create(ctx, executor, subscription, { httpClient });
         const locations = await client.subscriptions.listLocations(subscription.subscriptionId);
 
         expect(locations).to.have.length(2);
@@ -45,7 +44,6 @@ describe('SubscriptionClient (unit)', () => {
     it('should cache locations across multiple calls', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         let callCount = 0;
@@ -62,7 +60,7 @@ describe('SubscriptionClient (unit)', () => {
             },
         });
 
-        const client = await SubscriptionClient.create(ctx, executor, output, subscription, { httpClient });
+        const client = await SubscriptionClient.create(ctx, executor, subscription, { httpClient });
 
         const first = await client.subscriptions.listLocations(subscription.subscriptionId);
         const second = await client.subscriptions.listLocations(subscription.subscriptionId);

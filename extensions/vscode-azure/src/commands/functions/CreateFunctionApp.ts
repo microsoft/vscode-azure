@@ -5,8 +5,9 @@
 
 import { ChooseLocationStep, ChooseSubscriptionStep, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, unmanaged } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
+import { type IExecAzd } from '../../utils/azdUtils';
 import { AzdProvisionStep } from '../../wizard/azd/AzdProvisionStep';
 import { CreateAzdEnvStep } from '../../wizard/azd/CreateAzdEnvStep';
 import { EnvironmentNameStep } from '../../wizard/azd/EnvironmentNameStep';
@@ -33,14 +34,16 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
         @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
+        @unmanaged() private readonly exec?: IExecAzd,
     ) { }
 
     /** @inheritdoc */
     public async execute(): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
+            this.output,
             {},
             [
-                new HydrateAzdInfoStep(this.ctx.code),
+                new HydrateAzdInfoStep(this.ctx.code, this.exec),
                 new ChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
                 new ChooseLocationStep(this.ctx, this.subscriptionClientProvider, this.output),
                 new EnvironmentNameStep(this.ctx),
@@ -50,11 +53,10 @@ export class CreateFunctionApp implements ManagedCommand {
             ],
             [
                 new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']),
-                new GenerateAzureYamlStep(this.ctx.code),
-                new CreateAzdEnvStep(),
+                new GenerateAzureYamlStep(this.ctx.code, this.exec),
+                new CreateAzdEnvStep(this.exec),
                 new AzdProvisionStep(this.ctx.code),
             ],
-            this.output,
         );
 
         await wizard.run();

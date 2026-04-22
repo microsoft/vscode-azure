@@ -14,7 +14,7 @@ import type {
     ProvisioningState as SdkProvisioningState,
 } from '@azure/arm-resourcesdeployments';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, IOutputChannel, Page, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext, Page, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
@@ -63,7 +63,6 @@ export class DeploymentClient implements IDeploymentClient {
     public static async create(
         ctx: ICodeContext,
         executor: IActionExecutor,
-        output: IOutputChannel,
         subscription: AzureSubscription,
         options?: DeploymentsClientOptionalParams,
     ): Promise<DeploymentClient> {
@@ -74,7 +73,6 @@ export class DeploymentClient implements IDeploymentClient {
             DeploymentClient.sdk.DeploymentsClient,
             subscription,
             options,
-            output,
         );
         return new DeploymentClient(client);
     }

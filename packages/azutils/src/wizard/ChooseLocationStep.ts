@@ -26,7 +26,7 @@ export class ChooseLocationStep<TContext extends ChooseLocationContext> extends 
     public constructor(
         private readonly ctx: ICodeContext,
         private readonly subscriptionClientProvider: ISubscriptionClientProvider,
-        private readonly output?: IOutputChannel,
+        private readonly output: IOutputChannel,
     ) {
         super();
     }
@@ -40,10 +40,10 @@ export class ChooseLocationStep<TContext extends ChooseLocationContext> extends 
             throw new Error(this.ctx.code.l10n.t('Subscription is required to choose location'));
         }
 
-        this.output?.debug(`[wizard] fetch locations start subscription=${context.subscription.subscriptionId}`);
+        this.output.debug(`[wizard] fetch locations start subscription=${context.subscription.subscriptionId}`);
         const client = await this.subscriptionClientProvider(context.subscription);
         const locations = await client.subscriptions.listLocations(context.subscription.subscriptionId);
-        this.output?.debug(`[wizard] fetch locations done subscription=${context.subscription.subscriptionId} count=${locations.length}`);
+        this.output.debug(`[wizard] fetch locations done subscription=${context.subscription.subscriptionId} count=${locations.length}`);
 
         const picks: QuickPickItemWithData<Location>[] = locations
             .filter(l => l.name && l.displayName)

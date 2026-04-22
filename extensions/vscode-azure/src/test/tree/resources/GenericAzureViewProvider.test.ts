@@ -5,9 +5,10 @@
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
+import { mock } from 'node:test';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
 import { ConfigurationSection } from '../../../constants';
 import { GenericAzureViewProvider } from '../../../tree/resources/GenericAzureViewProvider';
@@ -20,7 +21,6 @@ describe('GenericAzureViewProvider (unit)', () => {
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
     ) {
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const allNodes = nodes ?? [];
         const cacheMap = new Map<string, ConcreteAzureNode>();
         for (const n of allNodes) {
@@ -39,7 +39,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, output, mockCache as never);
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
@@ -420,5 +420,62 @@ describe('GenericAzureViewProvider (unit)', () => {
                 }
             }),
         );
+    });
+
+    describe('dispose', () => {
+        it('should not throw when disposed', () => {
+            const provider = createProvider();
+            expect(() => { provider.dispose(); }).to.not.throw;
+        });
+    });
+
+    describe('configuration change listener', () => {
+        it('should fire onDidChange when groupBy setting changes', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: (s: string) => s === `${ConfigurationSection}.groupBy`,
+            });
+
+            expect(listener.mock.callCount()).to.equal(1);
+        });
+
+        it('should fire onDidChange when groupByTag setting changes', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: (s: string) => s === `${ConfigurationSection}.groupByTag`,
+            });
+
+            expect(listener.mock.callCount()).to.equal(1);
+        });
+
+        it('should fire onDidChange when alwaysShowAccountNodes setting changes', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: (s: string) => s === `${ConfigurationSection}.alwaysShowAccountNodes`,
+            });
+
+            expect(listener.mock.callCount()).to.equal(1);
+        });
+
+        it('should not fire onDidChange for unrelated settings', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: () => false,
+            });
+
+            expect(listener.mock.callCount()).to.equal(0);
+        });
     });
 });

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ConcreteAzureNode, resourceExperience } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, IOutputChannel, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
 import type { EnrichedAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
@@ -29,6 +29,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
         @inject(IAzureViewViewItemTree) private readonly viewTree: IAzureViewViewItemTree, // TODO: future: a single selector service that can accept pick options and give back the resolved resource (either from quick pick or from cache)?
     ) { }
@@ -41,7 +42,8 @@ export class DisableAcrAdminUser implements ManagedCommand {
                 ...this.ctx,
                 tree: this.viewTree,
                 dataItemTree: this.cache,
-                logicalType: AcrResourceType
+                logicalType: AcrResourceType,
+                output: this.output,
             });
         } else {
             resource = this.cache.get(key);
@@ -65,5 +67,3 @@ export class DisableAcrAdminUser implements ManagedCommand {
         );
     }
 }
-
-/* c8 ignore stop */

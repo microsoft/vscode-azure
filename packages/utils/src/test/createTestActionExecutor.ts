@@ -4,28 +4,30 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ActionExecutor } from '../base/IActionExecutor';
-import type { ITelemetryReporter } from '../base/ITelemetryReporter';
-import { NullTelemetryReporter } from '../base/ITelemetryReporter';
+import { NullTelemetryReporter, type ITelemetryReporter } from '../base/ITelemetryReporter';
 import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { IVsCode } from '../vscode/IVsCode';
+import { MockOutputChannel } from './vscode/MockOutputChannel';
 import { createMockVsCode } from './vscode/MockVsCode';
 
 /**
  * Creates an {@linkcode ActionExecutor} suitable for unit tests, backed
  * by a {@linkcode NullTelemetryReporter} and a mock `IVsCode` by default.
  *
- * Returns the executor along with the `IVsCode` mock and reporter so
- * tests can inspect calls on them.
+ * Returns the executor along with the `IVsCode` mock, reporter, and
+ * output channel so tests can inspect calls on them.
  */
 export function createTestActionExecutor(options?: {
     reporter?: ITelemetryReporter;
     output?: IOutputChannel;
-}): { executor: ActionExecutor; code: IVsCode; reporter: ITelemetryReporter } {
+}): { executor: ActionExecutor; code: IVsCode; reporter: ITelemetryReporter; output: IOutputChannel } {
     const { vscode: code } = createMockVsCode();
     const reporter = options?.reporter ?? new NullTelemetryReporter();
+    const output = options?.output ?? new MockOutputChannel('test');
     return {
-        executor: new ActionExecutor(code, reporter, 'test-extension', options?.output),
+        executor: new ActionExecutor(code, reporter, 'test-extension', output),
         code,
         reporter,
+        output,
     };
 }
