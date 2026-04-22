@@ -60,8 +60,8 @@ it('(unit) should invalidate the cache', async () => {
 - `registeredCommands` — commands registered via `commands.registerCommand`
 - `fs` — a `MockFileSystem` (in-memory `workspace.fs`; see below)
 - `workspaceFolders` — mutable array backing `workspace.workspaceFolders`
-- `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`
-- `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
+- `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`- `tasks` -- the mock `tasks` namespace (includes `executeTask` with call tracking)
+- `taskProcessEndEmitter` -- fire to simulate a task process ending with an exit code- `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
 
 All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior.
 
