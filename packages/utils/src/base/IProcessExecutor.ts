@@ -117,9 +117,9 @@ export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for(
  * The `execution` discriminant on the options object determines the execution
  * mode:
  *
- * - `'background'` — runs via {@linkcode spawnStreamAsync} and captures
+ * - `'background'` -- runs via {@linkcode spawnStreamAsync} and captures
  *   stdout/stderr. Supports optional JSON parsing and JSON-lines streaming.
- * - `'foreground'` — runs as a {@linkcode vscode.Task Task} visible in the
+ * - `'foreground'` -- runs as a {@linkcode vscode.Task Task} visible in the
  *   integrated terminal. Returns `Promise<void>` since task output is not
  *   capturable.
  *
@@ -292,14 +292,18 @@ function enrichError(e: unknown, stderr: string): unknown {
 
 async function* parseJsonLines(input: NodeJS.ReadableStream): AsyncGenerator {
     const rl = createInterface({ input });
-    for await (const line of rl) {
-        const trimmed = line.trim();
-        if (trimmed.length > 0) {
-            try {
-                yield JSON.parse(trimmed);
-            } catch {
-                // Not valid JSON -- skip the line
+    try {
+        for await (const line of rl) {
+            const trimmed = line.trim();
+            if (trimmed.length > 0) {
+                try {
+                    yield JSON.parse(trimmed);
+                } catch {
+                    // Not valid JSON -- skip the line
+                }
             }
         }
+    } finally {
+        rl.close();
     }
 }

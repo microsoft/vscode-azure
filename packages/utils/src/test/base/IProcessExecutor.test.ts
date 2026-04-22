@@ -287,7 +287,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const taskExecution = await getTaskExecution(m);
 
-            // Fire event for a different execution — should be ignored
+            // Fire event for a different execution -- should be ignored
             const otherExecution = { task: {}, terminate: mock.fn() } as unknown as vscode.TaskExecution;
             m.taskProcessEndEmitter.fire({ execution: otherExecution, exitCode: 1 });
 

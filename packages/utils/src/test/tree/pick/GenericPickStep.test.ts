@@ -150,7 +150,7 @@ describe('GenericPickStep (unit)', () => {
         const { promise } = runPick({
             tree,
             classify: () => 'skip',
-            responses: [], // no prompt expected — it auto-skips
+            responses: [], // no prompt expected -- it auto-skips
         });
 
         const result = await promise;
