@@ -5,10 +5,11 @@
 
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { showSmartInputBox, showSmartQuickPick, getWorkspaceFolder, withDelayedProgress } from '../../ui/uiHelpers';
+import { getWorkspaceFolder, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../ui/uiHelpers';
 import type { IVsCode } from '../../vscode/IVsCode';
 import { GoBackError } from '../../wizard/GoBackError';
-import { createMockCodeContext, createMockVsCode, MockUri, respondToPrompts } from '../vscode/MockVsCode';
+import { MockUri } from '../vscode/MockUri';
+import { createMockCodeContext, createMockVsCode, respondToPrompts } from '../vscode/MockVsCode';
 
 describe('uiHelpers (unit)', () => {
     describe('showSmartInputBox', () => {
