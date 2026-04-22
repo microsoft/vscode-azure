@@ -34,7 +34,11 @@ export interface IAzdService {
     /** Runs `azd env list --output json` and returns the parsed environment list. */
     envList(cwd: vscode.Uri): Promise<AzdEnvironment[]>;
 
-    /** Runs `azd provision` as a foreground VS Code task. */
+    /**
+     * Runs `azd provision` as a foreground VS Code task.
+     *
+     * @throws if `azure.yaml` / `azure.yml` is not found in `cwd`.
+     */
     provision(cwd: vscode.Uri): Promise<void>;
 }
 
@@ -116,6 +120,11 @@ export class AzdService implements IAzdService {
     }
 
     public async provision(cwd: vscode.Uri): Promise<void> {
+        const azureYamlUri = await this.findAzureYaml(cwd);
+        if (!azureYamlUri) {
+            throw new Error(this.code.l10n.t('Could not find azure.yaml or azure.yml in the project directory.'));
+        }
+
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',

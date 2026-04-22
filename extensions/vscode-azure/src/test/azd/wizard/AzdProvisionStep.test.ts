@@ -87,23 +87,5 @@ describe('AzdProvisionStep (unit)', () => {
             expect(azd.provision.mock.callCount()).to.equal(1);
             expect((azd.provision.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
         });
-
-        it('should throw when azure.yaml is not found', async () => {
-            const azd = createMockAzdService();
-            // findAzureYaml already returns undefined by default
-
-            const step = new AzdProvisionStep(azd);
-            const context = {
-                provision: true,
-                iacFolder: MockUri.file('/project'),
-            } as AzdWizardContext;
-
-            try {
-                await step.execute(context);
-                expect.fail('Expected an error');
-            } catch (e) {
-                expect((e as Error).message).to.include('Could not find azure.yaml');
-            }
-        });
     });
 });

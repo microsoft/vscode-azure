@@ -5,6 +5,7 @@
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import { getWorkspaceFolder, PromptStep } from '@microsoft/vscode-azure-utils';
+import type * as vscode from 'vscode';
 import { type IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
@@ -35,7 +36,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         }
 
         // Find the default azd environment via CLI
-        const envName = await this.findDefaultEnvironment(workspaceFolder.uri.fsPath);
+        const envName = await this.findDefaultEnvironment(workspaceFolder.uri);
         if (envName) {
             result.environmentName = envName;
         }
@@ -43,10 +44,10 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         return result as Partial<TContext>;
     }
 
-    private async findDefaultEnvironment(cwd: string): Promise<string | undefined> {
+    private async findDefaultEnvironment(cwd: vscode.Uri): Promise<string | undefined> {
         try {
             // TODO: future: Replace with AZD extension API when available
-            const envs = await this.azd.envList(this.code.Uri.file(cwd));
+            const envs = await this.azd.envList(cwd);
             const defaultEnv = envs.find(e => e.IsDefault);
             return defaultEnv?.Name;
         } catch {
