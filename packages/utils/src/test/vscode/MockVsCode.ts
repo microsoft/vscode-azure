@@ -59,8 +59,10 @@ export class MockFileSystem {
     }
 
     readonly stat = mock.fn((uri: MockUri) => {
-        if (this.files.has(uri.path) || this.directories.has(uri.path)) {
+        if (this.files.has(uri.path)) {
             return Promise.resolve({ type: 1, ctime: 0, mtime: 0, size: this.files.get(uri.path)?.byteLength ?? 0 });
+        } else if (this.directories.has(uri.path)) {
+            return Promise.resolve({ type: 2, ctime: 0, mtime: 0, size: 0 });
         }
         return Promise.reject(new Error(`File not found: ${uri.path}`));
     });
@@ -85,9 +87,10 @@ export class MockFileSystem {
 
     readonly copy = mock.fn((source: MockUri, target: MockUri) => {
         const data = this.files.get(source.path);
-        if (data) {
-            this.files.set(target.path, data);
+        if (!data) {
+            return Promise.reject(new Error(`File not found: ${source.path}`));
         }
+        this.files.set(target.path, data);
         return Promise.resolve();
     });
 
