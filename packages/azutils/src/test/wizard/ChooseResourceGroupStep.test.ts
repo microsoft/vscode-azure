@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Wizard } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, DebugOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { ConcreteAzureNode } from '../../models/AzureNode';
@@ -20,7 +20,7 @@ const rg1 = makeResourceGroup({ name: 'rg1', groupingValue: 'rg1' });
 const rg2 = makeResourceGroup({ name: 'rg2', location: 'westus', id: '/subscriptions/test-sub/resourceGroups/rg2', groupingValue: 'rg2' });
 
 describe('ChooseResourceGroupStep (unit)', () => {
-    const output = new DebugOutputChannel('test');
+    const output = new MockOutputChannel('test');
     it('should drill through subscription to pick a resource group', async () => {
         const { ctx, mock } = createMockCodeContext();
 

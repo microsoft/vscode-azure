@@ -8,8 +8,8 @@ import { describe, it } from 'mocha';
 import { mock, type Mock } from 'node:test';
 import type { ITelemetryReporter } from '../../base/ITelemetryReporter';
 import { CancellationError } from '../../vscode/CancellationError';
-import { DebugOutputChannel } from '../../vscode/IOutputChannel';
 import { createTestActionExecutor } from '../createTestActionExecutor';
+import { MockOutputChannel } from '../vscode/MockOutputChannel';
 
 // A mock reporter is necessary here to validate that the expected calls are made to the reporter
 function createReporter(): ITelemetryReporter & { sendTelemetryErrorEvent: Mock<ITelemetryReporter['sendTelemetryErrorEvent']> } {
@@ -19,7 +19,7 @@ function createReporter(): ITelemetryReporter & { sendTelemetryErrorEvent: Mock<
     };
 }
 
-function createExecutor(reporter?: ReturnType<typeof createReporter>, output?: DebugOutputChannel) {
+function createExecutor(reporter?: ReturnType<typeof createReporter>, output?: MockOutputChannel) {
     const r = reporter ?? createReporter();
     const { executor, code } = createTestActionExecutor({ reporter: r, output });
     return { executor, reporter: r, code };
@@ -154,7 +154,7 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should log command lifecycle for success and failure', async () => {
-            const output = new DebugOutputChannel('test');
+            const output = new MockOutputChannel('test');
             const debugSpy = mock.method(output, 'debug');
             const errorSpy = mock.method(output, 'error');
             const { executor } = createExecutor(undefined, output);

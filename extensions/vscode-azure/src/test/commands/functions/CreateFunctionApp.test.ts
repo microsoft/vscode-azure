@@ -5,7 +5,7 @@
 
 import { AzureNodeId, type ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, DebugOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -19,7 +19,7 @@ describe('CreateFunctionApp (unit)', () => {
 
     function createCommand() {
         const { ctx, mock: mockResult } = createMockCodeContext();
-        const output = new DebugOutputChannel('test');
+        const output = new MockOutputChannel('test');
 
         // Provide workspace folder for HydrateAzdInfoStep + OfferSaveStep
         mockResult.workspaceFolders.push({

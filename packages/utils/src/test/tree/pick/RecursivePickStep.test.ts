@@ -8,7 +8,7 @@ import { describe, it } from 'mocha';
 import { GenericPickStep, type PickClassification } from '../../../tree/pick/GenericPickStep';
 import type { PickContext } from '../../../tree/pick/PickContext';
 import { RecursivePickStep } from '../../../tree/pick/RecursivePickStep';
-import { DebugOutputChannel } from '../../../vscode/IOutputChannel';
+import { MockOutputChannel } from '../../vscode/MockOutputChannel';
 import type { ITreeItem } from '../../../vscode/IVsCode';
 import { Wizard } from '../../../wizard/Wizard';
 import { createMockCodeContext, respondToPrompts } from '../../vscode/MockVsCode';
@@ -26,7 +26,7 @@ function createTree(data: Record<string, string[]>) {
 }
 
 describe('RecursivePickStep (unit)', () => {
-    const output = new DebugOutputChannel('test');
+    const output = new MockOutputChannel('test');
     it('should pick a terminal item at the root', async () => {
         const { ctx, mock } = createMockCodeContext();
         const tree = createTree({ '': ['leaf-a', 'leaf-b'] });

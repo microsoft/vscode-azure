@@ -6,99 +6,18 @@
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { EventEmitter } from '../../vscode/EventEmitter';
-import { DebugOutputChannel } from '../../vscode/IOutputChannel';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
 import { MockWorkspaceConfiguration } from './config/MockWorkspaceConfiguration';
+import { MockFileSystem } from './MockFileSystem';
+import { MockOutputChannel } from './MockOutputChannel';
+import { MockUri } from './MockUri';
 import { MockInputBox } from './input/MockInputBox';
 import { MockQuickPick } from './input/MockQuickPick';
 import { MockTreeItem } from './tree/MockTreeItem';
 
-/**
- * Minimal stand-in for `vscode.Uri` used by {@linkcode createMockVsCode}.
- *
- * Only implements the subset of `Uri` relied on by code under test:
- * `scheme`, `path`, `fsPath`, `toString()`, and the static `file` /
- * `joinPath` factories.
- */
-export class MockUri {
-    constructor(
-        public readonly scheme: string,
-        public readonly path: string,
-        public readonly fsPath: string = path,
-    ) { }
-    /** Returns `scheme://path`. */
-    toString() { return `${this.scheme}://${this.path}`; }
-    /** Creates a `file:` scheme {@linkcode MockUri} for the given path. */
-    static file(path: string) { return new MockUri('file', path); }
-    /** Joins additional path segments onto `base` using `/` as separator. */
-    static joinPath(base: MockUri, ...segments: string[]) {
-        return new MockUri(base.scheme, [base.path, ...segments].join('/'));
-    }
-}
-
-/**
- * In-memory mock of `vscode.workspace.fs`.
- *
- * All operations work against an internal `Map<string, Uint8Array>`
- * keyed by the URI's {@linkcode MockUri.path path}.
- *
- * Tests can pre-populate the file system via {@linkcode addFile} or
- * inspect it via {@linkcode files}. Every method is a `mock.fn()`
- * for call-count assertions.
- */
-export class MockFileSystem {
-    /** Backing store keyed by URI path. */
-    readonly files = new Map<string, Uint8Array>();
-    /** Tracks directories created via {@linkcode createDirectory}. */
-    readonly directories = new Set<string>();
-
-    /** Pre-populate a file so {@linkcode stat} and {@linkcode readFile} find it. */
-    addFile(uri: MockUri, content: Uint8Array | string = new Uint8Array()): void {
-        this.files.set(uri.path, typeof content === 'string' ? Buffer.from(content) : content);
-    }
-
-    readonly stat = mock.fn((uri: MockUri) => {
-        if (this.files.has(uri.path)) {
-            return Promise.resolve({ type: 1, ctime: 0, mtime: 0, size: this.files.get(uri.path)?.byteLength ?? 0 });
-        } else if (this.directories.has(uri.path)) {
-            return Promise.resolve({ type: 2, ctime: 0, mtime: 0, size: 0 });
-        }
-        return Promise.reject(new Error(`File not found: ${uri.path}`));
-    });
-
-    readonly readFile = mock.fn((uri: MockUri) => {
-        const data = this.files.get(uri.path);
-        if (data) {
-            return Promise.resolve(data);
-        }
-        return Promise.reject(new Error(`File not found: ${uri.path}`));
-    });
-
-    readonly writeFile = mock.fn((uri: MockUri, content: Uint8Array) => {
-        this.files.set(uri.path, content);
-        return Promise.resolve();
-    });
-
-    readonly createDirectory = mock.fn((uri: MockUri) => {
-        this.directories.add(uri.path);
-        return Promise.resolve();
-    });
-
-    readonly copy = mock.fn((source: MockUri, target: MockUri) => {
-        const data = this.files.get(source.path);
-        if (data) {
-            this.files.set(target.path, data);
-        }
-        return Promise.resolve();
-    });
-
-    readonly delete = mock.fn((uri: MockUri) => {
-        this.files.delete(uri.path);
-        this.directories.delete(uri.path);
-        return Promise.resolve();
-    });
-}
+export { MockFileSystem } from './MockFileSystem';
+export { MockUri } from './MockUri';
 
 /**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
@@ -236,7 +155,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     });
 
     const createOutputChannel = mock.fn(
-        (name: string) => new DebugOutputChannel(name),
+        (name: string) => new MockOutputChannel(name),
     );
 
     const messageResponses: (string | undefined)[] = [];

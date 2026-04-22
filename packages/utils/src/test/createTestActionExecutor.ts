@@ -5,8 +5,9 @@
 
 import { ActionExecutor } from '../base/IActionExecutor';
 import { NullTelemetryReporter, type ITelemetryReporter } from '../base/ITelemetryReporter';
-import { DebugOutputChannel, type IOutputChannel } from '../vscode/IOutputChannel';
+import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { IVsCode } from '../vscode/IVsCode';
+import { MockOutputChannel } from './vscode/MockOutputChannel';
 import { createMockVsCode } from './vscode/MockVsCode';
 
 /**
@@ -22,7 +23,7 @@ export function createTestActionExecutor(options?: {
 }): { executor: ActionExecutor; code: IVsCode; reporter: ITelemetryReporter; output: IOutputChannel } {
     const { vscode: code } = createMockVsCode();
     const reporter = options?.reporter ?? new NullTelemetryReporter();
-    const output = options?.output ?? new DebugOutputChannel('test');
+    const output = options?.output ?? new MockOutputChannel('test');
     return {
         executor: new ActionExecutor(code, reporter, 'test-extension', output),
         code,

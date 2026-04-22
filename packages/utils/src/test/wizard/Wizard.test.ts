@@ -8,7 +8,7 @@ import { describe, it } from 'mocha';
 import type * as vscode from 'vscode';
 import { showSmartInputBox, showSmartQuickPick } from '../../ui/uiHelpers';
 import { CancellationError } from '../../vscode/CancellationError';
-import { DebugOutputChannel } from '../../vscode/IOutputChannel';
+import { MockOutputChannel } from '../vscode/MockOutputChannel';
 import type { ICodeContext } from '../../vscode/IVsCode';
 import { ExecuteStep } from '../../wizard/ExecuteStep';
 import { PromptStep } from '../../wizard/PromptStep';
@@ -72,7 +72,7 @@ class RecordingExecuteStep extends ExecuteStep<TestContext> {
 }
 
 describe('Wizard (unit)', () => {
-    const output = new DebugOutputChannel('test');
+    const output = new MockOutputChannel('test');
 
     it('should complete a single-step wizard with an input box', async () => {
         const { ctx, mock } = createMockCodeContext();

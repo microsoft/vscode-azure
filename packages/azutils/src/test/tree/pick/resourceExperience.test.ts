@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, DebugOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { AzureNodeId } from '../../../models/AzureNodeId';
@@ -18,7 +18,7 @@ const site1 = makeGenericResource({ name: 'site1', subscription });
 const site1Id = AzureNodeId.from(site1).toString();
 
 describe('resourceExperience (unit)', () => {
-    const output = new DebugOutputChannel('test');
+    const output = new MockOutputChannel('test');
     it('should return the picked resource typed as the generic parameter', async () => {
         const { ctx, mock } = createMockCodeContext();
         const tree = createMockViewItemTree({

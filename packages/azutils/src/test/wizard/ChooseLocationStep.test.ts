@@ -6,7 +6,7 @@
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { PickContext } from '@microsoft/vscode-azure-utils';
 import { Wizard } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, DebugOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { Location } from '../../rest/clients/SubscriptionClient';
@@ -33,7 +33,7 @@ function createMockSubscriptionClientProvider(locations: Location[]) {
 }
 
 describe('ChooseLocationStep (unit)', () => {
-    const output = new DebugOutputChannel('test');
+    const output = new MockOutputChannel('test');
     it('should pick a location from the list', async () => {
         const { ctx, mock } = createMockCodeContext();
         const provider = createMockSubscriptionClientProvider([eastus, westus, northeurope]);
