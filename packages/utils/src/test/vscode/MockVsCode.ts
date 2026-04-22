@@ -109,6 +109,21 @@ export interface MockVsCodeResult {
      * ```
      */
     readonly configChangeEmitter: EventEmitter<{ affectsConfiguration(section: string): boolean }>;
+
+    /** The mock `tasks` namespace. */
+    readonly tasks: typeof vscode.tasks;
+
+    /**
+     * Fire this emitter to simulate a task process ending.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * const execution = await m.vscode.tasks.executeTask(task);
+     * m.taskProcessEndEmitter.fire({ execution, exitCode: 0 });
+     * ```
+     */
+    readonly taskProcessEndEmitter: EventEmitter<vscode.TaskProcessEndEvent>;
 }
 
 /**
@@ -207,6 +222,30 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         constructor(public readonly id: string) { }
     }
 
+    class MockShellExecution {
+        constructor(
+            public readonly command: string,
+            public readonly args: unknown[],
+            public readonly options?: unknown,
+        ) { }
+    }
+
+    class MockTask {
+        public presentationOptions: vscode.TaskPresentationOptions = {};
+        constructor(
+            public readonly definition: vscode.TaskDefinition,
+            public readonly scope: vscode.TaskScope | vscode.WorkspaceFolder,
+            public readonly name: string,
+            public readonly source: string,
+            public readonly execution?: unknown,
+        ) { }
+    }
+
+    const TaskScope = {
+        Global: 1,
+        Workspace: 2,
+    } satisfies typeof vscode.TaskScope;
+
     const openExternal = mock.fn(
         () => Promise.resolve(true),
     );
@@ -254,6 +293,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showWorkspaceFolderPick,
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
+    const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
     const workspace = {
         getConfiguration,
         onDidChangeConfiguration: configChangeEmitter.event,
@@ -261,10 +301,23 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         fs,
     };
 
+    const executeTask = mock.fn(
+        (task: vscode.Task) => {
+            const execution = { task, terminate: mock.fn() } as unknown as vscode.TaskExecution;
+            return Promise.resolve(execution);
+        },
+    );
+
+    const tasks = {
+        executeTask,
+        onDidEndTaskProcess: taskProcessEndEmitter.event,
+    };
+
     const mockVsCode = {
         authentication,
         commands,
         env,
+        tasks,
         window,
         workspace,
         l10n: { t },
@@ -274,6 +327,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         ConfigurationTarget,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
+        ShellExecution: MockShellExecution,
+        Task: MockTask,
+        TaskScope,
         Uri: MockUri,
         ...overrides,
     } as unknown as IVsCode;
@@ -293,6 +349,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspace,
         messageResponses,
         configChangeEmitter,
+        tasks,
+        taskProcessEndEmitter,
     } as unknown as MockVsCodeResult;
 }
 
