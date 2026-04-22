@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import type { IAzdExecutor } from '../../utils/AzdExecutor';
+import type { IAzdService } from '../../utils/AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 // TODO: future: Replace with AZD extension API when available
@@ -14,7 +14,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
  */
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly azd: IAzdExecutor,
+        private readonly azd: IAzdService,
     ) {
         super();
     }

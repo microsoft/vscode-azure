@@ -7,18 +7,19 @@ import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
-import type { IAzdExecutor } from '../../../utils/AzdExecutor';
+import type { IAzdService } from '../../../utils/AzdService';
 import type { AzdWizardContext } from '../../../wizard/azd/AzdWizardContext';
 import { CreateAzdEnvStep } from '../../../wizard/azd/CreateAzdEnvStep';
 
-function createMockAzd(): { azd: IAzdExecutor; envNewFn: ReturnType<typeof mock.fn> } {
+function createMockAzd(): { azd: IAzdService; envNewFn: ReturnType<typeof mock.fn> } {
     const envNewFn = mock.fn((..._args: unknown[]) => Promise.resolve());
     return {
         azd: {
-            init: mock.fn(() => Promise.resolve()) as unknown as IAzdExecutor['init'],
-            envNew: envNewFn as unknown as IAzdExecutor['envNew'],
-            envList: mock.fn(() => Promise.resolve([])) as unknown as IAzdExecutor['envList'],
-            provision: mock.fn(() => Promise.resolve()) as unknown as IAzdExecutor['provision'],
+            findAzureYaml: mock.fn(() => Promise.resolve(undefined)),
+            init: mock.fn(() => Promise.resolve()),
+            envNew: envNewFn,
+            envList: mock.fn(() => Promise.resolve([])),
+            provision: mock.fn(() => Promise.resolve()),
         },
         envNewFn,
     };

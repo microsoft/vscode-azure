@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, type IVsCode } from '@microsoft/vscode-azure-utils';
-import type { IAzdExecutor } from '../../utils/AzdExecutor';
-import { findAzureYaml } from '../../utils/azdUtils';
+import { ExecuteStep } from '@microsoft/vscode-azure-utils';
+import type { IAzdService } from '../../utils/AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -14,8 +13,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
  */
 export class AzdProvisionStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly code: IVsCode,
-        private readonly azd: IAzdExecutor,
+        private readonly azd: IAzdService,
     ) {
         super();
     }
@@ -25,7 +23,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public async execute(context: TContext): Promise<void> {
-        const azureYamlUri = await findAzureYaml(this.code, context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        const azureYamlUri = await this.azd.findAzureYaml(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
         if (!azureYamlUri) {
             throw new Error('Could not find azure.yaml or azure.yml in the project directory.');
         }

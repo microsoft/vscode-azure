@@ -5,8 +5,7 @@
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import { getWorkspaceFolder, PromptStep } from '@microsoft/vscode-azure-utils';
-import { type IAzdExecutor } from '../../utils/AzdExecutor';
-import { findAzureYaml } from '../../utils/azdUtils';
+import { type IAzdService } from '../../utils/AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -17,7 +16,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
 export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
         private readonly code: IVsCode,
-        private readonly azd: IAzdExecutor,
+        private readonly azd: IAzdService,
     ) {
         super();
     }
@@ -31,7 +30,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         const result: Record<string, unknown> = {};
 
         // Check for azure.yaml / azure.yml to detect an existing azd project
-        if (await findAzureYaml(this.code, workspaceFolder.uri)) {
+        if (await this.azd.findAzureYaml(workspaceFolder.uri)) {
             result.iacFolder = workspaceFolder.uri;
         }
 

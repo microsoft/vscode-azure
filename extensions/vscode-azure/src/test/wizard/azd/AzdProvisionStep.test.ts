@@ -7,18 +7,19 @@ import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
-import type { IAzdExecutor } from '../../../utils/AzdExecutor';
+import type { IAzdService } from '../../../utils/AzdService';
 import { AzdProvisionStep } from '../../../wizard/azd/AzdProvisionStep';
 import type { AzdWizardContext } from '../../../wizard/azd/AzdWizardContext';
 
-function createMockAzd(): { azd: IAzdExecutor; provisionFn: ReturnType<typeof mock.fn> } {
+function createMockAzd(): { azd: IAzdService; provisionFn: ReturnType<typeof mock.fn> } {
     const provisionFn = mock.fn(() => Promise.resolve());
     return {
         azd: {
-            init: mock.fn(() => Promise.resolve()) as unknown as IAzdExecutor['init'],
-            envNew: mock.fn(() => Promise.resolve()) as unknown as IAzdExecutor['envNew'],
-            envList: mock.fn(() => Promise.resolve([])) as unknown as IAzdExecutor['envList'],
-            provision: provisionFn as unknown as IAzdExecutor['provision'],
+            findAzureYaml: mock.fn(() => Promise.resolve(MockUri.file('/project/azure.yaml'))) as unknown as IAzdService['findAzureYaml'],
+            init: mock.fn(() => Promise.resolve()),
+            envNew: mock.fn(() => Promise.resolve()),
+            envList: mock.fn(() => Promise.resolve([])),
+            provision: provisionFn,
         },
         provisionFn,
     };
@@ -27,9 +28,8 @@ function createMockAzd(): { azd: IAzdExecutor; provisionFn: ReturnType<typeof mo
 describe('AzdProvisionStep (unit)', () => {
     describe('shouldExecute', () => {
         it('should return true when provision is true and iacFolder is set', () => {
-            const { vscode: code } = createMockVsCode();
             const { azd } = createMockAzd();
-            const step = new AzdProvisionStep(code, azd);
+            const step = new AzdProvisionStep(azd);
 
             const context = {
                 provision: true,
@@ -40,9 +40,8 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should return false when provision is false', () => {
-            const { vscode: code } = createMockVsCode();
             const { azd } = createMockAzd();
-            const step = new AzdProvisionStep(code, azd);
+            const step = new AzdProvisionStep(azd);
 
             const context = {
                 provision: false,
@@ -53,9 +52,8 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should return false when provision is undefined', () => {
-            const { vscode: code } = createMockVsCode();
             const { azd } = createMockAzd();
-            const step = new AzdProvisionStep(code, azd);
+            const step = new AzdProvisionStep(azd);
 
             const context = {
                 iacFolder: MockUri.file('/project'),
@@ -65,9 +63,8 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should return false when iacFolder is undefined', () => {
-            const { vscode: code } = createMockVsCode();
             const { azd } = createMockAzd();
-            const step = new AzdProvisionStep(code, azd);
+            const step = new AzdProvisionStep(azd);
 
             const context = {
                 provision: true,
@@ -77,9 +74,8 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should return false when both are missing', () => {
-            const { vscode: code } = createMockVsCode();
             const { azd } = createMockAzd();
-            const step = new AzdProvisionStep(code, azd);
+            const step = new AzdProvisionStep(azd);
 
             expect(step.shouldExecute({})).to.be.false;
         });
@@ -92,7 +88,7 @@ describe('AzdProvisionStep (unit)', () => {
             mockResult.fs.addFile(yamlUri);
 
             const { azd, provisionFn } = createMockAzd();
-            const step = new AzdProvisionStep(mockResult.vscode, azd);
+            const step = new AzdProvisionStep(azd);
             const context = {
                 provision: true,
                 iacFolder: MockUri.file('/project'),
@@ -105,10 +101,12 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should throw when azure.yaml is not found', async () => {
-            const { vscode: code } = createMockVsCode();
             const { azd } = createMockAzd();
+            (azd.findAzureYaml as unknown as ReturnType<typeof mock.fn>).mock.mockImplementation(
+                () => Promise.resolve(undefined),
+            );
 
-            const step = new AzdProvisionStep(code, azd);
+            const step = new AzdProvisionStep(azd);
             const context = {
                 provision: true,
                 iacFolder: MockUri.file('/project'),

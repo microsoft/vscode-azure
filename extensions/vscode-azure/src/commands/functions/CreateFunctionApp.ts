@@ -7,7 +7,7 @@ import { ChooseLocationStep, ChooseSubscriptionStep, ISubscriptionClientProvider
 import { ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
-import { IAzdExecutor } from '../../utils/AzdExecutor';
+import { IAzdService } from '../../utils/AzdService';
 import { AzdProvisionStep } from '../../wizard/azd/AzdProvisionStep';
 import { CreateAzdEnvStep } from '../../wizard/azd/CreateAzdEnvStep';
 import { EnvironmentNameStep } from '../../wizard/azd/EnvironmentNameStep';
@@ -34,7 +34,7 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
         @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
-        @inject(IAzdExecutor) private readonly azd: IAzdExecutor,
+        @inject(IAzdService) private readonly azd: IAzdService,
     ) { }
 
     /** @inheritdoc */
@@ -53,9 +53,9 @@ export class CreateFunctionApp implements ManagedCommand {
             ],
             [
                 new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']),
-                new GenerateAzureYamlStep(this.ctx.code, this.azd),
+                new GenerateAzureYamlStep(this.azd),
                 new CreateAzdEnvStep(this.azd),
-                new AzdProvisionStep(this.ctx.code, this.azd),
+                new AzdProvisionStep(this.azd),
             ],
         );
 

@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IProcessExecutor } from '@microsoft/vscode-azure-utils';
+import { IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { composeArgs, withArg, withFlagArg, withNamedArg, type CommandLineArgs } from '@microsoft/vscode-processutils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 
-export const IAzdExecutor: ServiceIdentifier<IAzdExecutor> = Symbol.for('IAzdExecutor');
+export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdService');
+
+const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 /** An azd environment entry returned by `azd env list --output json`. */
 export interface AzdEnvironment {
@@ -16,7 +18,13 @@ export interface AzdEnvironment {
     readonly IsDefault: boolean;
 }
 
-export interface IAzdExecutor {
+export interface IAzdService {
+    /**
+     * Returns the URI of `azure.yaml` or `azure.yml` in the given
+     * directory, or `undefined` if neither exists.
+     */
+    findAzureYaml(directory: vscode.Uri): Promise<vscode.Uri | undefined>;
+
     /** Runs `azd init --minimal --no-prompt` in the given directory. */
     init(cwd: vscode.Uri): Promise<void>;
 
@@ -36,10 +44,24 @@ export interface IAzdExecutor {
  * `ENOENT` error with an actionable install hint.
  */
 @injectable()
-export class AzdExecutor implements IAzdExecutor {
+export class AzdService implements IAzdService {
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IProcessExecutor) private readonly processExecutor: IProcessExecutor,
     ) { }
+
+    public async findAzureYaml(directory: vscode.Uri): Promise<vscode.Uri | undefined> {
+        for (const name of AzureYamlFileNames) {
+            const fileUri = this.code.Uri.joinPath(directory, name);
+            try {
+                await this.code.workspace.fs.stat(fileUri);
+                return fileUri;
+            } catch {
+                // file not found -- try next
+            }
+        }
+        return undefined;
+    }
 
     public async init(cwd: vscode.Uri): Promise<void> {
         try {

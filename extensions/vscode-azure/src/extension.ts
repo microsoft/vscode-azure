@@ -38,7 +38,7 @@ import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-r
 import { registerCommands } from './commands/registerCommands';
 import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
-import { AzdExecutor, IAzdExecutor } from './utils/AzdExecutor';
+import { AzdService, IAzdService } from './utils/AzdService';
 import { TempProjectManager } from './wizard/azd/TempProjectManager';
 
 /**
@@ -126,7 +126,7 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
         return new ProcessExecutor(context.get(IVsCode));
     }).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(IAzdExecutor).to(AzdExecutor).inSingletonScope().onActivation(pushDisposable);
+    container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);

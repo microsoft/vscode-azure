@@ -11,7 +11,7 @@ import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
-import type { IAzdExecutor } from '../../../utils/AzdExecutor';
+import type { IAzdService } from '../../../utils/AzdService';
 import { TempProjectManager } from '../../../wizard/azd/TempProjectManager';
 
 describe('CreateFunctionApp (unit)', () => {
@@ -49,17 +49,20 @@ describe('CreateFunctionApp (unit)', () => {
         const tempManager = new TempProjectManager(ctx);
 
         const mockFs = mockResult.fs;
+        let azureYamlUri: vscode.Uri | undefined;
         const initFn = mock.fn((cwd: vscode.Uri) => {
             // Simulate `azd init` creating azure.yaml
-            mockFs.addFile(MockUri.file(`${cwd.fsPath}/azure.yaml`), 'name: my-app');
+            azureYamlUri = MockUri.file(`${cwd.fsPath}/azure.yaml`) as unknown as vscode.Uri;
+            mockFs.addFile(azureYamlUri, 'name: my-app');
             return Promise.resolve();
         });
         const envNewFn = mock.fn(() => Promise.resolve());
-        const azdExecutor: IAzdExecutor = {
-            init: initFn as unknown as IAzdExecutor['init'],
-            envNew: envNewFn as unknown as IAzdExecutor['envNew'],
-            envList: mock.fn(() => Promise.resolve([])) as unknown as IAzdExecutor['envList'],
-            provision: mock.fn(() => Promise.resolve()) as unknown as IAzdExecutor['provision'],
+        const azdExecutor: IAzdService = {
+            findAzureYaml: mock.fn(() => Promise.resolve(azureYamlUri)),
+            init: initFn,
+            envNew: envNewFn,
+            envList: mock.fn(() => Promise.resolve([])),
+            provision: mock.fn(() => Promise.resolve()),
         };
 
         const cmd = new CreateFunctionApp(
