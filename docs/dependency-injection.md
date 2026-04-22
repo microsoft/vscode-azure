@@ -15,6 +15,7 @@ export const IActionExecutor: ServiceIdentifier<IActionExecutor> = Symbol.for('I
 export const ICommandRegistry: ServiceIdentifier<ICommandRegistry> = Symbol.for('ICommandRegistry');
 export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
 export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('OutputChannel');
+export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for('IProcessExecutor');
 
 // In extensions/vscode-azure/src/services.ts
 export const IAzureSubscriptionProvider: ServiceIdentifier<...> = Symbol.for('IAzureSubscriptionProvider');
@@ -53,6 +54,10 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(IActionExecutor).toDynamicValue(context => {
         return new ActionExecutor(context.get(ITelemetryReporter));
     }).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IProcessExecutor).toDynamicValue(context => {
+        return new ProcessExecutor(context.get(IVsCode));
+    }).inSingletonScope();
 
     container.bind(ITelemetryReporter).toDynamicValue(context => {
         return createTelemetryReporter(context.get(IExtensionContext), TelemetryReporter);
