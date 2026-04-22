@@ -8,7 +8,6 @@ import type { IActionExecutor } from '../base/IActionExecutor';
 import { InflightMap } from '../data/InflightMap';
 import { Limiter } from '../data/Limiter';
 import type { Disposable } from '../vscode/Disposable';
-import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { ITreeItem } from '../vscode/IVsCode';
 import type { DataItemTree } from './DataItemTree';
 import type { DataProviderChangeEvent } from './DataProvider';
@@ -161,7 +160,6 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         private readonly executor: IActionExecutor,
         options: ViewItemTreeOptions<TViewItem, TResource>,
         private readonly loadMoreOptions?: LoadMoreOptions<TViewItem>,
-        private readonly output?: IOutputChannel,
     ) {
         super();
 
@@ -204,16 +202,16 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      */
     public async getChildren(viewItem?: TViewItem): Promise<TViewItem[]> {
         if (viewItem === undefined) {
-            this.output?.trace(`[view] ${this.name} getChildren(root)`);
+            this.executor.output.trace(`[view] ${this.name} getChildren(root)`);
             return this.getRootChildren();
         }
 
-        this.output?.trace(`[view] ${this.name} getChildren key=${this.getKey(viewItem)}`);
+        this.executor.output.trace(`[view] ${this.name} getChildren key=${this.getKey(viewItem)}`);
         return this.getBranchChildren(viewItem);
     }
 
     private async getRootChildren(): Promise<TViewItem[]> {
-        this.output?.trace(`[view] ${this.name} dispatch getRootChildren providers=${this.getRootProviders().length}`);
+        this.executor.output.trace(`[view] ${this.name} dispatch getRootChildren providers=${this.getRootProviders().length}`);
         // Each root provider gets its own telemetry scope so that
         // concurrent calls don't overwrite shared mutable properties.
         const limiter = new Limiter<TViewItem[] | null | undefined>(5);
@@ -241,7 +239,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
     }
 
     private async getBranchChildren(viewItem: TViewItem): Promise<TViewItem[]> {
-        this.output?.trace(`[view] ${this.name} dispatch getBranchChildren key=${this.getKey(viewItem)}`);
+        this.executor.output.trace(`[view] ${this.name} dispatch getBranchChildren key=${this.getKey(viewItem)}`);
         const parentNode = this.nodes.get(this.getKey(viewItem));
         if (!parentNode) {
             return [];
@@ -278,7 +276,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         if (this.loadMoreOptions && this.hasMoreData(resourceKey)) {
             const viewKey = this.getKey(viewItem);
             const loadMoreKey = this.loadMoreOptions.getLoadMoreKey(viewKey);
-            this.output?.debug(`[view] ${this.name} inject loadMore parent=${viewKey} key=${loadMoreKey}`);
+            this.executor.output.debug(`[view] ${this.name} inject loadMore parent=${viewKey} key=${loadMoreKey}`);
             return [...childItems, this.loadMoreOptions.createLoadMoreViewItem(loadMoreKey)];
         }
 
@@ -290,7 +288,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * delegating to the {@linkcode ViewProvider} that handles it.
      */
     public async getTreeItem(viewItem: TViewItem): Promise<ITreeItem> {
-        this.output?.trace(`[view] ${this.name} dispatch getTreeItem key=${this.getKey(viewItem)}`);
+        this.executor.output.trace(`[view] ${this.name} dispatch getTreeItem key=${this.getKey(viewItem)}`);
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
         return (await this.executor.callWithTelemetryAndErrorHandling('view.getTreeItem', (context) => {
             context.telemetry.suppress = 'onSuccess';
@@ -325,7 +323,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
      * works for nodes that have not yet been loaded.
      */
     public async getParent(viewItem: TViewItem): Promise<TViewItem | undefined> {
-        this.output?.trace(`[view] ${this.name} dispatch getParent key=${this.getKey(viewItem)}`);
+        this.executor.output.trace(`[view] ${this.name} dispatch getParent key=${this.getKey(viewItem)}`);
         return await this.executor.callWithTelemetryAndErrorHandling('view.getParent', async (context) => {
             context.telemetry.suppress = 'onSuccess';
             context.telemetry.isUserEvent = false;

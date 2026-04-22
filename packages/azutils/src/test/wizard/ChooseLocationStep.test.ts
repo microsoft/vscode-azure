@@ -6,7 +6,7 @@
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { PickContext } from '@microsoft/vscode-azure-utils';
 import { Wizard } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, DebugOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { Location } from '../../rest/clients/SubscriptionClient';
@@ -33,6 +33,7 @@ function createMockSubscriptionClientProvider(locations: Location[]) {
 }
 
 describe('ChooseLocationStep (unit)', () => {
+    const output = new DebugOutputChannel('test');
     it('should pick a location from the list', async () => {
         const { ctx, mock } = createMockCodeContext();
         const provider = createMockSubscriptionClientProvider([eastus, westus, northeurope]);
@@ -42,8 +43,9 @@ describe('ChooseLocationStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             { picks: [], subscription },
-            [new ChooseLocationStep(ctx, provider)],
+            [new ChooseLocationStep(ctx, provider, output)],
         );
         const result = await wizard.run();
 
@@ -63,8 +65,9 @@ describe('ChooseLocationStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             { picks: [], subscription },
-            [new ChooseLocationStep(ctx, provider)],
+            [new ChooseLocationStep(ctx, provider, output)],
         );
         const result = await wizard.run();
 
@@ -82,8 +85,9 @@ describe('ChooseLocationStep (unit)', () => {
         ]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             { picks: [], subscription },
-            [new ChooseLocationStep(ctx, provider)],
+            [new ChooseLocationStep(ctx, provider, output)],
         );
         const result = await wizard.run();
 
@@ -96,8 +100,9 @@ describe('ChooseLocationStep (unit)', () => {
         const provider = createMockSubscriptionClientProvider([eastus]);
 
         const wizard = new Wizard<TestContext>(
+            output,
             { picks: [] } as unknown as TestContext,
-            [new ChooseLocationStep(ctx, provider)],
+            [new ChooseLocationStep(ctx, provider, output)],
         );
 
         try {

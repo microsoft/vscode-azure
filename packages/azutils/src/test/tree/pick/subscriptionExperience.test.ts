@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, DebugOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { AzureNodeId } from '../../../models/AzureNodeId';
@@ -18,6 +18,7 @@ const sub1Id = AzureNodeId.from(sub1).toString();
 const sub2Id = AzureNodeId.from(sub2).toString();
 
 describe('subscriptionExperience (unit)', () => {
+    const output = new DebugOutputChannel('test');
     it('should return the picked AzureSubscription', async () => {
         const { ctx, mock } = createMockCodeContext();
         const tree = createMockViewItemTree({ '': [sub1Id, sub2Id] });
@@ -29,6 +30,7 @@ describe('subscriptionExperience (unit)', () => {
             ...ctx,
             tree: tree as never,
             dataItemTree,
+            output,
         });
 
         expect(result.subscriptionId).to.equal('sub-2');

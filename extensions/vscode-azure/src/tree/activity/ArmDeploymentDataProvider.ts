@@ -9,7 +9,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, flattenPages, IActionExecutor, InflightMap, IOutputChannel, IVsCode,
+    EventEmitter, flattenPages, IActionExecutor, InflightMap, IVsCode,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -82,7 +82,6 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-        @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
     ) { }
 
@@ -178,7 +177,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
             while (!abortSignal.aborted) {
                 let nextPollMs = 10 * 1000; // Default to 10s if server doesn't provide guidance
-                this.output.debug(`[activity] poll cycle start deployment=${activity.id}`);
+                this.executor.output.debug(`[activity] poll cycle start deployment=${activity.id}`);
 
                 try {
                     await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
@@ -215,7 +214,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                             activity.status = toActivityStatus(provisioningState);
                             activity.description = provisioningState;
                             if (activity.status !== previousStatus) {
-                                this.output.debug(`[activity] deployment status transition deployment=${activity.id} status=${activity.status}`);
+                                this.executor.output.debug(`[activity] deployment status transition deployment=${activity.id} status=${activity.status}`);
                             }
                         }
 
@@ -226,7 +225,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
                         if (isTerminalState(provisioningState)) {
                             activity.endTime = new Date();
-                            this.output.debug(`[activity] deployment reached terminal status deployment=${activity.id} status=${activity.status}`);
+                            this.executor.output.debug(`[activity] deployment reached terminal status deployment=${activity.id} status=${activity.status}`);
                             this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
                             return;
                         }
@@ -242,7 +241,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     abortSignal.throwIfAborted();
                     // Swallow other probably-transient errors and retry on next poll
                     const message = error instanceof Error ? error.message : String(error);
-                    this.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
+                    this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
                 }
 
                 // Wait for the next poll interval

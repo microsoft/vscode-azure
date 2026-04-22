@@ -5,7 +5,7 @@
 
 import type { StringDictionary, WebSiteManagementClient, WebSiteManagementClientOptionalParams } from '@azure/arm-appservice';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureSubscriptionClient } from '../createAzureClient';
 
@@ -44,7 +44,6 @@ export class WebAppClient implements IWebAppClient {
     public static async create(
         ctx: ICodeContext,
         executor: IActionExecutor,
-        output: IOutputChannel,
         subscription: AzureSubscription,
         options?: WebSiteManagementClientOptionalParams,
     ): Promise<WebAppClient> {
@@ -55,7 +54,6 @@ export class WebAppClient implements IWebAppClient {
             WebAppClient.sdk.WebSiteManagementClient,
             subscription,
             options,
-            output,
         );
         return new WebAppClient(inner);
     }

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
-import type { IActionExecutor, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor } from '@microsoft/vscode-azure-utils';
 
 const correlationIdHeaderName = 'x-ms-correlation-request-id';
 
@@ -25,7 +25,6 @@ export class CorrelationIdPolicy implements PipelinePolicy {
 
     public constructor(
         private readonly executor: IActionExecutor,
-        private readonly output?: IOutputChannel,
     ) { }
 
     /** @inheritdoc */
@@ -34,7 +33,7 @@ export class CorrelationIdPolicy implements PipelinePolicy {
         if (context) {
             const correlationId = context.telemetry.properties['x-ms-correlation-request-id'];
             request.headers.set(correlationIdHeaderName, correlationId);
-            this.output?.trace(`[rest] attached correlation id=${correlationId}`);
+            this.executor.output.trace(`[rest] attached correlation id=${correlationId}`);
         }
         return next(request);
     }

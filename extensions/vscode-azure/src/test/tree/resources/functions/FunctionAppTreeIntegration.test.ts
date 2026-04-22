@@ -6,7 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -92,7 +92,6 @@ describe('Function App Tree Integration (integration)', () => {
         initialSettings?: Record<string, string>;
     }): TestPipeline {
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const mockCtx = createMockCodeContext();
         const ctx = mockCtx.ctx;
         const code = ctx.code;
@@ -107,7 +106,6 @@ describe('Function App Tree Integration (integration)', () => {
             executor,
             resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000,
-            output,
         );
 
         const subProvider = createMockSubscriptionProvider({
@@ -120,7 +118,7 @@ describe('Function App Tree Integration (integration)', () => {
         const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
 
         const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider);
-        const genericDataProvider = new GenericAzureDataProvider(code, executor, output, resourceClientProvider, subProvider);
+        const genericDataProvider = new GenericAzureDataProvider(code, executor, resourceClientProvider, subProvider);
 
         // Register in correct order: Function App first, generic fallback second
         dataTree.registerProvider(funcDataProvider);
@@ -139,11 +137,10 @@ describe('Function App Tree Integration (integration)', () => {
             executor,
             viewOptions,
             undefined,
-            output,
         );
 
         const funcViewProvider = new FunctionAppViewProvider(ctx, executor, dataTree);
-        const genericViewProvider = new GenericAzureViewProvider(ctx, executor, output, dataTree);
+        const genericViewProvider = new GenericAzureViewProvider(ctx, executor, dataTree);
 
         viewTree.registerProvider(funcViewProvider);
         viewTree.registerProvider(genericViewProvider);

@@ -7,7 +7,7 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { EventEmitter, IActionExecutor, ICodeContext, IOutputChannel, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
+import { EventEmitter, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
 import { ConfigurationSection } from '../../constants';
@@ -51,14 +51,13 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-        @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) {
         this.disposables.push(ctx.code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)
                 || e.affectsConfiguration(`${ConfigurationSection}.groupBy`)
                 || e.affectsConfiguration(`${ConfigurationSection}.groupByTag`)) {
-                this.output.debug('[view] resources grouping configuration changed');
+                this.executor.output.debug('[view] resources grouping configuration changed');
                 this.changeEmitter.fire({ resource: undefined, includeChildren: true });
             }
         }));
@@ -232,13 +231,13 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         const skip = !this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<boolean>('alwaysShowAccountNodes', false);
 
         if (skip && nodes.length === 1 && isAccount(nodes[0])) {
-            this.output.debug('[view] skipping account level');
+            this.executor.output.debug('[view] skipping account level');
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'tenant';
         }
 
         if (skip && nodes.length === 1 && isTenant(nodes[0])) {
-            this.output.debug('[view] skipping tenant level');
+            this.executor.output.debug('[view] skipping tenant level');
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'subscription';
 
@@ -261,7 +260,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 return [];
             }
             const groups = await this.groupResources(subscription);
-            this.output.debug(`[view] grouped subscription=${subscription.subscriptionId} strategy=${this.groupingStrategy} groups=${groups.size}`);
+            this.executor.output.debug(`[view] grouped subscription=${subscription.subscriptionId} strategy=${this.groupingStrategy} groups=${groups.size}`);
             return [...groups.keys()].sort();
         }
 
@@ -274,7 +273,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 return [];
             }
             const groups = await this.groupResources(subscription);
-            this.output.debug(`[view] virtual group children subscription=${subscription.subscriptionId} group=${key} count=${groups.get(key)?.length ?? 0}`);
+            this.executor.output.debug(`[view] virtual group children subscription=${subscription.subscriptionId} group=${key} count=${groups.get(key)?.length ?? 0}`);
             return groups.get(key) ?? [];
         }
 
@@ -304,7 +303,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         // the cache on the next expansion -- no flattening needed.
         if (this.groupingStrategy === 'resourceGroup') {
             const resourceGroups = await this.cache.getChildren(sub);
-            this.output.debug(`[view] resource-group discovery subscription=${subscription.subscriptionId} count=${resourceGroups.length}`);
+            this.executor.output.debug(`[view] resource-group discovery subscription=${subscription.subscriptionId} count=${resourceGroups.length}`);
             const groups = new Map<string, string[]>();
             for (const rg of resourceGroups) {
                 groups.set(toKey(rg), []);
@@ -316,7 +315,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         // (exhausting pagination) so the complete set can be bucketed.
         await this.cache.loadAll(sub);
         const resourceGroups = await this.cache.getChildren(sub);
-        this.output.debug(`[view] flattened resource groups subscription=${subscription.subscriptionId} count=${resourceGroups.length}`);
+        this.executor.output.debug(`[view] flattened resource groups subscription=${subscription.subscriptionId} count=${resourceGroups.length}`);
 
         const limiter = new Limiter<void>(5);
         await Promise.all(resourceGroups.map(rg => limiter.queue(() => this.cache.loadAll(rg))));
@@ -324,7 +323,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         const allResources = (
             await Promise.all(resourceGroups.map(rg => this.cache.getChildren(rg)))
         ).flat().filter((r): r is GenericResource => isGenericResource(r) && !isResourceGroup(r));
-        this.output.debug(`[view] flattened resources subscription=${subscription.subscriptionId} count=${allResources.length} strategy=${this.groupingStrategy}`);
+        this.executor.output.debug(`[view] flattened resources subscription=${subscription.subscriptionId} count=${allResources.length} strategy=${this.groupingStrategy}`);
 
         const groups = new Map<string, string[]>();
         for (const resource of allResources) {

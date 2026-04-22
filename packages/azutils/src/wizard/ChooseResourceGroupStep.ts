@@ -23,7 +23,7 @@ export interface ChooseResourceGroupContext extends PickContext<string> {
 
 interface ChooseResourceGroupOptions extends Omit<GenericPickOptions<string>, 'canPickMany'> {
     readonly dataItemTree: ConcreteAzureNodeTree;
-    readonly output?: IOutputChannel;
+    readonly output: IOutputChannel;
 }
 
 /**
@@ -95,11 +95,11 @@ function classifyForResourceGroup(nodeId: AzureNodeId): PickClassification {
 class ResourceGroupViewItemTree {
     public constructor(
         private readonly dataItemTree: ConcreteAzureNodeTree,
-        private readonly output?: IOutputChannel,
+        private readonly output: IOutputChannel,
     ) { }
 
     public async getChildren(key?: string): Promise<string[]> {
-        this.output?.debug(`[wizard] fetch resource-group picker children start key=${key ?? '<root>'}`);
+        this.output.debug(`[wizard] fetch resource-group picker children start key=${key ?? '<root>'}`);
         let node: ConcreteAzureNode | undefined = undefined;
         if (key) {
             node = this.dataItemTree.get(key);
@@ -108,7 +108,7 @@ class ResourceGroupViewItemTree {
             }
         }
         const children = (await this.dataItemTree.getChildren(node)).map(child => AzureNodeId.from(child).toString());
-        this.output?.debug(`[wizard] fetch resource-group picker children done key=${key ?? '<root>'} count=${children.length}`);
+        this.output.debug(`[wizard] fetch resource-group picker children done key=${key ?? '<root>'} count=${children.length}`);
         return children;
     }
 

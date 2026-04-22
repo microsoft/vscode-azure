@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { AcrClient } from '../../../rest/clients/AcrClient';
@@ -14,7 +14,6 @@ describe('AcrClient (unit)', () => {
     it('should create a client and fetch a registry via registries.get', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const subscription = makeSubscription();
 
         const registryBody = JSON.stringify({
@@ -29,7 +28,7 @@ describe('AcrClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, registryBody),
         });
 
-        const client = await AcrClient.create(ctx, executor, output, subscription, { httpClient });
+        const client = await AcrClient.create(ctx, executor, subscription, { httpClient });
         const registry = await client.registries.get('rg1', 'myReg');
 
         expect(registry.name).to.equal('myReg');

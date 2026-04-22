@@ -10,7 +10,7 @@ import type {
     SubscriptionsListLocationsOptionalParams,
 } from '@azure/arm-resources-subscriptions';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureClient } from '../createAzureClient';
 
@@ -49,7 +49,6 @@ export class SubscriptionClient implements ISubscriptionClient {
     public static async create(
         ctx: ICodeContext,
         executor: IActionExecutor,
-        output: IOutputChannel,
         subscription: AzureSubscription,
         options?: SubscriptionClientOptionalParams,
     ): Promise<SubscriptionClient> {
@@ -60,7 +59,6 @@ export class SubscriptionClient implements ISubscriptionClient {
             SubscriptionClient.sdk.SubscriptionClient,
             subscription,
             options,
-            output,
         );
         return new SubscriptionClient(inner);
     }

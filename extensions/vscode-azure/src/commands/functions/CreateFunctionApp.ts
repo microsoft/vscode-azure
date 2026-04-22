@@ -40,6 +40,7 @@ export class CreateFunctionApp implements ManagedCommand {
     /** @inheritdoc */
     public async execute(): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
+            this.output,
             {},
             [
                 new HydrateAzdInfoStep(this.ctx.code, this.exec),
@@ -56,7 +57,6 @@ export class CreateFunctionApp implements ManagedCommand {
                 new CreateAzdEnvStep(this.exec),
                 new AzdProvisionStep(this.ctx.code),
             ],
-            this.output,
         );
 
         await wizard.run();

@@ -6,7 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode, type IAcrClientProvider, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createMockVsCode, createTestActionExecutor, DebugOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
@@ -67,7 +67,6 @@ describe('ACR Tree Integration (integration)', () => {
         acrClientOverrides?: Record<string, unknown>;
     }): TestPipeline {
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const mockVscode = createMockVsCode();
         const mockCtx = createMockCodeContext();
         const code = mockVscode.vscode;
@@ -79,7 +78,6 @@ describe('ACR Tree Integration (integration)', () => {
             executor,
             resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000,
-            output,
         );
 
         const subProvider = createMockSubscriptionProvider({
@@ -97,7 +95,6 @@ describe('ACR Tree Integration (integration)', () => {
         const genericDataProvider = new GenericAzureDataProvider(
             mockVscode.vscode,
             executor,
-            output,
             resourceClientProvider,
             subProvider,
         );
@@ -124,7 +121,6 @@ describe('ACR Tree Integration (integration)', () => {
             executor,
             viewOptions,
             undefined,
-            output,
         );
 
         const acrViewProvider = new AcrViewProvider(
@@ -136,7 +132,6 @@ describe('ACR Tree Integration (integration)', () => {
         const genericViewProvider = new GenericAzureViewProvider(
             mockCtx.ctx,
             executor,
-            output,
             dataTree,
         );
 

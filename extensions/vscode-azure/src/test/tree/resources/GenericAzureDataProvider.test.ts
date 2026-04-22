@@ -5,7 +5,7 @@
 
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, createTestActionExecutor, DebugOutputChannel, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -17,7 +17,6 @@ describe('GenericAzureDataProvider (unit)', () => {
 
     function createProvider(subscriptionProvider?: Record<string, unknown>, clientFactory?: unknown) {
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const subProvider = {
             signIn: mock.fn(() => Promise.resolve(true)),
             getAccounts: mock.fn(() => Promise.resolve([])),
@@ -27,7 +26,7 @@ describe('GenericAzureDataProvider (unit)', () => {
             ...subscriptionProvider,
         };
         const createClient = clientFactory ?? mock.fn(() => Promise.resolve({}));
-        return new GenericAzureDataProvider(code.vscode, executor, output, createClient as never, subProvider as never);
+        return new GenericAzureDataProvider(code.vscode, executor, createClient as never, subProvider as never);
     }
 
     describe('canHandle', () => {

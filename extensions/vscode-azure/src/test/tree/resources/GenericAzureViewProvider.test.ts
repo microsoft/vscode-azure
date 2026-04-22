@@ -5,7 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createTestActionExecutor, DebugOutputChannel, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -21,7 +21,6 @@ describe('GenericAzureViewProvider (unit)', () => {
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
     ) {
         const { executor } = createTestActionExecutor();
-        const output = new DebugOutputChannel('test');
         const allNodes = nodes ?? [];
         const cacheMap = new Map<string, ConcreteAzureNode>();
         for (const n of allNodes) {
@@ -40,7 +39,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, output, mockCache as never);
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {

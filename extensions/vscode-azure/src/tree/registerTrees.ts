@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, IActionExecutor, IOutputChannel, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
@@ -52,7 +52,6 @@ function registerResourcesTree(container: Container): void {
             context.get(IActionExecutor),
             resource => AzureNodeId.from(resource).toString(),
             5 * 60 * 1000, // 5 minute TTL
-            context.get(IOutputChannel),
         );
 
         for (const provider of context.getAll(IAzureViewDataProviders)) {
@@ -75,7 +74,6 @@ function registerResourcesTree(container: Container): void {
                 getResourceKey: key => key, // Identity mapping since both view and data items use the same key
             },
             defaultLoadMoreOptions(context.get(IVsCode)),
-            context.get(IOutputChannel),
         );
 
         for (const provider of context.getAll(IAzureViewViewProviders)) {
@@ -145,7 +143,6 @@ function registerActivityTree(container: Container): void {
             context.get(IActionExecutor),
             activity => activity.id,
             Infinity, // Providers manage freshness via polling and change events
-            context.get(IOutputChannel),
         );
 
         for (const provider of context.getAll(IActivityViewDataProviders)) {
@@ -168,7 +165,6 @@ function registerActivityTree(container: Container): void {
                 getResourceKey: key => key,
             },
             undefined,
-            context.get(IOutputChannel),
         );
 
         for (const provider of context.getAll(IActivityViewViewProviders)) {

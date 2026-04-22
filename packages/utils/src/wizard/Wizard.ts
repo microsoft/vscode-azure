@@ -35,16 +35,17 @@ export class Wizard<TContext extends object> {
     private readonly executeSteps: ExecuteStep<TContext>[];
 
     /**
+     * @param output - Output channel for debug logging of wizard step lifecycle.
      * @param baseContext - The initial context object to build upon.
      * @param promptSteps - Prompt steps, executed in order.
      * @param executeSteps - Execute steps, executed in order after
      *   all prompts complete.
      */
     public constructor(
+        private readonly output: IOutputChannel,
         private readonly baseContext: TContext,
         promptSteps: PromptStep<TContext>[],
         executeSteps: ExecuteStep<TContext>[] = [],
-        private readonly output?: IOutputChannel,
     ) {
         // Make shallow copies of step arrays
         this.promptSteps = [...promptSteps];
@@ -124,7 +125,7 @@ export class Wizard<TContext extends object> {
             }
 
             try {
-                this.output?.debug(`[wizard] prompt enter step=${step.constructor.name}`);
+                this.output.debug(`[wizard] prompt enter step=${step.constructor.name}`);
                 const stepResult = await step.prompt(context);
 
                 const record: PromptRecord<TContext> = {
@@ -137,11 +138,11 @@ export class Wizard<TContext extends object> {
 
                 // Collect dynamically added child steps
                 record.childPrompts = step.getSubPromptSteps(updatedContext);
-                this.output?.debug(`[wizard] prompt exit step=${step.constructor.name}`);
+                this.output.debug(`[wizard] prompt exit step=${step.constructor.name}`);
 
                 // Insert child prompt steps after current
                 if (record.childPrompts.length > 0) {
-                    this.output?.debug(`[wizard] inject prompt substeps parent=${step.constructor.name} count=${record.childPrompts.length}`);
+                    this.output.debug(`[wizard] inject prompt substeps parent=${step.constructor.name} count=${record.childPrompts.length}`);
                     this.promptSteps.splice(cursor + 1, 0, ...record.childPrompts);
                 }
 
@@ -149,7 +150,7 @@ export class Wizard<TContext extends object> {
                 cursor++;
             } catch (error) {
                 if (GoBackError.test(error)) {
-                    this.output?.debug(`[wizard] back navigation from step=${step.constructor.name}`);
+                    this.output.debug(`[wizard] back navigation from step=${step.constructor.name}`);
                     // Pop the previous prompted step
                     const prevRecord = history.pop();
                     if (!prevRecord) {
@@ -183,14 +184,14 @@ export class Wizard<TContext extends object> {
                 continue;
             }
 
-            this.output?.debug(`[wizard] execute enter step=${step.constructor.name}`);
+            this.output.debug(`[wizard] execute enter step=${step.constructor.name}`);
             await step.execute(context);
-            this.output?.debug(`[wizard] execute exit step=${step.constructor.name}`);
+            this.output.debug(`[wizard] execute exit step=${step.constructor.name}`);
 
             // Insert dynamically added sub-steps immediately after current
             const subSteps = step.getSubExecuteSteps(context);
             if (subSteps.length > 0) {
-                this.output?.debug(`[wizard] inject execute substeps parent=${step.constructor.name} count=${subSteps.length}`);
+                this.output.debug(`[wizard] inject execute substeps parent=${step.constructor.name} count=${subSteps.length}`);
                 this.executeSteps.splice(cursor + 1, 0, ...subSteps);
             }
 
