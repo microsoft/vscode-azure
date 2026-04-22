@@ -87,10 +87,9 @@ export class MockFileSystem {
 
     readonly copy = mock.fn((source: MockUri, target: MockUri) => {
         const data = this.files.get(source.path);
-        if (!data) {
-            return Promise.reject(new Error(`File not found: ${source.path}`));
+        if (data) {
+            this.files.set(target.path, data);
         }
-        this.files.set(target.path, data);
         return Promise.resolve();
     });
 
