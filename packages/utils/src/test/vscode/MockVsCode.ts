@@ -9,15 +9,12 @@ import { EventEmitter } from '../../vscode/EventEmitter';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
 import { MockWorkspaceConfiguration } from './config/MockWorkspaceConfiguration';
+import { MockInputBox } from './input/MockInputBox';
+import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileSystem } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockInputBox } from './input/MockInputBox';
-import { MockQuickPick } from './input/MockQuickPick';
 import { MockTreeItem } from './tree/MockTreeItem';
-
-export { MockFileSystem } from './MockFileSystem';
-export { MockUri } from './MockUri';
 
 /**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
