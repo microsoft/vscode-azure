@@ -158,7 +158,7 @@ describe('AzdService (unit)', () => {
         it('should wrap ENOENT errors with an install hint', async () => {
             const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
             const spawnFn = mock.fn(() => Promise.reject(enoent));
-            const { service } = createService(spawnFn as unknown as SpawnFn);
+            const { service } = createService(spawnFn);
 
             try {
                 await service.init(MockUri.file('/project') as unknown as vscode.Uri);
@@ -172,7 +172,7 @@ describe('AzdService (unit)', () => {
         it('should rethrow non-ENOENT errors as-is', async () => {
             const other = new Error('something else');
             const spawnFn = mock.fn(() => Promise.reject(other));
-            const { service } = createService(spawnFn as unknown as SpawnFn);
+            const { service } = createService(spawnFn);
 
             try {
                 await service.init(MockUri.file('/project') as unknown as vscode.Uri);
