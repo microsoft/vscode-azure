@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep, type IVsCode } from '@microsoft/vscode-azure-utils';
-import { execAzd, findAzureYaml, type IExecAzd } from '../../utils/azdUtils';
+import type { IAzdExecutor } from '../../utils/AzdExecutor';
+import { findAzureYaml } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -13,7 +14,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
 export class GenerateAzureYamlStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
         private readonly code: IVsCode,
-        private readonly exec: IExecAzd = execAzd,
+        private readonly azd: IAzdExecutor,
     ) {
         super();
     }
@@ -27,6 +28,6 @@ export class GenerateAzureYamlStep<TContext extends AzdWizardContext> extends Ex
     }
 
     public async execute(context: TContext): Promise<void> {
-        await this.exec(['init', '--minimal', '--no-prompt'], context.iacFolder!.fsPath); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        await this.azd.init(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 }

@@ -4,16 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep, type IVsCode } from '@microsoft/vscode-azure-utils';
+import type { IAzdExecutor } from '../../utils/AzdExecutor';
 import { findAzureYaml } from '../../utils/azdUtils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
- * Deploys the generated project by invoking the Azure Developer CLI
- * extension's `azure-dev.commands.cli.provision` command on the project directory.
+ * Deploys the generated project by running `azd provision` as a
+ * foreground VS Code task in the project directory.
  */
 export class AzdProvisionStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
         private readonly code: IVsCode,
+        private readonly azd: IAzdExecutor,
     ) {
         super();
     }
@@ -28,9 +30,6 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             throw new Error('Could not find azure.yaml or azure.yml in the project directory.');
         }
 
-        await this.code.commands.executeCommand(
-            'azure-dev.commands.cli.provision',
-            azureYamlUri,
-        );
+        await this.azd.provision(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 }
