@@ -40,20 +40,51 @@ describe('EnvironmentNameStep (unit)', () => {
     });
 
     describe('validation', () => {
-        it('should reject empty names', () => {
-            expect(/^[a-zA-Z0-9-]+$/.test('')).to.be.false;
+        it('should reject empty input', async () => {
+            const { ctx, mock: mockResult } = createMockCodeContext();
+
+            // Don't use respondToPrompts — drive the input box manually
+            const stepPromise = new EnvironmentNameStep(ctx).prompt();
+
+            const ib = mockResult.inputBoxes[0];
+            ib.changeValue('');
+
+            // Validation message should be set
+            expect(ib.validationMessage).to.be.a('string');
+            expect(ib.validationMessage).to.include('required');
+
+            // Accept a valid value to complete the promise
+            ib.changeValue('valid');
+            ib.accept();
+            await stepPromise;
         });
 
-        it('should accept alphanumeric names with hyphens', () => {
-            expect(/^[a-zA-Z0-9-]+$/.test('my-env-123')).to.be.true;
+        it('should reject names with special characters', async () => {
+            const { ctx, mock: mockResult } = createMockCodeContext();
+
+            const stepPromise = new EnvironmentNameStep(ctx).prompt();
+
+            const ib = mockResult.inputBoxes[0];
+            ib.changeValue('my_env!');
+            expect(ib.validationMessage).to.be.a('string');
+            expect(ib.validationMessage).to.include('letters');
+
+            ib.changeValue('valid');
+            ib.accept();
+            await stepPromise;
         });
 
-        it('should reject names with spaces', () => {
-            expect(/^[a-zA-Z0-9-]+$/.test('my env')).to.be.false;
-        });
+        it('should accept alphanumeric names with hyphens', async () => {
+            const { ctx, mock: mockResult } = createMockCodeContext();
 
-        it('should reject names with special characters', () => {
-            expect(/^[a-zA-Z0-9-]+$/.test('my_env!')).to.be.false;
+            const stepPromise = new EnvironmentNameStep(ctx).prompt();
+
+            const ib = mockResult.inputBoxes[0];
+            ib.changeValue('my-env-123');
+            expect(ib.validationMessage).to.be.undefined;
+
+            ib.accept();
+            await stepPromise;
         });
     });
 });
