@@ -32,7 +32,7 @@ describe('getUsernameReplacementOptions (unit)', () => {
             return; // skip for short usernames
         }
 
-        const result = `path/to/${username}/file.txt`.replace(options[0].lookup, options[0].replacementString);
+        const result = `path/to/${username}/file.txt`.replace(options[0].lookup, options[0].replacementString ?? '');
         expect(result).to.include('<REDACTED: username>');
         expect(result).to.not.include(username);
     });
@@ -46,7 +46,7 @@ describe('getUsernameReplacementOptions (unit)', () => {
         }
 
         const upper = `path/${username.toUpperCase()}/file`;
-        const result = upper.replace(options[0].lookup, options[0].replacementString);
+        const result = upper.replace(options[0].lookup, options[0].replacementString ?? '');
         expect(result).to.include('<REDACTED: username>');
     });
 });

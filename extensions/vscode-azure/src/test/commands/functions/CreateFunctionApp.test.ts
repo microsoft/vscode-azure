@@ -10,6 +10,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
+import type { IExecAzd } from '../../../utils/azdUtils';
 import { TempProjectManager } from '../../../wizard/azd/TempProjectManager';
 
 describe('CreateFunctionApp (unit)', () => {
@@ -46,6 +47,15 @@ describe('CreateFunctionApp (unit)', () => {
 
         const tempManager = new TempProjectManager(ctx);
 
+        const mockFs = mockResult.fs;
+        const execAzd = mock.fn((args: string[], cwd?: string) => {
+            // Simulate `azd init` creating azure.yaml
+            if (args[0] === 'init' && cwd) {
+                mockFs.addFile(MockUri.file(`${cwd}/azure.yaml`), 'name: my-app');
+            }
+            return Promise.resolve({ stdout: '', stderr: '' });
+        }) as unknown as IExecAzd;
+
         const cmd = new CreateFunctionApp(
             ctx,
             output,
@@ -53,9 +63,10 @@ describe('CreateFunctionApp (unit)', () => {
             viewItemTree as never,
             subscriptionClientProvider,
             tempManager,
+            execAzd,
         );
 
-        return { cmd, ctx, mockResult, fs: mockResult.fs };
+        return { cmd, ctx, mockResult, fs: mockResult.fs, execAzd };
     }
 
     it('should be constructable with required dependencies', () => {
@@ -69,7 +80,7 @@ describe('CreateFunctionApp (unit)', () => {
     });
 
     it('should run the full wizard flow and generate bicep files', async () => {
-        const { cmd, mockResult, fs } = createCommand();
+        const { cmd, mockResult, fs, execAzd } = createCommand();
 
         respondToPrompts(mockResult, [
             // ChooseSubscriptionStep: pick the subscription
@@ -86,15 +97,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: 'Deploy Only' },
         ]);
 
-        // Execute will generate bicep + try to run azd init (which will throw ENOENT).
-        // GenerateBicepStep should succeed (writes to MockFileSystem).
-        // GenerateAzureYamlStep calls execAzd which throws ENOENT and propagates.
-        try {
-            await cmd.execute();
-        } catch (e) {
-            // Expected: azd CLI not installed
-            expect((e as Error).message).to.include('Azure Developer CLI (azd) was not found');
-        }
+        await cmd.execute();
 
         // Verify GenerateBicepStep wrote the infra files
         expect(fs.createDirectory.mock.callCount()).to.be.greaterThanOrEqual(1);
@@ -107,5 +110,20 @@ describe('CreateFunctionApp (unit)', () => {
         const params = JSON.parse(paramsContent);
         expect(params.parameters.runtimeVersion.value).to.equal('Node|20');
         expect(params.parameters.hostingPlan.value).to.equal('FlexConsumption');
+
+        // Verify execAzd was called for azd init and azd env new
+        const execAzdMock = execAzd as unknown as ReturnType<typeof mock.fn>;
+        expect(execAzdMock.mock.callCount()).to.be.greaterThanOrEqual(2);
+
+        const calls = execAzdMock.mock.calls.map(c => c.arguments[0] as string[]);
+        const initCall = calls.find(args => args[0] === 'init');
+        expect(initCall).to.deep.equal(['init', '--minimal', '--no-prompt']);
+
+        const envNewCall = calls.find(args => args[0] === 'env' && args[1] === 'new');
+        expect(envNewCall).to.include('my-env');
+        expect(envNewCall).to.include('--location');
+        expect(envNewCall).to.include('eastus');
+        expect(envNewCall).to.include('--subscription');
+        expect(envNewCall).to.include('sub-1');
     });
 });

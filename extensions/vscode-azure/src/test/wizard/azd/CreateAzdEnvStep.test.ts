@@ -6,6 +6,7 @@
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
+import { mock } from 'node:test';
 import type { AzdWizardContext } from '../../../wizard/azd/AzdWizardContext';
 import { CreateAzdEnvStep } from '../../../wizard/azd/CreateAzdEnvStep';
 
@@ -74,8 +75,9 @@ describe('CreateAzdEnvStep (unit)', () => {
     });
 
     describe('execute', () => {
-        it('should throw a helpful error when azd is not installed', async () => {
-            const step = new CreateAzdEnvStep();
+        it('should call execAzd with correct args', async () => {
+            const exec = mock.fn((..._args: unknown[]) => Promise.resolve({ stdout: '', stderr: '' }));
+            const step = new CreateAzdEnvStep(exec);
             const context: Partial<AzdWizardContext> = {
                 iacFolder: MockUri.file('/project') as never,
                 environmentName: 'dev',
@@ -83,12 +85,12 @@ describe('CreateAzdEnvStep (unit)', () => {
                 subscription: { subscriptionId: 'sub-1' } as never,
             };
 
-            try {
-                await step.execute(context);
-                expect.fail('Expected an error');
-            } catch (e) {
-                expect((e as Error).message).to.include('Azure Developer CLI (azd) was not found');
-            }
+            await step.execute(context);
+
+            expect(exec.mock.callCount()).to.equal(1);
+            const args = exec.mock.calls[0].arguments[0] as string[];
+            expect(args).to.deep.equal(['env', 'new', 'dev', '--location', 'eastus', '--subscription', 'sub-1']);
+            expect(exec.mock.calls[0].arguments[1]).to.equal('/project');
         });
     });
 });

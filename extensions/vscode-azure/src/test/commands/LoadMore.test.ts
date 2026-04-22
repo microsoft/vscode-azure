@@ -45,7 +45,7 @@ describe('defaultLoadMoreOptions (unit)', () => {
 
 describe('LoadMore (unit)', () => {
     it('should call viewItemTree.loadMore with the parent key', async () => {
-        const loadMore = mock.fn(() => Promise.resolve());
+        const loadMore = mock.fn((..._args: unknown[]) => Promise.resolve());
         const viewItemTree = { loadMore } as never;
 
         const cmd = new LoadMore(viewItemTree);
