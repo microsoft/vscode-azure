@@ -35,11 +35,11 @@ import {
 import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
+import { AzdService, IAzdService } from './azd/AzdService';
+import { TempProjectManager } from './azd/wizard/TempProjectManager';
 import { registerCommands } from './commands/registerCommands';
 import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
-import { AzdService, IAzdService } from './utils/AzdService';
-import { TempProjectManager } from './wizard/azd/TempProjectManager';
 
 /**
  * Entry point called by the generated extension `activate` function.

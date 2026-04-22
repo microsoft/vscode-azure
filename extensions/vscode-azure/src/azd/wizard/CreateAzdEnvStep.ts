@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import type { IAzdService } from '../../utils/AzdService';
+import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 // TODO: future: Replace with AZD extension API when available

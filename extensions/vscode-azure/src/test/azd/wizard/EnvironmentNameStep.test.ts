@@ -6,8 +6,8 @@
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import type { AzdWizardContext } from '../../../wizard/azd/AzdWizardContext';
-import { EnvironmentNameStep } from '../../../wizard/azd/EnvironmentNameStep';
+import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
+import { EnvironmentNameStep } from '../../../azd/wizard/EnvironmentNameStep';
 
 describe('EnvironmentNameStep (unit)', () => {
     describe('shouldPrompt', () => {

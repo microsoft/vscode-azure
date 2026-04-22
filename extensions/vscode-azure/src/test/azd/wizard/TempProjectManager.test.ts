@@ -6,7 +6,7 @@
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { TempProjectManager } from '../../../wizard/azd/TempProjectManager';
+import { TempProjectManager } from '../../../azd/wizard/TempProjectManager';
 
 describe('TempProjectManager (unit)', () => {
     function createManager() {

@@ -7,9 +7,9 @@ import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
-import type { AzdEnvironment, IAzdService } from '../../../utils/AzdService';
-import type { AzdWizardContext } from '../../../wizard/azd/AzdWizardContext';
-import { HydrateAzdInfoStep } from '../../../wizard/azd/HydrateAzdInfoStep';
+import type { AzdEnvironment, IAzdService } from '../../../azd/AzdService';
+import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
+import { HydrateAzdInfoStep } from '../../../azd/wizard/HydrateAzdInfoStep';
 
 describe('HydrateAzdInfoStep (unit)', () => {
     function createMockAzd(envListResult: AzdEnvironment[] = []): IAzdService {

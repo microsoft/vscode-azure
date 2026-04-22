@@ -10,9 +10,9 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import type { IAzdService } from '../../../azd/AzdService';
+import { TempProjectManager } from '../../../azd/wizard/TempProjectManager';
 import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
-import type { IAzdService } from '../../../utils/AzdService';
-import { TempProjectManager } from '../../../wizard/azd/TempProjectManager';
 
 describe('CreateFunctionApp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });

@@ -6,8 +6,8 @@
 import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { OfferSaveStep } from '../../../wizard/azd/OfferSaveStep';
-import { TempProjectManager } from '../../../wizard/azd/TempProjectManager';
+import { OfferSaveStep } from '../../../azd/wizard/OfferSaveStep';
+import { TempProjectManager } from '../../../azd/wizard/TempProjectManager';
 
 describe('OfferSaveStep (unit)', () => {
     describe('prompt', () => {

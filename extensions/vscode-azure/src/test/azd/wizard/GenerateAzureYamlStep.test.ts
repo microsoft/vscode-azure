@@ -7,9 +7,9 @@ import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
-import type { IAzdService } from '../../../utils/AzdService';
-import type { AzdWizardContext } from '../../../wizard/azd/AzdWizardContext';
-import { GenerateAzureYamlStep } from '../../../wizard/azd/GenerateAzureYamlStep';
+import type { IAzdService } from '../../../azd/AzdService';
+import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
+import { GenerateAzureYamlStep } from '../../../azd/wizard/GenerateAzureYamlStep';
 
 function createMockAzd(): { azd: IAzdService; initFn: ReturnType<typeof mock.fn> } {
     const initFn = mock.fn((..._args: unknown[]) => Promise.resolve());

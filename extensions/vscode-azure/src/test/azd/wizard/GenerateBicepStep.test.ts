@@ -6,8 +6,8 @@
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import type { AzdWizardContext } from '../../../wizard/azd/AzdWizardContext';
-import { GenerateBicepStep } from '../../../wizard/azd/GenerateBicepStep';
+import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
+import { GenerateBicepStep } from '../../../azd/wizard/GenerateBicepStep';
 
 interface TestBicepContext extends AzdWizardContext {
     readonly runtimeVersion?: string;
