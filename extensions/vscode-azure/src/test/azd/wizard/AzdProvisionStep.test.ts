@@ -6,29 +6,14 @@
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { mock } from 'node:test';
-import type { IAzdService } from '../../../azd/AzdService';
 import { AzdProvisionStep } from '../../../azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
-
-function createMockAzd(): { azd: IAzdService; provisionFn: ReturnType<typeof mock.fn> } {
-    const provisionFn = mock.fn(() => Promise.resolve());
-    return {
-        azd: {
-            findAzureYaml: mock.fn(() => Promise.resolve(MockUri.file('/project/azure.yaml'))) as unknown as IAzdService['findAzureYaml'],
-            init: mock.fn(() => Promise.resolve()),
-            envNew: mock.fn(() => Promise.resolve()),
-            envList: mock.fn(() => Promise.resolve([])),
-            provision: provisionFn,
-        },
-        provisionFn,
-    };
-}
+import { createMockAzdService } from '../MockAzdService';
 
 describe('AzdProvisionStep (unit)', () => {
     describe('shouldExecute', () => {
         it('should return true when provision is true and iacFolder is set', () => {
-            const { azd } = createMockAzd();
+            const azd = createMockAzdService();
             const step = new AzdProvisionStep(azd);
 
             const context = {
@@ -40,7 +25,7 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should return false when provision is false', () => {
-            const { azd } = createMockAzd();
+            const azd = createMockAzdService();
             const step = new AzdProvisionStep(azd);
 
             const context = {
@@ -52,7 +37,7 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should return false when provision is undefined', () => {
-            const { azd } = createMockAzd();
+            const azd = createMockAzdService();
             const step = new AzdProvisionStep(azd);
 
             const context = {
@@ -63,7 +48,7 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should return false when iacFolder is undefined', () => {
-            const { azd } = createMockAzd();
+            const azd = createMockAzdService();
             const step = new AzdProvisionStep(azd);
 
             const context = {
@@ -74,7 +59,7 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should return false when both are missing', () => {
-            const { azd } = createMockAzd();
+            const azd = createMockAzdService();
             const step = new AzdProvisionStep(azd);
 
             expect(step.shouldExecute({})).to.be.false;
@@ -87,7 +72,10 @@ describe('AzdProvisionStep (unit)', () => {
             const mockResult = createMockVsCode();
             mockResult.fs.addFile(yamlUri);
 
-            const { azd, provisionFn } = createMockAzd();
+            const azd = createMockAzdService();
+            azd.findAzureYaml.mock.mockImplementation(
+                () => Promise.resolve(MockUri.file('/project/azure.yaml')),
+            );
             const step = new AzdProvisionStep(azd);
             const context = {
                 provision: true,
@@ -96,15 +84,13 @@ describe('AzdProvisionStep (unit)', () => {
 
             await step.execute(context);
 
-            expect(provisionFn.mock.callCount()).to.equal(1);
-            expect((provisionFn.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
+            expect(azd.provision.mock.callCount()).to.equal(1);
+            expect((azd.provision.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
         });
 
         it('should throw when azure.yaml is not found', async () => {
-            const { azd } = createMockAzd();
-            (azd.findAzureYaml as unknown as ReturnType<typeof mock.fn>).mock.mockImplementation(
-                () => Promise.resolve(undefined),
-            );
+            const azd = createMockAzdService();
+            // findAzureYaml already returns undefined by default
 
             const step = new AzdProvisionStep(azd);
             const context = {

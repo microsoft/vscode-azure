@@ -6,27 +6,17 @@
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { mock } from 'node:test';
-import type { AzdEnvironment, IAzdService } from '../../../azd/AzdService';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { HydrateAzdInfoStep } from '../../../azd/wizard/HydrateAzdInfoStep';
+import { createMockAzdService } from '../MockAzdService';
 
 describe('HydrateAzdInfoStep (unit)', () => {
-    function createMockAzd(envListResult: AzdEnvironment[] = []): IAzdService {
-        return {
-            findAzureYaml: mock.fn(() => Promise.resolve(undefined)),
-            init: mock.fn(() => Promise.resolve()),
-            envNew: mock.fn(() => Promise.resolve()),
-            envList: mock.fn(() => Promise.resolve(envListResult)),
-            provision: mock.fn(() => Promise.resolve()),
-        };
-    }
 
     describe('prompt', () => {
         it('should return empty when no workspace folder exists', async () => {
             const { vscode: code } = createMockVsCode();
 
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzd());
+            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzdService());
             const result = await step.prompt();
 
             expect(result).to.deep.equal({});
@@ -37,8 +27,8 @@ describe('HydrateAzdInfoStep (unit)', () => {
             const { vscode: code, workspaceFolders } = createMockVsCode();
             workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
 
-            const azd = createMockAzd();
-            (azd.findAzureYaml as unknown as ReturnType<typeof mock.fn>).mock.mockImplementation(
+            const azd = createMockAzdService();
+            azd.findAzureYaml.mock.mockImplementation(
                 () => Promise.resolve(MockUri.file('/workspace/azure.yaml')),
             );
 
@@ -53,7 +43,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
             const { vscode: code, workspaceFolders } = createMockVsCode();
             workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
 
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzd());
+            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzdService());
             const result = await step.prompt();
 
             expect(result.iacFolder).to.be.undefined;
@@ -69,7 +59,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
                 { Name: 'production', IsDefault: true },
             ];
 
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzd(envList));
+            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzdService(envList));
             const result = await step.prompt();
 
             expect(result.environmentName).to.equal('production');
@@ -84,7 +74,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
                 { Name: 'staging', IsDefault: false },
             ];
 
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzd(envList));
+            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzdService(envList));
             const result = await step.prompt();
 
             expect(result.environmentName).to.be.undefined;
@@ -95,13 +85,10 @@ describe('HydrateAzdInfoStep (unit)', () => {
             const { vscode: code, workspaceFolders } = createMockVsCode();
             workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
 
-            const failingAzd: IAzdService = {
-                findAzureYaml: mock.fn(() => Promise.resolve(undefined)),
-                init: mock.fn(() => Promise.resolve()),
-                envNew: mock.fn(() => Promise.resolve()),
-                envList: mock.fn(() => Promise.reject(new Error('azd not found'))),
-                provision: mock.fn(() => Promise.resolve()),
-            };
+            const failingAzd = createMockAzdService();
+            failingAzd.envList.mock.mockImplementation(
+                () => Promise.reject(new Error('azd not found')),
+            );
 
             const step = new HydrateAzdInfoStep<AzdWizardContext>(code, failingAzd);
             const result = await step.prompt();
