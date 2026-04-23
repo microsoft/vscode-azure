@@ -61,6 +61,7 @@ describe('CreateFunctionApp (unit)', () => {
             findAzureYaml: mock.fn(() => Promise.resolve(azureYamlUri)),
             init: initFn,
             envNew: envNewFn,
+            envUpdate: mock.fn(() => Promise.resolve()),
             envList: mock.fn(() => Promise.resolve([])),
             provision: mock.fn(() => Promise.resolve()),
         };
