@@ -41,7 +41,7 @@ export class CreateFunctionApp implements ManagedCommand {
     public async execute(): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
             this.output,
-            {},
+            { azdServiceName: 'myfunc' }, // TODO: don't hardcode default service name
             [
                 new HydrateAzdInfoStep(this.ctx.code, this.azd),
                 new ChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
@@ -52,7 +52,7 @@ export class CreateFunctionApp implements ManagedCommand {
                 new OfferSaveStep(this.ctx, this.tempManager),
             ],
             [
-                new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']),
+                new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan', 'azdServiceName']),
                 new GenerateAzureYamlStep(this.azd),
                 new CreateAzdEnvStep(this.azd),
                 new AzdProvisionStep(this.azd),

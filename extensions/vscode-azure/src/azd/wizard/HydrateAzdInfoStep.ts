@@ -39,6 +39,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         const envName = await this.findDefaultEnvironment(workspaceFolder.uri);
         if (envName) {
             result.environmentName = envName;
+            result.envAlreadyExists = true;
         }
 
         return result as Partial<TContext>;

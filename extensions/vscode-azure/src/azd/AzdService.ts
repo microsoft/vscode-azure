@@ -31,6 +31,14 @@ export interface IAzdService {
     /** Runs `azd env new` with the given name, location, and subscription. */
     envNew(name: string, location: string, subscriptionId: string, cwd: vscode.Uri): Promise<void>;
 
+    /**
+     * Updates an existing azd environment by selecting it as the default and
+     * setting `AZURE_LOCATION` / `AZURE_SUBSCRIPTION_ID`. Use this instead of
+     * {@linkcode IAzdService.envNew} when an environment with the same name
+     * already exists -- `envNew` would fail in that case.
+     */
+    envUpdate(name: string, location: string, subscriptionId: string, cwd: vscode.Uri): Promise<void>;
+
     /** Runs `azd env list --output json` and returns the parsed environment list. */
     envList(cwd: vscode.Uri): Promise<AzdEnvironment[]>;
 
@@ -93,6 +101,24 @@ export class AzdService implements IAzdService {
                     withArg('env', 'new', name),
                     withNamedArg('--location', location),
                     withNamedArg('--subscription', subscriptionId),
+                )(),
+                cwd,
+            });
+        } catch (e) {
+            throw this.wrapEnoent(e);
+        }
+    }
+
+    public async envUpdate(name: string, location: string, subscriptionId: string, cwd: vscode.Uri): Promise<void> {
+        try {
+            await this.processExecutor.spawn({
+                execution: 'background',
+                command: 'azd',
+                args: composeArgs(
+                    withArg('env', 'set'),
+                    withNamedArg('--environment', name),
+                    withNamedArg('AZURE_LOCATION', location, { assignValue: true }),
+                    withNamedArg('AZURE_SUBSCRIPTION_ID', subscriptionId, { assignValue: true })
                 )(),
                 cwd,
             });

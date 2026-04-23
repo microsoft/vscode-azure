@@ -13,7 +13,15 @@ export interface AzdWizardContext {
     readonly location?: Location;
     /** Name of the azd environment used to isolate state and resources. */
     readonly environmentName?: string;
-
+    /**
+     * Set by {@linkcode HydrateAzdInfoStep} when an azd environment with
+     * {@linkcode environmentName} was already present in the workspace.
+     * Downstream steps should update the existing environment's settings
+     * instead of running `azd env new` (which would fail).
+     */
+    readonly envAlreadyExists?: boolean;
+    /** Value written as the `azd-service-name` tag on the Function App so `azd deploy` can target it. */
+    readonly azdServiceName?: string;
     /** Folder that holds (or will hold) the generated `azure.yaml` and `infra/` files. */
     readonly iacFolder?: vscode.Uri;
     /** If `true`, the wizard should deploy after generating files. */

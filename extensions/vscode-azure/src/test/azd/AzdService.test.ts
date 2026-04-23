@@ -115,6 +115,27 @@ describe('AzdService (unit)', () => {
         });
     });
 
+    describe('envUpdate', () => {
+        it('should spawn a single azd env set with --environment and AZURE_LOCATION / AZURE_SUBSCRIPTION_ID assignments', async () => {
+            const { service, spawnMock } = createService();
+
+            await service.envUpdate('dev', 'eastus', 'sub-1', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(spawnMock.mock.callCount()).to.equal(1);
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(opts.execution).to.equal('background');
+            expect(opts.command).to.equal('azd');
+            expect(opts.cwd.path).to.equal('/project');
+
+            const values = argValues(opts.args);
+            expect(values).to.include.members(['env', 'set']);
+            expect(values).to.include('--environment');
+            expect(values).to.include('dev');
+            expect(values).to.include('AZURE_LOCATION=eastus');
+            expect(values).to.include('AZURE_SUBSCRIPTION_ID=sub-1');
+        });
+    });
+
     describe('envList', () => {
         it('should spawn azd env list with --output json and return parsed result', async () => {
             const envs = [{ Name: 'dev', IsDefault: true }];

@@ -10,7 +10,11 @@ import type { AzdWizardContext } from './AzdWizardContext';
 // TODO: future: Replace with AZD extension API when available
 /**
  * Creates a new azd environment (`azd env new`) in {@linkcode AzdWizardContext.iacFolder}
- * using the selected subscription, location, and environment name.
+ * using the selected subscription, location, and environment name. If
+ * {@linkcode AzdWizardContext.envAlreadyExists} is `true` (i.e.
+ * {@linkcode HydrateAzdInfoStep} already found an environment with that name),
+ * updates the existing environment's `AZURE_LOCATION` /
+ * `AZURE_SUBSCRIPTION_ID` instead so `azd env new` doesn't fail.
  */
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
@@ -24,11 +28,17 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public async execute(context: TContext): Promise<void> {
-        await this.azd.envNew(
-            context.environmentName!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            context.location!.name!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            context.subscription!.subscriptionId, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            context.iacFolder!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-        );
+        /* eslint-disable @typescript-eslint/no-non-null-assertion */
+        const name = context.environmentName!;
+        const location = context.location!.name!;
+        const subscriptionId = context.subscription!.subscriptionId;
+        const cwd = context.iacFolder!;
+        /* eslint-enable @typescript-eslint/no-non-null-assertion */
+
+        if (context.envAlreadyExists) {
+            await this.azd.envUpdate(name, location, subscriptionId, cwd);
+        } else {
+            await this.azd.envNew(name, location, subscriptionId, cwd);
+        }
     }
 }

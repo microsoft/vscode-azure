@@ -94,10 +94,33 @@ describe('CreateAzdEnvStep (unit)', () => {
             await step.execute(context);
 
             expect(azd.envNew.mock.callCount()).to.equal(1);
+            expect(azd.envUpdate.mock.callCount()).to.equal(0);
             const [name, location, subscriptionId, cwd] = azd.envNew.mock.calls[0].arguments;
             expect(name).to.equal('dev');
             expect(location).to.equal('eastus');
             expect(subscriptionId).to.equal('sub-1');
+            expect((cwd as MockUri).path).to.equal('/project');
+        });
+
+        it('should call azd envUpdate (not envNew) when envAlreadyExists is true', async () => {
+            const azd = createMockAzdService();
+            const step = new CreateAzdEnvStep(azd);
+            const context: Partial<AzdWizardContext> = {
+                iacFolder: MockUri.file('/project') as never,
+                environmentName: 'dev',
+                envAlreadyExists: true,
+                location: { name: 'westus' },
+                subscription: { subscriptionId: 'sub-2' } as never,
+            };
+
+            await step.execute(context);
+
+            expect(azd.envNew.mock.callCount()).to.equal(0);
+            expect(azd.envUpdate.mock.callCount()).to.equal(1);
+            const [name, location, subscriptionId, cwd] = azd.envUpdate.mock.calls[0].arguments;
+            expect(name).to.equal('dev');
+            expect(location).to.equal('westus');
+            expect(subscriptionId).to.equal('sub-2');
             expect((cwd as MockUri).path).to.equal('/project');
         });
     });

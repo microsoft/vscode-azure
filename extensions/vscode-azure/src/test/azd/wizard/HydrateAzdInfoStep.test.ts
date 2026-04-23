@@ -63,9 +63,10 @@ describe('HydrateAzdInfoStep (unit)', () => {
             const result = await step.prompt();
 
             expect(result.environmentName).to.equal('production');
+            expect(result.envAlreadyExists).to.be.true;
         });
 
-        it('should not set environmentName when no default env exists', async () => {
+        it('should not set envAlreadyExists when no default env exists', async () => {
             const folderUri = MockUri.file('/workspace');
             const { vscode: code, workspaceFolders } = createMockVsCode();
             workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
@@ -78,6 +79,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
             const result = await step.prompt();
 
             expect(result.environmentName).to.be.undefined;
+            expect(result.envAlreadyExists).to.be.undefined;
         });
 
         it('should not set environmentName when azd fails', async () => {
