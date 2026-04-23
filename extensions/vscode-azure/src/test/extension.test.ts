@@ -26,7 +26,7 @@ describe('bundle size guardrail (integration)', () => {
     // This is a guardrail, NOT a target. The intent is to notice when the extension
     // bundle grows or shrinks unexpectedly -- for example, a stray namespace import
     // that drags in a whole SDK, or a dependency that inadvertently ships its source
-    // maps. The ±10% tolerance below is deliberately generous to avoid noisy failures
+    // maps. The +/-10% tolerance below is deliberately generous to avoid noisy failures
     // on normal churn, so a failure here almost always means something real.
     //
     // DO NOT bump this baseline casually. Before changing it, confirm that the size
