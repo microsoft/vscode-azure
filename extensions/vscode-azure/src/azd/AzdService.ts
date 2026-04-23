@@ -80,7 +80,7 @@ export class AzdService implements IAzdService {
                 cwd,
             });
         } catch (e) {
-            throw wrapEnoent(e);
+            throw this.wrapEnoent(e);
         }
     }
 
@@ -97,7 +97,7 @@ export class AzdService implements IAzdService {
                 cwd,
             });
         } catch (e) {
-            throw wrapEnoent(e);
+            throw this.wrapEnoent(e);
         }
     }
 
@@ -115,7 +115,7 @@ export class AzdService implements IAzdService {
             });
             return result.json;
         } catch (e) {
-            throw wrapEnoent(e);
+            throw this.wrapEnoent(e);
         }
     }
 
@@ -139,22 +139,25 @@ export class AzdService implements IAzdService {
                 focus: true,
             });
         } catch (e) {
-            throw wrapEnoent(e);
+            throw this.wrapEnoent(e);
         }
+    }
+
+    private wrapEnoent(e: unknown): unknown {
+        if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+            return new Error(
+                this.code.l10n.t(
+                    'Azure Developer CLI (azd) was not found. Install it from {0} and ensure it is available on your PATH.',
+                    'https://aka.ms/azure-dev/install',
+                ),
+                { cause: e },
+            );
+        }
+        return e;
     }
 }
 
 /** Curry function that appends `--output json` to the argument list. */
 function withJsonOutput(): (args?: CommandLineArgs) => CommandLineArgs {
     return withNamedArg('--output', 'json');
-}
-
-function wrapEnoent(e: unknown): unknown {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-        return new Error(
-            'Azure Developer CLI (azd) was not found. Install it from https://aka.ms/azure-dev/install and ensure it is available on your PATH.',
-            { cause: e },
-        );
-    }
-    return e;
 }
