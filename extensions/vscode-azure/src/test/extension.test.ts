@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { before, describe, it } from 'mocha';
+import { describe, it } from 'mocha';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-before('extension', () => {
+describe('extension', () => {
     it('should activate', async () => {
         const extension = vscode.extensions.getExtension('ms-azuretools.vscode-azure');
         if (!extension) {
@@ -57,7 +57,7 @@ describe('bundle size guardrail (integration)', () => {
             if (process.env.GITHUB_ACTIONS === 'true') {
                 expect.fail(
                     `No .vsix file found under ${extensionPath}. Build/package the extension ` +
-                        `before running the bundle size guardrail in CI.`,
+                    `before running the bundle size guardrail in CI.`,
                 );
             }
             this.skip();
