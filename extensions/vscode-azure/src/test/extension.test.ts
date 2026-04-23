@@ -46,12 +46,20 @@ describe('bundle size guardrail (integration)', () => {
 
         // `vsce package` emits the VSIX next to package.json (e.g. `vscode-azure-1.0.0.vsix`).
         // In local dev runs the VSIX typically isn't built, so we skip rather than fail.
+        // Under GitHub Actions, however, a missing VSIX means this guardrail would never
+        // run, so fail fast instead of silently skipping.
         // If multiple VSIXs are present (e.g. stale artifacts from prior versions), pick the
         // highest semver to measure the current build. `localeCompare` with `numeric: true`
         // orders embedded version numbers correctly (e.g. `1.10.0` > `1.2.0`).
         const extensionPath = extension.extensionPath;
         const vsixFiles = fs.readdirSync(extensionPath).filter((name) => name.endsWith('.vsix'));
         if (vsixFiles.length === 0) {
+            if (process.env.GITHUB_ACTIONS === 'true') {
+                expect.fail(
+                    `No .vsix file found under ${extensionPath}. Build/package the extension ` +
+                        `before running the bundle size guardrail in CI.`,
+                );
+            }
             this.skip();
         }
 
@@ -78,7 +86,11 @@ describe('bundle size guardrail (integration)', () => {
                 `fail threshold ${VSIX_TOLERANCE * 100}%).`;
             console.warn(`[bundle-size] ${message}`);
             if (process.env.GITHUB_ACTIONS === 'true') {
-                console.log(`::warning title=Bundle size drift::${message}`);
+                // GitHub Actions workflow commands require `%`, `\r`, and `\n` in the message
+                // to be URL-encoded, otherwise the annotation parses incorrectly.
+                // See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#example-setting-a-warning-message
+                const encoded = message.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+                console.log(`::warning title=Bundle size drift::${encoded}`);
             }
         }
 
