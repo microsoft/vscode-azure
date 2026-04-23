@@ -27,16 +27,19 @@ import {
     ICommandRegistry,
     IExtensionContext,
     IOutputChannel,
+    IProcessExecutor,
     ITelemetryReporter,
     IVsCode,
+    ProcessExecutor,
 } from '@microsoft/vscode-azure-utils';
 import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
+import { AzdService, IAzdService } from './azd/AzdService';
+import { TempProjectManager } from './azd/wizard/TempProjectManager';
 import { registerCommands } from './commands/registerCommands';
 import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
-import { TempProjectManager } from './wizard/azd/TempProjectManager';
 
 /**
  * Entry point called by the generated extension `activate` function.
@@ -118,6 +121,12 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ITempProjectManager).to(TempProjectManager).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IProcessExecutor).toDynamicValue(context => {
+        return new ProcessExecutor(context.get(IVsCode));
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);

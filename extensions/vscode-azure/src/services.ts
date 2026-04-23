@@ -8,8 +8,8 @@ import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode
 import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
+import type { TempProjectManager } from './azd/wizard/TempProjectManager';
 import type { Activity } from './tree/activity/Activity';
-import type { TempProjectManager } from './wizard/azd/TempProjectManager';
 
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');

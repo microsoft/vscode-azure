@@ -9,9 +9,10 @@ import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } f
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
+import type * as vscode from 'vscode';
+import type { IAzdService } from '../../../azd/AzdService';
+import { TempProjectManager } from '../../../azd/wizard/TempProjectManager';
 import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
-import type { IExecAzd } from '../../../utils/azdUtils';
-import { TempProjectManager } from '../../../wizard/azd/TempProjectManager';
 
 describe('CreateFunctionApp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });
@@ -48,13 +49,21 @@ describe('CreateFunctionApp (unit)', () => {
         const tempManager = new TempProjectManager(ctx);
 
         const mockFs = mockResult.fs;
-        const execAzd = mock.fn((args: string[], cwd?: string) => {
+        let azureYamlUri: vscode.Uri | undefined;
+        const initFn = mock.fn((cwd: vscode.Uri) => {
             // Simulate `azd init` creating azure.yaml
-            if (args[0] === 'init' && cwd) {
-                mockFs.addFile(MockUri.file(`${cwd}/azure.yaml`), 'name: my-app');
-            }
-            return Promise.resolve({ stdout: '', stderr: '' });
-        }) as unknown as IExecAzd;
+            azureYamlUri = MockUri.file(`${cwd.fsPath}/azure.yaml`) as unknown as vscode.Uri;
+            mockFs.addFile(azureYamlUri, 'name: my-app');
+            return Promise.resolve();
+        });
+        const envNewFn = mock.fn(() => Promise.resolve());
+        const azdExecutor: IAzdService = {
+            findAzureYaml: mock.fn(() => Promise.resolve(azureYamlUri)),
+            init: initFn,
+            envNew: envNewFn,
+            envList: mock.fn(() => Promise.resolve([])),
+            provision: mock.fn(() => Promise.resolve()),
+        };
 
         const cmd = new CreateFunctionApp(
             ctx,
@@ -63,10 +72,10 @@ describe('CreateFunctionApp (unit)', () => {
             viewItemTree as never,
             subscriptionClientProvider,
             tempManager,
-            execAzd,
+            azdExecutor,
         );
 
-        return { cmd, ctx, mockResult, fs: mockResult.fs, execAzd };
+        return { cmd, ctx, mockResult, fs: mockResult.fs, azdExecutor, initFn, envNewFn };
     }
 
     it('should be constructable with required dependencies', () => {
@@ -80,7 +89,7 @@ describe('CreateFunctionApp (unit)', () => {
     });
 
     it('should run the full wizard flow and generate bicep files', async () => {
-        const { cmd, mockResult, fs, execAzd } = createCommand();
+        const { cmd, mockResult, fs, initFn, envNewFn } = createCommand();
 
         respondToPrompts(mockResult, [
             // ChooseSubscriptionStep: pick the subscription
@@ -111,19 +120,14 @@ describe('CreateFunctionApp (unit)', () => {
         expect(params.parameters.runtimeVersion.value).to.equal('Node|20');
         expect(params.parameters.hostingPlan.value).to.equal('FlexConsumption');
 
-        // Verify execAzd was called for azd init and azd env new
-        const execAzdMock = execAzd as unknown as ReturnType<typeof mock.fn>;
-        expect(execAzdMock.mock.callCount()).to.be.greaterThanOrEqual(2);
+        // Verify azd init was called
+        expect(initFn.mock.callCount()).to.equal(1);
 
-        const calls = execAzdMock.mock.calls.map(c => c.arguments[0] as string[]);
-        const initCall = calls.find(args => args[0] === 'init');
-        expect(initCall).to.deep.equal(['init', '--minimal', '--no-prompt']);
-
-        const envNewCall = calls.find(args => args[0] === 'env' && args[1] === 'new');
-        expect(envNewCall).to.include('my-env');
-        expect(envNewCall).to.include('--location');
-        expect(envNewCall).to.include('eastus');
-        expect(envNewCall).to.include('--subscription');
-        expect(envNewCall).to.include('sub-1');
+        // Verify azd env new was called with correct args
+        expect(envNewFn.mock.callCount()).to.equal(1);
+        const envNewArgs = envNewFn.mock.calls[0].arguments as unknown[];
+        expect(envNewArgs[0]).to.equal('my-env');
+        expect(envNewArgs[1]).to.equal('eastus');
+        expect(envNewArgs[2]).to.equal('sub-1');
     });
 });

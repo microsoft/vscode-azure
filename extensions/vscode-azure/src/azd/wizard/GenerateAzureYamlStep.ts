@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, type IVsCode } from '@microsoft/vscode-azure-utils';
-import { execAzd, findAzureYaml, type IExecAzd } from '../../utils/azdUtils';
+import { ExecuteStep } from '@microsoft/vscode-azure-utils';
+import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -12,8 +12,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
  */
 export class GenerateAzureYamlStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly code: IVsCode,
-        private readonly exec: IExecAzd = execAzd,
+        private readonly azd: IAzdService,
     ) {
         super();
     }
@@ -23,10 +22,10 @@ export class GenerateAzureYamlStep<TContext extends AzdWizardContext> extends Ex
             return false;
         }
 
-        return !(await findAzureYaml(this.code, context.iacFolder));
+        return !(await this.azd.findAzureYaml(context.iacFolder));
     }
 
     public async execute(context: TContext): Promise<void> {
-        await this.exec(['init', '--minimal', '--no-prompt'], context.iacFolder!.fsPath); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        await this.azd.init(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 }

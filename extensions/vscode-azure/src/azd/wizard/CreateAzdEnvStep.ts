@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import { execAzd, type IExecAzd } from '../../utils/azdUtils';
+import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 // TODO: future: Replace with AZD extension API when available
@@ -14,7 +14,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
  */
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly exec: IExecAzd = execAzd,
+        private readonly azd: IAzdService,
     ) {
         super();
     }
@@ -24,12 +24,11 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public async execute(context: TContext): Promise<void> {
-        const args = [
-            'env', 'new', context.environmentName!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            '--location', context.location!.name!,  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            '--subscription', context.subscription!.subscriptionId, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-        ];
-
-        await this.exec(args, context.iacFolder!.fsPath); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        await this.azd.envNew(
+            context.environmentName!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            context.location!.name!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            context.subscription!.subscriptionId, // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            context.iacFolder!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        );
     }
 }

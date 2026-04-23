@@ -6,14 +6,15 @@
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { mock } from 'node:test';
-import type { AzdWizardContext } from '../../../wizard/azd/AzdWizardContext';
-import { CreateAzdEnvStep } from '../../../wizard/azd/CreateAzdEnvStep';
+import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
+import { CreateAzdEnvStep } from '../../../azd/wizard/CreateAzdEnvStep';
+import { createMockAzdService } from '../MockAzdService';
 
 describe('CreateAzdEnvStep (unit)', () => {
     describe('shouldExecute', () => {
         it('should return true when all required fields are present', () => {
-            const step = new CreateAzdEnvStep();
+            const azd = createMockAzdService();
+            const step = new CreateAzdEnvStep(azd);
             const context: Partial<AzdWizardContext> = {
                 iacFolder: MockUri.file('/project') as never,
                 environmentName: 'dev',
@@ -25,7 +26,8 @@ describe('CreateAzdEnvStep (unit)', () => {
         });
 
         it('should return false when iacFolder is missing', () => {
-            const step = new CreateAzdEnvStep();
+            const azd = createMockAzdService();
+            const step = new CreateAzdEnvStep(azd);
             const context: Partial<AzdWizardContext> = {
                 environmentName: 'dev',
                 location: { name: 'eastus' },
@@ -36,7 +38,8 @@ describe('CreateAzdEnvStep (unit)', () => {
         });
 
         it('should return false when environmentName is missing', () => {
-            const step = new CreateAzdEnvStep();
+            const azd = createMockAzdService();
+            const step = new CreateAzdEnvStep(azd);
             const context: Partial<AzdWizardContext> = {
                 iacFolder: MockUri.file('/project') as never,
                 location: { name: 'eastus' },
@@ -47,7 +50,8 @@ describe('CreateAzdEnvStep (unit)', () => {
         });
 
         it('should return false when location is missing', () => {
-            const step = new CreateAzdEnvStep();
+            const azd = createMockAzdService();
+            const step = new CreateAzdEnvStep(azd);
             const context: Partial<AzdWizardContext> = {
                 iacFolder: MockUri.file('/project') as never,
                 environmentName: 'dev',
@@ -58,7 +62,8 @@ describe('CreateAzdEnvStep (unit)', () => {
         });
 
         it('should return false when subscription is missing', () => {
-            const step = new CreateAzdEnvStep();
+            const azd = createMockAzdService();
+            const step = new CreateAzdEnvStep(azd);
             const context: Partial<AzdWizardContext> = {
                 iacFolder: MockUri.file('/project') as never,
                 environmentName: 'dev',
@@ -69,15 +74,16 @@ describe('CreateAzdEnvStep (unit)', () => {
         });
 
         it('should return false when all fields are missing', () => {
-            const step = new CreateAzdEnvStep();
+            const azd = createMockAzdService();
+            const step = new CreateAzdEnvStep(azd);
             expect(step.shouldExecute({})).to.be.false;
         });
     });
 
     describe('execute', () => {
-        it('should call execAzd with correct args', async () => {
-            const exec = mock.fn((..._args: unknown[]) => Promise.resolve({ stdout: '', stderr: '' }));
-            const step = new CreateAzdEnvStep(exec);
+        it('should call azd envNew with correct args', async () => {
+            const azd = createMockAzdService();
+            const step = new CreateAzdEnvStep(azd);
             const context: Partial<AzdWizardContext> = {
                 iacFolder: MockUri.file('/project') as never,
                 environmentName: 'dev',
@@ -87,10 +93,12 @@ describe('CreateAzdEnvStep (unit)', () => {
 
             await step.execute(context);
 
-            expect(exec.mock.callCount()).to.equal(1);
-            const args = exec.mock.calls[0].arguments[0] as string[];
-            expect(args).to.deep.equal(['env', 'new', 'dev', '--location', 'eastus', '--subscription', 'sub-1']);
-            expect(exec.mock.calls[0].arguments[1]).to.equal('/project');
+            expect(azd.envNew.mock.callCount()).to.equal(1);
+            const [name, location, subscriptionId, cwd] = azd.envNew.mock.calls[0].arguments;
+            expect(name).to.equal('dev');
+            expect(location).to.equal('eastus');
+            expect(subscriptionId).to.equal('sub-1');
+            expect((cwd as MockUri).path).to.equal('/project');
         });
     });
 });
