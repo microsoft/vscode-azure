@@ -8,6 +8,7 @@ Most active work is tracked in [GitHub issues](https://github.com/microsoft/vsco
 
 ### Functions Bicep Issues
 - No services are in azure.yaml which makes `azd deploy` unworkable. Need to add them, get the name, and set it in the wizard.
+- Need to install AZD and auth as needed (auth server?)
 
 ## Ideas
 - Deep link support? Deep links to tree items etc.
