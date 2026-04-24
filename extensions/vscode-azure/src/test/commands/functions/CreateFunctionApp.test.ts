@@ -10,9 +10,9 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import type { IAzdService } from '../../../azd/AzdService';
 import { TempProjectManager } from '../../../azd/wizard/TempProjectManager';
 import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
+import { createMockAzdService } from '../../azd/MockAzdService';
 
 describe('CreateFunctionApp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });
@@ -50,21 +50,14 @@ describe('CreateFunctionApp (unit)', () => {
 
         const mockFs = mockResult.fs;
         let azureYamlUri: vscode.Uri | undefined;
-        const initFn = mock.fn((cwd: vscode.Uri) => {
+        const azdExecutor = createMockAzdService();
+        azdExecutor.findAzureYaml.mock.mockImplementation(() => Promise.resolve(azureYamlUri));
+        azdExecutor.init.mock.mockImplementation((cwd: vscode.Uri) => {
             // Simulate `azd init` creating azure.yaml
             azureYamlUri = MockUri.file(`${cwd.fsPath}/azure.yaml`) as unknown as vscode.Uri;
             mockFs.addFile(azureYamlUri, 'name: my-app');
             return Promise.resolve();
         });
-        const envNewFn = mock.fn(() => Promise.resolve());
-        const azdExecutor: IAzdService = {
-            findAzureYaml: mock.fn(() => Promise.resolve(azureYamlUri)),
-            init: initFn,
-            envNew: envNewFn,
-            envUpdate: mock.fn(() => Promise.resolve()),
-            envList: mock.fn(() => Promise.resolve([])),
-            provision: mock.fn(() => Promise.resolve()),
-        };
 
         const cmd = new CreateFunctionApp(
             ctx,
@@ -76,7 +69,7 @@ describe('CreateFunctionApp (unit)', () => {
             azdExecutor,
         );
 
-        return { cmd, ctx, mockResult, fs: mockResult.fs, azdExecutor, initFn, envNewFn };
+        return { cmd, ctx, mockResult, fs: mockResult.fs, azdExecutor };
     }
 
     it('should be constructable with required dependencies', () => {
@@ -90,7 +83,7 @@ describe('CreateFunctionApp (unit)', () => {
     });
 
     it('should run the full wizard flow and generate bicep files', async () => {
-        const { cmd, mockResult, fs, initFn, envNewFn } = createCommand();
+        const { cmd, mockResult, fs, azdExecutor } = createCommand();
 
         respondToPrompts(mockResult, [
             // ChooseSubscriptionStep: pick the subscription
@@ -122,11 +115,11 @@ describe('CreateFunctionApp (unit)', () => {
         expect(params.parameters.hostingPlan.value).to.equal('FlexConsumption');
 
         // Verify azd init was called
-        expect(initFn.mock.callCount()).to.equal(1);
+        expect(azdExecutor.init.mock.callCount()).to.equal(1);
 
         // Verify azd env new was called with correct args
-        expect(envNewFn.mock.callCount()).to.equal(1);
-        const envNewArgs = envNewFn.mock.calls[0].arguments as unknown[];
+        expect(azdExecutor.envNew.mock.callCount()).to.equal(1);
+        const envNewArgs = azdExecutor.envNew.mock.calls[0].arguments;
         expect(envNewArgs[0]).to.equal('my-env');
         expect(envNewArgs[1]).to.equal('eastus');
         expect(envNewArgs[2]).to.equal('sub-1');
