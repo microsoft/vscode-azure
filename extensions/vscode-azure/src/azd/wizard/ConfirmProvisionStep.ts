@@ -7,13 +7,26 @@ import { type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vs
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
- * Asks the user whether to run `azd provision` now.
+ * Asks the user whether to run `azd provision` now, *only* in the
+ * Bootstrapped state of the `deploy` job (i.e. when an existing default azd
+ * environment was found by {@linkcode HydrateAzdInfoStep}).
  *
- * Only prompts in the Bootstrapped state of the `deploy` job
- * (`existingDefaultEnvName` is set). The other paths default
- * {@linkcode AzdWizardContext.provision provision} to `true` (seeded by the
- * command entry point) because the user already opted into a deploy-flavored
- * command and re-prompting would be noise.
+ * The {@linkcode shouldPrompt} gate is `!!existingDefaultEnvName`, not
+ * `provision === undefined`. The deploy command always seeds
+ * {@linkcode AzdWizardContext.provision provision} to `true` so the no-prompt
+ * paths (Fresh / Post-clone) actually provision; this step is the
+ * *interruption* point that catches the one risky case where running
+ * `azd provision` would re-touch an existing live deployment. If the user
+ * picks "No", the seeded `true` gets overwritten with `false` and
+ * {@linkcode AzdProvisionStep} skips.
+ *
+ * State summary:
+ * - Fresh / Post-clone: no existing env -> step skipped, seeded `true`
+ *   carries through, provision runs.
+ * - Bootstrapped + Yes: existing env -> step prompts, re-affirms `true`,
+ *   provision runs.
+ * - Bootstrapped + No: existing env -> step prompts, sets `false`,
+ *   provision skipped.
  */
 export class ConfirmProvisionStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
