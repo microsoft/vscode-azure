@@ -31,16 +31,15 @@ export interface IAzdService {
     /** Runs `azd env new` with the given name, location, and subscription. */
     envNew(name: string, location: string, subscriptionId: string, cwd: vscode.Uri): Promise<void>;
 
-    /**
-     * Updates an existing azd environment by selecting it as the default and
-     * setting `AZURE_LOCATION` / `AZURE_SUBSCRIPTION_ID`. Use this instead of
-     * {@linkcode IAzdService.envNew} when an environment with the same name
-     * already exists -- `envNew` would fail in that case.
-     */
-    envUpdate(name: string, location: string, subscriptionId: string, cwd: vscode.Uri): Promise<void>;
-
     /** Runs `azd env list --output json` and returns the parsed environment list. */
     envList(cwd: vscode.Uri): Promise<AzdEnvironment[]>;
+
+    /**
+     * Returns `true` when an environment with the given {@linkcode name}
+     * exists in {@linkcode cwd}. Implemented on top of {@linkcode IAzdService.envList envList};
+     * a non-zero exit (e.g. azd not installed) is treated as `false`.
+     */
+    envExists(name: string, cwd: vscode.Uri): Promise<boolean>;
 
     /**
      * Runs `azd provision` as a foreground VS Code task.
@@ -109,24 +108,6 @@ export class AzdService implements IAzdService {
         }
     }
 
-    public async envUpdate(name: string, location: string, subscriptionId: string, cwd: vscode.Uri): Promise<void> {
-        try {
-            await this.processExecutor.spawn({
-                execution: 'background',
-                command: 'azd',
-                args: composeArgs(
-                    withArg('env', 'set'),
-                    withNamedArg('--environment', name),
-                    withNamedArg('AZURE_LOCATION', location, { assignValue: true }),
-                    withNamedArg('AZURE_SUBSCRIPTION_ID', subscriptionId, { assignValue: true })
-                )(),
-                cwd,
-            });
-        } catch (e) {
-            throw this.wrapEnoent(e);
-        }
-    }
-
     public async envList(cwd: vscode.Uri): Promise<AzdEnvironment[]> {
         try {
             const result = await this.processExecutor.spawn<AzdEnvironment[]>({
@@ -142,6 +123,15 @@ export class AzdService implements IAzdService {
             return result.json;
         } catch (e) {
             throw this.wrapEnoent(e);
+        }
+    }
+
+    public async envExists(name: string, cwd: vscode.Uri): Promise<boolean> {
+        try {
+            const envs = await this.envList(cwd);
+            return envs.some(e => e.Name === name);
+        } catch {
+            return false;
         }
     }
 

@@ -115,24 +115,35 @@ describe('AzdService (unit)', () => {
         });
     });
 
-    describe('envUpdate', () => {
-        it('should spawn a single azd env set with --environment and AZURE_LOCATION / AZURE_SUBSCRIPTION_ID assignments', async () => {
-            const { service, spawnMock } = createService();
+    describe('envExists', () => {
+        it('should return true when an environment with the given name is in envList', async () => {
+            const envs = [{ Name: 'dev', IsDefault: true }, { Name: 'prod', IsDefault: false }];
+            const spawnFn = mock.fn(() => Promise.resolve({ json: envs }));
+            const { service } = createService(spawnFn as unknown as SpawnFn);
 
-            await service.envUpdate('dev', 'eastus', 'sub-1', MockUri.file('/project') as unknown as vscode.Uri);
+            const result = await service.envExists('prod', MockUri.file('/project') as unknown as vscode.Uri);
 
-            expect(spawnMock.mock.callCount()).to.equal(1);
-            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
-            expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal('azd');
-            expect(opts.cwd.path).to.equal('/project');
+            expect(result).to.be.true;
+        });
 
-            const values = argValues(opts.args);
-            expect(values).to.include.members(['env', 'set']);
-            expect(values).to.include('--environment');
-            expect(values).to.include('dev');
-            expect(values).to.include('AZURE_LOCATION=eastus');
-            expect(values).to.include('AZURE_SUBSCRIPTION_ID=sub-1');
+        it('should return false when no environment with the given name exists', async () => {
+            const envs = [{ Name: 'dev', IsDefault: true }];
+            const spawnFn = mock.fn(() => Promise.resolve({ json: envs }));
+            const { service } = createService(spawnFn as unknown as SpawnFn);
+
+            const result = await service.envExists('missing', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.be.false;
+        });
+
+        it('should return false when envList rejects (azd not installed)', async () => {
+            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
+            const spawnFn = mock.fn(() => Promise.reject(enoent));
+            const { service } = createService(spawnFn);
+
+            const result = await service.envExists('dev', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.be.false;
         });
     });
 

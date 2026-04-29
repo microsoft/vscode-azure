@@ -25,8 +25,8 @@ export function createMockAzdService(envListResult: AzdEnvironment[] = []): Mock
         findAzureYaml: mock.fn(() => Promise.resolve(undefined)),
         init: mock.fn(() => Promise.resolve()),
         envNew: mock.fn(() => Promise.resolve()),
-        envUpdate: mock.fn(() => Promise.resolve()),
         envList: mock.fn(() => Promise.resolve(envListResult)),
+        envExists: mock.fn((name: string) => Promise.resolve(envListResult.some(e => e.Name === name))),
         provision: mock.fn(() => Promise.resolve()),
     };
 }

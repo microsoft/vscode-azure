@@ -33,6 +33,13 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
             return false;
         }
 
+        // Trust the hydration flag when present (set by HydrateAzdInfoStep for
+        // the `deploy` job). The `createNew` job skips hydration, so fall
+        // through to a live check.
+        if (context.hasInfra === true) {
+            return false;
+        }
+
         const infraFolder = this.ctx.code.Uri.joinPath(context.iacFolder, InfraFolderName);
 
         for (const fileName of [MainBicepFileName, MainParametersFileName]) {

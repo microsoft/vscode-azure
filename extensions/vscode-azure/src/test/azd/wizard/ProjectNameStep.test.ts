@@ -7,54 +7,58 @@ import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
-import { EnvironmentNameStep } from '../../../azd/wizard/EnvironmentNameStep';
+import { ProjectNameStep } from '../../../azd/wizard/ProjectNameStep';
 
-describe('EnvironmentNameStep (unit)', () => {
+describe('ProjectNameStep (unit)', () => {
     describe('shouldPrompt', () => {
-        it('should return true when environmentName is not set', () => {
+        it('returns true when neither projectName nor environmentName is set', () => {
             const { ctx } = createMockCodeContext();
-            const step = new EnvironmentNameStep(ctx);
+            const step = new ProjectNameStep(ctx);
             expect(step.shouldPrompt({})).to.be.true;
         });
 
-        it('should return false when environmentName is already set', () => {
+        it('returns false when projectName is set', () => {
             const { ctx } = createMockCodeContext();
-            const step = new EnvironmentNameStep(ctx);
-            const context: Partial<AzdWizardContext> = { environmentName: 'dev' };
+            const step = new ProjectNameStep(ctx);
+            const context: Partial<AzdWizardContext> = { projectName: 'myapp' };
+            expect(step.shouldPrompt(context)).to.be.false;
+        });
+
+        it('returns false when environmentName is set (hydrated)', () => {
+            const { ctx } = createMockCodeContext();
+            const step = new ProjectNameStep(ctx);
+            const context: Partial<AzdWizardContext> = { environmentName: 'prod' };
             expect(step.shouldPrompt(context)).to.be.false;
         });
     });
 
     describe('prompt', () => {
-        it('should return the entered environment name', async () => {
+        it('derives projectName, environmentName, and azdServiceName from a single input', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
             respondToPrompts(mockResult, [
-                { input: 'my-env' },
+                { input: 'my-app' },
             ]);
 
-            const step = new EnvironmentNameStep(ctx);
+            const step = new ProjectNameStep(ctx);
             const result = await step.prompt();
 
-            expect(result.environmentName).to.equal('my-env');
+            expect(result.projectName).to.equal('my-app');
+            expect(result.environmentName).to.equal('my-app');
+            expect(result.azdServiceName).to.equal('my-app');
         });
     });
 
     describe('validation', () => {
-        // Helper: start the prompt and wait for the input box to appear
         async function startPromptAndGetInputBox(ctx: ReturnType<typeof createMockCodeContext>['ctx'], mock: ReturnType<typeof createMockCodeContext>['mock']) {
-            const step = new EnvironmentNameStep(ctx);
+            const step = new ProjectNameStep(ctx);
             const stepPromise = step.prompt();
-
-            // The step does async work (getWorkspaceFolder) before creating the input box.
-            // Yield until the input box appears.
             while (mock.inputBoxes.length === 0) {
                 await new Promise(resolve => { setTimeout(resolve, 0); });
             }
-
             return { stepPromise, ib: mock.inputBoxes[0] };
         }
 
-        it('should reject empty input', async () => {
+        it('rejects empty input', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
             const { stepPromise, ib } = await startPromptAndGetInputBox(ctx, mockResult);
 
@@ -62,17 +66,16 @@ describe('EnvironmentNameStep (unit)', () => {
             expect(ib.validationMessage).to.be.a('string');
             expect(ib.validationMessage).to.include('required');
 
-            // Accept a valid value to complete the promise
             ib.changeValue('valid');
             ib.accept();
             await stepPromise;
         });
 
-        it('should reject names with special characters', async () => {
+        it('rejects names with special characters', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
             const { stepPromise, ib } = await startPromptAndGetInputBox(ctx, mockResult);
 
-            ib.changeValue('my_env!');
+            ib.changeValue('my_app!');
             expect(ib.validationMessage).to.be.a('string');
             expect(ib.validationMessage).to.include('letters');
 
@@ -81,11 +84,11 @@ describe('EnvironmentNameStep (unit)', () => {
             await stepPromise;
         });
 
-        it('should accept alphanumeric names with hyphens', async () => {
+        it('accepts alphanumeric names with hyphens', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
             const { stepPromise, ib } = await startPromptAndGetInputBox(ctx, mockResult);
 
-            ib.changeValue('my-env-123');
+            ib.changeValue('my-app-123');
             expect(ib.validationMessage).to.be.undefined;
 
             ib.accept();
