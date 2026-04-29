@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -11,90 +12,53 @@ import { CreateAzdEnvStep } from '../../../azd/wizard/CreateAzdEnvStep';
 import { createMockAzdService } from '../MockAzdService';
 
 describe('CreateAzdEnvStep (unit)', () => {
+    const baseContext: Partial<AzdWizardContext> = {
+        iacFolder: MockUri.file('/project') as never,
+        environmentName: 'dev',
+        location: { name: 'eastus' },
+        subscription: makeSubscription({ subscriptionId: 'sub-1' }),
+    };
+
     describe('shouldExecute', () => {
-        it('should return true when all required fields are present', () => {
-            const azd = createMockAzdService();
-            const step = new CreateAzdEnvStep(azd);
-            const context: Partial<AzdWizardContext> = {
-                iacFolder: MockUri.file('/project') as never,
-                environmentName: 'dev',
-                location: { name: 'eastus' },
-                subscription: { subscriptionId: 'sub-1' } as never,
-            };
-
-            expect(step.shouldExecute(context)).to.be.true;
+        it('returns true when all required fields are present', () => {
+            const step = new CreateAzdEnvStep(createMockAzdService());
+            expect(step.shouldExecute(baseContext)).to.be.true;
         });
 
-        it('should return false when iacFolder is missing', () => {
-            const azd = createMockAzdService();
-            const step = new CreateAzdEnvStep(azd);
-            const context: Partial<AzdWizardContext> = {
-                environmentName: 'dev',
-                location: { name: 'eastus' },
-                subscription: { subscriptionId: 'sub-1' } as never,
-            };
-
-            expect(step.shouldExecute(context)).to.be.false;
+        it('returns false when iacFolder is missing', () => {
+            const step = new CreateAzdEnvStep(createMockAzdService());
+            expect(step.shouldExecute({ ...baseContext, iacFolder: undefined })).to.be.false;
         });
 
-        it('should return false when environmentName is missing', () => {
-            const azd = createMockAzdService();
-            const step = new CreateAzdEnvStep(azd);
-            const context: Partial<AzdWizardContext> = {
-                iacFolder: MockUri.file('/project') as never,
-                location: { name: 'eastus' },
-                subscription: { subscriptionId: 'sub-1' } as never,
-            };
-
-            expect(step.shouldExecute(context)).to.be.false;
+        it('returns false when environmentName is missing', () => {
+            const step = new CreateAzdEnvStep(createMockAzdService());
+            expect(step.shouldExecute({ ...baseContext, environmentName: undefined })).to.be.false;
         });
 
-        it('should return false when location is missing', () => {
-            const azd = createMockAzdService();
-            const step = new CreateAzdEnvStep(azd);
-            const context: Partial<AzdWizardContext> = {
-                iacFolder: MockUri.file('/project') as never,
-                environmentName: 'dev',
-                subscription: { subscriptionId: 'sub-1' } as never,
-            };
-
-            expect(step.shouldExecute(context)).to.be.false;
+        it('returns false when location is missing', () => {
+            const step = new CreateAzdEnvStep(createMockAzdService());
+            expect(step.shouldExecute({ ...baseContext, location: undefined })).to.be.false;
         });
 
-        it('should return false when subscription is missing', () => {
-            const azd = createMockAzdService();
-            const step = new CreateAzdEnvStep(azd);
-            const context: Partial<AzdWizardContext> = {
-                iacFolder: MockUri.file('/project') as never,
-                environmentName: 'dev',
-                location: { name: 'eastus' },
-            };
-
-            expect(step.shouldExecute(context)).to.be.false;
+        it('returns false when subscription is missing', () => {
+            const step = new CreateAzdEnvStep(createMockAzdService());
+            expect(step.shouldExecute({ ...baseContext, subscription: undefined })).to.be.false;
         });
 
-        it('should return false when all fields are missing', () => {
-            const azd = createMockAzdService();
-            const step = new CreateAzdEnvStep(azd);
-            expect(step.shouldExecute({})).to.be.false;
+        it('returns false when existingDefaultEnvName is set (Bootstrapped state)', () => {
+            const step = new CreateAzdEnvStep(createMockAzdService());
+            expect(step.shouldExecute({ ...baseContext, existingDefaultEnvName: 'dev' })).to.be.false;
         });
     });
 
     describe('execute', () => {
-        it('should call azd envNew with correct args', async () => {
+        it('calls azd envNew with correct args when env does not exist', async () => {
             const azd = createMockAzdService();
             const step = new CreateAzdEnvStep(azd);
-            const context: Partial<AzdWizardContext> = {
-                iacFolder: MockUri.file('/project') as never,
-                environmentName: 'dev',
-                location: { name: 'eastus' },
-                subscription: { subscriptionId: 'sub-1' } as never,
-            };
 
-            await step.execute(context);
+            await step.execute(baseContext);
 
             expect(azd.envNew.mock.callCount()).to.equal(1);
-            expect(azd.envUpdate.mock.callCount()).to.equal(0);
             const [name, location, subscriptionId, cwd] = azd.envNew.mock.calls[0].arguments;
             expect(name).to.equal('dev');
             expect(location).to.equal('eastus');
@@ -102,26 +66,13 @@ describe('CreateAzdEnvStep (unit)', () => {
             expect((cwd as MockUri).path).to.equal('/project');
         });
 
-        it('should call azd envUpdate (not envNew) when envAlreadyExists is true', async () => {
-            const azd = createMockAzdService();
+        it('skips envNew when an env with the same name already exists in iacFolder', async () => {
+            const azd = createMockAzdService([{ Name: 'dev', IsDefault: false }]);
             const step = new CreateAzdEnvStep(azd);
-            const context: Partial<AzdWizardContext> = {
-                iacFolder: MockUri.file('/project') as never,
-                environmentName: 'dev',
-                envAlreadyExists: true,
-                location: { name: 'westus' },
-                subscription: { subscriptionId: 'sub-2' } as never,
-            };
 
-            await step.execute(context);
+            await step.execute(baseContext);
 
             expect(azd.envNew.mock.callCount()).to.equal(0);
-            expect(azd.envUpdate.mock.callCount()).to.equal(1);
-            const [name, location, subscriptionId, cwd] = azd.envUpdate.mock.calls[0].arguments;
-            expect(name).to.equal('dev');
-            expect(location).to.equal('westus');
-            expect(subscriptionId).to.equal('sub-2');
-            expect((cwd as MockUri).path).to.equal('/project');
         });
     });
 });

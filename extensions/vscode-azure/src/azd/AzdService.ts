@@ -18,6 +18,24 @@ export interface AzdEnvironment {
     readonly IsDefault: boolean;
 }
 
+/**
+ * Project metadata returned by `azd show --output json`.
+ *
+ * Only the fields the wizard actually consumes are typed; the real
+ * payload is richer (resources, supporting infra, etc.).
+ */
+export interface AzdShowResult {
+    /** Project name from {@linkcode AzureYamlFileNames azure.yaml}. */
+    readonly name?: string;
+    /**
+     * Map of `azd-service-name` -> service descriptor as declared under
+     * `services:` in `azure.yaml`. An empty / missing object means no
+     * services are configured -- `azd deploy` will not have anything to
+     * target until the user runs `azd add`.
+     */
+    readonly services?: Readonly<Record<string, unknown>>;
+}
+
 export interface IAzdService {
     /**
      * Returns the URI of `azure.yaml` or `azure.yml` in the given
@@ -40,6 +58,21 @@ export interface IAzdService {
      * a non-zero exit (e.g. azd not installed) is treated as `false`.
      */
     envExists(name: string, cwd: vscode.Uri): Promise<boolean>;
+
+    /**
+     * Runs `azd env get-values --environment <name> --output json` and
+     * returns the parsed key/value map. Returns an empty object when the
+     * call fails (e.g. azd not installed, env missing) so callers can
+     * treat the result as best-effort.
+     */
+    envGetValues(name: string, cwd: vscode.Uri): Promise<Record<string, string>>;
+
+    /**
+     * Runs `azd show --output json` and returns the parsed project
+     * metadata, or `undefined` when the call fails (typically because
+     * there is no `azure.yaml` in {@linkcode cwd}).
+     */
+    show(cwd: vscode.Uri): Promise<AzdShowResult | undefined>;
 
     /**
      * Runs `azd provision` as a foreground VS Code task.
@@ -132,6 +165,44 @@ export class AzdService implements IAzdService {
             return envs.some(e => e.Name === name);
         } catch {
             return false;
+        }
+    }
+
+    public async envGetValues(name: string, cwd: vscode.Uri): Promise<Record<string, string>> {
+        try {
+            const result = await this.processExecutor.spawn<Record<string, string>>({
+                execution: 'background',
+                command: 'azd',
+                args: composeArgs(
+                    withArg('env', 'get-values'),
+                    withNamedArg('--environment', name),
+                    withJsonOutput(),
+                )(),
+                cwd,
+                parseJson: true,
+            });
+            return result.json;
+        } catch {
+            // azd not installed, env missing, or non-zero exit -- best effort
+            return {};
+        }
+    }
+
+    public async show(cwd: vscode.Uri): Promise<AzdShowResult | undefined> {
+        try {
+            const result = await this.processExecutor.spawn<AzdShowResult>({
+                execution: 'background',
+                command: 'azd',
+                args: composeArgs(
+                    withArg('show'),
+                    withJsonOutput(),
+                )(),
+                cwd,
+                parseJson: true,
+            });
+            return result.json;
+        } catch {
+            return undefined;
         }
     }
 

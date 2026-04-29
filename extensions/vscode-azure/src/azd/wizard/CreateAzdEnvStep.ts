@@ -7,14 +7,16 @@ import { ExecuteStep } from '@microsoft/vscode-azure-utils';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
-// TODO: future: Replace with AZD extension API when available
 /**
- * Creates a new azd environment (`azd env new`) in {@linkcode AzdWizardContext.iacFolder}
- * using the selected subscription, location, and environment name. If
- * {@linkcode AzdWizardContext.envAlreadyExists} is `true` (i.e.
- * {@linkcode HydrateAzdInfoStep} already found an environment with that name),
- * updates the existing environment's `AZURE_LOCATION` /
- * `AZURE_SUBSCRIPTION_ID` instead so `azd env new` doesn't fail.
+ * Creates a new azd environment (`azd env new`) in
+ * {@linkcode AzdWizardContext.iacFolder iacFolder} using the selected
+ * subscription, location, and environment name.
+ *
+ * Skipped when {@linkcode AzdWizardContext.existingDefaultEnvName existingDefaultEnvName}
+ * is set (Bootstrapped state) and re-validates against the actual `iacFolder`
+ * at execute time -- if an environment with the chosen name already exists
+ * there, this step is a no-op (no `envUpdate` fallback; the wizard never
+ * mutates an existing user environment).
  */
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
@@ -24,7 +26,13 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public override shouldExecute(context: Readonly<TContext>): boolean {
-        return !!context.iacFolder && !!context.environmentName && !!context.location?.name && !!context.subscription;
+        return (
+            !!context.iacFolder
+            && !!context.environmentName
+            && !!context.location?.name
+            && !!context.subscription
+            && !context.existingDefaultEnvName
+        );
     }
 
     public async execute(context: TContext): Promise<void> {
@@ -35,10 +43,14 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
         const cwd = context.iacFolder!;
         /* eslint-enable @typescript-eslint/no-non-null-assertion */
 
-        if (context.envAlreadyExists) {
-            await this.azd.envUpdate(name, location, subscriptionId, cwd);
-        } else {
-            await this.azd.envNew(name, location, subscriptionId, cwd);
+        // `shouldExecute` already gates on
+        // !existingDefaultEnvName, but the workspace could have changed
+        // between hydration and now. Skip if an env with this name exists
+        // rather than failing on `azd env new`.
+        if (await this.azd.envExists(name, cwd)) {
+            return;
         }
+
+        await this.azd.envNew(name, location, subscriptionId, cwd);
     }
 }

@@ -6,96 +6,177 @@
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
+import type { AzdShowResult } from '../../../azd/AzdService';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { HydrateAzdInfoStep } from '../../../azd/wizard/HydrateAzdInfoStep';
 import { createMockAzdService } from '../MockAzdService';
 
 describe('HydrateAzdInfoStep (unit)', () => {
+    function makeStep(opts: {
+        readonly show?: AzdShowResult | undefined;
+        readonly hasInfra?: boolean;
+        readonly envs?: { Name: string; IsDefault: boolean }[];
+        readonly envListThrows?: boolean;
+        readonly envValues?: Record<string, string>;
+    } = {}) {
+        const folderUri = MockUri.file('/workspace');
+        const { vscode: code, fs } = createMockVsCode();
+
+        if (opts.hasInfra) {
+            fs.addFile(MockUri.file('/workspace/infra/main.bicep'));
+        }
+
+        const azd = createMockAzdService(opts.envs ?? []);
+        if (opts.show !== undefined) {
+            azd.show.mock.mockImplementation(() => Promise.resolve(opts.show));
+        }
+        if (opts.envListThrows) {
+            azd.envList.mock.mockImplementation(() => Promise.reject(new Error('azd not found')));
+        }
+        if (opts.envValues) {
+            azd.envGetValues.mock.mockImplementation(() => Promise.resolve(opts.envValues));
+        }
+
+        const step = new HydrateAzdInfoStep<AzdWizardContext>(code, azd);
+        const context: Partial<AzdWizardContext> = {
+            job: 'deploy',
+            iacFolder: folderUri as never,
+        };
+        return { step, context, azd };
+    }
+
+    describe('shouldPrompt', () => {
+        it('returns false when job is not deploy', () => {
+            const { step } = makeStep();
+            expect(step.shouldPrompt({ job: 'createNew', iacFolder: MockUri.file('/x') as never })).to.be.false;
+        });
+
+        it('returns false when iacFolder is missing', () => {
+            const { step } = makeStep();
+            expect(step.shouldPrompt({ job: 'deploy' })).to.be.false;
+        });
+
+        it('returns true when job is deploy and iacFolder is set', () => {
+            const { step, context } = makeStep();
+            expect(step.shouldPrompt(context)).to.be.true;
+        });
+    });
 
     describe('prompt', () => {
-        it('should return empty when no workspace folder exists', async () => {
-            const { vscode: code } = createMockVsCode();
+        it('classifies fresh state (nothing detected)', async () => {
+            const { step, context } = makeStep();
+            const result = await step.prompt(context);
 
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzdService());
-            const result = await step.prompt();
-
-            expect(result).to.deep.equal({});
+            expect(result.hasAzureYaml).to.be.undefined;
+            expect(result.hasServices).to.be.undefined;
+            expect(result.hasInfra).to.be.false;
+            expect(result.existingDefaultEnvName).to.be.undefined;
+            expect(result.environmentName).to.be.undefined;
         });
 
-        it('should set iacFolder when azure.yaml exists', async () => {
-            const folderUri = MockUri.file('/workspace');
-            const { vscode: code, workspaceFolders } = createMockVsCode();
-            workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
+        it('detects azure.yaml without services entry via azd show', async () => {
+            const { step, context } = makeStep({ show: { name: 'my-app' } });
+            const result = await step.prompt(context);
 
-            const azd = createMockAzdService();
-            azd.findAzureYaml.mock.mockImplementation(
-                () => Promise.resolve(MockUri.file('/workspace/azure.yaml')),
-            );
-
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, azd);
-            const result = await step.prompt();
-
-            expect((result.iacFolder as MockUri).path).to.equal('/workspace');
+            expect(result.hasAzureYaml).to.be.true;
+            expect(result.hasServices).to.be.false;
         });
 
-        it('should not set iacFolder when no azure.yaml exists', async () => {
-            const folderUri = MockUri.file('/workspace');
-            const { vscode: code, workspaceFolders } = createMockVsCode();
-            workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
+        it('detects azure.yaml with services entry via azd show', async () => {
+            const { step, context } = makeStep({
+                show: { name: 'my-app', services: { myfunc: { project: { path: '.', language: 'node' } } } },
+            });
+            const result = await step.prompt(context);
 
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzdService());
-            const result = await step.prompt();
-
-            expect(result.iacFolder).to.be.undefined;
+            expect(result.hasAzureYaml).to.be.true;
+            expect(result.hasServices).to.be.true;
         });
 
-        it('should set environmentName from the default azd environment', async () => {
-            const folderUri = MockUri.file('/workspace');
-            const { vscode: code, workspaceFolders } = createMockVsCode();
-            workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
+        it('detects existing infra/main.bicep', async () => {
+            const { step, context } = makeStep({ hasInfra: true });
+            const result = await step.prompt(context);
 
-            const envList = [
-                { Name: 'staging', IsDefault: false },
-                { Name: 'production', IsDefault: true },
-            ];
+            expect(result.hasInfra).to.be.true;
+        });
 
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzdService(envList));
-            const result = await step.prompt();
+        it('seeds environmentName from default azd environment', async () => {
+            const { step, context } = makeStep({
+                envs: [{ Name: 'staging', IsDefault: false }, { Name: 'production', IsDefault: true }],
+            });
+            const result = await step.prompt(context);
 
+            expect(result.existingDefaultEnvName).to.equal('production');
             expect(result.environmentName).to.equal('production');
-            expect(result.envAlreadyExists).to.be.true;
         });
 
-        it('should not set envAlreadyExists when no default env exists', async () => {
-            const folderUri = MockUri.file('/workspace');
-            const { vscode: code, workspaceFolders } = createMockVsCode();
-            workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
+        it('does not set environmentName when there is no default env', async () => {
+            const { step, context } = makeStep({
+                envs: [{ Name: 'staging', IsDefault: false }],
+            });
+            const result = await step.prompt(context);
 
-            const envList = [
-                { Name: 'staging', IsDefault: false },
-            ];
-
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, createMockAzdService(envList));
-            const result = await step.prompt();
-
+            expect(result.existingDefaultEnvName).to.be.undefined;
             expect(result.environmentName).to.be.undefined;
-            expect(result.envAlreadyExists).to.be.undefined;
         });
 
-        it('should not set environmentName when azd fails', async () => {
-            const folderUri = MockUri.file('/workspace');
-            const { vscode: code, workspaceFolders } = createMockVsCode();
-            workspaceFolders.push({ uri: folderUri, name: 'workspace', index: 0 } as never);
+        it('swallows envList failures (azd not installed)', async () => {
+            const { step, context } = makeStep({ envListThrows: true });
+            const result = await step.prompt(context);
 
-            const failingAzd = createMockAzdService();
-            failingAzd.envList.mock.mockImplementation(
-                () => Promise.reject(new Error('azd not found')),
-            );
+            expect(result.existingDefaultEnvName).to.be.undefined;
+        });
 
-            const step = new HydrateAzdInfoStep<AzdWizardContext>(code, failingAzd);
-            const result = await step.prompt();
+        it('hydrates subscription/location from env get-values', async () => {
+            const { step, context, azd } = makeStep({
+                envs: [{ Name: 'production', IsDefault: true }],
+                envValues: {
+                    /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
+                    AZURE_ENV_NAME: 'production',
+                    AZURE_LOCATION: 'eastus',
+                    AZURE_SUBSCRIPTION_ID: 'sub-1',
+                    /* eslint-enable @typescript-eslint/naming-convention */
+                },
+            });
+            const result = await step.prompt(context);
 
-            expect(result.environmentName).to.be.undefined;
+            expect(result.hydratedSubscriptionId).to.equal('sub-1');
+            expect(result.hydratedLocationName).to.equal('eastus');
+
+            // env values should be queried for the *default* env name.
+            expect(azd.envGetValues.mock.callCount()).to.equal(1);
+            expect(azd.envGetValues.mock.calls[0].arguments[0]).to.equal('production');
+        });
+
+        it('partially hydrates when only one of sub/location is present', async () => {
+            const { step, context } = makeStep({
+                envs: [{ Name: 'production', IsDefault: true }],
+                // eslint-disable-next-line @typescript-eslint/naming-convention -- azd env key
+                envValues: { AZURE_SUBSCRIPTION_ID: 'sub-1' },
+            });
+            const result = await step.prompt(context);
+
+            expect(result.hydratedSubscriptionId).to.equal('sub-1');
+            expect(result.hydratedLocationName).to.be.undefined;
+        });
+
+        it('leaves hydrated fields unset when env get-values returns nothing', async () => {
+            const { step, context } = makeStep({
+                envs: [{ Name: 'production', IsDefault: true }],
+                envValues: {},
+            });
+            const result = await step.prompt(context);
+
+            expect(result.hydratedSubscriptionId).to.be.undefined;
+            expect(result.hydratedLocationName).to.be.undefined;
+        });
+
+        it('does not call env get-values when no default env exists', async () => {
+            const { step, context, azd } = makeStep({
+                envs: [{ Name: 'staging', IsDefault: false }],
+            });
+            await step.prompt(context);
+
+            expect(azd.envGetValues.mock.callCount()).to.equal(0);
         });
     });
 });

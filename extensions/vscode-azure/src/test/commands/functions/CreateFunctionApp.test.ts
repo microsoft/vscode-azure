@@ -18,22 +18,20 @@ describe('CreateFunctionApp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });
     const subKey = AzureNodeId.from(sub).toString();
 
-    function createCommand() {
+    function createCommand(options: { workspaceFolder?: boolean } = {}) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const output = new MockOutputChannel('test');
 
-        // Provide workspace folder for HydrateAzdInfoStep + OfferSaveStep
-        mockResult.workspaceFolders.push({
-            uri: MockUri.file('/workspace'),
-            name: 'workspace',
-            index: 0,
-        } as never);
+        if (options.workspaceFolder !== false) {
+            mockResult.workspaceFolders.push({
+                uri: MockUri.file('/workspace'),
+                name: 'workspace',
+                index: 0,
+            } as never);
+        }
 
         const dataTree = createMockDataItemTree([sub]);
-
-        const viewItemTree = createMockViewItemTree({
-            '': [subKey],
-        });
+        const viewItemTree = createMockViewItemTree({ '': [subKey] });
 
         const subscriptionClientProvider: ISubscriptionClientProvider = (() =>
             Promise.resolve({
@@ -49,13 +47,17 @@ describe('CreateFunctionApp (unit)', () => {
         const tempManager = new TempProjectManager(ctx);
 
         const mockFs = mockResult.fs;
-        let azureYamlUri: vscode.Uri | undefined;
-        const azdExecutor = createMockAzdService();
-        azdExecutor.findAzureYaml.mock.mockImplementation(() => Promise.resolve(azureYamlUri));
-        azdExecutor.init.mock.mockImplementation((cwd: vscode.Uri) => {
-            // Simulate `azd init` creating azure.yaml
-            azureYamlUri = MockUri.file(`${cwd.fsPath}/azure.yaml`) as unknown as vscode.Uri;
-            mockFs.addFile(azureYamlUri, 'name: my-app');
+        let yamlInTemp: vscode.Uri | undefined;
+        const azd = createMockAzdService();
+        azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
+            const candidate = MockUri.file(`${dir.fsPath}/azure.yaml`);
+            return mockFs.files.has(candidate.path)
+                ? Promise.resolve(candidate as unknown as vscode.Uri)
+                : Promise.resolve(yamlInTemp);
+        });
+        azd.init.mock.mockImplementation((cwd: vscode.Uri) => {
+            yamlInTemp = MockUri.file(`${cwd.fsPath}/azure.yaml`) as unknown as vscode.Uri;
+            mockFs.addFile(yamlInTemp, 'name: my-app');
             return Promise.resolve();
         });
 
@@ -66,10 +68,10 @@ describe('CreateFunctionApp (unit)', () => {
             viewItemTree as never,
             subscriptionClientProvider,
             tempManager,
-            azdExecutor,
+            azd,
         );
 
-        return { cmd, ctx, mockResult, fs: mockResult.fs, azdExecutor };
+        return { cmd, ctx, mockResult, fs: mockResult.fs, azd };
     }
 
     it('should be constructable with required dependencies', () => {
@@ -77,51 +79,95 @@ describe('CreateFunctionApp (unit)', () => {
         expect(cmd).to.be.instanceOf(CreateFunctionApp);
     });
 
-    it('should have an execute method', () => {
-        const { cmd } = createCommand();
-        expect(typeof cmd.execute).to.equal('function');
-    });
-
-    it('should run the full wizard flow and generate bicep files', async () => {
-        const { cmd, mockResult, fs, azdExecutor } = createCommand();
+    it('should run the createNew flow into the temp directory', async () => {
+        const { cmd, mockResult, fs, azd } = createCommand({ workspaceFolder: false });
 
         respondToPrompts(mockResult, [
-            // ChooseSubscriptionStep: pick the subscription
-            { pick: 'sub-1' },
-            // ChooseLocationStep: pick a location
-            { pick: 'East US' },
-            // EnvironmentNameStep: enter environment name
-            { input: 'my-env' },
-            // PickRuntimeStep: pick a runtime
-            { pick: 'Node.js' },
-            // PickHostingPlanStep: pick a hosting plan
-            { pick: 'Flex Consumption' },
-            // OfferSaveStep: pick Deploy Only (uses temp dir, avoids workspace folder prompt)
-            { pick: 'Deploy Only' },
+            { pick: 'sub-1' },                  // ChooseSubscriptionStep
+            { pick: 'East US' },                // ChooseLocationStep
+            { input: 'my-app' },                // ProjectNameStep
+            { pick: 'Node.js' },                // PickRuntimeStep
+            { pick: 'Flex Consumption' },       // PickHostingPlanStep
         ]);
 
-        await cmd.execute();
+        await cmd.execute('createNew');
 
-        // Verify GenerateBicepStep wrote the infra files
         expect(fs.createDirectory.mock.callCount()).to.be.greaterThanOrEqual(1);
-        expect(fs.writeFile.mock.callCount()).to.be.greaterThanOrEqual(1);
         expect(fs.copy.mock.callCount()).to.be.greaterThanOrEqual(1);
+        expect(azd.init.mock.callCount()).to.equal(1);
 
-        // Verify the parameters file content
-        const writeArgs = fs.writeFile.mock.calls[0].arguments;
-        const paramsContent = Buffer.from(writeArgs[1]).toString();
-        const params = JSON.parse(paramsContent);
-        expect(params.parameters.runtimeVersion.value).to.equal('Node|20');
-        expect(params.parameters.hostingPlan.value).to.equal('FlexConsumption');
+        expect(azd.envNew.mock.callCount()).to.equal(1);
+        const [name, location, subscriptionId] = azd.envNew.mock.calls[0].arguments;
+        expect(name).to.equal('my-app');
+        expect(location).to.equal('eastus');
+        expect(subscriptionId).to.equal('sub-1');
 
-        // Verify azd init was called
-        expect(azdExecutor.init.mock.callCount()).to.equal(1);
+        expect(azd.provision.mock.callCount()).to.equal(1);
+    });
 
-        // Verify azd env new was called with correct args
-        expect(azdExecutor.envNew.mock.callCount()).to.equal(1);
-        const envNewArgs = azdExecutor.envNew.mock.calls[0].arguments;
-        expect(envNewArgs[0]).to.equal('my-env');
-        expect(envNewArgs[1]).to.equal('eastus');
-        expect(envNewArgs[2]).to.equal('sub-1');
+    it('should run the deploy job Fresh flow against the workspace folder', async () => {
+        const { cmd, mockResult, fs, azd } = createCommand();
+
+        respondToPrompts(mockResult, [
+            { pick: 'sub-1' },
+            { pick: 'East US' },
+            { input: 'my-app' },
+            { pick: 'Node.js' },
+            { pick: 'Flex Consumption' },
+        ]);
+
+        await cmd.execute('deploy');
+
+        expect(azd.init.mock.callCount()).to.equal(1);
+        expect(fs.copy.mock.callCount()).to.be.greaterThanOrEqual(1);
+        expect(azd.envNew.mock.callCount()).to.equal(1);
+        expect(azd.provision.mock.callCount()).to.equal(1);
+    });
+
+    it('should skip yaml/bicep/env-new in the deploy job Bootstrapped flow', async () => {
+        const { cmd, mockResult, fs, azd } = createCommand();
+
+        const workspaceYaml = MockUri.file('/workspace/azure.yaml') as unknown as vscode.Uri;
+        mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
+        mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(workspaceYaml));
+        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
+        azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
+
+        respondToPrompts(mockResult, [
+            // ProjectNameStep skipped (environmentName hydrated)
+            // PickRuntime / PickHostingPlan skipped (hasInfra)
+            { pick: 'sub-1' },                          // ChooseSubscriptionStep
+            { pick: 'East US' },                        // ChooseLocationStep
+            { pick: 'Yes' },                            // ConfirmProvisionStep
+        ]);
+
+        await cmd.execute('deploy');
+
+        expect(azd.init.mock.callCount()).to.equal(0);
+        expect(fs.copy.mock.callCount()).to.equal(0);
+        expect(azd.envNew.mock.callCount()).to.equal(0);
+        expect(azd.provision.mock.callCount()).to.equal(1);
+    });
+
+    it('should skip provisioning when user picks No on ConfirmProvisionStep', async () => {
+        const { cmd, mockResult, azd } = createCommand();
+
+        const workspaceYaml = MockUri.file('/workspace/azure.yaml') as unknown as vscode.Uri;
+        mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
+        mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(workspaceYaml));
+        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
+        azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
+
+        respondToPrompts(mockResult, [
+            { pick: 'sub-1' },
+            { pick: 'East US' },
+            { pick: 'No' },
+        ]);
+
+        await cmd.execute('deploy');
+
+        expect(azd.provision.mock.callCount()).to.equal(0);
     });
 });

@@ -3,16 +3,29 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
-import { getWorkspaceFolder, PromptStep } from '@microsoft/vscode-azure-utils';
+import { AsWritable, PromptStep, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import { type IAzdService } from '../AzdService';
+import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
+import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
 
 /**
- * Silently hydrates the wizard context with existing azd project
- * information found in the workspace root (azure.yaml and
- * `azd env list`). Never actually prompts the user.
+ * Silently classifies the existing azd state in {@linkcode AzdWizardContext.iacFolder}
+ * (only when {@linkcode AzdWizardContext.job job} is `deploy`) so subsequent
+ * prompt and execute steps can skip work that is already done. Never prompts
+ * the user.
+ *
+ * Detected signals (all best-effort -- failures leave the flag unset):
+ * - `hasAzureYaml` / `hasServices` -- derived from `azd show --output json`.
+ * - `hasInfra` -- presence of `infra/main.bicep`.
+ * - `existingDefaultEnvName` -- name of the default azd environment, if any.
+ * - `hydratedSubscriptionId` / `hydratedLocationName` -- `AZURE_SUBSCRIPTION_ID`
+ *   and `AZURE_LOCATION` from the existing default env, used by the
+ *   {@linkcode HydratableChooseSubscriptionStep} /
+ *   {@linkcode HydratableChooseLocationStep} to skip their pickers.
+ *
+ * For the `createNew` job this step is a no-op: the temp `iacFolder` is
+ * always empty, so all flags would be `false` anyway.
  */
 export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
@@ -22,38 +35,63 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         super();
     }
 
-    public async prompt(): Promise<Partial<TContext>> {
-        const workspaceFolder = await getWorkspaceFolder(this.code);
-        if (!workspaceFolder) {
-            return {};
+    public override shouldPrompt(context: Readonly<TContext>): boolean {
+        return context.job === 'deploy' && !!context.iacFolder;
+    }
+
+    public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
+        const iacFolder = context.iacFolder!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+        const result = {} as AsWritable<Partial<TContext>>;
+
+        // `azd show` is the source of truth for project + service info. It
+        // fails (returns undefined) when there is no `azure.yaml`, which is
+        // exactly the signal we want for `hasAzureYaml`.
+        const show = await this.azd.show(iacFolder);
+        if (show) {
+            result.hasAzureYaml = true;
+            result.hasServices = !!show.services && Object.keys(show.services).length > 0;
         }
 
-        const result: Record<string, unknown> = {};
+        result.hasInfra = await this.hasInfraTemplate(iacFolder);
 
-        // Check for azure.yaml / azure.yml to detect an existing azd project
-        if (await this.azd.findAzureYaml(workspaceFolder.uri)) {
-            result.iacFolder = workspaceFolder.uri;
-        }
-
-        // Find the default azd environment via CLI
-        const envName = await this.findDefaultEnvironment(workspaceFolder.uri);
+        const envName = await this.findDefaultEnvironment(iacFolder);
         if (envName) {
+            result.existingDefaultEnvName = envName;
             result.environmentName = envName;
-            result.envAlreadyExists = true;
+
+            // Pull seeded values from the existing env so we can skip the
+            // sub/location pickers. Best-effort: missing values just mean we
+            // fall back to prompting.
+            const values = await this.azd.envGetValues(envName, iacFolder);
+            if (values.AZURE_SUBSCRIPTION_ID) {
+                result.hydratedSubscriptionId = values.AZURE_SUBSCRIPTION_ID;
+            }
+            if (values.AZURE_LOCATION) {
+                result.hydratedLocationName = values.AZURE_LOCATION;
+            }
         }
 
-        return result as Partial<TContext>;
+        return result;
+    }
+
+    private async hasInfraTemplate(iacFolder: vscode.Uri): Promise<boolean> {
+        try {
+            await this.code.workspace.fs.stat(this.code.Uri.joinPath(iacFolder, InfraFolderName, MainBicepFileName));
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     private async findDefaultEnvironment(cwd: vscode.Uri): Promise<string | undefined> {
         try {
-            // TODO: future: Replace with AZD extension API when available
             const envs = await this.azd.envList(cwd);
             const defaultEnv = envs.find(e => e.IsDefault);
             return defaultEnv?.Name;
         } catch {
             // azd not installed or no environments -- ignore
+            return undefined;
         }
-        return undefined;
     }
 }

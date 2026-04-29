@@ -6,8 +6,8 @@
 import { ExecuteStep, type ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
-const InfraFolderName = 'infra';
-const MainBicepFileName = 'main.bicep';
+export const InfraFolderName = 'infra';
+export const MainBicepFileName = 'main.bicep';
 const MainParametersFileName = 'main.parameters.json';
 
 /**

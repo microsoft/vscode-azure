@@ -45,4 +45,14 @@ export interface AzdWizardContext {
     readonly hasServices?: boolean;
     /** Name of the existing default azd environment in {@linkcode iacFolder}, if any. */
     readonly existingDefaultEnvName?: string;
+    /**
+     * `AZURE_SUBSCRIPTION_ID` from the existing default environment, if any.
+     * Used by {@linkcode HydratableChooseSubscriptionStep} to skip the picker.
+     */
+    readonly hydratedSubscriptionId?: string;
+    /**
+     * `AZURE_LOCATION` from the existing default environment, if any.
+     * Used by {@linkcode HydratableChooseLocationStep} to skip the picker.
+     */
+    readonly hydratedLocationName?: string;
 }
