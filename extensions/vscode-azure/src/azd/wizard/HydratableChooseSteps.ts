@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ChooseLocationStep, ChooseSubscriptionContext, ChooseSubscriptionStep } from '@microsoft/vscode-azure-azutils';
+import { ChooseLocationStep, ChooseSubscriptionStep, type ChooseSubscriptionContext } from '@microsoft/vscode-azure-azutils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**

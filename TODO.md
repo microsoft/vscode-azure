@@ -5,10 +5,7 @@ Most active work is tracked in [GitHub issues](https://github.com/microsoft/vsco
 ## Issues
 - Figure out why the token expired and wasn't refreshing
 - Should the activity view use a stable/deterministic ID, like we have in `AzureNodeId`?
-
-### Functions Bicep Issues
-- No services are in azure.yaml which makes `azd deploy` unworkable. Need to add them, get the name, and set it in the wizard.
-- Need to install AZD and auth as needed (auth server?)
+- Need to install and auth AZD (auth server?)
 
 ## Ideas
 - Deep link support? Deep links to tree items etc.

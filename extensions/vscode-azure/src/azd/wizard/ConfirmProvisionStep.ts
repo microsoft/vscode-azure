@@ -34,12 +34,12 @@ export class ConfirmProvisionStep<TContext extends AzdWizardContext> extends Pro
         const items = [
             {
                 label: this.ctx.code.l10n.t('Yes'),
-                description: this.ctx.code.l10n.t('Run azd provision now'),
+                description: this.ctx.code.l10n.t('Provision now'),
                 data: true,
             },
             {
                 label: this.ctx.code.l10n.t('No'),
-                description: this.ctx.code.l10n.t('Skip provisioning -- you can run azd provision later'),
+                description: this.ctx.code.l10n.t('Skip provisioning'),
                 data: false,
             },
         ];
