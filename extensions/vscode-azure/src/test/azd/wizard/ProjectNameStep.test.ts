@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
@@ -40,18 +40,54 @@ describe('ProjectNameStep (unit)', () => {
             ]);
 
             const step = new ProjectNameStep(ctx);
-            const result = await step.prompt();
+            const result = await step.prompt({});
 
             expect(result.projectName).to.equal('my-app');
             expect(result.environmentName).to.equal('my-app');
             expect(result.azdServiceName).to.equal('my-app');
+        });
+
+        it('uses iacFolder basename as the input fallback (no folder picker)', async () => {
+            const { ctx, mock: mockResult } = createMockCodeContext();
+            respondToPrompts(mockResult, ['acceptDefault']);
+
+            const step = new ProjectNameStep(ctx);
+            const result = await step.prompt({ iacFolder: MockUri.file('/tmp/my-cool-project') as never });
+
+            expect(result.projectName).to.equal('my-cool-project');
+        });
+
+        it('falls back to the first workspace folder name without prompting', async () => {
+            const { ctx, mock: mockResult } = createMockCodeContext();
+            mockResult.workspaceFolders.push({ uri: MockUri.file('/repo/my-app'), name: 'my-app', index: 0 } as never);
+            respondToPrompts(mockResult, ['acceptDefault']);
+
+            const step = new ProjectNameStep(ctx);
+            const result = await step.prompt({});
+
+            expect(result.projectName).to.equal('my-app');
+        });
+
+        it('does not show a workspace-folder picker even with multiple workspace folders', async () => {
+            const { ctx, mock: mockResult } = createMockCodeContext();
+            mockResult.workspaceFolders.push(
+                { uri: MockUri.file('/a'), name: 'a', index: 0 } as never,
+                { uri: MockUri.file('/b'), name: 'b', index: 1 } as never,
+            );
+            respondToPrompts(mockResult, [{ input: 'chosen-name' }]);
+
+            const step = new ProjectNameStep(ctx);
+            await step.prompt({});
+
+            // Only the project-name input box should appear -- no folder quick pick.
+            expect(mockResult.quickPicks.length).to.equal(0);
         });
     });
 
     describe('validation', () => {
         async function startPromptAndGetInputBox(ctx: ReturnType<typeof createMockCodeContext>['ctx'], mock: ReturnType<typeof createMockCodeContext>['mock']) {
             const step = new ProjectNameStep(ctx);
-            const stepPromise = step.prompt();
+            const stepPromise = step.prompt({});
             while (mock.inputBoxes.length === 0) {
                 await new Promise(resolve => { setTimeout(resolve, 0); });
             }

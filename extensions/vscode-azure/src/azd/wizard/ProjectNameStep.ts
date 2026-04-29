@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, getWorkspaceFolder, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import * as path from 'path';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 const NameRegex = /^[a-zA-Z0-9-]+$/;
@@ -30,8 +31,16 @@ export class ProjectNameStep<TContext extends AzdWizardContext> extends PromptSt
         return !context.projectName && !context.environmentName;
     }
 
-    public async prompt(): Promise<Partial<TContext>> {
-        const fallbackName = sanitize((await getWorkspaceFolder(this.ctx.code))?.name) ?? 'myapp';
+    public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
+        // Derive the fallback name without prompting. Prefer the iacFolder
+        // basename (set by SelectIacFolderStep for `deploy`, or by the temp
+        // dir for `createNew`); fall back to the first workspace folder name
+        // (which is silent in single-root, picker-free), then to a generic
+        // default. We deliberately don't call getWorkspaceFolder() because in
+        // multi-root workspaces it would show an unrelated picker.
+        const iacBasename = context.iacFolder ? path.basename(context.iacFolder.path) : undefined;
+        const workspaceFolderName = this.ctx.code.workspace.workspaceFolders?.[0]?.name;
+        const fallbackName = sanitize(iacBasename) ?? sanitize(workspaceFolderName) ?? 'myapp';
 
         const name = await showSmartInputBox(this.ctx, {
             prompt: this.ctx.code.l10n.t('Enter a name for your project (used for the environment, service, and resource defaults)'),

@@ -131,14 +131,23 @@ describe('CreateFunctionApp (unit)', () => {
         mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
         mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(workspaceYaml));
+        azd.show.mock.mockImplementation(() => Promise.resolve({
+            name: 'my-app',
+            services: { api: { project: { path: './', language: 'node' } } },
+        }));
         azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
         azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
+        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
+            /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
+            AZURE_LOCATION: 'eastus',
+            AZURE_SUBSCRIPTION_ID: 'sub-1',
+            /* eslint-enable @typescript-eslint/naming-convention */
+        }));
 
         respondToPrompts(mockResult, [
             // ProjectNameStep skipped (environmentName hydrated)
+            // ChooseSubscription / ChooseLocation skipped (hydrated values)
             // PickRuntime / PickHostingPlan skipped (hasInfra)
-            { pick: 'sub-1' },                          // ChooseSubscriptionStep
-            { pick: 'East US' },                        // ChooseLocationStep
             { pick: 'Yes' },                            // ConfirmProvisionStep
         ]);
 
@@ -157,12 +166,20 @@ describe('CreateFunctionApp (unit)', () => {
         mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
         mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(workspaceYaml));
+        azd.show.mock.mockImplementation(() => Promise.resolve({
+            name: 'my-app',
+            services: { api: { project: { path: './', language: 'node' } } },
+        }));
         azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
         azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
+        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
+            /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
+            AZURE_LOCATION: 'eastus',
+            AZURE_SUBSCRIPTION_ID: 'sub-1',
+            /* eslint-enable @typescript-eslint/naming-convention */
+        }));
 
         respondToPrompts(mockResult, [
-            { pick: 'sub-1' },
-            { pick: 'East US' },
             { pick: 'No' },
         ]);
 

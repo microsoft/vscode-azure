@@ -4,9 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { getWorkspaceFolder, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import type * as vscode from 'vscode';
 import { IAzdService } from '../../azd/AzdService';
 import { AzdProvisionStep } from '../../azd/wizard/AzdProvisionStep';
 import type { AzdJob } from '../../azd/wizard/AzdWizardContext';
@@ -17,6 +16,7 @@ import { GenerateBicepStep } from '../../azd/wizard/GenerateBicepStep';
 import { HydratableChooseLocationStep, HydratableChooseSubscriptionStep } from '../../azd/wizard/HydratableChooseSteps';
 import { HydrateAzdInfoStep } from '../../azd/wizard/HydrateAzdInfoStep';
 import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
+import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import { IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
@@ -47,28 +47,14 @@ export class CreateFunctionApp implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(job: AzdJob): Promise<void> {
-        let iacFolder: vscode.Uri;
-        if (job === 'createNew') {
-            iacFolder = await this.tempManager.createProjectDir();
-        } else {
-            const workspaceFolder = await getWorkspaceFolder(
-                this.ctx.code,
-                this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
-            );
-            if (!workspaceFolder) {
-                throw new Error(this.ctx.code.l10n.t('A workspace folder is required to deploy a project.'));
-            }
-            iacFolder = workspaceFolder.uri;
-        }
-
         const wizard = new Wizard<CreateFunctionAppContext>(
             this.output,
             {
                 job,
-                iacFolder,
                 provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
             },
             [
+                new SelectIacFolderStep(this.ctx, this.tempManager),
                 new HydrateAzdInfoStep(this.ctx.code, this.azd),
                 new HydratableChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
                 new HydratableChooseLocationStep(this.ctx, this.subscriptionClientProvider, this.output),

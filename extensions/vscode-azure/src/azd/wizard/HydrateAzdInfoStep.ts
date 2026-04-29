@@ -5,7 +5,7 @@
 
 import { PromptStep, type AsWritable, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import type { IAzdService } from '../AzdService';
+import type { AzdEnvironment, IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
 
@@ -18,11 +18,20 @@ import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
  * Detected signals (all best-effort -- failures leave the flag unset):
  * - `hasAzureYaml` / `hasServices` -- derived from `azd show --output json`.
  * - `hasInfra` -- presence of `infra/main.bicep`.
- * - `existingDefaultEnvName` -- name of the default azd environment, if any.
- * - `hydratedSubscriptionId` / `hydratedLocationName` -- `AZURE_SUBSCRIPTION_ID`
- *   and `AZURE_LOCATION` from the existing default env, used by the
+ * - `existingDefaultEnvName` -- name of the default azd environment, *only*
+ *   when that env is fully configured (has both `AZURE_SUBSCRIPTION_ID` and
+ *   `AZURE_LOCATION`). Treated as Bootstrapped state downstream.
+ * - `hydratedSubscriptionId` / `hydratedLocationName` -- pulled from the
+ *   fully-configured env's values; used by the
  *   {@linkcode HydratableChooseSubscriptionStep} /
  *   {@linkcode HydratableChooseLocationStep} to skip their pickers.
+ *
+ * If a default env exists but is *partially* configured (missing one or both
+ * azure values), this step intentionally treats the wizard as Post-clone:
+ * it leaves `existingDefaultEnvName` unset (so {@linkcode CreateAzdEnvStep}
+ * runs) and seeds {@linkcode AzdWizardContext.environmentName environmentName}
+ * with a non-colliding suffixed name (e.g. `dev-2`). The user's broken env
+ * is left untouched -- the wizard never mutates an existing user env.
  *
  * For the `createNew` job this step is a no-op: the temp `iacFolder` is
  * always empty, so all flags would be `false` anyway.
@@ -64,20 +73,26 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
         result.hasInfra = await this.hasInfraTemplate(iacFolder);
 
-        const envName = await this.findDefaultEnvironment(iacFolder);
-        if (envName) {
-            result.existingDefaultEnvName = envName;
-            result.environmentName = envName;
+        const envs = await this.tryListEnvironments(iacFolder);
+        const defaultEnv = envs.find(e => e.IsDefault)?.Name;
+        if (defaultEnv) {
+            const values = await this.azd.envGetValues(defaultEnv, iacFolder);
+            const sub = values.AZURE_SUBSCRIPTION_ID;
+            const loc = values.AZURE_LOCATION;
 
-            // Pull seeded values from the existing env so we can skip the
-            // sub/location pickers. Best-effort: missing values just mean we
-            // fall back to prompting.
-            const values = await this.azd.envGetValues(envName, iacFolder);
-            if (values.AZURE_SUBSCRIPTION_ID) {
-                result.hydratedSubscriptionId = values.AZURE_SUBSCRIPTION_ID;
-            }
-            if (values.AZURE_LOCATION) {
-                result.hydratedLocationName = values.AZURE_LOCATION;
+            if (sub && loc) {
+                // Fully Bootstrapped: reuse the existing env in place.
+                result.existingDefaultEnvName = defaultEnv;
+                result.environmentName = defaultEnv;
+                result.hydratedSubscriptionId = sub;
+                result.hydratedLocationName = loc;
+            } else {
+                // Partial Bootstrapped: the existing default env is missing
+                // one or both azure values, so it can't be provisioned. Treat
+                // as Post-clone -- leave existingDefaultEnvName unset (so
+                // CreateAzdEnvStep runs) and seed environmentName with a
+                // non-colliding suffix so `azd env new` won't fail.
+                result.environmentName = nextAvailableSuffix(defaultEnv, new Set(envs.map(e => e.Name)));
             }
         }
 
@@ -93,14 +108,27 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         }
     }
 
-    private async findDefaultEnvironment(cwd: vscode.Uri): Promise<string | undefined> {
+    private async tryListEnvironments(cwd: vscode.Uri): Promise<AzdEnvironment[]> {
         try {
-            const envs = await this.azd.envList(cwd);
-            const defaultEnv = envs.find(e => e.IsDefault);
-            return defaultEnv?.Name;
+            return await this.azd.envList(cwd);
         } catch {
             // azd not installed or no environments -- ignore
-            return undefined;
+            return [];
         }
     }
+}
+
+/**
+ * Returns the smallest `${base}-N` (N >= 2) name that isn't in
+ * {@linkcode taken}. Falls back to a base-36 random suffix if the search
+ * range is exhausted.
+ */
+function nextAvailableSuffix(base: string, taken: ReadonlySet<string>): string {
+    for (let i = 2; i < 1000; i++) {
+        const candidate = `${base}-${i}`;
+        if (!taken.has(candidate)) {
+            return candidate;
+        }
+    }
+    return `${base}-${Math.random().toString(36).slice(2, 8)}`;
 }
