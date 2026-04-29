@@ -56,15 +56,16 @@ describe('SelectIacFolderStep (unit)', () => {
             expect((result.iacFolder as MockUri).path).to.equal('/repo');
         });
 
-        it('deploy: throws CancellationError when no workspace folder is open', async () => {
+        it('deploy: throws an explanatory error when no workspace folder is open', async () => {
             const { ctx } = createMockCodeContext();
             const step = new SelectIacFolderStep(ctx, new TempProjectManager(ctx));
 
             try {
                 await step.prompt({ job: 'deploy' });
-                expect.fail('Expected CancellationError');
+                expect.fail('Expected error');
             } catch (e) {
-                expect(CancellationError.test(e)).to.be.true;
+                expect(CancellationError.test(e)).to.be.false;
+                expect((e as Error).message).to.include('Open a folder');
             }
         });
     });

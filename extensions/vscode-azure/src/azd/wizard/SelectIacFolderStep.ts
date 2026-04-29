@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, getWorkspaceFolder, type ICodeContext, PromptStep } from '@microsoft/vscode-azure-utils';
+import { getWorkspaceFolder, type ICodeContext, PromptStep } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from './AzdWizardContext';
 import type { TempProjectManager } from './TempProjectManager';
 
@@ -14,8 +14,10 @@ import type { TempProjectManager } from './TempProjectManager';
  * - `createNew`: allocates a temp directory via {@linkcode TempProjectManager}.
  *   The workspace is never touched.
  * - `deploy`: prompts the user to pick a workspace folder (silent in
- *   single-root workspaces, shows a picker in multi-root). Throws
- *   {@linkcode CancellationError} if the user dismisses.
+ *   single-root workspaces, shows a picker in multi-root). Dismissing the
+ *   picker bubbles up as a {@linkcode CancellationError} from
+ *   {@linkcode getWorkspaceFolder}; an empty workspace throws an explanatory
+ *   error since the deploy job has nothing to write IaC into.
  *
  * Skipped when {@linkcode AzdWizardContext.iacFolder iacFolder} is already
  * set (e.g. by a future caller that pre-seeds it).
@@ -43,9 +45,10 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
             this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
         );
         if (!folder) {
-            // The user dismissed the folder picker -- treat as cancellation
-            // to abort the wizard cleanly.
-            throw new CancellationError();
+            // getWorkspaceFolder returns undefined only when no workspace
+            // folders are open. Cancellation (multi-root dismiss) throws
+            // CancellationError on its own.
+            throw new Error(this.ctx.code.l10n.t('Open a folder in VS Code to deploy a project as a Function App.'));
         }
         return { iacFolder: folder.uri } as Partial<TContext>;
     }
