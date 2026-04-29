@@ -29,8 +29,8 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
         return (
             !!context.iacFolder
             && !!context.environmentName
-            && !!context.location?.name
-            && !!context.subscription
+            && !!(context.hydratedLocationName ?? context.location?.name)
+            && !!(context.hydratedSubscriptionId ?? context.subscription?.subscriptionId)
             && !context.existingDefaultEnvName
         );
     }
@@ -38,8 +38,8 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
     public async execute(context: TContext): Promise<void> {
         /* eslint-disable @typescript-eslint/no-non-null-assertion */
         const name = context.environmentName!;
-        const location = context.location!.name!;
-        const subscriptionId = context.subscription!.subscriptionId;
+        const location = context.hydratedLocationName ?? context.location!.name!;
+        const subscriptionId = context.hydratedSubscriptionId ?? context.subscription!.subscriptionId;
         const cwd = context.iacFolder!;
         /* eslint-enable @typescript-eslint/no-non-null-assertion */
 

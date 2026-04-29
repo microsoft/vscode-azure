@@ -38,7 +38,7 @@ export class ProjectNameStep<TContext extends AzdWizardContext> extends PromptSt
         // (which is silent in single-root, picker-free), then to a generic
         // default. We deliberately don't call getWorkspaceFolder() because in
         // multi-root workspaces it would show an unrelated picker.
-        const iacBasename = context.iacFolder ? path.basename(context.iacFolder.path) : undefined;
+        const iacBasename = context.iacFolder ? path.basename(context.iacFolder.fsPath) : undefined;
         const workspaceFolderName = this.ctx.code.workspace.workspaceFolders?.[0]?.name;
         const fallbackName = sanitize(iacBasename) ?? sanitize(workspaceFolderName) ?? 'myapp';
 
