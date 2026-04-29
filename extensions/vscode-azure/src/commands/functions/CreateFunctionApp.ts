@@ -6,6 +6,7 @@
 import { ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { getWorkspaceFolder, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import type * as vscode from 'vscode';
 import { IAzdService } from '../../azd/AzdService';
 import { AzdProvisionStep } from '../../azd/wizard/AzdProvisionStep';
 import type { AzdJob } from '../../azd/wizard/AzdWizardContext';
@@ -46,45 +47,27 @@ export class CreateFunctionApp implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(job: AzdJob): Promise<void> {
+        let iacFolder: vscode.Uri;
         if (job === 'createNew') {
-            await this.runCreateNew();
+            iacFolder = await this.tempManager.createProjectDir();
         } else {
-            await this.runDeploy();
-        }
-    }
-
-    private async runCreateNew(): Promise<void> {
-        const iacFolder = await this.tempManager.createProjectDir();
-        await this.runWizard({
-            job: 'createNew',
-            iacFolder,
-            // createNew always provisions, no need to ask.
-            provision: true,
-        });
-    }
-
-    private async runDeploy(): Promise<void> {
-        const folder = await getWorkspaceFolder(
-            this.ctx.code,
-            this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
-        );
-        if (!folder) {
-            throw new Error(this.ctx.code.l10n.t('A workspace folder is required to deploy a project.'));
+            const workspaceFolder = await getWorkspaceFolder(
+                this.ctx.code,
+                this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
+            );
+            if (!workspaceFolder) {
+                throw new Error(this.ctx.code.l10n.t('A workspace folder is required to deploy a project.'));
+            }
+            iacFolder = workspaceFolder.uri;
         }
 
-        await this.runWizard({
-            job: 'deploy',
-            iacFolder: folder.uri,
-            // Default to provisioning. ConfirmProvisionStep overrides this in
-            // the Bootstrapped state if the user picks "No".
-            provision: true,
-        });
-    }
-
-    private async runWizard(seed: Partial<CreateFunctionAppContext>): Promise<void> {
         const wizard = new Wizard<CreateFunctionAppContext>(
             this.output,
-            seed,
+            {
+                job,
+                iacFolder,
+                provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
+            },
             [
                 new HydrateAzdInfoStep(this.ctx.code, this.azd),
                 new HydratableChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
