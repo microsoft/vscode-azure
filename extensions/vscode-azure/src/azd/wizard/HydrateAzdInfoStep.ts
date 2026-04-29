@@ -51,6 +51,15 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         if (show) {
             result.hasAzureYaml = true;
             result.hasServices = !!show.services && Object.keys(show.services).length > 0;
+
+            if (!result.hasServices) {
+                // Surface a non-blocking warning. Provisioning will still
+                // succeed, but `azd deploy` won't be able to target the new
+                // resource until the user adds a `services:` entry.
+                void this.code.window.showWarningMessage(this.code.l10n.t(
+                    'azure.yaml has no `services` entry. `azd deploy` and `azd up` will not be able to target this resource until you add add a service (e.g. by running `azd add`).',
+                ));
+            }
         }
 
         result.hasInfra = await this.hasInfraTemplate(iacFolder);

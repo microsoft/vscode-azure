@@ -6,10 +6,16 @@
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
+import { mock } from 'node:test';
 import type { AzdShowResult } from '../../../azd/AzdService';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { HydrateAzdInfoStep } from '../../../azd/wizard/HydrateAzdInfoStep';
 import { createMockAzdService } from '../MockAzdService';
+
+/** Helper: the mock window's `showWarningMessage` is a `mock.fn()` but is typed as `vscode.window.showWarningMessage`. */
+function asMockFn(fn: unknown): ReturnType<typeof mock.fn> {
+    return fn as ReturnType<typeof mock.fn>;
+}
 
 describe('HydrateAzdInfoStep (unit)', () => {
     function makeStep(opts: {
@@ -20,7 +26,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
         readonly envValues?: Record<string, string>;
     } = {}) {
         const folderUri = MockUri.file('/workspace');
-        const { vscode: code, fs } = createMockVsCode();
+        const { vscode: code, fs, window } = createMockVsCode();
 
         if (opts.hasInfra) {
             fs.addFile(MockUri.file('/workspace/infra/main.bicep'));
@@ -42,7 +48,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
             job: 'deploy',
             iacFolder: folderUri as never,
         };
-        return { step, context, azd };
+        return { step, context, azd, window };
     }
 
     describe('shouldPrompt', () => {
@@ -75,21 +81,36 @@ describe('HydrateAzdInfoStep (unit)', () => {
         });
 
         it('detects azure.yaml without services entry via azd show', async () => {
-            const { step, context } = makeStep({ show: { name: 'my-app' } });
+            const { step, context, window } = makeStep({ show: { name: 'my-app' } });
             const result = await step.prompt(context);
 
             expect(result.hasAzureYaml).to.be.true;
             expect(result.hasServices).to.be.false;
+
+            // Surfaces a non-blocking warning toast.
+            const showWarning = asMockFn(window.showWarningMessage);
+            expect(showWarning.mock.callCount()).to.equal(1);
+            expect(showWarning.mock.calls[0].arguments[0]).to.include('services');
         });
 
         it('detects azure.yaml with services entry via azd show', async () => {
-            const { step, context } = makeStep({
+            const { step, context, window } = makeStep({
                 show: { name: 'my-app', services: { myfunc: { project: { path: '.', language: 'node' } } } },
             });
             const result = await step.prompt(context);
 
             expect(result.hasAzureYaml).to.be.true;
             expect(result.hasServices).to.be.true;
+
+            // No warning when services are present.
+            expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
+        });
+
+        it('does not warn when there is no azure.yaml at all', async () => {
+            const { step, context, window } = makeStep();
+            await step.prompt(context);
+
+            expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
         });
 
         it('detects existing infra/main.bicep', async () => {
