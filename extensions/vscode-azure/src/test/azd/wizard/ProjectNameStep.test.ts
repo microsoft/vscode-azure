@@ -11,17 +11,10 @@ import { ProjectNameStep } from '../../../azd/wizard/ProjectNameStep';
 
 describe('ProjectNameStep (unit)', () => {
     describe('shouldPrompt', () => {
-        it('returns true when neither projectName nor environmentName is set', () => {
+        it('returns true when environmentName is not set', () => {
             const { ctx } = createMockCodeContext();
             const step = new ProjectNameStep(ctx);
             expect(step.shouldPrompt({})).to.be.true;
-        });
-
-        it('returns false when projectName is set', () => {
-            const { ctx } = createMockCodeContext();
-            const step = new ProjectNameStep(ctx);
-            const context: Partial<AzdWizardContext> = { projectName: 'myapp' };
-            expect(step.shouldPrompt(context)).to.be.false;
         });
 
         it('returns false when environmentName is set (hydrated)', () => {
@@ -33,7 +26,7 @@ describe('ProjectNameStep (unit)', () => {
     });
 
     describe('prompt', () => {
-        it('derives projectName, environmentName, and azdServiceName from a single input', async () => {
+        it('derives environmentName and azdServiceName from a single input', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
             respondToPrompts(mockResult, [
                 { input: 'my-app' },
@@ -42,9 +35,21 @@ describe('ProjectNameStep (unit)', () => {
             const step = new ProjectNameStep(ctx);
             const result = await step.prompt({});
 
-            expect(result.projectName).to.equal('my-app');
             expect(result.environmentName).to.equal('my-app');
             expect(result.azdServiceName).to.equal('my-app');
+        });
+
+        it('preserves azdServiceName when already set by hydration', async () => {
+            const { ctx, mock: mockResult } = createMockCodeContext();
+            respondToPrompts(mockResult, [
+                { input: 'my-app' },
+            ]);
+
+            const step = new ProjectNameStep(ctx);
+            const result = await step.prompt({ azdServiceName: 'existing-svc' });
+
+            expect(result.environmentName).to.equal('my-app');
+            expect(result.azdServiceName).to.be.undefined;
         });
 
         it('uses iacFolder basename as the input fallback (no folder picker)', async () => {
@@ -54,7 +59,7 @@ describe('ProjectNameStep (unit)', () => {
             const step = new ProjectNameStep(ctx);
             const result = await step.prompt({ iacFolder: MockUri.file('/tmp/my-cool-project') as never });
 
-            expect(result.projectName).to.equal('my-cool-project');
+            expect(result.environmentName).to.equal('my-cool-project');
         });
 
         it('falls back to the first workspace folder name without prompting', async () => {
@@ -65,7 +70,7 @@ describe('ProjectNameStep (unit)', () => {
             const step = new ProjectNameStep(ctx);
             const result = await step.prompt({});
 
-            expect(result.projectName).to.equal('my-app');
+            expect(result.environmentName).to.equal('my-app');
         });
 
         it('does not show a workspace-folder picker even with multiple workspace folders', async () => {

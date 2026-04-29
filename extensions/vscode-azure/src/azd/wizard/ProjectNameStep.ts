@@ -3,17 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import {
+    PromptStep, showSmartInputBox,
+    type AsWritable, type ICodeContext
+} from '@microsoft/vscode-azure-utils';
 import * as path from 'path';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 const NameRegex = /^[a-zA-Z0-9-]+$/;
 
 /**
- * Prompts for a single project name and derives downstream defaults.
+ * Prompts for a project name and derives downstream defaults.
  *
- * Sets {@linkcode AzdWizardContext.projectName projectName},
- * {@linkcode AzdWizardContext.environmentName environmentName}, and
+ * Sets {@linkcode AzdWizardContext.environmentName environmentName} and
  * {@linkcode AzdWizardContext.azdServiceName azdServiceName} from one user
  * input. Skipped entirely when {@linkcode AzdWizardContext.environmentName environmentName}
  * is already populated -- typically because
@@ -28,7 +30,7 @@ export class ProjectNameStep<TContext extends AzdWizardContext> extends PromptSt
     }
 
     public override shouldPrompt(context: Readonly<TContext>): boolean {
-        return !context.projectName && !context.environmentName;
+        return !context.environmentName;
     }
 
     public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
@@ -56,11 +58,13 @@ export class ProjectNameStep<TContext extends AzdWizardContext> extends PromptSt
             },
         });
 
-        return {
-            projectName: name,
-            environmentName: name,
-            azdServiceName: name,
-        } as Partial<TContext>;
+        const result = { environmentName: name } as AsWritable<Partial<TContext>>;
+
+        if (!context.azdServiceName) {
+            result.azdServiceName = name;
+        }
+
+        return result;
     }
 }
 

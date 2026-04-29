@@ -59,9 +59,12 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
         const show = await this.azd.show(iacFolder);
         if (show) {
             result.hasAzureYaml = true;
-            result.hasServices = !!show.services && Object.keys(show.services).length > 0;
+            const serviceNames = show.services ? Object.keys(show.services) : [];
+            result.hasServices = serviceNames.length > 0;
 
-            if (!result.hasServices) {
+            if (serviceNames.length > 0) {
+                result.azdServiceName = serviceNames[0];
+            } else {
                 // Surface a non-blocking warning. Provisioning will still
                 // succeed, but `azd deploy` won't be able to target the new
                 // resource until the user adds a `services:` entry.

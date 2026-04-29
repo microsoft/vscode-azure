@@ -33,8 +33,6 @@ export interface AzdWizardContext {
     readonly provision?: boolean;
     /** Selected job-to-be-done; set by the command entry point before the wizard runs. */
     readonly job?: AzdJob;
-    /** Project-level name used to derive {@linkcode environmentName}, {@linkcode azdServiceName}, and resource defaults. */
-    readonly projectName?: string;
 
     // ---- Hydration flags (set by HydrateAzdInfoStep, deploy job only) ----
     /** `true` when `azure.yaml` (or `azure.yml`) is present in {@linkcode iacFolder}. */

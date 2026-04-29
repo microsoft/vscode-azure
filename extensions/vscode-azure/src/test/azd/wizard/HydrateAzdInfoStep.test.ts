@@ -75,6 +75,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
 
             expect(result.hasAzureYaml).to.be.undefined;
             expect(result.hasServices).to.be.undefined;
+            expect(result.azdServiceName).to.be.undefined;
             expect(result.hasInfra).to.be.false;
             expect(result.existingDefaultEnvName).to.be.undefined;
             expect(result.environmentName).to.be.undefined;
@@ -86,6 +87,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
 
             expect(result.hasAzureYaml).to.be.true;
             expect(result.hasServices).to.be.false;
+            expect(result.azdServiceName).to.be.undefined;
 
             // Surfaces a non-blocking warning toast.
             const showWarning = asMockFn(window.showWarningMessage);
@@ -101,6 +103,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
 
             expect(result.hasAzureYaml).to.be.true;
             expect(result.hasServices).to.be.true;
+            expect(result.azdServiceName).to.equal('myfunc');
 
             // No warning when services are present.
             expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
