@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AsWritable, PromptStep, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { PromptStep, type AsWritable, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
@@ -57,7 +57,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
                 // succeed, but `azd deploy` won't be able to target the new
                 // resource until the user adds a `services:` entry.
                 void this.code.window.showWarningMessage(this.code.l10n.t(
-                    'azure.yaml has no `services` entry. `azd deploy` and `azd up` will not be able to target this resource until you add add a service (e.g. by running `azd add`).',
+                    'azure.yaml has no `services` entry. `azd deploy` and `azd up` will not be able to target this resource until you add a service (e.g. by running `azd add`).',
                 ));
             }
         }
