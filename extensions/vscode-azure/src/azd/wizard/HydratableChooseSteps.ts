@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ChooseLocationStep, ChooseSubscriptionStep, type ChooseSubscriptionContext } from '@microsoft/vscode-azure-azutils';
+import { ChooseLocationStep, ChooseSubscriptionStep, type ChooseLocationContext, type ChooseSubscriptionContext } from '@microsoft/vscode-azure-azutils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -29,7 +29,7 @@ export class HydratableChooseSubscriptionStep<TContext extends AzdWizardContext 
  * {@linkcode AzdWizardContext.hydratedLocationName hydratedLocationName}
  * is set (or a location has already been chosen).
  */
-export class HydratableChooseLocationStep<TContext extends AzdWizardContext> extends ChooseLocationStep<TContext> {
+export class HydratableChooseLocationStep<TContext extends AzdWizardContext & ChooseLocationContext> extends ChooseLocationStep<TContext> {
     public override shouldPrompt(context: Readonly<TContext>): boolean {
         return !context.hydratedLocationName && !context.location;
     }
