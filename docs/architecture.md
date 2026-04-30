@@ -50,6 +50,7 @@ The VS Code extension that wires everything together:
 
 - **Activation**: Container setup, command and tree registration
 - **Commands**: `Hello`, `OpenInPortal`, `RefreshResourcesView`, `LoadMore`, `DisableAcrAdminUser`, `TrackArmDeployment`, `ClearActivities`
+- **Resource creation wizards**: `CreateFunctionApp` — azd-backed wizard for creating and deploying Azure resources. See [Resource Creation](resource-creation.md).
 - **Tree providers**:
   - Resources: `GenericAzureDataProvider`/`ViewProvider`, `AcrDataProvider`/`ViewProvider`
   - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`

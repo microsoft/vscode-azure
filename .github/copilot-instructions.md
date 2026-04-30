@@ -7,6 +7,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * `docs/commands.md` -- ManagedCommand pattern, registration, context values, prefixArgs
 * `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers
 * `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
+* `docs/resource-creation.md` -- AzdJob, wizard step sequence, scenario matrix, hydration, adding new resource types
 * `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, coverage
 * `docs/resource-models.md` -- AzureNode union, GenericResource, AzureNodeId URI scheme
 * `docs/telemetry.md` -- IActionContext, ActionExecutor, telemetry suppression
