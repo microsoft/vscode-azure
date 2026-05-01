@@ -6,7 +6,6 @@
 import { VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
 import { IOutputChannel, IVsCode, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
-import * as forge from 'node-forge';
 import { generateKeyPair as cryptoGenerateKeyPair, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer, type Server } from 'node:https';
@@ -265,11 +264,15 @@ function listen(server: Server): Promise<number> {
  *   plus the base64-encoded DER cert (for `AZD_AUTH_CERT`).
  */
 async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: string; certDerBase64: string }> {
-    const { publicKey: publicKeyPem, privateKey: privateKeyPem } = await promisify(cryptoGenerateKeyPair)('rsa', {
-        modulusLength: 2048,
-        publicKeyEncoding: { type: 'spki', format: 'pem' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    });
+    // In parallel, generate an RSA key pair and import `node-forge` for cert creation
+    const [{ publicKey: publicKeyPem, privateKey: privateKeyPem }, forge] = await Promise.all([
+        promisify(cryptoGenerateKeyPair)('rsa', {
+            modulusLength: 2048,
+            publicKeyEncoding: { type: 'spki', format: 'pem' },
+            privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+        }),
+        import('node-forge'),
+    ]);
 
     const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
     const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
