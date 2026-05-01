@@ -35,6 +35,7 @@ import {
 import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
+import { AzdAuthServer, IAzdAuthServer } from './azd/AzdAuthServer';
 import { AzdService, IAzdService } from './azd/AzdService';
 import { TempProjectManager } from './azd/wizard/TempProjectManager';
 import { registerCommands } from './commands/registerCommands';
@@ -127,6 +128,8 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);

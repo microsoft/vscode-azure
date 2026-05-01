@@ -9,6 +9,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import type { IAzdAuthServer } from '../../azd/AzdAuthServer';
 import { AzdService } from '../../azd/AzdService';
 
 interface SpawnOpts {
@@ -32,7 +33,8 @@ function createService(spawnFn?: SpawnFn) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
     const processExecutor = { spawn: spawnMock } as unknown as IProcessExecutor;
-    const service = new AzdService(mockResult.vscode, processExecutor);
+    const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
+    const service = new AzdService(mockResult.vscode, processExecutor, authServer);
     return { service, spawnMock: spawnMock as ReturnType<typeof mock.fn>, fs: mockResult.fs };
 }
 

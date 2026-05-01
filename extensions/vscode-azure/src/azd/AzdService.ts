@@ -7,6 +7,7 @@ import { IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { composeArgs, withArg, withFlagArg, withNamedArg, type CommandLineArgs } from '@microsoft/vscode-processutils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
+import { IAzdAuthServer } from './AzdAuthServer';
 
 export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdService');
 
@@ -52,6 +53,7 @@ export class AzdService implements IAzdService {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IProcessExecutor) private readonly processExecutor: IProcessExecutor,
+        @inject(IAzdAuthServer) private readonly authServer: IAzdAuthServer,
     ) { }
 
     public async findAzureYaml(directory: vscode.Uri): Promise<vscode.Uri | undefined> {
@@ -125,6 +127,8 @@ export class AzdService implements IAzdService {
             throw new Error(this.code.l10n.t('Could not find azure.yaml or azure.yml in the project directory.'));
         }
 
+        const authEnv = await this.authServer.getEnv();
+
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
@@ -133,6 +137,7 @@ export class AzdService implements IAzdService {
                     withArg('provision'),
                 )(),
                 cwd,
+                env: authEnv,
                 taskName: 'azd provision',
                 source: 'azd',
                 alwaysRunNew: true,
