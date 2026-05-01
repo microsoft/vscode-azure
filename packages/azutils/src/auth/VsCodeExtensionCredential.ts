@@ -61,7 +61,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
      * authentication API. Returns `null` when no session is available.
      */
     public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
-        const scopesArray = Array.isArray(scopes) ? scopes : [scopes];
+        const scopesArray = Array.isArray(scopes) ? [...scopes] : [scopes];
 
         let provider: string;
         if (!this.options.environment || this.options.environment.name === DefaultEnvironment.name) {

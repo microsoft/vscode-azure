@@ -148,25 +148,31 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
                 return;
             }
 
-            let parsed: { scopes?: string[]; tenantId?: string };
+            let parsed: Record<string, unknown>;
             try {
-                parsed = JSON.parse(body) as { scopes?: string[]; tenantId?: string };
+                parsed = JSON.parse(body) as Record<string, unknown>;
             } catch {
                 sendError(res, 400, 'bad_request', this.code.l10n.t('Invalid JSON body'));
                 return;
             }
 
             const scopes = parsed.scopes;
-            if (!scopes || !Array.isArray(scopes) || scopes.length === 0) {
+            if (!Array.isArray(scopes) || scopes.length === 0 || scopes.some(s => typeof s !== 'string' || s.length === 0)) {
                 sendError(res, 400, 'bad_request', this.code.l10n.t('Missing or empty scopes'));
                 return;
             }
 
-            // Acquire token via VS Code
-            this.output.debug(`[azdAuth] token request scopes=${JSON.stringify(scopes)} tenant=${parsed.tenantId ?? '<default>'}`);
+            const tenantId = parsed.tenantId;
+            if (tenantId !== undefined && typeof tenantId !== 'string') {
+                sendError(res, 400, 'bad_request', this.code.l10n.t('Invalid tenant ID'));
+                return;
+            }
 
-            const token = await credential.getToken(scopes, {
-                tenantId: parsed.tenantId,
+            // Acquire token via VS Code
+            this.output.debug(`[azdAuth] token request scopes=${JSON.stringify(scopes)} tenant=${tenantId ?? '<default>'}`);
+
+            const token = await credential.getToken(scopes as string[], {
+                tenantId,
             });
 
             if (!token) {
@@ -176,7 +182,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
 
             const expiresOn = new Date(token.expiresOnTimestamp).toISOString();
 
-            this.output.debug(`[azdAuth] token acquired scopes=${JSON.stringify(scopes)} tenant=${parsed.tenantId ?? '<default>'} expiresOn=${expiresOn}`);
+            this.output.debug(`[azdAuth] token acquired scopes=${JSON.stringify(scopes)} tenant=${tenantId ?? '<default>'} expiresOn=${expiresOn}`);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
