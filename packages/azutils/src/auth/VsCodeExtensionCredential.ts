@@ -70,7 +70,14 @@ export class VsCodeExtensionCredential implements TokenCredential {
         }
 
         this.options.output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} scopes=${JSON.stringify(scopesArray)}`);
-        const session = await this.options.authentication.getSession(provider, scopesArray, this.options);
+        // We have to build a new options object or else VSCode throws about not having access to the "DevDeviceId" proposed API
+        const sessionOptions: vscode.AuthenticationGetSessionOptions = {
+            silent: this.options.silent,
+            createIfNone: this.options.createIfNone,
+            clearSessionPreference: this.options.clearSessionPreference,
+            forceNewSession: this.options.forceNewSession,
+        };
+        const session = await this.options.authentication.getSession(provider, scopesArray, sessionOptions);
 
         if (!session) {
             return null;

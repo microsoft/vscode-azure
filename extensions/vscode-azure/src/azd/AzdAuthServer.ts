@@ -242,7 +242,10 @@ function generateSelfSignedCert(): { certPem: string; keyPem: string; certDerBas
     const cert = forge.pki.createCertificate();
 
     cert.publicKey = keys.publicKey;
-    cert.serialNumber = randomBytes(16).toString('hex');
+    // Ensure the high bit is clear so the serial is a positive ASN.1 integer
+    const serialBytes = randomBytes(16);
+    serialBytes[0] &= 0x7f;
+    cert.serialNumber = serialBytes.toString('hex');
 
     const now = new Date();
     cert.validity.notBefore = now;
