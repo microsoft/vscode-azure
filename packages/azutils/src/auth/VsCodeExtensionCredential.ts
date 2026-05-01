@@ -11,7 +11,7 @@ import type * as vscode from 'vscode';
 /**
  * Options for constructing a {@linkcode VsCodeExtensionCredential}.
  */
-export interface VsCodeExtensionCredentialOptions extends vscode.AuthenticationGetSessionOptions {
+export interface VsCodeExtensionCredentialOptions {
     /**
      * (Required) The namespace the credential will use to access VS Code APIs. Pass in
      * `vscode.authentication` for easiest use.
@@ -33,6 +33,12 @@ export interface VsCodeExtensionCredentialOptions extends vscode.AuthenticationG
 
     /** (Optional) The VS Code namespace, used for localizing log messages. */
     code?: IVsCode;
+
+    /**
+     * (Optional) Options forwarded to {@linkcode vscode.authentication.getSession getSession}.
+     * Controls session creation behavior (e.g. `silent`, `createIfNone`).
+     */
+    sessionOptions?: vscode.AuthenticationGetSessionOptions;
 }
 
 const PublicProviderId = 'microsoft' as const;
@@ -70,14 +76,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
         }
 
         this.options.output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} scopes=${JSON.stringify(scopesArray)}`);
-        // We have to build a new options object or else VSCode throws about not having access to the "DevDeviceId" proposed API
-        const sessionOptions: vscode.AuthenticationGetSessionOptions = {
-            silent: this.options.silent,
-            createIfNone: this.options.createIfNone,
-            clearSessionPreference: this.options.clearSessionPreference,
-            forceNewSession: this.options.forceNewSession,
-        };
-        const session = await this.options.authentication.getSession(provider, scopesArray, sessionOptions);
+        const session = await this.options.authentication.getSession(provider, scopesArray, this.options.sessionOptions);
 
         if (!session) {
             return null;

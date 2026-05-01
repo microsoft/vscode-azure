@@ -163,7 +163,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             });
 
             if (!token) {
-                sendTokenError(res, 'NotSignedInError', 'No VS Code authentication session available. Please sign in.');
+                sendTokenError(res, 'NotSignedInError', this.code.l10n.t('No VS Code authentication session available. Please sign in.'));
                 return;
             }
 
@@ -179,8 +179,8 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             }));
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
-            this.output.warn(`[azdAuth] token request failed: ${message}`);
-            sendTokenError(res, 'GetTokenError', message);
+            this.output.warn(this.code.l10n.t('[azdAuth] token request failed: {0}', message));
+            sendTokenError(res, 'GetTokenError', this.code.l10n.t('Token request failed: {0}', message));
         }
     }
 }
@@ -231,7 +231,7 @@ function listen(server: Server): Promise<number> {
 
 /**
  * Generates a self-signed X.509 certificate and RSA key pair using
- * `node-forge`. The certificate is valid for 24 hours and bound to
+ * `node-forge`. The certificate is valid for 1 year and bound to
  * `127.0.0.1`.
  *
  * @returns PEM-encoded cert and key (for the Node.js HTTPS server),
