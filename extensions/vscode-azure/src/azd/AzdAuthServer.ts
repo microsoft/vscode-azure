@@ -104,7 +104,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         );
 
         const port = await listen(server);
-        this.output.debug(`[azdAuth] server listening on port ${port}`);
+        this.output.debug(`[auth] AZD auth server listening on port ${port}`);
 
         return { server, port, key, certBase64Der: certDerBase64 };
     }
@@ -162,7 +162,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             }
 
             // Acquire token via VS Code
-            this.output.debug(`[azdAuth] token request scopes=${JSON.stringify(scopes)} tenant=${tenantId ?? '<default>'}`);
+            this.output.debug(`[auth] AZD auth server token request, scopes=${JSON.stringify(scopes)} tenant=${tenantId ?? '<default>'}`);
 
             const token = await credential.getToken(scopes as string[], { tenantId });
 
@@ -172,12 +172,12 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             }
 
             const expiresOn = new Date(token.expiresOnTimestamp).toISOString();
-            this.output.debug(`[azdAuth] token acquired scopes=${JSON.stringify(scopes)} tenant=${tenantId ?? '<default>'} expiresOn=${expiresOn}`);
+            this.output.debug(`[auth] AZD auth server token acquired, scopes=${JSON.stringify(scopes)} tenant=${tenantId ?? '<default>'} expiresOn=${expiresOn}`);
 
             sendJson(res, 200, { status: 'success', token: token.token, expiresOn });
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
-            this.output.warn(this.code.l10n.t('[azdAuth] token request failed: {0}', message));
+            this.output.warn(this.code.l10n.t('[auth] AZD auth server token request failed: {0}', message));
             sendJson(res, 200, { status: 'error', code: 'GetTokenError', message: this.code.l10n.t('Token request failed: {0}', message) });
         }
     }
