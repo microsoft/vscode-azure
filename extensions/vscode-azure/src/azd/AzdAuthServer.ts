@@ -118,41 +118,48 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         try {
             // Only POST /token is supported
             if (req.method !== 'POST') {
-                sendError(res, 405, 'method_not_allowed', 'Method not allowed');
+                sendError(res, 405, 'method_not_allowed', this.code.l10n.t('Method not allowed'));
                 return;
             }
 
             const url = new URL(req.url ?? '/', `https://127.0.0.1`);
             if (url.pathname !== '/token') {
-                sendError(res, 404, 'not_found', 'Not found');
+                sendError(res, 404, 'not_found', this.code.l10n.t('Not found'));
                 return;
             }
 
             if (url.searchParams.get('api-version') !== apiVersion) {
-                sendError(res, 400, 'bad_request', `Unsupported api-version. Expected ${apiVersion}`);
+                sendError(res, 400, 'bad_request', this.code.l10n.t('Unsupported api-version. Expected {0}', apiVersion));
                 return;
             }
 
             // Validate bearer token
             const authHeader = req.headers.authorization ?? '';
             if (authHeader !== `Bearer ${expectedKey}`) {
-                sendError(res, 401, 'unauthorized', 'Invalid or missing authorization key');
+                sendError(res, 401, 'unauthorized', this.code.l10n.t('Invalid or missing authorization key'));
                 return;
             }
 
             // Parse request body
-            const body = await readBody(req);
+            let body: string;
+            try {
+                body = await readBody(req);
+            } catch {
+                sendError(res, 413, 'bad_request', this.code.l10n.t('Request body too large'));
+                return;
+            }
+
             let parsed: { scopes?: string[]; tenantId?: string };
             try {
                 parsed = JSON.parse(body) as { scopes?: string[]; tenantId?: string };
             } catch {
-                sendError(res, 400, 'bad_request', 'Invalid JSON body');
+                sendError(res, 400, 'bad_request', this.code.l10n.t('Invalid JSON body'));
                 return;
             }
 
             const scopes = parsed.scopes;
             if (!scopes || !Array.isArray(scopes) || scopes.length === 0) {
-                sendError(res, 400, 'bad_request', 'Missing or empty scopes');
+                sendError(res, 400, 'bad_request', this.code.l10n.t('Missing or empty scopes'));
                 return;
             }
 
