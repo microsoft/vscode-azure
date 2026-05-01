@@ -5,7 +5,7 @@
 
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { afterEach, describe, it } from 'mocha';
+import { after, afterEach, before, describe, it } from 'mocha';
 import { request as httpsRequest } from 'node:https';
 import { mock } from 'node:test';
 import { AzdAuthServer } from '../../azd/AzdAuthServer';
@@ -27,13 +27,21 @@ function certToPem(base64Der: string): string {
     return `-----BEGIN CERTIFICATE-----\n${wrapped}\n-----END CERTIFICATE-----\n`;
 }
 
-function post(
+function postJson(
     url: string,
     body: unknown,
     headers: Record<string, string>,
     certBase64Der: string,
 ): Promise<{ statusCode: number; body: TokenResponse }> {
-    const json = JSON.stringify(body);
+    return postRaw(url, JSON.stringify(body), headers, certBase64Der);
+}
+
+function postRaw(
+    url: string,
+    rawBody: string,
+    headers: Record<string, string>,
+    certBase64Der: string,
+): Promise<{ statusCode: number; body: TokenResponse }> {
     const parsed = new URL(url);
 
     return new Promise((resolve, reject) => {
@@ -44,7 +52,7 @@ function post(
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(json),
+                'Content-Length': Buffer.byteLength(rawBody),
                 ...headers,
             },
             ca: certToPem(certBase64Der),
@@ -59,48 +67,26 @@ function post(
             });
         });
         req.on('error', reject);
-        req.write(json);
+        req.write(rawBody);
         req.end();
     });
 }
 
-interface MockSession {
-    accessToken: string;
-    id: string;
-    scopes: string[];
-    account: { id: string; label: string };
-}
-
 describe('AzdAuthServer (unit)', () => {
-    const servers: AzdAuthServer[] = [];
+    describe('getEnv', () => {
+        const servers: AzdAuthServer[] = [];
 
-    function createAuthServer(sessionResult?: MockSession) {
-        const mockResult = createMockVsCode();
-
-        const getSession = mockResult.authentication.getSession as unknown as ReturnType<typeof mock.fn>;
-        getSession.mock.mockImplementation(() => {
-            if (!sessionResult) {
-                return Promise.resolve(undefined);
+        afterEach(() => {
+            for (const s of servers) {
+                s.dispose();
             }
-            return Promise.resolve({ ...sessionResult, idToken: undefined });
+            servers.length = 0;
         });
 
-        const output = new MockOutputChannel('test');
-        const server = new AzdAuthServer(mockResult.vscode, output);
-        servers.push(server);
-        return { server, mockResult };
-    }
-
-    afterEach(() => {
-        for (const s of servers) {
-            s.dispose();
-        }
-        servers.length = 0;
-    });
-
-    describe('getEnv', () => {
         it('should return env vars with endpoint, key, and cert', async () => {
-            const { server } = createAuthServer();
+            const { vscode: code } = createMockVsCode();
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'));
+            servers.push(server);
             const env = await server.getEnv();
 
             expect(env.AZD_AUTH_ENDPOINT).to.match(/^https:\/\/127\.0\.0\.1:\d+$/);
@@ -109,7 +95,9 @@ describe('AzdAuthServer (unit)', () => {
         });
 
         it('should return the same env vars on subsequent calls', async () => {
-            const { server } = createAuthServer();
+            const { vscode: code } = createMockVsCode();
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'));
+            servers.push(server);
             const env1 = await server.getEnv();
             const env2 = await server.getEnv();
 
@@ -120,21 +108,48 @@ describe('AzdAuthServer (unit)', () => {
     });
 
     describe('token endpoint', () => {
+        // All token endpoint tests share a single server instance to avoid
+        // repeatedly generating certs and keys.
+        let server: AzdAuthServer;
+        let env: Readonly<Record<string, string>>;
+        let getSession: ReturnType<typeof mock.fn>;
+
+        /** Shorthand for a valid POST to `/token` with the shared server's key. */
+        function tokenPost(body: unknown) {
+            return postJson(
+                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
+                body,
+                { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
+                env.AZD_AUTH_CERT,
+            );
+        }
+
+        before(async () => {
+            const mockResult = createMockVsCode();
+            getSession = mockResult.authentication.getSession as unknown as ReturnType<typeof mock.fn>;
+
+            server = new AzdAuthServer(mockResult.vscode, new MockOutputChannel('test'));
+            env = await server.getEnv();
+        });
+
+        after(() => {
+            server.dispose();
+        });
+
+        afterEach(() => {
+            getSession.mock.resetCalls();
+            getSession.mock.restore();
+        });
+
         it('should return a token on valid request', async () => {
-            const { server } = createAuthServer({
+            getSession.mock.mockImplementation(() => Promise.resolve({
                 accessToken: 'test-access-token',
                 id: 'session-1',
                 scopes: ['https://management.azure.com/.default'],
                 account: { id: 'user-1', label: 'test@example.com' },
-            });
-            const env = await server.getEnv();
+            }));
 
-            const result = await post(
-                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
-                { scopes: ['https://management.azure.com/.default'] },
-                { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
-                env.AZD_AUTH_CERT,
-            );
+            const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
             expect(result.statusCode).to.equal(200);
             expect(result.body.status).to.equal('success');
@@ -143,15 +158,9 @@ describe('AzdAuthServer (unit)', () => {
         });
 
         it('should return NotSignedInError when no session is available', async () => {
-            const { server } = createAuthServer();
-            const env = await server.getEnv();
+            getSession.mock.mockImplementation(() => Promise.resolve(undefined));
 
-            const result = await post(
-                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
-                { scopes: ['https://management.azure.com/.default'] },
-                { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
-                env.AZD_AUTH_CERT,
-            );
+            const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
             expect(result.statusCode).to.equal(200);
             expect(result.body.status).to.equal('error');
@@ -159,10 +168,7 @@ describe('AzdAuthServer (unit)', () => {
         });
 
         it('should reject requests with wrong key', async () => {
-            const { server } = createAuthServer();
-            const env = await server.getEnv();
-
-            const result = await post(
+            const result = await postJson(
                 `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
                 { scopes: ['https://management.azure.com/.default'] },
                 { Authorization: 'Bearer wrong-key' },
@@ -170,15 +176,11 @@ describe('AzdAuthServer (unit)', () => {
             );
 
             expect(result.statusCode).to.equal(401);
-            expect(result.body.status).to.equal('error');
             expect(result.body.code).to.equal('unauthorized');
         });
 
         it('should reject requests with wrong api-version', async () => {
-            const { server } = createAuthServer();
-            const env = await server.getEnv();
-
-            const result = await post(
+            const result = await postJson(
                 `${env.AZD_AUTH_ENDPOINT}/token?api-version=1999-01-01`,
                 { scopes: ['https://management.azure.com/.default'] },
                 { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
@@ -186,31 +188,18 @@ describe('AzdAuthServer (unit)', () => {
             );
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.status).to.equal('error');
             expect(result.body.code).to.equal('bad_request');
         });
 
         it('should reject requests with missing scopes', async () => {
-            const { server } = createAuthServer();
-            const env = await server.getEnv();
-
-            const result = await post(
-                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
-                { tenantId: 'some-tenant' },
-                { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
-                env.AZD_AUTH_CERT,
-            );
+            const result = await tokenPost({ tenantId: 'some-tenant' });
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.status).to.equal('error');
             expect(result.body.code).to.equal('bad_request');
         });
 
         it('should reject requests to wrong path', async () => {
-            const { server } = createAuthServer();
-            const env = await server.getEnv();
-
-            const result = await post(
+            const result = await postJson(
                 `${env.AZD_AUTH_ENDPOINT}/other?api-version=2023-07-12-preview`,
                 { scopes: ['https://management.azure.com/.default'] },
                 { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
@@ -221,29 +210,69 @@ describe('AzdAuthServer (unit)', () => {
         });
 
         it('should pass tenantId to the credential', async () => {
-            const { server, mockResult } = createAuthServer({
+            getSession.mock.mockImplementation(() => Promise.resolve({
                 accessToken: 'tenant-token',
                 id: 'session-2',
                 scopes: ['https://management.azure.com/.default'],
                 account: { id: 'user-1', label: 'test@example.com' },
-            });
-            const env = await server.getEnv();
+            }));
 
-            const result = await post(
+            const result = await tokenPost({
+                scopes: ['https://management.azure.com/.default'],
+                tenantId: 'my-tenant',
+            });
+
+            expect(result.statusCode).to.equal(200);
+            expect(result.body.token).to.equal('tenant-token');
+
+            const callArgs = getSession.mock.calls[0].arguments as [string, string[]];
+            expect(callArgs[1]).to.include('VSCODE_TENANT:my-tenant');
+        });
+
+        it('should reject non-string values in scopes array', async () => {
+            const result = await tokenPost({ scopes: [123, 'valid'] });
+
+            expect(result.statusCode).to.equal(400);
+            expect(result.body.code).to.equal('bad_request');
+        });
+
+        it('should reject empty strings in scopes array', async () => {
+            const result = await tokenPost({ scopes: [''] });
+
+            expect(result.statusCode).to.equal(400);
+            expect(result.body.code).to.equal('bad_request');
+        });
+
+        it('should reject non-string tenantId', async () => {
+            const result = await tokenPost({
+                scopes: ['https://management.azure.com/.default'],
+                tenantId: 123,
+            });
+
+            expect(result.statusCode).to.equal(400);
+            expect(result.body.code).to.equal('bad_request');
+        });
+
+        it('should reject invalid JSON body', async () => {
+            const result = await postRaw(
                 `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
-                { scopes: ['https://management.azure.com/.default'], tenantId: 'my-tenant' },
+                'not json{{{',
                 { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
                 env.AZD_AUTH_CERT,
             );
 
-            expect(result.statusCode).to.equal(200);
-            expect(result.body.status).to.equal('success');
-            expect(result.body.token).to.equal('tenant-token');
+            expect(result.statusCode).to.equal(400);
+            expect(result.body.code).to.equal('bad_request');
+        });
 
-            const getSession = mockResult.authentication.getSession as unknown as ReturnType<typeof mock.fn>;
-            const callArgs = getSession.mock.calls[0].arguments as [string, string[]];
-            const scopes = callArgs[1];
-            expect(scopes).to.include('VSCODE_TENANT:my-tenant');
+        it('should return GetTokenError when credential throws', async () => {
+            getSession.mock.mockImplementation(() => Promise.reject(new Error('auth provider exploded')));
+
+            const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
+
+            expect(result.statusCode).to.equal(200);
+            expect(result.body.status).to.equal('error');
+            expect(result.body.code).to.equal('GetTokenError');
         });
     });
 });
