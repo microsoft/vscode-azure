@@ -17,7 +17,7 @@ export class PickHostingPlanStep extends PromptStep<CreateFunctionAppContext> {
     }
 
     public override shouldPrompt(context: Readonly<CreateFunctionAppContext>): boolean {
-        return !context.hostingPlan;
+        return !context.hostingPlan && !context.hasInfra;
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {

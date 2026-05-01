@@ -12,7 +12,7 @@ import type { ISubscriptionClientProvider, Location } from '../rest/clients/Subs
  * Callers must ensure their wizard context extends this and have
  * populated {@linkcode subscription} before this step runs.
  */
-interface ChooseLocationContext {
+export interface ChooseLocationContext {
     readonly subscription?: AzureSubscription;
     readonly location?: Location;
 }
