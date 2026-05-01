@@ -265,7 +265,7 @@ function listen(server: Server): Promise<number> {
  */
 async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: string; certDerBase64: string }> {
     // In parallel, generate an RSA key pair and import `node-forge` for cert creation
-    const [{ publicKey: publicKeyPem, privateKey: privateKeyPem }, forge] = await Promise.all([
+    const [keyResult, forgeModule] = await Promise.all([
         promisify(cryptoGenerateKeyPair)('rsa', {
             modulusLength: 2048,
             publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -274,8 +274,11 @@ async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: stri
         import('node-forge'),
     ]);
 
-    const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
-    const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+    // node-forge is CommonJS; dynamic import wraps it in { default: ... }
+    const forge = ('default' in forgeModule ? forgeModule.default : forgeModule);
+
+    const publicKey = forge.pki.publicKeyFromPem(keyResult.publicKey);
+    const privateKey = forge.pki.privateKeyFromPem(keyResult.privateKey);
 
     const cert = forge.pki.createCertificate();
 
