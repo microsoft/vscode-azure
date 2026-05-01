@@ -7,9 +7,10 @@ import { VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
 import { IOutputChannel, IVsCode, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as forge from 'node-forge';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { generateKeyPair as cryptoGenerateKeyPair, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer, type Server } from 'node:https';
+import { promisify } from 'node:util';
 
 export const IAzdAuthServer: ServiceIdentifier<IAzdAuthServer> = Symbol.for('IAzdAuthServer');
 
@@ -89,7 +90,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
 
     private async start(): Promise<ServerState> {
         const key = randomUUID();
-        const { certPem, keyPem, certDerBase64 } = generateSelfSignedCert();
+        const { certPem, keyPem, certDerBase64 } = await generateSelfSignedCert();
 
         const credential = new VsCodeExtensionCredential({
             authentication: this.code.authentication,
@@ -200,18 +201,34 @@ function readBody(req: IncomingMessage): Promise<string> {
     return new Promise<string>((resolve, reject) => {
         const chunks: Buffer[] = [];
         let size = 0;
+        let settled = false;
         const maxSize = 64 * 1024; // 64 KB limit
 
         req.on('data', (chunk: Buffer) => {
+            if (settled) {
+                return;
+            }
             size += chunk.length;
             if (size > maxSize) {
+                settled = true;
                 req.destroy();
                 reject(new Error('Request body too large'));
+                return;
             }
             chunks.push(chunk);
         });
-        req.on('end', () => { resolve(Buffer.concat(chunks).toString('utf8')); });
-        req.on('error', reject);
+        req.on('end', () => {
+            if (!settled) {
+                settled = true;
+                resolve(Buffer.concat(chunks).toString('utf8'));
+            }
+        });
+        req.on('error', (err) => {
+            if (!settled) {
+                settled = true;
+                reject(err);
+            }
+        });
     });
 }
 
@@ -230,18 +247,29 @@ function listen(server: Server): Promise<number> {
 }
 
 /**
- * Generates a self-signed X.509 certificate and RSA key pair using
- * `node-forge`. The certificate is valid for 1 year and bound to
- * `127.0.0.1`.
+ * Generates a self-signed X.509 certificate and RSA key pair.
+ * The certificate is valid for 1 year and bound to `127.0.0.1`.
+ *
+ * RSA key generation uses Node's built-in `crypto.generateKeyPair`
+ * to avoid blocking the extension host thread. The resulting keys are
+ * converted to `node-forge` format for certificate construction.
  *
  * @returns PEM-encoded cert and key (for the Node.js HTTPS server),
  *   plus the base64-encoded DER cert (for `AZD_AUTH_CERT`).
  */
-function generateSelfSignedCert(): { certPem: string; keyPem: string; certDerBase64: string } {
-    const keys = forge.pki.rsa.generateKeyPair(2048);
+async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: string; certDerBase64: string }> {
+    const { publicKey: publicKeyPem, privateKey: privateKeyPem } = await promisify(cryptoGenerateKeyPair)('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+
+    const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
+    const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+
     const cert = forge.pki.createCertificate();
 
-    cert.publicKey = keys.publicKey;
+    cert.publicKey = publicKey;
     // Ensure the high bit is clear so the serial is a positive ASN.1 integer
     const serialBytes = randomBytes(16);
     serialBytes[0] &= 0x7f;
@@ -262,10 +290,10 @@ function generateSelfSignedCert(): { certPem: string; keyPem: string; certDerBas
         { name: 'extKeyUsage', serverAuth: true },
     ]);
 
-    cert.sign(keys.privateKey, forge.md.sha256.create());
+    cert.sign(privateKey, forge.md.sha256.create());
 
     const certPem = forge.pki.certificateToPem(cert);
-    const keyPem = forge.pki.privateKeyToPem(keys.privateKey);
+    const keyPem = forge.pki.privateKeyToPem(privateKey);
 
     // DER encoding: convert the ASN.1 cert to DER bytes, then base64
     const certAsn1 = forge.pki.certificateToAsn1(cert);
