@@ -127,9 +127,8 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
         return new ProcessExecutor(context.get(IVsCode));
     }).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
-
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
+    container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
