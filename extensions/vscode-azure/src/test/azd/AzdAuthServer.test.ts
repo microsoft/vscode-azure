@@ -33,10 +33,20 @@ function postJson(
     headers: Record<string, string>,
     certBase64Der: string,
 ): Promise<{ statusCode: number; body: TokenResponse }> {
-    return postRaw(url, JSON.stringify(body), headers, certBase64Der);
+    return sendRequest('POST', url, JSON.stringify(body), headers, certBase64Der);
 }
 
 function postRaw(
+    url: string,
+    rawBody: string,
+    headers: Record<string, string>,
+    certBase64Der: string,
+): Promise<{ statusCode: number; body: TokenResponse }> {
+    return sendRequest('POST', url, rawBody, headers, certBase64Der);
+}
+
+function sendRequest(
+    method: string,
     url: string,
     rawBody: string,
     headers: Record<string, string>,
@@ -49,7 +59,7 @@ function postRaw(
             hostname: parsed.hostname,
             port: parsed.port,
             path: parsed.pathname + parsed.search,
-            method: 'POST',
+            method,
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(rawBody),
@@ -227,6 +237,26 @@ describe('AzdAuthServer (unit)', () => {
 
             const callArgs = getSession.mock.calls[0].arguments as [string, string[]];
             expect(callArgs[1]).to.include('VSCODE_TENANT:my-tenant');
+        });
+
+        it('should reject non-POST requests', async () => {
+            const result = await sendRequest(
+                'GET',
+                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
+                '',
+                { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
+                env.AZD_AUTH_CERT,
+            );
+
+            expect(result.statusCode).to.equal(405);
+            expect(result.body.code).to.equal('method_not_allowed');
+        });
+
+        it('should reject empty scopes array', async () => {
+            const result = await tokenPost({ scopes: [] });
+
+            expect(result.statusCode).to.equal(400);
+            expect(result.body.code).to.equal('bad_request');
         });
 
         it('should reject non-string values in scopes array', async () => {
