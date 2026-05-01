@@ -9,6 +9,7 @@ import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { generateKeyPair as cryptoGenerateKeyPair, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer, type Server } from 'node:https';
+import { text } from 'node:stream/consumers';
 import { promisify } from 'node:util';
 
 export const IAzdAuthServer: ServiceIdentifier<IAzdAuthServer> = Symbol.for('IAzdAuthServer');
@@ -117,131 +118,74 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         try {
             // Only POST /token is supported
             if (req.method !== 'POST') {
-                sendError(res, 405, 'method_not_allowed', this.code.l10n.t('Method not allowed'));
+                sendJson(res, 405, { status: 'error', code: 'method_not_allowed', message: this.code.l10n.t('Method not allowed') });
                 return;
             }
 
-            const url = new URL(req.url ?? '/', `https://127.0.0.1`);
+            const url = new URL(req.url ?? '/', 'https://127.0.0.1');
             if (url.pathname !== '/token') {
-                sendError(res, 404, 'not_found', this.code.l10n.t('Not found'));
+                sendJson(res, 404, { status: 'error', code: 'not_found', message: this.code.l10n.t('Not found') });
                 return;
             }
 
             if (url.searchParams.get('api-version') !== apiVersion) {
-                sendError(res, 400, 'bad_request', this.code.l10n.t('Unsupported api-version. Expected {0}', apiVersion));
+                sendJson(res, 400, { status: 'error', code: 'bad_request', message: this.code.l10n.t('Unsupported api-version. Expected {0}', apiVersion) });
                 return;
             }
 
             // Validate bearer token
             const authHeader = req.headers.authorization ?? '';
             if (authHeader !== `Bearer ${expectedKey}`) {
-                sendError(res, 401, 'unauthorized', this.code.l10n.t('Invalid or missing authorization key'));
+                sendJson(res, 401, { status: 'error', code: 'unauthorized', message: this.code.l10n.t('Invalid or missing authorization key') });
                 return;
             }
 
-            // Parse request body
-            let body: string;
-            try {
-                body = await readBody(req);
-            } catch {
-                sendError(res, 413, 'bad_request', this.code.l10n.t('Request body too large'));
-                return;
-            }
-
+            // Parse and validate request body
             let parsed: Record<string, unknown>;
             try {
-                parsed = JSON.parse(body) as Record<string, unknown>;
+                parsed = JSON.parse(await text(req)) as Record<string, unknown>;
             } catch {
-                sendError(res, 400, 'bad_request', this.code.l10n.t('Invalid JSON body'));
+                sendJson(res, 400, { status: 'error', code: 'bad_request', message: this.code.l10n.t('Invalid JSON body') });
                 return;
             }
 
             const scopes = parsed.scopes;
             if (!Array.isArray(scopes) || scopes.length === 0 || scopes.some(s => typeof s !== 'string' || s.length === 0)) {
-                sendError(res, 400, 'bad_request', this.code.l10n.t('Missing or empty scopes'));
+                sendJson(res, 400, { status: 'error', code: 'bad_request', message: this.code.l10n.t('Missing or empty scopes') });
                 return;
             }
 
             const tenantId = parsed.tenantId;
             if (tenantId !== undefined && typeof tenantId !== 'string') {
-                sendError(res, 400, 'bad_request', this.code.l10n.t('Invalid tenant ID'));
+                sendJson(res, 400, { status: 'error', code: 'bad_request', message: this.code.l10n.t('Invalid tenant ID') });
                 return;
             }
 
             // Acquire token via VS Code
             this.output.debug(`[azdAuth] token request scopes=${JSON.stringify(scopes)} tenant=${tenantId ?? '<default>'}`);
 
-            const token = await credential.getToken(scopes as string[], {
-                tenantId,
-            });
+            const token = await credential.getToken(scopes as string[], { tenantId });
 
             if (!token) {
-                sendTokenError(res, 'NotSignedInError', this.code.l10n.t('No VS Code authentication session available. Please sign in.'));
+                sendJson(res, 200, { status: 'error', code: 'NotSignedInError', message: this.code.l10n.t('No VS Code authentication session available. Please sign in.') });
                 return;
             }
 
             const expiresOn = new Date(token.expiresOnTimestamp).toISOString();
-
             this.output.debug(`[azdAuth] token acquired scopes=${JSON.stringify(scopes)} tenant=${tenantId ?? '<default>'} expiresOn=${expiresOn}`);
 
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                status: 'success',
-                token: token.token,
-                expiresOn,
-            }));
+            sendJson(res, 200, { status: 'success', token: token.token, expiresOn });
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             this.output.warn(this.code.l10n.t('[azdAuth] token request failed: {0}', message));
-            sendTokenError(res, 'GetTokenError', this.code.l10n.t('Token request failed: {0}', message));
+            sendJson(res, 200, { status: 'error', code: 'GetTokenError', message: this.code.l10n.t('Token request failed: {0}', message) });
         }
     }
 }
 
-function sendError(res: ServerResponse, statusCode: number, code: string, message: string): void {
+function sendJson(res: ServerResponse, statusCode: number, body: Record<string, unknown>): void {
     res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'error', code, message }));
-}
-
-/** Sends an error response with HTTP 200, matching the azd token response protocol. */
-function sendTokenError(res: ServerResponse, code: string, message: string): void {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'error', code, message }));
-}
-
-function readBody(req: IncomingMessage): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        let size = 0;
-        let settled = false;
-        const maxSize = 64 * 1024; // 64 KB limit
-
-        req.on('data', (chunk: Buffer) => {
-            if (settled) {
-                return;
-            }
-            size += chunk.length;
-            if (size > maxSize) {
-                settled = true;
-                req.destroy();
-                reject(new Error('Request body too large'));
-                return;
-            }
-            chunks.push(chunk);
-        });
-        req.on('end', () => {
-            if (!settled) {
-                settled = true;
-                resolve(Buffer.concat(chunks).toString('utf8'));
-            }
-        });
-        req.on('error', (err) => {
-            if (!settled) {
-                settled = true;
-                reject(err);
-            }
-        });
-    });
+    res.end(JSON.stringify(body));
 }
 
 function listen(server: Server): Promise<number> {
