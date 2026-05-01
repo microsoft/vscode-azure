@@ -7,10 +7,16 @@ import { ExecuteStep } from '@microsoft/vscode-azure-utils';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
-// TODO: future: Replace with AZD extension API when available
 /**
- * Creates a new azd environment (`azd env new`) in {@linkcode AzdWizardContext.iacFolder}
- * using the selected subscription, location, and environment name.
+ * Creates a new azd environment (`azd env new`) in
+ * {@linkcode AzdWizardContext.iacFolder iacFolder} using the selected
+ * subscription, location, and environment name.
+ *
+ * Skipped when {@linkcode AzdWizardContext.existingDefaultEnvName existingDefaultEnvName}
+ * is set (Bootstrapped state) and re-validates against the actual `iacFolder`
+ * at execute time -- if an environment with the chosen name already exists
+ * there, this step is a no-op (no `envUpdate` fallback; the wizard never
+ * mutates an existing user environment).
  */
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
@@ -20,15 +26,31 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public override shouldExecute(context: Readonly<TContext>): boolean {
-        return !!context.iacFolder && !!context.environmentName && !!context.location?.name && !!context.subscription;
+        return (
+            !!context.iacFolder
+            && !!context.environmentName
+            && !!(context.hydratedLocationName ?? context.location?.name)
+            && !!(context.hydratedSubscriptionId ?? context.subscription?.subscriptionId)
+            && !context.existingDefaultEnvName
+        );
     }
 
     public async execute(context: TContext): Promise<void> {
-        await this.azd.envNew(
-            context.environmentName!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            context.location!.name!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            context.subscription!.subscriptionId, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            context.iacFolder!, // eslint-disable-line @typescript-eslint/no-non-null-assertion
-        );
+        /* eslint-disable @typescript-eslint/no-non-null-assertion */
+        const name = context.environmentName!;
+        const location = context.hydratedLocationName ?? context.location!.name!;
+        const subscriptionId = context.hydratedSubscriptionId ?? context.subscription!.subscriptionId;
+        const cwd = context.iacFolder!;
+        /* eslint-enable @typescript-eslint/no-non-null-assertion */
+
+        // `shouldExecute` already gates on
+        // !existingDefaultEnvName, but the workspace could have changed
+        // between hydration and now. Skip if an env with this name exists
+        // rather than failing on `azd env new`.
+        if (await this.azd.envExists(name, cwd)) {
+            return;
+        }
+
+        await this.azd.envNew(name, location, subscriptionId, cwd);
     }
 }

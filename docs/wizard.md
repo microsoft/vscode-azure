@@ -124,3 +124,7 @@ Each step defines a context interface (e.g. `ChooseSubscriptionContext`) that th
 `RecursivePickStep` accepts a `recursiveClass` parameter so subclasses can ensure recursion creates instances of the correct type, preserving the overridden `prompt()` logic at every drill level.
 
 Convenience wrappers (`subscriptionExperience`, `resourceGroupExperience`, `resourceExperience`) run a single-step wizard and return the picked object directly, for use outside of larger wizard flows.
+
+## Resource Creation Wizards
+
+The extension uses the wizard framework for azd-backed resource creation flows (e.g. Function App). These wizards combine shared prompt steps (folder selection, subscription/location pickers, project naming) with resource-specific steps and execute steps that generate IaC and run `azd provision`. See [Resource Creation](resource-creation.md) for the full step sequence, scenario matrix, and guide for adding new resource types.

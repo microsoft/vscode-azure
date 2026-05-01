@@ -117,6 +117,38 @@ describe('AzdService (unit)', () => {
         });
     });
 
+    describe('envExists', () => {
+        it('should return true when an environment with the given name is in envList', async () => {
+            const envs = [{ Name: 'dev', IsDefault: true }, { Name: 'prod', IsDefault: false }];
+            const spawnFn = mock.fn(() => Promise.resolve({ json: envs }));
+            const { service } = createService(spawnFn as unknown as SpawnFn);
+
+            const result = await service.envExists('prod', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.be.true;
+        });
+
+        it('should return false when no environment with the given name exists', async () => {
+            const envs = [{ Name: 'dev', IsDefault: true }];
+            const spawnFn = mock.fn(() => Promise.resolve({ json: envs }));
+            const { service } = createService(spawnFn as unknown as SpawnFn);
+
+            const result = await service.envExists('missing', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.be.false;
+        });
+
+        it('should return false when envList rejects (azd not installed)', async () => {
+            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
+            const spawnFn = mock.fn(() => Promise.reject(enoent));
+            const { service } = createService(spawnFn);
+
+            const result = await service.envExists('dev', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.be.false;
+        });
+    });
+
     describe('envList', () => {
         it('should spawn azd env list with --output json and return parsed result', async () => {
             const envs = [{ Name: 'dev', IsDefault: true }];
@@ -134,6 +166,98 @@ describe('AzdService (unit)', () => {
             expect(argValues(opts.args)).to.include('--output');
             expect(argValues(opts.args)).to.include('json');
             expect(opts.parseJson).to.be.true;
+        });
+    });
+
+    describe('envGetValues', () => {
+        it('should spawn azd env get-values with --environment <name> --output json and return parsed result', async () => {
+            const values = {
+                /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
+                AZURE_ENV_NAME: 'dev',
+                AZURE_LOCATION: 'eastus',
+                AZURE_SUBSCRIPTION_ID: 'sub-1',
+                /* eslint-enable @typescript-eslint/naming-convention */
+            };
+            const spawnFn = mock.fn(() => Promise.resolve({ json: values }));
+            const { service, spawnMock } = createService(spawnFn as unknown as SpawnFn);
+
+            const result = await service.envGetValues('dev', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.deep.equal(values);
+            expect(spawnMock.mock.callCount()).to.equal(1);
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(opts.execution).to.equal('background');
+            expect(opts.command).to.equal('azd');
+            expect(argValues(opts.args)).to.include('env');
+            expect(argValues(opts.args)).to.include('get-values');
+            expect(argValues(opts.args)).to.include('--environment');
+            expect(argValues(opts.args)).to.include('dev');
+            expect(argValues(opts.args)).to.include('--output');
+            expect(argValues(opts.args)).to.include('json');
+            expect(opts.parseJson).to.be.true;
+            expect(opts.cwd.path).to.equal('/project');
+        });
+
+        it('should return an empty object when the spawn fails (best-effort)', async () => {
+            const spawnFn = mock.fn(() => Promise.reject(new Error('env not found')));
+            const { service } = createService(spawnFn);
+
+            const result = await service.envGetValues('dev', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.deep.equal({});
+        });
+
+        it('should return an empty object when azd is not installed (ENOENT)', async () => {
+            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
+            const spawnFn = mock.fn(() => Promise.reject(enoent));
+            const { service } = createService(spawnFn);
+
+            const result = await service.envGetValues('dev', MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.deep.equal({});
+        });
+    });
+
+    describe('show', () => {
+        it('should spawn azd show with --output json and return parsed result', async () => {
+            const payload = {
+                name: 'my-app',
+                services: { myfunc: { project: { path: '/project', language: 'node' } } },
+            };
+            const spawnFn = mock.fn(() => Promise.resolve({ json: payload }));
+            const { service, spawnMock } = createService(spawnFn as unknown as SpawnFn);
+
+            const result = await service.show(MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.deep.equal(payload);
+            expect(spawnMock.mock.callCount()).to.equal(1);
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(opts.execution).to.equal('background');
+            expect(opts.command).to.equal('azd');
+            expect(argValues(opts.args)).to.include('show');
+            expect(argValues(opts.args)).to.include('--output');
+            expect(argValues(opts.args)).to.include('json');
+            expect(opts.parseJson).to.be.true;
+            expect(opts.cwd.path).to.equal('/project');
+        });
+
+        it('should return undefined when the spawn fails (no azure.yaml in cwd)', async () => {
+            const spawnFn = mock.fn(() => Promise.reject(new Error('no azure.yaml')));
+            const { service } = createService(spawnFn);
+
+            const result = await service.show(MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.be.undefined;
+        });
+
+        it('should return undefined when azd is not installed (ENOENT)', async () => {
+            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
+            const spawnFn = mock.fn(() => Promise.reject(enoent));
+            const { service } = createService(spawnFn);
+
+            const result = await service.show(MockUri.file('/project') as unknown as vscode.Uri);
+
+            expect(result).to.be.undefined;
         });
     });
 

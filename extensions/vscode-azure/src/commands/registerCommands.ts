@@ -40,7 +40,8 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
     registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
 
-    registerManagedCommand(container, 'vscode-azure/functions/create', CreateFunctionApp);
+    registerManagedCommand(container, 'vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
+    registerManagedCommand(container, 'vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
 }
 
 /**

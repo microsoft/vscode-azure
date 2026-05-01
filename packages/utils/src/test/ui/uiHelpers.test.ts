@@ -7,6 +7,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { getWorkspaceFolder, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../ui/uiHelpers';
 import type { IVsCode } from '../../vscode/IVsCode';
+import { CancellationError } from '../../vscode/CancellationError';
 import { GoBackError } from '../../wizard/GoBackError';
 import { MockUri } from '../vscode/MockUri';
 import { createMockCodeContext, createMockVsCode, respondToPrompts } from '../vscode/MockVsCode';
@@ -392,6 +393,24 @@ describe('uiHelpers (unit)', () => {
 
             const opts = showPick.mock.calls[0].arguments[0] as { placeHolder?: string };
             expect(opts.placeHolder).to.equal('Pick a folder');
+        });
+
+        it('should throw CancellationError when the user dismisses the picker', async () => {
+            const folder1 = { uri: MockUri.file('/a'), name: 'a', index: 0 };
+            const folder2 = { uri: MockUri.file('/b'), name: 'b', index: 1 };
+
+            const mockResult = createMockVsCode();
+            mockResult.workspaceFolders.push(folder1 as never, folder2 as never);
+
+            const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
+            showPick.mock.mockImplementation(() => Promise.resolve(undefined));
+
+            try {
+                await getWorkspaceFolder(mockResult.vscode);
+                expect.fail('Expected CancellationError');
+            } catch (e) {
+                expect(CancellationError.test(e)).to.be.true;
+            }
         });
     });
 });

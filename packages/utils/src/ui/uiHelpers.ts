@@ -364,8 +364,14 @@ const Pending: unique symbol = Symbol('Pending');
 
 /**
  * Returns the single workspace folder, or prompts the user to pick one
- * when multiple folders are open. Returns `undefined` if no folders are open
- * or the user dismisses the picker.
+ * when multiple folders are open.
+ *
+ * - Returns `undefined` when no workspace folders are open (nothing to pick).
+ * - Returns the single folder when exactly one is open (no prompt).
+ * - Prompts when multiple are open and returns the chosen folder.
+ * - Throws {@linkcode CancellationError} when the user dismisses the picker,
+ *   matching {@linkcode showSmartQuickPick} / {@linkcode showSmartInputBox}
+ *   so callers can rely on the same cancellation contract.
  */
 export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): Promise<vscode.WorkspaceFolder | undefined> {
     const folders = code.workspace.workspaceFolders;
@@ -373,9 +379,13 @@ export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): P
         return undefined;
     } else if (folders.length === 1) {
         return folders[0];
-    } else {
-        return code.window.showWorkspaceFolderPick({ placeHolder });
     }
+
+    const picked = await code.window.showWorkspaceFolderPick({ placeHolder });
+    if (!picked) {
+        throw new CancellationError();
+    }
+    return picked;
 }
 
 /**

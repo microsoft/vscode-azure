@@ -1,0 +1,78 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import {
+    PromptStep, showSmartInputBox,
+    type AsWritable, type ICodeContext
+} from '@microsoft/vscode-azure-utils';
+import * as path from 'path';
+import type { AzdWizardContext } from './AzdWizardContext';
+
+const NameRegex = /^[a-zA-Z0-9-]+$/;
+
+/**
+ * Prompts for a project name and derives downstream defaults.
+ *
+ * Sets {@linkcode AzdWizardContext.environmentName environmentName} and
+ * {@linkcode AzdWizardContext.azdServiceName azdServiceName} from one user
+ * input. Skipped entirely when {@linkcode AzdWizardContext.environmentName environmentName}
+ * is already populated -- typically because
+ * {@linkcode HydrateAzdInfoStep} found an existing default azd environment in
+ * {@linkcode AzdWizardContext.iacFolder iacFolder}.
+ */
+export class ProjectNameStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
+    public constructor(
+        private readonly ctx: ICodeContext,
+    ) {
+        super();
+    }
+
+    public override shouldPrompt(context: Readonly<TContext>): boolean {
+        return !context.environmentName;
+    }
+
+    public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
+        // Derive the fallback name without prompting. Prefer the iacFolder
+        // basename (set by SelectIacFolderStep for `deploy`, or by the temp
+        // dir for `createNew`); fall back to the first workspace folder name
+        // (which is silent in single-root, picker-free), then to a generic
+        // default. We deliberately don't call getWorkspaceFolder() because in
+        // multi-root workspaces it would show an unrelated picker.
+        const iacBasename = context.iacFolder ? path.basename(context.iacFolder.fsPath) : undefined;
+        const workspaceFolderName = this.ctx.code.workspace.workspaceFolders?.[0]?.name;
+        const fallbackName = sanitize(iacBasename) ?? sanitize(workspaceFolderName) ?? 'myapp';
+
+        const name = await showSmartInputBox(this.ctx, {
+            prompt: this.ctx.code.l10n.t('Enter a name for your project (used for the environment, service, and resource defaults)'),
+            fallbackValue: fallbackName,
+            showBack: true,
+            validateInput: (value) => {
+                if (!value) {
+                    return this.ctx.code.l10n.t('Project name is required');
+                } else if (!NameRegex.test(value)) {
+                    return this.ctx.code.l10n.t('Only letters, numbers, and hyphens are allowed');
+                }
+                return undefined;
+            },
+        });
+
+        const result = { environmentName: name } as AsWritable<Partial<TContext>>;
+
+        if (!context.azdServiceName) {
+            result.azdServiceName = name;
+        }
+
+        return result;
+    }
+}
+
+/** Strip characters that aren't allowed in azd environment / service names. */
+function sanitize(name: string | undefined): string | undefined {
+    if (!name) {
+        return undefined;
+    }
+    const sanitized = name.replace(/[^a-zA-Z0-9-]/g, '-').replace(/^-+|-+$/g, '');
+    return sanitized.length > 0 ? sanitized : undefined;
+}

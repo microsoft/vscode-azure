@@ -77,7 +77,7 @@ function registerManagedCommand(
 ): void
 ```
 
-This enables a single command class to be registered multiple times with different fixed arguments. For example, `ClearActivities` is registered three times with different modes (`'completed'`, `'successful'`, `'all'`) rather than needing three separate classes.
+This enables a single command class to be registered multiple times with different fixed arguments. For example, `ClearActivities` is registered three times with different modes (`'completed'`, `'successful'`, `'all'`) rather than needing three separate classes. `CreateFunctionApp` uses it to distinguish `'createNew'` vs `'deploy'` jobs — see [Resource Creation](resource-creation.md).
 
 ## Context Values for Tree Item Commands
 

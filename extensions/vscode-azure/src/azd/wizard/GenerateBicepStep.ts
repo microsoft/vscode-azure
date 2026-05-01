@@ -6,8 +6,8 @@
 import { ExecuteStep, type ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
-const InfraFolderName = 'infra';
-const MainBicepFileName = 'main.bicep';
+export const InfraFolderName = 'infra';
+export const MainBicepFileName = 'main.bicep';
 const MainParametersFileName = 'main.parameters.json';
 
 /**
@@ -30,6 +30,13 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
 
     public override async shouldExecute(context: Readonly<TContext>): Promise<boolean> {
         if (!context.iacFolder) {
+            return false;
+        }
+
+        // Trust the hydration flag when present (set by HydrateAzdInfoStep for
+        // the `deploy` job). The `createNew` job skips hydration, so fall
+        // through to a live check.
+        if (context.hasInfra === true) {
             return false;
         }
 

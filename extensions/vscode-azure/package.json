@@ -80,9 +80,14 @@
                 "title": "%commands.vscode-azure/functionApp/appSettings/delete%"
             },
             {
-                "command": "vscode-azure/functions/create",
+                "command": "vscode-azure/functions/createNew",
                 "category": "%commands.category.azure%",
-                "title": "%commands.vscode-azure/functions/create%"
+                "title": "%commands.vscode-azure/functions/createNew%"
+            },
+            {
+                "command": "vscode-azure/functions/deploy",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/functions/deploy%"
             }
         ],
         "menus": {
