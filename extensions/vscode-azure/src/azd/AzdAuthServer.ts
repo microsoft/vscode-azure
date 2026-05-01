@@ -246,10 +246,15 @@ async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: stri
     cert.setSubject(attrs);
     cert.setIssuer(attrs);
 
+    // Node.js's OpenSSL requires cA:true and keyCertSign to accept a
+    // self-signed cert as a trusted CA (used by the test client's `ca` option).
+    // Go's TLS (used by azd) does not, so we only set these during tests.
+    const isTest = process.env.VSCODE_RUNNING_TESTS === '1';
+
     cert.setExtensions([
         { name: 'subjectAltName', altNames: [{ type: 7, ip: '127.0.0.1' }] },
-        { name: 'basicConstraints', cA: true },
-        { name: 'keyUsage', digitalSignature: true, keyEncipherment: true, keyCertSign: true },
+        { name: 'basicConstraints', cA: isTest },
+        { name: 'keyUsage', digitalSignature: true, keyEncipherment: true, keyCertSign: isTest },
         { name: 'extKeyUsage', serverAuth: true },
     ]);
 
