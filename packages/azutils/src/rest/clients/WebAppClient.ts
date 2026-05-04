@@ -3,11 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { StringDictionary, WebSiteManagementClient, WebSiteManagementClientOptionalParams } from '@azure/arm-appservice';
+import type { StringDictionary } from '@azure/arm-appservice/models';
+/* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
+import { type WebSiteManagementClientOptionalParams, type WebSiteManagementContext, createWebSiteManagement } from '@azure/arm-appservice/api';
+import { listApplicationSettings as sdkListApplicationSettings, updateApplicationSettings as sdkUpdateApplicationSettings } from '@azure/arm-appservice/api/webApps';
+/* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { createAzureSubscriptionClient } from '../createAzureClient';
+import { createAzureRestSubscriptionClient } from '../createAzureClient';
 
 /** Factory that creates an {@linkcode IWebAppClient} for a given subscription. */
 export const IWebAppClientProvider: ServiceIdentifier<IWebAppClientProvider> = Symbol.for('IWebAppClientProvider');
@@ -24,46 +28,41 @@ export interface IWebAppClient {
 }
 
 /**
- * Wrapper around `WebSiteManagementClient` that exposes only the methods
- * we use.
+ * Wrapper around the `@azure/arm-appservice` REST-style SDK that adapts free
+ * functions into the `client.webApps.*` pattern.
  *
- * Uses the classic SDK class pattern (like {@linkcode ResourceClient}), with
- * lazy imports to keep load times down.
+ * Use the static {@linkcode create} factory to construct.
  */
 export class WebAppClient implements IWebAppClient {
-    private static sdk: typeof import('@azure/arm-appservice') | undefined;
-
     private constructor(
-        private readonly inner: WebSiteManagementClient,
+        private readonly inner: WebSiteManagementContext,
     ) { }
 
     /**
-     * Create a new {@linkcode WebAppClient} instance. Lazily imports
-     * `@azure/arm-appservice` on first call.
+     * Create a new {@linkcode WebAppClient} instance.
      */
-    public static async create(
+    public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
         subscription: AzureSubscription,
         options?: WebSiteManagementClientOptionalParams,
     ): Promise<WebAppClient> {
-        WebAppClient.sdk ??= await import('@azure/arm-appservice');
-        const inner = createAzureSubscriptionClient(
+        const context = createAzureRestSubscriptionClient(
             ctx,
             executor,
-            WebAppClient.sdk.WebSiteManagementClient,
+            createWebSiteManagement,
             subscription,
             options,
         );
-        return new WebAppClient(inner);
+        return Promise.resolve(new WebAppClient(context));
     }
 
     public get webApps(): IWebAppClient['webApps'] {
         return {
             listApplicationSettings: (resourceGroupName, name) =>
-                this.inner.webApps.listApplicationSettings(resourceGroupName, name),
+                sdkListApplicationSettings(this.inner, resourceGroupName, name),
             updateApplicationSettings: (resourceGroupName, name, appSettings) =>
-                this.inner.webApps.updateApplicationSettings(resourceGroupName, name, appSettings),
+                sdkUpdateApplicationSettings(this.inner, resourceGroupName, name, appSettings),
         };
     }
 }

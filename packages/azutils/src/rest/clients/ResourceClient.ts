@@ -5,16 +5,19 @@
 
 import type {
     ResourceGroupsListOptionalParams,
-    ResourceManagementClient,
-    ResourceManagementClientOptionalParams,
-    ResourcesListOptionalParams
+    ResourcesListByResourceGroupOptionalParams,
 } from '@azure/arm-resources';
+/* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
+import { type ResourceManagementClientOptionalParams, type ResourceManagementContext, createResourceManagement } from '@azure/arm-resources/api';
+import { list as sdkListResourceGroups } from '@azure/arm-resources/api/resourceGroups';
+import { listByResourceGroup as sdkListByResourceGroup } from '@azure/arm-resources/api/resources';
+/* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AsyncFactory, IActionExecutor, ICodeContext, Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
-import { createAzureSubscriptionClient } from '../createAzureClient';
+import { createAzureRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 /** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
@@ -42,45 +45,40 @@ export interface IResourceClient {
         list(options?: ResourceGroupsListOptionalParams): AsyncIterable<Page<ResourceGroup>>;
     };
     readonly resources: {
-        listByResourceGroup(resourceGroupName: string, options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>>;
+        listByResourceGroup(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>>;
     };
 }
 
 /**
- * Wrapper around {@linkcode ResourceManagementClient} that exposes only the
- * methods we use, with results converted to `AsyncIterable<Page<T>>` and
- * metadata attached.
+ * Wrapper around the `@azure/arm-resources` REST-style SDK that adapts free
+ * functions into the `client.resourceGroups.*` / `client.resources.*` pattern,
+ * with results converted to `AsyncIterable<Page<T>>` and metadata attached.
  *
- * Use the static {@linkcode create} factory to construct--it lazily imports the
- * SDK to keep load times down.
+ * Use the static {@linkcode create} factory to construct.
  */
 export class ResourceClient implements IResourceClient {
-    private static sdk: typeof import('@azure/arm-resources') | undefined;
-
     private constructor(
-        private readonly inner: ResourceManagementClient,
+        private readonly inner: ResourceManagementContext,
         private readonly subscription: AzureSubscription,
     ) { }
 
     /**
-     * Create a new {@linkcode ResourceClient} instance. Lazily imports
-     * `@azure/arm-resources` on first call.
+     * Create a new {@linkcode ResourceClient} instance.
      */
-    public static async create(
+    public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
         subscription: AzureSubscription,
         options?: ResourceManagementClientOptionalParams,
     ): Promise<ResourceClient> {
-        ResourceClient.sdk ??= await import('@azure/arm-resources');
-        const inner = createAzureSubscriptionClient(
+        const context = createAzureRestSubscriptionClient(
             ctx,
             executor,
-            ResourceClient.sdk.ResourceManagementClient,
+            createResourceManagement,
             subscription,
             options,
         );
-        return new ResourceClient(inner, subscription);
+        return Promise.resolve(new ResourceClient(context, subscription));
     }
 
     public get resourceGroups(): IResourceClient['resourceGroups'] {
@@ -93,8 +91,7 @@ export class ResourceClient implements IResourceClient {
 
     private listResourceGroups(options?: ResourceGroupsListOptionalParams): AsyncIterable<Page<ResourceGroup>> {
         return toPages(
-            this.inner.resourceGroups.list(options),
-            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
+            sdkListResourceGroups(this.inner, options),
             rg => {
                 const resourceGroup = attachMetadata(rg, this.subscription);
                 return Object.assign(resourceGroup, {
@@ -105,10 +102,9 @@ export class ResourceClient implements IResourceClient {
         );
     }
 
-    private listResources(resourceGroupName: string, options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>> {
+    private listResources(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>> {
         return toPages(
-            this.inner.resources.listByResourceGroup(resourceGroupName, options),
-            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
+            sdkListByResourceGroup(this.inner, resourceGroupName, options),
             r => attachMetadata(r, this.subscription),
         );
     }

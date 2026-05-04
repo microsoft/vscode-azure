@@ -4,15 +4,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type {
-    Location,
-    SubscriptionClient as SdkSubscriptionClient,
-    SubscriptionClientOptionalParams,
     SubscriptionsListLocationsOptionalParams,
 } from '@azure/arm-resources-subscriptions';
+import type {
+    Location,
+} from '@azure/arm-resources-subscriptions/models';
+/* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
+import { type SubscriptionClientOptionalParams, type SubscriptionContext, createSubscription } from '@azure/arm-resources-subscriptions/api';
+import { listLocations as sdkListLocations } from '@azure/arm-resources-subscriptions/api/subscriptions';
+/* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { createAzureClient } from '../createAzureClient';
+import { createAzureRestClient } from '../createAzureClient';
 
 export type { Location };
 
@@ -31,36 +35,31 @@ export interface ISubscriptionClient {
 }
 
 /**
- * Wrapper around the Azure SDK {@linkcode SdkSubscriptionClient} that exposes
- * only the methods we use.
+ * Wrapper around the `@azure/arm-resources-subscriptions` REST-style SDK that
+ * adapts free functions into the `client.subscriptions.*` pattern.
  *
- * Use the static {@linkcode create} factory to construct--it lazily imports the
- * SDK to keep load times down.
+ * Use the static {@linkcode create} factory to construct.
  */
 export class SubscriptionClient implements ISubscriptionClient {
-    private static sdk: typeof import('@azure/arm-resources-subscriptions') | undefined;
-
-    private constructor(private readonly inner: SdkSubscriptionClient) { }
+    private constructor(private readonly inner: SubscriptionContext) { }
 
     /**
-     * Create a new {@linkcode SubscriptionClient} instance. Lazily imports
-     * `@azure/arm-resources-subscriptions` on first call.
+     * Create a new {@linkcode SubscriptionClient} instance.
      */
-    public static async create(
+    public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
         subscription: AzureSubscription,
         options?: SubscriptionClientOptionalParams,
     ): Promise<SubscriptionClient> {
-        SubscriptionClient.sdk ??= await import('@azure/arm-resources-subscriptions');
-        const inner = createAzureClient(
+        const context = createAzureRestClient(
             ctx,
             executor,
-            SubscriptionClient.sdk.SubscriptionClient,
+            createSubscription,
             subscription,
             options,
         );
-        return new SubscriptionClient(inner);
+        return Promise.resolve(new SubscriptionClient(context));
     }
 
     public get subscriptions(): ISubscriptionClient['subscriptions'] {
@@ -76,7 +75,7 @@ export class SubscriptionClient implements ISubscriptionClient {
         }
 
         const locations: Location[] = [];
-        for await (const location of this.inner.subscriptions.listLocations(subscriptionId, options)) {
+        for await (const location of sdkListLocations(this.inner, subscriptionId, options)) {
             locations.push(location);
         }
 

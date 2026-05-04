@@ -5,7 +5,6 @@
 
 import type { Client as RestClient, ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
-import type { ServiceClient, ServiceClientOptions } from '@azure/core-client';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
@@ -17,85 +16,37 @@ import { RemoveBOMPolicy } from './pipeline/RemoveBOMPolicy';
 let azureAuth: typeof import('@microsoft/vscode-azext-azureauth') | undefined;
 
 /**
- * Create a classic `ServiceClient`-style Azure SDK client with the
- * standard set of pipeline policies applied (see {@linkcode DedupeRequestPolicy},
- * {@linkcode CorrelationIdPolicy}, {@linkcode AcceptLanguagePolicy},
- * {@linkcode MFAChallengePolicy}, {@linkcode RemoveBOMPolicy}) and a
- * user-agent prefix derived from the extension id/version.
+ * REST-style (`@azure-rest/core-client`) factory for SDKs whose
+ * `create*(credential, options?)` free function does **not** take a
+ * `subscriptionId` (e.g. `@azure/arm-resources-subscriptions`).
  *
- * @param ctx - Code context, used for environment/user-agent and `accept-language`.
- * @param executor - Action executor, used by context-aware policies.
- * @param clientCtor - Constructor of the SDK client class.
- * @param credentialOrSubscription - Either a raw {@linkcode TokenCredential}
- *   or an {@linkcode AzureSubscription} (whose credential + environment are
- *   used).
- * @param options - Optional SDK client options; pipeline policies and
- *   user-agent prefix are merged in.
+ * Applies the standard set of pipeline policies (see
+ * {@linkcode DedupeRequestPolicy}, {@linkcode CorrelationIdPolicy},
+ * {@linkcode AcceptLanguagePolicy}, {@linkcode MFAChallengePolicy},
+ * {@linkcode RemoveBOMPolicy}) and a user-agent prefix derived from
+ * the extension id/version.
  */
-export function createAzureClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
+export function createAzureRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
-    clientCtor: new (credential: TokenCredential, options?: TOptions) => TClient,
+    getClient: (credential: TokenCredential, options?: TOptions) => TClient,
     credentialOrSubscription: TokenCredential | AzureSubscription,
     options?: TOptions,
 ): TClient {
     const { credential, resolvedOptions } = resolveCredentialArgs<TOptions>(credentialOrSubscription, options);
-    executor.output.debug(`[rest] create client ${clientCtor.name}`);
-    return new clientCtor(credential, applyDefaults(ctx, executor, resolvedOptions));
+    executor.output.debug(`[rest] create rest client ${getClient.name}`);
+    return getClient(credential, applyDefaults(ctx, executor, resolvedOptions));
 }
-
-/**
- * Subscription-scoped variant of {@linkcode createAzureClient} for SDK
- * clients that take `(credential, subscriptionId, options?)` in their
- * constructor. Accepts either an {@linkcode AzureSubscription} or an
- * explicit `(credential, subscriptionId)` pair.
- */
-export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
-    ctx: ICodeContext,
-    executor: IActionExecutor,
-    clientCtor: new (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
-    subscription: AzureSubscription,
-    options?: TOptions,
-): TClient;
-export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
-    ctx: ICodeContext,
-    executor: IActionExecutor,
-    clientCtor: new (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
-    credential: TokenCredential,
-    subscriptionId: string,
-    options?: TOptions,
-): TClient;
-export function createAzureSubscriptionClient<TClient extends ServiceClient, TOptions extends ServiceClientOptions>(
-    ctx: ICodeContext,
-    executor: IActionExecutor,
-    clientCtor: new (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
-    credentialOrSubscription: TokenCredential | AzureSubscription,
-    subscriptionIdOrOptions?: string | TOptions,
-    optionsOrUndefined?: TOptions,
-): TClient {
-    const { credential, subscriptionId, resolvedOptions } = resolveSubscriptionArgs<TOptions>(credentialOrSubscription, subscriptionIdOrOptions, optionsOrUndefined);
-    executor.output.debug(`[rest] create subscription client ${clientCtor.name} subscription=${subscriptionId}`);
-    return new clientCtor(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions));
-}
-
-// TODO: future: uncomment or remove as needed
-// export function createAzureRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
-//     ctx: ICodeContext,
-//     executor: IActionExecutor,
-//     getClient: (credential: TokenCredential, options?: TOptions) => TClient,
-//     credential: TokenCredential,
-//     options?: TOptions,
-// ): TClient {
-//     return getClient(credential, applyDefaults(ctx, executor, options));
-// }
 
 /**
  * REST-style (`@azure-rest/core-client`) subscription-scoped factory.
  *
- * Equivalent to {@linkcode createAzureSubscriptionClient} but for the
- * newer SDKs that export a `create*Management(credential, subscriptionId, options?)`
- * free function instead of a class constructor (e.g.
- * `@azure/arm-containerregistry`).
+ * For the newer SDKs that export a
+ * `create*Management(credential, subscriptionId, options?)` free function
+ * instead of a class constructor (e.g. `@azure/arm-containerregistry`).
+ *
+ * Applies the standard set of pipeline policies (see
+ * {@linkcode createAzureRestClient}).
  */
 export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
@@ -176,7 +127,7 @@ function resolveSubscriptionArgs<TOptions>(
     }
 }
 
-function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions>(
+function applyDefaults<TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
     options?: TOptions,
@@ -215,7 +166,7 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
                 position: 'perRetry',
             },
         ],
-    } satisfies (RestClientOptions | ServiceClientOptions) as TOptions;
+    } satisfies RestClientOptions as TOptions;
 }
 
 // TODO: future: Other policies we (maybe) need from before:
