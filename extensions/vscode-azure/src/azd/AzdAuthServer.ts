@@ -6,7 +6,7 @@
 import { VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
 import { IOutputChannel, IVsCode, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
-import { generateKeyPair as cryptoGenerateKeyPair, randomBytes, randomUUID } from 'node:crypto';
+import { createPrivateKey, createPublicKey, generateKeyPair as cryptoGenerateKeyPair, sign as cryptoSign, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer, type Server } from 'node:https';
 import { text } from 'node:stream/consumers';
@@ -45,9 +45,10 @@ const apiVersion = '2023-07-12-preview';
  * - Response: `{ "status": "success", "token": "...", "expiresOn": "..." }`
  *   or `{ "status": "error", "code": "...", "message": "..." }`
  *
- * A self-signed TLS certificate is generated using `node-forge` so that
- * communication between azd and this server is encrypted. The cert is
- * passed to azd as base64-encoded DER via `AZD_AUTH_CERT`.
+ * A self-signed TLS certificate is generated using Node's built-in
+ * `node:crypto` module so that communication between azd and this
+ * server is encrypted. The cert is passed to azd as base64-encoded
+ * DER via `AZD_AUTH_CERT`.
  */
 interface ServerState {
     readonly server: Server;
@@ -203,70 +204,199 @@ function listen(server: Server): Promise<number> {
 }
 
 /**
- * Generates a self-signed X.509 certificate and RSA key pair.
- * The certificate is valid for 1 year and bound to `127.0.0.1`.
+ * Generates a self-signed X.509 certificate and RSA key pair using
+ * only Node's built-in `node:crypto` module (no external dependencies).
  *
- * RSA key generation uses Node's built-in `crypto.generateKeyPair`
- * to avoid blocking the extension host thread. The resulting keys are
- * converted to `node-forge` format for certificate construction.
+ * The certificate is valid for 1 year and bound to `127.0.0.1`.
+ * RSA key generation uses Node's `crypto.generateKeyPair` to avoid
+ * blocking the extension host thread. The X.509 structure is built
+ * as raw DER/ASN.1 and signed with `crypto.sign`.
  *
  * @returns PEM-encoded cert and key (for the Node.js HTTPS server),
  *   plus the base64-encoded DER cert (for `AZD_AUTH_CERT`).
  */
 async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: string; certDerBase64: string }> {
-    // In parallel, generate an RSA key pair and import `node-forge` for cert creation
-    const [keyResult, forgeModule] = await Promise.all([
-        promisify(cryptoGenerateKeyPair)('rsa', {
-            modulusLength: 2048,
-            publicKeyEncoding: { type: 'spki', format: 'pem' },
-            privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-        }),
-        import('node-forge'),
-    ]);
+    const keyResult = await promisify(cryptoGenerateKeyPair)('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
 
-    // node-forge is CommonJS; dynamic import wraps it in { default: ... }
-    const forge = ('default' in forgeModule ? forgeModule.default : forgeModule);
+    const privateKey = createPrivateKey(keyResult.privateKey);
+    const publicKeyDer = createPublicKey(keyResult.publicKey).export({ type: 'spki', format: 'der' });
 
-    const publicKey = forge.pki.publicKeyFromPem(keyResult.publicKey);
-    const privateKey = forge.pki.privateKeyFromPem(keyResult.privateKey);
-
-    const cert = forge.pki.createCertificate();
-
-    cert.publicKey = publicKey;
     // Ensure the high bit is clear so the serial is a positive ASN.1 integer
     const serialBytes = randomBytes(16);
     serialBytes[0] &= 0x7f;
-    cert.serialNumber = serialBytes.toString('hex');
 
     const now = new Date();
-    cert.validity.notBefore = now;
-    cert.validity.notAfter = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+    const notAfter = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
-    const attrs = [{ name: 'commonName', value: '127.0.0.1' }];
-    cert.setSubject(attrs);
-    cert.setIssuer(attrs);
+    const issuerAndSubject = derSequence([
+        // SET { SEQUENCE { OID commonName, UTF8String "127.0.0.1" } }
+        derSet([derSequence([derOid([2, 5, 4, 3]), derUtf8String('127.0.0.1')])]),
+    ]);
 
     // Node.js's OpenSSL requires cA:true and keyCertSign to accept a
     // self-signed cert as a trusted CA (used by the test client's `ca` option).
     // Go's TLS (used by azd) does not, so we only set these during tests.
     const isTest = process.env.VSCODE_RUNNING_TESTS === '1';
 
-    cert.setExtensions([
-        { name: 'subjectAltName', altNames: [{ type: 7, ip: '127.0.0.1' }] },
-        { name: 'basicConstraints', cA: isTest },
-        { name: 'keyUsage', digitalSignature: true, keyEncipherment: true, keyCertSign: isTest },
-        { name: 'extKeyUsage', serverAuth: true },
+    const extensions = derSequence([
+        // subjectAltName: IP 127.0.0.1
+        derSequence([derOid([2, 5, 29, 17]), derOctetString(derSequence([
+            derContextTag(7, Buffer.from([127, 0, 0, 1])),
+        ]))]),
+        // basicConstraints: cA = isTest
+        derSequence([derOid([2, 5, 29, 19]), derBoolean(true), derOctetString(derSequence(
+            isTest ? [derBoolean(true)] : [],
+        ))]),
+        // keyUsage: digitalSignature | keyEncipherment | (keyCertSign if test)
+        derSequence([derOid([2, 5, 29, 15]), derBoolean(true), derOctetString(
+            derBitString(Buffer.from([isTest ? 0xa4 : 0xa0]), isTest ? 2 : 5),
+        )]),
+        // extKeyUsage: serverAuth
+        derSequence([derOid([2, 5, 29, 37]), derOctetString(derSequence([
+            derOid([1, 3, 6, 1, 5, 5, 7, 3, 1]),
+        ]))]),
     ]);
 
-    cert.sign(privateKey, forge.md.sha256.create());
+    const tbsCertificate = derSequence([
+        // version: v3 (explicit tag [0])
+        derExplicitTag(0, derInteger(2)),
+        // serial number
+        derInteger(serialBytes),
+        // signature algorithm: sha256WithRSAEncryption
+        derSequence([derOid([1, 2, 840, 113549, 1, 1, 11]), derNull()]),
+        // issuer
+        issuerAndSubject,
+        // validity
+        derSequence([derUtcTime(now), derUtcTime(notAfter)]),
+        // subject
+        issuerAndSubject,
+        // subjectPublicKeyInfo (raw from Node's SPKI export)
+        publicKeyDer,
+        // extensions (explicit tag [3])
+        derExplicitTag(3, extensions),
+    ]);
 
-    const certPem = forge.pki.certificateToPem(cert);
-    const keyPem = forge.pki.privateKeyToPem(privateKey);
+    // Sign the TBS certificate
+    const signature = cryptoSign('sha256', tbsCertificate, privateKey);
 
-    // DER encoding: convert the ASN.1 cert to DER bytes, then base64
-    const certAsn1 = forge.pki.certificateToAsn1(cert);
-    const certDer = forge.asn1.toDer(certAsn1);
-    const certDerBase64 = forge.util.encode64(certDer.getBytes());
+    // Construct the full certificate
+    const certDer = derSequence([
+        tbsCertificate,
+        // signature algorithm
+        derSequence([derOid([1, 2, 840, 113549, 1, 1, 11]), derNull()]),
+        // signature value (BIT STRING with 0 unused bits)
+        derBitString(signature, 0),
+    ]);
+
+    const certDerBase64 = certDer.toString('base64');
+    const certPem = `-----BEGIN CERTIFICATE-----\n${certDerBase64.match(/.{1,64}/g)!.join('\n')}\n-----END CERTIFICATE-----\n`; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- base64 is never empty
+    const keyPem = keyResult.privateKey;
 
     return { certPem, keyPem, certDerBase64 };
+}
+
+// ---------------------------------------------------------------------------
+// Minimal DER / ASN.1 encoding helpers
+// ---------------------------------------------------------------------------
+
+/** Encode a DER tag + length + value. */
+function derTlv(tag: number, value: Buffer): Buffer {
+    const length = value.length;
+    let header: Buffer;
+    if (length < 0x80) {
+        header = Buffer.from([tag, length]);
+    } else if (length < 0x100) {
+        header = Buffer.from([tag, 0x81, length]);
+    } else if (length < 0x10000) {
+        header = Buffer.from([tag, 0x82, (length >> 8) & 0xff, length & 0xff]);
+    } else {
+        header = Buffer.from([tag, 0x83, (length >> 16) & 0xff, (length >> 8) & 0xff, length & 0xff]);
+    }
+    return Buffer.concat([header, value]);
+}
+
+function derSequence(items: Buffer[]): Buffer {
+    return derTlv(0x30, Buffer.concat(items));
+}
+
+function derSet(items: Buffer[]): Buffer {
+    return derTlv(0x31, Buffer.concat(items));
+}
+
+function derInteger(value: number | Buffer): Buffer {
+    if (typeof value === 'number') {
+        if (value < 0x80) {
+            return derTlv(0x02, Buffer.from([value]));
+        }
+        const bytes: number[] = [];
+        let v = value;
+        while (v > 0) {
+            bytes.unshift(v & 0xff);
+            v >>= 8;
+        }
+        if (bytes[0] & 0x80) {
+            bytes.unshift(0);
+        }
+        return derTlv(0x02, Buffer.from(bytes));
+    }
+    // Buffer: ensure positive by prepending 0 if high bit is set
+    const buf = (value[0] & 0x80) ? Buffer.concat([Buffer.from([0]), value]) : value;
+    return derTlv(0x02, buf);
+}
+
+function derBitString(data: Buffer, unusedBits: number): Buffer {
+    return derTlv(0x03, Buffer.concat([Buffer.from([unusedBits]), data]));
+}
+
+function derOctetString(data: Buffer): Buffer {
+    return derTlv(0x04, data);
+}
+
+function derNull(): Buffer {
+    return Buffer.from([0x05, 0x00]);
+}
+
+function derBoolean(value: boolean): Buffer {
+    return derTlv(0x01, Buffer.from([value ? 0xff : 0x00]));
+}
+
+function derOid(components: number[]): Buffer {
+    const bytes: number[] = [40 * components[0] + components[1]];
+    for (let i = 2; i < components.length; i++) {
+        let c = components[i];
+        if (c < 128) {
+            bytes.push(c);
+        } else {
+            const encoded: number[] = [];
+            encoded.push(c & 0x7f);
+            c >>= 7;
+            while (c > 0) {
+                encoded.push((c & 0x7f) | 0x80);
+                c >>= 7;
+            }
+            bytes.push(...encoded.reverse());
+        }
+    }
+    return derTlv(0x06, Buffer.from(bytes));
+}
+
+function derUtf8String(value: string): Buffer {
+    return derTlv(0x0c, Buffer.from(value, 'utf8'));
+}
+
+function derUtcTime(date: Date): Buffer {
+    const s = date.toISOString().replace(/[-:T]/g, '').slice(2, 14) + 'Z';
+    return derTlv(0x17, Buffer.from(s, 'ascii'));
+}
+
+function derExplicitTag(tagNumber: number, value: Buffer): Buffer {
+    return derTlv(0xa0 | tagNumber, value);
+}
+
+function derContextTag(tagNumber: number, value: Buffer): Buffer {
+    return derTlv(0x80 | tagNumber, value);
 }
