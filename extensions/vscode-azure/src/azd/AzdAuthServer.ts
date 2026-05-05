@@ -292,10 +292,20 @@ async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: stri
     ]);
 
     const certDerBase64 = certDer.toString('base64');
-    const certPem = `-----BEGIN CERTIFICATE-----\n${certDerBase64.match(/.{1,64}/g)!.join('\n')}\n-----END CERTIFICATE-----\n`; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- base64 is never empty
+    const certPem = certDerToPem(certDerBase64);
     const keyPem = keyResult.privateKey;
 
     return { certPem, keyPem, certDerBase64 };
+}
+
+/**
+ * Converts a base64-encoded DER certificate to PEM format.
+ *
+ * @internal Exported only for tests -- not part of the public API.
+ */
+export function certDerToPem(base64Der: string): string {
+    const wrapped = base64Der.match(/.{1,64}/g)!.join('\n'); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- base64 is never empty
+    return `-----BEGIN CERTIFICATE-----\n${wrapped}\n-----END CERTIFICATE-----\n`;
 }
 
 // ---------------------------------------------------------------------------
