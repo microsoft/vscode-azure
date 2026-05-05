@@ -18,7 +18,7 @@ interface SpawnOpts {
     args: Array<string | { value: string; quoting: number }>;
     cwd: { path: string };
     parseJson?: boolean;
-    taskName?: string;
+    name?: string;
     source?: string;
     alwaysRunNew?: boolean;
     focus?: boolean;
