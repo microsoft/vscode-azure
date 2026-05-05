@@ -390,6 +390,35 @@ describe('AzdService (unit)', () => {
             expect(argValues(fallbackOpts.args)).to.include('--output');
             expect(argValues(fallbackOpts.args)).to.include('json');
         });
+
+        it('should extract deployment info from stderr JSON lines in fallback mode', async () => {
+            const noShellResult: TerminalProcessResult = {
+                shellIntegration: false,
+                output: (async function* () { /* empty */ })(),
+                completed: Promise.resolve({ exitCode: undefined }),
+            };
+            const portalUrl = 'https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1%2Fproviders%2FMicrosoft.Resources%2Fdeployments%2Fdeploy-1';
+            let callCount = 0;
+            const spawnFn = mock.fn(() => {
+                callCount++;
+                if (callCount === 1) {
+                    return Promise.resolve(noShellResult);
+                }
+                return Promise.resolve(createMockJsonLinesResult([
+                    { type: 'info', data: { message: `View at ${portalUrl}` } },
+                ]));
+            });
+            const { service, fs } = createService(spawnFn as unknown as SpawnFn);
+            fs.addFile(MockUri.file('/project/azure.yaml'));
+
+            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
+            await result.completed;
+
+            const info = await result.deploymentInfo;
+            expect(info).to.not.be.undefined;
+            expect(info!.subscriptionId).to.equal('sub-1');
+            expect(info!.deploymentId).to.include('deploy-1');
+        });
     });
 
     describe('deployWithCapture', () => {
@@ -530,6 +559,12 @@ describe('parseDeploymentIdFromOutput (unit)', () => {
 
     it('should return undefined when the decoded ID is not a valid ARM resource ID', () => {
         const output = 'https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/not-a-valid-id';
+
+        expect(parseDeploymentIdFromOutput(output)).to.be.undefined;
+    });
+
+    it('should return undefined when the URL contains malformed percent-encoding', () => {
+        const output = 'https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%ZZmalformed';
 
         expect(parseDeploymentIdFromOutput(output)).to.be.undefined;
     });

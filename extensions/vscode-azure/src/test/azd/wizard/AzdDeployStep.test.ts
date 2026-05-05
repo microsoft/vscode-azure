@@ -73,7 +73,7 @@ describe('AzdDeployStep (unit)', () => {
             const { azd, step } = createStep();
 
             const context = {
-                provision: true,
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -92,7 +92,7 @@ describe('AzdDeployStep (unit)', () => {
             }));
 
             const context = {
-                provision: true,
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -105,7 +105,7 @@ describe('AzdDeployStep (unit)', () => {
             const { step } = createStep();
 
             const context = {
-                provision: true,
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -118,7 +118,7 @@ describe('AzdDeployStep (unit)', () => {
             const { codeProvider, step } = createStep();
 
             const context = {
-                provision: true,
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -139,7 +139,7 @@ describe('AzdDeployStep (unit)', () => {
             }));
 
             const context = {
-                provision: true,
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 

@@ -60,5 +60,41 @@ describe('ShowEndpointUrlStep (unit)', () => {
             const msg = showInfo.mock.calls[0].arguments[0];
             expect(msg).to.include('https://first.azurewebsites.net');
         });
+
+        it('should open the URL in a browser when user clicks Open in Browser', async () => {
+            const { step, mockResult } = createStep();
+
+            // Queue a response simulating the user clicking "Open in Browser"
+            mockResult.messageResponses.push('Open in Browser');
+
+            const context = {
+                endpointUrls: ['https://first.azurewebsites.net'],
+            } as AzdWizardContext;
+
+            step.execute(context);
+
+            // Let the promise chain in execute() settle (showInformationMessage -> then -> openExternal)
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            const openExternal = mockResult.env.openExternal as unknown as Mock<typeof mockResult.env.openExternal>;
+            expect(openExternal.mock.callCount()).to.equal(1);
+        });
+
+        it('should not open the URL when user dismisses the toast', async () => {
+            const { step, mockResult } = createStep();
+
+            // No response queued — simulates dismissal (resolves to undefined)
+
+            const context = {
+                endpointUrls: ['https://first.azurewebsites.net'],
+            } as AzdWizardContext;
+
+            step.execute(context);
+
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            const openExternal = mockResult.env.openExternal as unknown as Mock<typeof mockResult.env.openExternal>;
+            expect(openExternal.mock.callCount()).to.equal(0);
+        });
     });
 });

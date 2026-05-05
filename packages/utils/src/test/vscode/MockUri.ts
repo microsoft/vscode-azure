@@ -20,6 +20,15 @@ export class MockUri {
     toString() { return `${this.scheme}://${this.path}`; }
     /** Creates a `file:` scheme {@linkcode MockUri} for the given path. */
     static file(path: string) { return new MockUri('file', path); }
+    /** Parses a URI string into a {@linkcode MockUri}. */
+    static parse(value: string) {
+        try {
+            const url = new URL(value);
+            return new MockUri(url.protocol.replace(/:$/, ''), url.pathname);
+        } catch {
+            return new MockUri('', value);
+        }
+    }
     /** Joins additional path segments onto `base` using `/` as separator. */
     static joinPath(base: MockUri, ...segments: string[]) {
         return new MockUri(base.scheme, [base.path, ...segments].join('/'));
