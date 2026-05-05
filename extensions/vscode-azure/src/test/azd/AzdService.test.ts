@@ -18,7 +18,7 @@ interface SpawnOpts {
     args: Array<string | { value: string; quoting: number }>;
     cwd: { path: string };
     parseJson?: boolean;
-    taskName?: string;
+    name?: string;
     source?: string;
     alwaysRunNew?: boolean;
     focus?: boolean;
@@ -273,7 +273,7 @@ describe('AzdService (unit)', () => {
             expect(opts.execution).to.equal('foreground');
             expect(opts.command).to.equal('azd');
             expect(argValues(opts.args)).to.include('provision');
-            expect(opts.taskName).to.equal('azd provision');
+            expect(opts.name).to.equal('azd provision');
             expect(opts.source).to.equal('azd');
             expect(opts.alwaysRunNew).to.be.true;
             expect(opts.focus).to.be.true;

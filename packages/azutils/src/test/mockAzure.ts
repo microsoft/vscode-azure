@@ -4,7 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Environment } from '@azure/ms-rest-azure-env';
-import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
+import type { AzureAccount, AzureSubscription, AzureSubscriptionProvider, AzureTenant } from '@microsoft/vscode-azext-azureauth';
+import { EventEmitter } from '@microsoft/vscode-azure-utils';
+import { mock } from 'node:test';
 import type { GenericResource } from '../models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../models/Grouping';
 import type { VirtualResource } from '../models/VirtualResource';
@@ -118,4 +120,32 @@ export function makeVirtualResource(overrides?: Partial<VirtualResource>): Virtu
         azureResource: makeGenericResource(),
         ...overrides,
     };
+}
+
+/** Options for overriding {@linkcode createMockSubscriptionProvider} defaults. */
+export interface MockSubscriptionProviderOptions {
+    readonly accounts?: AzureAccount[];
+    readonly tenants?: AzureTenant[];
+    readonly subscriptions?: AzureSubscription[];
+}
+
+/**
+ * Creates a mock {@linkcode AzureSubscriptionProvider} backed by canned data.
+ * All methods are wrapped with `mock.fn()` from `node:test` so callers can
+ * assert call counts and arguments.
+ */
+export function createMockSubscriptionProvider(options?: MockSubscriptionProviderOptions): AzureSubscriptionProvider {
+    const accounts = options?.accounts ?? [makeAccount()];
+    const tenants = options?.tenants ?? [makeTenant()];
+    const subscriptions = options?.subscriptions ?? [makeSubscription()];
+    const emitter = new EventEmitter<unknown>();
+    return {
+        onRefreshSuggested: emitter.event,
+        signIn: mock.fn(() => Promise.resolve(true)),
+        getAccounts: mock.fn(() => Promise.resolve(accounts)),
+        getAvailableSubscriptions: mock.fn(() => Promise.resolve(subscriptions)),
+        getUnauthenticatedTenantsForAccount: mock.fn(() => Promise.resolve([])),
+        getTenantsForAccount: mock.fn(() => Promise.resolve(tenants)),
+        getSubscriptionsForTenant: mock.fn(() => Promise.resolve(subscriptions)),
+    } as unknown as AzureSubscriptionProvider;
 }

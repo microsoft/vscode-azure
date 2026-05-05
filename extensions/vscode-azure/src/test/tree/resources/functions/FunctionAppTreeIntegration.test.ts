@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -13,7 +13,7 @@ import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import { AddOrEditAppSetting } from '../../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../commands/functions/DeleteAppSetting';
-import { createMockResourceClient, createMockSubscriptionProvider } from '../../../../debug/mockData';
+import { createMockResourceClient } from '../../../../debug/mockData';
 import { FunctionAppVirtualPaths } from '../../../../tree/resources/functions/FunctionApp';
 import { FunctionAppDataProvider } from '../../../../tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functions/FunctionAppViewProvider';

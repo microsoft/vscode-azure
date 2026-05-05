@@ -225,7 +225,7 @@ export class AzdService implements IAzdService {
                 )(),
                 cwd,
                 env: authEnv,
-                taskName: 'azd provision',
+                name: 'azd provision',
                 source: 'azd',
                 alwaysRunNew: true,
                 focus: true,
