@@ -26,7 +26,7 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
     }
 
     public override shouldExecute(context: Readonly<TContext>): boolean {
-        return context.provision === true && !!context.iacFolder;
+        return context.deploy === true && !!context.iacFolder;
     }
 
     public async execute(context: TContext): Promise<void> {

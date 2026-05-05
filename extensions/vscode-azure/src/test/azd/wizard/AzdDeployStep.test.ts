@@ -29,22 +29,22 @@ function createStep() {
 
 describe('AzdDeployStep (unit)', () => {
     describe('shouldExecute', () => {
-        it('should return true when provision is true and iacFolder is set', () => {
+        it('should return true when deploy is true and iacFolder is set', () => {
             const { step } = createStep();
 
             const context = {
-                provision: true,
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
             expect(step.shouldExecute(context)).to.be.true;
         });
 
-        it('should return false when provision is false', () => {
+        it('should return false when deploy is false', () => {
             const { step } = createStep();
 
             const context = {
-                provision: false,
+                deploy: false,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -55,7 +55,7 @@ describe('AzdDeployStep (unit)', () => {
             const { step } = createStep();
 
             const context = {
-                provision: true,
+                deploy: true,
             } as AzdWizardContext;
 
             expect(step.shouldExecute(context)).to.be.false;

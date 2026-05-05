@@ -51,6 +51,7 @@ export class AzdUp implements ManagedCommand {
             {
                 iacFolder,
                 provision: true,
+                deploy: true,
             },
             [], // No prompt steps -- cwd is resolved above
             [
