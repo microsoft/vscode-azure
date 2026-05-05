@@ -10,6 +10,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { TempProjectManager } from '../../azd/wizard/TempProjectManager';
 import { AzdUp } from '../../commands/AzdUp';
 import { createMockAzdService } from '../azd/MockAzdService';
 
@@ -46,7 +47,7 @@ describe('AzdUp (unit)', () => {
 
         }
 
-        const cmd = new AzdUp(createActionContext('test'), ctx, output, azd, armProvider, codeProvider, subscriptionProvider, dataTree);
+        const cmd = new AzdUp(createActionContext('test'), ctx, output, azd, armProvider, codeProvider, subscriptionProvider, dataTree, new TempProjectManager(ctx));
         return { cmd, ctx, mockResult, azd, dataTree };
     }
 

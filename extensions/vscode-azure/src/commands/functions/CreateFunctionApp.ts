@@ -58,7 +58,7 @@ export class CreateFunctionApp implements ManagedCommand {
     /** @inheritdoc */
     public async execute(job: AzdJob): Promise<void> {
         const promptSteps = [
-            new SelectIacFolderStep(this.ctx, this.tempManager),
+            new SelectIacFolderStep(this.actionContext, this.ctx, this.tempManager, this.azd),
             new HydrateAzdInfoStep(this.ctx.code, this.azd),
             new HydratableChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
             new HydratableChooseLocationStep(this.ctx, this.subscriptionClientProvider, this.output),
