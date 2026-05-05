@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockDataItemTree, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockDataItemTree, createMockSubscriptionProvider, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -61,6 +61,12 @@ describe('CreateFunctionApp (unit)', () => {
             return Promise.resolve();
         });
 
+        const armProvider = { trackDeployment: mock.fn() } as never;
+        const codeProvider = {
+            trackDeployment: mock.fn(() => ({ id: 'test', type: 'codeDeployment', status: 'InProgress', title: 'test', startTime: new Date() })),
+        } as never;
+        const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
+
         const cmd = new CreateFunctionApp(
             ctx,
             output,
@@ -69,6 +75,9 @@ describe('CreateFunctionApp (unit)', () => {
             subscriptionClientProvider,
             tempManager,
             azd,
+            armProvider,
+            codeProvider,
+            subscriptionProvider,
         );
 
         return { cmd, ctx, mockResult, fs: mockResult.fs, azd };
@@ -102,7 +111,7 @@ describe('CreateFunctionApp (unit)', () => {
         expect(location).to.equal('eastus');
         expect(subscriptionId).to.equal('sub-1');
 
-        expect(azd.provision.mock.callCount()).to.equal(1);
+        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
     });
 
     it('should run the deploy job Fresh flow against the workspace folder', async () => {
@@ -121,7 +130,7 @@ describe('CreateFunctionApp (unit)', () => {
         expect(azd.init.mock.callCount()).to.equal(1);
         expect(fs.copy.mock.callCount()).to.be.greaterThanOrEqual(1);
         expect(azd.envNew.mock.callCount()).to.equal(1);
-        expect(azd.provision.mock.callCount()).to.equal(1);
+        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
     });
 
     it('should skip yaml/bicep/env-new in the deploy job Bootstrapped flow', async () => {
@@ -156,7 +165,7 @@ describe('CreateFunctionApp (unit)', () => {
         expect(azd.init.mock.callCount()).to.equal(0);
         expect(fs.copy.mock.callCount()).to.equal(0);
         expect(azd.envNew.mock.callCount()).to.equal(0);
-        expect(azd.provision.mock.callCount()).to.equal(1);
+        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
     });
 
     it('should skip provisioning when user picks No on ConfirmProvisionStep', async () => {
@@ -185,6 +194,6 @@ describe('CreateFunctionApp (unit)', () => {
 
         await cmd.execute('deploy');
 
-        expect(azd.provision.mock.callCount()).to.equal(0);
+        expect(azd.provisionWithCapture.mock.callCount()).to.equal(0);
     });
 });

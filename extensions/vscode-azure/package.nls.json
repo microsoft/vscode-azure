@@ -18,6 +18,7 @@
     "commands.vscode-azure/functionApp/appSettings/delete": "Delete Setting",
     "commands.vscode-azure/functions/createNew": "Create Empty Function App in Azure...",
     "commands.vscode-azure/functions/deploy": "Deploy Project as Function App...",
+    "commands.vscode-azure/azdUp": "Provision & Deploy",
     "settings.title": "Azure",
     "settings.vscode-azure.pageSize": "Number of items to load per page when fetching Azure resources.",
     "settings.vscode-azure.alwaysShowAccountNodes": "Always show account and tenant nodes in the Resources tree view, even when there is only one. By default, these nodes are hidden when there is a single account or tenant, and subscriptions are shown directly at the root.",
