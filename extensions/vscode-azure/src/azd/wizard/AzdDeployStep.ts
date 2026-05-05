@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep, type IActionContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import * as crypto from 'crypto';
 import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
@@ -33,7 +34,7 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
         const result = await this.azd.deployWithCapture(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
         const activity = this.codeProvider.trackDeployment({
-            id: `azd-deploy-${Date.now()}`,
+            id: crypto.randomUUID(),
             status: 'InProgress',
             title: 'azd deploy',
         });

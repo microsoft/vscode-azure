@@ -424,7 +424,7 @@ export class AzdService implements IAzdService {
             if (services) {
                 for (const svc of Object.values(services)) {
                     for (const artifact of svc.artifacts ?? []) {
-                        if (artifact.kind === 'endpoint' && artifact.location) {
+                        if (artifact.kind === 'endpoint' && artifact.location && !endpointUrls.includes(artifact.location)) {
                             endpointUrls.push(artifact.location);
                         }
                     }
@@ -494,7 +494,12 @@ export function parseDeploymentIdFromOutput(output: string): AzdDeploymentInfo |
         return undefined;
     }
 
-    const deploymentId = decodeURIComponent(match[1]);
+    let deploymentId: string;
+    try {
+        deploymentId = decodeURIComponent(match[1]);
+    } catch {
+        return undefined;
+    }
 
     try {
         const { subscriptionId } = parseAzureResourceId(deploymentId);
