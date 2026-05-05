@@ -8,7 +8,7 @@ import { expect } from 'chai';
 import { after, afterEach, before, describe, it } from 'mocha';
 import { request as httpsRequest } from 'node:https';
 import { mock } from 'node:test';
-import { AzdAuthServer } from '../../azd/AzdAuthServer';
+import { AzdAuthServer, certDerToPem } from '../../azd/AzdAuthServer';
 
 interface TokenResponse {
     status: string;
@@ -16,15 +16,6 @@ interface TokenResponse {
     expiresOn?: string;
     code?: string;
     message?: string;
-}
-
-/**
- * Converts a base64-encoded DER cert (as produced by `AZD_AUTH_CERT`)
- * back to PEM format so Node.js TLS can use it as a trusted CA.
- */
-function certToPem(base64Der: string): string {
-    const wrapped = base64Der.replace(/(.{64})/g, '$1\n').trimEnd();
-    return `-----BEGIN CERTIFICATE-----\n${wrapped}\n-----END CERTIFICATE-----\n`;
 }
 
 function postJson(
@@ -65,7 +56,7 @@ function sendRequest(
                 'Content-Length': Buffer.byteLength(rawBody),
                 ...headers,
             },
-            ca: certToPem(certBase64Der),
+            ca: certDerToPem(certBase64Der),
         }, (res) => {
             const chunks: Buffer[] = [];
             res.on('data', (c: Buffer) => { chunks.push(c); });
