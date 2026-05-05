@@ -478,14 +478,14 @@ describe('ProcessExecutor (unit)', () => {
             m.shellExecutionEndEmitter.fire({
                 execution: execution as unknown as vscode.TerminalShellExecution,
                 terminal: createdTerminal! as unknown as vscode.Terminal,
-                exitCode: 42,
+                exitCode: 0,
                 shellIntegration: shellIntegration as unknown as vscode.TerminalShellIntegration,
             });
 
             const result = await resultPromise;
             expect(result.shellIntegration).to.be.true;
             const { exitCode } = await result.completed;
-            expect(exitCode).to.equal(42);
+            expect(exitCode).to.equal(0);
         });
 
         it('should reject with CancellationError when cancelled during terminal execution', async () => {
@@ -609,6 +609,120 @@ describe('ProcessExecutor (unit)', () => {
                 shellIntegration: shellIntegration as unknown as vscode.TerminalShellIntegration,
             });
             await resultPromise;
+        });
+
+        it('should reject with ChildProcessError on non-zero exit code', async () => {
+            const m = createMockVsCode();
+            const { shellIntegration, execution } = createMockShellIntegration();
+
+            (m.window.createTerminal as unknown as ReturnType<typeof mock.fn>).mock.mockImplementation(
+                () => createMockTerminal(shellIntegration),
+            );
+
+            const executor = new ProcessExecutor(m.vscode);
+
+            const resultPromise = executor.spawn({
+                execution: 'terminal',
+                command: process.execPath,
+                name: 'Failing Terminal',
+            });
+
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            m.shellExecutionEndEmitter.fire({
+                execution: execution as unknown as vscode.TerminalShellExecution,
+                terminal: {} as vscode.Terminal,
+                exitCode: 42,
+                shellIntegration: shellIntegration as unknown as vscode.TerminalShellIntegration,
+            });
+
+            const result = await resultPromise;
+            expect(result.shellIntegration).to.be.true;
+
+            try {
+                await result.completed;
+                expect.fail('Expected error');
+            } catch (e) {
+                expect(isChildProcessError(e)).to.be.true;
+                expect((e as Error).message).to.include('42');
+            }
+        });
+
+        it('should return shellIntegration false when shell integration times out', async () => {
+            const m = createMockVsCode();
+
+            let createdTerminal: ReturnType<typeof createMockTerminal>;
+            (m.window.createTerminal as unknown as ReturnType<typeof mock.fn>).mock.mockImplementation(() => {
+                createdTerminal = createMockTerminal(undefined);
+                return createdTerminal;
+            });
+
+            const executor = new ProcessExecutor(m.vscode);
+
+            // Use fake timers to avoid a real 5-second wait
+            const clock = mock.timers;
+            clock.enable({ apis: ['setTimeout'] });
+
+            const resultPromise = executor.spawn({
+                execution: 'terminal',
+                command: process.execPath,
+                name: 'Timeout Terminal',
+            });
+
+            // Let the terminal creation happen
+            await new Promise(resolve => setImmediate(resolve));
+
+            // Advance past the shell integration timeout
+            clock.tick(6000);
+
+            const result = await resultPromise;
+            expect(result.shellIntegration).to.be.false;
+
+            // Terminal should be disposed
+            expect(createdTerminal!.dispose.mock.callCount()).to.equal(1);
+
+            const { exitCode } = await result.completed;
+            expect(exitCode).to.be.undefined;
+
+            clock.reset();
+        });
+
+        it('should cancel waitForShellIntegration and dispose terminal when cancelled before shell integration', async () => {
+            const m = createMockVsCode();
+
+            let createdTerminal: ReturnType<typeof createMockTerminal>;
+            (m.window.createTerminal as unknown as ReturnType<typeof mock.fn>).mock.mockImplementation(() => {
+                createdTerminal = createMockTerminal(undefined);
+                return createdTerminal;
+            });
+
+            const emitter = new EventEmitter<void>();
+            const token = {
+                isCancellationRequested: false,
+                onCancellationRequested: emitter.event,
+            };
+
+            const executor = new ProcessExecutor(m.vscode);
+
+            const resultPromise = executor.spawn({
+                execution: 'terminal',
+                command: process.execPath,
+                name: 'Cancel-Before-SI Terminal',
+            }, token);
+
+            // Let the terminal creation happen
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(createdTerminal!).to.not.be.undefined;
+
+            // Cancel before shell integration arrives
+            emitter.fire();
+
+            const result = await resultPromise;
+            // waitForShellIntegration resolved undefined due to cancellation
+            expect(result.shellIntegration).to.be.false;
+
+            // Terminal should be disposed
+            expect(createdTerminal!.dispose.mock.callCount()).to.equal(1);
         });
     });
 });

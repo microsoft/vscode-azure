@@ -139,14 +139,19 @@ export interface TerminalProcessResult {
     readonly shellIntegration: boolean;
     /** Streams raw terminal output (including ANSI escapes). Empty if {@linkcode shellIntegration} is `false`. */
     readonly output: AsyncIterable<string>;
-    /** Resolves when the command exits. Exit code is `undefined` if shell integration is unavailable. */
+    /**
+     * Resolves when the command exits with code 0. Rejects with
+     * {@linkcode ChildProcessError} on non-zero exit codes, matching
+     * foreground task execution behavior.
+     */
     readonly completed: Promise<{ exitCode: number | undefined }>;
 }
 
 export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for('IProcessExecutor');
 
 /**
- * Executes external processes in the background or as VS Code tasks.
+ * Executes external processes in the background, as VS Code tasks,
+ * or in a visible terminal with shell integration.
  *
  * @remarks
  * The `execution` discriminant on the options object determines the execution
@@ -157,10 +162,14 @@ export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for(
  * - `'foreground'` -- runs as a {@linkcode vscode.Task Task} visible in the
  *   integrated terminal. Returns `Promise<void>` since task output is not
  *   capturable.
+ * - `'terminal'` -- runs in a VS Code terminal with shell integration,
+ *   allowing output capture via the terminal's `read()` stream. Falls back
+ *   gracefully when shell integration is unavailable.
  *
- * On failure, background execution throws {@linkcode ChildProcessError}
- * enriched with captured stderr. Cancellation (via {@linkcode CancellationTokenLike})
- * throws {@linkcode CancellationError} in both modes.
+ * On failure, background and terminal execution throw {@linkcode ChildProcessError}
+ * enriched with captured stderr or exit code. Cancellation (via
+ * {@linkcode CancellationTokenLike}) throws {@linkcode CancellationError}
+ * in all modes.
  */
 export interface IProcessExecutor {
     /** Runs a process in a visible terminal with shell integration output capture. */
@@ -270,7 +279,7 @@ export class ProcessExecutor implements IProcessExecutor {
         terminal.show();
 
         // Wait for shell integration to activate (with a timeout)
-        const shellIntegration = terminal.shellIntegration ?? await waitForShellIntegration(this.code, terminal);
+        const shellIntegration = terminal.shellIntegration ?? await waitForShellIntegration(this.code, terminal, cancellationToken);
 
         if (!shellIntegration) {
             // Shell integration not available -- dispose the terminal and
@@ -306,7 +315,15 @@ export class ProcessExecutor implements IProcessExecutor {
                 if (e.execution === execution) {
                     ctDisposable?.dispose();
                     endDisposable.dispose();
-                    resolve({ exitCode: e.exitCode });
+                    if (e.exitCode === 0) {
+                        resolve({ exitCode: e.exitCode });
+                    } else {
+                        reject(new ChildProcessError(
+                            this.code.l10n.t('Process exited with code {0}', e.exitCode ?? -1),
+                            e.exitCode ?? -1,
+                            null,
+                        ));
+                    }
                 }
             });
         });
@@ -412,22 +429,39 @@ const shellIntegrationTimeoutMs = 5000;
 /**
  * Waits for shell integration to become available on the given terminal.
  * Returns the {@linkcode vscode.TerminalShellIntegration} if it activates
- * within {@linkcode shellIntegrationTimeoutMs}, or `undefined` if it times out.
+ * within {@linkcode shellIntegrationTimeoutMs}, or `undefined` if it times
+ * out or {@linkcode cancellationToken} fires.
  */
-function waitForShellIntegration(code: IVsCode, terminal: vscode.Terminal): Promise<vscode.TerminalShellIntegration | undefined> {
+function waitForShellIntegration(
+    code: IVsCode,
+    terminal: vscode.Terminal,
+    cancellationToken?: CancellationTokenLike,
+): Promise<vscode.TerminalShellIntegration | undefined> {
     return new Promise<vscode.TerminalShellIntegration | undefined>((resolve) => {
+        const cleanup = () => {
+            clearTimeout(timer);
+            disposable.dispose();
+            ctDisposable?.dispose();
+        };
+
         const disposable = code.window.onDidChangeTerminalShellIntegration(e => {
             if (e.terminal === terminal) {
-                clearTimeout(timer);
-                disposable.dispose();
+                cleanup();
                 resolve(e.shellIntegration);
             }
         });
 
         const timer = setTimeout(() => {
-            clearTimeout(timer);
-            disposable.dispose();
+            cleanup();
             resolve(undefined);
         }, shellIntegrationTimeoutMs);
+
+        let ctDisposable: Disposable | undefined;
+        if (cancellationToken) {
+            ctDisposable = cancellationToken.onCancellationRequested(() => {
+                cleanup();
+                resolve(undefined);
+            });
+        }
     });
 }
