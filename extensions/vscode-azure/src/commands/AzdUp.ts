@@ -80,10 +80,8 @@ export class AzdUp implements ManagedCommand {
         // Command palette -- search workspace folders for azure.yaml
         const workspaceFolders = this.ctx.code.workspace.workspaceFolders;
         if (!workspaceFolders?.length) {
-            void this.ctx.code.window.showErrorMessage(
-                this.ctx.code.l10n.t('No workspace folder is open. Open a folder with an azure.yaml file.'),
-            );
-            return undefined;
+            this.actionContext.errorHandling.suppressReportIssue = true;
+            throw new Error(this.ctx.code.l10n.t('No workspace folder is open. Open a folder with an azure.yaml file.'));
         }
 
         const candidates: { label: string; uri: vscode.Uri }[] = [];
@@ -95,10 +93,8 @@ export class AzdUp implements ManagedCommand {
         }
 
         if (candidates.length === 0) {
-            void this.ctx.code.window.showErrorMessage(
-                this.ctx.code.l10n.t('No azure.yaml file found in the workspace.'),
-            );
-            return undefined;
+            this.actionContext.errorHandling.suppressReportIssue = true;
+            throw new Error(this.ctx.code.l10n.t('No azure.yaml file found in the workspace.'));
         }
 
         if (candidates.length === 1) {

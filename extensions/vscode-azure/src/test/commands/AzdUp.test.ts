@@ -73,24 +73,30 @@ describe('AzdUp (unit)', () => {
     });
 
     it('should show error when no workspace folders are open', async () => {
-        const { cmd, azd, mockResult } = createCommand({ workspaceFolders: false });
+        const { cmd, azd } = createCommand({ workspaceFolders: false });
 
-        await cmd.execute();
+        try {
+            await cmd.execute();
+            expect.fail('Expected error');
+        } catch (e) {
+            expect((e as Error).message).to.include('workspace folder');
+        }
 
         expect(azd.provisionWithCapture.mock.callCount()).to.equal(0);
-        const showError = mockResult.window.showErrorMessage as unknown as { mock: { callCount(): number } };
-        expect(showError.mock.callCount()).to.equal(1);
     });
 
     it('should show error when no azure.yaml found in workspace', async () => {
-        const { cmd, azd, mockResult } = createCommand();
+        const { cmd, azd } = createCommand();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(undefined));
 
-        await cmd.execute();
+        try {
+            await cmd.execute();
+            expect.fail('Expected error');
+        } catch (e) {
+            expect((e as Error).message).to.include('azure.yaml');
+        }
 
         expect(azd.provisionWithCapture.mock.callCount()).to.equal(0);
-        const showError = mockResult.window.showErrorMessage as unknown as { mock: { callCount(): number } };
-        expect(showError.mock.callCount()).to.equal(1);
     });
 
     it('should invalidate the data tree after execution', async () => {
