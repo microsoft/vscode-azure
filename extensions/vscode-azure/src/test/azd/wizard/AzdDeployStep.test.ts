@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -14,6 +15,7 @@ import { createMockAzdService } from '../MockAzdService';
 function createStep() {
     const azd = createMockAzdService();
     const output = new MockOutputChannel('test');
+    const actionContext = createActionContext('test');
     const codeProvider = {
         trackDeployment: mock.fn((activity: Record<string, unknown>) => {
             // Return the same object so in-place mutations (status, endTime) are visible
@@ -21,8 +23,8 @@ function createStep() {
             return activity;
         }),
     } as never;
-    const step = new AzdDeployStep(azd, output, codeProvider);
-    return { azd, output, codeProvider, step };
+    const step = new AzdDeployStep(actionContext, azd, output, codeProvider);
+    return { azd, output, codeProvider, actionContext, step };
 }
 
 describe('AzdDeployStep (unit)', () => {
@@ -128,8 +130,8 @@ describe('AzdDeployStep (unit)', () => {
             expect(arg.status).to.equal('Completed');
         });
 
-        it('should mark activity as Failed when deploy rejects', async () => {
-            const { azd, codeProvider, step } = createStep();
+        it('should mark activity as Failed and rethrow with suppressDisplay when deploy rejects', async () => {
+            const { azd, codeProvider, actionContext, step } = createStep();
 
             azd.deployWithCapture.mock.mockImplementation(() => Promise.resolve({
                 endpointUrls: [],
@@ -141,11 +143,17 @@ describe('AzdDeployStep (unit)', () => {
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
-            await step.execute(context);
+            try {
+                await step.execute(context);
+                expect.fail('Expected error');
+            } catch (e) {
+                expect((e as Error).message).to.equal('deploy failed');
+            }
 
             const trackFn = (codeProvider as unknown as { trackDeployment: ReturnType<typeof mock.fn> }).trackDeployment;
             const arg = trackFn.mock.calls[0].arguments[0] as Record<string, unknown>;
             expect(arg.status).to.equal('Failed');
+            expect(actionContext.errorHandling.suppressDisplay).to.be.true;
         });
     });
 });

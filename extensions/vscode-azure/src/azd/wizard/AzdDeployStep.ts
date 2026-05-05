@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, type IActionContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
@@ -17,6 +17,7 @@ import type { AzdWizardContext } from './AzdWizardContext';
  */
 export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
+        private readonly actionContext: IActionContext,
         private readonly azd: IAzdService,
         private readonly output: IOutputChannel,
         private readonly codeProvider: CodeDeploymentDataProvider,
@@ -41,9 +42,12 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
             await result.completed;
             activity.status = 'Completed';
             activity.endTime = new Date();
-        } catch {
+        } catch (e) {
             activity.status = 'Failed';
             activity.endTime = new Date();
+            // TODO: activity should include error information
+            this.actionContext.errorHandling.suppressDisplay = true;
+            throw e;
         }
 
         if (result.endpointUrls.length > 0) {

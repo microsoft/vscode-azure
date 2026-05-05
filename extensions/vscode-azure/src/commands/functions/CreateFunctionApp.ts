@@ -5,7 +5,7 @@
 
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, IOutputChannel, Wizard, type ExecuteStep } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, IOutputChannel, Wizard, type ExecuteStep } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzdService } from '../../azd/AzdService';
 import { AzdDeployStep } from '../../azd/wizard/AzdDeployStep';
@@ -42,6 +42,7 @@ import { PickRuntimeStep } from './steps/PickRuntimeStep';
 @injectable()
 export class CreateFunctionApp implements ManagedCommand {
     public constructor(
+        @inject(IActionContext) private readonly actionContext: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
@@ -75,7 +76,7 @@ export class CreateFunctionApp implements ManagedCommand {
         ];
 
         if (job === 'deploy') {
-            executeSteps.push(new AzdDeployStep(this.azd, this.output, this.codeProvider));
+            executeSteps.push(new AzdDeployStep(this.actionContext, this.azd, this.output, this.codeProvider));
             executeSteps.push(new ShowEndpointUrlStep(this.ctx));
         }
 

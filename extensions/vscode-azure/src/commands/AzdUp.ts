@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { ICodeContext, IOutputChannel, showSmartQuickPick, Wizard } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, IOutputChannel, showSmartQuickPick, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzdService } from '../azd/AzdService';
@@ -29,6 +29,7 @@ import type { ManagedCommand } from './ManagedCommand';
 @injectable()
 export class AzdUp implements ManagedCommand {
     public constructor(
+        @inject(IActionContext) private readonly actionContext: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzdService) private readonly azd: IAzdService,
@@ -54,7 +55,7 @@ export class AzdUp implements ManagedCommand {
             [], // No prompt steps -- cwd is resolved above
             [
                 new AzdProvisionStep(this.azd, this.output, this.armProvider, this.subscriptionProvider),
-                new AzdDeployStep(this.azd, this.output, this.codeProvider),
+                new AzdDeployStep(this.actionContext, this.azd, this.output, this.codeProvider),
                 new ShowEndpointUrlStep(this.ctx),
             ],
         );

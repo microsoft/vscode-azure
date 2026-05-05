@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockSubscriptionProvider } from '@microsoft/vscode-azure-azutils/testing';
+import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -45,7 +46,7 @@ describe('AzdUp (unit)', () => {
 
         }
 
-        const cmd = new AzdUp(ctx, output, azd, armProvider, codeProvider, subscriptionProvider, dataTree);
+        const cmd = new AzdUp(createActionContext('test'), ctx, output, azd, armProvider, codeProvider, subscriptionProvider, dataTree);
         return { cmd, ctx, mockResult, azd, dataTree };
     }
 
