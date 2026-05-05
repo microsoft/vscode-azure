@@ -14,3 +14,6 @@ export const LoadMoreCommandId = 'vscode-azure/resources/loadMore';
 
 /** Top-level configuration section name used with `workspace.getConfiguration()`. */
 export const ConfigurationSection = 'vscode-azure';
+
+/** ARM tag applied by azd to resources it manages, containing the environment name. */
+export const AzdEnvNameTag = 'azd-env-name';

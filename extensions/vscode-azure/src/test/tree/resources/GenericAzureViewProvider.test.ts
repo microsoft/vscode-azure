@@ -10,7 +10,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
-import { ConfigurationSection } from '../../../constants';
+import { AzdEnvNameTag, ConfigurationSection } from '../../../constants';
 import { GenericAzureViewProvider } from '../../../tree/resources/GenericAzureViewProvider';
 
 describe('GenericAzureViewProvider (unit)', () => {
@@ -193,6 +193,30 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             expect(item.label).to.equal('rg1');
             expect(item.contextValue).to.include(OpenInPortal.ContextValue);
+        });
+
+        it('should use a rocket icon and azd env name as description for resource groups with azd-env-name tag', () => {
+            const rg = makeResourceGroup({ tags: { [AzdEnvNameTag]: 'my-env' } });
+            const key = AzureNodeId.from(rg).toString();
+            const provider = createProvider([rg]);
+
+            const item = provider.getTreeItem(key);
+
+            expect(item.label).to.equal('rg1');
+            expect(item.description).to.equal('my-env');
+            expect((item.iconPath as { id: string }).id).to.equal('rocket');
+        });
+
+        it('should use the standard ResourceGroup icon when azd-env-name tag is absent', () => {
+            const rg = makeResourceGroup({ tags: { other: 'value' } });
+            const key = AzureNodeId.from(rg).toString();
+            const provider = createProvider([rg]);
+
+            const item = provider.getTreeItem(key);
+
+            expect(item.description).to.be.undefined;
+            // Standard icon is a URI from getAzureIconUri, not a ThemeIcon
+            expect(item.iconPath).to.not.have.property('id');
         });
 
         it('should render a generic resource as a leaf node', () => {
