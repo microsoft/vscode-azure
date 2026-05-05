@@ -6,7 +6,7 @@
 import { VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
 import { IOutputChannel, IVsCode, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
-import { createPrivateKey, createPublicKey, generateKeyPair as cryptoGenerateKeyPair, sign as cryptoSign, randomBytes, randomUUID } from 'node:crypto';
+import { generateKeyPair as cryptoGenerateKeyPair, sign as cryptoSign, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer, type Server } from 'node:https';
 import { text } from 'node:stream/consumers';
@@ -218,12 +218,11 @@ function listen(server: Server): Promise<number> {
 async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: string; certDerBase64: string }> {
     const keyResult = await promisify(cryptoGenerateKeyPair)('rsa', {
         modulusLength: 2048,
-        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        publicKeyEncoding: { type: 'spki', format: 'der' },
         privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
     });
 
-    const privateKey = createPrivateKey(keyResult.privateKey);
-    const publicKeyDer = createPublicKey(keyResult.publicKey).export({ type: 'spki', format: 'der' });
+    const publicKeyDer = keyResult.publicKey;
 
     // Ensure the high bit is clear so the serial is a positive ASN.1 integer
     const serialBytes = randomBytes(16);
@@ -281,7 +280,7 @@ async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: stri
     ]);
 
     // Sign the TBS certificate
-    const signature = cryptoSign('sha256', tbsCertificate, privateKey);
+    const signature = cryptoSign('sha256', tbsCertificate, keyResult.privateKey);
 
     // Construct the full certificate
     const certDer = derSequence([
