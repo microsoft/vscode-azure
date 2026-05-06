@@ -242,9 +242,9 @@ export class AzdService implements IAzdService {
                     withArg('provision'),
                 )(),
                 cwd,
+                env: { ...authEnv, ...env },
                 name: 'azd provision',
                 source: 'azd',
-                env: { ...authEnv, ...env },
             });
         } catch (e) {
             throw this.wrapEnoent(e);
@@ -267,9 +267,9 @@ export class AzdService implements IAzdService {
                     withArg('deploy'),
                 )(),
                 cwd,
+                env: authEnv,
                 name: 'azd deploy',
                 source: 'azd',
-                env: authEnv,
             });
         } catch (e) {
             throw this.wrapEnoent(e);
