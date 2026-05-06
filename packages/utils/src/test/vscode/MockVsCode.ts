@@ -291,7 +291,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showErrorMessage,
         showOpenDialog,
         showWorkspaceFolderPick,
-    };    const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
+    };
+    const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
     const workspace = {
         getConfiguration,
