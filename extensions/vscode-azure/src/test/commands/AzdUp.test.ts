@@ -109,7 +109,7 @@ describe('AzdUp (unit)', () => {
         expect(invalidateAll.mock.callCount()).to.equal(1);
     });
 
-    it('should call deployWithCapture after provisionWithCapture', async () => {
+    it('should call deploy after provision', async () => {
         const { cmd, azd } = createCommand();
 
         await cmd.execute();

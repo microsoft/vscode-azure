@@ -68,7 +68,7 @@ describe('AzdDeployStep (unit)', () => {
     });
 
     describe('execute', () => {
-        it('should call azd deployWithCapture with the iac folder', async () => {
+        it('should call azd.deploy with the iac folder', async () => {
             const { azd, step } = createStep();
 
             const context = {

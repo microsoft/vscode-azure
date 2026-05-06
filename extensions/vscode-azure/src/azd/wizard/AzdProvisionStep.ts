@@ -52,7 +52,20 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const deployIdFileUri = this.ctx.code.Uri.joinPath(deployIdDir, 'deployment-id.json');
 
         // Poll for the deployment ID file (non-blocking)
-        this.pollForDeploymentIdFile(deployIdFileUri).then(async (info) => {
+        void this.trackDeployment(deployIdFileUri);
+
+        await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
+        });
+    }
+
+    /**
+     * Polls for the deployment ID file and starts tracking the ARM
+     * deployment in the activity view. Best-effort; errors are swallowed.
+     */
+    private async trackDeployment(deployIdFileUri: vscode.Uri): Promise<void> {
+        try {
+            const info = await this.pollForDeploymentIdFile(deployIdFileUri);
             if (!info) {
                 this.output.debug('[provision] no deployment ID found');
                 return;
@@ -62,11 +75,9 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             if (subscription) {
                 this.armProvider.trackDeployment(info.deploymentId, subscription);
             }
-        }).catch(() => { /* tracked non-blocking; errors are swallowed */ });
-
-        await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
-        });
+        } catch {
+            // Best-effort; errors are swallowed
+        }
     }
 
     /**
