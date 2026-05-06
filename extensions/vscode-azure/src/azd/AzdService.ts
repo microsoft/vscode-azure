@@ -238,13 +238,13 @@ export class AzdService implements IAzdService {
             await this.processExecutor.spawn({
                 execution: 'foreground',
                 command: AzdCommand,
-                args: ['provision'],
+                args: composeArgs(
+                    withArg('provision'),
+                )(),
                 cwd,
                 name: 'azd provision',
                 source: 'azd',
                 env: { ...authEnv, ...env },
-                alwaysRunNew: true,
-                focus: true,
             });
         } catch (e) {
             throw this.wrapEnoent(e);
@@ -263,13 +263,13 @@ export class AzdService implements IAzdService {
             await this.processExecutor.spawn({
                 execution: 'foreground',
                 command: AzdCommand,
-                args: ['deploy'],
+                args: composeArgs(
+                    withArg('deploy'),
+                )(),
+                cwd,
                 name: 'azd deploy',
                 source: 'azd',
-                cwd,
                 env: authEnv,
-                alwaysRunNew: true,
-                focus: true,
             });
         } catch (e) {
             throw this.wrapEnoent(e);
