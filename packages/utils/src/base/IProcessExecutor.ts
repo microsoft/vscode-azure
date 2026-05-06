@@ -7,7 +7,6 @@ import {
     AccumulatorStream, ChildProcessError, getSafeExecPath,
     isChildProcessError,
     isCancellationError as isProcessUtilsCancellationError,
-    NoShell,
     spawnStreamAsync,
     type CancellationTokenLike, type CommandLineArgs
 } from '@microsoft/vscode-processutils';
@@ -86,22 +85,6 @@ export interface ForegroundProcessOptions extends ProcessExecutorOptions {
 }
 
 /**
- * Runs a process in a visible VS Code terminal with shell integration,
- * allowing output capture via the terminal's `read()` stream while the
- * user can see the command running in the terminal panel.
- *
- * If shell integration is unavailable (disabled by user or timed out),
- * the result's {@linkcode TerminalProcessResult.shellIntegration} flag
- * is `false` and {@linkcode TerminalProcessResult.output} yields nothing.
- * Callers should check this flag and fall back accordingly.
- */
-export interface TerminalProcessOptions extends ProcessExecutorOptions {
-    readonly execution: 'terminal';
-    /** Display name shown in the terminal tab. */
-    readonly name: string;
-}
-
-/**
  * Captured output from a background process.
  */
 export interface ProcessResult {
@@ -126,32 +109,10 @@ export interface JsonLinesProcessResult<TOut = unknown, TLines = unknown> {
     readonly completed: Promise<JsonProcessResult<TOut>>;
 }
 
-/**
- * Result of a terminal-mode execution. The process runs in a visible
- * terminal; output is available only when shell integration is active.
- *
- * When {@linkcode shellIntegration} is `false`, the terminal was disposed
- * without running the command. The caller should fall back to another
- * execution mode (e.g. background with `--output json`).
- */
-export interface TerminalProcessResult {
-    /** `true` when shell integration was available and output capture is active. */
-    readonly shellIntegration: boolean;
-    /** Streams raw terminal output (including ANSI escapes). Empty if {@linkcode shellIntegration} is `false`. */
-    readonly output: AsyncIterable<string>;
-    /**
-     * Resolves when the command exits with code 0. Rejects with
-     * {@linkcode ChildProcessError} on non-zero exit codes, matching
-     * foreground task execution behavior.
-     */
-    readonly completed: Promise<{ exitCode: number | undefined }>;
-}
-
 export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for('IProcessExecutor');
 
 /**
- * Executes external processes in the background, as VS Code tasks,
- * or in a visible terminal with shell integration.
+ * Executes external processes in the background or as VS Code tasks.
  *
  * @remarks
  * The `execution` discriminant on the options object determines the execution
@@ -162,18 +123,12 @@ export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for(
  * - `'foreground'` -- runs as a {@linkcode vscode.Task Task} visible in the
  *   integrated terminal. Returns `Promise<void>` since task output is not
  *   capturable.
- * - `'terminal'` -- runs in a VS Code terminal with shell integration,
- *   allowing output capture via the terminal's `read()` stream. Falls back
- *   gracefully when shell integration is unavailable.
  *
- * On failure, background and terminal execution throw {@linkcode ChildProcessError}
- * enriched with captured stderr or exit code. Cancellation (via
- * {@linkcode CancellationTokenLike}) throws {@linkcode CancellationError}
- * in all modes.
+ * On failure, background execution throws {@linkcode ChildProcessError}
+ * enriched with captured stderr. Cancellation (via {@linkcode CancellationTokenLike})
+ * throws {@linkcode CancellationError} in both modes.
  */
 export interface IProcessExecutor {
-    /** Runs a process in a visible terminal with shell integration output capture. */
-    spawn(options: TerminalProcessOptions, cancellationToken?: CancellationTokenLike): Promise<TerminalProcessResult>;
     /** Runs a process as a VS Code task. Resolves when the task exits with code 0. */
     spawn(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void>;
     /** Runs a background process, parses stdout as JSON, and streams stderr as newline-delimited JSON objects. */
@@ -197,18 +152,15 @@ export class ProcessExecutor implements IProcessExecutor {
         private readonly spawnFn: SpawnFn = spawnStreamAsync,
     ) { }
 
-    public async spawn(options: TerminalProcessOptions, cancellationToken?: CancellationTokenLike): Promise<TerminalProcessResult>;
     public async spawn(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void>;
     public async spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonLinesProcessResult<TOut, TLines>>;
     public async spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonProcessResult<T>>;
     public async spawn(options: BackgroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<ProcessResult>;
     public async spawn(
-        options: TerminalProcessOptions | ForegroundProcessOptions | BackgroundJsonLinesProcessOptions | BackgroundJsonProcessOptions | BackgroundProcessOptions,
+        options: ForegroundProcessOptions | BackgroundJsonLinesProcessOptions | BackgroundJsonProcessOptions | BackgroundProcessOptions,
         cancellationToken?: CancellationTokenLike,
-    ): Promise<void | ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult | TerminalProcessResult> {
-        if (options.execution === 'terminal') {
-            return this.spawnTerminal(options, cancellationToken);
-        } else if (options.execution === 'foreground') {
+    ): Promise<void | ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
+        if (options.execution === 'foreground') {
             return this.spawnForeground(options, cancellationToken);
         } else {
             return this.spawnBackground(options, cancellationToken);
@@ -268,71 +220,6 @@ export class ProcessExecutor implements IProcessExecutor {
                 }
             });
         });
-    }
-
-    private async spawnTerminal(options: TerminalProcessOptions, cancellationToken?: CancellationTokenLike): Promise<TerminalProcessResult> {
-        const terminal = this.code.window.createTerminal({
-            name: options.name,
-            cwd: options.cwd,
-            env: options.env ? { ...options.env } : undefined,
-        });
-        terminal.show();
-
-        // Wait for shell integration to activate (with a timeout)
-        const shellIntegration = terminal.shellIntegration ?? await waitForShellIntegration(this.code, terminal, cancellationToken);
-
-        if (!shellIntegration) {
-            // Shell integration not available -- dispose the terminal and
-            // signal the caller so it can fall back to background JSON or
-            // foreground task. We can't use sendText() because there's no
-            // reliable way to detect command completion without shell
-            // integration.
-            terminal.dispose();
-
-            return {
-                shellIntegration: false,
-                output: (async function* () { /* empty `AsyncGenerator` */ })(),
-                completed: Promise.resolve({ exitCode: undefined }),
-            };
-        }
-
-        // Shell integration is available -- execute via the API for output capture
-        const execution = shellIntegration.executeCommand(getSafeExecPath(options.command), new NoShell().quote(options.args ?? []));
-
-        const completed = new Promise<{ exitCode: number | undefined }>((resolve, reject) => {
-            let ctDisposable: Disposable | undefined;
-
-            if (cancellationToken) {
-                ctDisposable = cancellationToken.onCancellationRequested(() => {
-                    terminal.dispose();
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
-                    reject(new CancellationError());
-                });
-            }
-
-            const endDisposable = this.code.window.onDidEndTerminalShellExecution((e) => {
-                if (e.execution === execution) {
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
-                    if (e.exitCode === 0) {
-                        resolve({ exitCode: e.exitCode });
-                    } else {
-                        reject(new ChildProcessError(
-                            this.code.l10n.t('Process exited with code {0}', e.exitCode ?? -1),
-                            e.exitCode ?? -1,
-                            null,
-                        ));
-                    }
-                }
-            });
-        });
-
-        return {
-            shellIntegration: true,
-            output: execution.read(),
-            completed,
-        };
     }
 
     private async spawnBackground(
@@ -421,47 +308,4 @@ async function* parseJsonLines(input: NodeJS.ReadableStream): AsyncGenerator {
     } finally {
         rl.close();
     }
-}
-
-/** Timeout in milliseconds to wait for shell integration to activate on a terminal. */
-const shellIntegrationTimeoutMs = 5000;
-
-/**
- * Waits for shell integration to become available on the given terminal.
- * Returns the {@linkcode vscode.TerminalShellIntegration} if it activates
- * within {@linkcode shellIntegrationTimeoutMs}, or `undefined` if it times
- * out or {@linkcode cancellationToken} fires.
- */
-function waitForShellIntegration(
-    code: IVsCode,
-    terminal: vscode.Terminal,
-    cancellationToken?: CancellationTokenLike,
-): Promise<vscode.TerminalShellIntegration | undefined> {
-    return new Promise<vscode.TerminalShellIntegration | undefined>((resolve) => {
-        const cleanup = () => {
-            clearTimeout(timer);
-            disposable.dispose();
-            ctDisposable?.dispose();
-        };
-
-        const disposable = code.window.onDidChangeTerminalShellIntegration(e => {
-            if (e.terminal === terminal) {
-                cleanup();
-                resolve(e.shellIntegration);
-            }
-        });
-
-        const timer = setTimeout(() => {
-            cleanup();
-            resolve(undefined);
-        }, shellIntegrationTimeoutMs);
-
-        let ctDisposable: Disposable | undefined;
-        if (cancellationToken) {
-            ctDisposable = cancellationToken.onCancellationRequested(() => {
-                cleanup();
-                resolve(undefined);
-            });
-        }
-    });
 }

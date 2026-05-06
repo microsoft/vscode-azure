@@ -124,37 +124,6 @@ export interface MockVsCodeResult {
      * ```
      */
     readonly taskProcessEndEmitter: EventEmitter<vscode.TaskProcessEndEvent>;
-
-    /**
-     * Fire this emitter to simulate shell integration becoming available
-     * on a terminal.
-     *
-     * @example
-     * ```ts
-     * const m = createMockVsCode();
-     * m.shellIntegrationChangeEmitter.fire({
-     *     terminal,
-     *     shellIntegration: mockShellIntegration,
-     * });
-     * ```
-     */
-    readonly shellIntegrationChangeEmitter: EventEmitter<vscode.TerminalShellIntegrationChangeEvent>;
-
-    /**
-     * Fire this emitter to simulate a terminal shell execution ending.
-     *
-     * @example
-     * ```ts
-     * const m = createMockVsCode();
-     * m.shellExecutionEndEmitter.fire({
-     *     execution: shellExecution,
-     *     terminal,
-     *     exitCode: 0,
-     *     shellIntegration: mockShellIntegration,
-     * });
-     * ```
-     */
-    readonly shellExecutionEndEmitter: EventEmitter<vscode.TerminalShellExecutionEndEvent>;
 }
 
 /**
@@ -313,32 +282,16 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         openExternal,
         remoteName: undefined,
     };
-    const shellIntegrationChangeEmitter = new EventEmitter<vscode.TerminalShellIntegrationChangeEvent>();
-    const shellExecutionEndEmitter = new EventEmitter<vscode.TerminalShellExecutionEndEvent>();
-
-    const createTerminal = mock.fn(
-        (opts: vscode.TerminalOptions) => ({
-            name: opts.name ?? '',
-            shellIntegration: undefined as vscode.TerminalShellIntegration | undefined,
-            show: mock.fn(),
-            dispose: mock.fn(),
-        }),
-    );
-
     const window = {
         createQuickPick,
         createInputBox,
         createOutputChannel,
-        createTerminal,
         showInformationMessage,
         showWarningMessage,
         showErrorMessage,
         showOpenDialog,
         showWorkspaceFolderPick,
-        onDidChangeTerminalShellIntegration: shellIntegrationChangeEmitter.event,
-        onDidEndTerminalShellExecution: shellExecutionEndEmitter.event,
-    };
-    const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
+    };    const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
     const workspace = {
         getConfiguration,
@@ -397,8 +350,6 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         configChangeEmitter,
         tasks,
         taskProcessEndEmitter,
-        shellIntegrationChangeEmitter,
-        shellExecutionEndEmitter,
     } as unknown as MockVsCodeResult;
 }
 
