@@ -13,7 +13,7 @@ import { AzdProvisionStep } from '../azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../azd/wizard/ShowEndpointUrlStep';
-import { IAzureSubscriptionProvider, IAzureViewDataTree, ITempProjectManager } from '../services';
+import { IAzureSubscriptionProvider, IAzureViewDataTree, ITempDirManager } from '../services';
 import { ArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
 import { CodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
@@ -38,7 +38,7 @@ export class AzdUp implements ManagedCommand {
         @inject(CodeDeploymentDataProvider) private readonly codeProvider: CodeDeploymentDataProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
-        @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
+        @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
     ) { }
 
     /** @inheritdoc */
@@ -57,7 +57,7 @@ export class AzdUp implements ManagedCommand {
                 new SelectIacFolderStep(this.actionContext, this.ctx, this.tempManager, this.azd),
             ],
             [
-                new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider),
+                new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider, this.tempManager),
                 new AzdDeployStep(this.actionContext, this.azd, this.codeProvider),
                 new ShowEndpointUrlStep(this.ctx, this.azd),
             ],

@@ -10,7 +10,7 @@ import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { IAzdAuthServer } from '../../azd/AzdAuthServer';
-import { AzdService } from '../../azd/AzdService';
+import { AzdCommand, AzdService } from '../../azd/AzdService';
 
 interface SpawnOpts {
     execution: string;
@@ -89,7 +89,7 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal('azd');
+            expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.include('init');
             expect(argValues(opts.args)).to.include('--minimal');
             expect(argValues(opts.args)).to.include('--no-prompt');
@@ -106,7 +106,7 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal('azd');
+            expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.include('env');
             expect(argValues(opts.args)).to.include('new');
             expect(argValues(opts.args)).to.include('dev');
@@ -188,7 +188,7 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal('azd');
+            expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.include('env');
             expect(argValues(opts.args)).to.include('get-values');
             expect(argValues(opts.args)).to.include('--environment');
@@ -224,7 +224,7 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal('azd');
+            expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.include('show');
             expect(argValues(opts.args)).to.include('--output');
             expect(argValues(opts.args)).to.include('json');
@@ -292,7 +292,7 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(opts.command).to.equal('azd');
+            expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.include('provision');
             expect(opts.source).to.equal('azd');
             expect(opts.alwaysRunNew).to.be.true;
@@ -348,7 +348,7 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(opts.command).to.equal('azd');
+            expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.include('deploy');
             expect(opts.source).to.equal('azd');
             expect(opts.alwaysRunNew).to.be.true;

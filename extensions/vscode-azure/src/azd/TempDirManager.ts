@@ -9,40 +9,40 @@ import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 
 /**
- * Manages generated Bicep projects in the extension's storage
- * directory (`extensionContext.storageUri/iac/`). Project
- * subdirectories are cleaned up on dispose but the `iac/` root
- * persists across sessions.
+ * Manages temporary directories in the extension's storage
+ * directory (`extensionContext.storageUri/tmp/`). Subdirectories
+ * are cleaned up on dispose but the `tmp/` root persists across
+ * sessions.
  */
 @injectable()
-export class TempProjectManager implements Disposable {
-    private readonly projectDirs: vscode.Uri[] = [];
-    private readonly iacBaseDir: vscode.Uri;
+export class TempDirManager implements Disposable {
+    private readonly trackedDirs: vscode.Uri[] = [];
+    private readonly baseDir: vscode.Uri;
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
     ) {
         const storageUri = this.ctx.extensionContext.storageUri ?? this.ctx.extensionContext.globalStorageUri;
-        this.iacBaseDir = this.ctx.code.Uri.joinPath(storageUri, 'iac');
+        this.baseDir = this.ctx.code.Uri.joinPath(storageUri, 'tmp');
     }
 
     /**
-     * Creates a new project directory under `storageUri/iac/`.
+     * Creates a new temporary directory under `storageUri/tmp/`.
      * The directory is tracked for cleanup on dispose.
      */
-    public async createProjectDir(): Promise<vscode.Uri> {
-        const dirName = `project-${crypto.randomUUID().slice(0, 8)}`;
-        const dir = this.ctx.code.Uri.joinPath(this.iacBaseDir, dirName);
+    public async createTempDir(): Promise<vscode.Uri> {
+        const dirName = `d-${crypto.randomUUID().slice(0, 8)}`;
+        const dir = this.ctx.code.Uri.joinPath(this.baseDir, dirName);
         await this.ctx.code.workspace.fs.createDirectory(dir);
-        this.projectDirs.push(dir);
+        this.trackedDirs.push(dir);
         return dir;
     }
 
     /** @inheritdoc */
     public dispose(): void {
-        for (const dir of this.projectDirs) {
+        for (const dir of this.trackedDirs) {
             this.ctx.code.workspace.fs.delete(dir, { recursive: true }).then(() => { /* void */ }, () => { /* ignore */ });
         }
-        this.projectDirs.length = 0;
+        this.trackedDirs.length = 0;
     }
 }

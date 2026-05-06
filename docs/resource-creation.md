@@ -8,7 +8,7 @@ Each creation command receives an `AzdJob` that determines how the wizard behave
 
 | Job | `iacFolder` target | Workspace modified? | Use case |
 |-----|--------------------|--------------------|----------|
-| `createNew` | Temp directory via `TempProjectManager` | No | Spin up a standalone Azure resource without committing IaC to the workspace |
+| `createNew` | Temp directory via `TempDirManager` | No | Spin up a standalone Azure resource without committing IaC to the workspace |
 | `deploy` | User's workspace folder | Yes | Generate IaC into the workspace so `azd deploy` / `azd provision` work long-term |
 
 ## Wizard Context
@@ -109,9 +109,9 @@ Applies to: `deploy` when the default env has both `AZURE_SUBSCRIPTION_ID` and `
 
 This ensures that existing projects keep their established service names while fresh projects derive a sensible default from the user's chosen name.
 
-### Temp project lifecycle
+### Temp directory lifecycle
 
-`createNew` uses `TempProjectManager`, which allocates directories under `extensionContext.storageUri/iac/project-{uuid}`. These are cleaned up when the manager is disposed (extension deactivation). The workspace is never modified.
+`createNew` uses `TempDirManager`, which allocates directories under `extensionContext.storageUri/tmp/d-{uuid}`. These are cleaned up when the manager is disposed (extension deactivation). The workspace is never modified.
 
 ### Environment collision avoidance
 

@@ -6,10 +6,10 @@
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { ExecuteStep, type ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
-import * as crypto from 'crypto';
 import type * as vscode from 'vscode';
 import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
+import type { TempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /** Parsed deployment information extracted from the deployment ID file. */
@@ -37,6 +37,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         private readonly output: IOutputChannel,
         private readonly armProvider: ArmDeploymentDataProvider,
         private readonly subscriptionProvider: AzureSubscriptionProvider,
+        private readonly tempDirManager: TempDirManager,
     ) {
         super();
     }
@@ -46,11 +47,8 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public async execute(context: TContext): Promise<void> {
-        const storageDir = this.ctx.extensionContext.storageUri ?? this.ctx.extensionContext.globalStorageUri;
-
         // Create a temp directory for the deployment ID file
-        const deployIdDir = this.ctx.code.Uri.joinPath(storageDir, `azd-${crypto.randomUUID().slice(0, 8)}`);
-        await this.ctx.code.workspace.fs.createDirectory(deployIdDir);
+        const deployIdDir = await this.tempDirManager.createTempDir();
         const deployIdFileUri = this.ctx.code.Uri.joinPath(deployIdDir, 'deployment-id.json');
 
         // Poll for the deployment ID file (non-blocking)

@@ -6,14 +6,14 @@
 import { getWorkspaceFolder, IActionContext, type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { IAzdService } from '../AzdService';
+import type { TempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
-import type { TempProjectManager } from './TempProjectManager';
 
 /**
  * Picks the {@linkcode AzdWizardContext.iacFolder iacFolder} based on
  * {@linkcode AzdWizardContext.job job}:
  *
- * - `createNew`: allocates a temp directory via {@linkcode TempProjectManager}.
+ * - `createNew`: allocates a temp directory via {@linkcode TempDirManager}.
  *   The workspace is never touched.
  * - `deploy`: prompts the user to pick a workspace folder (silent in
  *   single-root workspaces, shows a picker in multi-root). Dismissing the
@@ -33,7 +33,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
     public constructor(
         private readonly actionContext: IActionContext,
         private readonly ctx: ICodeContext,
-        private readonly tempManager: TempProjectManager,
+        private readonly tempManager: TempDirManager,
         private readonly azd: IAzdService,
     ) {
         super();
@@ -45,7 +45,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
 
     public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
         if (context.job === 'createNew') {
-            const iacFolder = await this.tempManager.createProjectDir();
+            const iacFolder = await this.tempManager.createTempDir();
             return { iacFolder } as Partial<TContext>;
         }
 

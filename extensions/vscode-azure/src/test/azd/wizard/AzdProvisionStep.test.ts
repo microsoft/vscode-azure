@@ -9,6 +9,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { AzdProvisionStep } from '../../../azd/wizard/AzdProvisionStep';
+import { TempDirManager } from '../../../azd/TempDirManager';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { createMockAzdService } from '../MockAzdService';
 
@@ -18,7 +19,8 @@ function createStep() {
     const output = new MockOutputChannel('test');
     const armProvider = { trackDeployment: mock.fn() } as never;
     const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
-    const step = new AzdProvisionStep(ctx, azd, output, armProvider, subscriptionProvider);
+    const tempDirManager = new TempDirManager(ctx);
+    const step = new AzdProvisionStep(ctx, azd, output, armProvider, subscriptionProvider, tempDirManager);
     return { azd, step, armProvider: armProvider as unknown as { trackDeployment: ReturnType<typeof mock.fn> }, output };
 }
 

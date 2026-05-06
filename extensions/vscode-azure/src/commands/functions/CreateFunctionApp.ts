@@ -20,7 +20,7 @@ import { HydrateAzdInfoStep } from '../../azd/wizard/HydrateAzdInfoStep';
 import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
-import { IAzureSubscriptionProvider, IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
+import { IAzureSubscriptionProvider, IAzureViewDataTree, IAzureViewViewItemTree, ITempDirManager } from '../../services';
 import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -34,7 +34,7 @@ import { PickRuntimeStep } from './steps/PickRuntimeStep';
  * via the command registration's prefix args:
  *
  * - **`createNew`**: emits IaC into a temp directory managed by
- *   {@linkcode ITempProjectManager}; the workspace is never modified.
+ *   {@linkcode ITempDirManager}; the workspace is never modified.
  * - **`deploy`**: emits IaC into the user's workspace folder so subsequent
  *   `azd deploy` / `azd provision` operate on the same project.
  *   After provisioning, also runs `azd deploy` and shows endpoint URLs.
@@ -48,7 +48,7 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
-        @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
+        @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(ArmDeploymentDataProvider) private readonly armProvider: ArmDeploymentDataProvider,
         @inject(CodeDeploymentDataProvider) private readonly codeProvider: CodeDeploymentDataProvider,
@@ -72,7 +72,7 @@ export class CreateFunctionApp implements ManagedCommand {
             new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan', 'azdServiceName']),
             new GenerateAzureYamlStep(this.azd),
             new CreateAzdEnvStep(this.azd),
-            new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider),
+            new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider, this.tempManager),
         ];
 
         if (job === 'deploy') {

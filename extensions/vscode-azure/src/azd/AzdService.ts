@@ -12,7 +12,7 @@ import { IAzdAuthServer } from './AzdAuthServer';
 export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdService');
 
 // TODO: revert to 'azd' before merging
-const AzdCommand = 'D:\\azure-dev\\cli\\azd\\azd.exe';
+export const AzdCommand = 'D:\\azure-dev\\cli\\azd\\azd.exe';
 
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
