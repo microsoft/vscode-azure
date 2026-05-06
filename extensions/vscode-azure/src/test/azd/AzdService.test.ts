@@ -21,8 +21,6 @@ interface SpawnOpts {
     name?: string;
     source?: string;
     env?: Record<string, string>;
-    alwaysRunNew?: boolean;
-    focus?: boolean;
 }
 
 /** Extracts plain string values from a command line args array. */
@@ -295,8 +293,6 @@ describe('AzdService (unit)', () => {
             expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.include('provision');
             expect(opts.source).to.equal('azd');
-            expect(opts.alwaysRunNew).to.be.true;
-            expect(opts.focus).to.be.true;
         });
 
         it('should merge extra env vars into the task environment', async () => {
@@ -351,8 +347,6 @@ describe('AzdService (unit)', () => {
             expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.include('deploy');
             expect(opts.source).to.equal('azd');
-            expect(opts.alwaysRunNew).to.be.true;
-            expect(opts.focus).to.be.true;
         });
 
         it('should reject on non-zero exit code', async () => {
