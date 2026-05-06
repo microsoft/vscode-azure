@@ -8,15 +8,15 @@ import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode
 import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import type { TempProjectManager } from './azd/wizard/TempProjectManager';
+import type { TempDirManager } from './azd/TempDirManager';
 import type { Activity } from './tree/activity/Activity';
 
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
 
-/** Identifier for the {@linkcode TempProjectManager} service */
-export const ITempProjectManager: ServiceIdentifier<ITempProjectManager> = Symbol.for('ITempProjectManager');
-export type ITempProjectManager = TempProjectManager;
+/** Identifier for the {@linkcode TempDirManager} service */
+export const ITempDirManager: ServiceIdentifier<ITempDirManager> = Symbol.for('ITempDirManager');
+export type ITempDirManager = TempDirManager;
 
 // #region Azure resource tree and view identifiers
 

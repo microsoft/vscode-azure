@@ -114,7 +114,7 @@ Key patterns:
 - Prefer `createMockVsCode()` / `createMockCodeContext()` over hand-rolled mocks for consistency and completeness
 - Use the built-in `fs`, `workspaceFolders`, and `messageResponses` on the result instead of passing `overrides` or using `mockImplementation` to set up workspace/fs/message state
 - Access namespace objects directly from the result (e.g. `mockResult.commands.executeCommand`) for call-count assertions instead of casting from `code.commands.executeCommand as unknown as Mock<...>`
-- Use real implementations (`ActionExecutor`, `createActionContext`, `TempProjectManager`) instead of mocking them when they work against `MockVsCode` — they often do
+- Use real implementations (`ActionExecutor`, `createActionContext`, `TempDirManager`) instead of mocking them when they work against `MockVsCode` — they often do
 - Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` for the `ActionExecutor` constructor
 - Use `Mock` from `node:test` to track call counts and arguments — prefer over manual `let callCount = 0` patterns
 - Use `makeVirtualResource()` from `@microsoft/vscode-azure-azutils/testing` instead of hand-rolling `VirtualResource` objects

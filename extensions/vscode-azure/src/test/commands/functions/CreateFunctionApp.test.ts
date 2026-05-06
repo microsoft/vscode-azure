@@ -10,7 +10,7 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { TempProjectManager } from '../../../azd/wizard/TempProjectManager';
+import { TempDirManager } from '../../../azd/TempDirManager';
 import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
 import { createMockAzdService } from '../../azd/MockAzdService';
 
@@ -44,7 +44,7 @@ describe('CreateFunctionApp (unit)', () => {
             })
         ) as unknown as ISubscriptionClientProvider;
 
-        const tempManager = new TempProjectManager(ctx);
+        const tempManager = new TempDirManager(ctx);
 
         const mockFs = mockResult.fs;
         let yamlInTemp: vscode.Uri | undefined;

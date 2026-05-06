@@ -12,7 +12,7 @@ import type * as vscode from 'vscode';
  *
  * - `createNew`: create an empty Azure resource with no workspace commitment.
  *   The IaC files live in a temp directory managed by
- *   {@linkcode TempProjectManager} and are disposed after provisioning.
+ *   {@linkcode TempDirManager} and are disposed after provisioning.
  * - `deploy`: create a resource wired to the user's workspace project so
  *   subsequent `azd deploy` / `azd provision` runs work against the same
  *   `azure.yaml` and `infra/`.
