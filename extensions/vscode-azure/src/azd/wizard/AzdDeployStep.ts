@@ -3,24 +3,21 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, type IActionContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, type IActionContext } from '@microsoft/vscode-azure-utils';
 import * as crypto from 'crypto';
 import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
- * Runs `azd deploy` with output capture after provisioning.
+ * Runs `azd deploy` after provisioning.
  *
- * Creates a code deployment activity in the activity view and
- * populates {@linkcode AzdWizardContext.endpointUrls} with any
- * endpoint URLs discovered from the deploy output.
+ * Creates a code deployment activity in the activity view.
  */
 export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
         private readonly actionContext: IActionContext,
         private readonly azd: IAzdService,
-        private readonly output: IOutputChannel,
         private readonly codeProvider: CodeDeploymentDataProvider,
     ) {
         super();
@@ -49,11 +46,6 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
             // TODO: activity should include error information
             this.actionContext.errorHandling.suppressDisplay = true;
             throw e;
-        }
-
-        if (result.endpointUrls.length > 0) {
-            context.endpointUrls = result.endpointUrls;
-            this.output.debug(`[deploy] endpoint URLs: ${result.endpointUrls.join(', ')}`);
         }
     }
 }

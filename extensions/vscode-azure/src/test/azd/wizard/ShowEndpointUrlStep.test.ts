@@ -3,42 +3,34 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type { Mock } from 'node:test';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { ShowEndpointUrlStep } from '../../../azd/wizard/ShowEndpointUrlStep';
+import { createMockAzdService } from '../MockAzdService';
 
 function createStep() {
     const { ctx, mock: mockResult } = createMockCodeContext();
-    const step = new ShowEndpointUrlStep(ctx);
-    return { step, mockResult, ctx };
+    const azd = createMockAzdService();
+    const step = new ShowEndpointUrlStep(ctx, azd);
+    return { step, azd, mockResult, ctx };
 }
 
 describe('ShowEndpointUrlStep (unit)', () => {
     describe('shouldExecute', () => {
-        it('should return true when endpointUrls has entries', () => {
+        it('should return true when iacFolder is set', () => {
             const { step } = createStep();
 
             const context = {
-                endpointUrls: ['https://myapp.azurewebsites.net'],
+                iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
             expect(step.shouldExecute(context)).to.be.true;
         });
 
-        it('should return false when endpointUrls is empty', () => {
-            const { step } = createStep();
-
-            const context = {
-                endpointUrls: [],
-            } as AzdWizardContext;
-
-            expect(step.shouldExecute(context)).to.be.false;
-        });
-
-        it('should return false when endpointUrls is undefined', () => {
+        it('should return false when iacFolder is undefined', () => {
             const { step } = createStep();
 
             expect(step.shouldExecute({})).to.be.false;
@@ -46,14 +38,44 @@ describe('ShowEndpointUrlStep (unit)', () => {
     });
 
     describe('execute', () => {
-        it('should show an information message with the first URL', () => {
-            const { step, mockResult } = createStep();
+        it('should call azd show and display a toast with the ingress URL', async () => {
+            const { step, azd, mockResult } = createStep();
+
+            azd.show.mock.mockImplementation(() => Promise.resolve({
+                name: 'my-app',
+                services: {
+                    myfunc: { ingressUrl: 'https://myapp.azurewebsites.net' },
+                },
+            }));
 
             const context = {
-                endpointUrls: ['https://first.azurewebsites.net', 'https://second.azurewebsites.net'],
+                iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
-            step.execute(context);
+            await step.execute(context);
+
+            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
+            expect(showInfo.mock.callCount()).to.equal(1);
+            const msg = showInfo.mock.calls[0].arguments[0];
+            expect(msg).to.include('https://myapp.azurewebsites.net');
+        });
+
+        it('should use the first ingress URL when multiple services have URLs', async () => {
+            const { step, azd, mockResult } = createStep();
+
+            azd.show.mock.mockImplementation(() => Promise.resolve({
+                name: 'my-app',
+                services: {
+                    svc1: { ingressUrl: 'https://first.azurewebsites.net' },
+                    svc2: { ingressUrl: 'https://second.azurewebsites.net' },
+                },
+            }));
+
+            const context = {
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            await step.execute(context);
 
             const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
             expect(showInfo.mock.callCount()).to.equal(1);
@@ -61,40 +83,78 @@ describe('ShowEndpointUrlStep (unit)', () => {
             expect(msg).to.include('https://first.azurewebsites.net');
         });
 
-        it('should open the URL in a browser when user clicks Open in Browser', async () => {
-            const { step, mockResult } = createStep();
+        it('should not show a toast when azd show returns no services', async () => {
+            const { step, azd, mockResult } = createStep();
 
-            // Queue a response simulating the user clicking "Open in Browser"
+            azd.show.mock.mockImplementation(() => Promise.resolve({
+                name: 'my-app',
+            }));
+
+            const context = {
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            await step.execute(context);
+
+            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
+            expect(showInfo.mock.callCount()).to.equal(0);
+        });
+
+        it('should not show a toast when services have no ingress URLs', async () => {
+            const { step, azd, mockResult } = createStep();
+
+            azd.show.mock.mockImplementation(() => Promise.resolve({
+                name: 'my-app',
+                services: {
+                    myfunc: { project: { path: '/p', language: 'node' } },
+                },
+            }));
+
+            const context = {
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            await step.execute(context);
+
+            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
+            expect(showInfo.mock.callCount()).to.equal(0);
+        });
+
+        it('should not show a toast when azd show fails', async () => {
+            const { step, mockResult } = createStep();
+            // Default mock returns undefined for show()
+
+            const context = {
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            await step.execute(context);
+
+            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
+            expect(showInfo.mock.callCount()).to.equal(0);
+        });
+
+        it('should open the URL in a browser when user clicks Open in Browser', async () => {
+            const { step, azd, mockResult } = createStep();
+
+            azd.show.mock.mockImplementation(() => Promise.resolve({
+                name: 'my-app',
+                services: { myfunc: { ingressUrl: 'https://myapp.azurewebsites.net' } },
+            }));
+
             mockResult.messageResponses.push('Open in Browser');
 
             const context = {
-                endpointUrls: ['https://first.azurewebsites.net'],
+                iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
-            step.execute(context);
+            await step.execute(context);
 
-            // Let the promise chain in execute() settle (showInformationMessage -> then -> openExternal)
+            // Let the promise chain settle
             await new Promise(resolve => setTimeout(resolve, 0));
 
             const openExternal = mockResult.env.openExternal as unknown as Mock<typeof mockResult.env.openExternal>;
             expect(openExternal.mock.callCount()).to.equal(1);
-        });
-
-        it('should not open the URL when user dismisses the toast', async () => {
-            const { step, mockResult } = createStep();
-
-            // No response queued — simulates dismissal (resolves to undefined)
-
-            const context = {
-                endpointUrls: ['https://first.azurewebsites.net'],
-            } as AzdWizardContext;
-
-            step.execute(context);
-
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            const openExternal = mockResult.env.openExternal as unknown as Mock<typeof mockResult.env.openExternal>;
-            expect(openExternal.mock.callCount()).to.equal(0);
         });
     });
 });

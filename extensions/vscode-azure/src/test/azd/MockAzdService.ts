@@ -26,7 +26,6 @@ function defaultProvisionCaptureResult(): AzdProvisionCaptureResult {
 /** Default mock result for {@linkcode IAzdService.deployWithCapture}. */
 function defaultDeployCaptureResult(): AzdDeployCaptureResult {
     return {
-        endpointUrls: [],
         completed: Promise.resolve(),
     };
 }

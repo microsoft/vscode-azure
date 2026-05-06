@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IProcessExecutor, type JsonLinesProcessResult, type SpawnFn, type TerminalProcessResult } from '@microsoft/vscode-azure-utils';
+import { type IProcessExecutor, type SpawnFn, type TerminalProcessResult } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { IAzdAuthServer } from '../../azd/AzdAuthServer';
-import { AzdService, parseDeploymentIdFromOutput, parseEndpointUrlsFromOutput } from '../../azd/AzdService';
+import { AzdService } from '../../azd/AzdService';
 
 interface SpawnOpts {
     execution: string;
@@ -19,9 +19,7 @@ interface SpawnOpts {
     cwd: { path: string };
     parseJson?: boolean;
     name?: string;
-    source?: string;
-    alwaysRunNew?: boolean;
-    focus?: boolean;
+    env?: Record<string, string>;
 }
 
 /** Extracts plain string values from a command line args array. */
@@ -36,6 +34,15 @@ function createService(spawnFn?: SpawnFn) {
     const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
     const service = new AzdService(mockResult.vscode, processExecutor, authServer);
     return { service, spawnMock: spawnMock as ReturnType<typeof mock.fn>, fs: mockResult.fs };
+}
+
+/** Creates a mock {@linkcode TerminalProcessResult}. */
+function createMockTerminalResult(exitCode = 0): TerminalProcessResult {
+    return {
+        shellIntegration: true,
+        output: (async function* () { /* empty */ })(),
+        completed: Promise.resolve({ exitCode }),
+    };
 }
 
 describe('AzdService (unit)', () => {
@@ -206,23 +213,13 @@ describe('AzdService (unit)', () => {
 
             expect(result).to.deep.equal({});
         });
-
-        it('should return an empty object when azd is not installed (ENOENT)', async () => {
-            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
-            const spawnFn = mock.fn(() => Promise.reject(enoent));
-            const { service } = createService(spawnFn);
-
-            const result = await service.envGetValues('dev', MockUri.file('/project') as unknown as vscode.Uri);
-
-            expect(result).to.deep.equal({});
-        });
     });
 
     describe('show', () => {
         it('should spawn azd show with --output json and return parsed result', async () => {
             const payload = {
                 name: 'my-app',
-                services: { myfunc: { project: { path: '/project', language: 'node' } } },
+                services: { myfunc: { ingressUrl: 'https://myapp.azurewebsites.net' } },
             };
             const spawnFn = mock.fn(() => Promise.resolve({ json: payload }));
             const { service, spawnMock } = createService(spawnFn as unknown as SpawnFn);
@@ -238,21 +235,10 @@ describe('AzdService (unit)', () => {
             expect(argValues(opts.args)).to.include('--output');
             expect(argValues(opts.args)).to.include('json');
             expect(opts.parseJson).to.be.true;
-            expect(opts.cwd.path).to.equal('/project');
         });
 
-        it('should return undefined when the spawn fails (no azure.yaml in cwd)', async () => {
+        it('should return undefined when the spawn fails', async () => {
             const spawnFn = mock.fn(() => Promise.reject(new Error('no azure.yaml')));
-            const { service } = createService(spawnFn);
-
-            const result = await service.show(MockUri.file('/project') as unknown as vscode.Uri);
-
-            expect(result).to.be.undefined;
-        });
-
-        it('should return undefined when azd is not installed (ENOENT)', async () => {
-            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
-            const spawnFn = mock.fn(() => Promise.reject(enoent));
             const { service } = createService(spawnFn);
 
             const result = await service.show(MockUri.file('/project') as unknown as vscode.Uri);
@@ -291,69 +277,59 @@ describe('AzdService (unit)', () => {
     });
 
     describe('provisionWithCapture', () => {
+        const storageDir = MockUri.file('/storage') as unknown as vscode.Uri;
+
         it('should throw when azure.yaml is not found', async () => {
             const { service } = createService();
 
             try {
-                await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
+                await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri, storageDir);
                 expect.fail('Expected error');
             } catch (e) {
                 expect((e as Error).message).to.include('azure.yaml');
             }
         });
 
-        it('should spawn terminal execution with auth env', async () => {
-            const terminalResult = createMockTerminalResult(['output']);
-            const spawnFn = mock.fn(() => Promise.resolve(terminalResult));
+        it('should spawn terminal execution with AZD_DEPLOYMENT_ID_FILE env var', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve(createMockTerminalResult()));
             const { service, spawnMock, fs } = createService(spawnFn as unknown as SpawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
-            await result.completed;
+            await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri, storageDir);
 
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('terminal');
             expect(opts.command).to.equal('azd');
             expect(argValues(opts.args)).to.include('provision');
+            expect(opts.env).to.have.property('AZD_DEPLOYMENT_ID_FILE');
         });
 
-        it('should extract deployment info from terminal output containing a portal URL', async () => {
-            const portalUrl = 'https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1%2Fproviders%2FMicrosoft.Resources%2Fdeployments%2Fdeploy-1';
-            const terminalResult = createMockTerminalResult([`Provisioning: ${portalUrl}`]);
-            const spawnFn = mock.fn(() => Promise.resolve(terminalResult));
+        it('should resolve deploymentInfo from the deployment ID file', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve(createMockTerminalResult()));
             const { service, fs } = createService(spawnFn as unknown as SpawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
-            await result.completed;
+            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri, storageDir);
+
+            // Simulate azd writing the deployment ID file
+            const opts = (spawnFn as ReturnType<typeof mock.fn>).mock.calls[0].arguments[0] as SpawnOpts;
+            const deployIdFilePath = opts.env!.AZD_DEPLOYMENT_ID_FILE;
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            fs.addFile(MockUri.file(deployIdFilePath), JSON.stringify({ deploymentId }));
 
             const info = await result.deploymentInfo;
             expect(info).to.not.be.undefined;
+            expect(info!.deploymentId).to.equal(deploymentId);
             expect(info!.subscriptionId).to.equal('sub-1');
-            expect(info!.deploymentId).to.include('deploy-1');
         });
 
-        it('should resolve deploymentInfo to undefined when no portal URL in output', async () => {
-            const terminalResult = createMockTerminalResult(['some output without URLs']);
-            const spawnFn = mock.fn(() => Promise.resolve(terminalResult));
+        it('should throw on non-zero exit code', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve(createMockTerminalResult(1)));
             const { service, fs } = createService(spawnFn as unknown as SpawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
-            await result.completed;
-
-            const info = await result.deploymentInfo;
-            expect(info).to.be.undefined;
-        });
-
-        it('should throw on non-zero exit code from terminal', async () => {
-            const terminalResult = createMockTerminalResult([], 1);
-            const spawnFn = mock.fn(() => Promise.resolve(terminalResult));
-            const { service, fs } = createService(spawnFn as unknown as SpawnFn);
-            fs.addFile(MockUri.file('/project/azure.yaml'));
-
-            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
+            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri, storageDir);
 
             try {
                 await result.completed;
@@ -361,63 +337,6 @@ describe('AzdService (unit)', () => {
             } catch (e) {
                 expect((e as Error).message).to.include('azd provision exited with code 1');
             }
-        });
-
-        it('should fall back to JSON mode when shell integration is unavailable', async () => {
-            const noShellResult: TerminalProcessResult = {
-                shellIntegration: false,
-                output: (async function* () { /* empty */ })(),
-                completed: Promise.resolve({ exitCode: undefined }),
-            };
-            let callCount = 0;
-            const spawnFn = mock.fn(() => {
-                callCount++;
-                if (callCount === 1) {
-                    return Promise.resolve(noShellResult);
-                }
-                // JSON fallback call
-                return Promise.resolve(createMockJsonLinesResult([]));
-            });
-            const { service, spawnMock, fs } = createService(spawnFn as unknown as SpawnFn);
-            fs.addFile(MockUri.file('/project/azure.yaml'));
-
-            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
-            await result.completed;
-
-            expect(spawnMock.mock.callCount()).to.equal(2);
-            const fallbackOpts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-            expect(fallbackOpts.execution).to.equal('background');
-            expect(argValues(fallbackOpts.args)).to.include('--output');
-            expect(argValues(fallbackOpts.args)).to.include('json');
-        });
-
-        it('should extract deployment info from stderr JSON lines in fallback mode', async () => {
-            const noShellResult: TerminalProcessResult = {
-                shellIntegration: false,
-                output: (async function* () { /* empty */ })(),
-                completed: Promise.resolve({ exitCode: undefined }),
-            };
-            const portalUrl = 'https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1%2Fproviders%2FMicrosoft.Resources%2Fdeployments%2Fdeploy-1';
-            let callCount = 0;
-            const spawnFn = mock.fn(() => {
-                callCount++;
-                if (callCount === 1) {
-                    return Promise.resolve(noShellResult);
-                }
-                return Promise.resolve(createMockJsonLinesResult([
-                    { type: 'info', data: { message: `View at ${portalUrl}` } },
-                ]));
-            });
-            const { service, fs } = createService(spawnFn as unknown as SpawnFn);
-            fs.addFile(MockUri.file('/project/azure.yaml'));
-
-            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
-            await result.completed;
-
-            const info = await result.deploymentInfo;
-            expect(info).to.not.be.undefined;
-            expect(info!.subscriptionId).to.equal('sub-1');
-            expect(info!.deploymentId).to.include('deploy-1');
         });
     });
 
@@ -434,8 +353,7 @@ describe('AzdService (unit)', () => {
         });
 
         it('should spawn terminal execution for deploy', async () => {
-            const terminalResult = createMockTerminalResult([]);
-            const spawnFn = mock.fn(() => Promise.resolve(terminalResult));
+            const spawnFn = mock.fn(() => Promise.resolve(createMockTerminalResult()));
             const { service, spawnMock, fs } = createService(spawnFn as unknown as SpawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
@@ -449,42 +367,8 @@ describe('AzdService (unit)', () => {
             expect(argValues(opts.args)).to.include('deploy');
         });
 
-        it('should extract endpoint URLs from terminal output', async () => {
-            const terminalResult = createMockTerminalResult([
-                'Deployed: https://myapp.azurewebsites.net',
-                'Also: https://myapi.azurewebsites.net',
-            ]);
-            const spawnFn = mock.fn(() => Promise.resolve(terminalResult));
-            const { service, fs } = createService(spawnFn as unknown as SpawnFn);
-            fs.addFile(MockUri.file('/project/azure.yaml'));
-
-            const result = await service.deployWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
-            await result.completed;
-
-            expect(result.endpointUrls).to.deep.equal([
-                'https://myapp.azurewebsites.net',
-                'https://myapi.azurewebsites.net',
-            ]);
-        });
-
-        it('should deduplicate endpoint URLs', async () => {
-            const terminalResult = createMockTerminalResult([
-                'Deployed: https://myapp.azurewebsites.net',
-                'Again: https://myapp.azurewebsites.net',
-            ]);
-            const spawnFn = mock.fn(() => Promise.resolve(terminalResult));
-            const { service, fs } = createService(spawnFn as unknown as SpawnFn);
-            fs.addFile(MockUri.file('/project/azure.yaml'));
-
-            const result = await service.deployWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
-            await result.completed;
-
-            expect(result.endpointUrls).to.deep.equal(['https://myapp.azurewebsites.net']);
-        });
-
-        it('should throw on non-zero exit code from terminal', async () => {
-            const terminalResult = createMockTerminalResult([], 2);
-            const spawnFn = mock.fn(() => Promise.resolve(terminalResult));
+        it('should throw on non-zero exit code', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve(createMockTerminalResult(2)));
             const { service, fs } = createService(spawnFn as unknown as SpawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
@@ -497,156 +381,5 @@ describe('AzdService (unit)', () => {
                 expect((e as Error).message).to.include('azd deploy exited with code 2');
             }
         });
-
-        it('should fall back to JSON mode and extract endpoints from stdout', async () => {
-            const noShellResult: TerminalProcessResult = {
-                shellIntegration: false,
-                output: (async function* () { /* empty */ })(),
-                completed: Promise.resolve({ exitCode: undefined }),
-            };
-            const deployJson = {
-                services: {
-                    web: {
-                        artifacts: [
-                            { kind: 'endpoint', location: 'https://myapp.azurewebsites.net' },
-                            { kind: 'package', location: '/tmp/package.zip' },
-                        ],
-                    },
-                },
-            };
-            let callCount = 0;
-            const spawnFn = mock.fn(() => {
-                callCount++;
-                if (callCount === 1) {
-                    return Promise.resolve(noShellResult);
-                }
-                return Promise.resolve(createMockJsonLinesResult([], deployJson));
-            });
-            const { service, fs } = createService(spawnFn as unknown as SpawnFn);
-            fs.addFile(MockUri.file('/project/azure.yaml'));
-
-            const result = await service.deployWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
-            await result.completed;
-
-            expect(result.endpointUrls).to.deep.equal(['https://myapp.azurewebsites.net']);
-        });
     });
 });
-
-describe('parseDeploymentIdFromOutput (unit)', () => {
-    it('should extract deployment ID from a portal URL', () => {
-        const output = 'View in portal: https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1%2Fproviders%2FMicrosoft.Resources%2Fdeployments%2Fdeploy-1';
-
-        const result = parseDeploymentIdFromOutput(output);
-
-        expect(result).to.not.be.undefined;
-        expect(result!.subscriptionId).to.equal('sub-1');
-        expect(result!.deploymentId).to.include('deploy-1');
-    });
-
-    it('should handle ANSI escape codes in the output', () => {
-        const output = '\x1b[32mView in portal: https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1%2Fproviders%2FMicrosoft.Resources%2Fdeployments%2Fdeploy-1\x1b[0m';
-
-        const result = parseDeploymentIdFromOutput(output);
-
-        expect(result).to.not.be.undefined;
-        expect(result!.subscriptionId).to.equal('sub-1');
-    });
-
-    it('should return undefined when no portal URL is present', () => {
-        expect(parseDeploymentIdFromOutput('no URL here')).to.be.undefined;
-    });
-
-    it('should return undefined when the decoded ID is not a valid ARM resource ID', () => {
-        const output = 'https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/not-a-valid-id';
-
-        expect(parseDeploymentIdFromOutput(output)).to.be.undefined;
-    });
-
-    it('should return undefined when the URL contains malformed percent-encoding', () => {
-        const output = 'https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%ZZmalformed';
-
-        expect(parseDeploymentIdFromOutput(output)).to.be.undefined;
-    });
-});
-
-describe('parseEndpointUrlsFromOutput (unit)', () => {
-    it('should extract https URLs from output', () => {
-        const output = 'Deployed to https://myapp.azurewebsites.net and https://myapi.azurewebsites.net';
-
-        const result = parseEndpointUrlsFromOutput(output);
-
-        expect(result).to.deep.equal([
-            'https://myapp.azurewebsites.net',
-            'https://myapi.azurewebsites.net',
-        ]);
-    });
-
-    it('should filter out Azure Portal URLs', () => {
-        const output = 'View at https://portal.azure.com/#/resource/... and endpoint https://myapp.azurewebsites.net';
-
-        const result = parseEndpointUrlsFromOutput(output);
-
-        expect(result).to.deep.equal(['https://myapp.azurewebsites.net']);
-    });
-
-    it('should filter out sovereign cloud portal URLs', () => {
-        const output = 'View at https://portal.azure.cn/#/resource/... or https://portal.azure.us/#/resource/...';
-
-        const result = parseEndpointUrlsFromOutput(output);
-
-        expect(result).to.deep.equal([]);
-    });
-
-    it('should filter out aka.ms links', () => {
-        const output = 'Learn more at https://aka.ms/azure-dev and endpoint https://myapp.azurewebsites.net';
-
-        const result = parseEndpointUrlsFromOutput(output);
-
-        expect(result).to.deep.equal(['https://myapp.azurewebsites.net']);
-    });
-
-    it('should handle ANSI escape codes', () => {
-        const output = '\x1b[1mhttps://myapp.azurewebsites.net\x1b[0m';
-
-        const result = parseEndpointUrlsFromOutput(output);
-
-        expect(result).to.deep.equal(['https://myapp.azurewebsites.net']);
-    });
-
-    it('should return empty array when no URLs are present', () => {
-        expect(parseEndpointUrlsFromOutput('no URLs here')).to.deep.equal([]);
-    });
-});
-
-// #region Test helpers
-
-/** Creates a mock {@linkcode TerminalProcessResult} with preset output chunks. */
-function createMockTerminalResult(chunks: string[], exitCode = 0): TerminalProcessResult {
-    return {
-        shellIntegration: true,
-        output: (async function* () { // eslint-disable-line @typescript-eslint/require-await
-            for (const chunk of chunks) {
-                yield chunk;
-            }
-        })(),
-        completed: Promise.resolve({ exitCode }),
-    };
-}
-
-/** Creates a mock {@linkcode JsonLinesProcessResult} for JSON fallback paths. */
-function createMockJsonLinesResult<T>(
-    stderrLines: Array<{ type?: string; data?: { message?: string } }> = [],
-    stdoutJson: T = {} as T,
-): JsonLinesProcessResult<T> {
-    return {
-        jsonLines: (async function* () { // eslint-disable-line @typescript-eslint/require-await
-            for (const line of stderrLines) {
-                yield line;
-            }
-        })(),
-        completed: Promise.resolve({ stdout: JSON.stringify(stdoutJson), stderr: '', json: stdoutJson }),
-    };
-}
-
-// #endregion

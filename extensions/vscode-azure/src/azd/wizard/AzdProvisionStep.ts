@@ -4,20 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { ExecuteStep, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, type ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
- * Deploys the generated project by running `azd provision` in a
- * visible terminal with output capture.
+ * Runs `azd provision` in a visible terminal.
  *
- * Extracts the ARM deployment ID from the provision output and starts
- * tracking it in the activity view via {@linkcode ArmDeploymentDataProvider}.
+ * Passes `AZD_DEPLOYMENT_ID_FILE` so azd writes the ARM deployment ID
+ * to a temp file. Polls for that file to start tracking the deployment
+ * in the activity view via {@linkcode ArmDeploymentDataProvider}.
  */
 export class AzdProvisionStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
+        private readonly ctx: ICodeContext,
         private readonly azd: IAzdService,
         private readonly output: IOutputChannel,
         private readonly armProvider: ArmDeploymentDataProvider,
@@ -31,7 +32,8 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public async execute(context: TContext): Promise<void> {
-        const result = await this.azd.provisionWithCapture(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        const storageDir = this.ctx.extensionContext.storageUri ?? this.ctx.extensionContext.globalStorageUri;
+        const result = await this.azd.provisionWithCapture(context.iacFolder!, storageDir); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
         // Track ARM deployment as soon as we find the ID (non-blocking)
         result.deploymentInfo.then(async (info) => {

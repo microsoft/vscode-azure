@@ -55,8 +55,4 @@ export interface AzdWizardContext {
      * Used by {@linkcode HydratableChooseLocationStep} to skip the picker.
      */
     readonly hydratedLocationName?: string;
-
-    // ---- Post-execution output (set by execute steps) ----
-    /** Endpoint URLs discovered from `azd deploy` output, if any. */
-    endpointUrls?: string[];
 }

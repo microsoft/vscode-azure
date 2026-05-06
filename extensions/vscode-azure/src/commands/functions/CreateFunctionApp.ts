@@ -72,12 +72,12 @@ export class CreateFunctionApp implements ManagedCommand {
             new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan', 'azdServiceName']),
             new GenerateAzureYamlStep(this.azd),
             new CreateAzdEnvStep(this.azd),
-            new AzdProvisionStep(this.azd, this.output, this.armProvider, this.subscriptionProvider),
+            new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider),
         ];
 
         if (job === 'deploy') {
-            executeSteps.push(new AzdDeployStep(this.actionContext, this.azd, this.output, this.codeProvider));
-            executeSteps.push(new ShowEndpointUrlStep(this.ctx));
+            executeSteps.push(new AzdDeployStep(this.actionContext, this.azd, this.codeProvider));
+            executeSteps.push(new ShowEndpointUrlStep(this.ctx, this.azd));
         }
 
         const wizard = new Wizard<CreateFunctionAppContext>(

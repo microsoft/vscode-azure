@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockSubscriptionProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -14,6 +14,7 @@ import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { createMockAzdService } from '../MockAzdService';
 
 function createStep(options?: { subscriptionId?: string }) {
+    const { ctx } = createMockCodeContext();
     const azd = createMockAzdService();
     const output = new MockOutputChannel('test');
     const armProvider = { trackDeployment: mock.fn() } as never;
@@ -21,7 +22,7 @@ function createStep(options?: { subscriptionId?: string }) {
         ? [makeSubscription({ subscriptionId: options.subscriptionId })]
         : [];
     const subscriptionProvider = createMockSubscriptionProvider({ subscriptions });
-    const step = new AzdProvisionStep(azd, output, armProvider, subscriptionProvider);
+    const step = new AzdProvisionStep(ctx, azd, output, armProvider, subscriptionProvider);
     return { azd, step, armProvider: armProvider as unknown as { trackDeployment: ReturnType<typeof mock.fn> }, output };
 }
 
@@ -78,14 +79,7 @@ describe('AzdProvisionStep (unit)', () => {
 
     describe('execute', () => {
         it('should call azd provisionWithCapture with the iac folder', async () => {
-            const yamlUri = MockUri.file('/project/azure.yaml');
-            const mockResult = createMockVsCode();
-            mockResult.fs.addFile(yamlUri);
-
             const { azd, step } = createStep();
-            azd.findAzureYaml.mock.mockImplementation(
-                () => Promise.resolve(MockUri.file('/project/azure.yaml')),
-            );
             const context = {
                 provision: true,
                 iacFolder: MockUri.file('/project'),

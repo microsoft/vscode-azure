@@ -57,9 +57,9 @@ export class AzdUp implements ManagedCommand {
                 new SelectIacFolderStep(this.actionContext, this.ctx, this.tempManager, this.azd),
             ],
             [
-                new AzdProvisionStep(this.azd, this.output, this.armProvider, this.subscriptionProvider),
-                new AzdDeployStep(this.actionContext, this.azd, this.output, this.codeProvider),
-                new ShowEndpointUrlStep(this.ctx),
+                new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider),
+                new AzdDeployStep(this.actionContext, this.azd, this.codeProvider),
+                new ShowEndpointUrlStep(this.ctx, this.azd),
             ],
         );
 

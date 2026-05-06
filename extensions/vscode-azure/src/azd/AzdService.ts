@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { IProcessExecutor, IVsCode, stripAnsi, type JsonLinesProcessResult, type TerminalProcessResult } from '@microsoft/vscode-azure-utils';
+import { IProcessExecutor, IVsCode, type TerminalProcessResult } from '@microsoft/vscode-azure-utils';
 import { composeArgs, withArg, withFlagArg, withNamedArg, type CommandLineArgs } from '@microsoft/vscode-processutils';
+import * as crypto from 'crypto';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzdAuthServer } from './AzdAuthServer';
@@ -35,7 +36,13 @@ export interface AzdShowResult {
      * services are configured -- `azd deploy` will not have anything to
      * target until the user runs `azd add`.
      */
-    readonly services?: Readonly<Record<string, unknown>>;
+    readonly services?: Readonly<Record<string, AzdServiceDescriptor>>;
+}
+
+/** A single service entry from {@linkcode AzdShowResult.services}. */
+export interface AzdServiceDescriptor extends Record<string, unknown> {
+    /** Ingress URL for the deployed service, if available. */
+    readonly ingressUrl?: string;
 }
 
 export interface IAzdService {
@@ -77,25 +84,20 @@ export interface IAzdService {
     show(cwd: vscode.Uri): Promise<AzdShowResult | undefined>;
 
     /**
-     * Runs `azd provision` in a visible terminal with output capture.
+     * Runs `azd provision` in a visible terminal.
      *
-     * Uses shell integration to capture output and extract the ARM
-     * deployment ID from the portal URL logged by azd. Falls back to
-     * `azd provision --output json` in background mode when shell
-     * integration is unavailable.
-     *
-     * The returned {@linkcode AzdProvisionCaptureResult.deploymentInfo}
-     * promise resolves as soon as the deployment ID is found (before the
-     * process completes).
+     * Writes `AZD_DEPLOYMENT_ID_FILE` to a temp file in {@linkcode storageDir}
+     * so azd can emit the ARM deployment ID. The returned
+     * {@linkcode AzdProvisionCaptureResult.deploymentInfo} promise
+     * resolves when the file appears (polled every 3 s, up to 2 min).
      */
-    provisionWithCapture(cwd: vscode.Uri): Promise<AzdProvisionCaptureResult>;
+    provisionWithCapture(cwd: vscode.Uri, storageDir: vscode.Uri): Promise<AzdProvisionCaptureResult>;
 
     /**
-     * Runs `azd deploy` in a visible terminal with output capture.
+     * Runs `azd deploy` in a visible terminal.
      *
-     * Uses shell integration to capture output and extract endpoint URLs.
-     * Falls back to `azd deploy --output json` in background mode when
-     * shell integration is unavailable.
+     * The returned promise resolves when the deploy completes.
+     * Rejects on non-zero exit.
      */
     deployWithCapture(cwd: vscode.Uri): Promise<AzdDeployCaptureResult>;
 }
@@ -108,7 +110,7 @@ export interface AzdDeploymentInfo {
 
 /** Result of {@linkcode IAzdService.provisionWithCapture}. */
 export interface AzdProvisionCaptureResult {
-    /** Resolves when the deployment ID is found in the output, or `undefined` if not found. */
+    /** Resolves when the deployment ID file appears, or `undefined` on timeout. */
     readonly deploymentInfo: Promise<AzdDeploymentInfo | undefined>;
     /** Resolves when the provision process completes. Rejects on non-zero exit. */
     readonly completed: Promise<void>;
@@ -116,8 +118,6 @@ export interface AzdProvisionCaptureResult {
 
 /** Result of {@linkcode IAzdService.deployWithCapture}. */
 export interface AzdDeployCaptureResult {
-    /** Endpoint URLs discovered from the deploy output. Populated after {@linkcode completed} resolves. */
-    readonly endpointUrls: string[];
     /** Resolves when the deploy process completes. Rejects on non-zero exit. */
     readonly completed: Promise<void>;
 }
@@ -247,13 +247,23 @@ export class AzdService implements IAzdService {
         }
     }
 
-    public async provisionWithCapture(cwd: vscode.Uri): Promise<AzdProvisionCaptureResult> {
+    public async provisionWithCapture(cwd: vscode.Uri, storageDir: vscode.Uri): Promise<AzdProvisionCaptureResult> {
         const azureYamlUri = await this.findAzureYaml(cwd);
         if (!azureYamlUri) {
             throw new Error(this.code.l10n.t('Could not find azure.yaml or azure.yml in the project directory.'));
         }
 
         const authEnv = await this.authServer.getEnv();
+
+        // Create a temp directory for the deployment ID file
+        const deployIdDir = this.code.Uri.joinPath(storageDir, `azd-${crypto.randomUUID().slice(0, 8)}`);
+        await this.code.workspace.fs.createDirectory(deployIdDir);
+        const deployIdFileUri = this.code.Uri.joinPath(deployIdDir, 'deployment-id.json');
+
+        const env: Record<string, string> = {
+            ...authEnv,
+            AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
+        };
 
         let terminalResult: TerminalProcessResult;
         try {
@@ -263,18 +273,21 @@ export class AzdService implements IAzdService {
                 args: ['provision'],
                 cwd,
                 name: 'azd provision',
-                env: authEnv,
+                env,
             });
         } catch (e) {
             throw this.wrapEnoent(e);
         }
 
-        if (terminalResult.shellIntegration) {
-            return this.captureProvisionFromTerminal(terminalResult);
-        }
+        const deploymentInfo = this.pollForDeploymentIdFile(deployIdFileUri);
 
-        // Fallback: background mode with --output json
-        return this.captureProvisionFromJson(cwd, authEnv);
+        const completed = terminalResult.completed.then(({ exitCode }) => {
+            if (exitCode !== undefined && exitCode !== 0) {
+                throw new Error(this.code.l10n.t('azd provision exited with code {0}', exitCode));
+            }
+        });
+
+        return { deploymentInfo, completed };
     }
 
     public async deployWithCapture(cwd: vscode.Uri): Promise<AzdDeployCaptureResult> {
@@ -299,140 +312,39 @@ export class AzdService implements IAzdService {
             throw this.wrapEnoent(e);
         }
 
-        if (terminalResult.shellIntegration) {
-            return this.captureDeployFromTerminal(terminalResult);
-        }
-
-        // Fallback: background mode with --output json
-        return this.captureDeployFromJson(cwd, authEnv);
-    }
-
-    private captureProvisionFromTerminal(result: TerminalProcessResult): AzdProvisionCaptureResult {
-        const { promise: deploymentInfo, resolve } = Promise.withResolvers<AzdDeploymentInfo | undefined>();
-
-        let found = false;
-        const completed = (async () => {
-            for await (const chunk of result.output) {
-                if (!found) {
-                    const info = parseDeploymentIdFromOutput(chunk);
-                    if (info) {
-                        found = true;
-                        resolve(info);
-                    }
-                }
-            }
-            if (!found) {
-                resolve(undefined);
-            }
-            const { exitCode } = await result.completed;
-            if (exitCode !== undefined && exitCode !== 0) {
-                throw new Error(this.code.l10n.t('azd provision exited with code {0}', exitCode));
-            }
-        })();
-
-        return { deploymentInfo, completed };
-    }
-
-    private captureProvisionFromJson(cwd: vscode.Uri, env: Readonly<Record<string, string>>): AzdProvisionCaptureResult {
-        const { promise: deploymentInfo, resolve } = Promise.withResolvers<AzdDeploymentInfo | undefined>();
-
-        let found = false;
-        const completed = (async () => {
-            let jsonLinesResult: JsonLinesProcessResult<unknown, AzdStderrMessage>;
-            try {
-                jsonLinesResult = await this.processExecutor.spawn<unknown, AzdStderrMessage>({
-                    execution: 'background',
-                    command: 'azd',
-                    args: composeArgs(withArg('provision'), withJsonOutput())(),
-                    cwd,
-                    env,
-                    parseJson: true,
-                    jsonLines: true,
-                });
-            } catch (e) {
-                resolve(undefined);
-                throw this.wrapEnoent(e);
-            }
-
-            for await (const line of jsonLinesResult.jsonLines) {
-                if (!found && line.data?.message) {
-                    const info = parseDeploymentIdFromOutput(line.data.message);
-                    if (info) {
-                        found = true;
-                        resolve(info);
-                    }
-                }
-            }
-            if (!found) {
-                resolve(undefined);
-            }
-
-            await jsonLinesResult.completed;
-        })();
-
-        return { deploymentInfo, completed };
-    }
-
-    private captureDeployFromTerminal(result: TerminalProcessResult): AzdDeployCaptureResult {
-        const endpointUrls: string[] = [];
-
-        const completed = (async () => {
-            for await (const chunk of result.output) {
-                const urls = parseEndpointUrlsFromOutput(chunk);
-                for (const url of urls) {
-                    if (!endpointUrls.includes(url)) {
-                        endpointUrls.push(url);
-                    }
-                }
-            }
-            const { exitCode } = await result.completed;
+        const completed = terminalResult.completed.then(({ exitCode }) => {
             if (exitCode !== undefined && exitCode !== 0) {
                 throw new Error(this.code.l10n.t('azd deploy exited with code {0}', exitCode));
             }
-        })();
+        });
 
-        return { endpointUrls, completed };
+        return { completed };
     }
 
-    private captureDeployFromJson(cwd: vscode.Uri, env: Readonly<Record<string, string>>): AzdDeployCaptureResult {
-        const endpointUrls: string[] = [];
 
-        const completed = (async () => {
-            let jsonLinesResult: JsonLinesProcessResult<AzdDeployStdout, AzdStderrMessage>;
+    /**
+     * Polls for the deployment ID file to appear. Checks every
+     * {@linkcode deployIdPollIntervalMs} for up to {@linkcode deployIdPollTimeoutMs}.
+     *
+     * Returns the parsed deployment info, or `undefined` on timeout.
+     */
+    private async pollForDeploymentIdFile(fileUri: vscode.Uri): Promise<AzdDeploymentInfo | undefined> {
+        const start = Date.now();
+        while (Date.now() - start < deployIdPollTimeoutMs) {
             try {
-                jsonLinesResult = await this.processExecutor.spawn<AzdDeployStdout, AzdStderrMessage>({
-                    execution: 'background',
-                    command: 'azd',
-                    args: composeArgs(withArg('deploy'), withJsonOutput())(),
-                    cwd,
-                    env,
-                    parseJson: true,
-                    jsonLines: true,
-                });
-            } catch (e) {
-                throw this.wrapEnoent(e);
-            }
-
-            // Drain stderr lines (deploy messages)
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars -- must drain the async generator
-            for await (const line of jsonLinesResult.jsonLines) {
-                // In JSON mode, endpoint URLs come from stdout, not stderr
-            }
-
-            const result = await jsonLinesResult.completed;
-            const services = result.json.services;
-            if (services) {
-                for (const svc of Object.values(services)) {
-                    for (const artifact of svc.artifacts ?? []) {
-                        if (artifact.kind === 'endpoint' && artifact.location && !endpointUrls.includes(artifact.location)) {
-                            endpointUrls.push(artifact.location);
-                        }
-                    }
+                const content = await this.code.workspace.fs.readFile(fileUri);
+                const text = new TextDecoder().decode(content);
+                const parsed = JSON.parse(text) as { deploymentId?: string };
+                if (parsed.deploymentId) {
+                    const { subscriptionId } = parseAzureResourceId(parsed.deploymentId);
+                    return { deploymentId: parsed.deploymentId, subscriptionId };
                 }
+            } catch {
+                // File doesn't exist yet or isn't valid -- keep polling
             }
-        })();
-
-        return { endpointUrls, completed };
+            await new Promise(resolve => setTimeout(resolve, deployIdPollIntervalMs));
+        }
+        return undefined;
     }
 
     private wrapEnoent(e: unknown): unknown {
@@ -454,95 +366,7 @@ function withJsonOutput(): (args?: CommandLineArgs) => CommandLineArgs {
     return withNamedArg('--output', 'json');
 }
 
-// #region Output parsers
-
-/** Shape of a JSON line emitted to stderr by `azd` with `--output json`. */
-interface AzdStderrMessage {
-    readonly type?: string;
-    readonly data?: { readonly message?: string };
-}
-
-/** Shape of `azd deploy --output json` stdout. */
-interface AzdDeployStdout {
-    readonly services?: Readonly<Record<string, {
-        readonly artifacts?: readonly {
-            readonly kind?: string;
-            readonly location?: string;
-        }[];
-    }>>;
-}
-
-/**
- * Regex matching the Azure Portal deployment URL logged by `azd provision`.
- *
- * The portal URL encodes the ARM deployment ID with `%2F`. We capture
- * everything after `/id/` up to whitespace, quote, or comma.
- */
-const portalDeploymentUrlPattern = /DeploymentDetailsBlade.*?\/id\/([^\s"',]+)/i;
-
-/**
- * Extracts the ARM deployment ID and subscription ID from azd output
- * containing a portal deployment URL.
- *
- * Works on both raw terminal output (after ANSI stripping) and plain
- * text from `--output json` stderr messages.
- */
-export function parseDeploymentIdFromOutput(output: string): AzdDeploymentInfo | undefined {
-    const cleaned = stripAnsi(output);
-    const match = portalDeploymentUrlPattern.exec(cleaned);
-    if (!match) {
-        return undefined;
-    }
-
-    let deploymentId: string;
-    try {
-        deploymentId = decodeURIComponent(match[1]);
-    } catch {
-        return undefined;
-    }
-
-    try {
-        const { subscriptionId } = parseAzureResourceId(deploymentId);
-        return { deploymentId, subscriptionId };
-    } catch {
-        return undefined;
-    }
-}
-
-/**
- * Regex matching https URLs in azd deploy output.
- * Captures any https URL; non-endpoint URLs (e.g. portal links) are
- * filtered out by {@linkcode parseEndpointUrlsFromOutput}.
- */
-const httpsUrlPattern = /https:\/\/[^\s"',)]+/gi;
-
-/** Hostname patterns that are not app endpoints (portal links, etc.). */
-const nonEndpointHosts = [
-    'portal.azure.com',
-    'portal.azure.cn',
-    'portal.azure.us',
-    'portal.microsoftazure.de',
-    'aka.ms',
-];
-
-/**
- * Extracts endpoint URLs from azd deploy terminal output.
- * Filters out Azure Portal and other non-endpoint URLs.
- */
-export function parseEndpointUrlsFromOutput(output: string): string[] {
-    const cleaned = stripAnsi(output);
-    const matches = cleaned.match(httpsUrlPattern);
-    if (!matches) {
-        return [];
-    }
-    return matches.filter(url => {
-        try {
-            const host = new URL(url).hostname.toLowerCase();
-            return !nonEndpointHosts.some(h => host === h || host.endsWith('.' + h));
-        } catch {
-            return false;
-        }
-    });
-}
-
-// #endregion
+/** Interval in milliseconds between polls for the deployment ID file. */
+const deployIdPollIntervalMs = 3000;
+/** Maximum time in milliseconds to poll for the deployment ID file. */
+const deployIdPollTimeoutMs = 120_000;

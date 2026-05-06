@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
-import { MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -14,7 +14,6 @@ import { createMockAzdService } from '../MockAzdService';
 
 function createStep() {
     const azd = createMockAzdService();
-    const output = new MockOutputChannel('test');
     const actionContext = createActionContext('test');
     const codeProvider = {
         trackDeployment: mock.fn((activity: Record<string, unknown>) => {
@@ -23,8 +22,8 @@ function createStep() {
             return activity;
         }),
     } as never;
-    const step = new AzdDeployStep(actionContext, azd, output, codeProvider);
-    return { azd, output, codeProvider, actionContext, step };
+    const step = new AzdDeployStep(actionContext, azd, codeProvider);
+    return { azd, codeProvider, actionContext, step };
 }
 
 describe('AzdDeployStep (unit)', () => {
@@ -83,37 +82,6 @@ describe('AzdDeployStep (unit)', () => {
             expect((azd.deployWithCapture.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
         });
 
-        it('should populate endpointUrls on context when deploy returns URLs', async () => {
-            const { azd, step } = createStep();
-
-            azd.deployWithCapture.mock.mockImplementation(() => Promise.resolve({
-                endpointUrls: ['https://myapp.azurewebsites.net'],
-                completed: Promise.resolve(),
-            }));
-
-            const context = {
-                deploy: true,
-                iacFolder: MockUri.file('/project'),
-            } as AzdWizardContext;
-
-            await step.execute(context);
-
-            expect(context.endpointUrls).to.deep.equal(['https://myapp.azurewebsites.net']);
-        });
-
-        it('should not set endpointUrls when deploy returns no URLs', async () => {
-            const { step } = createStep();
-
-            const context = {
-                deploy: true,
-                iacFolder: MockUri.file('/project'),
-            } as AzdWizardContext;
-
-            await step.execute(context);
-
-            expect(context.endpointUrls).to.be.undefined;
-        });
-
         it('should track a code deployment activity', async () => {
             const { codeProvider, step } = createStep();
 
@@ -134,7 +102,6 @@ describe('AzdDeployStep (unit)', () => {
             const { azd, codeProvider, actionContext, step } = createStep();
 
             azd.deployWithCapture.mock.mockImplementation(() => Promise.resolve({
-                endpointUrls: [],
                 completed: Promise.reject(new Error('deploy failed')),
             }));
 
