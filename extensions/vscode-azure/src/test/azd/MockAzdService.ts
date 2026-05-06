@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { mock } from 'node:test';
-import type { AzdDeployCaptureResult, AzdEnvironment, AzdProvisionCaptureResult, IAzdService } from '../../azd/AzdService';
+import type { AzdEnvironment, AzdProvisionCaptureResult, IAzdService } from '../../azd/AzdService';
 
 /**
  * A mock {@linkcode IAzdService} with all methods backed by `mock.fn()`.
@@ -19,13 +19,6 @@ export type MockAzdService = IAzdService & {
 function defaultProvisionCaptureResult(): AzdProvisionCaptureResult {
     return {
         deploymentInfo: Promise.resolve(undefined),
-        completed: Promise.resolve(),
-    };
-}
-
-/** Default mock result for {@linkcode IAzdService.deployWithCapture}. */
-function defaultDeployCaptureResult(): AzdDeployCaptureResult {
-    return {
         completed: Promise.resolve(),
     };
 }
@@ -45,6 +38,6 @@ export function createMockAzdService(envListResult: AzdEnvironment[] = []): Mock
         envGetValues: mock.fn(() => Promise.resolve({})),
         show: mock.fn(() => Promise.resolve(undefined)),
         provisionWithCapture: mock.fn(() => Promise.resolve(defaultProvisionCaptureResult())),
-        deployWithCapture: mock.fn(() => Promise.resolve(defaultDeployCaptureResult())),
+        deployWithCapture: mock.fn(() => Promise.resolve()),
     };
 }

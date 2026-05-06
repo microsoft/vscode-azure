@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { IProcessExecutor, IVsCode, type TerminalProcessResult } from '@microsoft/vscode-azure-utils';
+import { IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { composeArgs, withArg, withFlagArg, withNamedArg, type CommandLineArgs } from '@microsoft/vscode-processutils';
 import * as crypto from 'crypto';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -84,9 +84,9 @@ export interface IAzdService {
     show(cwd: vscode.Uri): Promise<AzdShowResult | undefined>;
 
     /**
-     * Runs `azd provision` in a visible terminal.
+     * Runs `azd provision` as a visible VS Code task.
      *
-     * Writes `AZD_DEPLOYMENT_ID_FILE` to a temp file in {@linkcode storageDir}
+     * Sets `AZD_DEPLOYMENT_ID_FILE` to a temp file in {@linkcode storageDir}
      * so azd can emit the ARM deployment ID. The returned
      * {@linkcode AzdProvisionCaptureResult.deploymentInfo} promise
      * resolves when the file appears (polled every 3 s, up to 2 min).
@@ -94,12 +94,12 @@ export interface IAzdService {
     provisionWithCapture(cwd: vscode.Uri, storageDir: vscode.Uri): Promise<AzdProvisionCaptureResult>;
 
     /**
-     * Runs `azd deploy` in a visible terminal.
+     * Runs `azd deploy` as a visible VS Code task.
      *
-     * The returned promise resolves when the deploy completes.
+     * Resolves when the task completes successfully.
      * Rejects on non-zero exit.
      */
-    deployWithCapture(cwd: vscode.Uri): Promise<AzdDeployCaptureResult>;
+    deployWithCapture(cwd: vscode.Uri): Promise<void>;
 }
 
 /** Parsed deployment information extracted from azd provision output. */
@@ -112,13 +112,7 @@ export interface AzdDeploymentInfo {
 export interface AzdProvisionCaptureResult {
     /** Resolves when the deployment ID file appears, or `undefined` on timeout. */
     readonly deploymentInfo: Promise<AzdDeploymentInfo | undefined>;
-    /** Resolves when the provision process completes. Rejects on non-zero exit. */
-    readonly completed: Promise<void>;
-}
-
-/** Result of {@linkcode IAzdService.deployWithCapture}. */
-export interface AzdDeployCaptureResult {
-    /** Resolves when the deploy process completes. Rejects on non-zero exit. */
+    /** Resolves when the provision task completes. Rejects on non-zero exit. */
     readonly completed: Promise<void>;
 }
 
@@ -265,32 +259,24 @@ export class AzdService implements IAzdService {
             AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
         };
 
-        let terminalResult: TerminalProcessResult;
-        try {
-            terminalResult = await this.processExecutor.spawn({
-                execution: 'terminal',
-                command: 'azd',
-                args: ['provision'],
-                cwd,
-                name: 'azd provision',
-                env,
-            });
-        } catch (e) {
-            throw this.wrapEnoent(e);
-        }
+        const completed = this.processExecutor.spawn({
+            execution: 'foreground',
+            command: 'azd',
+            args: ['provision'],
+            cwd,
+            name: 'azd provision',
+            source: 'azd',
+            env,
+            alwaysRunNew: true,
+            focus: true,
+        }).catch((e: unknown) => { throw this.wrapEnoent(e); });
 
         const deploymentInfo = this.pollForDeploymentIdFile(deployIdFileUri);
-
-        const completed = terminalResult.completed.then(({ exitCode }) => {
-            if (exitCode !== undefined && exitCode !== 0) {
-                throw new Error(this.code.l10n.t('azd provision exited with code {0}', exitCode));
-            }
-        });
 
         return { deploymentInfo, completed };
     }
 
-    public async deployWithCapture(cwd: vscode.Uri): Promise<AzdDeployCaptureResult> {
+    public async deployWithCapture(cwd: vscode.Uri): Promise<void> {
         const azureYamlUri = await this.findAzureYaml(cwd);
         if (!azureYamlUri) {
             throw new Error(this.code.l10n.t('Could not find azure.yaml or azure.yml in the project directory.'));
@@ -298,29 +284,22 @@ export class AzdService implements IAzdService {
 
         const authEnv = await this.authServer.getEnv();
 
-        let terminalResult: TerminalProcessResult;
         try {
-            terminalResult = await this.processExecutor.spawn({
-                execution: 'terminal',
+            await this.processExecutor.spawn({
+                execution: 'foreground',
                 command: 'azd',
                 args: ['deploy'],
                 name: 'azd deploy',
+                source: 'azd',
                 cwd,
                 env: authEnv,
+                alwaysRunNew: true,
+                focus: true,
             });
         } catch (e) {
             throw this.wrapEnoent(e);
         }
-
-        const completed = terminalResult.completed.then(({ exitCode }) => {
-            if (exitCode !== undefined && exitCode !== 0) {
-                throw new Error(this.code.l10n.t('azd deploy exited with code {0}', exitCode));
-            }
-        });
-
-        return { completed };
     }
-
 
     /**
      * Polls for the deployment ID file to appear. Checks every

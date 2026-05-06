@@ -28,8 +28,6 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
     }
 
     public async execute(context: TContext): Promise<void> {
-        const result = await this.azd.deployWithCapture(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
-
         const activity = this.codeProvider.trackDeployment({
             id: crypto.randomUUID(),
             status: 'InProgress',
@@ -37,13 +35,12 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
         });
 
         try {
-            await result.completed;
+            await this.azd.deployWithCapture(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
             activity.status = 'Completed';
             activity.endTime = new Date();
         } catch (e) {
             activity.status = 'Failed';
             activity.endTime = new Date();
-            // TODO: activity should include error information
             this.actionContext.errorHandling.suppressDisplay = true;
             throw e;
         }

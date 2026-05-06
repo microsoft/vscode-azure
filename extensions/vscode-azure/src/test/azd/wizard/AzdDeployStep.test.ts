@@ -101,9 +101,7 @@ describe('AzdDeployStep (unit)', () => {
         it('should mark activity as Failed and rethrow with suppressDisplay when deploy rejects', async () => {
             const { azd, codeProvider, actionContext, step } = createStep();
 
-            azd.deployWithCapture.mock.mockImplementation(() => Promise.resolve({
-                completed: Promise.reject(new Error('deploy failed')),
-            }));
+            azd.deployWithCapture.mock.mockImplementation(() => Promise.reject(new Error('deploy failed')));
 
             const context = {
                 deploy: true,
