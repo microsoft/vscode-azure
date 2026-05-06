@@ -113,7 +113,7 @@ describe('CreateFunctionApp (unit)', () => {
         expect(location).to.equal('eastus');
         expect(subscriptionId).to.equal('sub-1');
 
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
+        expect(azd.provision.mock.callCount()).to.equal(1);
     });
 
     it('should run the deploy job Fresh flow against the workspace folder', async () => {
@@ -132,7 +132,7 @@ describe('CreateFunctionApp (unit)', () => {
         expect(azd.init.mock.callCount()).to.equal(1);
         expect(fs.copy.mock.callCount()).to.be.greaterThanOrEqual(1);
         expect(azd.envNew.mock.callCount()).to.equal(1);
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
+        expect(azd.provision.mock.callCount()).to.equal(1);
     });
 
     it('should skip yaml/bicep/env-new in the deploy job Bootstrapped flow', async () => {
@@ -167,7 +167,7 @@ describe('CreateFunctionApp (unit)', () => {
         expect(azd.init.mock.callCount()).to.equal(0);
         expect(fs.copy.mock.callCount()).to.equal(0);
         expect(azd.envNew.mock.callCount()).to.equal(0);
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
+        expect(azd.provision.mock.callCount()).to.equal(1);
     });
 
     it('should skip provisioning when user picks No on ConfirmProvisionStep', async () => {
@@ -196,6 +196,6 @@ describe('CreateFunctionApp (unit)', () => {
 
         await cmd.execute('deploy');
 
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(0);
+        expect(azd.provision.mock.callCount()).to.equal(0);
     });
 });

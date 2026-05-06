@@ -78,8 +78,8 @@ describe('AzdDeployStep (unit)', () => {
 
             await step.execute(context);
 
-            expect(azd.deployWithCapture.mock.callCount()).to.equal(1);
-            expect((azd.deployWithCapture.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
+            expect(azd.deploy.mock.callCount()).to.equal(1);
+            expect((azd.deploy.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
         });
 
         it('should track a code deployment activity', async () => {
@@ -101,7 +101,7 @@ describe('AzdDeployStep (unit)', () => {
         it('should mark activity as Failed and rethrow with suppressDisplay when deploy rejects', async () => {
             const { azd, codeProvider, actionContext, step } = createStep();
 
-            azd.deployWithCapture.mock.mockImplementation(() => Promise.reject(new Error('deploy failed')));
+            azd.deploy.mock.mockImplementation(() => Promise.reject(new Error('deploy failed')));
 
             const context = {
                 deploy: true,

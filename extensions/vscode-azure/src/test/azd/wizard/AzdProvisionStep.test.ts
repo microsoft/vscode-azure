@@ -3,25 +3,21 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockSubscriptionProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockSubscriptionProvider } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
-import type { AzdDeploymentInfo, AzdProvisionCaptureResult } from '../../../azd/AzdService';
 import { AzdProvisionStep } from '../../../azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { createMockAzdService } from '../MockAzdService';
 
-function createStep(options?: { subscriptionId?: string }) {
+function createStep() {
     const { ctx } = createMockCodeContext();
     const azd = createMockAzdService();
     const output = new MockOutputChannel('test');
     const armProvider = { trackDeployment: mock.fn() } as never;
-    const subscriptions = options?.subscriptionId
-        ? [makeSubscription({ subscriptionId: options.subscriptionId })]
-        : [];
-    const subscriptionProvider = createMockSubscriptionProvider({ subscriptions });
+    const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
     const step = new AzdProvisionStep(ctx, azd, output, armProvider, subscriptionProvider);
     return { azd, step, armProvider: armProvider as unknown as { trackDeployment: ReturnType<typeof mock.fn> }, output };
 }
@@ -78,7 +74,7 @@ describe('AzdProvisionStep (unit)', () => {
     });
 
     describe('execute', () => {
-        it('should call azd provisionWithCapture with the iac folder', async () => {
+        it('should call azd.provision with the iac folder and AZD_DEPLOYMENT_ID_FILE env', async () => {
             const { azd, step } = createStep();
             const context = {
                 provision: true,
@@ -87,77 +83,10 @@ describe('AzdProvisionStep (unit)', () => {
 
             await step.execute(context);
 
-            expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
-            expect((azd.provisionWithCapture.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
-        });
-
-        it('should track ARM deployment when deployment info is found and subscription matches', async () => {
-            const { azd, step, armProvider } = createStep({ subscriptionId: 'sub-1' });
-
-            const deploymentInfo: AzdDeploymentInfo = { deploymentId: '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1', subscriptionId: 'sub-1' };
-            const captureResult: AzdProvisionCaptureResult = {
-                deploymentInfo: Promise.resolve(deploymentInfo),
-                completed: Promise.resolve(),
-            };
-            azd.provisionWithCapture.mock.mockImplementation(() => Promise.resolve(captureResult));
-
-            const context = {
-                provision: true,
-                iacFolder: MockUri.file('/project'),
-            } as AzdWizardContext;
-
-            await step.execute(context);
-            // Allow the non-blocking deploymentInfo.then() to settle
-            await captureResult.deploymentInfo;
-            // Yield to microtask queue so the .then() callback completes
-            await new Promise(resolve => setTimeout(resolve, 0));
-
-            expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
-            expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentInfo.deploymentId);
-        });
-
-        it('should not track ARM deployment when no deployment info is found', async () => {
-            const { azd, step, armProvider } = createStep({ subscriptionId: 'sub-1' });
-
-            const captureResult: AzdProvisionCaptureResult = {
-                deploymentInfo: Promise.resolve(undefined),
-                completed: Promise.resolve(),
-            };
-            azd.provisionWithCapture.mock.mockImplementation(() => Promise.resolve(captureResult));
-
-            const context = {
-                provision: true,
-                iacFolder: MockUri.file('/project'),
-            } as AzdWizardContext;
-
-            await step.execute(context);
-            await captureResult.deploymentInfo;
-            await new Promise(resolve => setTimeout(resolve, 0));
-
-            expect(armProvider.trackDeployment.mock.callCount()).to.equal(0);
-        });
-
-        it('should not track ARM deployment when subscription cannot be resolved', async () => {
-            // No subscriptions configured — resolveSubscription returns undefined
-            const { azd, step, armProvider } = createStep();
-
-            const deploymentInfo: AzdDeploymentInfo = { deploymentId: '/subscriptions/unknown/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1', subscriptionId: 'unknown' };
-            const captureResult: AzdProvisionCaptureResult = {
-                deploymentInfo: Promise.resolve(deploymentInfo),
-                completed: Promise.resolve(),
-            };
-            azd.provisionWithCapture.mock.mockImplementation(() => Promise.resolve(captureResult));
-
-            const context = {
-                provision: true,
-                iacFolder: MockUri.file('/project'),
-            } as AzdWizardContext;
-
-            await step.execute(context);
-            await captureResult.deploymentInfo;
-            await new Promise(resolve => setTimeout(resolve, 0));
-
-            expect(armProvider.trackDeployment.mock.callCount()).to.equal(0);
+            expect(azd.provision.mock.callCount()).to.equal(1);
+            expect((azd.provision.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
+            const env = azd.provision.mock.calls[0].arguments[1] as Record<string, string>;
+            expect(env).to.have.property('AZD_DEPLOYMENT_ID_FILE');
         });
     });
 });

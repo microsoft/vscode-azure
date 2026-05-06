@@ -270,66 +270,55 @@ describe('AzdService (unit)', () => {
         });
     });
 
-    describe('provisionWithCapture', () => {
-        const storageDir = MockUri.file('/storage') as unknown as vscode.Uri;
-
+    describe('provision', () => {
         it('should throw when azure.yaml is not found', async () => {
             const { service } = createService();
 
             try {
-                await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri, storageDir);
+                await service.provision(MockUri.file('/project') as unknown as vscode.Uri);
                 expect.fail('Expected error');
             } catch (e) {
                 expect((e as Error).message).to.include('azure.yaml');
             }
         });
 
-        it('should spawn foreground execution with AZD_DEPLOYMENT_ID_FILE env var', async () => {
+        it('should spawn foreground execution with provision args', async () => {
             const spawnFn = mock.fn(() => Promise.resolve());
             const { service, spawnMock, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri, storageDir);
+            await service.provision(MockUri.file('/project') as unknown as vscode.Uri);
 
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
             expect(opts.command).to.equal('azd');
             expect(argValues(opts.args)).to.include('provision');
-            expect(opts.env).to.have.property('AZD_DEPLOYMENT_ID_FILE');
             expect(opts.source).to.equal('azd');
             expect(opts.alwaysRunNew).to.be.true;
             expect(opts.focus).to.be.true;
         });
 
-        it('should resolve deploymentInfo from the deployment ID file', async () => {
+        it('should merge extra env vars into the task environment', async () => {
             const spawnFn = mock.fn(() => Promise.resolve());
-            const { service, fs } = createService(spawnFn);
+            const { service, spawnMock, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri, storageDir);
+            await service.provision(MockUri.file('/project') as unknown as vscode.Uri, {
+                AZD_DEPLOYMENT_ID_FILE: '/tmp/deploy-id.json', // eslint-disable-line @typescript-eslint/naming-convention
+            });
 
-            // Simulate azd writing the deployment ID file
-            const opts = (spawnFn as ReturnType<typeof mock.fn>).mock.calls[0].arguments[0] as SpawnOpts;
-            const deployIdFilePath = opts.env!.AZD_DEPLOYMENT_ID_FILE;
-            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
-            fs.addFile(MockUri.file(deployIdFilePath), JSON.stringify({ deploymentId }));
-
-            const info = await result.deploymentInfo;
-            expect(info).to.not.be.undefined;
-            expect(info!.deploymentId).to.equal(deploymentId);
-            expect(info!.subscriptionId).to.equal('sub-1');
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(opts.env).to.have.property('AZD_DEPLOYMENT_ID_FILE', '/tmp/deploy-id.json');
         });
 
-        it('should reject completed when task exits with non-zero code', async () => {
+        it('should reject on non-zero exit code', async () => {
             const spawnFn = mock.fn(() => Promise.reject(new ChildProcessError('Process exited with code 1', 1, null)));
             const { service, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            const result = await service.provisionWithCapture(MockUri.file('/project') as unknown as vscode.Uri, storageDir);
-
             try {
-                await result.completed;
+                await service.provision(MockUri.file('/project') as unknown as vscode.Uri);
                 expect.fail('Expected error');
             } catch (e) {
                 expect((e as Error).message).to.include('Process exited with code 1');
@@ -337,12 +326,12 @@ describe('AzdService (unit)', () => {
         });
     });
 
-    describe('deployWithCapture', () => {
+    describe('deploy', () => {
         it('should throw when azure.yaml is not found', async () => {
             const { service } = createService();
 
             try {
-                await service.deployWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
+                await service.deploy(MockUri.file('/project') as unknown as vscode.Uri);
                 expect.fail('Expected error');
             } catch (e) {
                 expect((e as Error).message).to.include('azure.yaml');
@@ -354,7 +343,7 @@ describe('AzdService (unit)', () => {
             const { service, spawnMock, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            await service.deployWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
+            await service.deploy(MockUri.file('/project') as unknown as vscode.Uri);
 
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
@@ -372,7 +361,7 @@ describe('AzdService (unit)', () => {
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
             try {
-                await service.deployWithCapture(MockUri.file('/project') as unknown as vscode.Uri);
+                await service.deploy(MockUri.file('/project') as unknown as vscode.Uri);
                 expect.fail('Expected error');
             } catch (e) {
                 expect((e as Error).message).to.include('Process exited with code 2');

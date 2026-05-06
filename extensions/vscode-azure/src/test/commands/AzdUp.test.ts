@@ -61,7 +61,7 @@ describe('AzdUp (unit)', () => {
 
         await cmd.execute(MockUri.file('/some/project/azure.yaml') as unknown as vscode.Uri);
 
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
+        expect(azd.provision.mock.callCount()).to.equal(1);
     });
 
     it('should resolve cwd from workspace folder when no file URI', async () => {
@@ -69,8 +69,8 @@ describe('AzdUp (unit)', () => {
 
         await cmd.execute();
 
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
-        expect((azd.provisionWithCapture.mock.calls[0].arguments[0] as MockUri).path).to.equal('/workspace');
+        expect(azd.provision.mock.callCount()).to.equal(1);
+        expect((azd.provision.mock.calls[0].arguments[0] as MockUri).path).to.equal('/workspace');
     });
 
     it('should show error when no workspace folders are open', async () => {
@@ -83,7 +83,7 @@ describe('AzdUp (unit)', () => {
             expect((e as Error).message).to.include('workspace folder');
         }
 
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(0);
+        expect(azd.provision.mock.callCount()).to.equal(0);
     });
 
     it('should show error when no azure.yaml found in workspace', async () => {
@@ -97,7 +97,7 @@ describe('AzdUp (unit)', () => {
             expect((e as Error).message).to.include('azure.yaml');
         }
 
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(0);
+        expect(azd.provision.mock.callCount()).to.equal(0);
     });
 
     it('should invalidate the data tree after execution', async () => {
@@ -114,7 +114,7 @@ describe('AzdUp (unit)', () => {
 
         await cmd.execute();
 
-        expect(azd.provisionWithCapture.mock.callCount()).to.equal(1);
-        expect(azd.deployWithCapture.mock.callCount()).to.equal(1);
+        expect(azd.provision.mock.callCount()).to.equal(1);
+        expect(azd.deploy.mock.callCount()).to.equal(1);
     });
 });

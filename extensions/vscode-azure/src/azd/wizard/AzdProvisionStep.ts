@@ -4,15 +4,29 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { ExecuteStep, type ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import * as crypto from 'crypto';
+import type * as vscode from 'vscode';
 import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
+/** Parsed deployment information extracted from the deployment ID file. */
+interface AzdDeploymentInfo {
+    readonly deploymentId: string;
+    readonly subscriptionId: string;
+}
+
+/** Interval in milliseconds between polls for the deployment ID file. */
+const deployIdPollIntervalMs = 3000;
+/** Maximum time in milliseconds to poll for the deployment ID file. */
+const deployIdPollTimeoutMs = 120_000;
+
 /**
- * Runs `azd provision` in a visible terminal.
+ * Runs `azd provision` as a visible VS Code task.
  *
- * Passes `AZD_DEPLOYMENT_ID_FILE` so azd writes the ARM deployment ID
+ * Sets `AZD_DEPLOYMENT_ID_FILE` so azd writes the ARM deployment ID
  * to a temp file. Polls for that file to start tracking the deployment
  * in the activity view via {@linkcode ArmDeploymentDataProvider}.
  */
@@ -33,12 +47,16 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
 
     public async execute(context: TContext): Promise<void> {
         const storageDir = this.ctx.extensionContext.storageUri ?? this.ctx.extensionContext.globalStorageUri;
-        const result = await this.azd.provisionWithCapture(context.iacFolder!, storageDir); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
-        // Track ARM deployment as soon as we find the ID (non-blocking)
-        result.deploymentInfo.then(async (info) => {
+        // Create a temp directory for the deployment ID file
+        const deployIdDir = this.ctx.code.Uri.joinPath(storageDir, `azd-${crypto.randomUUID().slice(0, 8)}`);
+        await this.ctx.code.workspace.fs.createDirectory(deployIdDir);
+        const deployIdFileUri = this.ctx.code.Uri.joinPath(deployIdDir, 'deployment-id.json');
+
+        // Poll for the deployment ID file (non-blocking)
+        this.pollForDeploymentIdFile(deployIdFileUri).then(async (info) => {
             if (!info) {
-                this.output.debug('[provision] no deployment ID found in output');
+                this.output.debug('[provision] no deployment ID found');
                 return;
             }
             this.output.debug(`[provision] found deployment ID: ${info.deploymentId}`);
@@ -48,7 +66,32 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             }
         }).catch(() => { /* tracked non-blocking; errors are swallowed */ });
 
-        await result.completed;
+        await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
+        });
+    }
+
+    /**
+     * Polls for the deployment ID file to appear. Checks every
+     * {@linkcode deployIdPollIntervalMs} for up to {@linkcode deployIdPollTimeoutMs}.
+     */
+    private async pollForDeploymentIdFile(fileUri: vscode.Uri): Promise<AzdDeploymentInfo | undefined> {
+        const start = Date.now();
+        while (Date.now() - start < deployIdPollTimeoutMs) {
+            try {
+                const content = await this.ctx.code.workspace.fs.readFile(fileUri);
+                const text = new TextDecoder().decode(content);
+                const parsed = JSON.parse(text) as { deploymentId?: string };
+                if (parsed.deploymentId) {
+                    const { subscriptionId } = parseAzureResourceId(parsed.deploymentId);
+                    return { deploymentId: parsed.deploymentId, subscriptionId };
+                }
+            } catch {
+                // File doesn't exist yet or isn't valid -- keep polling
+            }
+            await new Promise(resolve => setTimeout(resolve, deployIdPollIntervalMs));
+        }
+        return undefined;
     }
 
     private async resolveSubscription(subscriptionId: string): Promise<AzureSubscription | undefined> {

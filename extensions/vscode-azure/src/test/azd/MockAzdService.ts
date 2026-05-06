@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { mock } from 'node:test';
-import type { AzdEnvironment, AzdProvisionCaptureResult, IAzdService } from '../../azd/AzdService';
+import type { AzdEnvironment, IAzdService } from '../../azd/AzdService';
 
 /**
  * A mock {@linkcode IAzdService} with all methods backed by `mock.fn()`.
@@ -14,14 +14,6 @@ import type { AzdEnvironment, AzdProvisionCaptureResult, IAzdService } from '../
 export type MockAzdService = IAzdService & {
     [K in keyof IAzdService]: ReturnType<typeof mock.fn>;
 };
-
-/** Default mock result for {@linkcode IAzdService.provisionWithCapture}. */
-function defaultProvisionCaptureResult(): AzdProvisionCaptureResult {
-    return {
-        deploymentInfo: Promise.resolve(undefined),
-        completed: Promise.resolve(),
-    };
-}
 
 /**
  * Creates a mock {@linkcode IAzdService} suitable for unit tests.
@@ -37,7 +29,7 @@ export function createMockAzdService(envListResult: AzdEnvironment[] = []): Mock
         envExists: mock.fn((name: string) => Promise.resolve(envListResult.some(e => e.Name === name))),
         envGetValues: mock.fn(() => Promise.resolve({})),
         show: mock.fn(() => Promise.resolve(undefined)),
-        provisionWithCapture: mock.fn(() => Promise.resolve(defaultProvisionCaptureResult())),
-        deployWithCapture: mock.fn(() => Promise.resolve()),
+        provision: mock.fn(() => Promise.resolve()),
+        deploy: mock.fn(() => Promise.resolve()),
     };
 }

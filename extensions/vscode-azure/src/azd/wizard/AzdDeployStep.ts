@@ -35,7 +35,7 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
         });
 
         try {
-            await this.azd.deployWithCapture(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            await this.azd.deploy(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
             activity.status = 'Completed';
             activity.endTime = new Date();
         } catch (e) {
