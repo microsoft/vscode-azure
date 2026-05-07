@@ -1,9 +1,7 @@
 // Published to: br:bwaterpretendavm.azurecr.io/bicep/function-app
 // Current version: 0.1.11
 // To publish:
-//   az bicep publish \
-//     --file extensions/vscode-azure/resources/templates/pretendAvm/function-app.bicep \
-//     --target br:bwaterpretendavm.azurecr.io/bicep/function-app:<version>
+// az bicep publish --file extensions/vscode-azure/resources/templates/pretendAvm/function-app.bicep --target br:bwaterpretendavm.azurecr.io/bicep/function-app:<version>
 
 targetScope = 'resourceGroup'
 
