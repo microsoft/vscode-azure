@@ -5,29 +5,26 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { ExecuteStep, type ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { CancellationError, delay, ExecuteStep, type ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { TempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
-/** Parsed deployment information extracted from the deployment ID file. */
-interface AzdDeploymentInfo {
+/** A single line from the JSONL deployment ID file written by azd. */
+interface DeploymentIdEntry {
     readonly deploymentId: string;
-    readonly subscriptionId: string;
 }
 
 /** Interval in milliseconds between polls for the deployment ID file. */
-const deployIdPollIntervalMs = 3000;
-/** Maximum time in milliseconds to poll for the deployment ID file. */
-const deployIdPollTimeoutMs = 120_000;
+const pollIntervalMs = 3000;
 
 /**
  * Runs `azd provision` as a visible VS Code task.
  *
- * Sets `AZD_DEPLOYMENT_ID_FILE` so azd writes the ARM deployment ID
- * to a temp file. Polls for that file to start tracking the deployment
+ * Sets `AZD_DEPLOYMENT_ID_FILE` so azd writes ARM deployment IDs
+ * as JSONL. Polls for that file to start tracking each deployment
  * in the activity view via {@linkcode ArmDeploymentDataProvider}.
  */
 export class AzdProvisionStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
@@ -47,60 +44,98 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     }
 
     public async execute(context: TContext): Promise<void> {
-        // Create a temp directory for the deployment ID file
         const deployIdDir = await this.tempDirManager.createTempDir();
-        const deployIdFileUri = this.ctx.code.Uri.joinPath(deployIdDir, 'deployment-id.json');
+        const deployIdFileUri = this.ctx.code.Uri.joinPath(deployIdDir, 'deployment-id.jsonl');
 
-        // Poll for the deployment ID file (non-blocking)
-        void this.trackDeployment(deployIdFileUri);
+        const abortCtl = new AbortController();
+        const trackedIds = new Set<string>();
 
-        await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
-        });
-    }
+        // Start polling in the background (fire-and-forget)
+        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal);
 
-    /**
-     * Polls for the deployment ID file and starts tracking the ARM
-     * deployment in the activity view. Best-effort; errors are swallowed.
-     */
-    private async trackDeployment(deployIdFileUri: vscode.Uri): Promise<void> {
         try {
-            const info = await this.pollForDeploymentIdFile(deployIdFileUri);
-            if (!info) {
-                this.output.debug('[provision] no deployment ID found');
-                return;
-            }
-            this.output.debug(`[provision] found deployment ID: ${info.deploymentId}`);
-            const subscription = await this.resolveSubscription(info.subscriptionId);
-            if (subscription) {
-                this.armProvider.trackDeployment(info.deploymentId, subscription);
-            }
-        } catch {
-            // Best-effort; errors are swallowed
+            await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
+                AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
+            });
+        } finally {
+            abortCtl.abort();
+            // Final read to catch any entries written just before exit
+            await this.readAndTrack(deployIdFileUri, trackedIds);
         }
     }
 
     /**
-     * Polls for the deployment ID file to appear. Checks every
-     * {@linkcode deployIdPollIntervalMs} for up to {@linkcode deployIdPollTimeoutMs}.
+     * Polls the deployment ID file every {@linkcode pollIntervalMs} until
+     * the abort signal fires. Each poll reads the entire file, parses
+     * JSONL entries, and starts tracking any new deployment IDs.
      */
-    private async pollForDeploymentIdFile(fileUri: vscode.Uri): Promise<AzdDeploymentInfo | undefined> {
-        const start = Date.now();
-        while (Date.now() - start < deployIdPollTimeoutMs) {
+    private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal): Promise<void> {
+        try {
+            while (!signal.aborted) {
+                await this.readAndTrack(fileUri, trackedIds);
+                await delay(pollIntervalMs, { signal });
+            }
+        } catch (e) {
+            if (!CancellationError.test(e)) {
+                this.output.debug(`[provision] deployment ID polling failed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+    }
+
+    /**
+     * Reads the deployment ID file and starts tracking any entries
+     * not already in {@linkcode trackedIds}. Best-effort: silently
+     * ignores missing files, parse errors, and subscription resolution
+     * failures.
+     */
+    private async readAndTrack(fileUri: vscode.Uri, trackedIds: Set<string>): Promise<void> {
+        const entries = await this.readDeploymentIdFile(fileUri);
+        for (const entry of entries) {
+            if (trackedIds.has(entry.deploymentId)) {
+                continue;
+            }
+            trackedIds.add(entry.deploymentId);
+            this.output.debug(`[provision] found deployment ID: ${entry.deploymentId}`);
+
             try {
-                const content = await this.ctx.code.workspace.fs.readFile(fileUri);
-                const text = new TextDecoder().decode(content);
-                const parsed = JSON.parse(text) as { deploymentId?: string };
-                if (parsed.deploymentId) {
-                    const { subscriptionId } = parseAzureResourceId(parsed.deploymentId);
-                    return { deploymentId: parsed.deploymentId, subscriptionId };
+                const { subscriptionId } = parseAzureResourceId(entry.deploymentId);
+                const subscription = await this.resolveSubscription(subscriptionId);
+                if (subscription) {
+                    this.armProvider.trackDeployment(entry.deploymentId, subscription);
                 }
             } catch {
-                // File doesn't exist yet or isn't valid -- keep polling
+                this.output.debug(`[provision] failed to track deployment: ${entry.deploymentId}`);
             }
-            await new Promise(resolve => setTimeout(resolve, deployIdPollIntervalMs));
         }
-        return undefined;
+    }
+
+    /**
+     * Reads and parses the JSONL deployment ID file. Returns an empty
+     * array when the file doesn't exist or can't be read.
+     */
+    private async readDeploymentIdFile(fileUri: vscode.Uri): Promise<DeploymentIdEntry[]> {
+        try {
+            const content = await this.ctx.code.workspace.fs.readFile(fileUri);
+            const text = new TextDecoder().decode(content);
+            const entries: DeploymentIdEntry[] = [];
+            for (const line of text.split('\n')) {
+                const trimmed = line.trim();
+                if (trimmed.length === 0) {
+                    continue;
+                }
+                try {
+                    const parsed = JSON.parse(trimmed) as DeploymentIdEntry;
+                    if (parsed.deploymentId) {
+                        entries.push(parsed);
+                    }
+                } catch {
+                    // Skip malformed lines
+                }
+            }
+            return entries;
+        } catch {
+            return [];
+        }
     }
 
     private async resolveSubscription(subscriptionId: string): Promise<AzureSubscription | undefined> {
