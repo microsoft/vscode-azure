@@ -391,7 +391,7 @@ export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): P
 
 /**
  * Awaits a promise, showing a progress notification only if it doesn't
- * resolve within {@linkcode delay} milliseconds. Avoids a brief flash of the
+ * resolve within `ms` milliseconds. Avoids a brief flash of the
  * notification when the operation completes instantly (e.g. cache hit).
  *
  * @param code - The VS Code API surface.
