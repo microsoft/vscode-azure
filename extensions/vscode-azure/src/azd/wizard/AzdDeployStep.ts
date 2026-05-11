@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep, type IActionContext } from '@microsoft/vscode-azure-utils';
-import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
+import type { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
