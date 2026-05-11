@@ -31,6 +31,8 @@ export interface AzdWizardContext {
     readonly iacFolder?: vscode.Uri;
     /** If `true`, the wizard should provision after generating files. */
     readonly provision?: boolean;
+    /** If `true`, the wizard should deploy code after provisioning. */
+    readonly deploy?: boolean;
     /** Selected job-to-be-done; set by the command entry point before the wizard runs. */
     readonly job?: AzdJob;
 
