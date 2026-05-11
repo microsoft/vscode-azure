@@ -11,8 +11,7 @@ import { IAzdAuthServer } from './AzdAuthServer';
 
 export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdService');
 
-// TODO: revert to 'azd' before merging
-export const AzdCommand = 'D:\\azure-dev\\cli\\azd\\azd.exe';
+export const AzdCommand = 'azd';
 
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
@@ -227,11 +226,6 @@ export class AzdService implements IAzdService {
     }
 
     public async provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>): Promise<void> {
-        const azureYamlUri = await this.findAzureYaml(cwd);
-        if (!azureYamlUri) {
-            throw new Error(this.code.l10n.t('Could not find azure.yaml or azure.yml in the project directory.'));
-        }
-
         const authEnv = await this.authServer.getEnv();
 
         try {
@@ -252,11 +246,6 @@ export class AzdService implements IAzdService {
     }
 
     public async deploy(cwd: vscode.Uri): Promise<void> {
-        const azureYamlUri = await this.findAzureYaml(cwd);
-        if (!azureYamlUri) {
-            throw new Error(this.code.l10n.t('Could not find azure.yaml or azure.yml in the project directory.'));
-        }
-
         const authEnv = await this.authServer.getEnv();
 
         try {

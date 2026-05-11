@@ -15,22 +15,46 @@ export class MockUri {
         public readonly scheme: string,
         public readonly path: string,
         public readonly fsPath: string = path,
+        public readonly authority: string = '',
+        public readonly query: string = '',
+        public readonly fragment: string = '',
     ) { }
-    /** Returns `scheme://path`. */
-    toString() { return `${this.scheme}://${this.path}`; }
+    /** Returns the URI as a string in `scheme://authority/path?query#fragment` form. */
+    toString() {
+        let result = `${this.scheme}://`;
+        if (this.authority) {
+            result += this.authority;
+        }
+        result += this.path;
+        if (this.query) {
+            result += `?${this.query}`;
+        }
+        if (this.fragment) {
+            result += `#${this.fragment}`;
+        }
+        return result;
+    }
     /** Creates a `file:` scheme {@linkcode MockUri} for the given path. */
     static file(path: string) { return new MockUri('file', path); }
     /** Parses a URI string into a {@linkcode MockUri}. */
     static parse(value: string) {
         try {
             const url = new URL(value);
-            return new MockUri(url.protocol.replace(/:$/, ''), url.pathname);
+            return new MockUri(
+                url.protocol.replace(/:$/, ''),
+                url.pathname,
+                url.pathname,
+                url.host,
+                url.search.replace(/^\?/, ''),
+                url.hash.replace(/^#/, ''),
+            );
         } catch {
             return new MockUri('', value);
         }
     }
     /** Joins additional path segments onto `base` using `/` as separator. */
     static joinPath(base: MockUri, ...segments: string[]) {
-        return new MockUri(base.scheme, [base.path, ...segments].join('/'));
+        const joined = [base.path, ...segments].join('/');
+        return new MockUri(base.scheme, joined, joined, base.authority);
     }
 }
