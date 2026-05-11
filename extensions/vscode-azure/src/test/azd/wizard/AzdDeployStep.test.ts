@@ -15,15 +15,17 @@ import { createMockAzdService } from '../MockAzdService';
 function createStep() {
     const azd = createMockAzdService();
     const actionContext = createActionContext('test');
+    const completeFn = mock.fn();
+    const addChildFn = mock.fn();
     const codeProvider = {
-        trackDeployment: mock.fn((activity: Record<string, unknown>) => {
-            // Return the same object so in-place mutations (status, endTime) are visible
-            Object.assign(activity, { type: 'codeDeployment', startTime: new Date() });
-            return activity;
-        }),
+        trackDeployment: mock.fn(() => ({
+            id: 'test-id',
+            complete: completeFn,
+            addChild: addChildFn,
+        })),
     } as never;
     const step = new AzdDeployStep(actionContext, azd, codeProvider);
-    return { azd, codeProvider, actionContext, step };
+    return { azd, codeProvider, actionContext, step, completeFn, addChildFn };
 }
 
 describe('AzdDeployStep (unit)', () => {
@@ -83,7 +85,7 @@ describe('AzdDeployStep (unit)', () => {
         });
 
         it('should track a code deployment activity', async () => {
-            const { codeProvider, step } = createStep();
+            const { step, completeFn } = createStep();
 
             const context = {
                 deploy: true,
@@ -92,14 +94,12 @@ describe('AzdDeployStep (unit)', () => {
 
             await step.execute(context);
 
-            const trackFn = (codeProvider as unknown as { trackDeployment: ReturnType<typeof mock.fn> }).trackDeployment;
-            expect(trackFn.mock.callCount()).to.equal(1);
-            const arg = trackFn.mock.calls[0].arguments[0] as Record<string, unknown>;
-            expect(arg.status).to.equal('Completed');
+            expect(completeFn.mock.callCount()).to.equal(1);
+            expect(completeFn.mock.calls[0].arguments[0]).to.equal('Completed');
         });
 
         it('should mark activity as Failed and rethrow with suppressDisplay when deploy rejects', async () => {
-            const { azd, codeProvider, actionContext, step } = createStep();
+            const { azd, actionContext, step, completeFn } = createStep();
 
             azd.deploy.mock.mockImplementation(() => Promise.reject(new Error('deploy failed')));
 
@@ -115,9 +115,9 @@ describe('AzdDeployStep (unit)', () => {
                 expect((e as Error).message).to.equal('deploy failed');
             }
 
-            const trackFn = (codeProvider as unknown as { trackDeployment: ReturnType<typeof mock.fn> }).trackDeployment;
-            const arg = trackFn.mock.calls[0].arguments[0] as Record<string, unknown>;
-            expect(arg.status).to.equal('Failed');
+            expect(completeFn.mock.callCount()).to.equal(1);
+            expect(completeFn.mock.calls[0].arguments[0]).to.equal('Failed');
+            expect(completeFn.mock.calls[0].arguments[1]).to.be.instanceOf(Error);
             expect(actionContext.errorHandling.suppressDisplay).to.be.true;
         });
     });
