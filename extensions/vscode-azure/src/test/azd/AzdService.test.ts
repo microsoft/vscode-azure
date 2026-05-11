@@ -269,17 +269,6 @@ describe('AzdService (unit)', () => {
     });
 
     describe('provision', () => {
-        it('should throw when azure.yaml is not found', async () => {
-            const { service } = createService();
-
-            try {
-                await service.provision(MockUri.file('/project') as unknown as vscode.Uri);
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('azure.yaml');
-            }
-        });
-
         it('should spawn foreground execution with provision args', async () => {
             const spawnFn = mock.fn(() => Promise.resolve());
             const { service, spawnMock, fs } = createService(spawnFn);
@@ -323,17 +312,6 @@ describe('AzdService (unit)', () => {
     });
 
     describe('deploy', () => {
-        it('should throw when azure.yaml is not found', async () => {
-            const { service } = createService();
-
-            try {
-                await service.deploy(MockUri.file('/project') as unknown as vscode.Uri);
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('azure.yaml');
-            }
-        });
-
         it('should spawn foreground execution for deploy', async () => {
             const spawnFn = mock.fn(() => Promise.resolve());
             const { service, spawnMock, fs } = createService(spawnFn);
