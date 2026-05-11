@@ -82,7 +82,7 @@ describe('CreateFunctionApp (unit)', () => {
             subscriptionProvider,
         );
 
-        return { cmd, ctx, mockResult, fs: mockResult.fs, azd };
+        return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree };
     }
 
     it('should be constructable with required dependencies', () => {
@@ -197,5 +197,22 @@ describe('CreateFunctionApp (unit)', () => {
         await cmd.execute('deploy');
 
         expect(azd.provision.mock.callCount()).to.equal(0);
+    });
+
+    it('should invalidate the data tree after execution', async () => {
+        const { cmd, mockResult, dataTree } = createCommand();
+
+        respondToPrompts(mockResult, [
+            { pick: 'sub-1' },
+            { pick: 'East US' },
+            { input: 'my-app' },
+            { pick: 'Node.js' },
+            { pick: 'Flex Consumption' },
+        ]);
+
+        await cmd.execute('createNew');
+
+        const invalidateAll = (dataTree as unknown as { invalidateAll: ReturnType<typeof mock.fn> }).invalidateAll;
+        expect(invalidateAll.mock.callCount()).to.equal(1);
     });
 });

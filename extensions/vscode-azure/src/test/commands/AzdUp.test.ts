@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockSubscriptionProvider } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockDataItemTree, createMockSubscriptionProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -15,6 +15,8 @@ import { AzdUp } from '../../commands/AzdUp';
 import { createMockAzdService } from '../azd/MockAzdService';
 
 describe('AzdUp (unit)', () => {
+    const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });
+
     function createCommand(options: { workspaceFolders?: boolean } = {}) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const output = new MockOutputChannel('test');
@@ -28,7 +30,7 @@ describe('AzdUp (unit)', () => {
             })),
         } as never;
         const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
-        const dataTree = { invalidateAll: mock.fn() } as never;
+        const dataTree = createMockDataItemTree([sub]);
 
         if (options.workspaceFolders !== false) {
             mockResult.workspaceFolders.push({
