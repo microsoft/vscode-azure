@@ -92,5 +92,7 @@ export class CreateFunctionApp implements ManagedCommand {
         );
 
         await wizard.run();
+
+        this.dataTree.invalidateAll();
     }
 }
