@@ -5,11 +5,11 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, delay, ExecuteStep, type ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { CancellationError, delay, ExecuteStep, type ICodeContext, type IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
+import type { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
-import { ITempDirManager } from '../TempDirManager';
+import type { ITempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /** A single line from the JSONL deployment ID file written by azd. */

@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getWorkspaceFolder, IActionContext, type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { getWorkspaceFolder, type IActionContext, type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { IAzdService } from '../AzdService';
-import { ITempDirManager } from '../TempDirManager';
+import type { ITempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
