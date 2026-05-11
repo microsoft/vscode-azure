@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep, type IActionContext } from '@microsoft/vscode-azure-utils';
-import * as crypto from 'crypto';
 import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
@@ -28,21 +27,13 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
     }
 
     public async execute(context: TContext): Promise<void> {
-        const activity = this.codeProvider.trackDeployment({
-            id: crypto.randomUUID(),
-            status: 'InProgress',
-            title: 'azd deploy',
-        });
+        const handle = this.codeProvider.trackDeployment({ title: 'azd deploy' });
 
         try {
             await this.azd.deploy(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            activity.status = 'Completed';
-            activity.endTime = new Date();
-            this.codeProvider.fireDidChange(activity);
+            handle.complete('Completed');
         } catch (e) {
-            activity.status = 'Failed';
-            activity.endTime = new Date();
-            this.codeProvider.fireDidChange(activity);
+            handle.complete('Failed', e);
             this.actionContext.errorHandling.suppressDisplay = true;
             throw e;
         }
