@@ -38,9 +38,11 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
             await this.azd.deploy(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
             activity.status = 'Completed';
             activity.endTime = new Date();
+            this.codeProvider.fireDidChange(activity);
         } catch (e) {
             activity.status = 'Failed';
             activity.endTime = new Date();
+            this.codeProvider.fireDidChange(activity);
             this.actionContext.errorHandling.suppressDisplay = true;
             throw e;
         }

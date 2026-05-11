@@ -55,6 +55,11 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
         return full;
     }
 
+    /** Notify the tree that an activity has changed. */
+    public fireDidChange(activity: CodeDeploymentActivity): void {
+        this.onDidChangeEmitter.fire({ resource: activity, includeChildren: false });
+    }
+
     /** Remove all root code deployments matching `filter`. */
     public clearActivities(filter: (activity: CodeDeploymentActivity) => boolean): void {
         let changed = false;

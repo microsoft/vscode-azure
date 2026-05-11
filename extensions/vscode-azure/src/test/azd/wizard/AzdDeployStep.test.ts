@@ -21,6 +21,7 @@ function createStep() {
             Object.assign(activity, { type: 'codeDeployment', startTime: new Date() });
             return activity;
         }),
+        fireDidChange: mock.fn(),
     } as never;
     const step = new AzdDeployStep(actionContext, azd, codeProvider);
     return { azd, codeProvider, actionContext, step };
