@@ -8,10 +8,8 @@
 // This file is compiled as a SEPARATE esbuild entry point (debug.bundle.mjs)
 // so none of this code ends up in the main extension bundle.
 
-import type { AzureSubscriptionProvider, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import { type IAcrClient, IAcrClientProvider, IDeploymentClientProvider, type IResourceClient, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { EventEmitter } from '@microsoft/vscode-azure-utils';
+import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
 
@@ -56,30 +54,6 @@ const registryDetails: Record<string, { loginServer: string; sku: { name: string
 
 // -- Mock providers -----------------------------------------------------------
 
-/** Options for overriding {@linkcode createMockSubscriptionProvider} defaults. */
-export interface MockSubscriptionProviderOptions {
-    readonly accounts?: AzureSubscriptionProvider['getAccounts'] extends () => Promise<infer T> ? T : never;
-    readonly tenants?: AzureTenant[];
-    readonly subscriptions?: AzureSubscription[];
-}
-
-/** Creates an in-memory {@linkcode AzureSubscriptionProvider} backed by canned account/tenant/subscription data. */
-export function createMockSubscriptionProvider(options?: MockSubscriptionProviderOptions): AzureSubscriptionProvider {
-    const accounts = options?.accounts ?? [account];
-    const tenants = options?.tenants ?? [tenant];
-    const subscriptions = options?.subscriptions ?? [subscription];
-    const emitter = new EventEmitter<unknown>();
-    return {
-        onRefreshSuggested: emitter.event,
-        signIn: () => Promise.resolve(true),
-        getAccounts: () => Promise.resolve(accounts),
-        getAvailableSubscriptions: () => Promise.resolve(subscriptions),
-        getUnauthenticatedTenantsForAccount: () => Promise.resolve([]),
-        getTenantsForAccount: () => Promise.resolve(tenants),
-        getSubscriptionsForTenant: () => Promise.resolve(subscriptions),
-    } as unknown as AzureSubscriptionProvider;
-}
-
 /** Creates an {@linkcode IResourceClient} that returns fixed resource groups and resources. */
 export function createMockResourceClient(
     resourceGroups: unknown[] = [demoRg, stagingRg],
@@ -119,7 +93,11 @@ export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrCl
  */
 export function applyMockBindings(container: Container): void {
     container.rebind(IAzureSubscriptionProvider).toConstantValue(
-        createMockSubscriptionProvider(),
+        createMockSubscriptionProvider({
+            accounts: [account],
+            tenants: [tenant],
+            subscriptions: [subscription],
+        }),
     );
 
     container.rebind(IResourceClientProvider).toConstantValue(

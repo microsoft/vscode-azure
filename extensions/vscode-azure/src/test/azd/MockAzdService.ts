@@ -30,5 +30,6 @@ export function createMockAzdService(envListResult: AzdEnvironment[] = []): Mock
         envGetValues: mock.fn(() => Promise.resolve({})),
         show: mock.fn(() => Promise.resolve(undefined)),
         provision: mock.fn(() => Promise.resolve()),
+        deploy: mock.fn(() => Promise.resolve()),
     };
 }

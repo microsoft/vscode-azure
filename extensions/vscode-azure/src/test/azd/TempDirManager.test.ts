@@ -6,31 +6,31 @@
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { TempProjectManager } from '../../../azd/wizard/TempProjectManager';
+import { TempDirManager } from '../../azd/TempDirManager';
 
-describe('TempProjectManager (unit)', () => {
+describe('TempDirManager (unit)', () => {
     function createManager() {
         const { ctx, mock: mockResult } = createMockCodeContext();
-        const manager = new TempProjectManager(ctx);
+        const manager = new TempDirManager(ctx);
         return { manager, fs: mockResult.fs };
     }
 
-    it('should create project directories under storageUri/iac/', async () => {
+    it('should create temp directories under storageUri/tmp/', async () => {
         const { manager, fs } = createManager();
 
-        const dir = await manager.createProjectDir();
+        const dir = await manager.createTempDir();
 
         expect(fs.createDirectory.mock.callCount()).to.equal(1);
         const createdUri = fs.createDirectory.mock.calls[0].arguments[0];
-        expect(createdUri.path).to.include('/mock/storage/iac/project-');
+        expect(createdUri.path).to.include('/mock/storage/tmp/d-');
         expect(dir.path).to.equal(createdUri.path);
     });
 
     it('should create unique directories on each call', async () => {
         const { manager } = createManager();
 
-        const dir1 = await manager.createProjectDir();
-        const dir2 = await manager.createProjectDir();
+        const dir1 = await manager.createTempDir();
+        const dir2 = await manager.createTempDir();
 
         expect(dir1.path).to.not.equal(dir2.path);
     });
@@ -38,8 +38,8 @@ describe('TempProjectManager (unit)', () => {
     it('should delete tracked directories on dispose', async () => {
         const { manager, fs } = createManager();
 
-        await manager.createProjectDir();
-        await manager.createProjectDir();
+        await manager.createTempDir();
+        await manager.createTempDir();
 
         manager.dispose();
 
@@ -49,7 +49,7 @@ describe('TempProjectManager (unit)', () => {
     it('should clear tracked directories after dispose', async () => {
         const { manager, fs } = createManager();
 
-        await manager.createProjectDir();
+        await manager.createTempDir();
         manager.dispose();
 
         const countAfterFirst = fs.delete.mock.callCount();

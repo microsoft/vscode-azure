@@ -37,9 +37,9 @@ import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { AzdAuthServer, IAzdAuthServer } from './azd/AzdAuthServer';
 import { AzdService, IAzdService } from './azd/AzdService';
-import { TempProjectManager } from './azd/wizard/TempProjectManager';
+import { TempDirManager } from './azd/TempDirManager';
 import { registerCommands } from './commands/registerCommands';
-import { IAzureSubscriptionProvider, ITempProjectManager, pushDisposable } from './services';
+import { IAzureSubscriptionProvider, ITempDirManager, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 
 /**
@@ -121,7 +121,7 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
         return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
     }).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(ITempProjectManager).to(TempProjectManager).inSingletonScope().onActivation(pushDisposable);
+    container.bind(ITempDirManager).to(TempDirManager).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IProcessExecutor).toDynamicValue(context => {
         return new ProcessExecutor(context.get(IVsCode));

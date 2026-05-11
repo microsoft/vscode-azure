@@ -203,7 +203,7 @@ describe('ProcessExecutor (unit)', () => {
                 execution: 'foreground',
                 command: process.execPath,
                 args: ['--version'],
-                taskName: 'Test Task',
+                name: 'Test Task',
             });
 
             const taskExecution = await getTaskExecution(m);
@@ -223,7 +223,7 @@ describe('ProcessExecutor (unit)', () => {
             const promise = executor.spawn({
                 execution: 'foreground',
                 command: process.execPath,
-                taskName: 'Failing Task',
+                name: 'Failing Task',
             });
 
             const taskExecution = await getTaskExecution(m);
@@ -255,7 +255,7 @@ describe('ProcessExecutor (unit)', () => {
             const promise = executor.spawn({
                 execution: 'foreground',
                 command: process.execPath,
-                taskName: 'Cancelable Task',
+                name: 'Cancelable Task',
             }, token);
 
             const taskExecution = await getTaskExecution(m);
@@ -282,7 +282,7 @@ describe('ProcessExecutor (unit)', () => {
             const promise = executor.spawn({
                 execution: 'foreground',
                 command: process.execPath,
-                taskName: 'My Task',
+                name: 'My Task',
             });
 
             const taskExecution = await getTaskExecution(m);
@@ -304,7 +304,7 @@ describe('ProcessExecutor (unit)', () => {
             const promise = executor.spawn({
                 execution: 'foreground',
                 command: process.execPath,
-                taskName: 'Fancy Task',
+                name: 'Fancy Task',
                 alwaysRunNew: true,
                 focus: true,
                 source: 'mySource',
@@ -332,7 +332,7 @@ describe('ProcessExecutor (unit)', () => {
             const promise = executor.spawn({
                 execution: 'foreground',
                 command: process.execPath,
-                taskName: 'Scoped Task',
+                name: 'Scoped Task',
                 workspaceFolder: folder,
             });
 
@@ -354,7 +354,7 @@ describe('ProcessExecutor (unit)', () => {
             const promise = executor.spawn({
                 execution: 'foreground',
                 command: process.execPath,
-                taskName: 'Default Task',
+                name: 'Default Task',
             });
 
             const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;

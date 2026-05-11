@@ -17,7 +17,7 @@ import { HydratableChooseLocationStep, HydratableChooseSubscriptionStep } from '
 import { HydrateAzdInfoStep } from '../../azd/wizard/HydrateAzdInfoStep';
 import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
-import { IAzureViewDataTree, IAzureViewViewItemTree, ITempProjectManager } from '../../services';
+import { IAzureViewDataTree, IAzureViewViewItemTree, ITempDirManager } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
 import { PickHostingPlanStep } from './steps/PickHostingPlanStep';
@@ -29,7 +29,7 @@ import { PickRuntimeStep } from './steps/PickRuntimeStep';
  * via the command registration's prefix args:
  *
  * - **`createNew`**: emits IaC into a temp directory managed by
- *   {@linkcode ITempProjectManager}; the workspace is never modified.
+ *   {@linkcode ITempDirManager}; the workspace is never modified.
  * - **`deploy`**: emits IaC into the user's workspace folder so subsequent
  *   `azd deploy` / `azd provision` operate on the same project.
  */
@@ -41,7 +41,7 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IAzureViewViewItemTree) private readonly viewItemTree: IAzureViewViewItemTree,
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
-        @inject(ITempProjectManager) private readonly tempManager: ITempProjectManager,
+        @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
         @inject(IAzdService) private readonly azd: IAzdService,
     ) { }
 

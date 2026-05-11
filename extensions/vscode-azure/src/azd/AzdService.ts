@@ -11,6 +11,8 @@ import { IAzdAuthServer } from './AzdAuthServer';
 
 export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdService');
 
+export const AzdCommand = 'azd';
+
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 /** An azd environment entry returned by `azd env list --output json`. */
@@ -34,7 +36,13 @@ export interface AzdShowResult {
      * services are configured -- `azd deploy` will not have anything to
      * target until the user runs `azd add`.
      */
-    readonly services?: Readonly<Record<string, unknown>>;
+    readonly services?: Readonly<Record<string, AzdServiceDescriptor>>;
+}
+
+/** A single service entry from {@linkcode AzdShowResult.services}. */
+export interface AzdServiceDescriptor extends Record<string, unknown> {
+    /** Ingress URL for the deployed service, if available. */
+    readonly ingressUrl?: string;
 }
 
 export interface IAzdService {
@@ -76,11 +84,20 @@ export interface IAzdService {
     show(cwd: vscode.Uri): Promise<AzdShowResult | undefined>;
 
     /**
-     * Runs `azd provision` as a foreground VS Code task.
+     * Runs `azd provision` as a visible VS Code task.
      *
-     * @throws if `azure.yaml` / `azure.yml` is not found in `cwd`.
+     * @param env - Additional environment variables to pass to the task
+     *   (merged with the auth server env).
      */
-    provision(cwd: vscode.Uri): Promise<void>;
+    provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>): Promise<void>;
+
+    /**
+     * Runs `azd deploy` as a visible VS Code task.
+     *
+     * Resolves when the task completes successfully.
+     * Rejects on non-zero exit.
+     */
+    deploy(cwd: vscode.Uri): Promise<void>;
 }
 
 /**
@@ -113,7 +130,7 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
-                command: 'azd',
+                command: AzdCommand,
                 args: composeArgs(
                     withArg('init'),
                     withFlagArg('--minimal', true),
@@ -130,7 +147,7 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
-                command: 'azd',
+                command: AzdCommand,
                 args: composeArgs(
                     withArg('env', 'new', name),
                     withNamedArg('--location', location),
@@ -147,7 +164,7 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<AzdEnvironment[]>({
                 execution: 'background',
-                command: 'azd',
+                command: AzdCommand,
                 args: composeArgs(
                     withArg('env', 'list'),
                     withJsonOutput(),
@@ -174,7 +191,7 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<Record<string, string>>({
                 execution: 'background',
-                command: 'azd',
+                command: AzdCommand,
                 args: composeArgs(
                     withArg('env', 'get-values'),
                     withNamedArg('--environment', name),
@@ -194,7 +211,7 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<AzdShowResult>({
                 execution: 'background',
-                command: 'azd',
+                command: AzdCommand,
                 args: composeArgs(
                     withArg('show'),
                     withJsonOutput(),
@@ -208,27 +225,40 @@ export class AzdService implements IAzdService {
         }
     }
 
-    public async provision(cwd: vscode.Uri): Promise<void> {
-        const azureYamlUri = await this.findAzureYaml(cwd);
-        if (!azureYamlUri) {
-            throw new Error(this.code.l10n.t('Could not find azure.yaml or azure.yml in the project directory.'));
-        }
-
+    public async provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>): Promise<void> {
         const authEnv = await this.authServer.getEnv();
 
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
-                command: 'azd',
+                command: AzdCommand,
                 args: composeArgs(
                     withArg('provision'),
                 )(),
                 cwd,
-                env: authEnv,
-                taskName: 'azd provision',
+                env: { ...authEnv, ...env },
+                name: 'azd provision',
                 source: 'azd',
-                alwaysRunNew: true,
-                focus: true,
+            });
+        } catch (e) {
+            throw this.wrapEnoent(e);
+        }
+    }
+
+    public async deploy(cwd: vscode.Uri): Promise<void> {
+        const authEnv = await this.authServer.getEnv();
+
+        try {
+            await this.processExecutor.spawn({
+                execution: 'foreground',
+                command: AzdCommand,
+                args: composeArgs(
+                    withArg('deploy'),
+                )(),
+                cwd,
+                env: authEnv,
+                name: 'azd deploy',
+                source: 'azd',
             });
         } catch (e) {
             throw this.wrapEnoent(e);

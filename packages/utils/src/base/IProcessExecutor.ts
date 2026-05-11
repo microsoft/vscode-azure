@@ -72,7 +72,8 @@ export interface BackgroundJsonLinesProcessOptions extends ProcessExecutorOption
  */
 export interface ForegroundProcessOptions extends ProcessExecutorOptions {
     readonly execution: 'foreground';
-    readonly taskName: string;
+    /** Display name passed to the {@linkcode vscode.Task Task} constructor. Shown in the task list and terminal tab. */
+    readonly name: string;
     /** Scopes the task to a specific workspace folder. Defaults to {@linkcode vscode.TaskScope.Workspace TaskScope.Workspace}. */
     readonly workspaceFolder?: vscode.WorkspaceFolder;
     /** The source label shown in the task list. Defaults to `'process'`. */
@@ -161,8 +162,9 @@ export class ProcessExecutor implements IProcessExecutor {
     ): Promise<void | ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
         if (options.execution === 'foreground') {
             return this.spawnForeground(options, cancellationToken);
+        } else {
+            return this.spawnBackground(options, cancellationToken);
         }
-        return this.spawnBackground(options, cancellationToken);
     }
 
     private async spawnForeground(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void> {
@@ -175,7 +177,7 @@ export class ProcessExecutor implements IProcessExecutor {
         const task = new this.code.Task(
             { type: 'shell' },
             options.workspaceFolder ?? this.code.TaskScope.Workspace,
-            options.taskName,
+            options.name,
             options.source ?? 'process',
             shellExecution,
         );
