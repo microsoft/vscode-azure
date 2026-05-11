@@ -13,6 +13,7 @@ import type * as vscode from 'vscode';
 import { TempDirManager } from '../../azd/TempDirManager';
 import { AzdUp } from '../../commands/AzdUp';
 import { createMockAzdService } from '../azd/MockAzdService';
+import { createMockArmProvider, createMockCodeProvider } from '../tree/activity/MockActivityProviders';
 
 describe('AzdUp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });
@@ -21,14 +22,8 @@ describe('AzdUp (unit)', () => {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const output = new MockOutputChannel('test');
         const azd = createMockAzdService();
-        const armProvider = { trackDeployment: mock.fn() } as never;
-        const codeProvider = {
-            trackDeployment: mock.fn((activity: Record<string, unknown>) => ({
-                ...activity,
-                type: 'codeDeployment',
-                startTime: new Date(),
-            })),
-        } as never;
+        const armProvider = createMockArmProvider();
+        const codeProvider = createMockCodeProvider();
         const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
         const dataTree = createMockDataItemTree([sub]);
 
