@@ -3,10 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, IOutputChannel, Wizard, type ExecuteStep } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzdService } from '../../azd/AzdService';
+import { ITempDirManager } from '../../azd/TempDirManager';
+import { AzdDeployStep } from '../../azd/wizard/AzdDeployStep';
 import { AzdProvisionStep } from '../../azd/wizard/AzdProvisionStep';
 import type { AzdJob } from '../../azd/wizard/AzdWizardContext';
 import { ConfirmProvisionStep } from '../../azd/wizard/ConfirmProvisionStep';
@@ -17,7 +20,10 @@ import { HydratableChooseLocationStep, HydratableChooseSubscriptionStep } from '
 import { HydrateAzdInfoStep } from '../../azd/wizard/HydrateAzdInfoStep';
 import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
-import { IAzureViewDataTree, IAzureViewViewItemTree, ITempDirManager } from '../../services';
+import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
+import { IAzureSubscriptionProvider, IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
+import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
+import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
 import { PickHostingPlanStep } from './steps/PickHostingPlanStep';
@@ -32,10 +38,12 @@ import { PickRuntimeStep } from './steps/PickRuntimeStep';
  *   {@linkcode ITempDirManager}; the workspace is never modified.
  * - **`deploy`**: emits IaC into the user's workspace folder so subsequent
  *   `azd deploy` / `azd provision` operate on the same project.
+ *   After provisioning, also runs `azd deploy` and shows endpoint URLs.
  */
 @injectable()
 export class CreateFunctionApp implements ManagedCommand {
     public constructor(
+        @inject(IActionContext) private readonly actionContext: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
@@ -43,34 +51,49 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
         @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
         @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(ArmDeploymentDataProvider) private readonly armProvider: ArmDeploymentDataProvider,
+        @inject(CodeDeploymentDataProvider) private readonly codeProvider: CodeDeploymentDataProvider,
+        @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
     ) { }
 
     /** @inheritdoc */
     public async execute(job: AzdJob): Promise<void> {
+        const promptSteps = [
+            new SelectIacFolderStep(this.actionContext, this.ctx, this.tempManager, this.azd),
+            new HydrateAzdInfoStep(this.ctx.code, this.azd),
+            new HydratableChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
+            new HydratableChooseLocationStep(this.ctx, this.subscriptionClientProvider, this.output),
+            new ProjectNameStep(this.ctx),
+            new PickRuntimeStep(this.ctx),
+            new PickHostingPlanStep(this.ctx),
+            new ConfirmProvisionStep(this.ctx),
+        ];
+
+        const executeSteps: ExecuteStep<CreateFunctionAppContext>[] = [
+            new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan', 'azdServiceName']),
+            new GenerateAzureYamlStep(this.azd),
+            new CreateAzdEnvStep(this.azd),
+            new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider, this.tempManager),
+        ];
+
+        if (job === 'deploy') {
+            executeSteps.push(new AzdDeployStep(this.actionContext, this.ctx.code, this.azd, this.codeProvider));
+            executeSteps.push(new ShowEndpointUrlStep(this.ctx, this.azd));
+        }
+
         const wizard = new Wizard<CreateFunctionAppContext>(
             this.output,
             {
                 job,
                 provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
+                deploy: job === 'deploy', // Only deploy if the deploy job is selected
             },
-            [
-                new SelectIacFolderStep(this.ctx, this.tempManager),
-                new HydrateAzdInfoStep(this.ctx.code, this.azd),
-                new HydratableChooseSubscriptionStep({ ...this.ctx, tree: this.viewItemTree, dataItemTree: this.dataTree }),
-                new HydratableChooseLocationStep(this.ctx, this.subscriptionClientProvider, this.output),
-                new ProjectNameStep(this.ctx),
-                new PickRuntimeStep(this.ctx),
-                new PickHostingPlanStep(this.ctx),
-                new ConfirmProvisionStep(this.ctx),
-            ],
-            [
-                new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan', 'azdServiceName']),
-                new GenerateAzureYamlStep(this.azd),
-                new CreateAzdEnvStep(this.azd),
-                new AzdProvisionStep(this.azd),
-            ],
+            promptSteps,
+            executeSteps,
         );
 
         await wizard.run();
+
+        this.dataTree.invalidateAll();
     }
 }

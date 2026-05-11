@@ -5,8 +5,18 @@
 
 import { type Disposable, ICodeContext } from '@microsoft/vscode-azure-utils';
 import * as crypto from 'crypto';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
+
+/** Identifier for the {@linkcode TempDirManager} service */
+export const ITempDirManager: ServiceIdentifier<ITempDirManager> = Symbol.for('ITempDirManager');
+export interface ITempDirManager {
+    /**
+     * Creates a new temporary directory under `storageUri/tmp/`.
+     * The directory is tracked for cleanup on dispose.
+     */
+    createTempDir(): Promise<vscode.Uri>;
+}
 
 /**
  * Manages temporary directories in the extension's storage
@@ -15,7 +25,7 @@ import type * as vscode from 'vscode';
  * sessions.
  */
 @injectable()
-export class TempDirManager implements Disposable {
+export class TempDirManager implements ITempDirManager, Disposable {
     private readonly trackedDirs: vscode.Uri[] = [];
     private readonly baseDir: vscode.Uri;
 

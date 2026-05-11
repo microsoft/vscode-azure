@@ -24,7 +24,7 @@ describe('ClearActivities (unit)', () => {
 
         generic.trackActivity({ id: 'g1', status: 'InProgress', title: 'Running' });
         generic.trackActivity({ id: 'g2', status: 'Completed', title: 'Done' });
-        code.trackDeployment({ id: 'c1', status: 'Failed', title: 'Failed deploy' });
+        code.trackDeployment({ title: 'Failed deploy', status: 'Failed' });
 
         const cmd = new ClearActivities(arm as never, code, generic);
         cmd.execute('all');

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { DataItemTree } from '@microsoft/vscode-azure-utils';
+import { mock } from 'node:test';
 import type { ConcreteAzureNode } from '../../models/AzureNode';
 import { AzureNodeId } from '../../models/AzureNodeId';
 
@@ -36,7 +37,8 @@ export function createMockDataItemTree(nodes: ConcreteAzureNode[]): DataItemTree
         get(key: string): ConcreteAzureNode | undefined {
             return keyMap.get(key);
         },
-    } as DataItemTree<ConcreteAzureNode>;
+        invalidateAll: mock.fn(),
+    } as unknown as DataItemTree<ConcreteAzureNode>;
 }
 
 /**

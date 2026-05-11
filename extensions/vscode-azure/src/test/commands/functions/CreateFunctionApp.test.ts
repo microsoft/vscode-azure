@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockDataItemTree, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockDataItemTree, createMockSubscriptionProvider, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -13,6 +14,7 @@ import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../azd/TempDirManager';
 import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
 import { createMockAzdService } from '../../azd/MockAzdService';
+import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
 
 describe('CreateFunctionApp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });
@@ -61,7 +63,12 @@ describe('CreateFunctionApp (unit)', () => {
             return Promise.resolve();
         });
 
+        const armProvider = createMockArmProvider();
+        const codeProvider = createMockCodeProvider();
+        const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
+
         const cmd = new CreateFunctionApp(
+            createActionContext('test'),
             ctx,
             output,
             dataTree,
@@ -69,9 +76,12 @@ describe('CreateFunctionApp (unit)', () => {
             subscriptionClientProvider,
             tempManager,
             azd,
+            armProvider,
+            codeProvider,
+            subscriptionProvider,
         );
 
-        return { cmd, ctx, mockResult, fs: mockResult.fs, azd };
+        return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree };
     }
 
     it('should be constructable with required dependencies', () => {
@@ -186,5 +196,22 @@ describe('CreateFunctionApp (unit)', () => {
         await cmd.execute('deploy');
 
         expect(azd.provision.mock.callCount()).to.equal(0);
+    });
+
+    it('should invalidate the data tree after execution', async () => {
+        const { cmd, mockResult, dataTree } = createCommand();
+
+        respondToPrompts(mockResult, [
+            { pick: 'sub-1' },
+            { pick: 'East US' },
+            { input: 'my-app' },
+            { pick: 'Node.js' },
+            { pick: 'Flex Consumption' },
+        ]);
+
+        await cmd.execute('createNew');
+
+        const invalidateAll = (dataTree as unknown as { invalidateAll: ReturnType<typeof mock.fn> }).invalidateAll;
+        expect(invalidateAll.mock.callCount()).to.equal(1);
     });
 });
