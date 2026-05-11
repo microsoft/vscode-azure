@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
-import { MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -15,6 +15,7 @@ import { createMockAzdService } from '../MockAzdService';
 function createStep() {
     const azd = createMockAzdService();
     const actionContext = createActionContext('test');
+    const mockCode = createMockVsCode();
     const completeFn = mock.fn();
     const addChildFn = mock.fn();
     const codeProvider = {
@@ -24,9 +25,8 @@ function createStep() {
             addChild: addChildFn,
         })),
     } as never;
-    const activityTreeView = { reveal: mock.fn() } as never;
-    const step = new AzdDeployStep(actionContext, azd, codeProvider, activityTreeView);
-    return { azd, codeProvider, actionContext, step, completeFn, addChildFn, activityTreeView };
+    const step = new AzdDeployStep(actionContext, mockCode.vscode, azd, codeProvider);
+    return { azd, codeProvider, actionContext, step, completeFn, addChildFn, mockCode };
 }
 
 describe('AzdDeployStep (unit)', () => {
@@ -71,6 +71,21 @@ describe('AzdDeployStep (unit)', () => {
     });
 
     describe('execute', () => {
+        it('should focus the activity view', async () => {
+            const { step, mockCode } = createStep();
+
+            const context = {
+                deploy: true,
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            await step.execute(context);
+
+            const executeCmd = mockCode.commands.executeCommand as unknown as ReturnType<typeof mock.fn>;
+            expect(executeCmd.mock.callCount()).to.be.greaterThanOrEqual(1);
+            expect(executeCmd.mock.calls[0].arguments[0]).to.equal('vscode-azure/activity.focus');
+        });
+
         it('should call azd.deploy with the iac folder', async () => {
             const { azd, step } = createStep();
 

@@ -21,7 +21,7 @@ import { HydrateAzdInfoStep } from '../../azd/wizard/HydrateAzdInfoStep';
 import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
-import { IActivityTreeView, IAzureSubscriptionProvider, IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
+import { IAzureSubscriptionProvider, IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
 import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -54,7 +54,6 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(ArmDeploymentDataProvider) private readonly armProvider: ArmDeploymentDataProvider,
         @inject(CodeDeploymentDataProvider) private readonly codeProvider: CodeDeploymentDataProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
-        @inject(IActivityTreeView) private readonly activityTreeView: IActivityTreeView,
     ) { }
 
     /** @inheritdoc */
@@ -78,7 +77,7 @@ export class CreateFunctionApp implements ManagedCommand {
         ];
 
         if (job === 'deploy') {
-            executeSteps.push(new AzdDeployStep(this.actionContext, this.azd, this.codeProvider, this.activityTreeView));
+            executeSteps.push(new AzdDeployStep(this.actionContext, this.ctx.code, this.azd, this.codeProvider));
             executeSteps.push(new ShowEndpointUrlStep(this.ctx, this.azd));
         }
 

@@ -66,7 +66,6 @@ describe('CreateFunctionApp (unit)', () => {
         const armProvider = createMockArmProvider();
         const codeProvider = createMockCodeProvider();
         const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
-        const activityTreeView = { reveal: mock.fn() } as never;
 
         const cmd = new CreateFunctionApp(
             createActionContext('test'),
@@ -80,7 +79,6 @@ describe('CreateFunctionApp (unit)', () => {
             armProvider,
             codeProvider,
             subscriptionProvider,
-            activityTreeView,
         );
 
         return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree };
