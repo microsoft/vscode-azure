@@ -5,6 +5,7 @@
 
 import * as crypto from 'crypto';
 import type * as vscode from 'vscode';
+import { delay } from '../base/delay';
 import { CancellationError } from '../vscode/CancellationError';
 import type { ICodeContext, IVsCode } from '../vscode/IVsCode';
 import { GoBackError } from '../wizard/GoBackError';
@@ -396,12 +397,12 @@ export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): P
  * @param code - The VS Code API surface.
  * @param options - Progress options forwarded to `window.withProgress`.
  * @param promise - The promise to await.
- * @param delay - Milliseconds to wait before showing the notification. Defaults to 150.
+ * @param ms - Milliseconds to wait before showing the notification. Defaults to 150.
  */
-export async function withDelayedProgress<T>(code: IVsCode, options: vscode.ProgressOptions, promise: Promise<T>, delay = 150): Promise<T> {
+export async function withDelayedProgress<T>(code: IVsCode, options: vscode.ProgressOptions, promise: Promise<T>, ms = 150): Promise<T> {
     const raceResult = await Promise.race([
         promise,
-        new Promise<typeof Pending>(r => { setTimeout(() => { r(Pending); }, delay); }),
+        delay(ms).then((): typeof Pending => Pending),
     ]);
 
     if (raceResult !== Pending) {

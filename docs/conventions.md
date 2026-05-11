@@ -65,7 +65,7 @@ Debug and trace output to the output channel is exempt from localization.
 
 Use `IOutputChannel` directly via DI for extension logging. Do not add a wrapper class, do not fold `IOutputChannel` into `IExtensionContext`, and do not add a log-level setting (users control this from VS Code's output-channel log level UI).
 
-- Prefix every line with a bracketed subsystem: `[activate]`, `[cmd]`, `[data]`, `[view]`, `[cache]`, `[rest]`, `[auth]`, `[wizard]`, `[activity]`
+- Prefix every line with a bracketed subsystem: `[activate]`, `[cmd]`, `[data]`, `[view]`, `[cache]`, `[rest]`, `[auth]`, `[wizard]`, `[activity]`, etc.
 - Use supported string interpolation (for example `output.debug(\`[cmd] ${id} start\`)`)
 - Pass `Error` objects directly to `output.error(...)`
 - Levels:
