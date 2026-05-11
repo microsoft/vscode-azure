@@ -88,6 +88,12 @@
                 "command": "vscode-azure/functions/deploy",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/functions/deploy%"
+            },
+            {
+                "command": "vscode-azure/azdUp",
+                "category": "%commands.category.azure%",
+                "icon": "$(rocket)",
+                "title": "%commands.vscode-azure/azdUp%"
             }
         ],
         "menus": {
@@ -184,6 +190,13 @@
                 {
                     "command": "vscode-azure/functionApp/appSettings/delete",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteFunctionAppSetting\\b/i"
+                }
+            ],
+            "explorer/context": [
+                {
+                    "command": "vscode-azure/azdUp",
+                    "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
+                    "group": "navigation"
                 }
             ]
         },

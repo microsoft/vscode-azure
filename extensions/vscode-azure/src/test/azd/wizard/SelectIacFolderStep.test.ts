@@ -3,26 +3,27 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError } from '@microsoft/vscode-azure-utils';
+import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { TempDirManager } from '../../../azd/TempDirManager';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../../../azd/wizard/SelectIacFolderStep';
+import { createMockAzdService } from '../MockAzdService';
 
 describe('SelectIacFolderStep (unit)', () => {
     describe('shouldPrompt', () => {
         it('returns true when iacFolder is unset', () => {
             const { ctx } = createMockCodeContext();
-            const step = new SelectIacFolderStep(ctx, new TempDirManager(ctx));
+            const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
             expect(step.shouldPrompt({ job: 'deploy' })).to.be.true;
             expect(step.shouldPrompt({ job: 'createNew' })).to.be.true;
         });
 
         it('returns false when iacFolder is already set', () => {
             const { ctx } = createMockCodeContext();
-            const step = new SelectIacFolderStep(ctx, new TempDirManager(ctx));
+            const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
             const context: Partial<AzdWizardContext> = {
                 job: 'deploy',
                 iacFolder: MockUri.file('/repo') as never,
@@ -34,11 +35,11 @@ describe('SelectIacFolderStep (unit)', () => {
     describe('prompt', () => {
         it('createNew: allocates a temp dir from TempDirManager (no prompt)', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
-            const step = new SelectIacFolderStep(ctx, new TempDirManager(ctx));
+            const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
 
             const result = await step.prompt({ job: 'createNew' });
 
-            // TempDirManager creates dirs under storageUri/iac/.
+            // TempDirManager creates dirs under storageUri/tmp/.
             expect((result.iacFolder as MockUri).path).to.include('/tmp/d-');
             // No quick picks shown.
             expect(mockResult.quickPicks.length).to.equal(0);
@@ -49,7 +50,7 @@ describe('SelectIacFolderStep (unit)', () => {
             mockResult.workspaceFolders.push(
                 { uri: MockUri.file('/repo'), name: 'repo', index: 0 } as never,
             );
-            const step = new SelectIacFolderStep(ctx, new TempDirManager(ctx));
+            const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
 
             const result = await step.prompt({ job: 'deploy' });
 
@@ -58,7 +59,7 @@ describe('SelectIacFolderStep (unit)', () => {
 
         it('deploy: throws an explanatory error when no workspace folder is open', async () => {
             const { ctx } = createMockCodeContext();
-            const step = new SelectIacFolderStep(ctx, new TempDirManager(ctx));
+            const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
 
             try {
                 await step.prompt({ job: 'deploy' });

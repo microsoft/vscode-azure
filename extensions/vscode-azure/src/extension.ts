@@ -37,9 +37,9 @@ import { Container } from 'inversify';
 import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- This is the one place it should be imported
 import { AzdAuthServer, IAzdAuthServer } from './azd/AzdAuthServer';
 import { AzdService, IAzdService } from './azd/AzdService';
-import { TempDirManager } from './azd/TempDirManager';
+import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { registerCommands } from './commands/registerCommands';
-import { IAzureSubscriptionProvider, ITempDirManager, pushDisposable } from './services';
+import { IAzureSubscriptionProvider, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 
 /**
