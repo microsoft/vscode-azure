@@ -21,10 +21,11 @@ import type { AzdWizardContext } from './AzdWizardContext';
  *   {@linkcode getWorkspaceFolder}; an empty workspace throws an explanatory
  *   error since the deploy job has nothing to write IaC into.
  * - No job (e.g. `AzdUp`): scans workspace folders for an existing
- *   `azure.yaml` via {@linkcode IAzdService.findAzureYaml findAzureYaml}.
- *   Requires {@linkcode azd} to be provided. Throws if no `azure.yaml`
- *   is found; auto-selects the single match or prompts when multiple
- *   workspace folders contain one.
+ *   `azure.yaml` or `azure.yml` via
+ *   {@linkcode IAzdService.findAzureYaml findAzureYaml}. Requires
+ *   {@linkcode azd} to be provided. Throws if neither file is found;
+ *   auto-selects the single match or prompts when multiple workspace
+ *   folders contain one.
  *
  * Skipped when {@linkcode AzdWizardContext.iacFolder iacFolder} is already
  * set (e.g. when invoked from a right-click on `azure.yaml`).
