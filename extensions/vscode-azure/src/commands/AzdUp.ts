@@ -25,8 +25,8 @@ import type { ManagedCommand } from './ManagedCommand';
  * and code deployment progress.
  *
  * Accessible from the command palette (searches workspace for
- * `azure.yaml`) or by right-clicking an `azure.yaml` / `azure.yml`
- * file in the explorer.
+ * `azure.yaml` or `azure.yml`) or by right-clicking an `azure.yaml`
+ * / `azure.yml` file in the explorer.
  */
 @injectable()
 export class AzdUp implements ManagedCommand {
