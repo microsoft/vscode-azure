@@ -65,6 +65,8 @@ Using `CreateFunctionApp` as the concrete example:
 | 2 | `GenerateAzureYamlStep` | No existing `azure.yaml` | Runs `azd init --minimal --no-prompt` |
 | 3 | `CreateAzdEnvStep` | No `existingDefaultEnvName` | Runs `azd env new` |
 | 4 | `AzdProvisionStep` | `provision === true` | Runs `azd provision` as a foreground VS Code task |
+| 5 | `AzdDeployStep` | `deploy === true` | Runs `azd deploy`; tracks progress via `CodeDeploymentHandle` |
+| 6 | `ShowEndpointUrlStep` | `iacFolder` is set | Shows a toast with the deployed endpoint URL |
 
 ## Scenario Matrix
 
