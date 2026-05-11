@@ -24,8 +24,9 @@ function createStep() {
             addChild: addChildFn,
         })),
     } as never;
-    const step = new AzdDeployStep(actionContext, azd, codeProvider);
-    return { azd, codeProvider, actionContext, step, completeFn, addChildFn };
+    const activityTreeView = { reveal: mock.fn() } as never;
+    const step = new AzdDeployStep(actionContext, azd, codeProvider, activityTreeView);
+    return { azd, codeProvider, actionContext, step, completeFn, addChildFn, activityTreeView };
 }
 
 describe('AzdDeployStep (unit)', () => {

@@ -26,6 +26,7 @@ describe('AzdUp (unit)', () => {
         const codeProvider = createMockCodeProvider();
         const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
         const dataTree = createMockDataItemTree([sub]);
+        const activityTreeView = { reveal: mock.fn() } as never;
 
         if (options.workspaceFolders !== false) {
             mockResult.workspaceFolders.push({
@@ -44,7 +45,7 @@ describe('AzdUp (unit)', () => {
 
         }
 
-        const cmd = new AzdUp(createActionContext('test'), ctx, output, azd, armProvider, codeProvider, subscriptionProvider, dataTree, new TempDirManager(ctx));
+        const cmd = new AzdUp(createActionContext('test'), ctx, output, azd, armProvider, codeProvider, subscriptionProvider, dataTree, activityTreeView, new TempDirManager(ctx));
         return { cmd, ctx, mockResult, azd, dataTree };
     }
 
