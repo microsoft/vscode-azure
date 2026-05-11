@@ -6,14 +6,14 @@
 import { getWorkspaceFolder, IActionContext, type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { IAzdService } from '../AzdService';
-import type { TempDirManager } from '../TempDirManager';
+import { ITempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
  * Picks the {@linkcode AzdWizardContext.iacFolder iacFolder} based on
  * {@linkcode AzdWizardContext.job job}:
  *
- * - `createNew`: allocates a temp directory via {@linkcode TempDirManager}.
+ * - `createNew`: allocates a temp directory via {@linkcode ITempDirManager}.
  *   The workspace is never touched.
  * - `deploy`: prompts the user to pick a workspace folder (silent in
  *   single-root workspaces, shows a picker in multi-root). Dismissing the
@@ -33,7 +33,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
     public constructor(
         private readonly actionContext: IActionContext,
         private readonly ctx: ICodeContext,
-        private readonly tempManager: TempDirManager,
+        private readonly tempManager: ITempDirManager,
         private readonly azd: IAzdService,
     ) {
         super();

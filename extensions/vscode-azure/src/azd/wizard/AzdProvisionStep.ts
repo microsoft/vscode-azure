@@ -9,7 +9,7 @@ import { CancellationError, delay, ExecuteStep, type ICodeContext, IOutputChanne
 import type * as vscode from 'vscode';
 import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
-import type { TempDirManager } from '../TempDirManager';
+import { ITempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /** A single line from the JSONL deployment ID file written by azd. */
@@ -34,7 +34,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         private readonly output: IOutputChannel,
         private readonly armProvider: ArmDeploymentDataProvider,
         private readonly subscriptionProvider: AzureSubscriptionProvider,
-        private readonly tempDirManager: TempDirManager,
+        private readonly tempDirManager: ITempDirManager,
     ) {
         super();
     }

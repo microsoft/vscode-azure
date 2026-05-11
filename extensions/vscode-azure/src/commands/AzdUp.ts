@@ -8,12 +8,13 @@ import { IActionContext, ICodeContext, IOutputChannel, Wizard } from '@microsoft
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzdService } from '../azd/AzdService';
+import { ITempDirManager } from '../azd/TempDirManager';
 import { AzdDeployStep } from '../azd/wizard/AzdDeployStep';
 import { AzdProvisionStep } from '../azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../azd/wizard/ShowEndpointUrlStep';
-import { IAzureSubscriptionProvider, IAzureViewDataTree, ITempDirManager } from '../services';
+import { IAzureSubscriptionProvider, IAzureViewDataTree } from '../services';
 import { ArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
 import { CodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
