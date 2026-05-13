@@ -10,8 +10,9 @@ import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { GenerateBicepStep } from '../../../azd/wizard/GenerateBicepStep';
 
 interface TestBicepContext extends AzdWizardContext {
+    readonly functionWorkerRuntime?: string;
     readonly runtimeVersion?: string;
-    readonly hostingPlan?: string;
+    readonly appServicePlanSkuName?: string;
 }
 
 describe('GenerateBicepStep (unit)', () => {
@@ -26,14 +27,14 @@ describe('GenerateBicepStep (unit)', () => {
     describe('shouldExecute', () => {
         it('should return false when iacFolder is not set', async () => {
             const { ctx } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['runtimeVersion']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime']);
 
             expect(await step.shouldExecute({})).to.be.false;
         });
 
         it('should return true when infra files do not exist', async () => {
             const { ctx } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['runtimeVersion']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime']);
 
             const context = { iacFolder: MockUri.file('/project') } as TestBicepContext;
             expect(await step.shouldExecute(context)).to.be.true;
@@ -41,7 +42,7 @@ describe('GenerateBicepStep (unit)', () => {
 
         it('should return false when main.bicep already exists', async () => {
             const { ctx } = createCtxWithFs([MockUri.file('/project/infra/main.bicep')]);
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['runtimeVersion']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime']);
 
             const context = { iacFolder: MockUri.file('/project') } as TestBicepContext;
             expect(await step.shouldExecute(context)).to.be.false;
@@ -49,7 +50,7 @@ describe('GenerateBicepStep (unit)', () => {
 
         it('should return false when main.parameters.json already exists', async () => {
             const { ctx } = createCtxWithFs([MockUri.file('/project/infra/main.parameters.json')]);
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['runtimeVersion']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime']);
 
             const context = { iacFolder: MockUri.file('/project') } as TestBicepContext;
             expect(await step.shouldExecute(context)).to.be.false;
@@ -59,12 +60,13 @@ describe('GenerateBicepStep (unit)', () => {
     describe('execute', () => {
         it('should create infra directory and write files', async () => {
             const { ctx, fs } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName']);
 
             const context = {
                 iacFolder: MockUri.file('/project'),
-                runtimeVersion: 'Node|20',
-                hostingPlan: 'FlexConsumption',
+                functionWorkerRuntime: 'node',
+                runtimeVersion: '20',
+                appServicePlanSkuName: 'FC1',
             } as TestBicepContext;
 
             await step.execute(context);
@@ -82,25 +84,26 @@ describe('GenerateBicepStep (unit)', () => {
             expect(params.parameters.environmentName.value).to.equal('${AZURE_ENV_NAME}');
             // eslint-disable-next-line no-template-curly-in-string -- azd placeholders
             expect(params.parameters.location.value).to.equal('${AZURE_LOCATION}');
-            expect(params.parameters.runtimeVersion.value).to.equal('Node|20');
-            expect(params.parameters.hostingPlan.value).to.equal('FlexConsumption');
+            expect(params.parameters.functionWorkerRuntime.value).to.equal('node');
+            expect(params.parameters.runtimeVersion.value).to.equal('20');
+            expect(params.parameters.appServicePlanSkuName.value).to.equal('FC1');
         });
 
         it('should omit undefined parameter keys', async () => {
             const { ctx, fs } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName']);
 
             const context = {
                 iacFolder: MockUri.file('/project'),
-                runtimeVersion: 'Node|20',
+                functionWorkerRuntime: 'node',
             } as TestBicepContext;
 
             await step.execute(context);
 
             const paramsContent = Buffer.from(fs.writeFile.mock.calls[0].arguments[1]).toString();
             const params = JSON.parse(paramsContent);
-            expect(params.parameters.runtimeVersion.value).to.equal('Node|20');
-            expect(params.parameters).to.not.have.property('hostingPlan');
+            expect(params.parameters.functionWorkerRuntime.value).to.equal('node');
+            expect(params.parameters).to.not.have.property('appServicePlanSkuName');
         });
 
         it('should copy template from extension resources', async () => {
