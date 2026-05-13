@@ -8,7 +8,7 @@ import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
 
 /** Accumulated wizard context for Function App creation. */
 export interface CreateFunctionAppContext extends AzdWizardContext, PickContext<string> {
-    readonly functionWorkerRuntime?: string;
+    readonly functionWorkerRuntime?: FunctionWorkerRuntime;
     readonly runtimeVersion?: string;
     readonly appServicePlanSkuName?: AppServicePlanSku;
 }
@@ -17,4 +17,4 @@ export interface CreateFunctionAppContext extends AzdWizardContext, PickContext<
 export type AppServicePlanSku = 'FC1' | 'EP1' | 'S1';
 
 /** Runtime stacks offered by {@linkcode PickRuntimeStep}. */
-export type FunctionAppRuntime = 'dotnet-isolated' | 'node' | 'python' | 'java' | 'powershell' | 'custom';
+export type FunctionWorkerRuntime = 'dotnet-isolated' | 'node' | 'python' | 'java' | 'powershell' | 'custom';

@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
-import type { CreateFunctionAppContext, FunctionAppRuntime } from '../CreateFunctionAppContext';
+import type { CreateFunctionAppContext, FunctionWorkerRuntime } from '../CreateFunctionAppContext';
 
 interface RuntimeItemData {
-    readonly runtime: FunctionAppRuntime;
+    readonly runtime: FunctionWorkerRuntime;
     readonly version: string;
 }
 
