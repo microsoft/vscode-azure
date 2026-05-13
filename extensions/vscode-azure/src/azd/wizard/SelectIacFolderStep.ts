@@ -64,7 +64,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
             this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
         );
         if (!folder) {
-            this.actionContext.errorHandling.suppressReportIssue = true;
+            this.actionContext.errorHandling.suppress = 'reportIssue';
             throw new Error(this.ctx.code.l10n.t('Open a folder in VS Code to deploy a project as a Function App.'));
         }
         return { iacFolder: folder.uri } as Partial<TContext>;
@@ -73,7 +73,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
     private async promptAzureYamlFolder(): Promise<Partial<TContext>> {
         const workspaceFolders = this.ctx.code.workspace.workspaceFolders;
         if (!workspaceFolders?.length) {
-            this.actionContext.errorHandling.suppressReportIssue = true;
+            this.actionContext.errorHandling.suppress = 'reportIssue';
             throw new Error(this.ctx.code.l10n.t('No workspace folder is open. Open a folder with an azure.yaml file.'));
         }
 
@@ -86,7 +86,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
         }
 
         if (candidates.length === 0) {
-            this.actionContext.errorHandling.suppressReportIssue = true;
+            this.actionContext.errorHandling.suppress = 'reportIssue';
             throw new Error(this.ctx.code.l10n.t('No azure.yaml file found in the workspace.'));
         }
 

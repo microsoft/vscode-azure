@@ -57,14 +57,14 @@ export class TrackArmDeployment implements ManagedCommand {
         }
 
         if (!subscriptionId) {
-            this.context.errorHandling.suppressReportIssue = true;
+            this.context.errorHandling.suppress = 'reportIssue';
             throw new Error(this.ctx.code.l10n.t('Only subscription-scoped and resource-group-scoped deployments are supported at this time'));
         }
 
         const subscription = await this.resolveSubscription(subscriptionId);
 
         if (!subscription) {
-            this.context.errorHandling.suppressReportIssue = true;
+            this.context.errorHandling.suppress = 'reportIssue';
             throw new Error(this.ctx.code.l10n.t('Could not find a signed-in subscription matching "{0}"', subscriptionId));
         }
 
