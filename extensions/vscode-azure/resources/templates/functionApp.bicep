@@ -39,7 +39,6 @@ module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.0' = {
   name: 'functionApp'
   params: {
     functionAppName: '${environmentName}-func'
-    location: location
     appServicePlanSkuName: appServicePlanSkuName
     functionWorkerRuntime: functionWorkerRuntime
     runtimeVersion: runtimeVersion
