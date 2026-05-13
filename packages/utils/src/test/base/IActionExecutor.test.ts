@@ -215,24 +215,24 @@ describe('ActionExecutor (unit)', () => {
             expect(showErrorMessage.mock.calls[0].arguments[1]).to.equal('Report Issue');
         });
 
-        it('should not show error message when suppressDisplay is true', async () => {
+        it('should not show error message when suppress is display', async () => {
             const { executor, code } = createExecutor();
             const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
 
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
-                ctx.errorHandling.suppressDisplay = true;
+                ctx.errorHandling.suppress = 'display';
                 throw new Error('hidden error');
             });
 
             expect(showErrorMessage.mock.callCount()).to.equal(0);
         });
 
-        it('should not show Report Issue button when suppressReportIssue is true', async () => {
+        it('should not show Report Issue button when suppress is reportIssue', async () => {
             const { executor, code } = createExecutor();
             const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
 
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
-                ctx.errorHandling.suppressReportIssue = true;
+                ctx.errorHandling.suppress = 'reportIssue';
                 throw new Error('no report button');
             });
 

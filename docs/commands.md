@@ -173,6 +173,7 @@ Every command execution is automatically wrapped with telemetry. The `IActionCon
 - `telemetry.properties` — custom string key-value pairs
 - `telemetry.measurements` — custom numeric measurements
 - `telemetry.suppress` — opt out of telemetry for this event
+- `errorHandling.suppress` — suppress error UI: `'display'` hides the toast, `'reportIssue'` hides the button
 - `errorHandling.rethrow` — whether to rethrow errors after recording them
 
 See [Telemetry](telemetry.md) for details.
