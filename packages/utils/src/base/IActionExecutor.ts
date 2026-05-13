@@ -122,7 +122,7 @@ export class ActionExecutor implements IActionExecutor {
                         properties.stack = error.stack;
                     }
 
-                    if (!context.errorHandling.suppressDisplay) {
+                    if (context.errorHandling.suppress !== 'display') {
                         void this.showErrorToast(context, loggedError);
                     }
                 }
@@ -150,7 +150,7 @@ export class ActionExecutor implements IActionExecutor {
     }
 
     private async showErrorToast(context: IActionContext, error: Error): Promise<void> {
-        const reportIssue = context.errorHandling.suppressReportIssue
+        const reportIssue = context.errorHandling.suppress === 'reportIssue'
             ? undefined
             : this.code.l10n.t('Report Issue');
 

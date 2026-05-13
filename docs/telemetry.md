@@ -17,8 +17,7 @@ interface IActionContext {
     };
 
     readonly errorHandling: {
-        suppressDisplay?: boolean;     // don't show error toast
-        suppressReportIssue?: boolean; // don't show "Report Issue" button
+        suppress?: 'display' | 'reportIssue'; // 'display' = hide toast; 'reportIssue' = hide button
         rethrow?: boolean;             // re-throw after recording
     };
 }

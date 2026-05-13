@@ -39,7 +39,7 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
             handle.complete('Completed');
         } catch (e) {
             handle.complete('Failed', e);
-            this.actionContext.errorHandling.suppressDisplay = true;
+            this.actionContext.errorHandling.suppress = 'display';
             throw e;
         }
     }

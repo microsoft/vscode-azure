@@ -114,7 +114,7 @@ describe('AzdDeployStep (unit)', () => {
             expect(completeFn.mock.calls[0].arguments[0]).to.equal('Completed');
         });
 
-        it('should mark activity as Failed and rethrow with suppressDisplay when deploy rejects', async () => {
+        it('should mark activity as Failed and rethrow with suppress display when deploy rejects', async () => {
             const { azd, actionContext, step, completeFn } = createStep();
 
             azd.deploy.mock.mockImplementation(() => Promise.reject(new Error('deploy failed')));
@@ -134,7 +134,7 @@ describe('AzdDeployStep (unit)', () => {
             expect(completeFn.mock.callCount()).to.equal(1);
             expect(completeFn.mock.calls[0].arguments[0]).to.equal('Failed');
             expect(completeFn.mock.calls[0].arguments[1]).to.be.instanceOf(Error);
-            expect(actionContext.errorHandling.suppressDisplay).to.be.true;
+            expect(actionContext.errorHandling.suppress).to.equal('display');
         });
     });
 });
