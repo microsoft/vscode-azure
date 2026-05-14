@@ -23,14 +23,19 @@ const subscription = makeSubscription({
     account,
 });
 
+const subscriptionIdPrefix = `/subscriptions/${subscription.subscriptionId}`;
+const rgIdPrefix = (rgName: string) => `${subscriptionIdPrefix}/resourceGroups/${rgName}`;
+const resourceId = (rgName: string, resourceType: string, resourceName: string) =>
+    `${rgIdPrefix(rgName)}/providers/${resourceType}/${resourceName}`;
+
 const demoRg = makeResourceGroup({
-    id: '/subscriptions/mock-sub-1/resourceGroups/demo-rg',
+    id: rgIdPrefix('demo-rg'),
     name: 'demo-rg',
     subscription,
 });
 
 const stagingRg = makeResourceGroup({
-    id: '/subscriptions/mock-sub-1/resourceGroups/staging-rg',
+    id: rgIdPrefix('staging-rg'),
     name: 'staging-rg',
     location: 'westus2',
     subscription,
@@ -38,13 +43,13 @@ const stagingRg = makeResourceGroup({
 
 const resourcesByGroup: Record<string, unknown[]> = {
     'demo-rg': [
-        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/demo-rg/providers/Microsoft.ContainerRegistry/registries/myDemoRegistry', name: 'myDemoRegistry', type: 'Microsoft.ContainerRegistry/registries', logicalType: 'Microsoft.ContainerRegistry/registries', subscription }),
-        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/demo-rg/providers/Microsoft.Web/sites/demo-webapp', name: 'demo-webapp', type: 'Microsoft.Web/sites', logicalType: 'Microsoft.Web/sites', subscription }),
-        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/demo-rg/providers/Microsoft.Storage/storageAccounts/demostorage', name: 'demostorage', type: 'Microsoft.Storage/storageAccounts', logicalType: 'Microsoft.Storage/storageAccounts', subscription }),
+        makeGenericResource({ id: resourceId('demo-rg', 'Microsoft.ContainerRegistry/registries', 'myDemoRegistry'), name: 'myDemoRegistry', type: 'Microsoft.ContainerRegistry/registries', logicalType: 'Microsoft.ContainerRegistry/registries', subscription }),
+        makeGenericResource({ id: resourceId('demo-rg', 'Microsoft.Web/sites', 'demo-webapp'), name: 'demo-webapp', type: 'Microsoft.Web/sites', logicalType: 'Microsoft.Web/sites', subscription }),
+        makeGenericResource({ id: resourceId('demo-rg', 'Microsoft.Storage/storageAccounts', 'demostorage'), name: 'demostorage', type: 'Microsoft.Storage/storageAccounts', logicalType: 'Microsoft.Storage/storageAccounts', subscription }),
     ],
     'staging-rg': [
-        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/staging-rg/providers/Microsoft.ContainerRegistry/registries/stagingReg', name: 'stagingReg', type: 'Microsoft.ContainerRegistry/registries', logicalType: 'Microsoft.ContainerRegistry/registries', location: 'westus2', subscription }),
-        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/staging-rg/providers/Microsoft.Sql/servers/staging-sql', name: 'staging-sql', type: 'Microsoft.Sql/servers', logicalType: 'Microsoft.Sql/servers', location: 'westus2', subscription }),
+        makeGenericResource({ id: resourceId('staging-rg', 'Microsoft.ContainerRegistry/registries', 'stagingReg'), name: 'stagingReg', type: 'Microsoft.ContainerRegistry/registries', logicalType: 'Microsoft.ContainerRegistry/registries', location: 'westus2', subscription }),
+        makeGenericResource({ id: resourceId('staging-rg', 'Microsoft.Sql/servers', 'staging-sql'), name: 'staging-sql', type: 'Microsoft.Sql/servers', logicalType: 'Microsoft.Sql/servers', location: 'westus2', subscription }),
     ],
 };
 
