@@ -212,7 +212,11 @@ export class ProcessExecutor implements IProcessExecutor {
                         resolve();
                     } else {
                         reject(new ChildProcessError(
-                            this.code.l10n.t('Process exited with code {0}', e.exitCode ?? -1),
+                            this.code.l10n.t(
+                                "'{0}' failed with exit code {1}. See the '{0}' terminal for the full output.",
+                                options.name,
+                                e.exitCode ?? -1,
+                            ),
                             e.exitCode ?? -1,
                             null,
                         ));
