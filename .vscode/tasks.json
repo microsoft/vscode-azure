@@ -33,7 +33,7 @@
                 "--watch"
             ],
             "problemMatcher": {
-                "base": "$tsgo-watch",
+                "base": "$tsc-watch",
                 "fileLocation": [
                     "relative",
                     "${workspaceFolder}/extensions/vscode-azure"
@@ -67,7 +67,7 @@
                 "revealProblems": "onProblem"
             },
             "problemMatcher": {
-                "base": "$tsgo-watch",
+                "base": "$tsc-watch",
                 "fileLocation": [
                     "relative",
                     "${workspaceFolder}/packages/azutils"
@@ -93,7 +93,7 @@
                 "revealProblems": "onProblem"
             },
             "problemMatcher": {
-                "base": "$tsgo-watch",
+                "base": "$tsc-watch",
                 "fileLocation": [
                     "relative",
                     "${workspaceFolder}/packages/utils"

@@ -4,24 +4,28 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
-import type { CreateFunctionAppContext, FunctionAppRuntime } from '../CreateFunctionAppContext';
-import { getRuntimeVersion } from '../CreateFunctionAppContext';
+import type { CreateFunctionAppContext, FunctionWorkerRuntime } from '../CreateFunctionAppContext';
+
+interface RuntimeItemData {
+    readonly runtime: FunctionWorkerRuntime;
+    readonly version: string;
+}
 
 interface RuntimeItem {
     readonly label: string;
     readonly description: string;
-    readonly data: FunctionAppRuntime;
+    readonly data: RuntimeItemData;
 }
 
 // TODO: more runtimes/versions/split into runtime step and version step / etc.
 function getRuntimeItems(ctx: ICodeContext): RuntimeItem[] {
     return [
-        { label: ctx.code.l10n.t('Node.js'), description: ctx.code.l10n.t('JavaScript / TypeScript'), data: 'node' },
-        { label: ctx.code.l10n.t('Python'), description: ctx.code.l10n.t('Python 3.11'), data: 'python' },
-        { label: ctx.code.l10n.t('.NET (isolated)'), description: ctx.code.l10n.t('.NET 8 isolated worker'), data: 'dotnet-isolated' },
-        { label: ctx.code.l10n.t('Java'), description: ctx.code.l10n.t('Java 17'), data: 'java' },
-        { label: ctx.code.l10n.t('PowerShell'), description: ctx.code.l10n.t('PowerShell 7.4'), data: 'powershell' },
-        { label: ctx.code.l10n.t('Custom'), description: ctx.code.l10n.t('Custom handler'), data: 'custom' },
+        { label: ctx.code.l10n.t('Node.js'), description: ctx.code.l10n.t('JavaScript / TypeScript'), data: { runtime: 'node', version: '20' } },
+        { label: ctx.code.l10n.t('Python'), description: ctx.code.l10n.t('Python 3.11'), data: { runtime: 'python', version: '3.11' } },
+        { label: ctx.code.l10n.t('.NET (isolated)'), description: ctx.code.l10n.t('.NET 8 isolated worker'), data: { runtime: 'dotnet-isolated', version: '8.0' } },
+        { label: ctx.code.l10n.t('Java'), description: ctx.code.l10n.t('Java 17'), data: { runtime: 'java', version: '17' } },
+        { label: ctx.code.l10n.t('PowerShell'), description: ctx.code.l10n.t('PowerShell 7.4'), data: { runtime: 'powershell', version: '7.4' } },
+        { label: ctx.code.l10n.t('Custom'), description: ctx.code.l10n.t('Custom handler'), data: { runtime: 'custom', version: '' } },
     ];
 }
 
@@ -36,7 +40,7 @@ export class PickRuntimeStep extends PromptStep<CreateFunctionAppContext> {
     }
 
     public override shouldPrompt(context: Readonly<CreateFunctionAppContext>): boolean {
-        return !context.runtime && !context.hasInfra;
+        return !context.functionWorkerRuntime && !context.hasInfra;
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {
@@ -45,6 +49,7 @@ export class PickRuntimeStep extends PromptStep<CreateFunctionAppContext> {
             showBack: true,
         });
 
-        return { runtime: picked.data, runtimeVersion: getRuntimeVersion(picked.data) };
+        const { runtime, version } = picked.data;
+        return { functionWorkerRuntime: runtime, runtimeVersion: version };
     }
 }
