@@ -373,6 +373,13 @@ describe('ProcessExecutor (unit)', () => {
 });
 
 describe('ProcessExecutor (integration)', () => {
+    // Strip NODE_OPTIONS so spawned Node children don't inherit the test
+    // runner's --inspect flags. Otherwise, when the tests run under the VS
+    // Code debugger, every child prints 'Debugger attached.' to stderr at
+    // startup and 'Waiting for the debugger to disconnect...' at exit,
+    // which pollutes the captured stdout/stderr that these tests assert on.
+    const env: Record<string, string> = { NODE_OPTIONS: '' }; // eslint-disable-line @typescript-eslint/naming-convention
+
     function script(code: string): string {
         const dir = mkdtempSync(join(tmpdir(), 'proc-test-'));
         const file = join(dir, 'test.mjs');
@@ -389,6 +396,7 @@ describe('ProcessExecutor (integration)', () => {
                 execution: 'background',
                 command: process.execPath,
                 args: [script('process.stdout.write("out"); process.stderr.write("err");')],
+                env,
             });
 
             expect(result.stdout).to.equal('out');
@@ -404,6 +412,7 @@ describe('ProcessExecutor (integration)', () => {
                 command: process.execPath,
                 args: [script('process.stdout.write(JSON.stringify({ key: "value" }));')],
                 parseJson: true,
+                env,
             });
 
             expect(result.json).to.deep.equal({ key: 'value' });
@@ -419,6 +428,7 @@ describe('ProcessExecutor (integration)', () => {
                     execution: 'background',
                     command: process.execPath,
                     args: [script('process.stderr.write("failure reason"); process.exit(1);')],
+                    env,
                 });
                 expect.fail('Expected error');
             } catch (e) {
@@ -441,6 +451,7 @@ describe('ProcessExecutor (integration)', () => {
                 execution: 'background',
                 command: process.execPath,
                 args: [script('setTimeout(() => {}, 30000);')],
+                env,
             }, token);
 
             await new Promise(resolve => setTimeout(resolve, 50));
@@ -471,6 +482,7 @@ describe('ProcessExecutor (integration)', () => {
                 args: [f],
                 parseJson: true,
                 jsonLines: true,
+                env,
             });
 
             const lines: unknown[] = [];
@@ -502,6 +514,7 @@ describe('ProcessExecutor (integration)', () => {
                 args: [f],
                 parseJson: true,
                 jsonLines: true,
+                env,
             });
 
             const lines: unknown[] = [];

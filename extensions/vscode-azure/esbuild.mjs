@@ -15,7 +15,7 @@
 
 import { autoEsbuildOrWatch, autoSelectEsbuildConfig } from '@microsoft/vscode-azext-eng/esbuild';
 
-const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig(true);
+const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig();
 
 // These cause files in these packages to be resolved correctly by esbuild
 extensionConfig.alias = {
