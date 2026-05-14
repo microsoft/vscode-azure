@@ -58,7 +58,7 @@ The VS Code extension that wires everything together:
 
 ## Activation Flow
 
-1. VS Code loads `main.mjs`, which imports the esbuild bundle
+1. VS Code loads `main.js`, which imports the esbuild bundle
 2. `activateInternal()` creates the DI container via `setUpContainer()`
 3. Container binds all core services as singletons
 4. `registerCommands()` binds command classes and registers them with VS Code

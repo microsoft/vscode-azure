@@ -3,31 +3,31 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// This is the extension entrypoint, which imports extension.bundle.mjs, the actual extension code.
+// This is the extension entrypoint, which imports extension.bundle.js, the actual extension code.
 //
-// This is in a separate file so we can properly measure extension.bundle.mjs load time.
+// This is in a separate file so we can properly measure extension.bundle.js load time.
 
 const perfStats = {
     loadStartTime: Date.now(),
     loadEndTime: undefined
 };
 
-const extension = await import('./dist/extension.bundle.mjs');
+const extension = require('./dist/extension.bundle.js');
 
 /**
  * VS Code extension activation entry point.
  *
  * When `AZURE_MOCK_DATA=1` is set and the extension is running in Development
- * mode, mock bindings from `debug.bundle.mjs` are applied to the DI container
+ * mode, mock bindings from `debug.bundle.js` are applied to the DI container
  * before activation so the tree views render deterministic fake data.
  *
  * @param {import('vscode').ExtensionContext} ctx
  */
-export async function activate(ctx) {
+exports.activate = async function activate(ctx) {
     // ExtensionMode.Development === 2
     if (process.env.AZURE_MOCK_DATA === '1' && ctx.extensionMode === 2) {
         const container = extension.setUpContainer(ctx);
-        const { applyMockBindings } = await import('./dist/debug.bundle.mjs');
+        const { applyMockBindings } = require('./dist/debug.bundle.js');
         applyMockBindings(container);
         return await extension.activateInternal(ctx, perfStats, container);
     }
@@ -41,7 +41,7 @@ export async function activate(ctx) {
  *
  * @param {import('vscode').ExtensionContext} ctx
  */
-export async function deactivate(ctx) {
+exports.deactivate = async function deactivate(ctx) {
     return await extension.deactivateInternal(ctx);
 }
 

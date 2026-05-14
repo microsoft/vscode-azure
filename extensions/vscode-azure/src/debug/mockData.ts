@@ -5,7 +5,7 @@
 
 // Mock data setup for the "Extension: Run (Mock Data)" launch configuration.
 //
-// This file is compiled as a SEPARATE esbuild entry point (debug.bundle.mjs)
+// This file is compiled as a SEPARATE esbuild entry point (debug.bundle.js)
 // so none of this code ends up in the main extension bundle.
 
 import { type IAcrClient, IAcrClientProvider, IDeploymentClientProvider, type IResourceClient, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
@@ -24,6 +24,7 @@ const subscription = makeSubscription({
 });
 
 const demoRg = makeResourceGroup({
+    id: '/subscriptions/mock-sub-1/resourceGroups/demo-rg',
     name: 'demo-rg',
     subscription,
 });
@@ -37,13 +38,13 @@ const stagingRg = makeResourceGroup({
 
 const resourcesByGroup: Record<string, unknown[]> = {
     'demo-rg': [
-        makeGenericResource({ name: 'myDemoRegistry', type: 'Microsoft.ContainerRegistry/registries', logicalType: 'Microsoft.ContainerRegistry/registries', subscription }),
-        makeGenericResource({ name: 'demo-webapp', type: 'Microsoft.Web/sites', logicalType: 'Microsoft.Web/sites', subscription }),
-        makeGenericResource({ name: 'demostorage', type: 'Microsoft.Storage/storageAccounts', logicalType: 'Microsoft.Storage/storageAccounts', subscription }),
+        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/demo-rg/providers/Microsoft.ContainerRegistry/registries/myDemoRegistry', name: 'myDemoRegistry', type: 'Microsoft.ContainerRegistry/registries', logicalType: 'Microsoft.ContainerRegistry/registries', subscription }),
+        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/demo-rg/providers/Microsoft.Web/sites/demo-webapp', name: 'demo-webapp', type: 'Microsoft.Web/sites', logicalType: 'Microsoft.Web/sites', subscription }),
+        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/demo-rg/providers/Microsoft.Storage/storageAccounts/demostorage', name: 'demostorage', type: 'Microsoft.Storage/storageAccounts', logicalType: 'Microsoft.Storage/storageAccounts', subscription }),
     ],
     'staging-rg': [
-        makeGenericResource({ name: 'stagingReg', type: 'Microsoft.ContainerRegistry/registries', logicalType: 'Microsoft.ContainerRegistry/registries', location: 'westus2', subscription }),
-        makeGenericResource({ name: 'staging-sql', type: 'Microsoft.Sql/servers', logicalType: 'Microsoft.Sql/servers', location: 'westus2', subscription }),
+        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/staging-rg/providers/Microsoft.ContainerRegistry/registries/stagingReg', name: 'stagingReg', type: 'Microsoft.ContainerRegistry/registries', logicalType: 'Microsoft.ContainerRegistry/registries', location: 'westus2', subscription }),
+        makeGenericResource({ id: '/subscriptions/mock-sub-1/resourceGroups/staging-rg/providers/Microsoft.Sql/servers/staging-sql', name: 'staging-sql', type: 'Microsoft.Sql/servers', logicalType: 'Microsoft.Sql/servers', location: 'westus2', subscription }),
     ],
 };
 
@@ -89,7 +90,7 @@ export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrCl
 
 /**
  * Rebinds Azure providers on the given container with mock implementations.
- * Called from `main.mjs` when `AZURE_MOCK_DATA=1`.
+ * Called from `main.js` when `AZURE_MOCK_DATA=1`.
  */
 export function applyMockBindings(container: Container): void {
     container.rebind(IAzureSubscriptionProvider).toConstantValue(
