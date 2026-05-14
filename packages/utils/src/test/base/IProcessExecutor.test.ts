@@ -239,6 +239,7 @@ describe('ProcessExecutor (unit)', () => {
             } catch (e) {
                 expect(isChildProcessError(e)).to.be.true;
                 expect((e as Error).message).to.include('42');
+                expect((e as Error).message).to.include('Failing Task');
             }
         });
 
