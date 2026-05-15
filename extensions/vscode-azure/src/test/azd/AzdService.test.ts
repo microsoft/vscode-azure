@@ -566,7 +566,7 @@ describe('AzdService (unit)', () => {
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
                 expect(opts.command).to.equal('choco');
-                expect(argValues(opts.args)).to.deep.equal(['install', 'azd']);
+                expect(argValues(opts.args)).to.deep.equal(['upgrade', 'azd']);
             });
 
             it('should use powershell script on Windows when no package manager is available', async () => {
