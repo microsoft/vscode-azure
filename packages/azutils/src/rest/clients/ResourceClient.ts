@@ -22,7 +22,7 @@ export const SiteType = 'Microsoft.Web/sites';
 /** Logical type assigned to function apps (`Microsoft.Web/sites` with `kind` containing `functionapp`). */
 export const FunctionAppLogicalType = `${SiteType}~functionapp`;
 /** Logical type assigned to Logic Apps (Standard) (`Microsoft.Web/sites` with `kind` containing `workflowapp`). */
-export const WorkflowAppLogicalType = `${SiteType}~workflowapp`;
+export const LogicAppLogicalType = `${SiteType}~workflowapp`;
 /** Logical type assigned to App Service web apps (any other `Microsoft.Web/sites` kind). */
 export const AppServiceLogicalType = `${SiteType}~app`;
 
@@ -153,10 +153,10 @@ function logicalType(type: string, kind?: string): string {
 
     switch (true) {
         case typeLower === SiteType.toLowerCase(): {
-            if (kindLower?.includes('functionapp')) {
+            if (kindLower?.includes('functionapp') && kindLower.includes('workflowapp')) {
+                return LogicAppLogicalType;
+            } else if (kindLower?.includes('functionapp')) {
                 return FunctionAppLogicalType;
-            } else if (kindLower?.includes('workflowapp')) {
-                return WorkflowAppLogicalType;
             } else {
                 return AppServiceLogicalType;
             }
@@ -179,11 +179,13 @@ function logicalType(type: string, kind?: string): string {
             }
             return type;
         }
-        // Durable Task Hub is a nested resource type; normalise any
-        // `Microsoft.DurableTask/.../taskHubs` variant to a single constant.
-        case typeLower.startsWith(DurableTaskPrefix.toLowerCase()) && typeLower.endsWith('taskhubs'):
+        case typeLower.startsWith(DurableTaskPrefix.toLowerCase()) && typeLower.endsWith('taskhubs'): {
+            // Durable Task Hub is a nested resource type; normalise any
+            // `Microsoft.DurableTask/.../taskHubs` variant to a single constant.
             return DurableTaskHubLogicalType;
-        default:
+        }
+        default: {
             return type;
+        }
     }
 }
