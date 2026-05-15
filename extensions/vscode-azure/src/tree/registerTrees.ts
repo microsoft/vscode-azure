@@ -11,10 +11,10 @@ import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
 import { IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree, IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
 import type { Activity } from './activity/Activity';
 import { ActivityViewProvider } from './activity/ActivityViewProvider';
-import { ArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
+import { ArmDeploymentDataProvider, IArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
 import { ArmDeploymentViewProvider } from './activity/ArmDeploymentViewProvider';
-import { CodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvider';
-import { GenericActivityDataProvider } from './activity/GenericActivityDataProvider';
+import { CodeDeploymentDataProvider, ICodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvider';
+import { GenericActivityDataProvider, IGenericActivityDataProvider } from './activity/GenericActivityDataProvider';
 import { AcrDataProvider } from './resources/acr/AcrDataProvider';
 import { AcrViewProvider } from './resources/acr/AcrViewProvider';
 import { FunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
@@ -190,17 +190,17 @@ function registerActivityTree(container: Container): void {
 
 const IActivityViewDataProviders: ServiceIdentifier<DataProvider<Activity>> = Symbol.for('IActivityViewDataProviders');
 function bindActivityViewDataProviders(container: Container): void {
-    // Bind each provider as a singleton to its own class first, then alias
+    // Bind each provider as a singleton to its symbol, then alias
     // to IActivityViewDataProviders so they can be resolved both individually
     // (for commands that call track methods) and collectively (for the data tree).
-    container.bind(ArmDeploymentDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
-    container.bind(IActivityViewDataProviders).toService(ArmDeploymentDataProvider);
+    container.bind(IArmDeploymentDataProvider).to(ArmDeploymentDataProvider).inSingletonScope().onActivation(pushDisposable);
+    container.bind(IActivityViewDataProviders).toService(IArmDeploymentDataProvider);
 
-    container.bind(CodeDeploymentDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
-    container.bind(IActivityViewDataProviders).toService(CodeDeploymentDataProvider);
+    container.bind(ICodeDeploymentDataProvider).to(CodeDeploymentDataProvider).inSingletonScope().onActivation(pushDisposable);
+    container.bind(IActivityViewDataProviders).toService(ICodeDeploymentDataProvider);
 
-    container.bind(GenericActivityDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
-    container.bind(IActivityViewDataProviders).toService(GenericActivityDataProvider);
+    container.bind(IGenericActivityDataProvider).to(GenericActivityDataProvider).inSingletonScope().onActivation(pushDisposable);
+    container.bind(IActivityViewDataProviders).toService(IGenericActivityDataProvider);
 }
 
 const IActivityViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IActivityViewViewProviders');

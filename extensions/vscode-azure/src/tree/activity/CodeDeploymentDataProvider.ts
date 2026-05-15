@@ -5,8 +5,12 @@
 
 import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import * as crypto from 'crypto';
-import { injectable } from 'inversify';
+import { injectable, type ServiceIdentifier } from 'inversify';
 import { type Activity, type ActivityStatus, isActivity, isTerminalActivityStatus } from './Activity';
+
+/** Identifier for the code deployment data provider */
+export const ICodeDeploymentDataProvider: ServiceIdentifier<CodeDeploymentDataProvider> = Symbol.for('ICodeDeploymentDataProvider');
+export type ICodeDeploymentDataProvider = CodeDeploymentDataProvider;
 
 interface CodeDeploymentActivity extends Activity {
     readonly type: 'codeDeployment';

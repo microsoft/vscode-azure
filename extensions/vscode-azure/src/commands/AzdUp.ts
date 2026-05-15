@@ -15,8 +15,8 @@ import type { AzdWizardContext } from '../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../azd/wizard/ShowEndpointUrlStep';
 import { IAzureSubscriptionProvider, IAzureViewDataTree } from '../services';
-import { ArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
-import { CodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
+import { IArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
+import { ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
 
 /**
@@ -35,8 +35,8 @@ export class AzdUp implements ManagedCommand {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzdService) private readonly azd: IAzdService,
-        @inject(ArmDeploymentDataProvider) private readonly armProvider: ArmDeploymentDataProvider,
-        @inject(CodeDeploymentDataProvider) private readonly codeProvider: CodeDeploymentDataProvider,
+        @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
+        @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(ITempDirManager) private readonly tempManager: ITempDirManager,

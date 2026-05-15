@@ -12,6 +12,8 @@ import { type IAcrClient, IAcrClientProvider, IDeploymentClientProvider, type IR
 import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
+import { ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
+import { IGenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
 
 // -- Mock data ----------------------------------------------------------------
 
@@ -95,9 +97,9 @@ export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrCl
 
 /**
  * Rebinds Azure providers on the given container with mock implementations.
- * Called from `main.js` when `AZURE_MOCK_DATA=1`.
+ * Called from `main.js` before activation when `AZURE_MOCK_DATA=1`.
  */
-export function applyMockBindings(container: Container): void {
+export function preApply(container: Container): void {
     container.rebind(IAzureSubscriptionProvider).toConstantValue(
         createMockSubscriptionProvider({
             accounts: [account],
@@ -119,4 +121,41 @@ export function applyMockBindings(container: Container): void {
     container.rebind(ISubscriptionClientProvider).toConstantValue(
         () => Promise.reject(new Error('Mock mode: subscription client not available')),
     );
+}
+
+/**
+ * Seeds the activity tree with sample data.
+ * Called from `main.js` after activation when `AZURE_MOCK_DATA=1`.
+ */
+export function postApply(container: Container): void {
+    const genericProvider = container.get(IGenericActivityDataProvider);
+    const codeProvider = container.get(ICodeDeploymentDataProvider);
+
+    // Generic activities -- one per status
+    genericProvider.trackActivity({ id: 'mock-not-started', status: 'NotStarted', title: 'Waiting to start' });
+    genericProvider.trackActivity({ id: 'mock-in-progress', status: 'InProgress', title: 'Provisioning resources' });
+    genericProvider.trackActivity({ id: 'mock-completed', status: 'Completed', title: 'Deployment succeeded' });
+    genericProvider.trackActivity({ id: 'mock-failed', status: 'Failed', title: 'Build failed' });
+    genericProvider.trackActivity({ id: 'mock-canceled', status: 'Canceled', title: 'User canceled' });
+    genericProvider.trackActivity({ id: 'mock-info', status: 'Info', title: 'No changes detected' });
+    genericProvider.trackActivity({ id: 'mock-warn', status: 'Warn', title: 'Deprecated API version' });
+
+    // Code deployment with children
+    const deploy = codeProvider.trackDeployment({ title: 'Deploy to staging' });
+    deploy.addChild('Upload artifacts');
+    deploy.addChild('Run migrations');
+    deploy.addChild('Restart services', 'InProgress');
+
+    // Completed code deployment
+    const doneDeploy = codeProvider.trackDeployment({ title: 'Deploy to production' });
+    doneDeploy.addChild('Upload artifacts');
+    doneDeploy.addChild('Run migrations');
+    doneDeploy.addChild('Health check');
+    doneDeploy.complete('Completed');
+
+    // Failed code deployment
+    const failedDeploy = codeProvider.trackDeployment({ title: 'Deploy canary' });
+    failedDeploy.addChild('Upload artifacts');
+    failedDeploy.addChild('Run smoke tests', 'InProgress');
+    failedDeploy.complete('Failed', new Error('Smoke test timeout'));
 }

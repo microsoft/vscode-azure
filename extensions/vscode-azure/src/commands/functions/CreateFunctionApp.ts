@@ -22,8 +22,8 @@ import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
 import { IAzureSubscriptionProvider, IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
-import { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
-import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
+import { IArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
+import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
 import { PickHostingPlanStep } from './steps/PickHostingPlanStep';
@@ -51,8 +51,8 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(ISubscriptionClientProvider) private readonly subscriptionClientProvider: ISubscriptionClientProvider,
         @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
         @inject(IAzdService) private readonly azd: IAzdService,
-        @inject(ArmDeploymentDataProvider) private readonly armProvider: ArmDeploymentDataProvider,
-        @inject(CodeDeploymentDataProvider) private readonly codeProvider: CodeDeploymentDataProvider,
+        @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
+        @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
         @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
     ) { }
 
