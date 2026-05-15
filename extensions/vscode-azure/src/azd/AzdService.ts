@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
-import { composeArgs, withArg, withFlagArg, withNamedArg, type CommandLineArgs } from '@microsoft/vscode-processutils';
+import { IActionExecutor, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { composeArgs, withArg, withFlagArg, withNamedArg } from '@microsoft/vscode-processutils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import * as semver from 'semver';
 import type * as vscode from 'vscode';
 import { IAzdAuthServer } from './AzdAuthServer';
 
@@ -13,37 +14,12 @@ export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdServi
 
 export const AzdCommand = 'azd';
 
+/** Minimum `azd` version required by this extension. */
+export const MinAzdVersion = '1.25.0';
+/** Minimum `azd` version that supports the `azd update` command (public preview). */
+export const MinAzdUpdateVersion = '1.23.14';
+
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
-
-/** An azd environment entry returned by `azd env list --output json`. */
-export interface AzdEnvironment {
-    readonly Name: string;
-    readonly IsDefault: boolean;
-}
-
-/**
- * Project metadata returned by `azd show --output json`.
- *
- * Only the fields the wizard actually consumes are typed; the real
- * payload is richer (resources, supporting infra, etc.).
- */
-export interface AzdShowResult {
-    /** Project name from {@linkcode AzureYamlFileNames azure.yaml}. */
-    readonly name?: string;
-    /**
-     * Map of `azd-service-name` -> service descriptor as declared under
-     * `services:` in `azure.yaml`. An empty / missing object means no
-     * services are configured -- `azd deploy` will not have anything to
-     * target until the user runs `azd add`.
-     */
-    readonly services?: Readonly<Record<string, AzdServiceDescriptor>>;
-}
-
-/** A single service entry from {@linkcode AzdShowResult.services}. */
-export interface AzdServiceDescriptor extends Record<string, unknown> {
-    /** Ingress URL for the deployed service, if available. */
-    readonly ingressUrl?: string;
-}
 
 export interface IAzdService {
     /**
@@ -98,6 +74,62 @@ export interface IAzdService {
      * Rejects on non-zero exit.
      */
     deploy(cwd: vscode.Uri): Promise<void>;
+
+    /**
+     * Checks whether the installed `azd` version meets the given minimum.
+     *
+     * @param minVersion - Semver string to compare against (defaults to
+     *   {@linkcode MinAzdVersion}).
+     * @returns `true` if the installed version is >= {@linkcode minVersion},
+     *   `false` if it is below, or `undefined` if the version could not be
+     *   determined (e.g. azd not installed or version string is invalid).
+     */
+    checkVersion(minVersion?: string): Promise<boolean | undefined>;
+
+    /**
+     * Installs or updates the Azure Developer CLI via a visible VS Code
+     * task. Clears the cached version so the next {@linkcode checkVersion}
+     * call re-fetches it.
+     */
+    install(): Promise<void>;
+}
+
+/** An azd environment entry returned by `azd env list --output json`. */
+export interface AzdEnvironment {
+    readonly Name: string;
+    readonly IsDefault: boolean;
+}
+
+/**
+ * Project metadata returned by `azd show --output json`.
+ *
+ * Only the fields the wizard actually consumes are typed; the real
+ * payload is richer (resources, supporting infra, etc.).
+ */
+export interface AzdShowResult {
+    /** Project name from {@linkcode AzureYamlFileNames azure.yaml}. */
+    readonly name?: string;
+    /**
+     * Map of `azd-service-name` -> service descriptor as declared under
+     * `services:` in `azure.yaml`. An empty / missing object means no
+     * services are configured -- `azd deploy` will not have anything to
+     * target until the user runs `azd add`.
+     */
+    readonly services?: Readonly<Record<string, AzdServiceDescriptor>>;
+}
+
+/** A single service entry from {@linkcode AzdShowResult.services}. */
+export interface AzdServiceDescriptor extends Record<string, unknown> {
+    /** Ingress URL for the deployed service, if available. */
+    readonly ingressUrl?: string;
+}
+
+/** Result of `azd version --output json`. */
+interface AzdVersionResult {
+    readonly azd: {
+        readonly version: string;
+        readonly commit: string;
+    };
 }
 
 /**
@@ -110,9 +142,11 @@ export class AzdService implements IAzdService {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IProcessExecutor) private readonly processExecutor: IProcessExecutor,
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdAuthServer) private readonly authServer: IAzdAuthServer,
     ) { }
 
+    /** @inheritdoc */
     public async findAzureYaml(directory: vscode.Uri): Promise<vscode.Uri | undefined> {
         for (const name of AzureYamlFileNames) {
             const fileUri = this.code.Uri.joinPath(directory, name);
@@ -126,6 +160,7 @@ export class AzdService implements IAzdService {
         return undefined;
     }
 
+    /** @inheritdoc */
     public async init(cwd: vscode.Uri): Promise<void> {
         try {
             await this.processExecutor.spawn({
@@ -139,10 +174,11 @@ export class AzdService implements IAzdService {
                 cwd,
             });
         } catch (e) {
-            throw this.wrapEnoent(e);
+            throw await this.wrapAzdError(e);
         }
     }
 
+    /** @inheritdoc */
     public async envNew(name: string, location: string, subscriptionId: string, cwd: vscode.Uri): Promise<void> {
         try {
             await this.processExecutor.spawn({
@@ -156,10 +192,11 @@ export class AzdService implements IAzdService {
                 cwd,
             });
         } catch (e) {
-            throw this.wrapEnoent(e);
+            throw await this.wrapAzdError(e);
         }
     }
 
+    /** @inheritdoc */
     public async envList(cwd: vscode.Uri): Promise<AzdEnvironment[]> {
         try {
             const result = await this.processExecutor.spawn<AzdEnvironment[]>({
@@ -174,10 +211,11 @@ export class AzdService implements IAzdService {
             });
             return result.json;
         } catch (e) {
-            throw this.wrapEnoent(e);
+            throw await this.wrapAzdError(e);
         }
     }
 
+    /** @inheritdoc */
     public async envExists(name: string, cwd: vscode.Uri): Promise<boolean> {
         try {
             const envs = await this.envList(cwd);
@@ -187,6 +225,7 @@ export class AzdService implements IAzdService {
         }
     }
 
+    /** @inheritdoc */
     public async envGetValues(name: string, cwd: vscode.Uri): Promise<Record<string, string>> {
         try {
             const result = await this.processExecutor.spawn<Record<string, string>>({
@@ -207,6 +246,7 @@ export class AzdService implements IAzdService {
         }
     }
 
+    /** @inheritdoc */
     public async show(cwd: vscode.Uri): Promise<AzdShowResult | undefined> {
         try {
             const result = await this.processExecutor.spawn<AzdShowResult>({
@@ -225,6 +265,7 @@ export class AzdService implements IAzdService {
         }
     }
 
+    /** @inheritdoc */
     public async provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>): Promise<void> {
         const authEnv = await this.authServer.getEnv();
 
@@ -241,10 +282,11 @@ export class AzdService implements IAzdService {
                 source: 'azd',
             });
         } catch (e) {
-            throw this.wrapEnoent(e);
+            throw await this.wrapAzdError(e);
         }
     }
 
+    /** @inheritdoc */
     public async deploy(cwd: vscode.Uri): Promise<void> {
         const authEnv = await this.authServer.getEnv();
 
@@ -261,25 +303,140 @@ export class AzdService implements IAzdService {
                 source: 'azd',
             });
         } catch (e) {
-            throw this.wrapEnoent(e);
+            throw await this.wrapAzdError(e);
         }
     }
 
-    private wrapEnoent(e: unknown): unknown {
-        if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-            return new Error(
-                this.code.l10n.t(
-                    'Azure Developer CLI (azd) was not found. Install it from {0} and ensure it is available on your PATH.',
-                    'https://aka.ms/azure-dev/install',
-                ),
-                { cause: e },
-            );
+    private cachedVersion: string | false | undefined;
+
+    /** @inheritdoc */
+    public async checkVersion(minVersion: string = MinAzdVersion): Promise<boolean | undefined> {
+        if (this.cachedVersion === undefined) {
+            try {
+                const result = await this.processExecutor.spawn<AzdVersionResult>({
+                    execution: 'background',
+                    command: AzdCommand,
+                    args: composeArgs(
+                        withArg('version'),
+                        withJsonOutput(),
+                    )(),
+                    parseJson: true,
+                });
+                const version = semver.valid(result.json.azd.version);
+                this.cachedVersion = version ?? false;
+            } catch {
+                this.cachedVersion = false;
+            }
         }
+
+        if (this.cachedVersion === false) {
+            return undefined;
+        }
+
+        return semver.gte(this.cachedVersion, minVersion);
+    }
+
+    /** @inheritdoc */
+    public async install(): Promise<void> {
+        const { command, args } = await this.getInstallCommand();
+
+        await this.processExecutor.spawn({
+            execution: 'foreground',
+            command,
+            args,
+            name: this.code.l10n.t('Install Azure Developer CLI'),
+            source: 'azd',
+        });
+
+        this.cachedVersion = undefined;
+    }
+
+    /**
+     * Returns the preferred install/update command.
+     *
+     * When `azd` is already installed and supports `azd update`
+     * (>= {@linkcode MinAzdUpdateVersion}), returns `azd update`.
+     * Otherwise falls back to a platform-specific install command
+     * (winget, choco, brew, or the official install script).
+     */
+    private async getInstallCommand(): Promise<{ command: string; args: string[] }> {
+        const supportsUpdate = await this.checkVersion(MinAzdUpdateVersion);
+        if (supportsUpdate) {
+            return { command: AzdCommand, args: ['update'] };
+        } else if (process.platform === 'win32') {
+            if (await this.processExecutor.isOnPath('winget')) {
+                // `winget install` upgrades already-installed packages by default
+                return { command: 'winget', args: ['install', 'microsoft.azd'] };
+            } else if (await this.processExecutor.isOnPath('choco')) {
+                // `choco upgrade` installs if missing and upgrades if already installed
+                return { command: 'choco', args: ['upgrade', 'azd'] };
+            } else {
+                return {
+                    command: 'powershell',
+                    args: ['-ExecutionPolicy', 'AllSigned', '-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression'],
+                };
+            }
+        } else if (process.platform === 'darwin' && await this.processExecutor.isOnPath('brew')) {
+            // `brew install` upgrades already-installed packages by default
+            return { command: 'brew', args: ['install', 'azure/azd/azd'] };
+        } else {
+            return {
+                command: 'bash',
+                args: ['-c', 'curl -fsSL \'https://aka.ms/install-azd.sh\' | bash'],
+            };
+        }
+    }
+
+    /**
+     * Wraps errors from `azd` commands with actionable messages.
+     * - ENOENT → azd not installed
+     * - Other errors → checks the installed version and reports if
+     *   it is below {@linkcode MinAzdVersion}
+     *
+     * Shows a toast with an "Install" button and suppresses the
+     * default error dialog when the error is actionable.
+     */
+    private async wrapAzdError(e: unknown): Promise<unknown> {
+        if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+            const message = this.code.l10n.t(
+                'Azure Developer CLI (azd) was not found. Install it and ensure it is available on your PATH.',
+            );
+            this.showInstallToast(message);
+            return new Error(message, { cause: e });
+        }
+
+        const meetsMin = await this.checkVersion();
+        if (meetsMin === false) {
+            const message = this.code.l10n.t(
+                'Azure Developer CLI (azd) version {0} or later is required.',
+                MinAzdVersion,
+            );
+            this.showInstallToast(message);
+            return new Error(message, { cause: e });
+        }
+
         return e;
+    }
+
+    /**
+     * Shows a warning toast with an "Install" button that runs the
+     * {@linkcode install} command. Suppresses the default error dialog
+     * on the current action context, if available.
+     */
+    private showInstallToast(message: string): void {
+        const context = this.executor.currentContext;
+        if (context) {
+            context.errorHandling.suppress = 'display';
+        }
+
+        const installLabel = this.code.l10n.t('Install');
+        void this.code.window.showWarningMessage(message, installLabel).then(choice => {
+            if (choice === installLabel) {
+                void this.code.commands.executeCommand('vscode-azure/installAzd');
+            }
+        });
     }
 }
 
 /** Curry function that appends `--output json` to the argument list. */
-function withJsonOutput(): (args?: CommandLineArgs) => CommandLineArgs {
-    return withNamedArg('--output', 'json');
-}
+const withJsonOutput = () => withNamedArg('--output', 'json');
