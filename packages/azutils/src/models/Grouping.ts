@@ -6,6 +6,9 @@
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { GenericResource } from './GenericResource';
 
+/** ARM resource type string for resource groups */
+export const ResourceGroupArmType = 'Microsoft.Resources/resourceGroups';
+
 /**
  * Strategy used to group resources within a subscription.
  * `'resourceGroup'` maps to a real ARM resource group; the others

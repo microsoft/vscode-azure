@@ -2,7 +2,7 @@
 
 For detailed documentation on the project architecture and patterns, see the `docs/` folder:
 * `docs/architecture.md` -- Package organization, dependency graph, activation flow
-* `docs/tree-views.md` -- Data/view layer separation, providers, enrichment, caching, pagination, activity tree
+* `docs/tree-views.md` -- Data/view layer separation, providers, enrichment, caching, pagination, activity tree, resource icons
 * `docs/dependency-injection.md` -- Container setup, service identifiers, scoped execution, factory bindings
 * `docs/commands.md` -- ManagedCommand pattern, registration, context values, prefixArgs
 * `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers
@@ -41,6 +41,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * Any time ARM resource types (`GenericResource.type`) or logical types (`GenericResource.logicalType`) are checked, they should be compared **case-insensitively** to a constant (e.g., `AcrResourceType`) rather than a string literal
 * Azure SDK types used in client wrapper public APIs must be re-exported from the wrapper file in `packages/azutils/src/rest/clients/`. The extension and other consumers import these types from `@microsoft/vscode-azure-azutils`, never directly from `@azure/*` packages.
 * Commands that act on tree items should define a static `ContextValue` property. The view provider should use that in the tree item's `contextValue`. In `package.json`, the command's `when` clause should check for the context value with a regex (e.g., `viewItem =~ /\\bmyContextValue\\b/i`) rather than an equality check, to allow for multiple context values. The `\b` in the regex is important to prevent unintended matches (e.g., `myContextValue` matching `myContextValueWithSuffix`).
+* Resource icon SVGs in `packages/azutils/resources/azureIcons/` are resolved by convention: the filename **must** equal `<logicalType>.toLowerCase() + '.svg'`, with `/` acting as directory separators. A mismatch causes VS Code to silently show no icon. When adding a new resource type that shares an ARM type with other products (e.g., `Microsoft.Web/sites`), add a logical type constant and a `logicalType()` branch in `ResourceClient.ts`, then name the icon to match the new logical type. See `docs/tree-views.md` (Resource Icons) for the full convention.
 
 
 ## Understanding the Data Model

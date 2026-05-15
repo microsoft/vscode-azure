@@ -215,7 +215,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
 
             expect(item.description).to.be.undefined;
-            // Standard icon is a URI from getAzureIconUri, not a ThemeIcon
+            // Standard icon is a URI from getResourceTypeIconUri, not a ThemeIcon
             expect(item.iconPath).to.not.have.property('id');
         });
 
