@@ -49,7 +49,7 @@ Azure-specific models and helpers that build on `utils`:
 The VS Code extension that wires everything together:
 
 - **Activation**: Container setup, command and tree registration
-- **Commands**: `Hello`, `OpenInPortal`, `RefreshResourcesView`, `LoadMore`, `DisableAcrAdminUser`, `TrackArmDeployment`, `ClearActivities`
+- **Commands**: `Hello`, `OpenInPortal`, `RefreshResourcesView`, `LoadMore`, `DisableAcrAdminUser`, `ClearActivities`
 - **Resource creation wizards**: `CreateFunctionApp` — azd-backed wizard for creating and deploying Azure resources. See [Resource Creation](resource-creation.md).
 - **Tree providers**:
   - Resources: `GenericAzureDataProvider`/`ViewProvider`, `AcrDataProvider`/`ViewProvider`

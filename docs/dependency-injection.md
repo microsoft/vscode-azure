@@ -167,4 +167,4 @@ container.bind(ArmDeploymentDataProvider).toSelf().inSingletonScope().onActivati
 container.bind(IActivityViewDataProviders).toService(ArmDeploymentDataProvider);
 ```
 
-This enables commands like `TrackArmDeployment` to inject `ArmDeploymentDataProvider` directly while the tree system retrieves all providers via `container.getAll(IActivityViewDataProviders)`.
+This enables commands like `ClearActivities` to inject `ArmDeploymentDataProvider` directly while the tree system retrieves all providers via `container.getAll(IActivityViewDataProviders)`.
