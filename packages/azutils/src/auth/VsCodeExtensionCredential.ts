@@ -96,8 +96,6 @@ export class VsCodeExtensionCredential implements TokenCredential {
             };
         }
     }
-
-    // TODO: future: interactive sign in method?
 }
 
 /**

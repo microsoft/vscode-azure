@@ -121,37 +121,34 @@ The `\b` word boundary prevents unintended partial matches (e.g. `openInPortal` 
 
 ## Commands with Resource Selection
 
-Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command prompts the user to select a resource:
+Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command prompts the user to select a resource.
+
+The `ResourceSelector` service encapsulates this pattern. It resolves a resource from the data cache when a key is provided, or prompts the user via `resourceExperience` when no key is given:
 
 ```typescript
 @injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
-    public async execute(key?: string): Promise<void> {
-        let resource: ConcreteAzureNode | undefined;
-        if (!key) {
-            resource = await resourceExperience({
-                ...this.ctx,
-                tree: this.viewTree,
-                dataItemTree: this.cache,
-                logicalType: AcrResourceType
-            });
-        } else {
-            resource = this.cache.get(key);
-        }
+    public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IResourceSelector) private readonly selector: IResourceSelector,
+    ) { }
 
-        if (!resource || !isAcrRegistry(resource)) {
+    public async execute(key?: string): Promise<void> {
+        const resource = await this.selector.select(AcrResourceType, key);
+
+        if (!isAcrRegistry(resource)) {
             return;
         }
 
-        const enriched = await withDelayedProgress(this.ctx.code, { ... },
-            this.cache.whenEnriched<EnrichedAcrRegistry>(resource)
+        const enriched = await withDelayedProgress(this.code, { ... },
+            this.selector.whenEnriched<EnrichedAcrRegistry>(resource)
         );
         // ... use enriched resource
     }
 }
 ```
 
-`resourceExperience` returns the picked resource object directly (typed via the generic parameter), rather than a string key. See the `Choose*Step` classes in `packages/azutils/src/wizard/` for use as composable wizard steps.
+For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
 
 ## Activity Commands
 

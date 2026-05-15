@@ -41,6 +41,7 @@ import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { registerCommands } from './commands/registerCommands';
 import { IAzureSubscriptionProvider, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
+import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
 
 /**
  * Entry point called by the generated extension `activate` function.
@@ -159,6 +160,8 @@ export function setUpContainer(extensionContext: IExtensionContext): Container {
         const executor = context.get(IActionExecutor);
         return (subscription) => WebAppClient.create(ctx, executor, subscription);
     });
+
+    container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
 
     return container;
 }

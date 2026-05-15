@@ -34,7 +34,7 @@ describe('PickRuntimeStep (unit)', () => {
             const result = await step.prompt();
 
             expect(result.functionWorkerRuntime).to.equal('node');
-            expect(result.runtimeVersion).to.equal('20');
+            expect(result.runtimeVersion).to.equal('24');
         });
 
         it('should return python runtime with correct version', async () => {
@@ -45,7 +45,7 @@ describe('PickRuntimeStep (unit)', () => {
             const result = await step.prompt();
 
             expect(result.functionWorkerRuntime).to.equal('python');
-            expect(result.runtimeVersion).to.equal('3.11');
+            expect(result.runtimeVersion).to.equal('3.14');
         });
 
         it('should return dotnet-isolated runtime', async () => {
@@ -56,7 +56,7 @@ describe('PickRuntimeStep (unit)', () => {
             const result = await step.prompt();
 
             expect(result.functionWorkerRuntime).to.equal('dotnet-isolated');
-            expect(result.runtimeVersion).to.equal('8.0');
+            expect(result.runtimeVersion).to.equal('10.0');
         });
 
         it('should return java runtime', async () => {
@@ -67,7 +67,7 @@ describe('PickRuntimeStep (unit)', () => {
             const result = await step.prompt();
 
             expect(result.functionWorkerRuntime).to.equal('java');
-            expect(result.runtimeVersion).to.equal('17');
+            expect(result.runtimeVersion).to.equal('25');
         });
 
         it('should return powershell runtime', async () => {
@@ -78,7 +78,7 @@ describe('PickRuntimeStep (unit)', () => {
             const result = await step.prompt();
 
             expect(result.functionWorkerRuntime).to.equal('powershell');
-            expect(result.runtimeVersion).to.equal('7.4');
+            expect(result.runtimeVersion).to.equal('7.6');
         });
 
         it('should return custom runtime', async () => {

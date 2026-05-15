@@ -9,7 +9,6 @@
     "commands.vscode-azure/resources/openInPortal": "Open in Azure Portal",
     "commands.vscode-azure/resources/loadMore": "Load More...",
     "commands.vscode-azure/resources/groupBy": "Group By...",
-    "commands.vscode-azure/activity/trackArmDeployment": "Track ARM Deployment",
     "commands.vscode-azure/activity/clearSuccessful": "Clear Successful",
     "commands.vscode-azure/activity/clearCompleted": "Clear Completed",
     "commands.vscode-azure/activity/clearAll": "Clear All",
