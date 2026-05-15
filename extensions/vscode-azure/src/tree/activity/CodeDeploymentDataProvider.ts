@@ -14,7 +14,7 @@ export type ICodeDeploymentDataProvider = CodeDeploymentDataProvider;
 
 interface CodeDeploymentActivity extends Activity {
     readonly type: 'codeDeployment';
-    readonly isLeaf?: boolean;
+    isLeaf?: boolean;
     children?: CodeDeploymentActivity[];
 }
 
@@ -112,6 +112,7 @@ export class CodeDeploymentHandle {
      * status.
      */
     public addChild(opts: AddChildOptions): CodeDeploymentHandle {
+        this.activity.isLeaf = false;
         const child: CodeDeploymentActivity = {
             id: crypto.randomUUID(),
             type: 'codeDeployment',
