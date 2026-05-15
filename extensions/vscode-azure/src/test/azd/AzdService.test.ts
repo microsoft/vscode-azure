@@ -491,16 +491,36 @@ describe('AzdService (unit)', () => {
     });
 
     describe('install', () => {
-        it('should spawn a foreground task', async () => {
+        it('should spawn a foreground task with platform install when azd is not installed', async () => {
+            // checkVersion will fail (ENOENT), so install falls back to platform command
             const spawnFn = mock.fn(() => Promise.resolve());
             const { service, spawnMock } = createService(spawnFn);
 
             await service.install();
 
-            expect(spawnMock.mock.callCount()).to.equal(1);
-            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            // 1st call = checkVersion (azd version), 2nd call = foreground install
+            expect(spawnMock.mock.callCount()).to.equal(2);
+            const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
             expect(opts.source).to.equal('azd');
+        });
+
+        it('should use azd update when version supports it', async () => {
+            const spawnFn = mock.fn((opts: SpawnOpts) => {
+                if (opts.command === 'azd' && argValues(opts.args).includes('version')) {
+                    return Promise.resolve({ json: { azd: { version: '1.25.0' } } });
+                }
+                return Promise.resolve();
+            }) as unknown as SpawnFn;
+            const { service, spawnMock } = createService(spawnFn);
+
+            await service.install();
+
+            expect(spawnMock.mock.callCount()).to.equal(2);
+            const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
+            expect(opts.execution).to.equal('foreground');
+            expect(opts.command).to.equal('azd');
+            expect(argValues(opts.args)).to.deep.equal(['update']);
         });
     });
 });

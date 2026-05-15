@@ -17,6 +17,8 @@ export const AzdCommand = 'azd';
 
 /** Minimum `azd` version required by this extension. */
 export const MinAzdVersion = '1.25.0';
+/** Minimum `azd` version that supports the `azd update` command (public preview). */
+export const MinAzdUpdateVersion = '1.23.14';
 
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
@@ -337,7 +339,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async install(): Promise<void> {
-        const { command, args } = await getInstallCommand();
+        const { command, args } = await this.getInstallCommand();
 
         await this.processExecutor.spawn({
             execution: 'foreground',
@@ -348,6 +350,41 @@ export class AzdService implements IAzdService {
         });
 
         this.cachedVersion = undefined;
+    }
+
+    /**
+     * Returns the preferred install/update command.
+     *
+     * When `azd` is already installed and supports `azd update`
+     * (>= {@linkcode MinAzdUpdateVersion}), returns `azd update`.
+     * Otherwise falls back to a platform-specific install command
+     * (winget, choco, brew, or the official install script).
+     */
+    private async getInstallCommand(): Promise<{ command: string; args: string[] }> {
+        const supportsUpdate = await this.checkVersion(MinAzdUpdateVersion);
+        if (supportsUpdate) {
+            return { command: AzdCommand, args: ['update'] };
+        }
+
+        if (process.platform === 'win32') {
+            if (await isOnPath('winget')) {
+                return { command: 'winget', args: ['install', 'microsoft.azd'] };
+            } else if (await isOnPath('choco')) {
+                return { command: 'choco', args: ['install', 'azd'] };
+            } else {
+                return {
+                    command: 'powershell',
+                    args: ['-ExecutionPolicy', 'AllSigned', '-c', "Invoke-RestMethod 'https://aka.ms/install-azd.ps1' | Invoke-Expression"],
+                };
+            }
+        } else if (process.platform === 'darwin' && await isOnPath('brew')) {
+            return { command: 'brew', args: ['install', 'azure/azd/azd'] };
+        } else {
+            return {
+                command: 'bash',
+                args: ['-c', "curl -fsSL 'https://aka.ms/install-azd.sh' | bash"],
+            };
+        }
     }
 
     /**
@@ -404,35 +441,6 @@ export class AzdService implements IAzdService {
 /** Curry function that appends `--output json` to the argument list. */
 function withJsonOutput(): (args?: CommandLineArgs) => CommandLineArgs {
     return withNamedArg('--output', 'json');
-}
-
-/**
- * Returns the preferred install command for the current platform.
- * Prefers `winget` (Windows) or `brew` (macOS) when available,
- * falling back to the official install script.
- */
-async function getInstallCommand(): Promise<{ command: string; args: string[] }> {
-    if (process.platform === 'win32') {
-        if (await isOnPath('winget')) {
-            return { command: 'winget', args: ['install', 'microsoft.azd'] };
-        }
-        if (await isOnPath('choco')) {
-            return { command: 'choco', args: ['install', 'azd'] };
-        }
-        return {
-            command: 'powershell',
-            args: ['-ExecutionPolicy', 'Bypass', '-c', "Invoke-RestMethod 'https://aka.ms/install-azd.ps1' | Invoke-Expression"],
-        };
-    }
-
-    if (process.platform === 'darwin' && await isOnPath('brew')) {
-        return { command: 'brew', args: ['install', 'azure/azd/azd'] };
-    }
-
-    return {
-        command: 'bash',
-        args: ['-c', "curl -fsSL 'https://aka.ms/install-azd.sh' | bash"],
-    };
 }
 
 async function isOnPath(command: string): Promise<boolean> {
