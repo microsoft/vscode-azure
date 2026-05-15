@@ -14,6 +14,7 @@ export type ICodeDeploymentDataProvider = CodeDeploymentDataProvider;
 
 interface CodeDeploymentActivity extends Activity {
     readonly type: 'codeDeployment';
+    readonly isLeaf?: boolean;
     children?: CodeDeploymentActivity[];
 }
 
@@ -83,6 +84,13 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
     }
 }
 
+/** Options for {@linkcode CodeDeploymentHandle.addChild}. */
+export interface AddChildOptions {
+    readonly title: string;
+    readonly status?: ActivityStatus;
+    readonly isLeaf?: boolean;
+}
+
 /**
  * Handle returned by {@linkcode CodeDeploymentDataProvider.trackDeployment}
  * for controlling a deployment activity's lifecycle and children.
@@ -103,14 +111,15 @@ export class CodeDeploymentHandle {
      * handle whose {@linkcode complete} independently controls that child's
      * status.
      */
-    public addChild(title: string, status: ActivityStatus = 'Completed'): CodeDeploymentHandle {
+    public addChild(opts: AddChildOptions): CodeDeploymentHandle {
         const child: CodeDeploymentActivity = {
             id: crypto.randomUUID(),
             type: 'codeDeployment',
-            status,
-            title,
+            status: opts.status ?? 'Completed',
+            title: opts.title,
+            isLeaf: opts.isLeaf,
             startTime: new Date(),
-            endTime: isTerminalActivityStatus(status) ? new Date() : undefined,
+            endTime: isTerminalActivityStatus(opts.status ?? 'Completed') ? new Date() : undefined,
         };
         this.activity.children ??= [];
         this.activity.children.push(child);

@@ -23,7 +23,7 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should return child deployments added via handle', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        handle.addChild('Child');
+        handle.addChild({ title: 'Child' });
 
         const roots = await provider.getChildren();
         const children = await provider.getChildren(roots[0]);
@@ -35,7 +35,7 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should default addChild to Completed with an endTime', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        handle.addChild('Step 1');
+        handle.addChild({ title: 'Step 1' });
 
         const roots = await provider.getChildren();
         const children = await provider.getChildren(roots[0]);
@@ -46,7 +46,7 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should allow overriding addChild status', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        handle.addChild('Pending Step', 'InProgress');
+        handle.addChild({ title: 'Pending Step', status: 'InProgress' });
 
         const roots = await provider.getChildren();
         const children = await provider.getChildren(roots[0]);
@@ -112,8 +112,8 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should allow individually controlling child statuses', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        const child1 = handle.addChild('Service A', 'InProgress');
-        const child2 = handle.addChild('Service B', 'InProgress');
+        const child1 = handle.addChild({ title: 'Service A', status: 'InProgress' });
+        const child2 = handle.addChild({ title: 'Service B', status: 'InProgress' });
 
         child1.complete('Completed');
         child2.complete('Failed');
@@ -128,8 +128,8 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should auto-complete pending children with parent status', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        handle.addChild('Step 1', 'InProgress');
-        handle.addChild('Step 2', 'NotStarted');
+        handle.addChild({ title: 'Step 1', status: 'InProgress' });
+        handle.addChild({ title: 'Step 2', status: 'NotStarted' });
 
         handle.complete('Completed');
 
@@ -145,8 +145,8 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should not alter already-finished children when parent completes', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        const child1 = handle.addChild('Service A', 'InProgress');
-        handle.addChild('Service B', 'InProgress');
+        const child1 = handle.addChild({ title: 'Service A', status: 'InProgress' });
+        handle.addChild({ title: 'Service B', status: 'InProgress' });
 
         child1.complete('Failed');
         handle.complete('Completed');
@@ -161,8 +161,8 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should not alter children already in Completed state when parent fails', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        handle.addChild('Done Step'); // defaults to Completed
-        handle.addChild('Pending Step', 'InProgress');
+        handle.addChild({ title: 'Done Step' }); // defaults to Completed
+        handle.addChild({ title: 'Pending Step', status: 'InProgress' });
 
         handle.complete('Failed');
 
@@ -180,7 +180,7 @@ describe('CodeDeploymentDataProvider (unit)', () => {
         const onChange = mock.fn();
         provider.onDidChange(onChange);
 
-        handle.addChild('Step');
+        handle.addChild({ title: 'Step' });
         expect(onChange.mock.callCount()).to.equal(1);
     });
 
@@ -211,8 +211,8 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should support nested grandchildren via child handle', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        const childHandle = handle.addChild('Service A', 'InProgress');
-        childHandle.addChild('Sub-step 1');
+        const childHandle = handle.addChild({ title: 'Service A', status: 'InProgress' });
+        childHandle.addChild({ title: 'Sub-step 1' });
 
         const roots = await provider.getChildren();
         const children = await provider.getChildren(roots[0]);
@@ -231,9 +231,9 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should recursively auto-complete pending grandchildren', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        const childHandle = handle.addChild('Service A', 'InProgress');
-        childHandle.addChild('Sub-step 1', 'InProgress');
-        childHandle.addChild('Sub-step 2', 'NotStarted');
+        const childHandle = handle.addChild({ title: 'Service A', status: 'InProgress' });
+        childHandle.addChild({ title: 'Sub-step 1', status: 'InProgress' });
+        childHandle.addChild({ title: 'Sub-step 2', status: 'NotStarted' });
 
         handle.complete('Completed');
 
@@ -251,9 +251,9 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should not alter already-finished grandchildren during recursive completion', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        const childHandle = handle.addChild('Service A', 'InProgress');
-        const grandchildHandle = childHandle.addChild('Sub-step 1', 'InProgress');
-        childHandle.addChild('Sub-step 2', 'InProgress');
+        const childHandle = handle.addChild({ title: 'Service A', status: 'InProgress' });
+        const grandchildHandle = childHandle.addChild({ title: 'Sub-step 1', status: 'InProgress' });
+        childHandle.addChild({ title: 'Sub-step 2', status: 'InProgress' });
 
         grandchildHandle.complete('Failed');
         handle.complete('Completed');
@@ -268,8 +268,8 @@ describe('CodeDeploymentDataProvider (unit)', () => {
     it('should inherit status from immediate parent, not root', async () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
-        const childHandle = handle.addChild('Service A', 'InProgress');
-        childHandle.addChild('Sub-step', 'InProgress');
+        const childHandle = handle.addChild({ title: 'Service A', status: 'InProgress' });
+        childHandle.addChild({ title: 'Sub-step', status: 'InProgress' });
 
         // Complete the child as Failed, then the root as Completed
         childHandle.complete('Failed');

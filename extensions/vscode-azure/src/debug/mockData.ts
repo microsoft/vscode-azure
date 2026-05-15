@@ -142,20 +142,20 @@ export function postApply(container: Container): void {
 
     // Code deployment with children
     const deploy = codeProvider.trackDeployment({ title: 'Deploy to staging' });
-    deploy.addChild('Upload artifacts');
-    deploy.addChild('Run migrations');
-    deploy.addChild('Restart services', 'InProgress');
+    deploy.addChild({ title: 'Upload artifacts', isLeaf: true });
+    deploy.addChild({ title: 'Run migrations', isLeaf: true });
+    deploy.addChild({ title: 'Restart services', status: 'InProgress', isLeaf: true });
 
     // Completed code deployment
     const doneDeploy = codeProvider.trackDeployment({ title: 'Deploy to production' });
-    doneDeploy.addChild('Upload artifacts');
-    doneDeploy.addChild('Run migrations');
-    doneDeploy.addChild('Health check');
+    doneDeploy.addChild({ title: 'Upload artifacts', isLeaf: true });
+    doneDeploy.addChild({ title: 'Run migrations', isLeaf: true });
+    doneDeploy.addChild({ title: 'Health check', isLeaf: true });
     doneDeploy.complete('Completed');
 
     // Failed code deployment
     const failedDeploy = codeProvider.trackDeployment({ title: 'Deploy canary' });
-    failedDeploy.addChild('Upload artifacts');
-    failedDeploy.addChild('Run smoke tests', 'InProgress');
+    failedDeploy.addChild({ title: 'Upload artifacts', isLeaf: true });
+    failedDeploy.addChild({ title: 'Run smoke tests', status: 'InProgress', isLeaf: true });
     failedDeploy.complete('Failed', new Error('Smoke test timeout'));
 }
