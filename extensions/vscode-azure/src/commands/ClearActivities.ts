@@ -5,9 +5,9 @@
 
 import { inject, injectable } from 'inversify';
 import { isTerminalActivityStatus, type Activity } from '../tree/activity/Activity';
-import { ArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
-import { CodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
-import { GenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
+import { IArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
+import { ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
+import { IGenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
 
 type ClearMode = 'completed' | 'successful' | 'all';
@@ -22,9 +22,9 @@ type ClearMode = 'completed' | 'successful' | 'all';
 @injectable()
 export class ClearActivities implements ManagedCommand {
     public constructor(
-        @inject(ArmDeploymentDataProvider) private readonly armProvider: ArmDeploymentDataProvider,
-        @inject(CodeDeploymentDataProvider) private readonly codeProvider: CodeDeploymentDataProvider,
-        @inject(GenericActivityDataProvider) private readonly genericProvider: GenericActivityDataProvider,
+        @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
+        @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
+        @inject(IGenericActivityDataProvider) private readonly genericProvider: IGenericActivityDataProvider,
     ) { }
 
     public execute(mode: ClearMode): void {

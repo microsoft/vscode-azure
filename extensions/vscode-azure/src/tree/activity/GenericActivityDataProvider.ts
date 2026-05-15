@@ -4,8 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
-import { injectable } from 'inversify';
+import { injectable, type ServiceIdentifier } from 'inversify';
 import { type Activity, isActivity } from './Activity';
+
+/** Identifier for the generic activity data provider */
+export const IGenericActivityDataProvider: ServiceIdentifier<GenericActivityDataProvider> = Symbol.for('IGenericActivityDataProvider');
+export type IGenericActivityDataProvider = GenericActivityDataProvider;
 
 interface GenericActivity extends Activity {
     readonly type: 'generic';

@@ -67,7 +67,11 @@ export class ActivityViewProvider implements ViewProvider<string> {
  * Shared by all activity view providers.
  */
 export function toActivityTreeItem(code: IVsCode, activity: Activity, activityId: string): ITreeItem {
-    const isLeaf = activity.type === 'armDeploymentOperation' || activity.type === 'generic';
+    const isLeaf =
+        activity.type === 'armDeploymentOperation'
+        || activity.type === 'generic'
+        || ('isLeaf' in activity && activity.isLeaf === true);
+
     const collapsibleState = isLeaf
         ? code.TreeItemCollapsibleState.None
         : code.TreeItemCollapsibleState.Collapsed;
@@ -91,6 +95,12 @@ export function toActivityTreeItem(code: IVsCode, activity: Activity, activityId
             break;
         case 'Failed':
             treeItem.iconPath = new code.ThemeIcon('error', new code.ThemeColor('testing.iconFailed'));
+            break;
+        case 'Info':
+            treeItem.iconPath = new code.ThemeIcon('info', new code.ThemeColor('problemsInfoIcon.foreground'));
+            break;
+        case 'Warn':
+            treeItem.iconPath = new code.ThemeIcon('warning', new code.ThemeColor('problemsWarningIcon.foreground'));
             break;
     }
 

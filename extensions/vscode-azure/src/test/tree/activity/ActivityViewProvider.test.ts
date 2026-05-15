@@ -129,7 +129,7 @@ describe('toActivityTreeItem (unit)', () => {
     });
 
     it('should set icon based on status', () => {
-        const statuses: Activity['status'][] = ['NotStarted', 'InProgress', 'Completed', 'Canceled', 'Failed'];
+        const statuses: Activity['status'][] = ['NotStarted', 'InProgress', 'Completed', 'Canceled', 'Failed', 'Info', 'Warn'];
 
         for (const status of statuses) {
             const activity = makeActivity({ id: `test-${status}`, status, title: status });

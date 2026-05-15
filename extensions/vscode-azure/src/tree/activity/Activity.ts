@@ -7,7 +7,7 @@
 export type ActivityType = 'armDeployment' | 'armDeploymentOperation' | 'codeDeployment' | 'generic';
 
 /** Lifecycle state of an {@linkcode Activity}. */
-export type ActivityStatus = 'NotStarted' | 'InProgress' | 'Canceled' | 'Completed' | 'Failed';
+export type ActivityStatus = 'NotStarted' | 'InProgress' | 'Canceled' | 'Completed' | 'Failed' | 'Info' | 'Warn';
 
 /**
  * Common shape of all items displayed in the activity tree.
@@ -38,5 +38,5 @@ export function isActivity(maybeActivity: unknown): maybeActivity is Activity {
 
 /** Returns `true` if `status` is a final (non-progressing) state. */
 export function isTerminalActivityStatus(status: ActivityStatus): boolean {
-    return status === 'Completed' || status === 'Failed' || status === 'Canceled';
+    return status === 'Completed' || status === 'Failed' || status === 'Canceled' || status === 'Info' || status === 'Warn';
 }
