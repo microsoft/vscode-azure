@@ -153,7 +153,7 @@ function logicalType(type: string, kind?: string): string {
 
     switch (true) {
         case typeLower === SiteType.toLowerCase(): {
-            if (kindLower?.includes('functionapp') && kindLower.includes('workflowapp')) {
+            if (kindLower?.includes('workflowapp')) {
                 return LogicAppLogicalType;
             } else if (kindLower?.includes('functionapp')) {
                 return FunctionAppLogicalType;
