@@ -96,7 +96,7 @@ export function toActivityTreeItem(code: IVsCode, activity: Activity, activityId
             treeItem.iconPath = new code.ThemeIcon('info', new code.ThemeColor('problemsInfoIcon.foreground'));
             break;
         case 'Warn':
-            treeItem.iconPath = new code.ThemeIcon('warning', new code.ThemeColor('testing.iconSkipped'));
+            treeItem.iconPath = new code.ThemeIcon('warning', new code.ThemeColor('testing.iconQueued'));
             break;
     }
 
