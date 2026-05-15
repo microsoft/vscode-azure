@@ -29,6 +29,11 @@
                 "title": "%commands.vscode-azure/resources/openInPortal%"
             },
             {
+                "command": "vscode-azure/installAzd",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/installAzd%"
+            },
+            {
                 "command": "vscode-azure/acr/disableAdminUser",
                 "category": "%commands.category.azure%",
                 "title": "Disable Admin User"
@@ -288,6 +293,8 @@
         "vscode": "^1.106.0"
     },
     "devDependencies": {
+        "@types/semver": "^7.7.1",
+        "@types/which": "^3.0.4",
         "@vscode/test-cli": "*",
         "@vscode/test-electron": "*",
         "@vscode/vsce": "*",
@@ -301,6 +308,8 @@
         "@microsoft/vscode-azure-utils": "*",
         "@microsoft/vscode-processutils": "^0.2.2",
         "@vscode/extension-telemetry": "^1.5.1",
-        "inversify": "^8.1.0"
+        "inversify": "^8.1.0",
+        "semver": "^7.8.0",
+        "which": "^5.0.0"
     }
 }

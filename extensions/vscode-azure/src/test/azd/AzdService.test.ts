@@ -4,13 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IProcessExecutor, type SpawnFn, ChildProcessError } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { IAzdAuthServer } from '../../azd/AzdAuthServer';
-import { AzdCommand, AzdService } from '../../azd/AzdService';
+import { AzdCommand, AzdService, MinAzdVersion } from '../../azd/AzdService';
 
 interface SpawnOpts {
     execution: string;
@@ -33,8 +33,9 @@ function createService(spawnFn?: SpawnFn) {
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
     const processExecutor = { spawn: spawnMock } as unknown as IProcessExecutor;
     const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
-    const service = new AzdService(mockResult.vscode, processExecutor, authServer);
-    return { service, spawnMock: spawnMock as ReturnType<typeof mock.fn>, fs: mockResult.fs };
+    const { executor } = createTestActionExecutor();
+    const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer);
+    return { service, spawnMock: spawnMock as ReturnType<typeof mock.fn>, fs: mockResult.fs, executor };
 }
 
 describe('AzdService (unit)', () => {
@@ -240,23 +241,71 @@ describe('AzdService (unit)', () => {
     });
 
     describe('ENOENT handling', () => {
-        it('should wrap ENOENT errors with an install hint', async () => {
+        it('should wrap ENOENT errors with an install hint and suppress display', async () => {
             const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
             const spawnFn = mock.fn(() => Promise.reject(enoent));
-            const { service } = createService(spawnFn);
+            const { service, executor } = createService(spawnFn);
 
+            let suppress: string | boolean | undefined;
             try {
-                await service.init(MockUri.file('/project') as unknown as vscode.Uri);
+                await executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
+                    ctx.errorHandling.rethrow = true;
+                    try {
+                        await service.init(MockUri.file('/project') as unknown as vscode.Uri);
+                    } finally {
+                        suppress = ctx.errorHandling.suppress;
+                    }
+                });
                 expect.fail('Expected error');
             } catch (e) {
                 expect((e as Error).message).to.include('Azure Developer CLI (azd) was not found');
                 expect((e as Error).cause).to.equal(enoent);
+                expect(suppress).to.equal('display');
             }
         });
 
-        it('should rethrow non-ENOENT errors as-is', async () => {
+        it('should report outdated version and suppress display when azd is too old', async () => {
+            let callCount = 0;
+            const spawnFn = mock.fn(() => {
+                callCount++;
+                if (callCount === 1) {
+                    // First call: the azd command that fails
+                    return Promise.reject(new Error('something went wrong'));
+                }
+                // Second call: checkVersion
+                return Promise.resolve({ json: { azd: { version: '1.0.0', commit: 'abc' } } });
+            }) as unknown as SpawnFn;
+            const { service, executor } = createService(spawnFn);
+
+            let suppress: string | boolean | undefined;
+            try {
+                await executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
+                    ctx.errorHandling.rethrow = true;
+                    try {
+                        await service.init(MockUri.file('/project') as unknown as vscode.Uri);
+                    } finally {
+                        suppress = ctx.errorHandling.suppress;
+                    }
+                });
+                expect.fail('Expected error');
+            } catch (e) {
+                expect((e as Error).message).to.include('version');
+                expect((e as Error).message).to.include('1.25.0');
+                expect(suppress).to.equal('display');
+            }
+        });
+
+        it('should rethrow non-ENOENT errors as-is when version is sufficient', async () => {
+            let callCount = 0;
             const other = new Error('something else');
-            const spawnFn = mock.fn(() => Promise.reject(other));
+            const spawnFn = mock.fn(() => {
+                callCount++;
+                if (callCount === 1) {
+                    return Promise.reject(other);
+                }
+                // checkVersion call
+                return Promise.resolve({ json: { azd: { version: '1.25.0', commit: 'abc' } } });
+            }) as unknown as SpawnFn;
             const { service } = createService(spawnFn);
 
             try {
@@ -338,6 +387,120 @@ describe('AzdService (unit)', () => {
             } catch (e) {
                 expect((e as Error).message).to.include('Process exited with code 2');
             }
+        });
+    });
+
+    describe('checkVersion', () => {
+        function makeVersionSpawn(version: string): SpawnFn {
+            return mock.fn(() => Promise.resolve({ json: { azd: { version, commit: 'abc' } } })) as unknown as SpawnFn;
+        }
+
+        it('should return true when the installed version meets the minimum', async () => {
+            const { service } = createService(makeVersionSpawn('1.9.5'));
+
+            const result = await service.checkVersion('1.9.0');
+
+            expect(result).to.be.true;
+        });
+
+        it('should return true when the installed version equals the minimum', async () => {
+            const { service } = createService(makeVersionSpawn('1.9.0'));
+
+            const result = await service.checkVersion('1.9.0');
+
+            expect(result).to.be.true;
+        });
+
+        it('should return false when the installed version is below the minimum', async () => {
+            const { service } = createService(makeVersionSpawn('1.8.0'));
+
+            const result = await service.checkVersion('1.9.0');
+
+            expect(result).to.be.false;
+        });
+
+        it('should return undefined when azd is not installed (ENOENT)', async () => {
+            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
+            const spawnFn = mock.fn(() => Promise.reject(enoent));
+            const { service } = createService(spawnFn);
+
+            const result = await service.checkVersion('1.0.0');
+
+            expect(result).to.be.undefined;
+        });
+
+        it('should handle prerelease versions', async () => {
+            const { service } = createService(makeVersionSpawn('1.25.0-beta.1-pr.6266592'));
+
+            const result = await service.checkVersion('1.9.0');
+
+            expect(result).to.be.true;
+        });
+
+        it('should default to MinAzdVersion when no argument is provided', async () => {
+            const { service } = createService(makeVersionSpawn(MinAzdVersion));
+
+            const result = await service.checkVersion();
+
+            expect(result).to.be.true;
+        });
+
+        it('should return undefined for an invalid version string', async () => {
+            const { service } = createService(makeVersionSpawn('not-a-version'));
+
+            const result = await service.checkVersion('1.0.0');
+
+            expect(result).to.be.undefined;
+        });
+
+        it('should cache the version and not spawn again on subsequent calls', async () => {
+            const spawnFn = makeVersionSpawn('1.9.5');
+            const { service, spawnMock } = createService(spawnFn);
+
+            await service.checkVersion('1.9.0');
+            await service.checkVersion('1.8.0');
+
+            expect(spawnMock.mock.callCount()).to.equal(1);
+        });
+
+        it('should clear the cache after install is called', async () => {
+            let callCount = 0;
+            const spawnFn = mock.fn(() => {
+                callCount++;
+                if (callCount === 1) {
+                    // First call: checkVersion
+                    return Promise.resolve({ json: { azd: { version: '1.8.0', commit: 'abc' } } });
+                }
+                // Second call: install (foreground)
+                // Third call: checkVersion again
+                if (callCount === 3) {
+                    return Promise.resolve({ json: { azd: { version: '1.9.5', commit: 'def' } } });
+                }
+                return Promise.resolve();
+            }) as unknown as SpawnFn;
+            const { service } = createService(spawnFn);
+
+            const before = await service.checkVersion('1.9.0');
+            expect(before).to.be.false;
+
+            await service.install();
+
+            const after = await service.checkVersion('1.9.0');
+            expect(after).to.be.true;
+        });
+    });
+
+    describe('install', () => {
+        it('should spawn a foreground task', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve());
+            const { service, spawnMock } = createService(spawnFn);
+
+            await service.install();
+
+            expect(spawnMock.mock.callCount()).to.equal(1);
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(opts.execution).to.equal('foreground');
+            expect(opts.source).to.equal('azd');
         });
     });
 });

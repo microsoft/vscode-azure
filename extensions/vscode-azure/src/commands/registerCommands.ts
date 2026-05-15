@@ -9,6 +9,7 @@ import { LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
 import { AzdUp } from './AzdUp';
 import { ClearActivities } from './ClearActivities';
+import { InstallAzd } from './InstallAzd';
 import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
 import { DeleteAppSetting } from './functions/DeleteAppSetting';
@@ -45,6 +46,7 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
 
     registerManagedCommand(container, 'vscode-azure/azdUp', AzdUp);
+    registerManagedCommand(container, 'vscode-azure/installAzd', InstallAzd);
 }
 
 /**

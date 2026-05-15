@@ -31,5 +31,7 @@ export function createMockAzdService(envListResult: AzdEnvironment[] = []): Mock
         show: mock.fn(() => Promise.resolve(undefined)),
         provision: mock.fn(() => Promise.resolve()),
         deploy: mock.fn(() => Promise.resolve()),
+        checkVersion: mock.fn(() => Promise.resolve(true)),
+        install: mock.fn(() => Promise.resolve()),
     };
 }
