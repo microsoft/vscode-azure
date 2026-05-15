@@ -174,6 +174,54 @@ When a `DataProvider` returns `AsyncIterable<Page<T>>`, the tree supports increm
 
 The `LoadMore` command handles this interaction, and `LoadMoreOptions` configures the appearance of the synthetic node.
 
+## Resource Icons
+
+Tree items for Azure resources display product-specific SVG icons. The icon for a given resource is resolved at runtime by `getResourceTypeIconUri()` in `extensions/vscode-azure/src/tree/iconPath.ts`, which builds a file URI from the resource's **logical type** (or ARM type for non-resource nodes like subscriptions and resource groups).
+
+### Convention
+
+The icon file path is derived mechanically from the type string:
+
+```
+<logicalType>.toLowerCase() + '.svg'
+```
+
+The `/` in the type becomes a directory separator, and `~` separates kind suffixes. For example:
+
+| Type / Logical Type | Icon path |
+|----------------------|-----------|
+| `Microsoft.Web/sites~functionapp` | `microsoft.web/sites~functionapp.svg` |
+| `Microsoft.ContainerRegistry/registries` | `microsoft.containerregistry/registries.svg` |
+| `Microsoft.Resources/subscriptions` | `microsoft.resources/subscriptions.svg` |
+| `Microsoft.DocumentDB/databaseAccounts~cosmosdb` | `microsoft.documentdb/databaseaccounts~cosmosdb.svg` |
+
+**This naming convention is load-bearing.** If the icon filename does not match the lowercased logical type, the icon silently fails to load and VS Code shows no icon for that tree item.
+
+### Source location
+
+Icon SVGs live in `packages/azutils/resources/azureIcons/`, organized into subfolders by provider namespace (e.g. `microsoft.web/`, `microsoft.containerregistry/`). The esbuild copy plugin copies them into `dist/azureIcons/` at build time, so they are bundled with the extension.
+
+### Logical types
+
+Most resources use their raw ARM `type` as the icon key. However, some ARM types cover multiple visually-distinct products (e.g. `Microsoft.Web/sites` includes both Function Apps and App Services). For these, `logicalType()` in `ResourceClient.ts` appends a `~<kind>` suffix based on the resource's `kind` field. The full set of logical type constants is exported from `@microsoft/vscode-azure-azutils`:
+
+| Constant | Value | Disambiguates |
+|----------|-------|---------------|
+| `FunctionAppLogicalType` | `Microsoft.Web/sites~functionapp` | Function Apps |
+| `LogicAppLogicalType` | `Microsoft.Web/sites~workflowapp` | Logic Apps (Standard) |
+| `AppServiceLogicalType` | `Microsoft.Web/sites~app` | App Service web apps |
+| `AIServicesLogicalType` | `Microsoft.CognitiveServices/accounts~aiservices` | AI Foundry |
+| `CosmosDBMongoLogicalType` | `Microsoft.DocumentDB/databaseAccounts~mongodb` | Cosmos DB for MongoDB |
+| `CosmosDBLogicalType` | `Microsoft.DocumentDB/databaseAccounts~cosmosdb` | Cosmos DB (non-MongoDB) |
+| `AIFoundryProjectLogicalType` | `Microsoft.MachineLearningServices/workspaces~project` | AI Foundry projects |
+| `DurableTaskHubLogicalType` | `Microsoft.DurableTask/schedulers/taskHubs` | Durable Task Hubs |
+
+### Adding a new icon
+
+1. Drop an SVG file into the matching subfolder of `packages/azutils/resources/azureIcons/`. The filename **must** be `<logicalType>.toLowerCase() + '.svg'`.
+2. If the ARM type needs kind-based disambiguation, add a logical type constant and a branch to `logicalType()` in `ResourceClient.ts`.
+3. No view provider changes are needed — `GenericAzureViewProvider` already passes `resource.logicalType` to `getResourceTypeIconUri()`.
+
 ## Putting It Together
 
 ```

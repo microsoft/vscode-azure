@@ -24,11 +24,10 @@ import type * as vscode from 'vscode';
  *
  * To add a new icon, drop an SVG in the matching subfolder of
  * `packages/azutils/resources/azureIcons/` -- no code changes required.
- *
- * // TODO: future: scan the azureIcons directory lazily and fall back to a
- * // ThemeIcon when no matching SVG exists. Currently VS Code shows no icon
- * // if the path is invalid.
  */
+// TODO: future: scan the azureIcons directory lazily and fall back to a
+// ThemeIcon when no matching SVG exists. Currently VS Code shows no icon
+// if the path is invalid.
 export function getResourceTypeIconUri(code: IVsCode, extensionContext: IExtensionContext, resourceType: string): vscode.Uri {
     return code.Uri.joinPath(extensionContext.extensionUri, 'dist', 'azureIcons', `${resourceType.toLowerCase()}.svg`);
 }

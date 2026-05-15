@@ -151,41 +151,34 @@ function logicalType(type: string, kind?: string): string {
     const typeLower = type.toLowerCase();
     const kindLower = kind?.toLowerCase();
 
-    switch (true) {
-        case typeLower === SiteType.toLowerCase(): {
-            if (kindLower?.includes('workflowapp')) {
-                return LogicAppLogicalType;
-            } else if (kindLower?.includes('functionapp')) {
-                return FunctionAppLogicalType;
-            } else {
-                return AppServiceLogicalType;
-            }
+    if (typeLower === SiteType.toLowerCase()) {
+        if (kindLower?.includes('workflowapp')) {
+            return LogicAppLogicalType;
+        } else if (kindLower?.includes('functionapp')) {
+            return FunctionAppLogicalType;
+        } else {
+            return AppServiceLogicalType;
         }
-        case typeLower === CognitiveServicesAccountType.toLowerCase(): {
-            if (kindLower?.includes('aiservices')) {
-                return AIServicesLogicalType;
-            }
-            return type;
+    } else if (typeLower === CognitiveServicesAccountType.toLowerCase()) {
+        if (kindLower?.includes('aiservices')) {
+            return AIServicesLogicalType;
         }
-        case typeLower === DocumentDBAccountType.toLowerCase(): {
-            if (kindLower?.includes('mongodb')) {
-                return CosmosDBMongoLogicalType;
-            }
-            return CosmosDBLogicalType;
+        return type;
+    } else if (typeLower === DocumentDBAccountType.toLowerCase()) {
+        if (kindLower?.includes('mongodb')) {
+            return CosmosDBMongoLogicalType;
         }
-        case typeLower === MLWorkspaceType.toLowerCase(): {
-            if (kindLower?.includes('project')) {
-                return AIFoundryProjectLogicalType;
-            }
-            return type;
+        return CosmosDBLogicalType;
+    } else if (typeLower === MLWorkspaceType.toLowerCase()) {
+        if (kindLower?.includes('project')) {
+            return AIFoundryProjectLogicalType;
         }
-        case typeLower.startsWith(DurableTaskPrefix.toLowerCase()) && typeLower.endsWith('taskhubs'): {
-            // Durable Task Hub is a nested resource type; normalise any
-            // `Microsoft.DurableTask/.../taskHubs` variant to a single constant.
-            return DurableTaskHubLogicalType;
-        }
-        default: {
-            return type;
-        }
+        return type;
+    } else if (typeLower.startsWith(DurableTaskPrefix.toLowerCase()) && typeLower.endsWith('taskhubs')) {
+        // Durable Task Hub is a nested resource type; normalise any
+        // `Microsoft.DurableTask/.../taskHubs` variant to a single constant.
+        return DurableTaskHubLogicalType;
+    } else {
+        return type;
     }
 }
