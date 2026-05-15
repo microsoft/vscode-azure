@@ -6,7 +6,7 @@
 import { IActionExecutor, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { composeArgs, withArg, withFlagArg, withNamedArg } from '@microsoft/vscode-processutils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
-import semver from 'semver';
+import * as semver from 'semver';
 import type * as vscode from 'vscode';
 import { IAzdAuthServer } from './AzdAuthServer';
 
@@ -365,9 +365,11 @@ export class AzdService implements IAzdService {
             return { command: AzdCommand, args: ['update'] };
         } else if (process.platform === 'win32') {
             if (await this.processExecutor.isOnPath('winget')) {
+                // `winget install` upgrades already-installed packages by default
                 return { command: 'winget', args: ['install', 'microsoft.azd'] };
             } else if (await this.processExecutor.isOnPath('choco')) {
-                return { command: 'choco', args: ['install', 'azd'] };
+                // `choco upgrade` installs if missing and upgrades if already installed
+                return { command: 'choco', args: ['upgrade', 'azd'] };
             } else {
                 return {
                     command: 'powershell',
@@ -375,6 +377,7 @@ export class AzdService implements IAzdService {
                 };
             }
         } else if (process.platform === 'darwin' && await this.processExecutor.isOnPath('brew')) {
+            // `brew install` upgrades already-installed packages by default
             return { command: 'brew', args: ['install', 'azure/azd/azd'] };
         } else {
             return {

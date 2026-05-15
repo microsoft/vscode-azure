@@ -14,7 +14,7 @@ import type { ServiceIdentifier } from 'inversify';
 import { createInterface } from 'node:readline';
 import { PassThrough } from 'node:stream';
 import type * as vscode from 'vscode';
-import which from 'which';
+import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
 import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
