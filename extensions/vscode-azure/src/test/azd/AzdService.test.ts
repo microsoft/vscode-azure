@@ -10,7 +10,7 @@ import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { IAzdAuthServer } from '../../azd/AzdAuthServer';
-import { AzdCommand, AzdService, MinAzdVersion } from '../../azd/AzdService';
+import { AzdCommand, AzdService, MinAzdUpdateVersion, MinAzdVersion } from '../../azd/AzdService';
 
 interface SpawnOpts {
     execution: string;
@@ -290,7 +290,7 @@ describe('AzdService (unit)', () => {
                 expect.fail('Expected error');
             } catch (e) {
                 expect((e as Error).message).to.include('version');
-                expect((e as Error).message).to.include('1.25.0');
+                expect((e as Error).message).to.include(MinAzdVersion);
                 expect(suppress).to.equal('display');
             }
         });
@@ -304,7 +304,7 @@ describe('AzdService (unit)', () => {
                     return Promise.reject(other);
                 }
                 // checkVersion call
-                return Promise.resolve({ json: { azd: { version: '1.25.0', commit: 'abc' } } });
+                return Promise.resolve({ json: { azd: { version: MinAzdVersion, commit: 'abc' } } });
             }) as unknown as SpawnFn;
             const { service } = createService(spawnFn);
 
@@ -508,7 +508,7 @@ describe('AzdService (unit)', () => {
         it('should use azd update when version supports it', async () => {
             const spawnFn = mock.fn((opts: SpawnOpts) => {
                 if (opts.command === 'azd' && argValues(opts.args).includes('version')) {
-                    return Promise.resolve({ json: { azd: { version: '1.25.0' } } });
+                    return Promise.resolve({ json: { azd: { version: MinAzdUpdateVersion } } });
                 }
                 return Promise.resolve();
             }) as unknown as SpawnFn;

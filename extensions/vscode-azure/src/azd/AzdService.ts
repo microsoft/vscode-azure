@@ -374,7 +374,7 @@ export class AzdService implements IAzdService {
             } else {
                 return {
                     command: 'powershell',
-                    args: ['-ExecutionPolicy', 'AllSigned', '-c', "Invoke-RestMethod 'https://aka.ms/install-azd.ps1' | Invoke-Expression"],
+                    args: ['-ExecutionPolicy', 'AllSigned', '-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression'],
                 };
             }
         } else if (process.platform === 'darwin' && await isOnPath('brew')) {
@@ -382,7 +382,7 @@ export class AzdService implements IAzdService {
         } else {
             return {
                 command: 'bash',
-                args: ['-c', "curl -fsSL 'https://aka.ms/install-azd.sh' | bash"],
+                args: ['-c', 'curl -fsSL \'https://aka.ms/install-azd.sh\' | bash'],
             };
         }
     }
