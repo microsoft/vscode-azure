@@ -44,6 +44,14 @@ describe('Activity (unit)', () => {
             expect(isTerminalActivityStatus('Canceled')).to.be.true;
         });
 
+        it('should return true for Info', () => {
+            expect(isTerminalActivityStatus('Info')).to.be.true;
+        });
+
+        it('should return true for Warn', () => {
+            expect(isTerminalActivityStatus('Warn')).to.be.true;
+        });
+
         it('should return false for InProgress', () => {
             expect(isTerminalActivityStatus('InProgress')).to.be.false;
         });
