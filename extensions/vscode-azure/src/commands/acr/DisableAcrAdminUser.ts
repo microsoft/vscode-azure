@@ -12,7 +12,6 @@ import type { ManagedCommand } from '../ManagedCommand';
 
 /* c8 ignore start */
 
-// TODO: remove this demonstration command
 /**
  * Demonstration command that would disable the ACR admin user on a
  * registry node. When invoked without a key (e.g., from the command
@@ -20,6 +19,8 @@ import type { ManagedCommand } from '../ManagedCommand';
  *
  * Today it only displays an informational message instead of making
  * the actual ARM call.
+ *
+ * TODO: this is a demonstration command and needs to be removed
  */
 @injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
