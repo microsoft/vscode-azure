@@ -5,7 +5,7 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -13,7 +13,7 @@ import { OpenInPortal } from '../../commands/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { combineContextValues } from '../combineContextValues';
-import { getAzureIconUri } from '../iconPath';
+import { getResourceTypeIconUri } from '../iconPath';
 
 /**
  * Root view-layer provider for the Azure resources tree.
@@ -129,7 +129,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 const item = new this.ctx.code.TreeItem(resource.name, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = getAzureIconUri(this.ctx.code, this.ctx.extensionContext, 'Subscription');
+                item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, SubscriptionArmType);
                 return item;
             }
 
@@ -142,7 +142,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                     item.iconPath = new this.ctx.code.ThemeIcon('rocket');
                     item.description = azdEnvName;
                 } else {
-                    item.iconPath = getAzureIconUri(this.ctx.code, this.ctx.extensionContext, 'ResourceGroup');
+                    item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, ResourceGroupArmType);
                 }
                 return item;
             }
@@ -152,7 +152,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 item.id = key;
                 item.description = resource.logicalType;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = new this.ctx.code.ThemeIcon('symbol-misc');
+                item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, resource.logicalType);
                 return item;
             }
 

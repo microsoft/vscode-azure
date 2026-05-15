@@ -7,9 +7,27 @@ import type { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
- * Returns a {@linkcode vscode.Uri} pointing to an Azure resource icon SVG file
- * located under `resources/icons/`.
+ * Returns a {@linkcode vscode.Uri} pointing to an Azure resource icon SVG
+ * whose path is derived from the resource's logical type.
+ *
+ * Callers should pass {@linkcode GenericResource.logicalType} rather than
+ * the raw ARM `type`, because logical types disambiguate resources that
+ * share the same ARM type (e.g. `Microsoft.Web/sites~functionapp` vs
+ * `Microsoft.Web/sites~app`). For non-resource nodes such as subscriptions
+ * or resource groups, pass the corresponding ARM type constant
+ * (e.g. {@linkcode SubscriptionArmType}, {@linkcode ResourceGroupArmType}).
+ *
+ * The icon files are organized by provider namespace under `dist/azureIcons/`,
+ * mirroring the ARM type structure. For example, the logical type
+ * `Microsoft.Web/sites~functionapp` resolves to
+ * `dist/azureIcons/microsoft.web/sites~functionapp.svg`.
+ *
+ * To add a new icon, drop an SVG in the matching subfolder of
+ * `packages/azutils/resources/azureIcons/` -- no code changes required.
+ *
+ * // TODO: verify what VS Code renders when the icon file is missing
+ * // (blank space, fallback icon, or nothing).
  */
-export function getAzureIconUri(code: IVsCode, extensionContext: IExtensionContext, iconName: string): vscode.Uri {
-    return code.Uri.joinPath(extensionContext.extensionUri, 'resources', 'icons', `${iconName}.svg`);
+export function getResourceTypeIconUri(code: IVsCode, extensionContext: IExtensionContext, resourceType: string): vscode.Uri {
+    return code.Uri.joinPath(extensionContext.extensionUri, 'dist', 'azureIcons', `${resourceType.toLowerCase()}.svg`);
 }
