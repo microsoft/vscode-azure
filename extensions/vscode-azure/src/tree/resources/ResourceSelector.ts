@@ -40,12 +40,17 @@ export class ResourceSelector {
      *   is looked up directly from the data cache. When omitted, the
      *   user is prompted to pick a resource via a quick-pick wizard.
      * @returns The resolved resource.
-     * @throws If no resource could be resolved, or if the user
-     *   cancels the picker when `key` is not provided.
+     * @throws If `key` is provided but the resource is not found in the
+     *   data cache (e.g. stale tree item or invalid invocation), or if
+     *   the user cancels the picker when `key` is not provided.
      */
     public async select<T extends GenericResource>(logicalType: string, key?: string): Promise<T> {
         if (key) {
-            return this.cache.get(key) as T;
+            const resource = this.cache.get(key);
+            if (!resource) {
+                throw new Error(this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.'));
+            }
+            return resource as T;
         }
 
         return resourceExperience<T>({
