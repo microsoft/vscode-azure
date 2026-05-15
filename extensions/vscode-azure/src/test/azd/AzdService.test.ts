@@ -6,7 +6,7 @@
 import { type IProcessExecutor, type SpawnFn, ChildProcessError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
+import { afterEach, describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { IAzdAuthServer } from '../../azd/AzdAuthServer';
@@ -28,10 +28,11 @@ function argValues(args: SpawnOpts['args']): string[] {
     return args.map(a => typeof a === 'string' ? a : a.value);
 }
 
-function createService(spawnFn?: SpawnFn) {
+function createService(spawnFn?: SpawnFn, isOnPathFn?: (cmd: string) => Promise<boolean>) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
-    const processExecutor = { spawn: spawnMock } as unknown as IProcessExecutor;
+    const isOnPathMock = isOnPathFn ?? mock.fn(() => Promise.resolve(false));
+    const processExecutor = { spawn: spawnMock, isOnPath: isOnPathMock } as unknown as IProcessExecutor;
     const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
     const { executor } = createTestActionExecutor();
     const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer);
@@ -521,6 +522,101 @@ describe('AzdService (unit)', () => {
             expect(opts.execution).to.equal('foreground');
             expect(opts.command).to.equal('azd');
             expect(argValues(opts.args)).to.deep.equal(['update']);
+        });
+
+        describe('platform fallback commands', () => {
+            // All platform tests use a version too old for `azd update`
+            // so the fallback logic is exercised.
+            function makeOldVersionSpawn(): SpawnFn {
+                return mock.fn((opts: SpawnOpts) => {
+                    if (opts.command === 'azd' && argValues(opts.args).includes('version')) {
+                        return Promise.resolve({ json: { azd: { version: '1.0.0' } } });
+                    }
+                    return Promise.resolve();
+                }) as unknown as SpawnFn;
+            }
+
+            const originalPlatform = process.platform;
+            function setPlatform(value: string): void {
+                Object.defineProperty(process, 'platform', { value, configurable: true });
+            }
+
+            afterEach(() => {
+                Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+            });
+
+            it('should use winget on Windows when winget is available', async () => {
+                setPlatform('win32');
+                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'winget'));
+                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
+
+                await service.install();
+
+                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
+                expect(opts.command).to.equal('winget');
+                expect(argValues(opts.args)).to.deep.equal(['install', 'microsoft.azd']);
+            });
+
+            it('should use choco on Windows when winget is unavailable', async () => {
+                setPlatform('win32');
+                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'choco'));
+                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
+
+                await service.install();
+
+                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
+                expect(opts.command).to.equal('choco');
+                expect(argValues(opts.args)).to.deep.equal(['install', 'azd']);
+            });
+
+            it('should use powershell script on Windows when no package manager is available', async () => {
+                setPlatform('win32');
+                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
+
+                await service.install();
+
+                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
+                expect(opts.command).to.equal('powershell');
+                expect(argValues(opts.args)).to.include('-ExecutionPolicy');
+                expect(argValues(opts.args)).to.include('AllSigned');
+            });
+
+            it('should use brew on macOS when brew is available', async () => {
+                setPlatform('darwin');
+                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'brew'));
+                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
+
+                await service.install();
+
+                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
+                expect(opts.command).to.equal('brew');
+                expect(argValues(opts.args)).to.deep.equal(['install', 'azure/azd/azd']);
+            });
+
+            it('should use bash curl script on macOS when brew is unavailable', async () => {
+                setPlatform('darwin');
+                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
+
+                await service.install();
+
+                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
+                expect(opts.command).to.equal('bash');
+                expect(argValues(opts.args).join(' ')).to.include('install-azd.sh');
+            });
+
+            it('should use bash curl script on Linux', async () => {
+                setPlatform('linux');
+                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
+
+                await service.install();
+
+                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
+                expect(opts.command).to.equal('bash');
+                expect(argValues(opts.args).join(' ')).to.include('install-azd.sh');
+            });
         });
     });
 });

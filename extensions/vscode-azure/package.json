@@ -294,7 +294,6 @@
     },
     "devDependencies": {
         "@types/semver": "^7.7.1",
-        "@types/which": "^3.0.4",
         "@vscode/test-cli": "*",
         "@vscode/test-electron": "*",
         "@vscode/vsce": "*",
@@ -309,7 +308,6 @@
         "@microsoft/vscode-processutils": "^0.2.2",
         "@vscode/extension-telemetry": "^1.5.1",
         "inversify": "^8.1.0",
-        "semver": "^7.8.0",
-        "which": "^5.0.0"
+        "semver": "^7.8.0"
     }
 }

@@ -14,6 +14,7 @@ import type { ServiceIdentifier } from 'inversify';
 import { createInterface } from 'node:readline';
 import { PassThrough } from 'node:stream';
 import type * as vscode from 'vscode';
+import which from 'which';
 import { CancellationError } from '../vscode/CancellationError';
 import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
@@ -137,6 +138,13 @@ export interface IProcessExecutor {
     spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonProcessResult<T>>;
     /** Runs a background process and captures raw stdout and stderr. */
     spawn(options: BackgroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<ProcessResult>;
+
+    /**
+     * Tests whether a command is available on the system `PATH`.
+     *
+     * @returns `true` when the command can be resolved, `false` otherwise.
+     */
+    isOnPath(command: string): Promise<boolean>;
 }
 
 /**
@@ -164,6 +172,16 @@ export class ProcessExecutor implements IProcessExecutor {
             return this.spawnForeground(options, cancellationToken);
         } else {
             return this.spawnBackground(options, cancellationToken);
+        }
+    }
+
+    /** @inheritdoc */
+    public async isOnPath(command: string): Promise<boolean> {
+        try {
+            await which(command);
+            return true;
+        } catch {
+            return false;
         }
     }
 

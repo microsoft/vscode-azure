@@ -4,11 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IActionExecutor, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
-import { composeArgs, withArg, withFlagArg, withNamedArg, type CommandLineArgs } from '@microsoft/vscode-processutils';
+import { composeArgs, withArg, withFlagArg, withNamedArg } from '@microsoft/vscode-processutils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import semver from 'semver';
 import type * as vscode from 'vscode';
-import which from 'which';
 import { IAzdAuthServer } from './AzdAuthServer';
 
 export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdService');
@@ -364,12 +363,10 @@ export class AzdService implements IAzdService {
         const supportsUpdate = await this.checkVersion(MinAzdUpdateVersion);
         if (supportsUpdate) {
             return { command: AzdCommand, args: ['update'] };
-        }
-
-        if (process.platform === 'win32') {
-            if (await isOnPath('winget')) {
+        } else if (process.platform === 'win32') {
+            if (await this.processExecutor.isOnPath('winget')) {
                 return { command: 'winget', args: ['install', 'microsoft.azd'] };
-            } else if (await isOnPath('choco')) {
+            } else if (await this.processExecutor.isOnPath('choco')) {
                 return { command: 'choco', args: ['install', 'azd'] };
             } else {
                 return {
@@ -377,7 +374,7 @@ export class AzdService implements IAzdService {
                     args: ['-ExecutionPolicy', 'AllSigned', '-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression'],
                 };
             }
-        } else if (process.platform === 'darwin' && await isOnPath('brew')) {
+        } else if (process.platform === 'darwin' && await this.processExecutor.isOnPath('brew')) {
             return { command: 'brew', args: ['install', 'azure/azd/azd'] };
         } else {
             return {
@@ -439,15 +436,4 @@ export class AzdService implements IAzdService {
 }
 
 /** Curry function that appends `--output json` to the argument list. */
-function withJsonOutput(): (args?: CommandLineArgs) => CommandLineArgs {
-    return withNamedArg('--output', 'json');
-}
-
-async function isOnPath(command: string): Promise<boolean> {
-    try {
-        await which(command);
-        return true;
-    } catch {
-        return false;
-    }
-}
+const withJsonOutput = () => withNamedArg('--output', 'json');
