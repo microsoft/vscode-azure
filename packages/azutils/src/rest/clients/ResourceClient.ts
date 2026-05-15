@@ -31,6 +31,13 @@ export const CognitiveServicesAccountType = 'Microsoft.CognitiveServices/account
 /** Logical type assigned to AI Foundry resources (`Microsoft.CognitiveServices/accounts` with `kind` containing `AIServices`). */
 export const AIServicesLogicalType = `${CognitiveServicesAccountType}~aiservices`;
 
+/** ARM resource type string for Cosmos DB accounts (`Microsoft.DocumentDB/databaseAccounts`). */
+export const DocumentDBAccountType = 'Microsoft.DocumentDB/databaseAccounts';
+/** Logical type assigned to Cosmos DB for MongoDB accounts (`Microsoft.DocumentDB/databaseAccounts` with `kind` containing `MongoDB`). */
+export const CosmosDBMongoLogicalType = `${DocumentDBAccountType}~mongodb`;
+/** Logical type assigned to Cosmos DB accounts (any non-MongoDB `Microsoft.DocumentDB/databaseAccounts` kind). */
+export const CosmosDBLogicalType = `${DocumentDBAccountType}~cosmosdb`;
+
 /** Factory that creates an {@linkcode IResourceClient} for a given subscription. */
 export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
 export type IResourceClientProvider = AsyncFactory<IResourceClient, [AzureSubscription]>;
@@ -147,6 +154,12 @@ function logicalType(type: string, kind?: string): string {
                 return AIServicesLogicalType;
             }
             return type;
+        }
+        case DocumentDBAccountType.toLowerCase(): {
+            if (kind?.toLowerCase().includes('mongodb')) {
+                return CosmosDBMongoLogicalType;
+            }
+            return CosmosDBLogicalType;
         }
         default:
             return type;
