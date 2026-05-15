@@ -26,6 +26,11 @@ export const WorkflowAppLogicalType = `${SiteType}~workflowapp`;
 /** Logical type assigned to App Service web apps (any other `Microsoft.Web/sites` kind). */
 export const AppServiceLogicalType = `${SiteType}~app`;
 
+/** ARM resource type string for Cognitive Services accounts (`Microsoft.CognitiveServices/accounts`). */
+export const CognitiveServicesAccountType = 'Microsoft.CognitiveServices/accounts';
+/** Logical type assigned to AI Foundry resources (`Microsoft.CognitiveServices/accounts` with `kind` containing `AIServices`). */
+export const AIServicesLogicalType = `${CognitiveServicesAccountType}~aiservices`;
+
 /** Factory that creates an {@linkcode IResourceClient} for a given subscription. */
 export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
 export type IResourceClientProvider = AsyncFactory<IResourceClient, [AzureSubscription]>;
@@ -136,6 +141,12 @@ function logicalType(type: string, kind?: string): string {
             } else {
                 return AppServiceLogicalType;
             }
+        }
+        case CognitiveServicesAccountType.toLowerCase(): {
+            if (kind?.toLowerCase().includes('aiservices')) {
+                return AIServicesLogicalType;
+            }
+            return type;
         }
         default:
             return type;
