@@ -68,6 +68,12 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * Polls the deployment ID file every {@linkcode pollIntervalMs} until
      * the abort signal fires. Each poll reads the entire file, parses
      * JSONL entries, and starts tracking any new deployment IDs.
+     *
+     * Polling lifetime is tied to the `azd provision` task, **not** to the
+     * visibility of the resulting activities. Clearing a tracked deployment
+     * does not stop discovery of additional deployments produced by the
+     * still-running provision -- a brand new deployment is a brand new event
+     * and should appear in the tree.
      */
     private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal): Promise<void> {
         try {

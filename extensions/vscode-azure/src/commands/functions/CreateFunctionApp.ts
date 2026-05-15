@@ -70,7 +70,7 @@ export class CreateFunctionApp implements ManagedCommand {
         ];
 
         const executeSteps: ExecuteStep<CreateFunctionAppContext>[] = [
-            new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['runtimeVersion', 'hostingPlan', 'azdServiceName']),
+            new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName', 'azdServiceName']),
             new GenerateAzureYamlStep(this.azd),
             new CreateAzdEnvStep(this.azd),
             new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider, this.tempManager),

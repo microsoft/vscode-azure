@@ -15,9 +15,7 @@
     },
     "license": "MIT",
     "author": "Microsoft Corporation",
-    "type": "module",
-    "main": "main.mjs",
-    "module": "main.mjs",
+    "main": "main.js",
     "contributes": {
         "commands": [
             {

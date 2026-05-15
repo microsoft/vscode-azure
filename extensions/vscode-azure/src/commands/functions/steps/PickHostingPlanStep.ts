@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ICodeContext, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
-import type { CreateFunctionAppContext, FunctionAppHostingPlan } from '../CreateFunctionAppContext';
+import type { AppServicePlanSku, CreateFunctionAppContext } from '../CreateFunctionAppContext';
 
 /**
  * Prompts the user to pick a hosting plan.
@@ -17,14 +17,14 @@ export class PickHostingPlanStep extends PromptStep<CreateFunctionAppContext> {
     }
 
     public override shouldPrompt(context: Readonly<CreateFunctionAppContext>): boolean {
-        return !context.hostingPlan && !context.hasInfra;
+        return !context.appServicePlanSkuName && !context.hasInfra;
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {
-        const items: QuickPickItemWithData<FunctionAppHostingPlan>[] = [
-            { label: this.ctx.code.l10n.t('Flex Consumption'), description: this.ctx.code.l10n.t('Modern serverless, auto-scale'), data: 'FlexConsumption' },
-            { label: this.ctx.code.l10n.t('Premium'), description: this.ctx.code.l10n.t('Elastic Premium, pre-warmed instances'), data: 'Premium' },
-            { label: this.ctx.code.l10n.t('App Service Plan'), description: this.ctx.code.l10n.t('Dedicated plan, predictable pricing'), data: 'AppServicePlan' },
+        const items: QuickPickItemWithData<AppServicePlanSku>[] = [
+            { label: this.ctx.code.l10n.t('Flex Consumption'), description: this.ctx.code.l10n.t('Modern serverless, auto-scale'), data: 'FC1' },
+            { label: this.ctx.code.l10n.t('Premium'), description: this.ctx.code.l10n.t('Elastic Premium, pre-warmed instances'), data: 'EP1' },
+            { label: this.ctx.code.l10n.t('App Service Plan'), description: this.ctx.code.l10n.t('Dedicated plan, predictable pricing'), data: 'S1' },
         ];
 
         const picked = await showSmartQuickPick(this.ctx, items, {
@@ -32,6 +32,6 @@ export class PickHostingPlanStep extends PromptStep<CreateFunctionAppContext> {
             showBack: true,
         });
 
-        return { hostingPlan: picked.data };
+        return { appServicePlanSkuName: picked.data };
     }
 }

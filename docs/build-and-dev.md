@@ -61,7 +61,7 @@ The extension uses **esbuild** to bundle all source (including packages) into a 
 ```bash
 npm run build --workspace=extensions/vscode-azure
 # Runs two commands in series:
-#   build:esbuild — node esbuild.mjs (produces dist/extension.bundle.mjs)
+#   build:esbuild — node esbuild.mjs (produces dist/extension.bundle.js)
 #   build:check   — tsgo --noEmit (type checking only)
 ```
 
@@ -70,7 +70,7 @@ npm run build --workspace=extensions/vscode-azure
 `esbuild.mjs` uses shared configs from `@microsoft/vscode-azext-eng/esbuild`:
 
 ```javascript
-const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig(true);
+const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig();
 
 extensionConfig.alias = {
     ...extensionConfig.alias,
@@ -81,7 +81,7 @@ extensionConfig.alias = {
 await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
 ```
 
-- `autoSelectEsbuildConfig(true)` returns both an `extensionConfig` and a `telemetryConfig` (for the separate telemetry bundle). The `true` argument enables ESM output.
+- `autoSelectEsbuildConfig()` returns both an `extensionConfig` and a `telemetryConfig` (for the separate telemetry bundle). Output is CommonJS (`.js`), which the CJS `main.js` entry point loads with `require()`.
 - `autoEsbuildOrWatch` builds in production mode by default, or enters watch mode when `--watch` is passed on the command line.
 - The `alias` configuration resolves local package imports to their source files so esbuild bundles them directly.
 
@@ -140,13 +140,13 @@ npm run package --workspace=packages/utils           # npm pack
 
 ## Extension Entry Point
 
-The extension entry point is `main.mjs`, which measures bundle load time and delegates to the esbuild bundle:
+The extension entry point is `main.js` (CommonJS), which measures bundle load time and delegates to the esbuild bundle:
 
 ```javascript
 const perfStats = { loadStartTime: Date.now(), loadEndTime: undefined };
-const extension = await import('./dist/extension.bundle.mjs');
+const extension = require('./dist/extension.bundle.js');
 
-export async function activate(ctx) {
+exports.activate = async function activate(ctx) {
     return await extension.activateInternal(ctx, perfStats);
 }
 
