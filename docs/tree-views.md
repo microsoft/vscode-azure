@@ -154,7 +154,7 @@ interface Activity {
 | `CodeDeploymentDataProvider` | Yes | Tracks code deployments (e.g. `azd deploy`). `trackDeployment()` returns a `CodeDeploymentHandle` for controlling lifecycle and adding children. The handle exposes `complete(status, error?)` and `addChild(title, status?)` — the provider owns all mutations and fires change events internally. |
 | `GenericActivityDataProvider` | Yes | Tracks simple one-off activities (leaf nodes, no children). |
 
-Activity providers are bound with `.toSelf().inSingletonScope()` first, then aliased with `.toService()` to the multi-binding identifier. This allows commands (e.g. `TrackArmDeployment`, `ClearActivities`) to inject specific providers directly while the tree still retrieves all providers collectively.
+Activity providers are bound with `.toSelf().inSingletonScope()` first, then aliased with `.toService()` to the multi-binding identifier. This allows commands (e.g. `ClearActivities`) to inject specific providers directly while the tree still retrieves all providers collectively.
 
 ### Activity View Providers
 

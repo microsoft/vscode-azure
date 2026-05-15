@@ -3,12 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ConcreteAzureNode, resourceExperience } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, IOutputChannel, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { IVsCode, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
 import type { EnrichedAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
 import { AcrResourceType, isAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
+import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /* c8 ignore start */
@@ -17,7 +16,7 @@ import type { ManagedCommand } from '../ManagedCommand';
 /**
  * Demonstration command that would disable the ACR admin user on a
  * registry node. When invoked without a key (e.g., from the command
- * palette) it prompts for a registry via {@linkcode resourceExperience}.
+ * palette) it prompts for a registry via {@linkcode IResourceSelector}.
  *
  * Today it only displays an informational message instead of making
  * the actual ARM call.
@@ -28,42 +27,29 @@ export class DisableAcrAdminUser implements ManagedCommand {
     public static ContextValue = 'disableAcrAdminUser';
 
     public constructor(
-        @inject(ICodeContext) private readonly ctx: ICodeContext,
-        @inject(IOutputChannel) private readonly output: IOutputChannel,
-        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(IAzureViewViewItemTree) private readonly viewTree: IAzureViewViewItemTree, // TODO: future: a single selector service that can accept pick options and give back the resolved resource (either from quick pick or from cache)?
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IResourceSelector) private readonly selector: IResourceSelector,
     ) { }
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        let resource: ConcreteAzureNode | undefined;
-        if (!key) {
-            resource = await resourceExperience({
-                ...this.ctx,
-                tree: this.viewTree,
-                dataItemTree: this.cache,
-                logicalType: AcrResourceType,
-                output: this.output,
-            });
-        } else {
-            resource = this.cache.get(key);
-        }
+        const resource = await this.selector.select(AcrResourceType, key);
 
-        if (!resource || !isAcrRegistry(resource)) {
+        if (!isAcrRegistry(resource)) {
             return;
         }
 
         const registry = await withDelayedProgress(
-            this.ctx.code,
+            this.code,
             {
-                location: this.ctx.code.ProgressLocation.Notification,
-                title: this.ctx.code.l10n.t('Loading details for \'{0}\'...', resource.name),
+                location: this.code.ProgressLocation.Notification,
+                title: this.code.l10n.t('Loading details for \'{0}\'...', resource.name),
             },
-            this.cache.whenEnriched<EnrichedAcrRegistry>(resource),
+            this.selector.whenEnriched<EnrichedAcrRegistry>(resource),
         );
 
-        void this.ctx.code.window.showInformationMessage(
-            this.ctx.code.l10n.t('If this command were real, it would disable admin user on \'{0}\' (loginServer: {1}, sku: {2}).', registry.name, registry.loginServer, registry.sku.name)
+        void this.code.window.showInformationMessage(
+            this.code.l10n.t('If this command were real, it would disable admin user on \'{0}\' (loginServer: {1}, sku: {2}).', registry.name, registry.loginServer, registry.sku.name)
         );
     }
 }

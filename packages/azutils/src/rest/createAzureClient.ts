@@ -141,7 +141,7 @@ function resolveCredentialArgs<TOptions>(
             credential: credentialOrSubscription.credential,
             resolvedOptions: {
                 ...options,
-                // TODO: future: this won't work for non-ARM clients. Is that a problem? Probably not since only ARM clients care about subscriptions?
+                // TODO: future: this won't work for non-ARM clients. Is that a problem?
                 endpoint: credentialOrSubscription.environment.resourceManagerEndpointUrl.replace(/\/+$/, ''),
             } as TOptions,
         };

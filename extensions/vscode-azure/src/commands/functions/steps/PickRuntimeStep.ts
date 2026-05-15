@@ -17,14 +17,14 @@ interface RuntimeItem {
     readonly data: RuntimeItemData;
 }
 
-// TODO: more runtimes/versions/split into runtime step and version step / etc.
+// TODO: more runtimes / versions or split into runtime step and version step / etc.
 function getRuntimeItems(ctx: ICodeContext): RuntimeItem[] {
     return [
-        { label: ctx.code.l10n.t('Node.js'), description: ctx.code.l10n.t('JavaScript / TypeScript'), data: { runtime: 'node', version: '20' } },
-        { label: ctx.code.l10n.t('Python'), description: ctx.code.l10n.t('Python 3.11'), data: { runtime: 'python', version: '3.11' } },
-        { label: ctx.code.l10n.t('.NET (isolated)'), description: ctx.code.l10n.t('.NET 8 isolated worker'), data: { runtime: 'dotnet-isolated', version: '8.0' } },
-        { label: ctx.code.l10n.t('Java'), description: ctx.code.l10n.t('Java 17'), data: { runtime: 'java', version: '17' } },
-        { label: ctx.code.l10n.t('PowerShell'), description: ctx.code.l10n.t('PowerShell 7.4'), data: { runtime: 'powershell', version: '7.4' } },
+        { label: ctx.code.l10n.t('Node.js'), description: ctx.code.l10n.t('JavaScript / TypeScript'), data: { runtime: 'node', version: '24' } },
+        { label: ctx.code.l10n.t('Python'), description: ctx.code.l10n.t('Python 3.14'), data: { runtime: 'python', version: '3.14' } },
+        { label: ctx.code.l10n.t('.NET (isolated)'), description: ctx.code.l10n.t('.NET 10 isolated worker'), data: { runtime: 'dotnet-isolated', version: '10.0' } },
+        { label: ctx.code.l10n.t('Java'), description: ctx.code.l10n.t('Java 25'), data: { runtime: 'java', version: '25' } },
+        { label: ctx.code.l10n.t('PowerShell'), description: ctx.code.l10n.t('PowerShell 7.6'), data: { runtime: 'powershell', version: '7.6' } },
         { label: ctx.code.l10n.t('Custom'), description: ctx.code.l10n.t('Custom handler'), data: { runtime: 'custom', version: '' } },
     ];
 }

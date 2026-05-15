@@ -43,11 +43,6 @@
                 "title": "%commands.vscode-azure/resources/groupBy%"
             },
             {
-                "command": "vscode-azure/activity/trackArmDeployment",
-                "category": "%commands.category.azure%",
-                "title": "%commands.vscode-azure/activity/trackArmDeployment%"
-            },
-            {
                 "command": "vscode-azure/activity/clearSuccessful",
                 "icon": "$(check)",
                 "title": "%commands.vscode-azure/activity/clearSuccessful%"
