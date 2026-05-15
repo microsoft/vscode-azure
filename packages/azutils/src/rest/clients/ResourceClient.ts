@@ -38,6 +38,16 @@ export const CosmosDBMongoLogicalType = `${DocumentDBAccountType}~mongodb`;
 /** Logical type assigned to Cosmos DB accounts (any non-MongoDB `Microsoft.DocumentDB/databaseAccounts` kind). */
 export const CosmosDBLogicalType = `${DocumentDBAccountType}~cosmosdb`;
 
+/** ARM resource type prefix for Durable Task resources (`Microsoft.DurableTask`). */
+export const DurableTaskPrefix = 'Microsoft.DurableTask';
+/** Normalized logical type for Durable Task Hub resources (`Microsoft.DurableTask/schedulers/taskHubs`). */
+export const DurableTaskHubLogicalType = `${DurableTaskPrefix}/schedulers/taskHubs`;
+
+/** ARM resource type string for Machine Learning workspaces (`Microsoft.MachineLearningServices/workspaces`). */
+export const MLWorkspaceType = 'Microsoft.MachineLearningServices/workspaces';
+/** Logical type assigned to AI Foundry projects (`Microsoft.MachineLearningServices/workspaces` with `kind` containing `project`). */
+export const AIFoundryProjectLogicalType = `${MLWorkspaceType}~project`;
+
 /** Factory that creates an {@linkcode IResourceClient} for a given subscription. */
 export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
 export type IResourceClientProvider = AsyncFactory<IResourceClient, [AzureSubscription]>;
@@ -138,9 +148,11 @@ function attachMetadata<T extends { type?: string; kind?: string }>(resource: T,
 }
 
 function logicalType(type: string, kind?: string): string {
-    switch (type.toLowerCase()) {
-        case SiteType.toLowerCase(): {
-            const kindLower = kind?.toLowerCase();
+    const typeLower = type.toLowerCase();
+    const kindLower = kind?.toLowerCase();
+
+    switch (true) {
+        case typeLower === SiteType.toLowerCase(): {
             if (kindLower?.includes('functionapp')) {
                 return FunctionAppLogicalType;
             } else if (kindLower?.includes('workflowapp')) {
@@ -149,18 +161,28 @@ function logicalType(type: string, kind?: string): string {
                 return AppServiceLogicalType;
             }
         }
-        case CognitiveServicesAccountType.toLowerCase(): {
-            if (kind?.toLowerCase().includes('aiservices')) {
+        case typeLower === CognitiveServicesAccountType.toLowerCase(): {
+            if (kindLower?.includes('aiservices')) {
                 return AIServicesLogicalType;
             }
             return type;
         }
-        case DocumentDBAccountType.toLowerCase(): {
-            if (kind?.toLowerCase().includes('mongodb')) {
+        case typeLower === DocumentDBAccountType.toLowerCase(): {
+            if (kindLower?.includes('mongodb')) {
                 return CosmosDBMongoLogicalType;
             }
             return CosmosDBLogicalType;
         }
+        case typeLower === MLWorkspaceType.toLowerCase(): {
+            if (kindLower?.includes('project')) {
+                return AIFoundryProjectLogicalType;
+            }
+            return type;
+        }
+        // Durable Task Hub is a nested resource type; normalise any
+        // `Microsoft.DurableTask/.../taskHubs` variant to a single constant.
+        case typeLower.startsWith(DurableTaskPrefix.toLowerCase()) && typeLower.endsWith('taskhubs'):
+            return DurableTaskHubLogicalType;
         default:
             return type;
     }
