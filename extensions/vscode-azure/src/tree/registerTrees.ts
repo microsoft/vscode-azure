@@ -7,8 +7,12 @@ import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azu
 import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
-import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
-import { IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree, IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
+import { ActivityTreeViewId, AzureResourceTreeViewId, WorkspaceTreeViewId } from '../constants';
+import {
+    IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree,
+    IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree,
+    IWorkspaceTreeView, IWorkspaceViewDataTree, IWorkspaceViewViewItemTree, pushDisposable,
+} from '../services';
 import type { Activity } from './activity/Activity';
 import { ActivityViewProvider } from './activity/ActivityViewProvider';
 import { ArmDeploymentDataProvider, IArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
@@ -21,6 +25,13 @@ import { FunctionAppDataProvider } from './resources/functions/FunctionAppDataPr
 import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
+import { AzdWorkspaceDataProvider } from './workspace/azd/AzdWorkspaceDataProvider';
+import { AzdWorkspaceViewProvider } from './workspace/azd/AzdWorkspaceViewProvider';
+import { EmulatorsWorkspaceDataProvider } from './workspace/emulators/EmulatorsWorkspaceDataProvider';
+import { EmulatorsWorkspaceViewProvider } from './workspace/emulators/EmulatorsWorkspaceViewProvider';
+import { FunctionsWorkspaceDataProvider } from './workspace/functions/FunctionsWorkspaceDataProvider';
+import { FunctionsWorkspaceViewProvider } from './workspace/functions/FunctionsWorkspaceViewProvider';
+import type { WorkspaceNode } from './workspace/WorkspaceNode';
 
 /**
  * Bind the Azure resources tree and activity tree into the DI container.
@@ -37,6 +48,7 @@ import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
  */
 export function registerTrees(container: Container): void {
     registerResourcesTree(container);
+    registerWorkspaceTree(container);
     registerActivityTree(container);
 }
 
@@ -126,6 +138,93 @@ function bindAzureViewViewProviders(container: Container): void {
     container.bind(IAzureViewViewProviders).to(AcrViewProvider).onActivation(pushDisposable);
     container.bind(IAzureViewViewProviders).to(FunctionAppViewProvider).onActivation(pushDisposable);
     container.bind(IAzureViewViewProviders).to(GenericAzureViewProvider).onActivation(pushDisposable);
+}
+
+// #endregion
+
+// #region Workspace tree
+
+function registerWorkspaceTree(container: Container): void {
+    // Workspace view: data layer
+    bindWorkspaceViewDataProviders(container);
+    container.bind(IWorkspaceViewDataTree).toDynamicValue(context => {
+        const cache = new DataItemTree<WorkspaceNode>(
+            context.get(IVsCode),
+            WorkspaceTreeViewId,
+            context.get(IActionExecutor),
+            node => node.id,
+            // Workspace discovery is cheap (filesystem stats); refresh every
+            // minute so newly-added `azure.yaml` / `host.json` files appear.
+            60 * 1000,
+        );
+
+        for (const provider of context.getAll(IWorkspaceViewDataProviders)) {
+            cache.registerProvider(provider);
+        }
+
+        return cache;
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    // Workspace view: view layer
+    bindWorkspaceViewViewProviders(container);
+    container.bind(IWorkspaceViewViewItemTree).toDynamicValue(context => {
+        const viewItemTree = new ViewItemTree<string, WorkspaceNode>(
+            WorkspaceTreeViewId,
+            context.get(IActionExecutor),
+            {
+                dataItemTree: context.get(IWorkspaceViewDataTree),
+                toViewItem: node => node.id,
+                getKey: key => key,
+                getResourceKey: key => key,
+            },
+            undefined,
+        );
+
+        for (const provider of context.getAll(IWorkspaceViewViewProviders)) {
+            viewItemTree.registerProvider(provider);
+        }
+
+        return viewItemTree;
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    // Workspace view: VSCode tree view
+    container.bind(IWorkspaceTreeView).toDynamicValue(context => {
+        const code = context.get(IVsCode);
+        return code.window.createTreeView(WorkspaceTreeViewId, {
+            treeDataProvider: context.get(IWorkspaceViewViewItemTree),
+            showCollapseAll: true,
+            canSelectMany: false,
+        });
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    container.get(IWorkspaceTreeView);
+}
+
+/**
+ * Identifier for the Workspace view's {@linkcode DataProvider}s.
+ * @internal - Not intended for use outside this file
+ */
+const IWorkspaceViewDataProviders: ServiceIdentifier<DataProvider<WorkspaceNode>> = Symbol.for('IWorkspaceViewDataProviders');
+function bindWorkspaceViewDataProviders(container: Container): void {
+    // Registration order matters: specific providers first. Each provider's
+    // `canHandle` is narrow (it matches only its own node variants), so
+    // ordering here mainly affects the *appearance order* at the root.
+    container.bind(IWorkspaceViewDataProviders).to(AzdWorkspaceDataProvider).onActivation(pushDisposable);
+    container.bind(IWorkspaceViewDataProviders).to(FunctionsWorkspaceDataProvider).onActivation(pushDisposable);
+    container.bind(IWorkspaceViewDataProviders).to(EmulatorsWorkspaceDataProvider).onActivation(pushDisposable);
+}
+
+/**
+ * Identifier for the Workspace view's {@linkcode ViewProvider}s.
+ * @internal - Not intended for use outside this file
+ */
+const IWorkspaceViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IWorkspaceViewViewProviders');
+function bindWorkspaceViewViewProviders(container: Container): void {
+    // Each provider dispatches on its own key prefix, so order here mainly
+    // affects root-children ordering.
+    container.bind(IWorkspaceViewViewProviders).to(AzdWorkspaceViewProvider).onActivation(pushDisposable);
+    container.bind(IWorkspaceViewViewProviders).to(FunctionsWorkspaceViewProvider).onActivation(pushDisposable);
+    container.bind(IWorkspaceViewViewProviders).to(EmulatorsWorkspaceViewProvider).onActivation(pushDisposable);
 }
 
 // #endregion

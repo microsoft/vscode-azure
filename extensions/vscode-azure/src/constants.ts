@@ -6,6 +6,9 @@
 /** View id of the Azure resource tree (registered in `package.json`). */
 export const AzureResourceTreeViewId = 'vscode-azure/resources';
 
+/** View id of the workspace (local items) tree (registered in `package.json`). */
+export const WorkspaceTreeViewId = 'vscode-azure/workspace';
+
 /** View id of the activity tree (registered in `package.json`). */
 export const ActivityTreeViewId = 'vscode-azure/activity';
 

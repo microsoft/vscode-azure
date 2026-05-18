@@ -18,6 +18,8 @@ import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';
 import { OpenInPortal } from './OpenInPortal';
 import { RefreshResourcesView } from './RefreshResourcesView';
+import { RefreshWorkspaceView } from './RefreshWorkspaceView';
+import { RevealInExplorer } from './RevealInExplorer';
 
 /**
  * Registers every {@linkcode ManagedCommand} exposed by the extension
@@ -29,6 +31,9 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
     registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
+
+    registerManagedCommand(container, 'vscode-azure/workspace/refresh', RefreshWorkspaceView);
+    registerManagedCommand(container, 'vscode-azure/workspace/revealInExplorer', RevealInExplorer);
 
     registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
 
