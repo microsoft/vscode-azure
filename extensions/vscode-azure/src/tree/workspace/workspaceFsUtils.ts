@@ -30,7 +30,7 @@ export async function fileExists(code: IVsCode, uri: vscode.Uri): Promise<boolea
  * Walks the currently-open workspace folders (zero or more) and yields
  * each folder's URI. When no workspace is open, yields nothing.
  *
- * Centralised so a future change (e.g. recursing into nested folders)
+ * Centralized so a future change (e.g. recursing into nested folders)
  * affects every provider consistently.
  */
 export function getWorkspaceFolders(code: IVsCode): readonly vscode.WorkspaceFolder[] {
