@@ -8,37 +8,27 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import type { AzdEnvironment, AzdShowResult, IAzdService } from '../../../../azd/AzdService';
+import type { AzdShowResult } from '../../../../azd/AzdService';
 import { AzdWorkspaceDataProvider } from '../../../../tree/workspace/azd/AzdWorkspaceDataProvider';
 import { isAzdProjectNode, isAzdServiceNode } from '../../../../tree/workspace/WorkspaceNode';
+import { createMockAzdService } from '../../../azd/MockAzdService';
 import { makeAzdProjectNode, makeAzdServiceNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
-interface StubAzdOptions {
+interface ProviderOptions {
     readonly azureYamlFor?: (folder: vscode.Uri) => vscode.Uri | undefined;
     readonly showFor?: (cwd: vscode.Uri) => AzdShowResult | undefined;
 }
 
-function createStubAzd(options: StubAzdOptions = {}): IAzdService {
-    const notImplemented = () => Promise.reject(new Error('not implemented'));
-    return {
-        findAzureYaml: (folder: vscode.Uri) => Promise.resolve(options.azureYamlFor?.(folder)),
-        show: (cwd: vscode.Uri) => Promise.resolve(options.showFor?.(cwd)),
-        init: notImplemented,
-        envNew: notImplemented,
-        envList: () => Promise.resolve([] as AzdEnvironment[]),
-        envExists: () => Promise.resolve(false),
-        envGetValues: () => Promise.resolve({}),
-        provision: notImplemented,
-        deploy: notImplemented,
-        checkVersion: () => Promise.resolve(undefined),
-        install: notImplemented,
-    };
-}
-
-function createProvider(options: StubAzdOptions = {}) {
+function createProvider(options: ProviderOptions = {}) {
     const m = createMockVsCode();
     const { executor } = createTestActionExecutor();
-    const azd = createStubAzd(options);
+    const azd = createMockAzdService();
+    if (options.azureYamlFor) {
+        azd.findAzureYaml.mock.mockImplementation((folder: vscode.Uri) => Promise.resolve(options.azureYamlFor!(folder)));
+    }
+    if (options.showFor) {
+        azd.show.mock.mockImplementation((cwd: vscode.Uri) => Promise.resolve(options.showFor!(cwd)));
+    }
     const provider = new AzdWorkspaceDataProvider(m.vscode, executor, azd);
     return { provider, mock: m, azd };
 }
@@ -72,12 +62,8 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
         });
 
         it('discovers an azd project via IAzdService.findAzureYaml', async () => {
-            const findAzureYaml = mock.fn((folder: vscode.Uri) => folder);
-            const { provider, mock: m } = createProvider({
-                azureYamlFor: (folder) => {
-                    findAzureYaml(folder);
-                    return m.vscode.Uri.joinPath(folder, 'azure.yaml');
-                },
+            const { provider, mock: m, azd } = createProvider({
+                azureYamlFor: (folder) => m.vscode.Uri.joinPath(folder, 'azure.yaml'),
             });
             const folder = m.vscode.Uri.file('/repo');
             m.workspaceFolders.push({ uri: folder, name: 'repo', index: 0 });
@@ -86,7 +72,7 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(children).to.have.length(1);
             expect(isAzdProjectNode(children[0])).to.be.true;
             expect(children[0].label).to.equal('repo');
-            expect(findAzureYaml.mock.callCount()).to.equal(1);
+            expect(azd.findAzureYaml.mock.callCount()).to.equal(1);
         });
 
         it('emits onDidChange when workspace folders change', () => {
