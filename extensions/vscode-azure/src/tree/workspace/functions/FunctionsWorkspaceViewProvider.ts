@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/RevealInExplorer';
 import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
+import { getResourceTypeIconUri } from '../../iconPath';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode, type FunctionsProjectNode } from '../WorkspaceNode';
 
 /** View-layer provider for {@linkcode FunctionsProjectNode}s. */
@@ -17,7 +19,7 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
     public readonly isRoot = true;
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IWorkspaceViewDataTree) private readonly dataTree: IWorkspaceViewDataTree,
     ) { }
@@ -47,18 +49,17 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
             throw new Error(`Functions workspace node with key ${key} not found in cache`);
         } else {
             this.executor.setTelProp('nodeType', node.type);
-            return toFunctionsProjectTreeItem(this.code, node);
+            return toFunctionsProjectTreeItem(this.ctx, node);
         }
     }
 }
 
 /** Exported for unit testing. */
-export function toFunctionsProjectTreeItem(code: IVsCode, node: FunctionsProjectNode): ITreeItem {
-    const item = new code.TreeItem(node.label, code.TreeItemCollapsibleState.None);
+export function toFunctionsProjectTreeItem(ctx: ICodeContext, node: FunctionsProjectNode): ITreeItem {
+    const item = new ctx.code.TreeItem(node.label, ctx.code.TreeItemCollapsibleState.None);
     item.id = node.id;
-    item.description = code.l10n.t('Azure Functions');
-    item.iconPath = new code.ThemeIcon('zap');
-    item.resourceUri = node.resourceUri;
+    item.description = ctx.code.l10n.t('Azure Functions');
+    item.iconPath = getResourceTypeIconUri(ctx, FunctionAppLogicalType);
     item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
     item.tooltip = node.resourceUri.fsPath;
     return item;

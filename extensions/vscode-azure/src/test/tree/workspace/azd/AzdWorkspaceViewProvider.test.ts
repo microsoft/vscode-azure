@@ -3,17 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
+import type * as vscode from 'vscode';
 import {
-    AzdWorkspaceViewProvider, toAzdProjectTreeItem, toAzdServiceTreeItem,
+    AzdWorkspaceViewProvider,
+    toAzdServiceTreeItem
 } from '../../../../tree/workspace/azd/AzdWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeAzdServiceNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
 function createProvider(nodes: WorkspaceNode[], rootChildren: WorkspaceNode[] = nodes) {
-    const m = createMockVsCode();
+    const { ctx } = createMockCodeContext();
     const { executor } = createTestActionExecutor();
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
     const dataTree = {
@@ -25,7 +27,7 @@ function createProvider(nodes: WorkspaceNode[], rootChildren: WorkspaceNode[] = 
             return Promise.resolve([] as WorkspaceNode[]);
         },
     };
-    return { provider: new AzdWorkspaceViewProvider(m.vscode, executor, dataTree as never), code: m.vscode };
+    return { provider: new AzdWorkspaceViewProvider(ctx, executor, dataTree as never), code: ctx.code };
 }
 
 describe('AzdWorkspaceViewProvider (unit)', () => {
@@ -56,15 +58,14 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
     });
 
     describe('getTreeItem', () => {
-        it('renders an azdProject as a collapsible item with rocket icon', () => {
+        it('renders an azdProject as a collapsible item with azd icon', () => {
             const node = makeAzdProjectNode({ label: 'my-repo' });
             const { provider, code } = createProvider([node]);
 
             const item = provider.getTreeItem(node.id);
             expect(item.label).to.equal('my-repo');
             expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.Collapsed);
-            // ThemeIcon ID is `id` on the MockThemeIcon
-            expect((item.iconPath as { id?: string }).id).to.equal('rocket');
+            expect((item.iconPath as vscode.Uri).fsPath).to.include('azd.svg');
             expect((item.contextValue ?? '')).to.include('revealInExplorer');
         });
 
@@ -97,16 +98,9 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
     });
 
     describe('renderers', () => {
-        it('toAzdProjectTreeItem sets resourceUri to the azure.yaml file', () => {
-            const { vscode: code } = createMockVsCode();
-            const node = makeAzdProjectNode();
-            const item = toAzdProjectTreeItem(code, node);
-            expect(item.resourceUri).to.equal(node.azureYamlUri);
-        });
-
         it('toAzdServiceTreeItem falls back to "No project folder" when missing', () => {
-            const { vscode: code } = createMockVsCode();
-            const item = toAzdServiceTreeItem(code, makeAzdServiceNode());
+            const { ctx } = createMockCodeContext();
+            const item = toAzdServiceTreeItem(ctx, makeAzdServiceNode());
             expect(item.description).to.equal('No project folder');
         });
     });

@@ -4,11 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, IVsCode, basename } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext, basename } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/RevealInExplorer';
 import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
+import { getAzureIconUri } from '../../iconPath';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode, type AzdProjectNode, type AzdServiceNode } from '../WorkspaceNode';
 
 /**
@@ -23,7 +24,7 @@ export class AzdWorkspaceViewProvider implements ViewProvider<string> {
     public readonly isRoot = true;
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IWorkspaceViewDataTree) private readonly dataTree: IWorkspaceViewDataTree,
     ) { }
@@ -56,10 +57,10 @@ export class AzdWorkspaceViewProvider implements ViewProvider<string> {
             throw new Error(`Azd workspace node with key ${key} not found in cache`);
         } else if (isAzdProjectNode(node)) {
             this.executor.setTelProp('nodeType', node.type);
-            return toAzdProjectTreeItem(this.code, node);
+            return toAzdProjectTreeItem(this.ctx, node);
         } else if (isAzdServiceNode(node)) {
             this.executor.setTelProp('nodeType', node.type);
-            return toAzdServiceTreeItem(this.code, node);
+            return toAzdServiceTreeItem(this.ctx, node);
         } else {
             throw new Error(`Unexpected node type for key ${key}: ${(node as { type?: string }).type ?? 'unknown'}`);
         }
@@ -67,29 +68,28 @@ export class AzdWorkspaceViewProvider implements ViewProvider<string> {
 }
 
 /** Exported for unit testing. */
-export function toAzdProjectTreeItem(code: IVsCode, node: AzdProjectNode): ITreeItem {
-    const item = new code.TreeItem(node.label, code.TreeItemCollapsibleState.Collapsed);
+export function toAzdProjectTreeItem(ctx: ICodeContext, node: AzdProjectNode): ITreeItem {
+    const item = new ctx.code.TreeItem(node.label, ctx.code.TreeItemCollapsibleState.Collapsed);
     item.id = node.id;
-    item.description = code.l10n.t('Azure Developer CLI');
-    item.iconPath = new code.ThemeIcon('rocket');
-    item.resourceUri = node.azureYamlUri;
+    item.description = ctx.code.l10n.t('Azure Developer CLI');
+    item.iconPath = getAzureIconUri(ctx, 'azd');
     item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
     item.tooltip = node.azureYamlUri.path;
     return item;
 }
 
 /** Exported for unit testing. */
-export function toAzdServiceTreeItem(code: IVsCode, node: AzdServiceNode): ITreeItem {
-    const item = new code.TreeItem(node.label, code.TreeItemCollapsibleState.None);
+export function toAzdServiceTreeItem(ctx: ICodeContext, node: AzdServiceNode): ITreeItem {
+    const item = new ctx.code.TreeItem(node.label, ctx.code.TreeItemCollapsibleState.None);
     item.id = node.id;
-    item.iconPath = new code.ThemeIcon('package');
+    item.iconPath = new ctx.code.ThemeIcon('package');
     if (node.resourceUri) {
         item.description = basename(node.resourceUri);
         item.resourceUri = node.resourceUri;
         item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
         item.tooltip = node.resourceUri.path;
     } else {
-        item.description = code.l10n.t('No project folder');
+        item.description = ctx.code.l10n.t('No project folder');
     }
     return item;
 }
