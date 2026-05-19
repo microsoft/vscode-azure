@@ -6,7 +6,7 @@
 import { IVsCode, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { EmulatorNode, EmulatorsGroupNode, WorkspaceNode } from '../WorkspaceNode';
-import { EmulatorKeyPrefix, EmulatorsGroupId, isEmulatorsGroupNode } from '../WorkspaceNode';
+import { EmulatorKeyPrefix, EmulatorsGroupId, isEmulatorNode, isEmulatorsGroupNode } from '../WorkspaceNode';
 
 /**
  * Data-layer provider for the local emulators section.
@@ -27,25 +27,21 @@ export class EmulatorsWorkspaceDataProvider implements DataProvider<EmulatorsGro
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is EmulatorsGroupNode | EmulatorNode {
-        if (typeof resource !== 'object' || resource === null) {
-            return false;
-        }
-        const type = (resource as WorkspaceNode).type;
-        return type === 'emulatorsGroup' || type === 'emulator';
+        return isEmulatorsGroupNode(resource) || isEmulatorNode(resource);
     }
 
     /** @inheritdoc */
     public getChildren(resource?: WorkspaceNode): Promise<(EmulatorsGroupNode | EmulatorNode)[]> {
         if (!resource) {
-            return Promise.resolve([this.buildGroup()]);
-        }
-        if (isEmulatorsGroupNode(resource)) {
+            return Promise.resolve([this.buildGroupNode()]);
+        } else if (isEmulatorsGroupNode(resource)) {
             return Promise.resolve(this.getEmulators());
+        } else {
+            return Promise.resolve([]);
         }
-        return Promise.resolve([]);
     }
 
-    private buildGroup(): EmulatorsGroupNode {
+    private buildGroupNode(): EmulatorsGroupNode {
         return {
             id: EmulatorsGroupId,
             type: 'emulatorsGroup',
@@ -53,6 +49,7 @@ export class EmulatorsWorkspaceDataProvider implements DataProvider<EmulatorsGro
         };
     }
 
+    // TODO: just mock data for now
     private getEmulators(): EmulatorNode[] {
         return [
             {

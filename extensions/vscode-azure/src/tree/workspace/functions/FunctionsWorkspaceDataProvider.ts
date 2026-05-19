@@ -56,9 +56,9 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
     public async getChildren(resource?: WorkspaceNode): Promise<FunctionsProjectNode[]> {
         if (!resource) {
             return this.discoverProjects();
+        } else {
+            return [];
         }
-        // Leaf node: no children produced by this provider.
-        return [];
     }
 
     private async discoverProjects(): Promise<FunctionsProjectNode[]> {

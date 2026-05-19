@@ -57,11 +57,11 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
     public async getChildren(resource?: WorkspaceNode): Promise<(AzdProjectNode | AzdServiceNode)[]> {
         if (!resource) {
             return this.discoverProjects();
-        }
-        if (isAzdProjectNode(resource)) {
+        } else if (isAzdProjectNode(resource)) {
             return this.getServices(resource);
+        } else {
+            return [];
         }
-        return [];
     }
 
     /**
