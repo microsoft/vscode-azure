@@ -17,7 +17,7 @@ const FunctionsHostFileName = 'host.json';
 /**
  * Data-layer provider for {@linkcode FunctionsProjectNode}s.
  *
- * Searches for a top-level {@linkcode FunctionsHostFileName host.json}
+ * Searches for a {@linkcode FunctionsHostFileName host.json}
  * across all open workspace folders via
  * {@linkcode vscode.workspace.findFiles findFiles}, then maps each
  * result to its containing workspace folder. Function-app children inside

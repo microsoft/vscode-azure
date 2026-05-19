@@ -29,13 +29,12 @@ export class RevealInExplorer implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(key: string): Promise<void> {
-        if (typeof key !== 'string') {
-            return;
-        }
         const node = this.dataTree.get(key);
+
         if (!isWorkspaceNode(node) || !node.resourceUri) {
             return;
         }
+
         await this.code.commands.executeCommand('revealInExplorer', node.resourceUri);
     }
 }

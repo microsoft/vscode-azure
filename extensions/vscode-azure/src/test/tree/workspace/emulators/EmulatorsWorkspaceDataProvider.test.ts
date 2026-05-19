@@ -9,7 +9,7 @@ import { describe, it } from 'mocha';
 import {
     EmulatorsWorkspaceDataProvider,
 } from '../../../../tree/workspace/emulators/EmulatorsWorkspaceDataProvider';
-import { EmulatorsGroupId, isEmulatorNode, isEmulatorsGroupNode } from '../../../../tree/workspace/WorkspaceNode';
+import { EmulatorKeyPrefix, EmulatorsGroupId, isEmulatorNode, isEmulatorsGroupNode } from '../../../../tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeEmulatorNode, makeEmulatorsGroupNode } from '../mockWorkspaceNode';
 
 function createProvider() {
@@ -52,6 +52,15 @@ describe('EmulatorsWorkspaceDataProvider (unit)', () => {
         it('returns empty for a leaf emulator node', async () => {
             const provider = createProvider();
             expect(await provider.getChildren(makeEmulatorNode())).to.deep.equal([]);
+        });
+    });
+
+    describe('key invariants', () => {
+        it('EmulatorsGroupId must not start with EmulatorKeyPrefix', () => {
+            // canHandle relies on these being distinct: the group id must not
+            // match the emulator prefix, otherwise the provider would treat
+            // the group node as an emulator child.
+            expect(EmulatorsGroupId.startsWith(EmulatorKeyPrefix)).to.be.false;
         });
     });
 });

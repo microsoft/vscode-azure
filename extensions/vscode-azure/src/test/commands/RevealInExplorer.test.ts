@@ -42,11 +42,4 @@ describe('RevealInExplorer (unit)', () => {
         await cmd.execute('azwr://azdProject/missing');
         expect(executeCommand.mock.callCount()).to.equal(0);
     });
-
-    it('is a no-op when the key is not a string', async () => {
-        const { cmd, executeCommand } = setUp(makeAzdProjectNode());
-
-        await cmd.execute(42 as unknown as string);
-        expect(executeCommand.mock.callCount()).to.equal(0);
-    });
 });
