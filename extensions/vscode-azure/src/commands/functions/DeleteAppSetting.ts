@@ -8,7 +8,7 @@ import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { FunctionAppVirtualTypes } from '../../tree/resources/functions/FunctionApp';
-import { FunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
+import { IFunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
 import { appSettingsParentKey } from '../../tree/resources/functions/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 
@@ -23,7 +23,7 @@ export class DeleteAppSetting implements ManagedCommand {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(FunctionAppDataProvider) private readonly dataProvider: FunctionAppDataProvider,
+        @inject(IFunctionAppDataProvider) private readonly dataProvider: IFunctionAppDataProvider,
     ) { }
 
     /** @inheritdoc */

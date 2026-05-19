@@ -7,7 +7,7 @@ import { isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure
 import { ICodeContext, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
-import { FunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
+import { IFunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
 import { appSettingsParentKey } from '../../tree/resources/functions/appSettingsParentKey';
 import type { ManagedCommand } from '../ManagedCommand';
 
@@ -28,7 +28,7 @@ export class AddOrEditAppSetting implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(FunctionAppDataProvider) private readonly dataProvider: FunctionAppDataProvider,
+        @inject(IFunctionAppDataProvider) private readonly dataProvider: IFunctionAppDataProvider,
     ) { }
 
     /** @inheritdoc */
