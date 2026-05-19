@@ -7,9 +7,9 @@ import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import {
-    EmulatorsGroupId, EmulatorsWorkspaceDataProvider,
+    EmulatorsWorkspaceDataProvider,
 } from '../../../../tree/workspace/emulators/EmulatorsWorkspaceDataProvider';
-import { isEmulatorNode, isEmulatorsGroupNode } from '../../../../tree/workspace/WorkspaceNode';
+import { EmulatorsGroupId, isEmulatorNode, isEmulatorsGroupNode } from '../../../../tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeEmulatorNode, makeEmulatorsGroupNode } from '../mockWorkspaceNode';
 
 function createProvider() {

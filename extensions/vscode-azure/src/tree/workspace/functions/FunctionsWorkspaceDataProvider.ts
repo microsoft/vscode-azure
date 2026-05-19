@@ -9,7 +9,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
-import { isFunctionsProjectNode } from '../WorkspaceNode';
+import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../WorkspaceNode';
 import { fileExists, getWorkspaceFolders } from '../workspaceFsUtils';
 
 /** File name that marks an Azure Functions project. */
@@ -68,7 +68,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
             const hostJson = this.code.Uri.joinPath(folder.uri, FunctionsHostFileName);
             if (await fileExists(this.code, hostJson)) {
                 projects.push({
-                    id: `azwr://functionsProject/${folder.uri.toString()}`,
+                    id: `${FunctionsProjectKeyPrefix}${folder.uri.toString()}`,
                     type: 'functionsProject',
                     label: folder.name,
                     resourceUri: folder.uri,

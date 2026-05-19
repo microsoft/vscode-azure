@@ -92,6 +92,28 @@ export interface EmulatorNode extends WorkspaceNode {
     readonly description?: string;
 }
 
+// #region Workspace-node key prefixes
+// These constants define the URI-scheme prefixes used as stable `id` values
+// for workspace-tree nodes. Data providers build ids with these prefixes;
+// view providers match on them for dispatch.
+
+/** Key prefix for {@linkcode AzdProjectNode} ids. */
+export const AzdProjectKeyPrefix = 'azwr://azdProject/';
+
+/** Key prefix for {@linkcode AzdServiceNode} ids. */
+export const AzdServiceKeyPrefix = 'azwr://azdService/';
+
+/** Key prefix for {@linkcode FunctionsProjectNode} ids. */
+export const FunctionsProjectKeyPrefix = 'azwr://functionsProject/';
+
+/** Stable id of the singleton {@linkcode EmulatorsGroupNode}. */
+export const EmulatorsGroupId = 'azwr://emulators';
+
+/** Key prefix for {@linkcode EmulatorNode} ids. */
+export const EmulatorKeyPrefix = 'azwr://emulator/';
+
+// #endregion
+
 /** Type guard that narrows an unknown value to a {@linkcode WorkspaceNode}. */
 export function isWorkspaceNode(maybeNode: unknown): maybeNode is WorkspaceNode {
     return !!maybeNode

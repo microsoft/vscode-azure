@@ -6,10 +6,7 @@
 import { IVsCode, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { EmulatorNode, EmulatorsGroupNode, WorkspaceNode } from '../WorkspaceNode';
-import { isEmulatorsGroupNode } from '../WorkspaceNode';
-
-/** Stable id of the singleton emulators-group node. */
-export const EmulatorsGroupId = 'azwr://emulators';
+import { EmulatorKeyPrefix, EmulatorsGroupId, isEmulatorsGroupNode } from '../WorkspaceNode';
 
 /**
  * Data-layer provider for the local emulators section.
@@ -59,13 +56,13 @@ export class EmulatorsWorkspaceDataProvider implements DataProvider<EmulatorsGro
     private getEmulators(): EmulatorNode[] {
         return [
             {
-                id: 'azwr://emulator/azurite',
+                id: `${EmulatorKeyPrefix}azurite`,
                 type: 'emulator',
                 label: this.code.l10n.t('Azurite (Storage)'),
                 description: this.code.l10n.t('Not detected'),
             },
             {
-                id: 'azwr://emulator/functions',
+                id: `${EmulatorKeyPrefix}functions`,
                 type: 'emulator',
                 label: this.code.l10n.t('Azure Functions Core Tools'),
                 description: this.code.l10n.t('Not detected'),

@@ -11,7 +11,7 @@ import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzdService } from '../../../azd/AzdService';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
-import { isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
+import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
 import { fileExists, getWorkspaceFolders } from '../workspaceFsUtils';
 
 /**
@@ -72,7 +72,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
             const azureYamlUri = await this.azd.findAzureYaml(folder.uri);
             if (azureYamlUri) {
                 projects.push({
-                    id: `azwr://azdProject/${folder.uri.toString()}`,
+                    id: `${AzdProjectKeyPrefix}${folder.uri.toString()}`,
                     type: 'azdProject',
                     label: folder.name,
                     resourceUri: folder.uri,
@@ -110,7 +110,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
                 }
             }
             result.push({
-                id: `azwr://azdService/${project.resourceUri.toString()}/${name}`,
+                id: `${AzdServiceKeyPrefix}${project.resourceUri.toString()}/${name}`,
                 type: 'azdService',
                 label: name,
                 serviceName: name,

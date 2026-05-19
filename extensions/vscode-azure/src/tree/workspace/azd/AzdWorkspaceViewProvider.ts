@@ -9,11 +9,8 @@ import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/RevealInExplorer';
 import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
-import { isAzdProjectNode, isAzdServiceNode, type AzdProjectNode, type AzdServiceNode } from '../WorkspaceNode';
+import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode, type AzdProjectNode, type AzdServiceNode } from '../WorkspaceNode';
 import { basename } from '../workspaceFsUtils';
-
-const AzdProjectKeyPrefix = 'azwr://azdProject/';
-const AzdServiceKeyPrefix = 'azwr://azdService/';
 
 /**
  * View-layer provider for {@linkcode AzdProjectNode}s and their

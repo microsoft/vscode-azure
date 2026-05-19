@@ -8,9 +8,7 @@ import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
-import { isEmulatorNode, isEmulatorsGroupNode, type EmulatorNode, type EmulatorsGroupNode } from '../WorkspaceNode';
-
-const EmulatorsKeyPrefix = 'azwr://emulator';
+import { EmulatorKeyPrefix, EmulatorsGroupId, isEmulatorNode, isEmulatorsGroupNode, type EmulatorNode, type EmulatorsGroupNode } from '../WorkspaceNode';
 
 /** View-layer provider for the emulators group and its emulator children. */
 @injectable()
@@ -25,7 +23,8 @@ export class EmulatorsWorkspaceViewProvider implements ViewProvider<string> {
 
     /** @inheritdoc */
     public canHandle(key: unknown): key is string {
-        return typeof key === 'string' && key.startsWith(EmulatorsKeyPrefix);
+        return typeof key === 'string'
+            && (key === EmulatorsGroupId || key.startsWith(EmulatorKeyPrefix));
     }
 
     /** @inheritdoc */

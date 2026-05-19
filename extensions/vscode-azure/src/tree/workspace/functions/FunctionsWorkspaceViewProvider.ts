@@ -9,9 +9,7 @@ import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/RevealInExplorer';
 import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
-import { isFunctionsProjectNode, type FunctionsProjectNode } from '../WorkspaceNode';
-
-const FunctionsProjectKeyPrefix = 'azwr://functionsProject/';
+import { FunctionsProjectKeyPrefix, isFunctionsProjectNode, type FunctionsProjectNode } from '../WorkspaceNode';
 
 /** View-layer provider for {@linkcode FunctionsProjectNode}s. */
 @injectable()
@@ -60,6 +58,6 @@ export function toFunctionsProjectTreeItem(code: IVsCode, node: FunctionsProject
     item.iconPath = new code.ThemeIcon('zap');
     item.resourceUri = node.resourceUri;
     item.contextValue = combineContextValues('functionsProject', RevealInExplorer.ContextValue);
-    item.tooltip = node.resourceUri.path;
+    item.tooltip = node.resourceUri.fsPath;
     return item;
 }

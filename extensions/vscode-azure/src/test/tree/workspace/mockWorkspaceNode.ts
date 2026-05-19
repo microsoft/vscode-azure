@@ -8,12 +8,16 @@ import type {
     AzdProjectNode, AzdServiceNode, EmulatorNode, EmulatorsGroupNode,
     FunctionsProjectNode, WorkspaceNode,
 } from '../../../tree/workspace/WorkspaceNode';
+import {
+    AzdProjectKeyPrefix, AzdServiceKeyPrefix, EmulatorKeyPrefix,
+    EmulatorsGroupId, FunctionsProjectKeyPrefix,
+} from '../../../tree/workspace/WorkspaceNode';
 
 export function makeAzdProjectNode(overrides?: Partial<AzdProjectNode>): AzdProjectNode {
     const folder = overrides?.resourceUri ?? MockUri.file('/repo');
     const yaml = overrides?.azureYamlUri ?? MockUri.file('/repo/azure.yaml');
     return {
-        id: `azwr://azdProject/${folder.toString()}`,
+        id: `${AzdProjectKeyPrefix}${folder.toString()}`,
         type: 'azdProject',
         label: 'repo',
         resourceUri: folder as never,
@@ -25,7 +29,7 @@ export function makeAzdProjectNode(overrides?: Partial<AzdProjectNode>): AzdProj
 export function makeAzdServiceNode(overrides?: Partial<AzdServiceNode>): AzdServiceNode {
     const folder = overrides?.projectFolderUri ?? MockUri.file('/repo');
     return {
-        id: `azwr://azdService/${folder.toString()}/api`,
+        id: `${AzdServiceKeyPrefix}${folder.toString()}/api`,
         type: 'azdService',
         label: 'api',
         serviceName: 'api',
@@ -37,7 +41,7 @@ export function makeAzdServiceNode(overrides?: Partial<AzdServiceNode>): AzdServ
 export function makeFunctionsProjectNode(overrides?: Partial<FunctionsProjectNode>): FunctionsProjectNode {
     const folder = overrides?.resourceUri ?? MockUri.file('/repo');
     return {
-        id: `azwr://functionsProject/${folder.toString()}`,
+        id: `${FunctionsProjectKeyPrefix}${folder.toString()}`,
         type: 'functionsProject',
         label: 'repo',
         resourceUri: folder as never,
@@ -47,7 +51,7 @@ export function makeFunctionsProjectNode(overrides?: Partial<FunctionsProjectNod
 
 export function makeEmulatorsGroupNode(overrides?: Partial<EmulatorsGroupNode>): EmulatorsGroupNode {
     return {
-        id: 'azwr://emulators',
+        id: EmulatorsGroupId,
         type: 'emulatorsGroup',
         label: 'Emulators',
         ...overrides,
@@ -56,7 +60,7 @@ export function makeEmulatorsGroupNode(overrides?: Partial<EmulatorsGroupNode>):
 
 export function makeEmulatorNode(overrides?: Partial<EmulatorNode>): EmulatorNode {
     return {
-        id: 'azwr://emulator/azurite',
+        id: `${EmulatorKeyPrefix}azurite`,
         type: 'emulator',
         label: 'Azurite',
         ...overrides,
