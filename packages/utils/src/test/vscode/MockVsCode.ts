@@ -295,7 +295,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const getWorkspaceFolder = mock.fn(
         (uri: MockUri): vscode.WorkspaceFolder | undefined => {
             const uriStr = uri.toString();
-            return workspaceFolders.find(f => uriStr.startsWith((f.uri as unknown as MockUri).toString()));
+            return workspaceFolders.find(f => uriStr.startsWith((f.uri).toString()));
         },
     );
 

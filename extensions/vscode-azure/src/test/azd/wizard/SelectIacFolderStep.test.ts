@@ -26,7 +26,7 @@ describe('SelectIacFolderStep (unit)', () => {
             const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
             const context: Partial<AzdWizardContext> = {
                 job: 'deploy',
-                iacFolder: MockUri.file('/repo') as never,
+                iacFolder: MockUri.file('/repo'),
             };
             expect(step.shouldPrompt(context)).to.be.false;
         });
@@ -48,7 +48,7 @@ describe('SelectIacFolderStep (unit)', () => {
         it('deploy: returns iacFolder from the workspace folder picker (single-root: silent)', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
             mockResult.workspaceFolders.push(
-                { uri: MockUri.file('/repo'), name: 'repo', index: 0 } as never,
+                { uri: MockUri.file('/repo'), name: 'repo', index: 0 },
             );
             const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
 

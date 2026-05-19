@@ -29,7 +29,7 @@ describe('CreateFunctionApp (unit)', () => {
                 uri: MockUri.file('/workspace'),
                 name: 'workspace',
                 index: 0,
-            } as never);
+            });
         }
 
         const dataTree = createMockDataItemTree([sub]);
@@ -54,11 +54,11 @@ describe('CreateFunctionApp (unit)', () => {
         azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
             const candidate = MockUri.file(`${dir.fsPath}/azure.yaml`);
             return mockFs.files.has(candidate.path)
-                ? Promise.resolve([candidate as unknown as vscode.Uri])
+                ? Promise.resolve([candidate])
                 : yamlInTemp ? Promise.resolve([yamlInTemp]) : Promise.resolve([]);
         });
         azd.init.mock.mockImplementation((cwd: vscode.Uri) => {
-            yamlInTemp = MockUri.file(`${cwd.fsPath}/azure.yaml`) as unknown as vscode.Uri;
+            yamlInTemp = MockUri.file(`${cwd.fsPath}/azure.yaml`);
             mockFs.addFile(yamlInTemp, 'name: my-app');
             return Promise.resolve();
         });
@@ -137,7 +137,7 @@ describe('CreateFunctionApp (unit)', () => {
     it('should skip yaml/bicep/env-new in the deploy job Bootstrapped flow', async () => {
         const { cmd, mockResult, fs, azd } = createCommand();
 
-        const workspaceYaml = MockUri.file('/workspace/azure.yaml') as unknown as vscode.Uri;
+        const workspaceYaml = MockUri.file('/workspace/azure.yaml');
         mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
         mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
@@ -172,7 +172,7 @@ describe('CreateFunctionApp (unit)', () => {
     it('should skip provisioning when user picks No on ConfirmProvisionStep', async () => {
         const { cmd, mockResult, azd } = createCommand();
 
-        const workspaceYaml = MockUri.file('/workspace/azure.yaml') as unknown as vscode.Uri;
+        const workspaceYaml = MockUri.file('/workspace/azure.yaml');
         mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
         mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));

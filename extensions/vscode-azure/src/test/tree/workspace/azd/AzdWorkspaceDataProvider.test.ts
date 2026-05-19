@@ -26,7 +26,7 @@ function createProvider(options: ProviderOptions = {}) {
     if (options.azureYamls) {
         azd.findAzureYaml.mock.mockImplementation(
             (dir?: vscode.Uri) => dir
-                ? Promise.resolve(options.azureYamls!.filter(u => (u as unknown as MockUri).path.startsWith((dir as unknown as MockUri).path + '/')))
+                ? Promise.resolve(options.azureYamls!.filter(u => (u).path.startsWith((dir).path + '/')))
                 : Promise.resolve(options.azureYamls!),
         );
     }
@@ -66,7 +66,7 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
         });
 
         it('discovers an azd project via IAzdService.findAzureYaml', async () => {
-            const yamlUri = MockUri.file('/repo/azure.yaml') as unknown as vscode.Uri;
+            const yamlUri = MockUri.file('/repo/azure.yaml');
             const { provider, mock: m, azd } = createProvider({
                 azureYamls: [yamlUri],
             });

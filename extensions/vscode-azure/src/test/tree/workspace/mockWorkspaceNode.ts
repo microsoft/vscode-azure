@@ -20,8 +20,8 @@ export function makeAzdProjectNode(overrides?: Partial<AzdProjectNode>): AzdProj
         id: `${AzdProjectKeyPrefix}${folder.toString()}`,
         type: 'azdProject',
         label: 'repo',
-        resourceUri: folder as never,
-        azureYamlUri: yaml as never,
+        resourceUri: folder,
+        azureYamlUri: yaml,
         ...overrides,
     };
 }
@@ -33,7 +33,7 @@ export function makeAzdServiceNode(overrides?: Partial<AzdServiceNode>): AzdServ
         type: 'azdService',
         label: 'api',
         serviceName: 'api',
-        projectFolderUri: folder as never,
+        projectFolderUri: folder,
         ...overrides,
     };
 }
@@ -44,7 +44,7 @@ export function makeFunctionsProjectNode(overrides?: Partial<FunctionsProjectNod
         id: `${FunctionsProjectKeyPrefix}${folder.toString()}`,
         type: 'functionsProject',
         label: 'repo',
-        resourceUri: folder as never,
+        resourceUri: folder,
         ...overrides,
     };
 }
