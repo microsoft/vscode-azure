@@ -73,6 +73,10 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 * `GenericAzureViewProvider` (extension layer) is a `ViewProvider` that maps Azure resources to tree items with icons, context values, grouping strategies, etc.
 * Service-specific providers (e.g. ACR) handle narrower resource types and are registered alongside the generic ones.
 
+### Tree registration (`registerTrees.ts`)
+
+All trees are wired up declaratively via `registerTree()` which takes a `TreeConfig<TData>` object. Providers are listed as `ProviderEntry<T>` arrays -- either a bare class (simple binding) or a `[primaryId, Class]` tuple (singleton under `primaryId`, aliased into the collection for direct `@inject`). Order in the array determines dispatch priority. To add a new tree provider, add the class to the appropriate `dataProviders` or `viewProviders` array in `registerTrees.ts` -- before the generic fallback.
+
 
 ## Writing JSDocs
 
