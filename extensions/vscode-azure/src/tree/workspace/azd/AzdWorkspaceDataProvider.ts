@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode,
+    EventEmitter, IActionExecutor, IVsCode, fileExists,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -12,7 +12,6 @@ import type * as vscode from 'vscode';
 import { IAzdService } from '../../../azd/AzdService';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
-import { fileExists } from '../workspaceFsUtils';
 
 /**
  * Data-layer provider for {@linkcode AzdProjectNode}s and their

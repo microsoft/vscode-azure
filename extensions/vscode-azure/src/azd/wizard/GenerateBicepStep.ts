@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, type ICodeContext } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, fileExists, type ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 export const InfraFolderName = 'infra';
@@ -43,12 +43,9 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         const infraFolder = this.ctx.code.Uri.joinPath(context.iacFolder, InfraFolderName);
 
         for (const fileName of [MainBicepFileName, MainParametersFileName]) {
-            try {
-                await this.ctx.code.workspace.fs.stat(this.ctx.code.Uri.joinPath(infraFolder, fileName));
+            if (await fileExists(this.ctx.code, this.ctx.code.Uri.joinPath(infraFolder, fileName))) {
                 // At least one file already exists; skip generation
                 return false;
-            } catch {
-                // File does not exist; continue checking
             }
         }
 

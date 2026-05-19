@@ -3,15 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
+import type { IVsCode } from './IVsCode';
 
 /**
- * Shared helpers used by workspace tree providers.
- */
-
-/**
- * Returns `true` when `uri` exists on disk (as a file or directory).
+ * Returns `true` when {@linkcode uri} exists on disk (as a file or directory).
  * Swallows the FS error so callers can treat the result as a boolean.
  */
 export async function fileExists(code: IVsCode, uri: vscode.Uri): Promise<boolean> {
@@ -24,8 +20,8 @@ export async function fileExists(code: IVsCode, uri: vscode.Uri): Promise<boolea
 }
 
 /**
- * Returns the last path segment of `uri`, used as a compact description
- * (typically the folder name) in tree items.
+ * Returns the last path segment of {@linkcode uri}, used as a compact
+ * display label (typically the folder name) in tree items.
  */
 export function basename(uri: vscode.Uri): string {
     const segments = uri.path.split('/').filter(Boolean);

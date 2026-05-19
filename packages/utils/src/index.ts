@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+export * from './base/delay';
 export * from './base/IActionContext';
 export * from './base/IActionExecutor';
 export * from './base/ICommandRegistry';
 export * from './base/IProcessExecutor';
 export { ITelemetryReporter, createTelemetryReporter } from './base/ITelemetryReporter'; // Excluding `NullTelemetryReporter` since it's only intended for testing
-export * from './base/delay';
 export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './data/Page';
@@ -27,6 +27,7 @@ export * from './ui/uiHelpers';
 export * from './vscode/CancellationError';
 export * from './vscode/Disposable';
 export * from './vscode/EventEmitter';
+export * from './vscode/fsHelpers';
 export { IOutputChannel, createOutputChannel } from './vscode/IOutputChannel'; // Excluding `DebugOutputChannel` since it's only intended for testing
 export * from './vscode/IVsCode';
 export * from './vscode/ProviderResult';

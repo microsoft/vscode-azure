@@ -4,13 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IVsCode, basename } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/RevealInExplorer';
 import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode, type AzdProjectNode, type AzdServiceNode } from '../WorkspaceNode';
-import { basename } from '../workspaceFsUtils';
 
 /**
  * View-layer provider for {@linkcode AzdProjectNode}s and their

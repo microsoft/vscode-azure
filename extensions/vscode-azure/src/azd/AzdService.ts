@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IProcessExecutor, IVsCode, fileExists } from '@microsoft/vscode-azure-utils';
 import { composeArgs, withArg, withFlagArg, withNamedArg } from '@microsoft/vscode-processutils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
@@ -163,11 +163,8 @@ export class AzdService implements IAzdService {
         if (directory) {
             for (const name of AzureYamlFileNames) {
                 const fileUri = this.code.Uri.joinPath(directory, name);
-                try {
-                    await this.code.workspace.fs.stat(fileUri);
+                if (await fileExists(this.code, fileUri)) {
                     return [fileUri];
-                } catch {
-                    // file not found -- try next
                 }
             }
             return [];
