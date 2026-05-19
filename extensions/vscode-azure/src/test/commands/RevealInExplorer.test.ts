@@ -6,7 +6,7 @@
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { Mock } from 'node:test';
+import type { Mock } from 'node:test';
 import { RevealInExplorer } from '../../commands/RevealInExplorer';
 import { makeAzdProjectNode, makeAzdServiceNode } from '../tree/workspace/mockWorkspaceNode';
 
