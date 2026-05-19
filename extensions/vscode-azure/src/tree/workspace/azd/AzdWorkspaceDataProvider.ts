@@ -12,14 +12,15 @@ import type * as vscode from 'vscode';
 import { IAzdService } from '../../../azd/AzdService';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
-import { fileExists, getWorkspaceFolders } from '../workspaceFsUtils';
+import { fileExists } from '../workspaceFsUtils';
 
 /**
  * Data-layer provider for {@linkcode AzdProjectNode}s and their
  * {@linkcode AzdServiceNode} children.
  *
- * Discovers azd projects by asking {@linkcode IAzdService.findAzureYaml}
- * for each open workspace folder, and enumerates services by invoking
+ * Discovers azd projects via a single {@linkcode IAzdService.findAzureYaml}
+ * call across the workspace, then maps each result to its containing
+ * workspace folder. Enumerates services by invoking
  * {@linkcode IAzdService.show} (which shells out to `azd show --output json`).
  * Caching is handled by the surrounding `DataItemTree` so `azd` is only
  * re-invoked when the data layer's TTL expires or an explicit invalidate
@@ -64,13 +65,16 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
         return [];
     }
 
-    /** Scan each workspace folder for an azd project via {@linkcode IAzdService.findAzureYaml}. */
+    /**
+     * Discover azd projects by searching for `azure.yaml` / `azure.yml`
+     * across all open workspace folders via {@linkcode IAzdService.findAzureYaml}.
+     */
     private async discoverProjects(): Promise<AzdProjectNode[]> {
-        const folders = getWorkspaceFolders(this.code);
+        const azureYamls = await this.azd.findAzureYaml(undefined, 5);
         const projects: AzdProjectNode[] = [];
-        for (const folder of folders) {
-            const azureYamlUri = await this.azd.findAzureYaml(folder.uri);
-            if (azureYamlUri) {
+        for (const azureYamlUri of azureYamls) {
+            const folder = this.code.workspace.getWorkspaceFolder(azureYamlUri);
+            if (folder) {
                 projects.push({
                     id: `${AzdProjectKeyPrefix}${folder.uri.toString()}`,
                     type: 'azdProject',
@@ -80,7 +84,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
                 });
             }
         }
-        this.executor.output.debug(`[data] azd workspace: discovered=${projects.length} of folders=${folders.length}`);
+        this.executor.output.debug(`[data] azd workspace: discovered=${projects.length}`);
         return projects;
     }
 

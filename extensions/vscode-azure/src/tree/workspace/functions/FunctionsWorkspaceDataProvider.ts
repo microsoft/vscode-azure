@@ -10,7 +10,6 @@ import {
 import { inject, injectable } from 'inversify';
 import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../WorkspaceNode';
-import { fileExists, getWorkspaceFolders } from '../workspaceFsUtils';
 
 /** File name that marks an Azure Functions project. */
 const FunctionsHostFileName = 'host.json';
@@ -18,9 +17,10 @@ const FunctionsHostFileName = 'host.json';
 /**
  * Data-layer provider for {@linkcode FunctionsProjectNode}s.
  *
- * Scans each open workspace folder for a top-level
- * {@linkcode FunctionsHostFileName host.json} and surfaces one
- * Functions-project node per match. Function-app children inside
+ * Searches for a top-level {@linkcode FunctionsHostFileName host.json}
+ * across all open workspace folders via
+ * {@linkcode vscode.workspace.findFiles findFiles}, then maps each
+ * result to its containing workspace folder. Function-app children inside
  * the project (individual function trigger definitions, deployed
  * function apps, ...) are out of scope for this initial pass --
  * future work can add an `enrich` step or a child provider.
@@ -62,11 +62,11 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
     }
 
     private async discoverProjects(): Promise<FunctionsProjectNode[]> {
-        const folders = getWorkspaceFolders(this.code);
+        const hostJsons = await this.code.workspace.findFiles(FunctionsHostFileName, undefined, 5);
         const projects: FunctionsProjectNode[] = [];
-        for (const folder of folders) {
-            const hostJson = this.code.Uri.joinPath(folder.uri, FunctionsHostFileName);
-            if (await fileExists(this.code, hostJson)) {
+        for (const uri of hostJsons) {
+            const folder = this.code.workspace.getWorkspaceFolder(uri);
+            if (folder) {
                 projects.push({
                     id: `${FunctionsProjectKeyPrefix}${folder.uri.toString()}`,
                     type: 'functionsProject',
@@ -75,7 +75,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
                 });
             }
         }
-        this.executor.output.debug(`[data] functions workspace: discovered=${projects.length} of folders=${folders.length}`);
+        this.executor.output.debug(`[data] functions workspace: discovered=${projects.length}`);
         return projects;
     }
 

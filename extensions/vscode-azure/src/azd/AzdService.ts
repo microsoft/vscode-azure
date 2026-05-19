@@ -23,10 +23,16 @@ const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 export interface IAzdService {
     /**
-     * Returns the URI of `azure.yaml` or `azure.yml` in the given
-     * directory, or `undefined` if neither exists.
+     * Finds `azure.yaml` or `azure.yml` files.
+     *
+     * When {@linkcode directory} is provided, checks only that folder
+     * (stat-based). When omitted, searches across all open workspace
+     * folders using {@linkcode vscode.workspace.findFiles findFiles}.
+     *
+     * @param directory - Scope the search to a single folder.
+     * @param maxResults - Cap the number of results. Defaults to `1`.
      */
-    findAzureYaml(directory: vscode.Uri): Promise<vscode.Uri | undefined>;
+    findAzureYaml(directory?: vscode.Uri, maxResults?: number): Promise<vscode.Uri[]>;
 
     /** Runs `azd init --minimal --no-prompt` in the given directory. */
     init(cwd: vscode.Uri): Promise<void>;
@@ -153,17 +159,23 @@ export class AzdService implements IAzdService {
     ) { }
 
     /** @inheritdoc */
-    public async findAzureYaml(directory: vscode.Uri): Promise<vscode.Uri | undefined> {
-        for (const name of AzureYamlFileNames) {
-            const fileUri = this.code.Uri.joinPath(directory, name);
-            try {
-                await this.code.workspace.fs.stat(fileUri);
-                return fileUri;
-            } catch {
-                // file not found -- try next
+    public async findAzureYaml(directory?: vscode.Uri, maxResults: number = 1): Promise<vscode.Uri[]> {
+        if (directory) {
+            for (const name of AzureYamlFileNames) {
+                const fileUri = this.code.Uri.joinPath(directory, name);
+                try {
+                    await this.code.workspace.fs.stat(fileUri);
+                    return [fileUri];
+                } catch {
+                    // file not found -- try next
+                }
             }
+            return [];
         }
-        return undefined;
+
+        // Search across all workspace folders via findFiles.
+        const pattern = `{${AzureYamlFileNames.join(',')}}`;
+        return this.code.workspace.findFiles(pattern, undefined, maxResults);
     }
 
     /** @inheritdoc */

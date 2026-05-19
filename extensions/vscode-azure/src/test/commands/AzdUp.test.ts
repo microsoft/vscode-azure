@@ -37,9 +37,9 @@ describe('AzdUp (unit)', () => {
             // By default, findAzureYaml finds it in the workspace
             azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
                 if ((dir as MockUri).path === '/workspace') {
-                    return Promise.resolve(MockUri.file('/workspace/azure.yaml') as unknown as vscode.Uri);
+                    return Promise.resolve([MockUri.file('/workspace/azure.yaml') as unknown as vscode.Uri]);
                 }
-                return Promise.resolve(undefined);
+                return Promise.resolve([]);
             });
 
         }
@@ -85,7 +85,7 @@ describe('AzdUp (unit)', () => {
 
     it('should show error when no azure.yaml found in workspace', async () => {
         const { cmd, azd } = createCommand();
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(undefined));
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([]));
 
         try {
             await cmd.execute();

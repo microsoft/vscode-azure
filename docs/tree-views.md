@@ -165,7 +165,7 @@ plus a matching pair of providers. There is **no shared mega-provider**
 
 | Provider | Root? | Description |
 |----------|-------|-------------|
-| `AzdWorkspaceDataProvider` | Yes | Discovers azd projects by calling `IAzdService.findAzureYaml` for each workspace folder, and enumerates services for a project via `IAzdService.show` (which shells out to `azd show --output json`). Caching is handled by the surrounding `DataItemTree` TTL. |
+| `AzdWorkspaceDataProvider` | Yes | Discovers azd projects via a single `IAzdService.findAzureYaml` call across the workspace, mapping results to their containing workspace folders. Enumerates services via `IAzdService.show` (which shells out to `azd show --output json`). Caching is handled by the surrounding `DataItemTree` TTL. |
 | `FunctionsWorkspaceDataProvider` | Yes | Detects an Azure Functions project from a top-level `host.json`. |
 | `EmulatorsWorkspaceDataProvider` | Yes | Surfaces a fixed "Emulators" group with stubbed entries for Azurite and Functions Core Tools. |
 

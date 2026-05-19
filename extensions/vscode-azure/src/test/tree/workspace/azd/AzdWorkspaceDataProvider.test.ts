@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
@@ -15,7 +15,7 @@ import { createMockAzdService } from '../../../azd/MockAzdService';
 import { makeAzdProjectNode, makeAzdServiceNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
 interface ProviderOptions {
-    readonly azureYamlFor?: (folder: vscode.Uri) => vscode.Uri | undefined;
+    readonly azureYamls?: vscode.Uri[];
     readonly showFor?: (cwd: vscode.Uri) => AzdShowResult | undefined;
 }
 
@@ -23,8 +23,12 @@ function createProvider(options: ProviderOptions = {}) {
     const m = createMockVsCode();
     const { executor } = createTestActionExecutor();
     const azd = createMockAzdService();
-    if (options.azureYamlFor) {
-        azd.findAzureYaml.mock.mockImplementation((folder: vscode.Uri) => Promise.resolve(options.azureYamlFor!(folder)));
+    if (options.azureYamls) {
+        azd.findAzureYaml.mock.mockImplementation(
+            (dir?: vscode.Uri) => dir
+                ? Promise.resolve(options.azureYamls!.filter(u => (u as unknown as MockUri).path.startsWith((dir as unknown as MockUri).path + '/')))
+                : Promise.resolve(options.azureYamls!),
+        );
     }
     if (options.showFor) {
         azd.show.mock.mockImplementation((cwd: vscode.Uri) => Promise.resolve(options.showFor!(cwd)));
@@ -55,15 +59,16 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(await provider.getChildren()).to.deep.equal([]);
         });
 
-        it('returns no projects when findAzureYaml returns undefined', async () => {
+        it('returns no projects when findAzureYaml returns empty', async () => {
             const { provider, mock: m } = createProvider();
             m.workspaceFolders.push({ uri: m.vscode.Uri.file('/repo'), name: 'repo', index: 0 });
             expect(await provider.getChildren()).to.deep.equal([]);
         });
 
         it('discovers an azd project via IAzdService.findAzureYaml', async () => {
+            const yamlUri = MockUri.file('/repo/azure.yaml') as unknown as vscode.Uri;
             const { provider, mock: m, azd } = createProvider({
-                azureYamlFor: (folder) => m.vscode.Uri.joinPath(folder, 'azure.yaml'),
+                azureYamls: [yamlUri],
             });
             const folder = m.vscode.Uri.file('/repo');
             m.workspaceFolders.push({ uri: folder, name: 'repo', index: 0 });

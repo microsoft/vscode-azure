@@ -7,10 +7,7 @@ import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
- * Shared helpers used by workspace data providers.
- *
- * Kept deliberately small -- providers handle their own detection
- * logic and only share these low-level filesystem helpers.
+ * Shared helpers used by workspace tree providers.
  */
 
 /**
@@ -24,17 +21,6 @@ export async function fileExists(code: IVsCode, uri: vscode.Uri): Promise<boolea
     } catch {
         return false;
     }
-}
-
-/**
- * Walks the currently-open workspace folders (zero or more) and yields
- * each folder's URI. When no workspace is open, yields nothing.
- *
- * Centralized so a future change (e.g. recursing into nested folders)
- * affects every provider consistently.
- */
-export function getWorkspaceFolders(code: IVsCode): readonly vscode.WorkspaceFolder[] {
-    return code.workspace.workspaceFolders ?? [];
 }
 
 /**

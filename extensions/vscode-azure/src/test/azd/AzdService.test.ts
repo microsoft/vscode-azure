@@ -47,8 +47,8 @@ describe('AzdService (unit)', () => {
 
             const result = await service.findAzureYaml(MockUri.file('/project') as unknown as vscode.Uri);
 
-            expect(result).to.not.be.undefined;
-            expect(result!.path).to.equal('/project/azure.yaml');
+            expect(result).to.have.length(1);
+            expect(result[0].path).to.equal('/project/azure.yaml');
         });
 
         it('should return azure.yml URI when azure.yaml does not exist', async () => {
@@ -57,8 +57,8 @@ describe('AzdService (unit)', () => {
 
             const result = await service.findAzureYaml(MockUri.file('/project') as unknown as vscode.Uri);
 
-            expect(result).to.not.be.undefined;
-            expect(result!.path).to.equal('/project/azure.yml');
+            expect(result).to.have.length(1);
+            expect(result[0].path).to.equal('/project/azure.yml');
         });
 
         it('should prefer azure.yaml over azure.yml when both exist', async () => {
@@ -68,15 +68,15 @@ describe('AzdService (unit)', () => {
 
             const result = await service.findAzureYaml(MockUri.file('/project') as unknown as vscode.Uri);
 
-            expect(result!.path).to.equal('/project/azure.yaml');
+            expect(result[0].path).to.equal('/project/azure.yaml');
         });
 
-        it('should return undefined when neither file exists', async () => {
+        it('should return empty array when neither file exists', async () => {
             const { service } = createService();
 
             const result = await service.findAzureYaml(MockUri.file('/project') as unknown as vscode.Uri);
 
-            expect(result).to.be.undefined;
+            expect(result).to.deep.equal([]);
         });
     });
 
