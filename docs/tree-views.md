@@ -178,8 +178,8 @@ each provider's guard accepts only its own variants.
 
 | Provider | Key prefix | Description |
 |----------|-----------|-------------|
-| `AzdWorkspaceViewProvider` | `azwr://azdProject/`, `azwr://azdService/` | Rocket icon for projects, package icon for services. |
-| `FunctionsWorkspaceViewProvider` | `azwr://functionsProject/` | Zap icon. |
+| `AzdWorkspaceViewProvider` | `azwr://azdProject/`, `azwr://azdService/` | azd icon for projects, package icon for services. |
+| `FunctionsWorkspaceViewProvider` | `azwr://functionsProject/` | Function App resource-type icon. |
 | `EmulatorsWorkspaceViewProvider` | `azwr://emulator` (covers group + entries) | Server-environment icon for the group, debug-disconnect for entries. |
 
 View providers dispatch by key prefix (the data-layer ids embed the
