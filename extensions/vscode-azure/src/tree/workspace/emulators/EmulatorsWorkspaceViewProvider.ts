@@ -41,15 +41,16 @@ export class EmulatorsWorkspaceViewProvider implements ViewProvider<string> {
     /** @inheritdoc */
     public getTreeItem(key: string): ITreeItem {
         const node = this.dataTree.get(key);
+
         if (isEmulatorsGroupNode(node)) {
             this.executor.setTelProp('nodeType', node.type);
             return toEmulatorsGroupTreeItem(this.code, node);
-        }
-        if (isEmulatorNode(node)) {
+        } else if (isEmulatorNode(node)) {
             this.executor.setTelProp('nodeType', node.type);
             return toEmulatorTreeItem(this.code, node);
+        } else {
+            throw new Error(`Emulators workspace node with key ${key} not found in cache`);
         }
-        throw new Error(`Emulators workspace node with key ${key} not found in cache`);
     }
 }
 

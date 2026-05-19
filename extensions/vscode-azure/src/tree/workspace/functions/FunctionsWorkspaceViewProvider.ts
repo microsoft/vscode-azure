@@ -42,11 +42,13 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
     /** @inheritdoc */
     public getTreeItem(key: string): ITreeItem {
         const node = this.dataTree.get(key);
+
         if (!isFunctionsProjectNode(node)) {
             throw new Error(`Functions workspace node with key ${key} not found in cache`);
+        } else {
+            this.executor.setTelProp('nodeType', node.type);
+            return toFunctionsProjectTreeItem(this.code, node);
         }
-        this.executor.setTelProp('nodeType', node.type);
-        return toFunctionsProjectTreeItem(this.code, node);
     }
 }
 

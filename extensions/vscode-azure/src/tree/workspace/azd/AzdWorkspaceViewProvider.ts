@@ -51,20 +51,18 @@ export class AzdWorkspaceViewProvider implements ViewProvider<string> {
     /** @inheritdoc */
     public getTreeItem(key: string): ITreeItem {
         const node = this.dataTree.get(key);
+
         if (!node) {
             throw new Error(`Azd workspace node with key ${key} not found in cache`);
-        }
-
-        if (isAzdProjectNode(node)) {
+        } else if (isAzdProjectNode(node)) {
             this.executor.setTelProp('nodeType', node.type);
             return toAzdProjectTreeItem(this.code, node);
-        }
-        if (isAzdServiceNode(node)) {
+        } else if (isAzdServiceNode(node)) {
             this.executor.setTelProp('nodeType', node.type);
             return toAzdServiceTreeItem(this.code, node);
+        } else {
+            throw new Error(`Unexpected node type for key ${key}: ${(node as { type?: string }).type ?? 'unknown'}`);
         }
-
-        throw new Error(`Unexpected node type for key ${key}: ${(node as { type?: string }).type ?? 'unknown'}`);
     }
 }
 
