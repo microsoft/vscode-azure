@@ -39,7 +39,7 @@ describe('RevealInExplorer (unit)', () => {
     it('is a no-op when the node is missing from the data tree', async () => {
         const { cmd, executeCommand } = setUp(undefined);
 
-        await cmd.execute('workspace://azdProject/missing');
+        await cmd.execute('azwr://azdProject/missing');
         expect(executeCommand.mock.callCount()).to.equal(0);
     });
 

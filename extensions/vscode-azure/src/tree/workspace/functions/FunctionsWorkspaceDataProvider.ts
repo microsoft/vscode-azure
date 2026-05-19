@@ -68,7 +68,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
             const hostJson = this.code.Uri.joinPath(folder.uri, FunctionsHostFileName);
             if (await fileExists(this.code, hostJson)) {
                 projects.push({
-                    id: `workspace://functionsProject/${folder.uri.toString()}`,
+                    id: `azwr://functionsProject/${folder.uri.toString()}`,
                     type: 'functionsProject',
                     label: folder.name,
                     resourceUri: folder.uri,

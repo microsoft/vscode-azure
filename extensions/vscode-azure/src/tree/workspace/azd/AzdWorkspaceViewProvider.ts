@@ -12,8 +12,8 @@ import { combineContextValues } from '../../combineContextValues';
 import { isAzdProjectNode, isAzdServiceNode, type AzdProjectNode, type AzdServiceNode } from '../WorkspaceNode';
 import { basename } from '../workspaceFsUtils';
 
-const AzdProjectKeyPrefix = 'workspace://azdProject/';
-const AzdServiceKeyPrefix = 'workspace://azdService/';
+const AzdProjectKeyPrefix = 'azwr://azdProject/';
+const AzdServiceKeyPrefix = 'azwr://azdService/';
 
 /**
  * View-layer provider for {@linkcode AzdProjectNode}s and their

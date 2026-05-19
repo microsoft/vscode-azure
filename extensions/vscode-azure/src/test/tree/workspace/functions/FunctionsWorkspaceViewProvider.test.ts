@@ -26,8 +26,8 @@ function createProvider(nodes: WorkspaceNode[], rootChildren: WorkspaceNode[] = 
 describe('FunctionsWorkspaceViewProvider (unit)', () => {
     it('canHandle matches only functionsProject keys', () => {
         const { provider } = createProvider([]);
-        expect(provider.canHandle('workspace://functionsProject/file:///repo')).to.be.true;
-        expect(provider.canHandle('workspace://azdProject/file:///repo')).to.be.false;
+        expect(provider.canHandle('azwr://functionsProject/file:///repo')).to.be.true;
+        expect(provider.canHandle('azwr://azdProject/file:///repo')).to.be.false;
         expect(provider.canHandle(null)).to.be.false;
     });
 
@@ -51,7 +51,7 @@ describe('FunctionsWorkspaceViewProvider (unit)', () => {
 
     it('getTreeItem throws for unknown keys', () => {
         const { provider } = createProvider([]);
-        expect(() => provider.getTreeItem('workspace://functionsProject/missing')).to.throw();
+        expect(() => provider.getTreeItem('azwr://functionsProject/missing')).to.throw();
     });
 
     it('toFunctionsProjectTreeItem points resourceUri at the folder', () => {

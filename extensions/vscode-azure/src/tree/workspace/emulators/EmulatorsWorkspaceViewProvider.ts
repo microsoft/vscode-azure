@@ -10,7 +10,7 @@ import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { isEmulatorNode, isEmulatorsGroupNode, type EmulatorNode, type EmulatorsGroupNode } from '../WorkspaceNode';
 
-const EmulatorsKeyPrefix = 'workspace://emulator';
+const EmulatorsKeyPrefix = 'azwr://emulator';
 
 /** View-layer provider for the emulators group and its emulator children. */
 @injectable()

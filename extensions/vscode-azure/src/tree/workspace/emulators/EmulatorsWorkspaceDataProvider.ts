@@ -9,7 +9,7 @@ import type { EmulatorNode, EmulatorsGroupNode, WorkspaceNode } from '../Workspa
 import { isEmulatorsGroupNode } from '../WorkspaceNode';
 
 /** Stable id of the singleton emulators-group node. */
-export const EmulatorsGroupId = 'workspace://emulators';
+export const EmulatorsGroupId = 'azwr://emulators';
 
 /**
  * Data-layer provider for the local emulators section.
@@ -59,13 +59,13 @@ export class EmulatorsWorkspaceDataProvider implements DataProvider<EmulatorsGro
     private getEmulators(): EmulatorNode[] {
         return [
             {
-                id: 'workspace://emulator/azurite',
+                id: 'azwr://emulator/azurite',
                 type: 'emulator',
                 label: this.code.l10n.t('Azurite (Storage)'),
                 description: this.code.l10n.t('Not detected'),
             },
             {
-                id: 'workspace://emulator/functions',
+                id: 'azwr://emulator/functions',
                 type: 'emulator',
                 label: this.code.l10n.t('Azure Functions Core Tools'),
                 description: this.code.l10n.t('Not detected'),

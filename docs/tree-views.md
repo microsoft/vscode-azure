@@ -178,9 +178,9 @@ each provider's guard accepts only its own variants.
 
 | Provider | Key prefix | Description |
 |----------|-----------|-------------|
-| `AzdWorkspaceViewProvider` | `workspace://azdProject/`, `workspace://azdService/` | Rocket icon for projects, package icon for services. |
-| `FunctionsWorkspaceViewProvider` | `workspace://functionsProject/` | Zap icon. |
-| `EmulatorsWorkspaceViewProvider` | `workspace://emulator` (covers group + entries) | Server-environment icon for the group, debug-disconnect for entries. |
+| `AzdWorkspaceViewProvider` | `azwr://azdProject/`, `azwr://azdService/` | Rocket icon for projects, package icon for services. |
+| `FunctionsWorkspaceViewProvider` | `azwr://functionsProject/` | Zap icon. |
+| `EmulatorsWorkspaceViewProvider` | `azwr://emulator` (covers group + entries) | Server-environment icon for the group, debug-disconnect for entries. |
 
 View providers dispatch by key prefix (the data-layer ids embed the
 discriminator), keeping their `canHandle` checks self-contained.

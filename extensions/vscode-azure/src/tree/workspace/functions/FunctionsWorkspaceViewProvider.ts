@@ -11,7 +11,7 @@ import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { isFunctionsProjectNode, type FunctionsProjectNode } from '../WorkspaceNode';
 
-const FunctionsProjectKeyPrefix = 'workspace://functionsProject/';
+const FunctionsProjectKeyPrefix = 'azwr://functionsProject/';
 
 /** View-layer provider for {@linkcode FunctionsProjectNode}s. */
 @injectable()

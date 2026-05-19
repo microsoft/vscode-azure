@@ -14,7 +14,7 @@ export function makeAzdProjectNode(overrides?: Partial<AzdProjectNode>): AzdProj
     const folder = (overrides?.resourceUri as MockUriLike | undefined) ?? makeUri('/repo');
     const yaml = (overrides?.azureYamlUri as MockUriLike | undefined) ?? makeUri('/repo/azure.yaml');
     return {
-        id: `workspace://azdProject/${folder.toString()}`,
+        id: `azwr://azdProject/${folder.toString()}`,
         type: 'azdProject',
         label: 'repo',
         resourceUri: folder as never,
@@ -26,7 +26,7 @@ export function makeAzdProjectNode(overrides?: Partial<AzdProjectNode>): AzdProj
 export function makeAzdServiceNode(overrides?: Partial<AzdServiceNode>): AzdServiceNode {
     const folder = (overrides?.projectFolderUri as MockUriLike | undefined) ?? makeUri('/repo');
     return {
-        id: `workspace://azdService/${folder.toString()}/api`,
+        id: `azwr://azdService/${folder.toString()}/api`,
         type: 'azdService',
         label: 'api',
         serviceName: 'api',
@@ -38,7 +38,7 @@ export function makeAzdServiceNode(overrides?: Partial<AzdServiceNode>): AzdServ
 export function makeFunctionsProjectNode(overrides?: Partial<FunctionsProjectNode>): FunctionsProjectNode {
     const folder = (overrides?.resourceUri as MockUriLike | undefined) ?? makeUri('/repo');
     return {
-        id: `workspace://functionsProject/${folder.toString()}`,
+        id: `azwr://functionsProject/${folder.toString()}`,
         type: 'functionsProject',
         label: 'repo',
         resourceUri: folder as never,
@@ -48,7 +48,7 @@ export function makeFunctionsProjectNode(overrides?: Partial<FunctionsProjectNod
 
 export function makeEmulatorsGroupNode(overrides?: Partial<EmulatorsGroupNode>): EmulatorsGroupNode {
     return {
-        id: 'workspace://emulators',
+        id: 'azwr://emulators',
         type: 'emulatorsGroup',
         label: 'Emulators',
         ...overrides,
@@ -57,7 +57,7 @@ export function makeEmulatorsGroupNode(overrides?: Partial<EmulatorsGroupNode>):
 
 export function makeEmulatorNode(overrides?: Partial<EmulatorNode>): EmulatorNode {
     return {
-        id: 'workspace://emulator/azurite',
+        id: 'azwr://emulator/azurite',
         type: 'emulator',
         label: 'Azurite',
         ...overrides,

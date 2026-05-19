@@ -44,7 +44,7 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
         it('returns false for unrelated workspace nodes and non-objects', () => {
             const { provider } = createProvider();
             expect(provider.canHandle(makeFunctionsProjectNode())).to.be.false;
-            expect(provider.canHandle('workspace://azdProject/x')).to.be.false;
+            expect(provider.canHandle('azwr://azdProject/x')).to.be.false;
             expect(provider.canHandle(null)).to.be.false;
         });
     });

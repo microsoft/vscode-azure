@@ -26,9 +26,9 @@ function createProvider(nodes: WorkspaceNode[], rootChildren: WorkspaceNode[] = 
 describe('EmulatorsWorkspaceViewProvider (unit)', () => {
     it('canHandle matches emulator-prefixed keys', () => {
         const { provider } = createProvider([]);
-        expect(provider.canHandle('workspace://emulators')).to.be.true;
-        expect(provider.canHandle('workspace://emulator/azurite')).to.be.true;
-        expect(provider.canHandle('workspace://azdProject/x')).to.be.false;
+        expect(provider.canHandle('azwr://emulators')).to.be.true;
+        expect(provider.canHandle('azwr://emulator/azurite')).to.be.true;
+        expect(provider.canHandle('azwr://azdProject/x')).to.be.false;
         expect(provider.canHandle(undefined)).to.be.false;
     });
 
@@ -58,7 +58,7 @@ describe('EmulatorsWorkspaceViewProvider (unit)', () => {
 
     it('getTreeItem throws for unknown keys', () => {
         const { provider } = createProvider([]);
-        expect(() => provider.getTreeItem('workspace://emulator/missing')).to.throw();
+        expect(() => provider.getTreeItem('azwr://emulator/missing')).to.throw();
     });
 
     it('exported helpers build deterministic items', () => {

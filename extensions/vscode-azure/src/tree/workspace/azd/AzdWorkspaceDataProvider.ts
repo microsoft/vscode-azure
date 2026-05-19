@@ -72,7 +72,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
             const azureYamlUri = await this.azd.findAzureYaml(folder.uri);
             if (azureYamlUri) {
                 projects.push({
-                    id: `workspace://azdProject/${folder.uri.toString()}`,
+                    id: `azwr://azdProject/${folder.uri.toString()}`,
                     type: 'azdProject',
                     label: folder.name,
                     resourceUri: folder.uri,
@@ -110,7 +110,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
                 }
             }
             result.push({
-                id: `workspace://azdService/${project.resourceUri.toString()}/${name}`,
+                id: `azwr://azdService/${project.resourceUri.toString()}/${name}`,
                 type: 'azdService',
                 label: name,
                 serviceName: name,

@@ -32,10 +32,10 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
     describe('canHandle', () => {
         it('matches only azd-prefixed string keys', () => {
             const { provider } = createProvider([]);
-            expect(provider.canHandle('workspace://azdProject/file:///repo')).to.be.true;
-            expect(provider.canHandle('workspace://azdService/file:///repo/api')).to.be.true;
-            expect(provider.canHandle('workspace://functionsProject/file:///repo')).to.be.false;
-            expect(provider.canHandle('workspace://emulators')).to.be.false;
+            expect(provider.canHandle('azwr://azdProject/file:///repo')).to.be.true;
+            expect(provider.canHandle('azwr://azdService/file:///repo/api')).to.be.true;
+            expect(provider.canHandle('azwr://functionsProject/file:///repo')).to.be.false;
+            expect(provider.canHandle('azwr://emulators')).to.be.false;
             expect(provider.canHandle(42)).to.be.false;
         });
     });
@@ -51,7 +51,7 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
 
         it('returns empty for unknown keys', async () => {
             const { provider } = createProvider([]);
-            expect(await provider.getChildren('workspace://azdProject/missing')).to.deep.equal([]);
+            expect(await provider.getChildren('azwr://azdProject/missing')).to.deep.equal([]);
         });
     });
 
@@ -95,7 +95,7 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
 
         it('throws for unknown keys', () => {
             const { provider } = createProvider([]);
-            expect(() => provider.getTreeItem('workspace://azdProject/missing')).to.throw();
+            expect(() => provider.getTreeItem('azwr://azdProject/missing')).to.throw();
         });
     });
 
