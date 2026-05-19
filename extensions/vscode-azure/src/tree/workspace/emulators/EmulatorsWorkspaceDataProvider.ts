@@ -50,6 +50,7 @@ export class EmulatorsWorkspaceDataProvider implements DataProvider<EmulatorsGro
     }
 
     // TODO: just mock data for now
+    // TODO: need to detect changes to emulator availability and update accordingly
     private getEmulators(): EmulatorNode[] {
         return [
             {

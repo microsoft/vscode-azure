@@ -61,6 +61,8 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
         }
     }
 
+    // TODO: show the individual functions
+    // TODO: detect changes and update accordingly
     private async discoverProjects(): Promise<FunctionsProjectNode[]> {
         const hostJsons = await this.code.workspace.findFiles(FunctionsHostFileName, undefined, 5);
         const projects: FunctionsProjectNode[] = [];
