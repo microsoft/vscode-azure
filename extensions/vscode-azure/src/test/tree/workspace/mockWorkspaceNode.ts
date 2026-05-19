@@ -3,16 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import type {
     AzdProjectNode, AzdServiceNode, EmulatorNode, EmulatorsGroupNode,
     FunctionsProjectNode, WorkspaceNode,
 } from '../../../tree/workspace/WorkspaceNode';
 
-type MockUriLike = { path: string; toString(): string };
-
 export function makeAzdProjectNode(overrides?: Partial<AzdProjectNode>): AzdProjectNode {
-    const folder = (overrides?.resourceUri as MockUriLike | undefined) ?? makeUri('/repo');
-    const yaml = (overrides?.azureYamlUri as MockUriLike | undefined) ?? makeUri('/repo/azure.yaml');
+    const folder = overrides?.resourceUri ?? MockUri.file('/repo');
+    const yaml = overrides?.azureYamlUri ?? MockUri.file('/repo/azure.yaml');
     return {
         id: `azwr://azdProject/${folder.toString()}`,
         type: 'azdProject',
@@ -24,7 +23,7 @@ export function makeAzdProjectNode(overrides?: Partial<AzdProjectNode>): AzdProj
 }
 
 export function makeAzdServiceNode(overrides?: Partial<AzdServiceNode>): AzdServiceNode {
-    const folder = (overrides?.projectFolderUri as MockUriLike | undefined) ?? makeUri('/repo');
+    const folder = overrides?.projectFolderUri ?? MockUri.file('/repo');
     return {
         id: `azwr://azdService/${folder.toString()}/api`,
         type: 'azdService',
@@ -36,7 +35,7 @@ export function makeAzdServiceNode(overrides?: Partial<AzdServiceNode>): AzdServ
 }
 
 export function makeFunctionsProjectNode(overrides?: Partial<FunctionsProjectNode>): FunctionsProjectNode {
-    const folder = (overrides?.resourceUri as MockUriLike | undefined) ?? makeUri('/repo');
+    const folder = overrides?.resourceUri ?? MockUri.file('/repo');
     return {
         id: `azwr://functionsProject/${folder.toString()}`,
         type: 'functionsProject',
@@ -66,8 +65,4 @@ export function makeEmulatorNode(overrides?: Partial<EmulatorNode>): EmulatorNod
 
 export function makeWorkspaceNode(overrides?: Partial<WorkspaceNode>): WorkspaceNode {
     return makeAzdProjectNode(overrides as Partial<AzdProjectNode>);
-}
-
-function makeUri(path: string): MockUriLike {
-    return { path, toString() { return `file://${path}`; } };
 }
