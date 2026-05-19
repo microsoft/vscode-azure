@@ -7,7 +7,7 @@ import { FunctionAppLogicalType, SubscriptionArmType } from '@microsoft/vscode-a
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { getResourceTypeIconUri } from '../../tree/iconPath';
+import { getAzureIconUri, getResourceTypeIconUri } from '../../tree/iconPath';
 import { AcrResourceType } from '../../tree/resources/acr/AcrRegistry';
 
 describe('getResourceTypeIconUri (unit)', () => {
@@ -31,5 +31,29 @@ describe('getResourceTypeIconUri (unit)', () => {
         const uri = getResourceTypeIconUri(ctx, AcrResourceType.toUpperCase());
 
         expect(uri.path).to.include('microsoft.containerregistry/registries.svg');
+    });
+});
+
+describe('getAzureIconUri (unit)', () => {
+    it('should return a URI under dist/azureIcons with .svg extension', () => {
+        const { ctx } = createMockCodeContext();
+        const uri = getAzureIconUri(ctx, 'azd');
+
+        expect(uri).to.be.instanceOf(MockUri);
+        expect(uri.path).to.include('dist/azureIcons/azd.svg');
+    });
+
+    it('should lowercase the icon name', () => {
+        const { ctx } = createMockCodeContext();
+        const uri = getAzureIconUri(ctx, 'AZD');
+
+        expect(uri.path).to.include('dist/azureIcons/azd.svg');
+    });
+
+    it('should be based on the extensionUri', () => {
+        const { ctx } = createMockCodeContext();
+        const uri = getAzureIconUri(ctx, 'azd');
+
+        expect(uri.path).to.include(ctx.extensionContext.extensionUri.path);
     });
 });

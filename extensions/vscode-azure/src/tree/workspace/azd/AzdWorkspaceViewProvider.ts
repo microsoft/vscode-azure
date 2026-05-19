@@ -85,7 +85,6 @@ export function toAzdServiceTreeItem(ctx: ICodeContext, node: AzdServiceNode): I
     item.iconPath = new ctx.code.ThemeIcon('package');
     if (node.resourceUri) {
         item.description = basename(node.resourceUri);
-        item.resourceUri = node.resourceUri;
         item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
         item.tooltip = node.resourceUri.path;
     } else {
