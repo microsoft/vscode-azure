@@ -107,7 +107,7 @@ export const AzdServiceKeyPrefix = 'azwr://azdService/';
 export const FunctionsProjectKeyPrefix = 'azwr://functionsProject/';
 
 /** Stable id of the singleton {@linkcode EmulatorsGroupNode}. */
-export const EmulatorsGroupId = 'azwr://emulators';
+export const EmulatorsGroupId = 'azwr://emulatorsGroup';
 
 /** Key prefix for {@linkcode EmulatorNode} ids. */
 export const EmulatorKeyPrefix = 'azwr://emulator/';
