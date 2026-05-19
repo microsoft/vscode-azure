@@ -7,7 +7,6 @@ import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceViewDataTree } from '../../../services';
-import { combineContextValues } from '../../combineContextValues';
 import { EmulatorKeyPrefix, EmulatorsGroupId, isEmulatorNode, isEmulatorsGroupNode, type EmulatorNode, type EmulatorsGroupNode } from '../WorkspaceNode';
 
 /** View-layer provider for the emulators group and its emulator children. */
@@ -59,7 +58,6 @@ export function toEmulatorsGroupTreeItem(code: IVsCode, node: EmulatorsGroupNode
     const item = new code.TreeItem(node.label, code.TreeItemCollapsibleState.Collapsed);
     item.id = node.id;
     item.iconPath = new code.ThemeIcon('server-environment');
-    item.contextValue = combineContextValues('emulatorsGroup');
     return item;
 }
 
@@ -69,6 +67,5 @@ export function toEmulatorTreeItem(code: IVsCode, node: EmulatorNode): ITreeItem
     item.id = node.id;
     item.description = node.description;
     item.iconPath = new code.ThemeIcon('debug-disconnect');
-    item.contextValue = combineContextValues('emulator');
     return item;
 }

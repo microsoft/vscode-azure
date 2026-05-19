@@ -57,7 +57,7 @@ export function toFunctionsProjectTreeItem(code: IVsCode, node: FunctionsProject
     item.description = code.l10n.t('Azure Functions');
     item.iconPath = new code.ThemeIcon('zap');
     item.resourceUri = node.resourceUri;
-    item.contextValue = combineContextValues('functionsProject', RevealInExplorer.ContextValue);
+    item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
     item.tooltip = node.resourceUri.fsPath;
     return item;
 }

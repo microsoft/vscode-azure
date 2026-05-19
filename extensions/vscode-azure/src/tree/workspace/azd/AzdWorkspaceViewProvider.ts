@@ -76,7 +76,7 @@ export function toAzdProjectTreeItem(code: IVsCode, node: AzdProjectNode): ITree
     item.description = code.l10n.t('Azure Developer CLI');
     item.iconPath = new code.ThemeIcon('rocket');
     item.resourceUri = node.azureYamlUri;
-    item.contextValue = combineContextValues('azdProject', RevealInExplorer.ContextValue);
+    item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
     item.tooltip = node.azureYamlUri.path;
     return item;
 }
@@ -89,11 +89,10 @@ export function toAzdServiceTreeItem(code: IVsCode, node: AzdServiceNode): ITree
     if (node.resourceUri) {
         item.description = basename(node.resourceUri);
         item.resourceUri = node.resourceUri;
-        item.contextValue = combineContextValues('azdService', RevealInExplorer.ContextValue);
+        item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
         item.tooltip = node.resourceUri.path;
     } else {
         item.description = code.l10n.t('No project folder');
-        item.contextValue = combineContextValues('azdService');
     }
     return item;
 }
