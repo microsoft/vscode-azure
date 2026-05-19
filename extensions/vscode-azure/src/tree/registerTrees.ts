@@ -83,19 +83,14 @@ export function registerTrees(container: Container): void {
 
 // #region Internal provider collection identifiers
 
-/** @internal */
 const IAzureViewDataProviders: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IAzureViewDataProviders');
-/** @internal */
 const IAzureViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IAzureViewViewProviders');
-/** @internal */
 const IActivityViewDataProviders: ServiceIdentifier<DataProvider<Activity>> = Symbol.for('IActivityViewDataProviders');
-/** @internal */
 const IActivityViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IActivityViewViewProviders');
 
 // #endregion
 
 // #region Binding glue
-
 
 /**
  * A provider entry for declarative binding. Either a bare class (simple
