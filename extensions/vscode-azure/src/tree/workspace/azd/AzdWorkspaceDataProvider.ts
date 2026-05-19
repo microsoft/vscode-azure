@@ -9,7 +9,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { IAzdService } from '../../../azd/AzdService';
+import { AzureYamlRecursiveGlobPattern, IAzdService } from '../../../azd/AzdService';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
 
@@ -42,10 +42,20 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdService) private readonly azd: IAzdService,
     ) {
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => {
-            this.executor.output.debug('[data] azd workspace: folders changed');
+        const invalidateAll = (reason: string) => {
+            this.executor.output.debug(`[data] azd workspace: ${reason}`);
             this.changeEmitter.fire({ resource: undefined, includeChildren: true });
-        }));
+        };
+
+        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));
+
+        const watcher = code.workspace.createFileSystemWatcher(AzureYamlRecursiveGlobPattern);
+        this.disposables.push(
+            watcher,
+            watcher.onDidCreate(() => { invalidateAll('azure.yaml created'); }),
+            watcher.onDidChange(() => { invalidateAll('azure.yaml changed'); }),
+            watcher.onDidDelete(() => { invalidateAll('azure.yaml deleted'); }),
+        );
     }
 
     /** @inheritdoc */

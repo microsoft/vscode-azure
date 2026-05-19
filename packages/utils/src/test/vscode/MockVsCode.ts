@@ -361,7 +361,26 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
+
+    const createFileSystemWatcher = mock.fn(
+        (): vscode.FileSystemWatcher => {
+            const create = new EventEmitter<vscode.Uri>();
+            const change = new EventEmitter<vscode.Uri>();
+            const del = new EventEmitter<vscode.Uri>();
+            return {
+                ignoreCreateEvents: false,
+                ignoreChangeEvents: false,
+                ignoreDeleteEvents: false,
+                onDidCreate: create.event,
+                onDidChange: change.event,
+                onDidDelete: del.event,
+                dispose: () => { create.dispose(); change.dispose(); del.dispose(); },
+            };
+        },
+    );
+
     const workspace = {
+        createFileSystemWatcher,
         findFiles,
         getConfiguration,
         getWorkspaceFolder,
