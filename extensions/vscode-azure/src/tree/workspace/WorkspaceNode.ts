@@ -100,6 +100,7 @@ export function isWorkspaceNode(maybeNode: unknown): maybeNode is WorkspaceNode 
         && 'type' in maybeNode
         && 'label' in maybeNode
         && typeof (maybeNode as WorkspaceNode).id === 'string'
+        && typeof (maybeNode as WorkspaceNode).type === 'string'
         && typeof (maybeNode as WorkspaceNode).label === 'string';
 }
 
