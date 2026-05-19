@@ -6,7 +6,7 @@
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import type {
     AzdProjectNode, AzdServiceNode, EmulatorNode, EmulatorsGroupNode,
-    FunctionsProjectNode, WorkspaceNode,
+    FunctionsProjectNode
 } from '../../../tree/workspace/WorkspaceNode';
 import {
     AzdProjectKeyPrefix, AzdServiceKeyPrefix, EmulatorKeyPrefix,
@@ -65,8 +65,4 @@ export function makeEmulatorNode(overrides?: Partial<EmulatorNode>): EmulatorNod
         label: 'Azurite',
         ...overrides,
     };
-}
-
-export function makeWorkspaceNode(overrides?: Partial<WorkspaceNode>): WorkspaceNode {
-    return makeAzdProjectNode(overrides as Partial<AzdProjectNode>);
 }
