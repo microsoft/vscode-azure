@@ -9,13 +9,13 @@ import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSetting';
-import type { FunctionAppDataProvider } from '../../../tree/resources/functions/FunctionAppDataProvider';
+import type { IFunctionAppDataProvider } from '../../../tree/resources/functions/FunctionAppDataProvider';
 
 function createMockDataProvider() {
     const addOrUpdateSetting = mock.fn((..._args: unknown[]) => Promise.resolve());
     const getSettingValue = mock.fn((_resourceId: string, _key: string) => 'old-value');
     return {
-        provider: { addOrUpdateSetting, getSettingValue } as unknown as FunctionAppDataProvider,
+        provider: { addOrUpdateSetting, getSettingValue } as unknown as IFunctionAppDataProvider,
         addOrUpdateSetting,
     };
 }

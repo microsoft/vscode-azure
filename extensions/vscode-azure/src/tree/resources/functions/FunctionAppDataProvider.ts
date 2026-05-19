@@ -4,12 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    getNodeType, IWebAppClientProvider, isVirtualResource, parseAzureResourceId,
+    getNodeType,
+    isVirtualResource,
+    IWebAppClientProvider,
+    parseAzureResourceId,
     type ConcreteAzureNode, type GenericResource, type IWebAppClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
-import { isFunctionApp, FunctionAppVirtualPaths, FunctionAppVirtualTypes } from './FunctionApp';
+import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import { FunctionAppVirtualPaths, FunctionAppVirtualTypes, isFunctionApp } from './FunctionApp';
+
+export const IFunctionAppDataProvider: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IFunctionAppDataProvider');
+export type IFunctionAppDataProvider = FunctionAppDataProvider;
 
 /**
  * Data-layer provider for Azure Function Apps.

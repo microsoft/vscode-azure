@@ -114,17 +114,41 @@ export class Hello implements ManagedCommand {
 
 ## Multi-Binding for Providers
 
-Tree data and view providers use multi-binding — multiple providers are bound to the same identifier, and `container.getAll()` retrieves them in registration order:
+Tree data and view providers use multi-binding — multiple providers are bound to the same identifier, and `container.getAll()` retrieves them in registration order.
+
+`registerTrees.ts` uses a declarative `ProviderEntry<T>` type to express bindings as arrays rather than imperative `container.bind()` calls. Each entry is either a bare class or a `[primaryId, Class]` tuple:
 
 ```typescript
-// Registration order matters: specific first, fallback last
-container.bind(IAzureViewDataProviders).to(AcrDataProvider);
-container.bind(IAzureViewDataProviders).to(GenericAzureDataProvider);
+type ProviderEntry<T> = Newable<T> | readonly [ServiceIdentifier<T>, Newable<T>];
+```
 
-// Retrieval preserves order
-for (const provider of context.getAll(IAzureViewDataProviders)) {
-    cache.registerProvider(provider);
+- **Bare class** — bound directly to the collection identifier
+- **`[primaryId, Class]` tuple** — bound as a singleton under `primaryId`, then aliased into the collection so commands can `@inject(primaryId)` directly
+
+The `bindProviders` helper iterates the array and handles both cases:
+
+```typescript
+function bindProviders<T>(container, collectionId, entries: readonly ProviderEntry<T>[]) {
+    for (const entry of entries) {
+        if (typeof entry === 'function') {
+            container.bind(collectionId).to(entry).onActivation(pushDisposable);
+        } else {
+            const [primaryId, providerClass] = entry;
+            container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
+            container.bind(collectionId).toService(primaryId);
+        }
+    }
 }
+```
+
+Registration order in the array determines dispatch order — specific providers must come before the generic fallback:
+
+```typescript
+dataProviders: [
+    AcrDataProvider,                                     // specific
+    [IFunctionAppDataProvider, FunctionAppDataProvider],  // specific, with direct-inject support
+    GenericAzureDataProvider,                             // fallback
+],
 ```
 
 ## VS Code API Abstraction
@@ -158,13 +182,19 @@ The resulting `IResourceClientProvider` type is an `AsyncFactory<IResourceClient
 
 ## Multi-Binding with Dual Registration
 
-Activity providers use a dual-binding pattern: each is bound to its own class first (for direct injection into commands), then aliased to the shared multi-binding identifier (for collective retrieval by the tree):
+Some providers need to be injected directly by commands *and* retrieved collectively by the tree. The `[primaryId, Class]` tuple form of `ProviderEntry` handles this declaratively:
 
 ```typescript
-// 1. Bind to self so commands can inject it directly
-container.bind(ArmDeploymentDataProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
-// 2. Alias to multi-binding so DataItemTree can retrieve all providers
-container.bind(IActivityViewDataProviders).toService(ArmDeploymentDataProvider);
+// Activity tree — all providers use singleton+alias tuples
+dataProviders: [
+    [IArmDeploymentDataProvider, ArmDeploymentDataProvider],
+    [ICodeDeploymentDataProvider, CodeDeploymentDataProvider],
+    [IGenericActivityDataProvider, GenericActivityDataProvider],
+],
 ```
 
-This enables commands like `ClearActivities` to inject `ArmDeploymentDataProvider` directly while the tree system retrieves all providers via `container.getAll(IActivityViewDataProviders)`.
+This expands to:
+1. `container.bind(IArmDeploymentDataProvider).to(ArmDeploymentDataProvider).inSingletonScope()`
+2. `container.bind(IActivityViewDataProviders).toService(IArmDeploymentDataProvider)`
+
+Commands like `ClearActivities` inject `IArmDeploymentDataProvider` directly, while the tree retrieves all providers via `container.getAll(IActivityViewDataProviders)`.
