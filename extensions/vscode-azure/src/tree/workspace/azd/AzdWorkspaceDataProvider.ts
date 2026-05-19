@@ -9,7 +9,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { AzureYamlRecursiveGlobPattern, IAzdService } from '../../../azd/AzdService';
+import { AzureYamlGlobPattern, IAzdService } from '../../../azd/AzdService';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
 
@@ -49,7 +49,10 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
 
         this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));
 
-        const watcher = code.workspace.createFileSystemWatcher(AzureYamlRecursiveGlobPattern);
+        // When passed a plain string glob (not a RelativePattern), VS Code
+        // filters events from its existing recursive workspace watcher rather
+        // than creating a new OS-level file watcher, so this is essentially free.
+        const watcher = code.workspace.createFileSystemWatcher(AzureYamlGlobPattern);
         this.disposables.push(
             watcher,
             watcher.onDidCreate(() => { invalidateAll('azure.yaml created'); }),

@@ -24,15 +24,6 @@ const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 /** Glob pattern matching `azure.yaml` / `azure.yml` at the workspace root only. */
 export const AzureYamlGlobPattern = `{${AzureYamlFileNames.join(',')}}`;
 
-/**
- * Recursive glob pattern matching `azure.yaml` / `azure.yml` at any depth.
- *
- * When passed as a **string** to {@linkcode vscode.workspace.createFileSystemWatcher},
- * this piggybacks on VS Code's built-in recursive workspace watcher and adds
- * zero additional OS-level file watches.
- */
-export const AzureYamlRecursiveGlobPattern = `**/${AzureYamlGlobPattern}`;
-
 export interface IAzdService {
     /**
      * Finds `azure.yaml` or `azure.yml` files.
