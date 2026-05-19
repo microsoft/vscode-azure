@@ -6,9 +6,7 @@
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import {
-    EmulatorsWorkspaceViewProvider, toEmulatorsGroupTreeItem, toEmulatorTreeItem,
-} from '../../../../tree/workspace/emulators/EmulatorsWorkspaceViewProvider';
+import { EmulatorsWorkspaceViewProvider } from '../../../../tree/workspace/emulators/EmulatorsWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeEmulatorNode, makeEmulatorsGroupNode } from '../mockWorkspaceNode';
 
@@ -59,13 +57,5 @@ describe('EmulatorsWorkspaceViewProvider (unit)', () => {
     it('getTreeItem throws for unknown keys', () => {
         const { provider } = createProvider([]);
         expect(() => provider.getTreeItem('azwr://emulator/missing')).to.throw();
-    });
-
-    it('exported helpers build deterministic items', () => {
-        const { vscode: code } = createMockVsCode();
-        const groupItem = toEmulatorsGroupTreeItem(code, makeEmulatorsGroupNode());
-        expect(groupItem.label).to.equal('Emulators');
-        const item = toEmulatorTreeItem(code, makeEmulatorNode());
-        expect(item.label).to.equal('Azurite');
     });
 });

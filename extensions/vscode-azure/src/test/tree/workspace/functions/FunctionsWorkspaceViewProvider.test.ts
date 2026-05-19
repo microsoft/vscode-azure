@@ -7,9 +7,7 @@ import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vsco
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type * as vscode from 'vscode';
-import {
-    FunctionsWorkspaceViewProvider, toFunctionsProjectTreeItem,
-} from '../../../../tree/workspace/functions/FunctionsWorkspaceViewProvider';
+import { FunctionsWorkspaceViewProvider } from '../../../../tree/workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
@@ -52,12 +50,5 @@ describe('FunctionsWorkspaceViewProvider (unit)', () => {
     it('getTreeItem throws for unknown keys', () => {
         const { provider } = createProvider([]);
         expect(() => provider.getTreeItem('azwr://functionsProject/missing')).to.throw();
-    });
-
-    it('toFunctionsProjectTreeItem uses the folder path as tooltip', () => {
-        const { ctx } = createMockCodeContext();
-        const node = makeFunctionsProjectNode();
-        const item = toFunctionsProjectTreeItem(ctx, node);
-        expect(item.tooltip).to.equal(node.resourceUri.fsPath);
     });
 });

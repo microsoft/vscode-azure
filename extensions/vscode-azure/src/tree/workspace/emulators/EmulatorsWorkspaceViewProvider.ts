@@ -54,16 +54,14 @@ export class EmulatorsWorkspaceViewProvider implements ViewProvider<string> {
     }
 }
 
-/** Exported for unit testing. */
-export function toEmulatorsGroupTreeItem(code: IVsCode, node: EmulatorsGroupNode): ITreeItem {
+function toEmulatorsGroupTreeItem(code: IVsCode, node: EmulatorsGroupNode): ITreeItem {
     const item = new code.TreeItem(node.label, code.TreeItemCollapsibleState.Collapsed);
     item.id = node.id;
     item.iconPath = new code.ThemeIcon('server-environment');
     return item;
 }
 
-/** Exported for unit testing. */
-export function toEmulatorTreeItem(code: IVsCode, node: EmulatorNode): ITreeItem {
+function toEmulatorTreeItem(code: IVsCode, node: EmulatorNode): ITreeItem {
     const item = new code.TreeItem(node.label, code.TreeItemCollapsibleState.None);
     item.id = node.id;
     item.description = node.description;

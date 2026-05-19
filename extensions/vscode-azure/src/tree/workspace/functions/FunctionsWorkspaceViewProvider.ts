@@ -54,8 +54,7 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
     }
 }
 
-/** Exported for unit testing. */
-export function toFunctionsProjectTreeItem(ctx: ICodeContext, node: FunctionsProjectNode): ITreeItem {
+function toFunctionsProjectTreeItem(ctx: ICodeContext, node: FunctionsProjectNode): ITreeItem {
     const item = new ctx.code.TreeItem(node.label, ctx.code.TreeItemCollapsibleState.None);
     item.id = node.id;
     item.description = ctx.code.l10n.t('Azure Functions');

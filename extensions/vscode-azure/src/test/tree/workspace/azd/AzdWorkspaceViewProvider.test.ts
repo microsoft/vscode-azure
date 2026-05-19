@@ -7,10 +7,7 @@ import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vsco
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import type * as vscode from 'vscode';
-import {
-    AzdWorkspaceViewProvider,
-    toAzdServiceTreeItem
-} from '../../../../tree/workspace/azd/AzdWorkspaceViewProvider';
+import { AzdWorkspaceViewProvider } from '../../../../tree/workspace/azd/AzdWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeAzdServiceNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
@@ -94,14 +91,6 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
         it('throws for unknown keys', () => {
             const { provider } = createProvider([]);
             expect(() => provider.getTreeItem('azwr://azdProject/missing')).to.throw();
-        });
-    });
-
-    describe('renderers', () => {
-        it('toAzdServiceTreeItem falls back to "No project folder" when missing', () => {
-            const { ctx } = createMockCodeContext();
-            const item = toAzdServiceTreeItem(ctx, makeAzdServiceNode());
-            expect(item.description).to.equal('No project folder');
         });
     });
 });

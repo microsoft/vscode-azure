@@ -67,8 +67,7 @@ export class AzdWorkspaceViewProvider implements ViewProvider<string> {
     }
 }
 
-/** Exported for unit testing. */
-export function toAzdProjectTreeItem(ctx: ICodeContext, node: AzdProjectNode): ITreeItem {
+function toAzdProjectTreeItem(ctx: ICodeContext, node: AzdProjectNode): ITreeItem {
     const item = new ctx.code.TreeItem(node.label, ctx.code.TreeItemCollapsibleState.Collapsed);
     item.id = node.id;
     item.description = ctx.code.l10n.t('Azure Developer CLI');
@@ -78,8 +77,7 @@ export function toAzdProjectTreeItem(ctx: ICodeContext, node: AzdProjectNode): I
     return item;
 }
 
-/** Exported for unit testing. */
-export function toAzdServiceTreeItem(ctx: ICodeContext, node: AzdServiceNode): ITreeItem {
+function toAzdServiceTreeItem(ctx: ICodeContext, node: AzdServiceNode): ITreeItem {
     const item = new ctx.code.TreeItem(node.label, ctx.code.TreeItemCollapsibleState.None);
     item.id = node.id;
     item.iconPath = new ctx.code.ThemeIcon('package');
