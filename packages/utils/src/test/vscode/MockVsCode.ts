@@ -110,6 +110,18 @@ export interface MockVsCodeResult {
      */
     readonly configChangeEmitter: EventEmitter<{ affectsConfiguration(section: string): boolean }>;
 
+    /**
+     * Fire this emitter to simulate a workspace folder change.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * m.workspaceFolders.push({ uri: m.vscode.Uri.file('/repo'), name: 'repo', index: 0 });
+     * m.workspaceFoldersChangeEmitter.fire({ added: [...], removed: [] });
+     * ```
+     */
+    readonly workspaceFoldersChangeEmitter: EventEmitter<vscode.WorkspaceFoldersChangeEvent>;
+
     /** The mock `tasks` namespace. */
     readonly tasks: typeof vscode.tasks;
 
@@ -293,10 +305,12 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showWorkspaceFolderPick,
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
+    const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
     const workspace = {
         getConfiguration,
         onDidChangeConfiguration: configChangeEmitter.event,
+        onDidChangeWorkspaceFolders: workspaceFoldersChangeEmitter.event,
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
     };
@@ -349,6 +363,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspace,
         messageResponses,
         configChangeEmitter,
+        workspaceFoldersChangeEmitter,
         tasks,
         taskProcessEndEmitter,
     } as unknown as MockVsCodeResult;

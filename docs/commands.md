@@ -49,6 +49,9 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
     registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
 
+    registerManagedCommand(container, 'vscode-azure/workspace/refresh', RefreshWorkspaceView);
+    registerManagedCommand(container, 'vscode-azure/workspace/revealInExplorer', RevealInExplorer);
+
     // ...
 
     registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');

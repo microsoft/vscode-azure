@@ -131,6 +131,67 @@ dataProviders: [
 
 Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly). See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
 
+## Workspace (Local) Tree
+
+A tree view in the same container as the resources tree shows
+items that live "locally" rather than in Azure. It uses the same
+`DataItemTree` / `ViewItemTree` infrastructure as the resources tree
+but with a short 60-second TTL so newly-added marker files
+(`azure.yaml`, `host.json`, ...) are picked up quickly.
+
+### Workspace Node Model
+
+All workspace items implement a small, common interface and are
+discriminated by `type`:
+
+```typescript
+interface WorkspaceNode {
+    readonly id: string;       // stable key, also used as VS Code TreeItem.id
+    readonly type: WorkspaceNodeType;
+    readonly label: string;
+    readonly resourceUri?: vscode.Uri; // file/folder on disk, drives "Reveal in Explorer"
+}
+type WorkspaceNodeType =
+    | 'azdProject' | 'azdService'
+    | 'functionsProject'
+    | 'emulatorsGroup' | 'emulator';
+```
+
+Each domain (azd, functions, emulators) owns its own concrete variant
+plus a matching pair of providers. There is **no shared mega-provider**
+— providers stay narrow so adding a new domain only adds new files.
+
+### Workspace Data Providers
+
+| Provider | Root? | Description |
+|----------|-------|-------------|
+| `AzdWorkspaceDataProvider` | Yes | Discovers azd projects by calling `IAzdService.findAzureYaml` for each workspace folder, and enumerates services for a project via `IAzdService.show` (which shells out to `azd show --output json`). Caching is handled by the surrounding `DataItemTree` TTL. |
+| `FunctionsWorkspaceDataProvider` | Yes | Detects an Azure Functions project from a top-level `host.json`. |
+| `EmulatorsWorkspaceDataProvider` | Yes | Surfaces a fixed "Emulators" group with stubbed entries for Azurite and Functions Core Tools. |
+
+All three are `isRoot: true`, so they each contribute their detected
+items to the root in registration order (azd, functions, emulators).
+Non-root dispatch goes through the standard `canHandle` mechanism —
+each provider's guard accepts only its own variants.
+
+### Workspace View Providers
+
+| Provider | Key prefix | Description |
+|----------|-----------|-------------|
+| `AzdWorkspaceViewProvider` | `azwr://azdProject/`, `azwr://azdService/` | Rocket icon for projects, package icon for services. |
+| `FunctionsWorkspaceViewProvider` | `azwr://functionsProject/` | Zap icon. |
+| `EmulatorsWorkspaceViewProvider` | `azwr://emulator` (covers group + entries) | Server-environment icon for the group, debug-disconnect for entries. |
+
+View providers dispatch by key prefix (the data-layer ids embed the
+discriminator), keeping their `canHandle` checks self-contained.
+
+### Workspace Commands
+
+| Command | Context value | Behaviour |
+|---------|---------------|-----------|
+| `vscode-azure/workspace/refresh` | View title | `IWorkspaceViewDataTree.invalidateAll()` |
+| `vscode-azure/workspace/revealInExplorer` | `revealInExplorer` (any node with `resourceUri`) | Forwards to VS Code's built-in `revealInExplorer` command. |
+
 ## Activity Tree
 
 A second tree view tracks long-running operations (ARM deployments, code deployments, generic activities). It uses the same `DataItemTree` / `ViewItemTree` infrastructure as the resources tree but with `Infinity` TTL — providers manage freshness via polling and the `onDidChange` event.
