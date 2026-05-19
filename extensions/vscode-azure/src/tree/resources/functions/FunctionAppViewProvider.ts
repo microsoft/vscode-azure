@@ -12,7 +12,7 @@ import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSet
 import { DeleteAppSetting } from '../../../commands/functions/DeleteAppSetting';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
-import { getAzureIconUri } from '../../iconPath';
+import { getResourceTypeIconUri } from '../../iconPath';
 import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './FunctionApp';
 
 /**
@@ -70,7 +70,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = combineContextValues(OpenInPortal.ContextValue, FunctionAppViewProvider.ContextValue);
-        item.iconPath = getAzureIconUri(this.ctx.code, this.ctx.extensionContext, 'FunctionApp');
+        item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, resource.logicalType);
         item.description = resource.logicalType;
 
         return item;

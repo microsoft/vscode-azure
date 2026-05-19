@@ -12,8 +12,12 @@ import {
     EventEmitter, flattenPages, IActionExecutor, InflightMap, IVsCode,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { isActivity, isTerminalActivityStatus, type Activity } from './Activity';
+
+/** Identifier for the ARM deployment data provider */
+export const IArmDeploymentDataProvider: ServiceIdentifier<ArmDeploymentDataProvider> = Symbol.for('IArmDeploymentDataProvider');
+export type IArmDeploymentDataProvider = ArmDeploymentDataProvider;
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
 

@@ -124,7 +124,7 @@ describe('ACR Tree Integration (integration)', () => {
         );
 
         const acrViewProvider = new AcrViewProvider(
-            code,
+            mockCtx.ctx,
             executor,
             dataTree,
         );
@@ -255,7 +255,7 @@ describe('ACR Tree Integration (integration)', () => {
     });
 
     describe('ACR-specific rendering', () => {
-        it('should render ACR registry with package icon and correct context values', async () => {
+        it('should render ACR registry with resource type icon and correct context values', async () => {
             const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
@@ -265,10 +265,11 @@ describe('ACR Tree Integration (integration)', () => {
             const item = registry!.item;
             expect(item.contextValue).to.include('openInPortal');
             expect(item.contextValue).to.include('disableAcrAdminUser');
-            expect((item.iconPath as { id: string }).id).to.equal('package');
+            // Icon is now a URI-based path, not a ThemeIcon
+            expect(item.iconPath).to.not.have.property('id');
         });
 
-        it('should render non-ACR resource with generic icon and openInPortal context', async () => {
+        it('should render non-ACR resource with resource type icon and openInPortal context', async () => {
             const { viewTree } = createTestPipeline();
 
             const tree = await collectTree(viewTree);
@@ -278,7 +279,8 @@ describe('ACR Tree Integration (integration)', () => {
             const item = site!.item;
             expect(item.contextValue).to.include('openInPortal');
             expect(item.contextValue).to.not.include('disableAcrAdminUser');
-            expect((item.iconPath as { id: string }).id).to.equal('symbol-misc');
+            // Icon is now a URI-based path, not a ThemeIcon
+            expect(item.iconPath).to.not.have.property('id');
         });
 
         it('should render Repositories as collapsed folder with acrCategory context', async () => {
@@ -361,12 +363,12 @@ describe('ACR Tree Integration (integration)', () => {
 
             const tree = await collectTree(viewTree);
 
-            // ACR registry should have ACR-specific rendering (package icon, two context values)
+            // ACR registry should have ACR-specific rendering (resource type icon, two context values)
             const registry = findByLabel(tree, 'myReg');
             expect(registry).to.exist;
             expect(registry!.item.contextValue).to.include('disableAcrAdminUser');
 
-            // Non-ACR resource should have generic rendering (symbol-misc icon, only openInPortal)
+            // Non-ACR resource should have generic rendering (resource type icon, only openInPortal)
             const site = findByLabel(tree, 'mySite');
             expect(site).to.exist;
             expect(site!.item.contextValue).to.not.include('disableAcrAdminUser');

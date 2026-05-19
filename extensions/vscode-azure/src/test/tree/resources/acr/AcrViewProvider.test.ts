@@ -5,7 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
@@ -25,6 +25,8 @@ function makeAcrVirtualResource(overrides?: Partial<VirtualResource>): VirtualRe
 }
 
 describe('AcrViewProvider (unit)', () => {
+    const ctx = createMockCodeContext();
+
     function createProvider(
         cache?: Map<string, ConcreteAzureNode>,
         childrenFn?: (node: ConcreteAzureNode) => ConcreteAzureNode[],
@@ -35,7 +37,7 @@ describe('AcrViewProvider (unit)', () => {
             get: (key: string) => cacheMap.get(key),
             getChildren: (node: ConcreteAzureNode) => Promise.resolve(childrenFn ? childrenFn(node) : []),
         };
-        return new AcrViewProvider(vscode, executor, mockCache as never);
+        return new AcrViewProvider(ctx.ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {

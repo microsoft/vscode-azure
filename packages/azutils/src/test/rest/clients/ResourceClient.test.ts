@@ -6,7 +6,7 @@
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { ResourceClient } from '../../../rest/clients/ResourceClient';
+import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient } from '../../../rest/clients/ResourceClient';
 import { makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
@@ -79,7 +79,7 @@ describe('ResourceClient (unit)', () => {
         const resourcesBody = JSON.stringify({
             value: [
                 { id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/fn1', name: 'fn1', type: 'Microsoft.Web/sites', kind: 'functionapp', location: 'eastus' },
-                { id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/wf1', name: 'wf1', type: 'Microsoft.Web/sites', kind: 'workflowapp', location: 'eastus' },
+                { id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/wf1', name: 'wf1', type: 'Microsoft.Web/sites', kind: 'functionapp,workflowapp', location: 'eastus' },
                 { id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/app1', name: 'app1', type: 'Microsoft.Web/sites', kind: 'app', location: 'eastus' },
             ],
         });
@@ -95,9 +95,9 @@ describe('ResourceClient (unit)', () => {
         }
 
         const resources = pages[0].items;
-        expect(resources[0].logicalType).to.equal('Microsoft.Web/sites~functionapp');
-        expect(resources[1].logicalType).to.equal('Microsoft.Web/sites~workflowapp');
-        expect(resources[2].logicalType).to.equal('Microsoft.Web/sites~app');
+        expect(resources[0].logicalType).to.equal(FunctionAppLogicalType);
+        expect(resources[1].logicalType).to.equal(LogicAppLogicalType);
+        expect(resources[2].logicalType).to.equal(AppServiceLogicalType);
     });
 
     it('should set hasMore based on nextLink presence', async () => {

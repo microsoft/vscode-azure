@@ -9,6 +9,7 @@ import { LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
 import { AzdUp } from './AzdUp';
 import { ClearActivities } from './ClearActivities';
+import { InstallAzd } from './InstallAzd';
 import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
 import { DeleteAppSetting } from './functions/DeleteAppSetting';
@@ -17,7 +18,6 @@ import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';
 import { OpenInPortal } from './OpenInPortal';
 import { RefreshResourcesView } from './RefreshResourcesView';
-import { TrackArmDeployment } from './TrackArmDeployment';
 
 /**
  * Registers every {@linkcode ManagedCommand} exposed by the extension
@@ -36,7 +36,6 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
     registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
 
-    registerManagedCommand(container, 'vscode-azure/activity/trackArmDeployment', TrackArmDeployment);
     registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
     registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
     registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
@@ -45,6 +44,7 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
 
     registerManagedCommand(container, 'vscode-azure/azdUp', AzdUp);
+    registerManagedCommand(container, 'vscode-azure/installAzd', InstallAzd);
 }
 
 /**

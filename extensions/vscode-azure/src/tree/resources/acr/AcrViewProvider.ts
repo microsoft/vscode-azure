@@ -5,12 +5,13 @@
 
 import { AzureNodeId, getNodeType, isGenericResource, isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { DisableAcrAdminUser } from '../../../commands/acr/DisableAcrAdminUser';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
+import { getResourceTypeIconUri } from '../../iconPath';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**
@@ -28,7 +29,7 @@ import { isAcrRegistry } from './AcrRegistry';
 export class AcrViewProvider implements ViewProvider<string> {
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
     ) { }
@@ -52,7 +53,7 @@ export class AcrViewProvider implements ViewProvider<string> {
     public getTreeItem(key: string): ITreeItem {
         const resource = this.cache.get(key);
         if (!resource) {
-            return new this.code.TreeItem(key);
+            return new this.ctx.code.TreeItem(key);
         }
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
@@ -65,15 +66,15 @@ export class AcrViewProvider implements ViewProvider<string> {
             // but categories are the ones that match the category label
             const isCategory = isCategoryNode(resource);
             const collapsibleState = isCategory
-                ? this.code.TreeItemCollapsibleState.Collapsed
-                : this.code.TreeItemCollapsibleState.None;
+                ? this.ctx.code.TreeItemCollapsibleState.Collapsed
+                : this.ctx.code.TreeItemCollapsibleState.None;
 
-            const item = new this.code.TreeItem(label, collapsibleState);
+            const item = new this.ctx.code.TreeItem(label, collapsibleState);
             item.id = key;
             item.contextValue = isCategory ? 'acrCategory' : 'acrItem';
             item.iconPath = isCategory
-                ? new this.code.ThemeIcon('folder')
-                : new this.code.ThemeIcon('symbol-misc');
+                ? new this.ctx.code.ThemeIcon('folder')
+                : new this.ctx.code.ThemeIcon('symbol-misc');
             return item;
         }
 
@@ -82,17 +83,17 @@ export class AcrViewProvider implements ViewProvider<string> {
         }
 
         // Collapsed since we have children
-        const item = new this.code.TreeItem(resource.name, this.code.TreeItemCollapsibleState.Collapsed);
+        const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = combineContextValues(OpenInPortal.ContextValue, DisableAcrAdminUser.ContextValue);
-        item.iconPath = new this.code.ThemeIcon('package');
+        item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, resource.logicalType);
 
         if (isAcrRegistry(resource)) {
             item.description = resource.logicalType;
 
             if (resource.adminUserEnabled === true) {
-                item.iconPath = new this.code.ThemeIcon('warning', new this.code.ThemeColor('problemsWarningIcon.foreground'));
-                item.tooltip = this.code.l10n.t('Admin user is enabled. This is a security risk and is not recommended for production registries.');
+                item.iconPath = new this.ctx.code.ThemeIcon('warning', new this.ctx.code.ThemeColor('problemsWarningIcon.foreground'));
+                item.tooltip = this.ctx.code.l10n.t('Admin user is enabled. This is a security risk and is not recommended for production registries.');
             }
         }
 

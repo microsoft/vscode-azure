@@ -14,6 +14,7 @@
  */
 
 import { autoEsbuildOrWatch, autoSelectEsbuildConfig } from '@microsoft/vscode-azext-eng/esbuild';
+import { copy } from 'esbuild-plugin-copy';
 
 const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig();
 
@@ -24,6 +25,19 @@ extensionConfig.alias = {
     '@microsoft/vscode-azure-azutils': '../../packages/azutils/src/index.ts',
     '@microsoft/vscode-azure-azutils/testing': '../../packages/azutils/src/testing.ts',
 };
+
+// Copy Azure resource type icons into dist/azureIcons/ so they are bundled
+// with the extension and cleaned up automatically by `npm run clean`.
+extensionConfig.plugins.push(
+    copy({
+        assets: [
+            {
+                from: '../../packages/azutils/resources/azureIcons/**/*.svg',
+                to: './azureIcons',
+            },
+        ],
+    }),
+);
 
 // Add a separate entry point for the debug mock data bundle so it does not
 // pollute the main extension bundle.

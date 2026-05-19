@@ -3,33 +3,33 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { FunctionAppLogicalType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { getAzureIconUri } from '../../tree/iconPath';
+import { getResourceTypeIconUri } from '../../tree/iconPath';
+import { AcrResourceType } from '../../tree/resources/acr/AcrRegistry';
 
-describe('getAzureIconUri (unit)', () => {
-    it('should return a URI under resources/icons with .svg extension', () => {
+describe('getResourceTypeIconUri (unit)', () => {
+    it('should return a URI under dist/azureIcons with .svg extension', () => {
         const { ctx } = createMockCodeContext();
-        const uri = getAzureIconUri(ctx.code, ctx.extensionContext, 'functionApp');
+        const uri = getResourceTypeIconUri(ctx.code, ctx.extensionContext, FunctionAppLogicalType);
 
         expect(uri).to.be.instanceOf(MockUri);
-        expect(uri.path).to.include('resources/icons/functionApp.svg');
+        expect(uri.path).to.include('dist/azureIcons/microsoft.web/sites~functionapp.svg');
     });
 
     it('should be based on the extensionUri', () => {
         const { ctx } = createMockCodeContext();
-        const uri = getAzureIconUri(ctx.code, ctx.extensionContext, 'subscription');
+        const uri = getResourceTypeIconUri(ctx.code, ctx.extensionContext, SubscriptionArmType);
 
         expect(uri.path).to.include(ctx.extensionContext.extensionUri.path);
     });
 
-    it('should handle different icon names', () => {
+    it('should lowercase the resource type', () => {
         const { ctx } = createMockCodeContext();
+        const uri = getResourceTypeIconUri(ctx.code, ctx.extensionContext, AcrResourceType.toUpperCase());
 
-        for (const name of ['resourceGroup', 'acr', 'appService']) {
-            const uri = getAzureIconUri(ctx.code, ctx.extensionContext, name);
-            expect(uri.path).to.include(`${name}.svg`);
-        }
+        expect(uri.path).to.include('microsoft.containerregistry/registries.svg');
     });
 });
