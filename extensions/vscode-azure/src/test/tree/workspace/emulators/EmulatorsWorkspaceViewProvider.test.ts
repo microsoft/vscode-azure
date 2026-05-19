@@ -26,7 +26,7 @@ function createProvider(nodes: WorkspaceNode[], rootChildren: WorkspaceNode[] = 
 describe('EmulatorsWorkspaceViewProvider (unit)', () => {
     it('canHandle matches emulator-prefixed keys', () => {
         const { provider } = createProvider([]);
-        expect(provider.canHandle('azwr://emulators')).to.be.true;
+        expect(provider.canHandle('azwr://emulatorsGroup')).to.be.true;
         expect(provider.canHandle('azwr://emulator/azurite')).to.be.true;
         expect(provider.canHandle('azwr://azdProject/x')).to.be.false;
         expect(provider.canHandle(undefined)).to.be.false;

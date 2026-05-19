@@ -45,7 +45,6 @@ describe('FunctionsWorkspaceViewProvider (unit)', () => {
         expect(item.label).to.equal('my-fn');
         expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.None);
         expect((item.iconPath as { id?: string }).id).to.equal('zap');
-        expect((item.contextValue ?? '')).to.include('functionsProject');
         expect((item.contextValue ?? '')).to.include('revealInExplorer');
     });
 

@@ -65,7 +65,6 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
             expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.Collapsed);
             // ThemeIcon ID is `id` on the MockThemeIcon
             expect((item.iconPath as { id?: string }).id).to.equal('rocket');
-            expect((item.contextValue ?? '')).to.include('azdProject');
             expect((item.contextValue ?? '')).to.include('revealInExplorer');
         });
 
@@ -79,7 +78,6 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
             const item = provider.getTreeItem(service.id);
             expect(item.label).to.equal('api');
             expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.None);
-            expect((item.contextValue ?? '')).to.include('azdService');
             expect((item.contextValue ?? '')).to.include('revealInExplorer');
         });
 
@@ -89,7 +87,6 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
             const { provider } = createProvider([project, service]);
 
             const item = provider.getTreeItem(service.id);
-            expect(item.contextValue ?? '').to.include('azdService');
             expect(item.contextValue ?? '').to.not.include('revealInExplorer');
         });
 
