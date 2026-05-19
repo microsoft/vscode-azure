@@ -118,17 +118,22 @@ View providers control presentation without modifying the data layer. They may:
 
 Both layers extend `ProviderRegistry`, which maintains an ordered list of providers. `findProvider(resource)` returns the **first** provider whose `canHandle(resource)` returns `true`.
 
-**Registration order matters** — specific providers must be registered before broader fallback providers:
+**Registration order matters** — specific providers must be registered before broader fallback providers. In `registerTrees.ts`, each tree is configured via a `TreeConfig` object whose `dataProviders` and `viewProviders` arrays are processed in order:
 
 ```typescript
 // In registerTrees.ts — AcrDataProvider before GenericAzureDataProvider
-container.bind(IAzureViewDataProviders).to(AcrDataProvider);
-container.bind(IAzureViewDataProviders).to(GenericAzureDataProvider); // fallback
+dataProviders: [
+    AcrDataProvider,
+    [IFunctionAppDataProvider, FunctionAppDataProvider], // singleton+alias tuple
+    GenericAzureDataProvider,                            // fallback
+],
 ```
+
+Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly). See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
 
 ## Workspace (Local) Tree
 
-A second tree view in the same container as the resources tree shows
+A tree view in the same container as the resources tree shows
 items that live "locally" rather than in Azure. It uses the same
 `DataItemTree` / `ViewItemTree` infrastructure as the resources tree
 but with a short 60-second TTL so newly-added marker files
@@ -215,7 +220,15 @@ interface Activity {
 | `CodeDeploymentDataProvider` | Yes | Tracks code deployments (e.g. `azd deploy`). `trackDeployment()` returns a `CodeDeploymentHandle` for controlling lifecycle and adding children. The handle exposes `complete(status, error?)` and `addChild(title, status?)` — the provider owns all mutations and fires change events internally. |
 | `GenericActivityDataProvider` | Yes | Tracks simple one-off activities (leaf nodes, no children). |
 
-Activity providers are bound with `.toSelf().inSingletonScope()` first, then aliased with `.toService()` to the multi-binding identifier. This allows commands (e.g. `ClearActivities`) to inject specific providers directly while the tree still retrieves all providers collectively.
+Activity providers are registered as `[primaryId, Class]` tuples in the `dataProviders` array, which binds each as a singleton under its own identifier and aliases it into the collection. This allows commands (e.g. `ClearActivities`) to inject specific providers directly while the tree still retrieves all providers collectively:
+
+```typescript
+dataProviders: [
+    [IArmDeploymentDataProvider, ArmDeploymentDataProvider],
+    [ICodeDeploymentDataProvider, CodeDeploymentDataProvider],
+    [IGenericActivityDataProvider, GenericActivityDataProvider],
+],
+```
 
 ### Activity View Providers
 
