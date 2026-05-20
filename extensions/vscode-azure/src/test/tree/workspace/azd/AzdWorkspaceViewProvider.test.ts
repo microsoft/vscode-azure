@@ -69,7 +69,7 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
         it('renders an azdService leaf with revealInExplorer context when a folder exists', () => {
             const project = makeAzdProjectNode();
             const service = makeAzdServiceNode({
-                resourceUri: { path: '/repo/src/api', toString() { return 'file:///repo/src/api'; } } as never,
+                projectFolderUri: { path: '/repo/src/api', toString() { return 'file:///repo/src/api'; } } as never,
             });
             const { provider, code } = createProvider([project, service]);
 
@@ -81,7 +81,7 @@ describe('AzdWorkspaceViewProvider (unit)', () => {
 
         it('omits revealInExplorer from context when service has no project folder', () => {
             const project = makeAzdProjectNode();
-            const service = makeAzdServiceNode(); // no resourceUri
+            const service = makeAzdServiceNode(); // no projectFolderUri
             const { provider } = createProvider([project, service]);
 
             const item = provider.getTreeItem(service.id);

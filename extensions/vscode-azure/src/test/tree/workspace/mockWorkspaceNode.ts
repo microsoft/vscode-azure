@@ -14,37 +14,35 @@ import {
 } from '../../../tree/workspace/WorkspaceNode';
 
 export function makeAzdProjectNode(overrides?: Partial<AzdProjectNode>): AzdProjectNode {
-    const folder = overrides?.resourceUri ?? MockUri.file('/repo');
-    const yaml = overrides?.azureYamlUri ?? MockUri.file('/repo/azure.yaml');
+    const yaml = overrides?.resourceUri ?? MockUri.file('/repo/azure.yaml');
     return {
-        id: `${AzdProjectKeyPrefix}${folder.toString()}`,
+        id: `${AzdProjectKeyPrefix}${yaml.toString()}`,
         type: 'azdProject',
         label: 'repo',
-        resourceUri: folder,
-        azureYamlUri: yaml,
+        resourceUri: yaml,
         ...overrides,
     };
 }
 
 export function makeAzdServiceNode(overrides?: Partial<AzdServiceNode>): AzdServiceNode {
-    const folder = overrides?.projectFolderUri ?? MockUri.file('/repo');
+    const yaml = overrides?.resourceUri ?? MockUri.file('/repo/azure.yaml');
     return {
-        id: `${AzdServiceKeyPrefix}${folder.toString()}/api`,
+        id: `${AzdServiceKeyPrefix}${yaml.toString()}/api`,
         type: 'azdService',
         label: 'api',
         serviceName: 'api',
-        projectFolderUri: folder,
+        resourceUri: yaml,
         ...overrides,
     };
 }
 
 export function makeFunctionsProjectNode(overrides?: Partial<FunctionsProjectNode>): FunctionsProjectNode {
-    const folder = overrides?.resourceUri ?? MockUri.file('/repo');
+    const hostJson = overrides?.resourceUri ?? MockUri.file('/repo/host.json');
     return {
-        id: `${FunctionsProjectKeyPrefix}${folder.toString()}`,
+        id: `${FunctionsProjectKeyPrefix}${hostJson.toString()}`,
         type: 'functionsProject',
         label: 'repo',
-        resourceUri: folder,
+        resourceUri: hostJson,
         ...overrides,
     };
 }

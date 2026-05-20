@@ -81,9 +81,18 @@ export class MockUri implements vscode.Uri {
         return new MockUri(components.scheme, path, path, components.authority ?? '', components.query ?? '', components.fragment ?? '');
     }
 
-    /** Joins additional path segments onto `base` using `/` as separator. */
+    /** Joins additional path segments onto `base` using `/` as separator, resolving `.` and `..`. */
     static joinPath(base: MockUri, ...segments: string[]) {
-        const joined = [base.path, ...segments].join('/');
-        return new MockUri(base.scheme, joined, joined, base.authority);
+        const parts = [base.path, ...segments].join('/').split('/');
+        const resolved: string[] = [];
+        for (const p of parts) {
+            if (p === '..') {
+                resolved.pop();
+            } else if (p !== '.' && p !== '') {
+                resolved.push(p);
+            }
+        }
+        const path = '/' + resolved.join('/');
+        return new MockUri(base.scheme, path, path, base.authority);
     }
 }

@@ -50,13 +50,11 @@ export interface WorkspaceNode {
     readonly resourceUri?: vscode.Uri;
 }
 
-/** A folder containing an `azure.yaml` / `azure.yml` (an azd project). */
+/** An azd project identified by its `azure.yaml` / `azure.yml` file. */
 export interface AzdProjectNode extends WorkspaceNode {
     readonly type: 'azdProject';
-    /** Folder containing the `azure.yaml` file. */
-    readonly resourceUri: vscode.Uri;
     /** URI of the `azure.yaml` (or `azure.yml`) file itself. */
-    readonly azureYamlUri: vscode.Uri;
+    readonly resourceUri: vscode.Uri;
 }
 
 /** A single service declared under `services:` in `azure.yaml`. */
@@ -64,19 +62,19 @@ export interface AzdServiceNode extends WorkspaceNode {
     readonly type: 'azdService';
     /** The service name as it appears under `services:` in `azure.yaml`. */
     readonly serviceName: string;
-    /** Folder of the parent azd project. */
-    readonly projectFolderUri: vscode.Uri;
+    /** URI of the parent project's `azure.yaml` file. */
+    readonly resourceUri: vscode.Uri;
     /**
-     * URI of the service folder on disk, if a `project:` value was found
-     * in `azure.yaml` and the folder exists.
+     * URI of the service's project folder on disk, if a `project:` value
+     * was found in `azure.yaml` and the folder exists.
      */
-    readonly resourceUri?: vscode.Uri;
+    readonly projectFolderUri?: vscode.Uri;
 }
 
-/** A folder containing an Azure Functions `host.json`. */
+/** An Azure Functions project identified by its `host.json` file. */
 export interface FunctionsProjectNode extends WorkspaceNode {
     readonly type: 'functionsProject';
-    /** Folder containing the `host.json` file. */
+    /** URI of the `host.json` file itself. */
     readonly resourceUri: vscode.Uri;
 }
 

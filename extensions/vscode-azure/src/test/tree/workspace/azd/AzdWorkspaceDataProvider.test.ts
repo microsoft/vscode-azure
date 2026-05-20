@@ -77,6 +77,7 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(children).to.have.length(1);
             expect(isAzdProjectNode(children[0])).to.be.true;
             expect(children[0].label).to.equal('repo');
+            expect(children[0].resourceUri.toString()).to.equal(yamlUri.toString());
             expect(azd.findAzureYaml.mock.callCount()).to.equal(1);
         });
 
@@ -94,8 +95,7 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
         it('returns no services when azd show fails', async () => {
             const { provider, mock: m } = createProvider({ showFor: () => undefined });
             const project = makeAzdProjectNode({
-                resourceUri: m.vscode.Uri.file('/repo'),
-                azureYamlUri: m.vscode.Uri.file('/repo/azure.yaml'),
+                resourceUri: m.vscode.Uri.file('/repo/azure.yaml'),
             });
             expect(await provider.getChildren(project)).to.deep.equal([]);
         });
@@ -105,8 +105,7 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
                 showFor: () => ({ name: 'app' }),
             });
             const project = makeAzdProjectNode({
-                resourceUri: m.vscode.Uri.file('/repo'),
-                azureYamlUri: m.vscode.Uri.file('/repo/azure.yaml'),
+                resourceUri: m.vscode.Uri.file('/repo/azure.yaml'),
             });
             expect(await provider.getChildren(project)).to.deep.equal([]);
         });
@@ -126,8 +125,7 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             m.fs.addFile(m.vscode.Uri.file('/repo/src/web'));
 
             const project = makeAzdProjectNode({
-                resourceUri: m.vscode.Uri.file('/repo'),
-                azureYamlUri: m.vscode.Uri.file('/repo/azure.yaml'),
+                resourceUri: m.vscode.Uri.file('/repo/azure.yaml'),
             });
 
             const services = await provider.getChildren(project);
@@ -135,43 +133,41 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(services.every(isAzdServiceNode)).to.be.true;
             const first = services[0];
             if (isAzdServiceNode(first)) {
-                expect(first.resourceUri).to.not.equal(undefined);
+                expect(first.projectFolderUri).to.not.equal(undefined);
             }
         });
 
-        it('omits resourceUri when the service folder does not exist on disk', async () => {
+        it('omits projectFolderUri when the service folder does not exist on disk', async () => {
             const { provider, mock: m } = createProvider({
                 showFor: () => ({
                     services: { api: { relativePath: './missing' } },
                 }),
             });
             const project = makeAzdProjectNode({
-                resourceUri: m.vscode.Uri.file('/repo'),
-                azureYamlUri: m.vscode.Uri.file('/repo/azure.yaml'),
+                resourceUri: m.vscode.Uri.file('/repo/azure.yaml'),
             });
 
             const services = await provider.getChildren(project);
             expect(services).to.have.length(1);
             const svc = services[0];
             if (isAzdServiceNode(svc)) {
-                expect(svc.resourceUri).to.equal(undefined);
+                expect(svc.projectFolderUri).to.equal(undefined);
             }
         });
 
-        it('omits resourceUri when the descriptor has no relativePath', async () => {
+        it('omits projectFolderUri when the descriptor has no relativePath', async () => {
             const { provider, mock: m } = createProvider({
                 showFor: () => ({ services: { api: {} } }),
             });
             const project = makeAzdProjectNode({
-                resourceUri: m.vscode.Uri.file('/repo'),
-                azureYamlUri: m.vscode.Uri.file('/repo/azure.yaml'),
+                resourceUri: m.vscode.Uri.file('/repo/azure.yaml'),
             });
 
             const services = await provider.getChildren(project);
             expect(services).to.have.length(1);
             const svc = services[0];
             if (isAzdServiceNode(svc)) {
-                expect(svc.resourceUri).to.equal(undefined);
+                expect(svc.projectFolderUri).to.equal(undefined);
             }
         });
 

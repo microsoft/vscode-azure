@@ -88,11 +88,10 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
             const folder = this.code.workspace.getWorkspaceFolder(azureYamlUri);
             if (folder) {
                 projects.push({
-                    id: `${AzdProjectKeyPrefix}${folder.uri.toString()}`,
+                    id: `${AzdProjectKeyPrefix}${azureYamlUri.toString()}`,
                     type: 'azdProject',
                     label: folder.name,
-                    resourceUri: folder.uri,
-                    azureYamlUri,
+                    resourceUri: azureYamlUri,
                 });
             }
         }
@@ -107,7 +106,8 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
      * than blanking out the tree.
      */
     private async getServices(project: AzdProjectNode): Promise<AzdServiceNode[]> {
-        const show = await this.azd.show(project.resourceUri);
+        const projectFolder = this.code.Uri.joinPath(project.resourceUri, '..');
+        const show = await this.azd.show(projectFolder);
         const servicesMap = show?.services ?? {};
         const serviceNames = Object.keys(servicesMap);
         this.executor.output.debug(`[data] azd workspace: ${project.resourceUri.toString()} services=${serviceNames.length}`);
@@ -115,14 +115,14 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
         const result: AzdServiceNode[] = [];
         for (const name of serviceNames) {
             const descriptor = servicesMap[name];
-            let resourceUri: vscode.Uri | undefined;
+            let projectFolderUri: vscode.Uri | undefined;
             if (descriptor.relativePath) {
                 const candidate = this.code.Uri.joinPath(
-                    project.resourceUri,
+                    projectFolder,
                     ...descriptor.relativePath.split(/[\\/]/).filter(Boolean),
                 );
                 if (await fileExists(this.code, candidate)) {
-                    resourceUri = candidate;
+                    projectFolderUri = candidate;
                 }
             }
             result.push({
@@ -130,8 +130,8 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
                 type: 'azdService',
                 label: name,
                 serviceName: name,
-                projectFolderUri: project.resourceUri,
-                resourceUri,
+                resourceUri: project.resourceUri,
+                projectFolderUri,
             });
         }
         return result;

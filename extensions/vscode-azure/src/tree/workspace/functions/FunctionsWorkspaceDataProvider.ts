@@ -41,10 +41,20 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
     ) {
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => {
-            this.executor.output.debug('[data] functions workspace: folders changed');
+        const invalidateAll = (reason: string) => {
+            this.executor.output.debug(`[data] functions workspace: ${reason}`);
             this.changeEmitter.fire({ resource: undefined, includeChildren: true });
-        }));
+        };
+
+        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));
+
+        const watcher = code.workspace.createFileSystemWatcher(FunctionsHostFileName);
+        this.disposables.push(
+            watcher,
+            watcher.onDidCreate(() => { invalidateAll('host.json created'); }),
+            watcher.onDidChange(() => { invalidateAll('host.json changed'); }),
+            watcher.onDidDelete(() => { invalidateAll('host.json deleted'); }),
+        );
     }
 
     /** @inheritdoc */
@@ -62,7 +72,6 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
     }
 
     // TODO: show the individual functions
-    // TODO: detect changes and update accordingly
     private async discoverProjects(): Promise<FunctionsProjectNode[]> {
         const hostJsons = await this.code.workspace.findFiles(FunctionsHostFileName, undefined, 5);
         const projects: FunctionsProjectNode[] = [];
@@ -70,10 +79,10 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
             const folder = this.code.workspace.getWorkspaceFolder(uri);
             if (folder) {
                 projects.push({
-                    id: `${FunctionsProjectKeyPrefix}${folder.uri.toString()}`,
+                    id: `${FunctionsProjectKeyPrefix}${uri.toString()}`,
                     type: 'functionsProject',
                     label: folder.name,
-                    resourceUri: folder.uri,
+                    resourceUri: uri,
                 });
             }
         }

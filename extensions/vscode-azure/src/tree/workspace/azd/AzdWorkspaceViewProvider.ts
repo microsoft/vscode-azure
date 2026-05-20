@@ -73,7 +73,7 @@ function toAzdProjectTreeItem(ctx: ICodeContext, node: AzdProjectNode): ITreeIte
     item.description = ctx.code.l10n.t('Azure Developer CLI');
     item.iconPath = getAzureIconUri(ctx, 'azd');
     item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
-    item.tooltip = node.azureYamlUri.path;
+    item.tooltip = node.resourceUri.fsPath;
     return item;
 }
 
@@ -81,10 +81,10 @@ function toAzdServiceTreeItem(ctx: ICodeContext, node: AzdServiceNode): ITreeIte
     const item = new ctx.code.TreeItem(node.label, ctx.code.TreeItemCollapsibleState.None);
     item.id = node.id;
     item.iconPath = new ctx.code.ThemeIcon('package');
-    if (node.resourceUri) {
-        item.description = basename(node.resourceUri);
+    if (node.projectFolderUri) {
+        item.description = basename(node.projectFolderUri);
         item.contextValue = combineContextValues(RevealInExplorer.ContextValue);
-        item.tooltip = node.resourceUri.path;
+        item.tooltip = node.projectFolderUri.fsPath;
     } else {
         item.description = ctx.code.l10n.t('No project folder');
     }

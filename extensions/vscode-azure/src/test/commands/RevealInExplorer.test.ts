@@ -28,8 +28,19 @@ describe('RevealInExplorer (unit)', () => {
         expect(arg).to.equal(node.resourceUri);
     });
 
+    it('forwards projectFolderUri for azdService nodes', async () => {
+        const projectFolder = { path: '/repo/src/api', toString() { return 'file:///repo/src/api'; } } as never;
+        const node = makeAzdServiceNode({ projectFolderUri: projectFolder });
+        const { cmd, executeCommand } = setUp(node);
+
+        await cmd.execute(node.id);
+        expect(executeCommand.mock.callCount()).to.equal(1);
+        const [, arg] = executeCommand.mock.calls[0].arguments;
+        expect(arg).to.equal(projectFolder);
+    });
+
     it('is a no-op for nodes without a resourceUri', async () => {
-        const node = makeAzdServiceNode(); // no resourceUri
+        const node = { id: 'azwr://test', type: 'emulatorsGroup', label: 'test' };
         const { cmd, executeCommand } = setUp(node);
 
         await cmd.execute(node.id);
