@@ -180,9 +180,9 @@ each provider's guard accepts only its own variants.
 |----------|-----------|-------------|
 | `AzdWorkspaceViewProvider` | `azwr://azdProject/`, `azwr://azdService/` | azd icon for projects, package icon for services. |
 | `FunctionsWorkspaceViewProvider` | `azwr://functionsProject/` | Function App resource-type icon. |
-| `EmulatorsWorkspaceViewProvider` | `azwr://emulator` (covers group + entries) | Server-environment icon for the group, debug-disconnect for entries. |
+| `EmulatorsWorkspaceViewProvider` | `azwr://emulatorsGroup`, `azwr://emulator/` | Server-environment icon for the group, debug-disconnect for entries. |
 
-View providers dispatch by key prefix (the data-layer ids embed the
+View providers dispatch by key prefix or exact id (the data-layer ids embed the
 discriminator), keeping their `canHandle` checks self-contained.
 
 ### Workspace Commands
