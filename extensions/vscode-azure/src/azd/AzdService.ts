@@ -406,8 +406,8 @@ export class AzdService implements IAzdService {
 
     /**
      * Wraps errors from `azd` commands with actionable messages.
-     * - ENOENT → azd not installed
-     * - Other errors → checks the installed version and reports if
+     * - ENOENT -> azd not installed
+     * - Other errors -> checks the installed version and reports if
      *   it is below {@linkcode MinAzdVersion}
      *
      * Shows a toast with an "Install" button and suppresses the
