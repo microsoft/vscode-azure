@@ -131,12 +131,13 @@ export interface AzdShowResult {
 export interface AzdServiceDescriptor extends Record<string, unknown> {
     /** Ingress URL for the deployed service, if available. */
     readonly ingressUrl?: string;
-    /**
-     * Path to the service's source folder, relative to the project root
-     * (the folder containing `azure.yaml`). Mirrors the `project:` field
-     * declared under `services:` in `azure.yaml`.
-     */
-    readonly relativePath?: string;
+    /** Project containing the source code for this service. */
+    readonly project?: {
+        /** Absolute filesystem path to the service's project folder. */
+        readonly path?: string;
+        /** Programming language of the service. */
+        readonly language?: string;
+    };
 }
 
 /** Result of `azd version --output json`. */

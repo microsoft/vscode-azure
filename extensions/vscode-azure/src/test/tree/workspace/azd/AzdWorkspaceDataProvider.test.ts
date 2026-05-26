@@ -115,8 +115,8 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
                 showFor: () => ({
                     name: 'app',
                     services: {
-                        api: { relativePath: 'src/api' },
-                        web: { relativePath: 'src/web' },
+                        api: { project: { path: '/repo/src/api', language: 'node' } },
+                        web: { project: { path: '/repo/src/web', language: 'node' } },
                     },
                 }),
             });
@@ -133,14 +133,16 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(services.every(isAzdServiceNode)).to.be.true;
             const first = services[0];
             if (isAzdServiceNode(first)) {
-                expect(first.projectFolderUri).to.not.equal(undefined);
+                expect(first.projectFolderUri?.toString()).to.equal(
+                    m.vscode.Uri.file('/repo/src/api').toString(),
+                );
             }
         });
 
         it('omits projectFolderUri when the service folder does not exist on disk', async () => {
             const { provider, mock: m } = createProvider({
                 showFor: () => ({
-                    services: { api: { relativePath: './missing' } },
+                    services: { api: { project: { path: '/repo/src/missing' } } },
                 }),
             });
             const project = makeAzdProjectNode({
@@ -155,7 +157,7 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             }
         });
 
-        it('omits projectFolderUri when the descriptor has no relativePath', async () => {
+        it('omits projectFolderUri when the descriptor has no project path', async () => {
             const { provider, mock: m } = createProvider({
                 showFor: () => ({ services: { api: {} } }),
             });

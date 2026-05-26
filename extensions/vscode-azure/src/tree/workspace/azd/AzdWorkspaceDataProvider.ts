@@ -116,11 +116,8 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
         for (const name of serviceNames) {
             const descriptor = servicesMap[name];
             let projectFolderUri: vscode.Uri | undefined;
-            if (descriptor.relativePath) {
-                const candidate = this.code.Uri.joinPath(
-                    projectFolder,
-                    ...descriptor.relativePath.split(/[\\/]/).filter(Boolean),
-                );
+            if (descriptor.project?.path) {
+                const candidate = this.code.Uri.file(descriptor.project.path);
                 if (await fileExists(this.code, candidate)) {
                     projectFolderUri = candidate;
                 }
