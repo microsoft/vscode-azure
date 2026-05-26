@@ -178,4 +178,53 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(await provider.getChildren(makeAzdServiceNode())).to.deep.equal([]);
         });
     });
+
+    describe('enrich', () => {
+        it('replaces the folder-name label with the project name from azd show', async () => {
+            const { provider, mock: m, azd } = createProvider({
+                showFor: () => ({ name: 'my-app' }),
+            });
+            const project = makeAzdProjectNode({
+                label: 'repo',
+                resourceUri: m.vscode.Uri.file('/repo/azure.yaml'),
+            });
+
+            const changed = await provider.enrich(project);
+            expect(changed).to.be.false;
+            expect(project.label).to.equal('my-app');
+            expect(azd.show.mock.callCount()).to.equal(1);
+        });
+
+        it('leaves the label untouched when azd show fails', async () => {
+            const { provider, mock: m } = createProvider({ showFor: () => undefined });
+            const project = makeAzdProjectNode({
+                label: 'repo',
+                resourceUri: m.vscode.Uri.file('/repo/azure.yaml'),
+            });
+
+            await provider.enrich(project);
+            expect(project.label).to.equal('repo');
+        });
+
+        it('leaves the label untouched when azd show returns no name', async () => {
+            const { provider, mock: m } = createProvider({ showFor: () => ({}) });
+            const project = makeAzdProjectNode({
+                label: 'repo',
+                resourceUri: m.vscode.Uri.file('/repo/azure.yaml'),
+            });
+
+            await provider.enrich(project);
+            expect(project.label).to.equal('repo');
+        });
+
+        it('is a no-op for service nodes', async () => {
+            const { provider, azd } = createProvider();
+            const service = makeAzdServiceNode({ label: 'api' });
+
+            const changed = await provider.enrich(service);
+            expect(changed).to.be.false;
+            expect(service.label).to.equal('api');
+            expect(azd.show.mock.callCount()).to.equal(0);
+        });
+    });
 });

@@ -78,6 +78,28 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
     }
 
     /**
+     * Replace the initial folder-name label on an {@linkcode AzdProjectNode}
+     * with the `name:` from `azure.yaml`, as reported by `azd show`. Runs
+     * in the background after the node is loaded so the tree appears
+     * immediately with the folder name and updates once `azd` responds.
+     * Service nodes need no enrichment.
+     *
+     * @returns Always `false`; the project name is presentation-only and
+     * does not affect the list of child services.
+     */
+    public async enrich(resource: AzdProjectNode | AzdServiceNode): Promise<boolean> {
+        if (!isAzdProjectNode(resource)) {
+            return false;
+        }
+        const projectFolder = this.code.Uri.joinPath(resource.resourceUri, '..');
+        const show = await this.azd.show(projectFolder);
+        if (show?.name) {
+            Object.assign(resource, { label: show.name });
+        }
+        return false;
+    }
+
+    /**
      * Discover azd projects by searching for `azure.yaml` / `azure.yml`
      * across all open workspace folders via {@linkcode IAzdService.findAzureYaml}.
      */
