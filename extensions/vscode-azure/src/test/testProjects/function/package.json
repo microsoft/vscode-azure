@@ -1,0 +1,17 @@
+{
+  "name": "azure-functions-app",
+  "version": "1.0.0",
+  "main": "dist/src/functions/httpTrigger.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "start": "func start",
+    "prestart": "npm run build"
+  },
+  "dependencies": {
+    "@azure/functions": "~4"
+  },
+  "devDependencies": {
+    "typescript": "~5"
+  }
+}
