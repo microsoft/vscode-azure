@@ -116,7 +116,7 @@ export function preApply(container: Container): void {
     );
 
     container.rebind(IDeploymentClientProvider).toConstantValue(
-        () => Promise.reject(new Error('Mock mode: deployments not available')),
+        () => { throw new Error('Mock mode: deployments not available'); },
     );
     container.rebind(ISubscriptionClientProvider).toConstantValue(
         () => { throw new Error('Mock mode: subscription client not available'); },

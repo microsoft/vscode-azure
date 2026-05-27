@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { RegistriesGetOptionalParams } from '@azure/arm-containerregistry';
 import type { Registry as SdkRegistry, Sku as SdkSku } from '@azure/arm-containerregistry/models';
 /* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
 import { type ContainerRegistryManagementClientOptionalParams, type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
-import { get as sdkGetRegistry } from '@azure/arm-containerregistry/api/registries';
+import { type RegistriesGetOptionalParams, get as sdkGetRegistry } from '@azure/arm-containerregistry/api/registries';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { AsyncFactory, IActionExecutor, ICodeContext, WithRequired } from '@microsoft/vscode-azure-utils';

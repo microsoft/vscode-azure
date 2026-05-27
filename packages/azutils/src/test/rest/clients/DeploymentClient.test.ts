@@ -29,7 +29,7 @@ describe('DeploymentClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, deploymentBody),
         });
 
-        const client = await DeploymentClient.create(ctx, executor, subscription, { httpClient });
+        const client = DeploymentClient.create(ctx, executor, subscription, { httpClient });
         const deployment = await client.deployments.getAtScope(
             '/subscriptions/test-sub/resourceGroups/rg1',
             'myDeploy',
@@ -56,7 +56,7 @@ describe('DeploymentClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, operationsBody),
         });
 
-        const client = await DeploymentClient.create(ctx, executor, subscription, { httpClient });
+        const client = DeploymentClient.create(ctx, executor, subscription, { httpClient });
         const pages: unknown[][] = [];
         for await (const page of client.deploymentOperations.listAtScope(
             '/subscriptions/test-sub/resourceGroups/rg1',

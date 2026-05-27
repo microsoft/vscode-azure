@@ -4,14 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type {
-    SubscriptionsListLocationsOptionalParams,
-} from '@azure/arm-resources-subscriptions';
-import type {
     Location,
 } from '@azure/arm-resources-subscriptions/models';
 /* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
-import { type SubscriptionClientOptionalParams, type SubscriptionContext, createSubscription } from '@azure/arm-resources-subscriptions/api';
-import { listLocations as sdkListLocations } from '@azure/arm-resources-subscriptions/api/subscriptions';
+import { createSubscription, type SubscriptionClientOptionalParams, type SubscriptionContext } from '@azure/arm-resources-subscriptions/api';
+import { listLocations as sdkListLocations, type SubscriptionsListLocationsOptionalParams } from '@azure/arm-resources-subscriptions/api/subscriptions';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';

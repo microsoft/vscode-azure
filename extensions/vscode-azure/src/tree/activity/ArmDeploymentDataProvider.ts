@@ -9,7 +9,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, flattenPages, IActionExecutor, InflightMap, IVsCode,
+    EventEmitter, flattenPages, IActionExecutor, IVsCode,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -78,7 +78,6 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
     private readonly activePolls = new Set<string>();
-    private readonly clientCache = new InflightMap<IDeploymentClient>();
 
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<ArmDeploymentActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
@@ -118,7 +117,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             return false;
         }
 
-        const client = await this.getOrCreateClient(resource.subscription);
+        const client = this.createClient(resource.subscription);
         resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
 
         // Start polling if not terminal and not already polling
@@ -188,7 +187,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                         context.telemetry.suppress = 'onSuccess';
                         context.telemetry.isUserEvent = false;
                         context.errorHandling.rethrow = true;
-                        const client = await this.getOrCreateClient(activity.subscription);
+                        const client = this.createClient(activity.subscription);
 
                         const [deployment, operations] = await Promise.all([
                             client.deployments.getAtScope(
@@ -356,10 +355,6 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         }
 
         return results;
-    }
-
-    private getOrCreateClient(subscription: AzureSubscription): Promise<IDeploymentClient> {
-        return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
     }
 
     /**
