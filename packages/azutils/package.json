@@ -50,7 +50,7 @@
         "@azure/core-client": "^1.10.1",
         "@azure/core-paging": "^1.6.2",
         "@azure/core-rest-pipeline": "^1.23.0",
-        "@microsoft/vscode-azext-azureauth": "^6.0.0-alpha.8",
+        "@microsoft/vscode-azext-azureauth": "^6.1.0-alpha.1",
         "inversify": "*"
     },
     "mocha": {
