@@ -18,6 +18,7 @@ import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureRestSubscriptionClient } from '../createAzureClient';
+import { toPages } from '../toPages';
 
 /**
  * Subset of {@linkcode SdkDeploymentExtended} with fields that the ARM API always returns.
@@ -81,12 +82,7 @@ export class DeploymentClient implements IDeploymentClient {
         return { listAtScope: (scope, deploymentName, options) => this.listOperationsAtScope(scope, deploymentName, options) };
     }
 
-    private async *listOperationsAtScope(scope: string, deploymentName: string, options?: DeploymentOperationsListAtScopeOptionalParams): AsyncIterable<Page<SdkDeploymentOperation>> {
-        for await (const page of sdkListAtScope(this.inner, scope, deploymentName, options).byPage()) {
-            yield {
-                items: [...page],
-                hasMore: !!page.continuationToken,
-            };
-        }
+    private listOperationsAtScope(scope: string, deploymentName: string, options?: DeploymentOperationsListAtScopeOptionalParams): AsyncIterable<Page<SdkDeploymentOperation>> {
+        return toPages(sdkListAtScope(this.inner, scope, deploymentName, options));
     }
 }
