@@ -156,7 +156,7 @@ container.bind(IResourceClientProvider).toFactory(context => {
 });
 ```
 
-The resulting type is `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. Commands and data providers inject the factory and call it with the relevant subscription:
+The resulting type is `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. Clients whose `create()` is synchronous (e.g. `SubscriptionClient`) use the sibling `SyncFactory<T, TArgs>` type instead, which returns `T` directly. Both types live in `packages/utils/src/types/Factory.ts`. Commands and data providers inject the factory and call it with the relevant subscription:
 
 ```typescript
 @inject(IResourceClientProvider) private readonly getResourceClient: IResourceClientProvider

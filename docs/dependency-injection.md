@@ -178,7 +178,7 @@ container.bind(IResourceClientProvider).toFactory(context => {
 });
 ```
 
-The resulting `IResourceClientProvider` type is an `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. See [Azure Clients](azure-clients.md) for details on the client wrappers.
+The resulting `IResourceClientProvider` type is an `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. The sibling `SyncFactory<T, TArgs>` type (same shape but returns `T` instead of `Promise<T>`) is used for clients whose `create()` is synchronous, such as `ISubscriptionClientProvider`. Both types are defined in `packages/utils/src/types/Factory.ts`. See [Azure Clients](azure-clients.md) for details on the client wrappers.
 
 ## Multi-Binding with Dual Registration
 
