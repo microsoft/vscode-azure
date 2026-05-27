@@ -78,24 +78,38 @@ export function createAzureSubscriptionClient<TClient extends ServiceClient, TOp
     return new clientCtor(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions));
 }
 
-// TODO: future: uncomment or remove as needed
-// export function createAzureRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
-//     ctx: ICodeContext,
-//     executor: IActionExecutor,
-//     getClient: (credential: TokenCredential, options?: TOptions) => TClient,
-//     credential: TokenCredential,
-//     options?: TOptions,
-// ): TClient {
-//     return getClient(credential, applyDefaults(ctx, executor, options));
-// }
+/**
+ * REST-style (`@azure-rest/core-client`) factory for SDKs whose
+ * `create*(credential, options?)` free function does **not** take a
+ * `subscriptionId` (e.g. `@azure/arm-resources-subscriptions`).
+ *
+ * Applies the standard set of pipeline policies (see
+ * {@linkcode DedupeRequestPolicy}, {@linkcode CorrelationIdPolicy},
+ * {@linkcode AcceptLanguagePolicy}, {@linkcode MFAChallengePolicy},
+ * {@linkcode RemoveBOMPolicy}) and a user-agent prefix derived from
+ * the extension id/version.
+ */
+export function createAzureRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
+    ctx: ICodeContext,
+    executor: IActionExecutor,
+    getClient: (credential: TokenCredential, options?: TOptions) => TClient,
+    credentialOrSubscription: TokenCredential | AzureSubscription,
+    options?: TOptions,
+): TClient {
+    const { credential, resolvedOptions } = resolveCredentialArgs<TOptions>(credentialOrSubscription, options);
+    executor.output.debug(`[rest] create rest client ${getClient.name}`);
+    return getClient(credential, applyDefaults(ctx, executor, resolvedOptions));
+}
 
 /**
  * REST-style (`@azure-rest/core-client`) subscription-scoped factory.
  *
- * Equivalent to {@linkcode createAzureSubscriptionClient} but for the
- * newer SDKs that export a `create*Management(credential, subscriptionId, options?)`
- * free function instead of a class constructor (e.g.
- * `@azure/arm-containerregistry`).
+ * For the newer SDKs that export a
+ * `create*Management(credential, subscriptionId, options?)` free function
+ * instead of a class constructor (e.g. `@azure/arm-containerregistry`).
+ *
+ * Applies the standard set of pipeline policies (see
+ * {@linkcode createAzureRestClient}).
  */
 export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
