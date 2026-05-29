@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+export * from './base/delay';
 export * from './base/IActionContext';
 export * from './base/IActionExecutor';
 export * from './base/ICommandRegistry';
 export * from './base/IProcessExecutor';
 export { ITelemetryReporter, createTelemetryReporter } from './base/ITelemetryReporter'; // Excluding `NullTelemetryReporter` since it's only intended for testing
-export * from './base/delay';
 export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './data/Page';
@@ -20,7 +20,7 @@ export * from './tree/pick/RecursivePickStep';
 export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AsWritable';
-export * from './types/AsyncFactory';
+export * from './types/Factory';
 export * from './types/Satisfies';
 export * from './types/WithRequired';
 export * from './ui/uiHelpers';

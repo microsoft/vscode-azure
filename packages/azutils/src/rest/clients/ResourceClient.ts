@@ -116,7 +116,6 @@ export class ResourceClient implements IResourceClient {
     private listResourceGroups(options?: ResourceGroupsListOptionalParams): AsyncIterable<Page<ResourceGroup>> {
         return toPages(
             this.inner.resourceGroups.list(options),
-            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
             rg => {
                 const resourceGroup = attachMetadata(rg, this.subscription);
                 return Object.assign(resourceGroup, {
@@ -124,14 +123,15 @@ export class ResourceClient implements IResourceClient {
                     groupingValue: resourceGroup.name,
                 });
             },
+            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
         );
     }
 
     private listResources(resourceGroupName: string, options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>> {
         return toPages(
             this.inner.resources.listByResourceGroup(resourceGroupName, options),
-            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
             r => attachMetadata(r, this.subscription),
+            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
         );
     }
 }

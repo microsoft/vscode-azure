@@ -24,7 +24,7 @@ describe('AcrDataProvider (unit)', () => {
             },
             ...clientOverrides,
         };
-        const createClient = mock.fn(() => Promise.resolve(mockClient));
+        const createClient = mock.fn(() => mockClient);
         return new AcrDataProvider(executor, createClient as never);
     }
 

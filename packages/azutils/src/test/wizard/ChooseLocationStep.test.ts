@@ -25,7 +25,7 @@ interface TestContext extends PickContext<string> {
 }
 
 function createMockSubscriptionClientProvider(locations: Location[]) {
-    return () => Promise.resolve({
+    return () => ({
         subscriptions: {
             listLocations: () => Promise.resolve(locations),
         },

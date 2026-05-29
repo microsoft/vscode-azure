@@ -4,19 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type {
-    DeploymentOperationsListAtScopeOptionalParams,
-    DeploymentsClient,
-    DeploymentsClientOptionalParams,
-    DeploymentsGetAtScopeOptionalParams,
     DeploymentExtended as SdkDeploymentExtended,
     DeploymentOperation as SdkDeploymentOperation,
     ProvisioningOperation as SdkProvisioningOperation,
     ProvisioningState as SdkProvisioningState,
-} from '@azure/arm-resourcesdeployments';
+} from '@azure/arm-resourcesdeployments/models';
+/* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
+import { createDeployments, type DeploymentsClientOptionalParams, type DeploymentsContext } from '@azure/arm-resourcesdeployments/api';
+import { listAtScope as sdkListAtScope, type DeploymentOperationsListAtScopeOptionalParams } from '@azure/arm-resourcesdeployments/api/deploymentOperations';
+import { getAtScope as sdkGetAtScope, type DeploymentsGetAtScopeOptionalParams } from '@azure/arm-resourcesdeployments/api/deployments';
+/* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, Page, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, Page, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { createAzureSubscriptionClient } from '../createAzureClient';
+import { createAzureRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 /**
@@ -29,7 +30,7 @@ export type ProvisioningState = SdkProvisioningState;
 
 /** Factory that creates an {@linkcode IDeploymentClient} for a given subscription. */
 export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');
-export type IDeploymentClientProvider = AsyncFactory<IDeploymentClient, [AzureSubscription]>;
+export type IDeploymentClientProvider = SyncFactory<IDeploymentClient, [AzureSubscription]>;
 
 /**
  * Interface describing the deployment APIs we use.
@@ -45,40 +46,36 @@ export interface IDeploymentClient {
 }
 
 /**
- * Wrapper around {@linkcode DeploymentsClient} that exposes only the methods
- * we use, with corrected return types.
+ * Wrapper around the `@azure/arm-resourcesdeployments` REST-style SDK that
+ * adapts free functions into the `client.deployments.*` / `client.deploymentOperations.*`
+ * pattern.
  *
- * Use the static {@linkcode create} factory to construct--it lazily imports
- * the SDK to keep load times down.
+ * Use the static {@linkcode create} factory to construct.
  */
 export class DeploymentClient implements IDeploymentClient {
-    private static sdk: typeof import('@azure/arm-resourcesdeployments') | undefined;
-
-    private constructor(private readonly inner: DeploymentsClient) { }
+    private constructor(private readonly inner: DeploymentsContext) { }
 
     /**
-     * Create a new {@linkcode DeploymentClient} instance. Lazily imports
-     * `@azure/arm-resourcesdeployments` on first call.
+     * Create a new {@linkcode DeploymentClient} instance.
      */
-    public static async create(
+    public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
         subscription: AzureSubscription,
         options?: DeploymentsClientOptionalParams,
-    ): Promise<DeploymentClient> {
-        DeploymentClient.sdk ??= await import('@azure/arm-resourcesdeployments');
-        const client = createAzureSubscriptionClient(
+    ): DeploymentClient {
+        const context = createAzureRestSubscriptionClient(
             ctx,
             executor,
-            DeploymentClient.sdk.DeploymentsClient,
+            createDeployments,
             subscription,
             options,
         );
-        return new DeploymentClient(client);
+        return new DeploymentClient(context);
     }
 
     public get deployments(): IDeploymentClient['deployments'] {
-        return this.inner.deployments as IDeploymentClient['deployments'];
+        return { getAtScope: (scope, deploymentName, options) => sdkGetAtScope(this.inner, scope, deploymentName, options) as Promise<DeploymentExtended> };
     }
 
     public get deploymentOperations(): IDeploymentClient['deploymentOperations'] {
@@ -86,9 +83,6 @@ export class DeploymentClient implements IDeploymentClient {
     }
 
     private listOperationsAtScope(scope: string, deploymentName: string, options?: DeploymentOperationsListAtScopeOptionalParams): AsyncIterable<Page<SdkDeploymentOperation>> {
-        return toPages(
-            this.inner.deploymentOperations.listAtScope(scope, deploymentName, options),
-            DeploymentClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
-        );
+        return toPages(sdkListAtScope(this.inner, scope, deploymentName, options));
     }
 }
