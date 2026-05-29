@@ -3,14 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { RegistriesGetOptionalParams } from '@azure/arm-containerregistry';
 import type { Registry as SdkRegistry, Sku as SdkSku } from '@azure/arm-containerregistry/models';
 /* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
 import { type ContainerRegistryManagementClientOptionalParams, type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
-import { get as sdkGetRegistry } from '@azure/arm-containerregistry/api/registries';
+import { type RegistriesGetOptionalParams, get as sdkGetRegistry } from '@azure/arm-containerregistry/api/registries';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, WithRequired } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureRestSubscriptionClient } from '../createAzureClient';
 
@@ -22,7 +21,7 @@ export type Sku = SdkSku;
 
 /** Factory that creates an {@linkcode IAcrClient} for a given subscription. */
 export const IAcrClientProvider: ServiceIdentifier<IAcrClientProvider> = Symbol.for('IAcrClientProvider');
-export type IAcrClientProvider = AsyncFactory<IAcrClient, [AzureSubscription]>;
+export type IAcrClientProvider = SyncFactory<IAcrClient, [AzureSubscription]>;
 
 /**
  * Interface describing the container registry APIs we use.
@@ -57,7 +56,7 @@ export class AcrClient implements IAcrClient {
         executor: IActionExecutor,
         subscription: AzureSubscription,
         options?: ContainerRegistryManagementClientOptionalParams,
-    ): Promise<AcrClient> {
+    ): AcrClient {
         const context = createAzureRestSubscriptionClient(
             ctx,
             executor,
@@ -65,7 +64,7 @@ export class AcrClient implements IAcrClient {
             subscription,
             options,
         );
-        return Promise.resolve(new AcrClient(context, sdkGetRegistry));
+        return new AcrClient(context, sdkGetRegistry);
     }
 
     public get registries(): IAcrClient['registries'] {

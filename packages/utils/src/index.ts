@@ -20,7 +20,7 @@ export * from './tree/pick/RecursivePickStep';
 export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AsWritable';
-export * from './types/AsyncFactory';
+export * from './types/Factory';
 export * from './types/Satisfies';
 export * from './types/WithRequired';
 export * from './ui/uiHelpers';

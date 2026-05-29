@@ -167,18 +167,17 @@ This makes code testable — unit tests can provide a mock `IVsCode` with only t
 
 ## Factory Bindings for Azure Clients
 
-Azure SDK client providers use `.toFactory()` bindings. Each factory captures `ICodeContext`, `IActionExecutor`, and `IOutputChannel`, then returns an async function that creates the client for a given subscription:
+Azure SDK client providers use `.toFactory()` bindings. Each factory captures `ICodeContext` and `IActionExecutor`, then returns a function (sync or async, depending on the client) that creates the client for a given subscription:
 
 ```typescript
 container.bind(IResourceClientProvider).toFactory(context => {
     const ctx = context.get(ICodeContext);
     const executor = context.get(IActionExecutor);
-    const output = context.get(IOutputChannel);
-    return (subscription) => ResourceClient.create(ctx, executor, output, subscription);
+    return (subscription) => ResourceClient.create(ctx, executor, subscription);
 });
 ```
 
-The resulting `IResourceClientProvider` type is an `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. See [Azure Clients](azure-clients.md) for details on the client wrappers.
+The resulting `IResourceClientProvider` type is an `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. The sibling `SyncFactory<T, TArgs>` type (same shape but returns `T` instead of `Promise<T>`) is used for clients whose `create()` is synchronous, such as `IDeploymentClientProvider` and `ISubscriptionClientProvider`. Both types are defined in `packages/utils/src/types/Factory.ts`. See [Azure Clients](azure-clients.md) for details on the client wrappers.
 
 ## Multi-Binding with Dual Registration
 

@@ -41,7 +41,7 @@ export class ChooseLocationStep<TContext extends ChooseLocationContext> extends 
         }
 
         this.output.debug(`[wizard] fetch locations start subscription=${context.subscription.subscriptionId}`);
-        const client = await this.subscriptionClientProvider(context.subscription);
+        const client = this.subscriptionClientProvider(context.subscription);
         const locations = await client.subscriptions.listLocations(context.subscription.subscriptionId);
         this.output.debug(`[wizard] fetch locations done subscription=${context.subscription.subscriptionId} count=${locations.length}`);
 
