@@ -28,7 +28,7 @@ describe('AcrClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, registryBody),
         });
 
-        const client = await AcrClient.create(ctx, executor, subscription, { httpClient });
+        const client = AcrClient.create(ctx, executor, subscription, { httpClient });
         const registry = await client.registries.get('rg1', 'myReg');
 
         expect(registry.name).to.equal('myReg');

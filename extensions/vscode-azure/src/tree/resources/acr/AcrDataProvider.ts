@@ -7,7 +7,7 @@ import {
     getNodeType, IAcrClientProvider, isVirtualResource, parseAzureResourceId,
     type ConcreteAzureNode, type GenericResource, type IAcrClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { isAcrRegistry } from './AcrRegistry';
 
@@ -31,7 +31,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * Cached ARM management clients per subscription ID, so all calls for
      * the same subscription share one client instance.
      */
-    private readonly clientCache = new InflightMap<IAcrClient>();
+    private readonly clientCache = new Map<string, IAcrClient>();
 
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
@@ -59,7 +59,7 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
 
-        const client = await this.getOrCreateClient(resource);
+        const client = this.getOrCreateClient(resource);
         const { resourceGroup: resourceGroupName } = parseAzureResourceId(resource.id);
         if (!resourceGroupName) {
             throw new Error(`Cannot extract resource group name from resource ID: ${resource.id}`);
@@ -118,8 +118,13 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
      * Get or create a cached ARM management client for the given resource's
      * subscription.
      */
-    private getOrCreateClient(resource: GenericResource): Promise<IAcrClient> {
-        return this.clientCache.getOrCreate(resource.subscription.subscriptionId, () => this.createClient(resource.subscription));
+    private getOrCreateClient(resource: GenericResource): IAcrClient {
+        let client = this.clientCache.get(resource.subscription.subscriptionId);
+        if (!client) {
+            client = this.createClient(resource.subscription);
+            this.clientCache.set(resource.subscription.subscriptionId, client);
+        }
+        return client;
     }
 }
 

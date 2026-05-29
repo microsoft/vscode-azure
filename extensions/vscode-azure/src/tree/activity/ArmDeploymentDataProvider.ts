@@ -261,15 +261,6 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         }
     }
 
-    private getClient(subscription: AzureSubscription): IDeploymentClient {
-        let client = this.clientCache.get(subscription.subscriptionId);
-        if (!client) {
-            client = this.createClient(subscription);
-            this.clientCache.set(subscription.subscriptionId, client);
-        }
-        return client;
-    }
-
     /**
      * Extract child deployments from a deployment's operations.
      * Reuses existing objects from {@linkcode knownDeployments} to preserve
@@ -366,6 +357,15 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         }
 
         return results;
+    }
+
+    private getClient(subscription: AzureSubscription): IDeploymentClient {
+        let client = this.clientCache.get(subscription.subscriptionId);
+        if (!client) {
+            client = this.createClient(subscription);
+            this.clientCache.set(subscription.subscriptionId, client);
+        }
+        return client;
     }
 
     /**

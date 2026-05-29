@@ -112,7 +112,7 @@ export function preApply(container: Container): void {
         () => Promise.resolve(createMockResourceClient()),
     );
     container.rebind(IAcrClientProvider).toConstantValue(
-        () => Promise.resolve(createMockAcrClient()),
+        () => createMockAcrClient(),
     );
 
     container.rebind(IDeploymentClientProvider).toConstantValue(
