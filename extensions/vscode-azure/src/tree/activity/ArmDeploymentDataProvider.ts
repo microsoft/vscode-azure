@@ -9,7 +9,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, flattenPages, IActionExecutor, InflightMap, IVsCode,
+    EventEmitter, flattenPages, IActionExecutor, IVsCode,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -79,7 +79,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
     private readonly activePolls = new Set<string>();
     /** Shared deployment clients per subscription to reuse pipelines and dedupe identical GET requests. */
-    private readonly clientCache = new InflightMap<IDeploymentClient>();
+    private readonly clientCache = new Map<string, IDeploymentClient>();
 
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<ArmDeploymentActivity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
@@ -262,7 +262,12 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     }
 
     private getClient(subscription: AzureSubscription): IDeploymentClient {
-        return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
+        let client = this.clientCache.get(subscription.subscriptionId);
+        if (!client) {
+            client = this.createClient(subscription);
+            this.clientCache.set(subscription.subscriptionId, client);
+        }
+        return client;
     }
 
     /**
