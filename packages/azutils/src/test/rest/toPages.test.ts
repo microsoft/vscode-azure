@@ -72,6 +72,26 @@ describe('toPages (unit)', () => {
         expect(result[1].items).to.deep.equal(['item-3']);
     });
 
+    it('should use getContinuationToken when provided (classic SDK shape)', async () => {
+        // Simulate a classic SDK: pages do NOT carry continuationToken on
+        // the array; instead the SDK exposes a separate helper.
+        const tokens = new WeakMap<object, string>();
+        const pages = [[1, 2], [3]];
+        tokens.set(pages[0], 'next-token');
+        const iterator = mockIterator(pages);
+        const getContinuationToken = (page: unknown) => tokens.get(page as object);
+
+        const result: { items: string[]; hasMore: boolean }[] = [];
+        for await (const page of toPages(iterator, (n: number) => `item-${n}`, getContinuationToken)) {
+            result.push(page);
+        }
+
+        expect(result[0].items).to.deep.equal(['item-1', 'item-2']);
+        expect(result[0].hasMore).to.be.true;
+        expect(result[1].items).to.deep.equal(['item-3']);
+        expect(result[1].hasMore).to.be.false;
+    });
+
     it('should handle an empty iterator', async () => {
         const iterator = mockIterator<string>([]);
 

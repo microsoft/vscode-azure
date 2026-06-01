@@ -297,7 +297,7 @@
         "tsx": "*"
     },
     "dependencies": {
-        "@microsoft/vscode-azext-azureauth": "file:../../../vscode-azuretools/auth/microsoft-vscode-azext-azureauth-6.1.0-alpha.9.tgz",
+        "@microsoft/vscode-azext-azureauth": "^6.1.0-alpha.1",
         "@microsoft/vscode-azure-azutils": "*",
         "@microsoft/vscode-azure-utils": "*",
         "@microsoft/vscode-processutils": "^0.2.2",

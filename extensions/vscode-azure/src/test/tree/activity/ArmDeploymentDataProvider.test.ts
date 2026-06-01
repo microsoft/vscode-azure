@@ -133,8 +133,8 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         const { executor } = createTestActionExecutor();
         const { vscode } = createMockVsCode();
         const createClientFn = clientOrFactory
-            ? mock.fn(() => Promise.resolve(clientOrFactory))
-            : mock.fn(() => Promise.resolve({}));
+            ? mock.fn(() => clientOrFactory)
+            : mock.fn(() => ({}));
         return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never);
     }
 

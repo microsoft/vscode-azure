@@ -121,6 +121,7 @@ export class ResourceClient implements IResourceClient {
                     groupingValue: resourceGroup.name,
                 });
             },
+            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
         );
     }
 
@@ -128,6 +129,7 @@ export class ResourceClient implements IResourceClient {
         return toPages(
             sdkListByResourceGroup(this.inner, resourceGroupName, options),
             r => attachMetadata(r, this.subscription),
+            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
         );
     }
 }

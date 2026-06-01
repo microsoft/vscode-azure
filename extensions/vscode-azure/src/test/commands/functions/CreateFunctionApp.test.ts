@@ -35,16 +35,15 @@ describe('CreateFunctionApp (unit)', () => {
         const dataTree = createMockDataItemTree([sub]);
         const viewItemTree = createMockViewItemTree({ '': [subKey] });
 
-        const subscriptionClientProvider: ISubscriptionClientProvider = (() =>
-            Promise.resolve({
-                subscriptions: {
-                    listLocations: mock.fn(() => [
-                        { name: 'eastus', displayName: 'East US' },
-                        { name: 'westus', displayName: 'West US' },
-                    ]),
-                },
-            })
-        ) as unknown as ISubscriptionClientProvider;
+        const subscriptionClientProvider: ISubscriptionClientProvider = () =>
+        ({
+            subscriptions: {
+                listLocations: mock.fn(() => Promise.resolve([
+                    { name: 'eastus', displayName: 'East US' },
+                    { name: 'westus', displayName: 'West US' },
+                ])),
+            },
+        });
 
         const tempManager = new TempDirManager(ctx);
 

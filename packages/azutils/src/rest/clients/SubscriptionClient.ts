@@ -4,17 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type {
-    SubscriptionsListLocationsOptionalParams,
-} from '@azure/arm-resources-subscriptions';
-import type {
     Location,
 } from '@azure/arm-resources-subscriptions/models';
 /* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
-import { type SubscriptionClientOptionalParams, type SubscriptionContext, createSubscription } from '@azure/arm-resources-subscriptions/api';
-import { listLocations as sdkListLocations } from '@azure/arm-resources-subscriptions/api/subscriptions';
+import { createSubscription, type SubscriptionClientOptionalParams, type SubscriptionContext } from '@azure/arm-resources-subscriptions/api';
+import { listLocations as sdkListLocations, type SubscriptionsListLocationsOptionalParams } from '@azure/arm-resources-subscriptions/api/subscriptions';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureRestClient } from '../createAzureClient';
 
@@ -22,7 +19,7 @@ export type { Location };
 
 /** Factory that creates an {@linkcode ISubscriptionClient} for a given subscription. */
 export const ISubscriptionClientProvider: ServiceIdentifier<ISubscriptionClientProvider> = Symbol.for('ISubscriptionClientProvider');
-export type ISubscriptionClientProvider = AsyncFactory<ISubscriptionClient, [AzureSubscription]>;
+export type ISubscriptionClientProvider = SyncFactory<ISubscriptionClient, [AzureSubscription]>;
 
 /**
  * Interface describing the subscription-level APIs we use.
@@ -51,7 +48,7 @@ export class SubscriptionClient implements ISubscriptionClient {
         executor: IActionExecutor,
         subscription: AzureSubscription,
         options?: SubscriptionClientOptionalParams,
-    ): Promise<SubscriptionClient> {
+    ): SubscriptionClient {
         const context = createAzureRestClient(
             ctx,
             executor,
@@ -59,7 +56,7 @@ export class SubscriptionClient implements ISubscriptionClient {
             subscription,
             options,
         );
-        return Promise.resolve(new SubscriptionClient(context));
+        return new SubscriptionClient(context);
     }
 
     public get subscriptions(): ISubscriptionClient['subscriptions'] {

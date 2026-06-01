@@ -32,7 +32,7 @@ describe('SubscriptionClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, locationsBody),
         });
 
-        const client = await SubscriptionClient.create(ctx, executor, subscription, { httpClient });
+        const client = SubscriptionClient.create(ctx, executor, subscription, { httpClient });
         const locations = await client.subscriptions.listLocations(subscription.subscriptionId);
 
         expect(locations).to.have.length(2);
@@ -60,7 +60,7 @@ describe('SubscriptionClient (unit)', () => {
             },
         });
 
-        const client = await SubscriptionClient.create(ctx, executor, subscription, { httpClient });
+        const client = SubscriptionClient.create(ctx, executor, subscription, { httpClient });
 
         const first = await client.subscriptions.listLocations(subscription.subscriptionId);
         const second = await client.subscriptions.listLocations(subscription.subscriptionId);

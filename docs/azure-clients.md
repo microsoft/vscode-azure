@@ -78,7 +78,7 @@ Exported type constants: `SiteType`, `FunctionAppLogicalType`, `WorkflowAppLogic
 
 ### `DeploymentClient`
 
-Wraps `@azure/arm-resourcesdeployments` (`DeploymentsClient`). Provides:
+Wraps `@azure/arm-resourcesdeployments` using the REST-style SDK pattern (free functions + context, created via `createDeployments`). Provides:
 
 ```typescript
 interface IDeploymentClient {
@@ -109,7 +109,7 @@ Unlike the other clients, ACR uses `createAzureRestSubscriptionClient` because t
 
 ### `SubscriptionClient`
 
-Wraps `@azure/arm-resources-subscriptions` (`SubscriptionClient`). Provides:
+Wraps `@azure/arm-resources-subscriptions` using the REST-style SDK pattern (free functions + context, created via `createSubscription`). Provides:
 
 ```typescript
 interface ISubscriptionClient {
@@ -130,18 +130,19 @@ Converts Azure SDK's `PagedAsyncIterableIterator` to the project-standard `Async
 ```typescript
 function toPages<T>(
     iterator: PagedAsyncIterableIterator<T, T[]>,
-    getContinuationToken: (page: unknown) => string | undefined,
 ): AsyncIterable<Page<T>>;
 
-// With item mapping
+// With item mapping (and optional classic-SDK continuation token helper)
 function toPages<T, U>(
     iterator: PagedAsyncIterableIterator<T, T[]>,
-    getContinuationToken: (page: unknown) => string | undefined,
     map: (item: T) => U,
+    getContinuationToken?: (page: unknown) => string | undefined,
 ): AsyncIterable<Page<U>>;
 ```
 
-Uses `.byPage()` for page-level iteration and `getContinuationToken` (exported by each Azure SDK) to determine `hasMore`. The optional `map` parameter transforms items — used by `ResourceClient` to call `attachMetadata()` on each resource.
+Uses `.byPage()` for page-level iteration. By default `hasMore` is derived from the `continuationToken` property attached to each page array, which matches the modular REST-style SDK `ContinuablePage` shape (e.g. `@azure/arm-resources-subscriptions/api`, `@azure/arm-resourcesdeployments/api`).
+
+For classic `ServiceClient`-style SDKs (e.g. `@azure/arm-resources`), the continuation token is stored in a `WeakMap` and accessed via the SDK's exported `getContinuationToken(page)` helper rather than on the page array. Pass that helper as the third argument -- `ResourceClient` does exactly this. The `map` parameter is also used by `ResourceClient` to call `attachMetadata()` on each resource.
 
 ## DI Integration
 
@@ -151,12 +152,11 @@ Client providers are registered as factory bindings in `extension.ts`:
 container.bind(IResourceClientProvider).toFactory(context => {
     const ctx = context.get(ICodeContext);
     const executor = context.get(IActionExecutor);
-    const output = context.get(IOutputChannel);
-    return (subscription) => ResourceClient.create(ctx, executor, output, subscription);
+    return (subscription) => ResourceClient.create(ctx, executor, subscription);
 });
 ```
 
-The resulting type is `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. Commands and data providers inject the factory and call it with the relevant subscription:
+The resulting type is `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. Clients whose `create()` is synchronous (the REST-style SDK clients `DeploymentClient` and `SubscriptionClient`) use the sibling `SyncFactory<T, TArgs>` type instead, which returns `T` directly. Both types live in `packages/utils/src/types/Factory.ts`. Commands and data providers inject the factory and call it with the relevant subscription:
 
 ```typescript
 @inject(IResourceClientProvider) private readonly getResourceClient: IResourceClientProvider
@@ -166,7 +166,7 @@ const client = await this.getResourceClient(subscription);
 const resources = client.resources.listByResourceGroup(rgName);
 ```
 
-Each client wrapper exposes an interface (`IResourceClient`, `IDeploymentClient`, `IAcrClient`) that can be mocked in unit tests without needing the real Azure SDK.
+Each client wrapper exposes an interface (`IResourceClient`, `IDeploymentClient`, `ISubscriptionClient`, `IAcrClient`) that can be mocked in unit tests without needing the real Azure SDK.
 
 ## Type Re-exports
 
