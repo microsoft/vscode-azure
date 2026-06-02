@@ -4,10 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
-import { IOutputChannel, IpcHttpServer, IVsCode, type Disposable } from '@microsoft/vscode-azure-utils';
+import { IOutputChannel, IVsCode, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { randomUUID } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 
 export const IAzdAuthServer: ServiceIdentifier<IAzdAuthServer> = Symbol.for('IAzdAuthServer');
@@ -64,8 +67,20 @@ export interface TokenErrorResponse {
 export const AzdAuthApiVersion = '2023-07-12-preview';
 
 interface ServerState {
-    readonly server: IpcHttpServer;
+    readonly server: Server;
+    /**
+     * OS-level socket path. On POSIX this is the absolute path of a Unix
+     * Domain Socket file; on Windows it is a Named Pipe path of the form
+     * `\\.\pipe\<uuid>`. Suitable for Node's `http.request({ socketPath })`.
+     */
+    readonly socketPath: string;
     readonly key: string;
+    /**
+     * Temporary directory holding the UDS file on POSIX, to be removed on
+     * {@linkcode AzdAuthServer.dispose}. `undefined` on Windows because
+     * named pipes are not file-backed.
+     */
+    readonly cleanupDir: string | undefined;
 }
 
 /**
@@ -79,13 +94,20 @@ interface ServerState {
  * from the VS Code authentication API on behalf of azd.
  *
  * @remarks
- * The protocol is defined by the azd CLI's `RemoteCredential`:
+ * The protocol is defined by the azd CLI's `RemoteCredential`
+ * (see [external-authentication.md](https://github.com/Azure/azure-dev/blob/main/cli/azd/docs/external-authentication.md)):
  *
  * - `POST /token?api-version={@linkcode AzdAuthApiVersion}`
  * - `Authorization: Bearer {AZD_AUTH_KEY}`
  * - Body: `{ "scopes": [...], "tenantId": "..." }`
  * - Response: `{ "status": "success", "token": "...", "expiresOn": "..." }`
  *   or `{ "status": "error", "code": "...", "message": "..." }`
+ *
+ * `RemoteCredential` only decodes the response body when the HTTP
+ * status is 200; non-200 responses surface as a generic transport
+ * error with the body ignored. Protocol-level rejections therefore
+ * return a bare status code with no body, and only the 200 path
+ * emits the documented JSON envelope.
  */
 @injectable()
 export class AzdAuthServer implements IAzdAuthServer, Disposable {
@@ -102,11 +124,11 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             throw new Error('AzdAuthServer has been disposed');
         }
 
-        const { server, key } = await this.ensureStarted();
+        const { socketPath, key } = await this.ensureStarted();
 
         return {
             /* eslint-disable @typescript-eslint/naming-convention -- azd env var names */
-            AZD_AUTH_ENDPOINT: socketPathToUrl(server.socketPath),
+            AZD_AUTH_ENDPOINT: socketPathToUrl(socketPath),
             AZD_AUTH_KEY: key,
             /* eslint-enable @typescript-eslint/naming-convention */
         };
@@ -122,7 +144,18 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         this.serverPromise = undefined;
         if (promise) {
             promise.then(
-                ({ server }) => { server.dispose(); },
+                ({ server, cleanupDir }) => {
+                    try {
+                        // `Server.close()` is async; clean up the temp dir from its
+                        // callback so we never race the listening socket's fd.
+                        server.close(() => { removeCleanupDir(cleanupDir); });
+                    } catch {
+                        // `Server.close()` can throw synchronously (e.g.
+                        // ERR_SERVER_NOT_RUNNING); clean up anyway so the temp
+                        // directory doesn't leak.
+                        removeCleanupDir(cleanupDir);
+                    }
+                },
                 () => { /* start() failed; nothing to dispose */ },
             );
         }
@@ -142,13 +175,41 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             code: this.code,
         });
 
-        const server = await IpcHttpServer.create(
-            (req, res) => { void this.handleRequest(req, res, key, credential); },
-        );
+        let socketPath: string;
+        let cleanupDir: string | undefined;
+        if (process.platform === 'win32') {
+            socketPath = `\\\\.\\pipe\\${randomUUID()}`;
+        } else {
+            // `mkdtempSync` creates the directory with mode 0o700 on POSIX,
+            // restricting it to the current user. (Mode 0o700, not 0o600,
+            // because the owner still needs the execute/traverse bit to bind
+            // a socket file inside the directory.)
+            const dir = await mkdtemp(join(tmpdir(), 'azd-auth-'));
+            cleanupDir = dir;
+            socketPath = join(dir, 's.sock');
+        }
 
-        this.output.debug(`[auth] AZD auth server listening at ${socketPathToUrl(server.socketPath)}`);
+        const server = createServer((req, res) => {
+            void this.handleRequest(req, res, key, credential);
+        });
 
-        return { server, key };
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const onError = (err: Error): void => { reject(err); };
+                server.once('error', onError);
+                server.listen(socketPath, () => {
+                    server.off('error', onError);
+                    resolve();
+                });
+            });
+        } catch (err) {
+            removeCleanupDir(cleanupDir);
+            throw err;
+        }
+
+        this.output.debug(`[auth] AZD auth server listening at ${socketPathToUrl(socketPath)}`);
+
+        return { server, socketPath, key, cleanupDir };
     }
 
     private async handleRequest(
@@ -251,4 +312,15 @@ function socketPathToUrl(socketPath: string): string {
         return `npipe://${socketPath.replace(/^\\\\/, '').replace(/\\/g, '/')}`;
     }
     return `unix://${socketPath}`;
+}
+
+/**
+ * Best-effort removal of the temporary directory that held the Unix
+ * Domain Socket file. No-op on Windows (where {@linkcode dir} is
+ * `undefined`) and silently swallows filesystem errors.
+ */
+function removeCleanupDir(dir: string | undefined): void {
+    if (dir) {
+        void rm(dir, { recursive: true, force: true });
+    }
 }
