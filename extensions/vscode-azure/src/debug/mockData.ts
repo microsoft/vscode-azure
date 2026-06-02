@@ -14,7 +14,8 @@ import type { Container } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
 import { createMockAcrClient } from '../test/tree/resources/acr/mockAcr';
 import { createMockResourceClient } from '../test/tree/resources/mockResourceClient';
-import { ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
+import type { ActivityStatus } from '../tree/activity/Activity';
+import { type AddChildOptions, ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import { IGenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
 
 // -- Mock data ----------------------------------------------------------------
@@ -62,6 +63,51 @@ const registryDetails: Record<string, { loginServer: string; sku: { name: string
     'stagingReg': { loginServer: 'stagingreg.azurecr.io', sku: { name: 'Basic', tier: 'Basic' }, adminUserEnabled: false },
 };
 
+// One generic activity per status.
+const mockGenericActivities: ReadonlyArray<{ readonly id: string; readonly status: ActivityStatus; readonly title: string }> = [
+    { id: 'mock-not-started', status: 'NotStarted', title: 'Waiting to start' },
+    { id: 'mock-in-progress', status: 'InProgress', title: 'Provisioning resources' },
+    { id: 'mock-completed', status: 'Completed', title: 'Deployment succeeded' },
+    { id: 'mock-failed', status: 'Failed', title: 'Build failed' },
+    { id: 'mock-canceled', status: 'Canceled', title: 'User canceled' },
+    { id: 'mock-info', status: 'Info', title: 'No changes detected' },
+    { id: 'mock-warn', status: 'Warn', title: 'Deprecated API version' },
+];
+
+// Code deployments with children. `complete` is applied after children are
+// added to drive the deployment to a terminal state.
+const mockCodeDeployments: ReadonlyArray<{
+    readonly title: string;
+    readonly children: readonly AddChildOptions[];
+    readonly complete?: { readonly status: ActivityStatus; readonly error?: unknown };
+}> = [
+        {
+            title: 'Deploy to staging',
+            children: [
+                { title: 'Upload artifacts', isLeaf: true },
+                { title: 'Run migrations', isLeaf: true },
+                { title: 'Restart services', status: 'InProgress', isLeaf: true },
+            ],
+        },
+        {
+            title: 'Deploy to production',
+            children: [
+                { title: 'Upload artifacts', isLeaf: true },
+                { title: 'Run migrations', isLeaf: true },
+                { title: 'Health check', isLeaf: true },
+            ],
+            complete: { status: 'Completed' },
+        },
+        {
+            title: 'Deploy canary',
+            children: [
+                { title: 'Upload artifacts', isLeaf: true },
+                { title: 'Run smoke tests', status: 'InProgress', isLeaf: true },
+            ],
+            complete: { status: 'Failed', error: new Error('Smoke test timeout') },
+        },
+    ];
+
 // -- Public API ---------------------------------------------------------------
 
 /**
@@ -101,36 +147,23 @@ export function applyMockData(container: Container): void {
     // activation hooks that seed them as soon as they are constructed.
 
     container.onActivation(IGenericActivityDataProvider, (_context, genericProvider) => {
-        // Generic activities -- one per status
-        genericProvider.trackActivity({ id: 'mock-not-started', status: 'NotStarted', title: 'Waiting to start' });
-        genericProvider.trackActivity({ id: 'mock-in-progress', status: 'InProgress', title: 'Provisioning resources' });
-        genericProvider.trackActivity({ id: 'mock-completed', status: 'Completed', title: 'Deployment succeeded' });
-        genericProvider.trackActivity({ id: 'mock-failed', status: 'Failed', title: 'Build failed' });
-        genericProvider.trackActivity({ id: 'mock-canceled', status: 'Canceled', title: 'User canceled' });
-        genericProvider.trackActivity({ id: 'mock-info', status: 'Info', title: 'No changes detected' });
-        genericProvider.trackActivity({ id: 'mock-warn', status: 'Warn', title: 'Deprecated API version' });
+        mockGenericActivities.forEach(activity => genericProvider.trackActivity(activity));
+        for (const activity of mockGenericActivities) {
+            genericProvider.trackActivity(activity);
+        }
         return genericProvider;
     });
 
     container.onActivation(ICodeDeploymentDataProvider, (_context, codeProvider) => {
-        // Code deployment with children
-        const deploy = codeProvider.trackDeployment({ title: 'Deploy to staging' });
-        deploy.addChild({ title: 'Upload artifacts', isLeaf: true });
-        deploy.addChild({ title: 'Run migrations', isLeaf: true });
-        deploy.addChild({ title: 'Restart services', status: 'InProgress', isLeaf: true });
-
-        // Completed code deployment
-        const doneDeploy = codeProvider.trackDeployment({ title: 'Deploy to production' });
-        doneDeploy.addChild({ title: 'Upload artifacts', isLeaf: true });
-        doneDeploy.addChild({ title: 'Run migrations', isLeaf: true });
-        doneDeploy.addChild({ title: 'Health check', isLeaf: true });
-        doneDeploy.complete('Completed');
-
-        // Failed code deployment
-        const failedDeploy = codeProvider.trackDeployment({ title: 'Deploy canary' });
-        failedDeploy.addChild({ title: 'Upload artifacts', isLeaf: true });
-        failedDeploy.addChild({ title: 'Run smoke tests', status: 'InProgress', isLeaf: true });
-        failedDeploy.complete('Failed', new Error('Smoke test timeout'));
+        for (const { title, children, complete } of mockCodeDeployments) {
+            const handle = codeProvider.trackDeployment({ title });
+            for (const child of children) {
+                handle.addChild(child);
+            }
+            if (complete) {
+                handle.complete(complete.status, complete.error);
+            }
+        }
         return codeProvider;
     });
 }
