@@ -8,11 +8,14 @@
 // This file is compiled as a SEPARATE esbuild entry point (debug.bundle.js)
 // so none of this code ends up in the main extension bundle.
 
-import { type IAcrClient, IAcrClientProvider, IDeploymentClientProvider, type IResourceClient, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
-import { ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
+import { createMockAcrClient } from '../test/tree/resources/acr/mockAcr';
+import { createMockResourceClient } from '../test/tree/resources/mockResourceClient';
+import type { ActivityStatus } from '../tree/activity/Activity';
+import { type AddChildOptions, ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import { IGenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
 
 // -- Mock data ----------------------------------------------------------------
@@ -60,46 +63,62 @@ const registryDetails: Record<string, { loginServer: string; sku: { name: string
     'stagingReg': { loginServer: 'stagingreg.azurecr.io', sku: { name: 'Basic', tier: 'Basic' }, adminUserEnabled: false },
 };
 
-// -- Mock providers -----------------------------------------------------------
+// One generic activity per status.
+const mockGenericActivities: ReadonlyArray<{ readonly id: string; readonly status: ActivityStatus; readonly title: string }> = [
+    { id: 'mock-not-started', status: 'NotStarted', title: 'Waiting to start' },
+    { id: 'mock-in-progress', status: 'InProgress', title: 'Provisioning resources' },
+    { id: 'mock-completed', status: 'Completed', title: 'Deployment succeeded' },
+    { id: 'mock-failed', status: 'Failed', title: 'Build failed' },
+    { id: 'mock-canceled', status: 'Canceled', title: 'User canceled' },
+    { id: 'mock-info', status: 'Info', title: 'No changes detected' },
+    { id: 'mock-warn', status: 'Warn', title: 'Deprecated API version' },
+];
 
-/** Creates an {@linkcode IResourceClient} that returns fixed resource groups and resources. */
-export function createMockResourceClient(
-    resourceGroups: unknown[] = [demoRg, stagingRg],
-    resourcesByRg: Record<string, unknown[]> | unknown[] = resourcesByGroup,
-): IResourceClient {
-    return {
-        resourceGroups: { list: () => resourceGroups },
-        resources: {
-            listByResourceGroup: Array.isArray(resourcesByRg)
-                ? () => resourcesByRg
-                : (rgName: string) => resourcesByRg[rgName] ?? [],
+// Code deployments with children. `complete` is applied after children are
+// added to drive the deployment to a terminal state.
+const mockCodeDeployments: ReadonlyArray<{
+    readonly title: string;
+    readonly children: readonly AddChildOptions[];
+    readonly complete?: { readonly status: ActivityStatus; readonly error?: unknown };
+}> = [
+        {
+            title: 'Deploy to staging',
+            children: [
+                { title: 'Upload artifacts', isLeaf: true },
+                { title: 'Run migrations', isLeaf: true },
+                { title: 'Restart services', status: 'InProgress', isLeaf: true },
+            ],
         },
-    } as unknown as IResourceClient;
-}
-
-/**
- * Creates an {@linkcode IAcrClient} whose `registries.get()` returns canned
- * details for the mock registries. Additional top-level methods can
- * be supplied via {@linkcode overrides}.
- */
-export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrClient {
-    return {
-        registries: {
-            get: (_rg: string, name: string) => Promise.resolve(
-                registryDetails[name] ?? { loginServer: '', sku: { name: 'Basic' }, adminUserEnabled: false },
-            ),
+        {
+            title: 'Deploy to production',
+            children: [
+                { title: 'Upload artifacts', isLeaf: true },
+                { title: 'Run migrations', isLeaf: true },
+                { title: 'Health check', isLeaf: true },
+            ],
+            complete: { status: 'Completed' },
         },
-        ...overrides,
-    } as unknown as IAcrClient;
-}
+        {
+            title: 'Deploy canary',
+            children: [
+                { title: 'Upload artifacts', isLeaf: true },
+                { title: 'Run smoke tests', status: 'InProgress', isLeaf: true },
+            ],
+            complete: { status: 'Failed', error: new Error('Smoke test timeout') },
+        },
+    ];
 
 // -- Public API ---------------------------------------------------------------
 
 /**
- * Rebinds Azure providers on the given container with mock implementations.
- * Called from `main.js` before activation when `AZURE_MOCK_DATA=1`.
+ * Applies all mock-data overrides to the given container.
+ *
+ * Called from `main.js` after `setUpContainer` but before activation when
+ * `AZURE_MOCK_DATA=1`.
  */
-export function preApply(container: Container): void {
+export function applyMockData(container: Container): void {
+    // -- Rebind Azure providers with mock implementations ---------------------
+
     container.rebind(IAzureSubscriptionProvider).toConstantValue(
         createMockSubscriptionProvider({
             accounts: [account],
@@ -109,10 +128,10 @@ export function preApply(container: Container): void {
     );
 
     container.rebind(IResourceClientProvider).toConstantValue(
-        () => Promise.resolve(createMockResourceClient()),
+        () => Promise.resolve(createMockResourceClient([demoRg, stagingRg], resourcesByGroup)),
     );
     container.rebind(IAcrClientProvider).toConstantValue(
-        () => createMockAcrClient(),
+        () => createMockAcrClient(registryDetails),
     );
 
     container.rebind(IDeploymentClientProvider).toConstantValue(
@@ -121,41 +140,30 @@ export function preApply(container: Container): void {
     container.rebind(ISubscriptionClientProvider).toConstantValue(
         () => { throw new Error('Mock mode: subscription client not available'); },
     );
-}
 
-/**
- * Seeds the activity tree with sample data.
- * Called from `main.js` after activation when `AZURE_MOCK_DATA=1`.
- */
-export function postApply(container: Container): void {
-    const genericProvider = container.get(IGenericActivityDataProvider);
-    const codeProvider = container.get(ICodeDeploymentDataProvider);
+    // -- Seed the activity tree with sample data ------------------------------
+    //
+    // The activity providers are bound during activation, so register
+    // activation hooks that seed them as soon as they are constructed.
 
-    // Generic activities -- one per status
-    genericProvider.trackActivity({ id: 'mock-not-started', status: 'NotStarted', title: 'Waiting to start' });
-    genericProvider.trackActivity({ id: 'mock-in-progress', status: 'InProgress', title: 'Provisioning resources' });
-    genericProvider.trackActivity({ id: 'mock-completed', status: 'Completed', title: 'Deployment succeeded' });
-    genericProvider.trackActivity({ id: 'mock-failed', status: 'Failed', title: 'Build failed' });
-    genericProvider.trackActivity({ id: 'mock-canceled', status: 'Canceled', title: 'User canceled' });
-    genericProvider.trackActivity({ id: 'mock-info', status: 'Info', title: 'No changes detected' });
-    genericProvider.trackActivity({ id: 'mock-warn', status: 'Warn', title: 'Deprecated API version' });
+    container.onActivation(IGenericActivityDataProvider, (_context, genericProvider) => {
+        mockGenericActivities.forEach(activity => genericProvider.trackActivity(activity));
+        for (const activity of mockGenericActivities) {
+            genericProvider.trackActivity(activity);
+        }
+        return genericProvider;
+    });
 
-    // Code deployment with children
-    const deploy = codeProvider.trackDeployment({ title: 'Deploy to staging' });
-    deploy.addChild({ title: 'Upload artifacts', isLeaf: true });
-    deploy.addChild({ title: 'Run migrations', isLeaf: true });
-    deploy.addChild({ title: 'Restart services', status: 'InProgress', isLeaf: true });
-
-    // Completed code deployment
-    const doneDeploy = codeProvider.trackDeployment({ title: 'Deploy to production' });
-    doneDeploy.addChild({ title: 'Upload artifacts', isLeaf: true });
-    doneDeploy.addChild({ title: 'Run migrations', isLeaf: true });
-    doneDeploy.addChild({ title: 'Health check', isLeaf: true });
-    doneDeploy.complete('Completed');
-
-    // Failed code deployment
-    const failedDeploy = codeProvider.trackDeployment({ title: 'Deploy canary' });
-    failedDeploy.addChild({ title: 'Upload artifacts', isLeaf: true });
-    failedDeploy.addChild({ title: 'Run smoke tests', status: 'InProgress', isLeaf: true });
-    failedDeploy.complete('Failed', new Error('Smoke test timeout'));
+    container.onActivation(ICodeDeploymentDataProvider, (_context, codeProvider) => {
+        for (const { title, children, complete } of mockCodeDeployments) {
+            const handle = codeProvider.trackDeployment({ title });
+            for (const child of children) {
+                handle.addChild(child);
+            }
+            if (complete) {
+                handle.complete(complete.status, complete.error);
+            }
+        }
+        return codeProvider;
+    });
 }
