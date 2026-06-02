@@ -26,12 +26,8 @@ const extension = require('./dist/extension.bundle.js');
 exports.activate = async function activate(ctx) {
     // ExtensionMode.Development === 2
     if (process.env.AZURE_MOCK_DATA === '1' && ctx.extensionMode === 2) {
-        const container = extension.setUpContainer(ctx);
-        const { preApply, postApply } = require('./dist/debug.bundle.js');
-        preApply(container);
-        const result = await extension.activateInternal(ctx, perfStats, container);
-        postApply(container);
-        return result;
+        const { applyMockData } = require('./dist/debug.bundle.js');
+        return await extension.activateInternal(ctx, perfStats, applyMockData);
     }
 
     return await extension.activateInternal(ctx, perfStats);

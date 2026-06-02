@@ -10,12 +10,13 @@ import { createMockCodeContext, createMockVsCode, createTestActionExecutor } fro
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
-import { createMockAcrClient, createMockResourceClient } from '../../../../debug/mockData';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
 import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../tree/resources/acr/AcrViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
+import { createMockResourceClient } from '../mockResourceClient';
+import { createMockAcrClient } from './mockAcr';
 
 /**
  * Integration tests for the ACR tree rendering pipeline.
