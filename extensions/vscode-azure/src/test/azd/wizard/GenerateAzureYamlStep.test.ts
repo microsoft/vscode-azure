@@ -30,7 +30,7 @@ describe('GenerateAzureYamlStep (unit)', () => {
         it('should return false when azure.yaml exists', async () => {
             const azd = createMockAzdService();
             azd.findAzureYaml.mock.mockImplementation(
-                () => Promise.resolve(MockUri.file('/project/azure.yaml')),
+                () => Promise.resolve([MockUri.file('/project/azure.yaml')]),
             );
             const step = new GenerateAzureYamlStep(azd);
 
@@ -41,7 +41,7 @@ describe('GenerateAzureYamlStep (unit)', () => {
         it('should return false when azure.yml exists', async () => {
             const azd = createMockAzdService();
             azd.findAzureYaml.mock.mockImplementation(
-                () => Promise.resolve(MockUri.file('/project/azure.yml')),
+                () => Promise.resolve([MockUri.file('/project/azure.yml')]),
             );
             const step = new GenerateAzureYamlStep(azd);
 

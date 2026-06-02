@@ -114,11 +114,11 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         item.id = key;
 
         if (isCategory) {
-            item.contextValue = combineContextValues('functionAppSettings', AddOrEditAppSetting.AddContextValue);
+            item.contextValue = combineContextValues(AddOrEditAppSetting.AddContextValue);
             item.iconPath = new this.ctx.code.ThemeIcon('folder');
         } else {
             // Individual app setting
-            item.contextValue = combineContextValues('functionAppSetting', AddOrEditAppSetting.EditContextValue, DeleteAppSetting.ContextValue);
+            item.contextValue = combineContextValues(AddOrEditAppSetting.EditContextValue, DeleteAppSetting.ContextValue);
             item.iconPath = new this.ctx.code.ThemeIcon('symbol-key');
         }
 

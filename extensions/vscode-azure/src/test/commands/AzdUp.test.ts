@@ -39,7 +39,7 @@ describe('AzdUp (unit)', () => {
                 if ((dir).path === '/workspace') {
                     return Promise.resolve(MockUri.file('/workspace/azure.yaml'));
                 }
-                return Promise.resolve(undefined);
+                return Promise.resolve([]);
             });
 
         }
@@ -85,7 +85,7 @@ describe('AzdUp (unit)', () => {
 
     it('should show error when no azure.yaml found in workspace', async () => {
         const { cmd, azd } = createCommand();
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(undefined));
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([]));
 
         try {
             await cmd.execute();
