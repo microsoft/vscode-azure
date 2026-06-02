@@ -53,8 +53,8 @@ describe('CreateFunctionApp (unit)', () => {
         azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
             const candidate = MockUri.file(`${dir.fsPath}/azure.yaml`);
             return mockFs.files.has(candidate.path)
-                ? Promise.resolve(candidate)
-                : Promise.resolve(yamlInTemp);
+                ? Promise.resolve([candidate])
+                : yamlInTemp ? Promise.resolve([yamlInTemp]) : Promise.resolve([]);
         });
         azd.init.mock.mockImplementation((cwd: vscode.Uri) => {
             yamlInTemp = MockUri.file(`${cwd.fsPath}/azure.yaml`);
@@ -139,7 +139,7 @@ describe('CreateFunctionApp (unit)', () => {
         const workspaceYaml = MockUri.file('/workspace/azure.yaml');
         mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
         mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(workspaceYaml));
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
         azd.show.mock.mockImplementation(() => Promise.resolve({
             name: 'my-app',
             services: { api: { project: { path: './', language: 'node' } } },
@@ -174,7 +174,7 @@ describe('CreateFunctionApp (unit)', () => {
         const workspaceYaml = MockUri.file('/workspace/azure.yaml');
         mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
         mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(workspaceYaml));
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
         azd.show.mock.mockImplementation(() => Promise.resolve({
             name: 'my-app',
             services: { api: { project: { path: './', language: 'node' } } },
