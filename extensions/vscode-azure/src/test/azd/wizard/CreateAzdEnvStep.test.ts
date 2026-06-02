@@ -13,7 +13,7 @@ import { createMockAzdService } from '../MockAzdService';
 
 describe('CreateAzdEnvStep (unit)', () => {
     const baseContext: Partial<AzdWizardContext> = {
-        iacFolder: MockUri.file('/project') as never,
+        iacFolder: MockUri.file('/project'),
         environmentName: 'dev',
         location: { name: 'eastus' },
         subscription: makeSubscription({ subscriptionId: 'sub-1' }),
