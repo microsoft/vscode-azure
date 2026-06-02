@@ -24,7 +24,9 @@ export function makeAcrRegistry(overrides?: Partial<AcrRegistry>): AcrRegistry {
 /**
  * Creates an {@linkcode IAcrClient} whose `registries.get()` returns canned
  * details from {@linkcode registryDetailsByName}, keyed by registry name.
- * Names not present in the map fall back to minimal default details.
+ * Names not present in the map fall back to a minimal but realistic
+ * {@linkcode Registry} shape that includes the `id`, `name`, `type`, and
+ * `location` fields the real ARM API always populates.
  *
  * @param registryDetailsByName - Map from registry name to the details
  *   returned by `registries.get()`.
@@ -34,8 +36,16 @@ export function createMockAcrClient(
 ): IAcrClient {
     return {
         registries: {
-            get: (_rg: string, name: string) => Promise.resolve(
-                registryDetailsByName[name] ?? { loginServer: '', sku: { name: 'Basic' }, adminUserEnabled: false },
+            get: (resourceGroupName: string, name: string) => Promise.resolve(
+                registryDetailsByName[name] ?? {
+                    id: `/subscriptions/test-sub/resourceGroups/${resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/${name}`,
+                    name,
+                    type: AcrResourceType,
+                    location: 'westus2',
+                    loginServer: `${name.toLowerCase()}.azurecr.io`,
+                    sku: { name: 'Basic', tier: 'Basic' },
+                    adminUserEnabled: false,
+                },
             ),
         },
     } as unknown as IAcrClient;
