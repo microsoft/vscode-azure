@@ -9,6 +9,7 @@ import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } f
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { Activity } from './tree/activity/Activity';
+import type { WorkspaceNode } from './tree/workspace/WorkspaceNode';
 
 /** Identifier for the Azure subscription provider */
 export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
@@ -26,6 +27,22 @@ export type IAzureViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');
 export type IAzureResourceTreeView = vscode.TreeView<string>;
+
+// #endregion
+
+// #region Workspace tree and view identifiers
+
+/** Identifier for the workspace (local items) tree data cache */
+export const IWorkspaceViewDataTree: ServiceIdentifier<IWorkspaceViewDataTree> = Symbol.for('IWorkspaceViewDataTree');
+export type IWorkspaceViewDataTree = DataItemTree<WorkspaceNode>;
+
+/** Identifier for the workspace view-item tree (view layer) */
+export const IWorkspaceViewViewItemTree: ServiceIdentifier<IWorkspaceViewViewItemTree> = Symbol.for('IWorkspaceViewViewItemTree');
+export type IWorkspaceViewViewItemTree = ViewItemTree<string, WorkspaceNode>;
+
+/** Identifier for the workspace VSCode tree view */
+export const IWorkspaceTreeView: ServiceIdentifier<IWorkspaceTreeView> = Symbol.for('IWorkspaceTreeView');
+export type IWorkspaceTreeView = vscode.TreeView<string>;
 
 // #endregion
 

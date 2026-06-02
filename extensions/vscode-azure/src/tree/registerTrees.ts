@@ -7,8 +7,12 @@ import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azu
 import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, type LoadMoreOptions, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, Newable, ResolutionContext, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/LoadMore';
-import { ActivityTreeViewId, AzureResourceTreeViewId } from '../constants';
-import { IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree, IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree, pushDisposable } from '../services';
+import { ActivityTreeViewId, AzureResourceTreeViewId, WorkspaceTreeViewId } from '../constants';
+import {
+    IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree,
+    IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree,
+    IWorkspaceTreeView, IWorkspaceViewDataTree, IWorkspaceViewViewItemTree, pushDisposable,
+} from '../services';
 import type { Activity } from './activity/Activity';
 import { ActivityViewProvider } from './activity/ActivityViewProvider';
 import { ArmDeploymentDataProvider, IArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
@@ -21,6 +25,13 @@ import { FunctionAppDataProvider, IFunctionAppDataProvider } from './resources/f
 import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
+import { AzdWorkspaceDataProvider } from './workspace/azd/AzdWorkspaceDataProvider';
+import { AzdWorkspaceViewProvider } from './workspace/azd/AzdWorkspaceViewProvider';
+import { EmulatorsWorkspaceDataProvider } from './workspace/emulators/EmulatorsWorkspaceDataProvider';
+import { EmulatorsWorkspaceViewProvider } from './workspace/emulators/EmulatorsWorkspaceViewProvider';
+import { FunctionsWorkspaceDataProvider } from './workspace/functions/FunctionsWorkspaceDataProvider';
+import { FunctionsWorkspaceViewProvider } from './workspace/functions/FunctionsWorkspaceViewProvider';
+import type { WorkspaceNode } from './workspace/WorkspaceNode';
 
 /**
  * Bind the Azure resources tree, workspace tree, and activity tree into the
@@ -58,6 +69,30 @@ export function registerTrees(container: Container): void {
         ],
     });
 
+    // Workspace tree
+    registerTree<WorkspaceNode>(container, {
+        treeViewId: WorkspaceTreeViewId,
+        dataTreeId: IWorkspaceViewDataTree,
+        viewItemTreeId: IWorkspaceViewViewItemTree,
+        treeViewServiceId: IWorkspaceTreeView,
+        dataProvidersId: IWorkspaceViewDataProviders,
+        viewProvidersId: IWorkspaceViewViewProviders,
+        getKey: node => node.id,
+        // Workspace discovery is cheap (filesystem stats); refresh every
+        // minute so newly-added `azure.yaml` / `host.json` files appear.
+        ttl: 60 * 1000,
+        dataProviders: [
+            AzdWorkspaceDataProvider,
+            FunctionsWorkspaceDataProvider,
+            EmulatorsWorkspaceDataProvider,
+        ],
+        viewProviders: [
+            AzdWorkspaceViewProvider,
+            FunctionsWorkspaceViewProvider,
+            EmulatorsWorkspaceViewProvider,
+        ],
+    });
+
     // Activity tree
     registerTree<Activity>(container, {
         treeViewId: ActivityTreeViewId,
@@ -85,6 +120,8 @@ export function registerTrees(container: Container): void {
 
 const IAzureViewDataProviders: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IAzureViewDataProviders');
 const IAzureViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IAzureViewViewProviders');
+const IWorkspaceViewDataProviders: ServiceIdentifier<DataProvider<WorkspaceNode>> = Symbol.for('IWorkspaceViewDataProviders');
+const IWorkspaceViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IWorkspaceViewViewProviders');
 const IActivityViewDataProviders: ServiceIdentifier<DataProvider<Activity>> = Symbol.for('IActivityViewDataProviders');
 const IActivityViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symbol.for('IActivityViewViewProviders');
 
