@@ -6,69 +6,85 @@
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { after, afterEach, before, describe, it } from 'mocha';
-import { request as httpsRequest } from 'node:https';
+import { request as httpRequest } from 'node:http';
 import { mock } from 'node:test';
-import { AzdAuthServer, certDerToPem } from '../../azd/AzdAuthServer';
+import { AzdAuthApiVersion, type AzdAuthEnv, AzdAuthServer, type TokenErrorResponse, type TokenResponse, type TokenSuccessResponse } from '../../azd/AzdAuthServer';
 
-interface TokenResponse {
-    status: string;
-    token?: string;
-    expiresOn?: string;
-    code?: string;
-    message?: string;
+/** Asserts and narrows {@linkcode TokenResponse} to its success variant. */
+function assertSuccess(body: TokenResponse | undefined): asserts body is TokenSuccessResponse {
+    expect(body, 'expected a response body').to.not.be.undefined;
+    expect(body!.status).to.equal('success');
+}
+
+/** Asserts and narrows {@linkcode TokenResponse} to its error variant. */
+function assertError(body: TokenResponse | undefined): asserts body is TokenErrorResponse {
+    expect(body, 'expected a response body').to.not.be.undefined;
+    expect(body!.status).to.equal('error');
 }
 
 function postJson(
-    url: string,
+    endpoint: string,
+    path: string,
     body: unknown,
     headers: Record<string, string>,
-    certBase64Der: string,
-): Promise<{ statusCode: number; body: TokenResponse }> {
-    return sendRequest('POST', url, JSON.stringify(body), headers, certBase64Der);
+): Promise<{ statusCode: number; body: TokenResponse | undefined }> {
+    return sendRequest('POST', endpoint, path, JSON.stringify(body), headers);
 }
 
 function postRaw(
-    url: string,
+    endpoint: string,
+    path: string,
     rawBody: string,
     headers: Record<string, string>,
-    certBase64Der: string,
-): Promise<{ statusCode: number; body: TokenResponse }> {
-    return sendRequest('POST', url, rawBody, headers, certBase64Der);
+): Promise<{ statusCode: number; body: TokenResponse | undefined }> {
+    return sendRequest('POST', endpoint, path, rawBody, headers);
 }
 
 function sendRequest(
     method: string,
-    url: string,
+    endpoint: string,
+    path: string,
     rawBody: string,
     headers: Record<string, string>,
-    certBase64Der: string,
-): Promise<{ statusCode: number; body: TokenResponse }> {
-    const parsed = new URL(url);
+): Promise<{ statusCode: number; body: TokenResponse | undefined }> {
+    // Inverse of the `unix://` / `npipe://` URLs returned by
+    // `AzdAuthServer.getEnv()`, back to the OS-level socket path that
+    // Node's `http.request({ socketPath })` accepts.
+    let socketPath: string;
+    if (endpoint.startsWith('unix://')) {
+        socketPath = endpoint.slice('unix://'.length);
+    } else if (endpoint.startsWith('npipe://')) {
+        // npipe://./pipe/<name> -> \\.\pipe\<name>
+        socketPath = `\\\\${endpoint.slice('npipe://'.length).replace(/\//g, '\\')}`;
+    } else {
+        throw new Error(`Unsupported endpoint scheme: ${endpoint}`);
+    }
 
     return new Promise((resolve, reject) => {
-        const req = httpsRequest({
-            hostname: parsed.hostname,
-            port: parsed.port,
-            path: parsed.pathname + parsed.search,
+        const req = httpRequest({
+            socketPath,
+            path,
             method,
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(rawBody),
                 ...headers,
             },
-            ca: certDerToPem(certBase64Der),
         }, (res) => {
             const chunks: Buffer[] = [];
             res.on('data', (c: Buffer) => { chunks.push(c); });
             res.on('end', () => {
+                const raw = Buffer.concat(chunks).toString('utf8');
                 resolve({
                     statusCode: res.statusCode ?? 0,
-                    body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as TokenResponse,
+                    body: raw.length > 0 ? JSON.parse(raw) as TokenResponse : undefined,
                 });
             });
         });
         req.on('error', reject);
-        req.write(rawBody);
+        if (rawBody.length > 0) {
+            req.write(rawBody);
+        }
         req.end();
     });
 }
@@ -84,15 +100,17 @@ describe('AzdAuthServer (unit)', () => {
             servers.length = 0;
         });
 
-        it('should return env vars with endpoint, key, and cert', async () => {
+        it('should return env vars with endpoint and key', async () => {
             const { vscode: code } = createMockVsCode();
             const server = new AzdAuthServer(code, new MockOutputChannel('test'));
             servers.push(server);
             const env = await server.getEnv();
 
-            expect(env.AZD_AUTH_ENDPOINT).to.match(/^https:\/\/127\.0\.0\.1:\d+$/);
+            const expectedSchemePattern = process.platform === 'win32'
+                ? /^npipe:\/\/\.\/pipe\/[0-9a-f-]+$/
+                : /^unix:\/\/\/.+\/s\.sock$/;
+            expect(env.AZD_AUTH_ENDPOINT).to.match(expectedSchemePattern);
             expect(env.AZD_AUTH_KEY).to.be.a('string').with.length.greaterThan(0);
-            expect(env.AZD_AUTH_CERT).to.be.a('string').with.length.greaterThan(0);
         });
 
         it('should return the same env vars on subsequent calls', async () => {
@@ -104,24 +122,38 @@ describe('AzdAuthServer (unit)', () => {
 
             expect(env1.AZD_AUTH_ENDPOINT).to.equal(env2.AZD_AUTH_ENDPOINT);
             expect(env1.AZD_AUTH_KEY).to.equal(env2.AZD_AUTH_KEY);
-            expect(env1.AZD_AUTH_CERT).to.equal(env2.AZD_AUTH_CERT);
+        });
+
+        it('should throw if called after dispose', async () => {
+            const { vscode: code } = createMockVsCode();
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'));
+            await server.getEnv();
+            server.dispose();
+
+            let caught: unknown;
+            try {
+                await server.getEnv();
+            } catch (e) {
+                caught = e;
+            }
+            expect(caught).to.be.instanceOf(Error);
+            expect((caught as Error).message).to.match(/disposed/i);
         });
     });
 
     describe('token endpoint', () => {
-        // All token endpoint tests share a single server instance to avoid
-        // repeatedly generating certs and keys.
+        // All token endpoint tests share a single server instance.
         let server: AzdAuthServer;
-        let env: Readonly<Record<string, string>>;
+        let env: AzdAuthEnv;
         let getSession: ReturnType<typeof mock.fn>;
 
         /** Shorthand for a valid POST to `/token` with the shared server's key. */
         function tokenPost(body: unknown) {
             return postJson(
-                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
+                env.AZD_AUTH_ENDPOINT,
+                `/token?api-version=${AzdAuthApiVersion}`,
                 body,
                 { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
-                env.AZD_AUTH_CERT,
             );
         }
 
@@ -153,7 +185,7 @@ describe('AzdAuthServer (unit)', () => {
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
             expect(result.statusCode).to.equal(200);
-            expect(result.body.status).to.equal('success');
+            assertSuccess(result.body);
             expect(result.body.token).to.equal('test-access-token');
             expect(result.body.expiresOn).to.be.a('string');
         });
@@ -164,47 +196,47 @@ describe('AzdAuthServer (unit)', () => {
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
             expect(result.statusCode).to.equal(200);
-            expect(result.body.status).to.equal('error');
+            assertError(result.body);
             expect(result.body.code).to.equal('NotSignedInError');
         });
 
         it('should reject requests with wrong key', async () => {
             const result = await postJson(
-                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
+                env.AZD_AUTH_ENDPOINT,
+                `/token?api-version=${AzdAuthApiVersion}`,
                 { scopes: ['https://management.azure.com/.default'] },
                 { Authorization: 'Bearer wrong-key' },
-                env.AZD_AUTH_CERT,
             );
 
             expect(result.statusCode).to.equal(401);
-            expect(result.body.code).to.equal('unauthorized');
+            expect(result.body).to.be.undefined;
         });
 
         it('should reject requests with wrong api-version', async () => {
             const result = await postJson(
-                `${env.AZD_AUTH_ENDPOINT}/token?api-version=1999-01-01`,
+                env.AZD_AUTH_ENDPOINT,
+                '/token?api-version=1999-01-01',
                 { scopes: ['https://management.azure.com/.default'] },
                 { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
-                env.AZD_AUTH_CERT,
             );
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.code).to.equal('bad_request');
+            expect(result.body).to.be.undefined;
         });
 
         it('should reject requests with missing scopes', async () => {
             const result = await tokenPost({ tenantId: 'some-tenant' });
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.code).to.equal('bad_request');
+            expect(result.body).to.be.undefined;
         });
 
         it('should reject requests to wrong path', async () => {
             const result = await postJson(
-                `${env.AZD_AUTH_ENDPOINT}/other?api-version=2023-07-12-preview`,
+                env.AZD_AUTH_ENDPOINT,
+                `/other?api-version=${AzdAuthApiVersion}`,
                 { scopes: ['https://management.azure.com/.default'] },
                 { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
-                env.AZD_AUTH_CERT,
             );
 
             expect(result.statusCode).to.equal(404);
@@ -224,6 +256,7 @@ describe('AzdAuthServer (unit)', () => {
             });
 
             expect(result.statusCode).to.equal(200);
+            assertSuccess(result.body);
             expect(result.body.token).to.equal('tenant-token');
 
             const callArgs = getSession.mock.calls[0].arguments as [string, string[]];
@@ -233,35 +266,35 @@ describe('AzdAuthServer (unit)', () => {
         it('should reject non-POST requests', async () => {
             const result = await sendRequest(
                 'GET',
-                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
+                env.AZD_AUTH_ENDPOINT,
+                `/token?api-version=${AzdAuthApiVersion}`,
                 '',
                 { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
-                env.AZD_AUTH_CERT,
             );
 
             expect(result.statusCode).to.equal(405);
-            expect(result.body.code).to.equal('method_not_allowed');
+            expect(result.body).to.be.undefined;
         });
 
         it('should reject empty scopes array', async () => {
             const result = await tokenPost({ scopes: [] });
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.code).to.equal('bad_request');
+            expect(result.body).to.be.undefined;
         });
 
         it('should reject non-string values in scopes array', async () => {
             const result = await tokenPost({ scopes: [123, 'valid'] });
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.code).to.equal('bad_request');
+            expect(result.body).to.be.undefined;
         });
 
         it('should reject empty strings in scopes array', async () => {
             const result = await tokenPost({ scopes: [''] });
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.code).to.equal('bad_request');
+            expect(result.body).to.be.undefined;
         });
 
         it('should reject non-string tenantId', async () => {
@@ -271,19 +304,19 @@ describe('AzdAuthServer (unit)', () => {
             });
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.code).to.equal('bad_request');
+            expect(result.body).to.be.undefined;
         });
 
         it('should reject invalid JSON body', async () => {
             const result = await postRaw(
-                `${env.AZD_AUTH_ENDPOINT}/token?api-version=2023-07-12-preview`,
+                env.AZD_AUTH_ENDPOINT,
+                `/token?api-version=${AzdAuthApiVersion}`,
                 'not json{{{',
                 { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
-                env.AZD_AUTH_CERT,
             );
 
             expect(result.statusCode).to.equal(400);
-            expect(result.body.code).to.equal('bad_request');
+            expect(result.body).to.be.undefined;
         });
 
         it('should return GetTokenError when credential throws', async () => {
@@ -292,7 +325,7 @@ describe('AzdAuthServer (unit)', () => {
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
             expect(result.statusCode).to.equal(200);
-            expect(result.body.status).to.equal('error');
+            assertError(result.body);
             expect(result.body.code).to.equal('GetTokenError');
         });
     });

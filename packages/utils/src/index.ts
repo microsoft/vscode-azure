@@ -7,6 +7,7 @@ export * from './base/delay';
 export * from './base/IActionContext';
 export * from './base/IActionExecutor';
 export * from './base/ICommandRegistry';
+export * from './base/IpcHttpServer';
 export * from './base/IProcessExecutor';
 export { ITelemetryReporter, createTelemetryReporter } from './base/ITelemetryReporter'; // Excluding `NullTelemetryReporter` since it's only intended for testing
 export * from './data/InflightMap';

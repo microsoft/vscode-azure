@@ -32,7 +32,11 @@ function createService(spawnFn?: SpawnFn, isOnPathFn?: (cmd: string) => Promise<
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
     const isOnPathMock = isOnPathFn ?? mock.fn(() => Promise.resolve(false));
     const processExecutor = { spawn: spawnMock, isOnPath: isOnPathMock } as unknown as IProcessExecutor;
-    const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
+    const authServer: IAzdAuthServer = {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH_ENDPOINT: '', AZD_AUTH_KEY: '' })),
+        dispose: mock.fn(() => { /* noop */ }),
+    };
     const { executor } = createTestActionExecutor();
     const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer);
     return { service, spawnMock: spawnMock as ReturnType<typeof mock.fn>, fs: mockResult.fs, executor };
@@ -507,7 +511,7 @@ describe('AzdService (unit)', () => {
 
         it('should use azd update when version supports it', async () => {
             const spawnFn = mock.fn((opts: SpawnOpts) => {
-                if (opts.command === 'azd' && argValues(opts.args).includes('version')) {
+                if (opts.command === AzdCommand && argValues(opts.args).includes('version')) {
                     return Promise.resolve({ json: { azd: { version: MinAzdUpdateVersion } } });
                 }
                 return Promise.resolve();
@@ -519,7 +523,7 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(2);
             const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(opts.command).to.equal('azd');
+            expect(opts.command).to.equal(AzdCommand);
             expect(argValues(opts.args)).to.deep.equal(['update']);
         });
 
@@ -528,7 +532,7 @@ describe('AzdService (unit)', () => {
             // so the fallback logic is exercised.
             function makeOldVersionSpawn(): SpawnFn {
                 return mock.fn((opts: SpawnOpts) => {
-                    if (opts.command === 'azd' && argValues(opts.args).includes('version')) {
+                    if (opts.command === AzdCommand && argValues(opts.args).includes('version')) {
                         return Promise.resolve({ json: { azd: { version: '1.0.0' } } });
                     }
                     return Promise.resolve();
