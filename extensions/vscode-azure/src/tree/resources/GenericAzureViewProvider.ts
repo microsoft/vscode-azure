@@ -129,7 +129,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 const item = new this.ctx.code.TreeItem(resource.name, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, SubscriptionArmType);
+                item.iconPath = getResourceTypeIconUri(this.ctx, SubscriptionArmType);
                 return item;
             }
 
@@ -142,7 +142,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                     item.iconPath = new this.ctx.code.ThemeIcon('rocket');
                     item.description = azdEnvName;
                 } else {
-                    item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, ResourceGroupArmType);
+                    item.iconPath = getResourceTypeIconUri(this.ctx, ResourceGroupArmType);
                 }
                 return item;
             }
@@ -152,7 +152,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 item.id = key;
                 item.description = resource.logicalType;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, resource.logicalType);
+                item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
                 return item;
             }
 

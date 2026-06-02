@@ -86,7 +86,7 @@ export class AcrViewProvider implements ViewProvider<string> {
         const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = combineContextValues(OpenInPortal.ContextValue, DisableAcrAdminUser.ContextValue);
-        item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, resource.logicalType);
+        item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
 
         if (isAcrRegistry(resource)) {
             item.description = resource.logicalType;
