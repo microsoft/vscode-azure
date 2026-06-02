@@ -65,7 +65,7 @@ describe('ACR Tree Integration (integration)', () => {
      */
     function createTestPipeline(options?: {
         resources?: ConcreteAzureNode[];
-        acrClientOverrides?: Record<string, unknown>;
+        registryDetails?: Record<string, unknown>;
     }): TestPipeline {
         const { executor } = createTestActionExecutor();
         const mockVscode = createMockVsCode();
@@ -88,7 +88,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
         const resources = options?.resources ?? [acrRegistry, nonAcrResource];
         const resourceClient = createMockResourceClient([resourceGroup], resources);
-        const acrClient = createMockAcrClient(options?.acrClientOverrides);
+        const acrClient = createMockAcrClient(options?.registryDetails ?? {});
 
         const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
         const acrClientProvider: IAcrClientProvider = () => acrClient;
@@ -314,13 +314,11 @@ describe('ACR Tree Integration (integration)', () => {
     describe('enrichment', () => {
         it('should show warning icon when admin user is enabled after enrichment', async () => {
             const { viewTree, dataTree } = createTestPipeline({
-                acrClientOverrides: {
-                    registries: {
-                        get: () => Promise.resolve({
-                            loginServer: 'myreg.azurecr.io',
-                            sku: { name: 'Basic', tier: 'Basic' },
-                            adminUserEnabled: true,
-                        }),
+                registryDetails: {
+                    myReg: {
+                        loginServer: 'myreg.azurecr.io',
+                        sku: { name: 'Basic', tier: 'Basic' },
+                        adminUserEnabled: true,
                     },
                 },
             });

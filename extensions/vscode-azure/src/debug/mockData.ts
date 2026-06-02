@@ -68,12 +68,7 @@ const registryDetails: Record<string, { loginServer: string; sku: { name: string
  * Applies all mock-data overrides to the given container.
  *
  * Called from `main.js` after `setUpContainer` but before activation when
- * `AZURE_MOCK_DATA=1`. It does two things:
- *
- * 1. Rebinds the Azure provider services with mock implementations so the
- *    tree views render deterministic fake data instead of hitting the network.
- * 2. Registers activation hooks that seed the activity tree with sample data
- *    once the activity providers are constructed during activation.
+ * `AZURE_MOCK_DATA=1`.
  */
 export function applyMockData(container: Container): void {
     // -- Rebind Azure providers with mock implementations ---------------------
@@ -90,13 +85,7 @@ export function applyMockData(container: Container): void {
         () => Promise.resolve(createMockResourceClient([demoRg, stagingRg], resourcesByGroup)),
     );
     container.rebind(IAcrClientProvider).toConstantValue(
-        () => createMockAcrClient({
-            registries: {
-                get: (_rg: string, name: string) => Promise.resolve(
-                    registryDetails[name] ?? { loginServer: '', sku: { name: 'Basic' }, adminUserEnabled: false },
-                ),
-            },
-        }),
+        () => createMockAcrClient(registryDetails),
     );
 
     container.rebind(IDeploymentClientProvider).toConstantValue(

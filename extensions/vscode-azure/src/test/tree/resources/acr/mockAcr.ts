@@ -23,14 +23,20 @@ export function makeAcrRegistry(overrides?: Partial<AcrRegistry>): AcrRegistry {
 
 /**
  * Creates an {@linkcode IAcrClient} whose `registries.get()` returns canned
- * details by default. Additional top-level methods (or a different
- * `registries` implementation) can be supplied via {@linkcode overrides}.
+ * details from {@linkcode registryDetailsByName}, keyed by registry name.
+ * Names not present in the map fall back to minimal default details.
+ *
+ * @param registryDetailsByName - Map from registry name to the details
+ *   returned by `registries.get()`.
  */
-export function createMockAcrClient(overrides?: Record<string, unknown>): IAcrClient {
+export function createMockAcrClient(
+    registryDetailsByName: Record<string, unknown>,
+): IAcrClient {
     return {
         registries: {
-            get: () => Promise.resolve({ loginServer: '', sku: { name: 'Basic' }, adminUserEnabled: false }),
+            get: (_rg: string, name: string) => Promise.resolve(
+                registryDetailsByName[name] ?? { loginServer: '', sku: { name: 'Basic' }, adminUserEnabled: false },
+            ),
         },
-        ...overrides,
     } as unknown as IAcrClient;
 }
