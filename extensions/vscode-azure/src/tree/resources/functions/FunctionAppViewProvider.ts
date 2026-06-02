@@ -70,7 +70,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = combineContextValues(OpenInPortal.ContextValue, FunctionAppViewProvider.ContextValue);
-        item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, resource.logicalType);
+        item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
         item.description = resource.logicalType;
 
         return item;

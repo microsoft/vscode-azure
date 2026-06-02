@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import type { ICodeContext } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
@@ -28,6 +28,19 @@ import type * as vscode from 'vscode';
 // TODO: future: scan the azureIcons directory lazily and fall back to a
 // ThemeIcon when no matching SVG exists. Currently VS Code shows no icon
 // if the path is invalid.
-export function getResourceTypeIconUri(code: IVsCode, extensionContext: IExtensionContext, resourceType: string): vscode.Uri {
-    return code.Uri.joinPath(extensionContext.extensionUri, 'dist', 'azureIcons', `${resourceType.toLowerCase()}.svg`);
+export function getResourceTypeIconUri(ctx: ICodeContext, resourceType: string): vscode.Uri {
+    return getAzureIconUri(ctx, resourceType);
+}
+
+
+/**
+ * Returns a {@linkcode vscode.Uri} pointing to an Azure icon SVG
+ * under `dist/azureIcons/`. Unlike {@linkcode getResourceTypeIconUri},
+ * this accepts an arbitrary icon name rather than a resource type,
+ * allowing callers to reference icons that don't correspond to an
+ * ARM type (e.g. `microsoft.web/sites~functionapp` for a workspace
+ * Functions project node).
+ */
+export function getAzureIconUri(ctx: ICodeContext, iconName: string): vscode.Uri {
+    return ctx.code.Uri.joinPath(ctx.extensionContext.extensionUri, 'dist', 'azureIcons', `${iconName.toLowerCase()}.svg`);
 }
