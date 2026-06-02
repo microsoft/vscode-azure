@@ -37,15 +37,11 @@ export function createMockAcrClient(
     return {
         registries: {
             get: (resourceGroupName: string, name: string) => Promise.resolve(
-                registryDetailsByName[name] ?? {
+                registryDetailsByName[name] ?? makeAcrRegistry({
                     id: `/subscriptions/test-sub/resourceGroups/${resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/${name}`,
                     name,
-                    type: AcrResourceType,
-                    location: 'westus2',
                     loginServer: `${name.toLowerCase()}.azurecr.io`,
-                    sku: { name: 'Basic', tier: 'Basic' },
-                    adminUserEnabled: false,
-                },
+                }),
             ),
         },
     } as unknown as IAcrClient;
