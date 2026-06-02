@@ -35,7 +35,6 @@ function createService(spawnFn?: SpawnFn, isOnPathFn?: (cmd: string) => Promise<
     const authServer: IAzdAuthServer = {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH_ENDPOINT: '', AZD_AUTH_KEY: '' })),
-        dispose: mock.fn(() => { /* noop */ }),
     };
     const { executor } = createTestActionExecutor();
     const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer);

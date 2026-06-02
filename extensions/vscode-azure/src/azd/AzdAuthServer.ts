@@ -12,7 +12,7 @@ import { text } from 'node:stream/consumers';
 
 export const IAzdAuthServer: ServiceIdentifier<IAzdAuthServer> = Symbol.for('IAzdAuthServer');
 
-export interface IAzdAuthServer extends Disposable {
+export interface IAzdAuthServer {
     /**
      * Returns the environment variables that should be set on a terminal
      * so azd delegates authentication to this server.
@@ -88,7 +88,7 @@ interface ServerState {
  *   or `{ "status": "error", "code": "...", "message": "..." }`
  */
 @injectable()
-export class AzdAuthServer implements IAzdAuthServer {
+export class AzdAuthServer implements IAzdAuthServer, Disposable {
     private serverPromise: Promise<ServerState> | undefined;
     private disposed = false;
 
