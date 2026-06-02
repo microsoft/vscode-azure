@@ -352,8 +352,18 @@ function derInteger(value: number | Buffer): Buffer {
         }
         return derTlv(0x02, Buffer.from(bytes));
     }
-    // Buffer: ensure positive by prepending 0 if high bit is set
-    const buf = (value[0] & 0x80) ? Buffer.concat([Buffer.from([0]), value]) : value;
+    // Buffer: canonicalize per DER rules.
+    // 1. Strip unnecessary leading 0x00 bytes (a leading 0x00 is only legal
+    //    when the next byte has its high bit set, to keep the value positive).
+    // 2. If the high bit of the remaining first byte is set, prepend 0x00
+    //    so the value is interpreted as positive.
+    let buf = value;
+    while (buf.length > 1 && buf[0] === 0 && (buf[1] & 0x80) === 0) {
+        buf = buf.subarray(1);
+    }
+    if (buf[0] & 0x80) {
+        buf = Buffer.concat([Buffer.from([0]), buf]);
+    }
     return derTlv(0x02, buf);
 }
 
