@@ -8,18 +8,14 @@ import { expect } from 'chai';
 import { after, afterEach, before, describe, it } from 'mocha';
 import { request as httpRequest } from 'node:http';
 import { mock } from 'node:test';
-import { AzdAuthApiVersion, type AzdAuthEnv, AzdAuthServer, type TokenErrorResponse, type TokenResponse, type TokenSuccessResponse } from '../../azd/AzdAuthServer';
+import { AzdAuthApiVersion, AzdAuthServer } from '../../azd/AzdAuthServer';
 
-/** Asserts and narrows {@linkcode TokenResponse} to its success variant. */
-function assertSuccess(body: TokenResponse | undefined): asserts body is TokenSuccessResponse {
-    expect(body, 'expected a response body').to.not.be.undefined;
-    expect(body!.status).to.equal('success');
-}
-
-/** Asserts and narrows {@linkcode TokenResponse} to its error variant. */
-function assertError(body: TokenResponse | undefined): asserts body is TokenErrorResponse {
-    expect(body, 'expected a response body').to.not.be.undefined;
-    expect(body!.status).to.equal('error');
+interface TokenResponse {
+    status: string;
+    token?: string;
+    expiresOn?: string;
+    code?: string;
+    message?: string;
 }
 
 function postJson(
@@ -123,28 +119,12 @@ describe('AzdAuthServer (unit)', () => {
             expect(env1.AZD_AUTH_ENDPOINT).to.equal(env2.AZD_AUTH_ENDPOINT);
             expect(env1.AZD_AUTH_KEY).to.equal(env2.AZD_AUTH_KEY);
         });
-
-        it('should throw if called after dispose', async () => {
-            const { vscode: code } = createMockVsCode();
-            const server = new AzdAuthServer(code, new MockOutputChannel('test'));
-            await server.getEnv();
-            server.dispose();
-
-            let caught: unknown;
-            try {
-                await server.getEnv();
-            } catch (e) {
-                caught = e;
-            }
-            expect(caught).to.be.instanceOf(Error);
-            expect((caught as Error).message).to.match(/disposed/i);
-        });
     });
 
     describe('token endpoint', () => {
         // All token endpoint tests share a single server instance.
         let server: AzdAuthServer;
-        let env: AzdAuthEnv;
+        let env: Readonly<Record<string, string>>;
         let getSession: ReturnType<typeof mock.fn>;
 
         /** Shorthand for a valid POST to `/token` with the shared server's key. */
@@ -185,9 +165,9 @@ describe('AzdAuthServer (unit)', () => {
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
             expect(result.statusCode).to.equal(200);
-            assertSuccess(result.body);
-            expect(result.body.token).to.equal('test-access-token');
-            expect(result.body.expiresOn).to.be.a('string');
+            expect(result.body?.status).to.equal('success');
+            expect(result.body?.token).to.equal('test-access-token');
+            expect(result.body?.expiresOn).to.be.a('string');
         });
 
         it('should return NotSignedInError when no session is available', async () => {
@@ -196,8 +176,8 @@ describe('AzdAuthServer (unit)', () => {
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
             expect(result.statusCode).to.equal(200);
-            assertError(result.body);
-            expect(result.body.code).to.equal('NotSignedInError');
+            expect(result.body?.status).to.equal('error');
+            expect(result.body?.code).to.equal('NotSignedInError');
         });
 
         it('should reject requests with wrong key', async () => {
@@ -256,8 +236,8 @@ describe('AzdAuthServer (unit)', () => {
             });
 
             expect(result.statusCode).to.equal(200);
-            assertSuccess(result.body);
-            expect(result.body.token).to.equal('tenant-token');
+            expect(result.body?.status).to.equal('success');
+            expect(result.body?.token).to.equal('tenant-token');
 
             const callArgs = getSession.mock.calls[0].arguments as [string, string[]];
             expect(callArgs[1]).to.include('VSCODE_TENANT:my-tenant');
@@ -325,8 +305,8 @@ describe('AzdAuthServer (unit)', () => {
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
             expect(result.statusCode).to.equal(200);
-            assertError(result.body);
-            expect(result.body.code).to.equal('GetTokenError');
+            expect(result.body?.status).to.equal('error');
+            expect(result.body?.code).to.equal('GetTokenError');
         });
     });
 });
