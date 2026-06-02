@@ -57,14 +57,14 @@ describe('ProjectNameStep (unit)', () => {
             respondToPrompts(mockResult, ['acceptDefault']);
 
             const step = new ProjectNameStep(ctx);
-            const result = await step.prompt({ iacFolder: MockUri.file('/tmp/my-cool-project') as never });
+            const result = await step.prompt({ iacFolder: MockUri.file('/tmp/my-cool-project') });
 
             expect(result.environmentName).to.equal('my-cool-project');
         });
 
         it('falls back to the first workspace folder name without prompting', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
-            mockResult.workspaceFolders.push({ uri: MockUri.file('/repo/my-app'), name: 'my-app', index: 0 } as never);
+            mockResult.workspaceFolders.push({ uri: MockUri.file('/repo/my-app'), name: 'my-app', index: 0 });
             respondToPrompts(mockResult, ['acceptDefault']);
 
             const step = new ProjectNameStep(ctx);
@@ -76,8 +76,8 @@ describe('ProjectNameStep (unit)', () => {
         it('does not show a workspace-folder picker even with multiple workspace folders', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
             mockResult.workspaceFolders.push(
-                { uri: MockUri.file('/a'), name: 'a', index: 0 } as never,
-                { uri: MockUri.file('/b'), name: 'b', index: 1 } as never,
+                { uri: MockUri.file('/a'), name: 'a', index: 0 },
+                { uri: MockUri.file('/b'), name: 'b', index: 1 },
             );
             respondToPrompts(mockResult, [{ input: 'chosen-name' }]);
 

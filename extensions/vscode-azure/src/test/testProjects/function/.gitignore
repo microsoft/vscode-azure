@@ -1,0 +1,7 @@
+node_modules/
+dist/
+local.settings.json
+.azure
+
+# Don't need to commit the lockfile for test projects
+package-lock.json

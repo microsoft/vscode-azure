@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PromptStep, type AsWritable, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { PromptStep, fileExists, type AsWritable, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { AzdEnvironment, IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
@@ -103,12 +103,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
     }
 
     private async hasInfraTemplate(iacFolder: vscode.Uri): Promise<boolean> {
-        try {
-            await this.code.workspace.fs.stat(this.code.Uri.joinPath(iacFolder, InfraFolderName, MainBicepFileName));
-            return true;
-        } catch {
-            return false;
-        }
+        return fileExists(this.code, this.code.Uri.joinPath(iacFolder, InfraFolderName, MainBicepFileName));
     }
 
     private async tryListEnvironments(cwd: vscode.Uri): Promise<AzdEnvironment[]> {

@@ -13,11 +13,11 @@ import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import { AddOrEditAppSetting } from '../../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../commands/functions/DeleteAppSetting';
-import { createMockResourceClient } from '../../../../debug/mockData';
 import { FunctionAppVirtualPaths } from '../../../../tree/resources/functions/FunctionApp';
 import { FunctionAppDataProvider } from '../../../../tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
+import { createMockResourceClient } from '../mockResourceClient';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
 

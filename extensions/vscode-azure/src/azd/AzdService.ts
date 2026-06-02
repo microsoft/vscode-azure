@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IProcessExecutor, IVsCode, fileExists } from '@microsoft/vscode-azure-utils';
 import { composeArgs, withArg, withFlagArg, withNamedArg } from '@microsoft/vscode-processutils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
@@ -21,12 +21,21 @@ export const MinAzdUpdateVersion = '1.23.14';
 
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
+/** Glob pattern matching `azure.yaml` / `azure.yml` at the workspace root only. */
+export const AzureYamlGlobPattern = `{${AzureYamlFileNames.join(',')}}`;
+
 export interface IAzdService {
     /**
-     * Returns the URI of `azure.yaml` or `azure.yml` in the given
-     * directory, or `undefined` if neither exists.
+     * Finds `azure.yaml` or `azure.yml` files.
+     *
+     * When {@linkcode directory} is provided, checks only that folder
+     * (stat-based). When omitted, searches across all open workspace
+     * folders using {@linkcode vscode.workspace.findFiles findFiles}.
+     *
+     * @param directory - Scope the search to a single folder.
+     * @param maxResults - Cap the number of results. Defaults to `1`.
      */
-    findAzureYaml(directory: vscode.Uri): Promise<vscode.Uri | undefined>;
+    findAzureYaml(directory?: vscode.Uri, maxResults?: number): Promise<vscode.Uri[]>;
 
     /** Runs `azd init --minimal --no-prompt` in the given directory. */
     init(cwd: vscode.Uri): Promise<void>;
@@ -122,6 +131,13 @@ export interface AzdShowResult {
 export interface AzdServiceDescriptor extends Record<string, unknown> {
     /** Ingress URL for the deployed service, if available. */
     readonly ingressUrl?: string;
+    /** Project containing the source code for this service. */
+    readonly project?: {
+        /** Absolute filesystem path to the service's project folder. */
+        readonly path?: string;
+        /** Programming language of the service. */
+        readonly language?: string;
+    };
 }
 
 /** Result of `azd version --output json`. */
@@ -147,17 +163,19 @@ export class AzdService implements IAzdService {
     ) { }
 
     /** @inheritdoc */
-    public async findAzureYaml(directory: vscode.Uri): Promise<vscode.Uri | undefined> {
-        for (const name of AzureYamlFileNames) {
-            const fileUri = this.code.Uri.joinPath(directory, name);
-            try {
-                await this.code.workspace.fs.stat(fileUri);
-                return fileUri;
-            } catch {
-                // file not found -- try next
+    public async findAzureYaml(directory?: vscode.Uri, maxResults: number = 1): Promise<vscode.Uri[]> {
+        if (directory) {
+            for (const name of AzureYamlFileNames) {
+                const fileUri = this.code.Uri.joinPath(directory, name);
+                if (await fileExists(this.code, fileUri)) {
+                    return [fileUri];
+                }
             }
+            return [];
         }
-        return undefined;
+
+        // Search across all workspace folders via findFiles.
+        return this.code.workspace.findFiles(AzureYamlGlobPattern, undefined, maxResults);
     }
 
     /** @inheritdoc */
@@ -389,8 +407,8 @@ export class AzdService implements IAzdService {
 
     /**
      * Wraps errors from `azd` commands with actionable messages.
-     * - ENOENT → azd not installed
-     * - Other errors → checks the installed version and reports if
+     * - ENOENT -> azd not installed
+     * - Other errors -> checks the installed version and reports if
      *   it is below {@linkcode MinAzdVersion}
      *
      * Shows a toast with an "Install" button and suppresses the

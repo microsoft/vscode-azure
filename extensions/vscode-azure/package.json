@@ -24,6 +24,15 @@
                 "title": "%commands.vscode-azure/resources/refresh%"
             },
             {
+                "command": "vscode-azure/workspace/refresh",
+                "icon": "$(refresh)",
+                "title": "%commands.vscode-azure/workspace/refresh%"
+            },
+            {
+                "command": "vscode-azure/workspace/revealInExplorer",
+                "title": "%commands.vscode-azure/workspace/revealInExplorer%"
+            },
+            {
                 "command": "vscode-azure/resources/openInPortal",
                 "icon": "$(link-external)",
                 "title": "%commands.vscode-azure/resources/openInPortal%"
@@ -101,6 +110,14 @@
                     "when": "false"
                 },
                 {
+                    "command": "vscode-azure/workspace/refresh",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/workspace/revealInExplorer",
+                    "when": "false"
+                },
+                {
                     "command": "vscode-azure/acr/disableAdminUser",
                     "when": "false"
                 },
@@ -153,6 +170,11 @@
                     "group": "navigation@2"
                 },
                 {
+                    "command": "vscode-azure/workspace/refresh",
+                    "when": "view == vscode-azure/workspace",
+                    "group": "navigation@1"
+                },
+                {
                     "command": "vscode-azure/activity/clearSuccessful",
                     "when": "view == vscode-azure/activity",
                     "group": "navigation@1"
@@ -188,6 +210,11 @@
                 {
                     "command": "vscode-azure/functionApp/appSettings/delete",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteFunctionAppSetting\\b/i"
+                },
+                {
+                    "command": "vscode-azure/workspace/revealInExplorer",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\brevealInExplorer\\b/i",
+                    "group": "navigation"
                 }
             ],
             "explorer/context": [
@@ -220,6 +247,13 @@
                     "name": "%views.vscode-azure/resources%",
                     "id": "vscode-azure/resources",
                     "icon": "$(azure)",
+                    "visibility": "visible",
+                    "type": "tree"
+                },
+                {
+                    "name": "%views.vscode-azure/workspace%",
+                    "id": "vscode-azure/workspace",
+                    "icon": "$(folder)",
                     "visibility": "visible",
                     "type": "tree"
                 }

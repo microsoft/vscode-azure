@@ -79,8 +79,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
 
         const candidates: { label: string; uri: vscode.Uri }[] = [];
         for (const folder of workspaceFolders) {
-            const found = await this.azd.findAzureYaml(folder.uri);
-            if (found) {
+            if ((await this.azd.findAzureYaml(folder.uri)).length) {
                 candidates.push({ label: folder.name, uri: folder.uri });
             }
         }

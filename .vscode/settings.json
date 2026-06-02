@@ -10,15 +10,23 @@
     "files.insertFinalNewline": true,
     "files.trimTrailingWhitespace": true,
     "search.exclude": {
-        "**/out": true,
         "**/dist": true,
         "**/node_modules": true,
-        "**/.vscode-test": true
+        "**/.vscode-test": true,
+    },
+    "files.watcherExclude": {
+        "**/dist": true,
+        "**/node_modules": true,
+        "**/.vscode-test": true,
     },
     "eslint.workingDirectories": [
         {
-            "mode": "auto"
+            "mode": "auto",
         }
     ],
     "js/ts.experimental.useTsgo": true,
+    "js/ts.preferences.quoteStyle": "single",
+    "js/ts.preferences.preferTypeOnlyAutoImports": true,
+    "github.copilot.chat.codesearch.enabled": true,
+    "github.copilot.chat.codesearch.agent.enabled": true,
 }

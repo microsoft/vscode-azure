@@ -110,6 +110,18 @@ export interface MockVsCodeResult {
      */
     readonly configChangeEmitter: EventEmitter<{ affectsConfiguration(section: string): boolean }>;
 
+    /**
+     * Fire this emitter to simulate a workspace folder change.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * m.workspaceFolders.push({ uri: m.vscode.Uri.file('/repo'), name: 'repo', index: 0 });
+     * m.workspaceFoldersChangeEmitter.fire({ added: [...], removed: [] });
+     * ```
+     */
+    readonly workspaceFoldersChangeEmitter: EventEmitter<vscode.WorkspaceFoldersChangeEvent>;
+
     /** The mock `tasks` namespace. */
     readonly tasks: typeof vscode.tasks;
 
@@ -246,6 +258,16 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         Workspace: 2,
     } satisfies typeof vscode.TaskScope;
 
+    class MockRelativePattern {
+        public readonly baseUri: MockUri;
+        constructor(
+            base: vscode.WorkspaceFolder | vscode.Uri,
+            public readonly pattern: string,
+        ) {
+            this.baseUri = 'uri' in base ? base.uri : base;
+        }
+    }
+
     const openExternal = mock.fn(
         () => Promise.resolve(true),
     );
@@ -269,6 +291,50 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 
     const fs = new MockFileSystem();
     const workspaceFolders: vscode.WorkspaceFolder[] = [];
+
+    const getWorkspaceFolder = mock.fn(
+        (uri: MockUri): vscode.WorkspaceFolder | undefined => {
+            const uriStr = uri.toString();
+            return workspaceFolders.find(f => uriStr.startsWith((f.uri).toString()));
+        },
+    );
+
+    const findFiles = mock.fn(
+        (include: unknown, _exclude?: unknown, maxResults?: number) => {
+            let baseUri: MockUri | undefined;
+            let pattern: string;
+            if (include instanceof MockRelativePattern) {
+                baseUri = (include).baseUri;
+                pattern = (include).pattern;
+            } else {
+                pattern = String(include);
+            }
+
+            // Expand brace patterns like {azure.yaml,azure.yml}
+            const braceMatch = /^\{([^}]+)\}$/.exec(pattern);
+            const names = braceMatch ? braceMatch[1].split(',') : [pattern];
+
+            const matched: MockUri[] = [];
+            for (const [filePath] of fs.files) {
+                if (maxResults !== undefined && matched.length >= maxResults) {
+                    break;
+                }
+                const fileName = filePath.split('/').pop() ?? '';
+                if (!names.includes(fileName)) {
+                    continue;
+                }
+                if (baseUri) {
+                    const basePath = baseUri.path.endsWith('/') ? baseUri.path : baseUri.path + '/';
+                    // Only match files directly inside the base (not in subdirectories)
+                    if (filePath !== basePath + fileName) {
+                        continue;
+                    }
+                }
+                matched.push(MockUri.parse(`file://${filePath}`));
+            }
+            return Promise.resolve(matched);
+        },
+    );
     const authentication = {
         getSession,
     };
@@ -293,10 +359,33 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showWorkspaceFolderPick,
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
+    const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
+
+    const createFileSystemWatcher = mock.fn(
+        (): vscode.FileSystemWatcher => {
+            const create = new EventEmitter<vscode.Uri>();
+            const change = new EventEmitter<vscode.Uri>();
+            const del = new EventEmitter<vscode.Uri>();
+            return {
+                ignoreCreateEvents: false,
+                ignoreChangeEvents: false,
+                ignoreDeleteEvents: false,
+                onDidCreate: create.event,
+                onDidChange: change.event,
+                onDidDelete: del.event,
+                dispose: () => { create.dispose(); change.dispose(); del.dispose(); },
+            };
+        },
+    );
+
     const workspace = {
+        createFileSystemWatcher,
+        findFiles,
         getConfiguration,
+        getWorkspaceFolder,
         onDidChangeConfiguration: configChangeEmitter.event,
+        onDidChangeWorkspaceFolders: workspaceFoldersChangeEmitter.event,
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
     };
@@ -328,6 +417,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
         ShellExecution: MockShellExecution,
+        RelativePattern: MockRelativePattern,
         Task: MockTask,
         TaskScope,
         Uri: MockUri,
@@ -349,6 +439,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspace,
         messageResponses,
         configChangeEmitter,
+        workspaceFoldersChangeEmitter,
         tasks,
         taskProcessEndEmitter,
     } as unknown as MockVsCodeResult;

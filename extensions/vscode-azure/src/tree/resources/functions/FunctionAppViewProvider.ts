@@ -70,7 +70,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
         item.contextValue = combineContextValues(OpenInPortal.ContextValue, FunctionAppViewProvider.ContextValue);
-        item.iconPath = getResourceTypeIconUri(this.ctx.code, this.ctx.extensionContext, resource.logicalType);
+        item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
         item.description = resource.logicalType;
 
         return item;
@@ -114,11 +114,11 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         item.id = key;
 
         if (isCategory) {
-            item.contextValue = combineContextValues('functionAppSettings', AddOrEditAppSetting.AddContextValue);
+            item.contextValue = combineContextValues(AddOrEditAppSetting.AddContextValue);
             item.iconPath = new this.ctx.code.ThemeIcon('folder');
         } else {
             // Individual app setting
-            item.contextValue = combineContextValues('functionAppSetting', AddOrEditAppSetting.EditContextValue, DeleteAppSetting.ContextValue);
+            item.contextValue = combineContextValues(AddOrEditAppSetting.EditContextValue, DeleteAppSetting.ContextValue);
             item.iconPath = new this.ctx.code.ThemeIcon('symbol-key');
         }
 

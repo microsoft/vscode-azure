@@ -10,12 +10,13 @@ import { createMockCodeContext, createMockVsCode, createTestActionExecutor } fro
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
-import { createMockAcrClient, createMockResourceClient } from '../../../../debug/mockData';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
 import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../tree/resources/acr/AcrViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
+import { createMockResourceClient } from '../mockResourceClient';
+import { createMockAcrClient } from './mockAcr';
 
 /**
  * Integration tests for the ACR tree rendering pipeline.
@@ -64,7 +65,7 @@ describe('ACR Tree Integration (integration)', () => {
      */
     function createTestPipeline(options?: {
         resources?: ConcreteAzureNode[];
-        acrClientOverrides?: Record<string, unknown>;
+        registryDetails?: Record<string, unknown>;
     }): TestPipeline {
         const { executor } = createTestActionExecutor();
         const mockVscode = createMockVsCode();
@@ -87,7 +88,7 @@ describe('ACR Tree Integration (integration)', () => {
         });
         const resources = options?.resources ?? [acrRegistry, nonAcrResource];
         const resourceClient = createMockResourceClient([resourceGroup], resources);
-        const acrClient = createMockAcrClient(options?.acrClientOverrides);
+        const acrClient = createMockAcrClient(options?.registryDetails ?? {});
 
         const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
         const acrClientProvider: IAcrClientProvider = () => acrClient;
@@ -313,13 +314,11 @@ describe('ACR Tree Integration (integration)', () => {
     describe('enrichment', () => {
         it('should show warning icon when admin user is enabled after enrichment', async () => {
             const { viewTree, dataTree } = createTestPipeline({
-                acrClientOverrides: {
-                    registries: {
-                        get: () => Promise.resolve({
-                            loginServer: 'myreg.azurecr.io',
-                            sku: { name: 'Basic', tier: 'Basic' },
-                            adminUserEnabled: true,
-                        }),
+                registryDetails: {
+                    myReg: {
+                        loginServer: 'myreg.azurecr.io',
+                        sku: { name: 'Basic', tier: 'Basic' },
+                        adminUserEnabled: true,
                     },
                 },
             });
