@@ -46,7 +46,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
         const step = new HydrateAzdInfoStep<AzdWizardContext>(code, azd);
         const context: Partial<AzdWizardContext> = {
             job: 'deploy',
-            iacFolder: folderUri as never,
+            iacFolder: folderUri,
         };
         return { step, context, azd, window };
     }
@@ -54,7 +54,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
     describe('shouldPrompt', () => {
         it('returns false when job is not deploy', () => {
             const { step } = makeStep();
-            expect(step.shouldPrompt({ job: 'createNew', iacFolder: MockUri.file('/x') as never })).to.be.false;
+            expect(step.shouldPrompt({ job: 'createNew', iacFolder: MockUri.file('/x') })).to.be.false;
         });
 
         it('returns false when iacFolder is missing', () => {

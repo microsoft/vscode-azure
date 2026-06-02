@@ -32,12 +32,12 @@ describe('AzdUp (unit)', () => {
                 uri: MockUri.file('/workspace'),
                 name: 'workspace',
                 index: 0,
-            } as never);
+            });
 
             // By default, findAzureYaml finds it in the workspace
             azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
-                if ((dir as MockUri).path === '/workspace') {
-                    return Promise.resolve(MockUri.file('/workspace/azure.yaml') as unknown as vscode.Uri);
+                if ((dir).path === '/workspace') {
+                    return Promise.resolve(MockUri.file('/workspace/azure.yaml'));
                 }
                 return Promise.resolve(undefined);
             });
@@ -56,7 +56,7 @@ describe('AzdUp (unit)', () => {
     it('should resolve cwd from file URI when invoked from explorer', async () => {
         const { cmd, azd } = createCommand();
 
-        await cmd.execute(MockUri.file('/some/project/azure.yaml') as unknown as vscode.Uri);
+        await cmd.execute(MockUri.file('/some/project/azure.yaml'));
 
         expect(azd.provision.mock.callCount()).to.equal(1);
     });

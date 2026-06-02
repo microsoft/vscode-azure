@@ -6,8 +6,8 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { getWorkspaceFolder, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../ui/uiHelpers';
-import type { IVsCode } from '../../vscode/IVsCode';
 import { CancellationError } from '../../vscode/CancellationError';
+import type { IVsCode } from '../../vscode/IVsCode';
 import { GoBackError } from '../../wizard/GoBackError';
 import { MockUri } from '../vscode/MockUri';
 import { createMockCodeContext, createMockVsCode, respondToPrompts } from '../vscode/MockVsCode';
@@ -356,7 +356,7 @@ describe('uiHelpers (unit)', () => {
         it('should return the single folder when there is exactly one', async () => {
             const { vscode: code, workspaceFolders } = createMockVsCode();
             const folder = { uri: MockUri.file('/project'), name: 'project', index: 0 };
-            workspaceFolders.push(folder as never);
+            workspaceFolders.push(folder);
 
             const result = await getWorkspaceFolder(code);
 
@@ -368,7 +368,7 @@ describe('uiHelpers (unit)', () => {
             const folder2 = { uri: MockUri.file('/project2'), name: 'project2', index: 1 };
 
             const mockResult = createMockVsCode();
-            mockResult.workspaceFolders.push(folder1 as never, folder2 as never);
+            mockResult.workspaceFolders.push(folder1, folder2);
 
             const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
             showPick.mock.mockImplementation(() => Promise.resolve(folder2));
@@ -384,7 +384,7 @@ describe('uiHelpers (unit)', () => {
             const folder2 = { uri: MockUri.file('/b'), name: 'b', index: 1 };
 
             const mockResult = createMockVsCode();
-            mockResult.workspaceFolders.push(folder1 as never, folder2 as never);
+            mockResult.workspaceFolders.push(folder1, folder2);
 
             const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
             showPick.mock.mockImplementation(() => Promise.resolve(folder1));
@@ -400,7 +400,7 @@ describe('uiHelpers (unit)', () => {
             const folder2 = { uri: MockUri.file('/b'), name: 'b', index: 1 };
 
             const mockResult = createMockVsCode();
-            mockResult.workspaceFolders.push(folder1 as never, folder2 as never);
+            mockResult.workspaceFolders.push(folder1, folder2);
 
             const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
             showPick.mock.mockImplementation(() => Promise.resolve(undefined));
