@@ -75,7 +75,7 @@ export async function activateInternal(
 }
 
 /** Entry point called by the generated extension `deactivate` function. */
-export function deactivateInternal(): Promise<void> {
+export function deactivateInternal(_extensionContext: IExtensionContext): Promise<void> {
     return Promise.resolve();
 }
 
