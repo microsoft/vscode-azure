@@ -37,7 +37,7 @@ describe('AzdUp (unit)', () => {
             // By default, findAzureYaml finds it in the workspace
             azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
                 if ((dir).path === '/workspace') {
-                    return Promise.resolve(MockUri.file('/workspace/azure.yaml'));
+                    return Promise.resolve([MockUri.file('/workspace/azure.yaml')]);
                 }
                 return Promise.resolve([]);
             });

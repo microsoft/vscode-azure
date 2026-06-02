@@ -53,8 +53,8 @@ describe('CreateFunctionApp (unit)', () => {
         azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
             const candidate = MockUri.file(`${dir.fsPath}/azure.yaml`);
             return mockFs.files.has(candidate.path)
-                ? Promise.resolve(candidate)
-                : Promise.resolve(yamlInTemp);
+                ? Promise.resolve([candidate])
+                : yamlInTemp ? Promise.resolve([yamlInTemp]) : Promise.resolve([]);
         });
         azd.init.mock.mockImplementation((cwd: vscode.Uri) => {
             yamlInTemp = MockUri.file(`${cwd.fsPath}/azure.yaml`);
