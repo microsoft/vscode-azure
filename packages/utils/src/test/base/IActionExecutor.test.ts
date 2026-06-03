@@ -22,8 +22,8 @@ function createReporter(): ITelemetryReporter & { sendTelemetryErrorEvent: Mock<
 
 function createExecutor(reporter?: ReturnType<typeof createReporter>, output?: MockOutputChannel) {
     const r = reporter ?? createReporter();
-    const { executor, code } = createTestActionExecutor({ reporter: r, output });
-    return { executor, reporter: r, code };
+    const { executor, code, mockVsCode } = createTestActionExecutor({ reporter: r, output });
+    return { executor, reporter: r, code, mockVsCode };
 }
 
 describe('ActionExecutor (unit)', () => {
@@ -204,8 +204,8 @@ describe('ActionExecutor (unit)', () => {
 
     describe('error toast', () => {
         it('should show an error message with Report Issue button on failure', async () => {
-            const { executor, code } = createExecutor();
-            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+            const { executor, mockVsCode } = createExecutor();
+            const showErrorMessage = mockVsCode.window.showErrorMessage;
 
             await executor.callWithTelemetryAndErrorHandling('test', () => {
                 throw new Error('something broke');
@@ -217,8 +217,8 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should not show error message when suppress is display', async () => {
-            const { executor, code } = createExecutor();
-            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+            const { executor, mockVsCode } = createExecutor();
+            const showErrorMessage = mockVsCode.window.showErrorMessage;
 
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 ctx.errorHandling.suppress = 'display';
@@ -229,8 +229,8 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should not show Report Issue button when suppress is reportIssue', async () => {
-            const { executor, code } = createExecutor();
-            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+            const { executor, mockVsCode } = createExecutor();
+            const showErrorMessage = mockVsCode.window.showErrorMessage;
 
             await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 ctx.errorHandling.suppress = 'reportIssue';
@@ -244,9 +244,9 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should open issue reporter with extensionId and data when Report Issue is clicked', async () => {
-            const { executor, code } = createExecutor();
-            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
-            const executeCommand = code.commands.executeCommand as unknown as Mock<typeof code.commands.executeCommand>;
+            const { executor, mockVsCode } = createExecutor();
+            const showErrorMessage = mockVsCode.window.showErrorMessage;
+            const executeCommand = mockVsCode.commands.executeCommand;
 
             // Simulate user clicking "Report Issue"
             showErrorMessage.mock.mockImplementation(
@@ -269,8 +269,8 @@ describe('ActionExecutor (unit)', () => {
         });
 
         it('should not show error toast for CancellationError', async () => {
-            const { executor, code } = createExecutor();
-            const showErrorMessage = code.window.showErrorMessage as unknown as Mock<typeof code.window.showErrorMessage>;
+            const { executor, mockVsCode } = createExecutor();
+            const showErrorMessage = mockVsCode.window.showErrorMessage;
 
             await executor.callWithTelemetryAndErrorHandling('test', () => {
                 throw new CancellationError();

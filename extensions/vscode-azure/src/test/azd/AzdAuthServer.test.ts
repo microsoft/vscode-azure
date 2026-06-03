@@ -127,7 +127,7 @@ describe('AzdAuthServer (unit)', () => {
 
         before(async () => {
             const mockResult = createMockVsCode();
-            getSession = mockResult.authentication.getSession as unknown as ReturnType<typeof mock.fn>;
+            getSession = mockResult.authentication.getSession;
 
             server = new AzdAuthServer(mockResult.vscode, new MockOutputChannel('test'));
             env = await server.getEnv();

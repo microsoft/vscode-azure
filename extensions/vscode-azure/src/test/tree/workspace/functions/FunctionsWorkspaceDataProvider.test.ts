@@ -6,7 +6,7 @@
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { mock, type Mock } from 'node:test';
+import { mock } from 'node:test';
 import { FunctionsWorkspaceDataProvider } from '../../../../tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { isFunctionsProjectNode } from '../../../../tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
@@ -66,9 +66,8 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
 
         it('creates a file system watcher for host.json', () => {
             const { mock: m } = createProvider();
-            const watcher = m.workspace.createFileSystemWatcher as unknown as Mock<(...args: unknown[]) => unknown>;
-            expect(watcher.mock.calls.length).to.equal(1);
-            expect(watcher.mock.calls[0].arguments[0]).to.equal('host.json');
+            expect(m.workspace.createFileSystemWatcher.mock.calls.length).to.equal(1);
+            expect(m.workspace.createFileSystemWatcher.mock.calls[0].arguments[0]).to.equal('host.json');
         });
     });
 });

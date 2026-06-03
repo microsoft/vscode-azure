@@ -40,7 +40,7 @@ describe('SelectIacFolderStep (unit)', () => {
             const result = await step.prompt({ job: 'createNew' });
 
             // TempDirManager creates dirs under storageUri/tmp/.
-            expect((result.iacFolder as MockUri).path).to.include('/tmp/d-');
+            expect((result.iacFolder!).path).to.include('/tmp/d-');
             // No quick picks shown.
             expect(mockResult.quickPicks.length).to.equal(0);
         });
@@ -54,7 +54,7 @@ describe('SelectIacFolderStep (unit)', () => {
 
             const result = await step.prompt({ job: 'deploy' });
 
-            expect((result.iacFolder as MockUri).path).to.equal('/repo');
+            expect((result.iacFolder!).path).to.equal('/repo');
         });
 
         it('deploy: throws an explanatory error when no workspace folder is open', async () => {

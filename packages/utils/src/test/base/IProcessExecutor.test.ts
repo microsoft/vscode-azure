@@ -191,9 +191,8 @@ describe('ProcessExecutor (unit)', () => {
         async function getTaskExecution(m: ReturnType<typeof createMockVsCode>): Promise<vscode.TaskExecution> {
             // Yield to let spawn's async internals call executeTask
             await delay(0);
-            const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;
-            expect(executeTask.mock.callCount()).to.equal(1);
-            return executeTask.mock.calls[0].result as Promise<vscode.TaskExecution>;
+            expect(m.tasks.executeTask.mock.callCount()).to.equal(1);
+            return m.tasks.executeTask.mock.calls[0].result as Promise<vscode.TaskExecution>;
         }
 
         it('should create a task and resolve on exit code 0', async () => {
@@ -312,9 +311,8 @@ describe('ProcessExecutor (unit)', () => {
                 source: 'mySource',
             });
 
-            const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;
             await delay(0);
-            const task = executeTask.mock.calls[0].arguments[0];
+            const task = m.tasks.executeTask.mock.calls[0].arguments[0];
 
             expect(task.definition.idRandomizer).to.be.a('number');
             expect(task.presentationOptions.focus).to.be.true;
@@ -338,9 +336,8 @@ describe('ProcessExecutor (unit)', () => {
                 workspaceFolder: folder,
             });
 
-            const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;
             await delay(0);
-            const task = executeTask.mock.calls[0].arguments[0];
+            const task = m.tasks.executeTask.mock.calls[0].arguments[0];
 
             expect(task.scope).to.equal(folder);
 
@@ -359,9 +356,8 @@ describe('ProcessExecutor (unit)', () => {
                 name: 'Default Task',
             });
 
-            const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;
             await delay(0);
-            const task = executeTask.mock.calls[0].arguments[0];
+            const task = m.tasks.executeTask.mock.calls[0].arguments[0];
 
             expect(task.source).to.equal('process');
             expect(task.scope).to.equal(2); // TaskScope.Workspace

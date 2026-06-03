@@ -4,95 +4,36 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
+import { URI, Utils } from 'vscode-uri';
+import type { Satisfies } from '../../types/Satisfies';
 
 /**
- * Minimal stand-in for `vscode.Uri` used by {@linkcode createMockVsCode}.
+ * A faithful stand-in for `vscode.Uri`, backed by the Microsoft-published
+ * `vscode-uri` package (the same `URI` implementation the editor ships).
  *
- * Implements the full `Uri` instance API (`scheme`, `path`, `fsPath`,
- * `authority`, `query`, `fragment`, `toString()`, `toJSON()`, `with()`)
- * and the static factories (`file`, `parse`, `from`, `joinPath`).
+ * @remarks
+ * Instances returned by {@linkcode MockUri.file}, {@linkcode MockUri.parse},
+ * etc. are real `vscode-uri` `URI` objects, so percent-encoding, `fsPath`
+ * normalization (drive letters, UNC paths, platform separators), and
+ * round-tripping all match the editor exactly -- unlike a hand-rolled mock.
+ *
+ * The only adaptation is {@linkcode MockUri.joinPath}, which `vscode-uri`
+ * exposes as `Utils.joinPath` rather than a static on `URI`; it is re-shaped
+ * here to match `vscode.Uri.joinPath`. Use {@linkcode MockUri.isUri} rather
+ * than `instanceof` to test for URI-ness.
  */
-export class MockUri implements vscode.Uri {
-    constructor(
-        public readonly scheme: string,
-        public readonly path: string,
-        public readonly fsPath: string = path,
-        public readonly authority: string = '',
-        public readonly query: string = '',
-        public readonly fragment: string = '',
-    ) { }
+export const MockUri = {
+    isUri: (thing: unknown): thing is vscode.Uri => URI.isUri(thing),
+    parse: (value: string, strict?: boolean): vscode.Uri => URI.parse(value, strict),
+    file: (path: string): vscode.Uri => URI.file(path),
+    from: (components: { scheme: string; authority?: string; path?: string; query?: string; fragment?: string }): vscode.Uri => URI.from(components),
+    joinPath: (base: vscode.Uri, ...pathSegments: string[]): vscode.Uri =>
+        Utils.joinPath(URI.isUri(base) ? base : URI.from(base), ...pathSegments),
+} as unknown as typeof vscode.Uri;
 
-    /** Returns a new {@linkcode MockUri} with the given component overrides. */
-    with(change: { scheme?: string; authority?: string; path?: string; query?: string; fragment?: string }) {
-        return new MockUri(
-            change.scheme ?? this.scheme,
-            change.path ?? this.path,
-            change.path ?? this.fsPath,
-            change.authority ?? this.authority,
-            change.query ?? this.query,
-            change.fragment ?? this.fragment,
-        );
-    }
-
-    /** Returns a JSON representation of this URI. */
-    toJSON() {
-        return { scheme: this.scheme, authority: this.authority, path: this.path, query: this.query, fragment: this.fragment };
-    }
-
-    /** Returns the URI as a string in `scheme://authority/path?query#fragment` form. */
-    toString() {
-        let result = `${this.scheme}://`;
-        if (this.authority) {
-            result += this.authority;
-        }
-        result += this.path;
-        if (this.query) {
-            result += `?${this.query}`;
-        }
-        if (this.fragment) {
-            result += `#${this.fragment}`;
-        }
-        return result;
-    }
-
-    /** Creates a `file:` scheme {@linkcode MockUri} for the given path. */
-    static file(path: string) { return new MockUri('file', path); }
-
-    /** Parses a URI string into a {@linkcode MockUri}. */
-    static parse(value: string) {
-        try {
-            const url = new URL(value);
-            return new MockUri(
-                url.protocol.replace(/:$/, ''),
-                url.pathname,
-                url.pathname,
-                url.host,
-                url.search.replace(/^\?/, ''),
-                url.hash.replace(/^#/, ''),
-            );
-        } catch {
-            return new MockUri('', value);
-        }
-    }
-
-    /** Creates a {@linkcode MockUri} from component parts. */
-    static from(components: { scheme: string; authority?: string; path?: string; query?: string; fragment?: string }) {
-        const path = components.path ?? '';
-        return new MockUri(components.scheme, path, path, components.authority ?? '', components.query ?? '', components.fragment ?? '');
-    }
-
-    /** Joins additional path segments onto `base` using `/` as separator, resolving `.` and `..`. */
-    static joinPath(base: MockUri, ...segments: string[]) {
-        const parts = [base.path, ...segments].join('/').split('/');
-        const resolved: string[] = [];
-        for (const p of parts) {
-            if (p === '..') {
-                resolved.pop();
-            } else if (p !== '.' && p !== '') {
-                resolved.push(p);
-            }
-        }
-        const path = '/' + resolved.join('/');
-        return new MockUri(base.scheme, path, path, base.authority);
-    }
-}
+// Compile-time checks: vscode-uri's URI instances are mutually assignable to
+// vscode.Uri, so the instances handed back by `Uri.*` are faithful.
+/* eslint-disable @typescript-eslint/no-unused-vars */
+type ForwardCheckUri = Satisfies<URI, vscode.Uri>;
+type ReverseCheckUri = Satisfies<vscode.Uri, URI>;
+/* eslint-enable @typescript-eslint/no-unused-vars */

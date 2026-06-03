@@ -6,7 +6,6 @@
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import type { Mock } from 'node:test';
 import { RevealInExplorer } from '../../commands/RevealInExplorer';
 import { makeAzdProjectNode, makeAzdServiceNode } from '../tree/workspace/mockWorkspaceNode';
 
@@ -14,7 +13,7 @@ describe('RevealInExplorer (unit)', () => {
     function setUp(node?: unknown) {
         const m = createMockVsCode();
         const dataTree = { get: () => node } as never;
-        return { code: m.vscode, executeCommand: m.commands.executeCommand as unknown as Mock<(...args: unknown[]) => unknown>, cmd: new RevealInExplorer(m.vscode, dataTree) };
+        return { code: m.vscode, executeCommand: m.commands.executeCommand, cmd: new RevealInExplorer(m.vscode, dataTree) };
     }
 
     it('forwards resourceUri to VS Code revealInExplorer when present', async () => {
