@@ -8,6 +8,7 @@ import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
+import type * as vscode from 'vscode';
 import { AzdDeployStep } from '../../../azd/wizard/AzdDeployStep';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { createMockAzdService } from '../MockAzdService';
@@ -97,7 +98,7 @@ describe('AzdDeployStep (unit)', () => {
             await step.execute(context);
 
             expect(azd.deploy.mock.callCount()).to.equal(1);
-            expect((azd.deploy.mock.calls[0].arguments[0] as MockUri).path).to.equal('/project');
+            expect((azd.deploy.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/project');
         });
 
         it('should track a code deployment activity', async () => {

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { FunctionAppLogicalType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
-import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { getAzureIconUri, getResourceTypeIconUri } from '../../tree/iconPath';
@@ -15,7 +15,7 @@ describe('getResourceTypeIconUri (unit)', () => {
         const { ctx } = createMockCodeContext();
         const uri = getResourceTypeIconUri(ctx, FunctionAppLogicalType);
 
-        expect(uri).to.be.instanceOf(MockUri);
+        expect(uri.scheme).to.equal('file');
         expect(uri.path).to.include('dist/azureIcons/microsoft.web/sites~functionapp.svg');
     });
 
@@ -39,7 +39,7 @@ describe('getAzureIconUri (unit)', () => {
         const { ctx } = createMockCodeContext();
         const uri = getAzureIconUri(ctx, 'azd');
 
-        expect(uri).to.be.instanceOf(MockUri);
+        expect(uri.scheme).to.equal('file');
         expect(uri.path).to.include('dist/azureIcons/azd.svg');
     });
 

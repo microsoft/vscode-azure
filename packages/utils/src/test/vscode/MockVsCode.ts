@@ -259,7 +259,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     } satisfies typeof vscode.TaskScope;
 
     class MockRelativePattern {
-        public readonly baseUri: MockUri;
+        public readonly baseUri: vscode.Uri;
         constructor(
             base: vscode.WorkspaceFolder | vscode.Uri,
             public readonly pattern: string,
@@ -293,7 +293,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const workspaceFolders: vscode.WorkspaceFolder[] = [];
 
     const getWorkspaceFolder = mock.fn(
-        (uri: MockUri): vscode.WorkspaceFolder | undefined => {
+        (uri: vscode.Uri): vscode.WorkspaceFolder | undefined => {
             const uriStr = uri.toString();
             return workspaceFolders.find(f => uriStr.startsWith((f.uri).toString()));
         },
@@ -301,7 +301,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 
     const findFiles = mock.fn(
         (include: unknown, _exclude?: unknown, maxResults?: number) => {
-            let baseUri: MockUri | undefined;
+            let baseUri: vscode.Uri | undefined;
             let pattern: string;
             if (include instanceof MockRelativePattern) {
                 baseUri = (include).baseUri;
@@ -314,7 +314,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
             const braceMatch = /^\{([^}]+)\}$/.exec(pattern);
             const names = braceMatch ? braceMatch[1].split(',') : [pattern];
 
-            const matched: MockUri[] = [];
+            const matched: vscode.Uri[] = [];
             for (const [filePath] of fs.files) {
                 if (maxResults !== undefined && matched.length >= maxResults) {
                     break;

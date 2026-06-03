@@ -43,7 +43,7 @@ describe('FunctionsWorkspaceViewProvider (unit)', () => {
         const item = provider.getTreeItem(node.id);
         expect(item.label).to.equal('my-fn');
         expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.None);
-        expect((item.iconPath as vscode.Uri).fsPath).to.include('microsoft.web/sites~functionapp.svg');
+        expect((item.iconPath as vscode.Uri).path).to.include('microsoft.web/sites~functionapp.svg');
         expect((item.contextValue ?? '')).to.include('revealInExplorer');
     });
 

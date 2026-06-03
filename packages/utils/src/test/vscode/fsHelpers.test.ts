@@ -37,12 +37,12 @@ describe('fsHelpers (unit)', () => {
         });
 
         it('ignores trailing slashes', () => {
-            const uri = new MockUri('file', '/workspace/folder/');
+            const uri = MockUri.from({ scheme: 'file', path: '/workspace/folder/' });
             expect(basename(uri)).to.equal('folder');
         });
 
         it('falls back to the full path for empty segments', () => {
-            const uri = new MockUri('file', '');
+            const uri = MockUri.from({ scheme: 'untitled', path: '' });
             expect(basename(uri)).to.equal('');
         });
     });
