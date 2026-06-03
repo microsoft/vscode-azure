@@ -14,4 +14,5 @@ export * from './test/vscode/MockOutputChannel';
 export * from './test/vscode/MockUri';
 export * from './test/vscode/MockVsCode';
 export * from './test/vscode/tree/MockTreeItem';
+export * from './test/vscode/valueTypes';
 export { DebugOutputChannel } from './vscode/IOutputChannel';

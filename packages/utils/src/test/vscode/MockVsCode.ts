@@ -15,6 +15,7 @@ import { MockFileSystem } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
 import { MockTreeItem } from './tree/MockTreeItem';
+import { MockConfigurationTarget, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './valueTypes';
 
 /**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
@@ -208,55 +209,11 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         Back: { iconPath: { id: 'arrow-left' } } satisfies vscode.QuickInputButton,
     };
 
-    const TreeItemCollapsibleState = {
-        None: 0,
-        Collapsed: 1,
-        Expanded: 2,
-    } satisfies typeof vscode.TreeItemCollapsibleState;
-
     const settings = new Map<string, unknown>();
 
     const getConfiguration = mock.fn(
         (section?: string) => new MockWorkspaceConfiguration(settings, section),
     );
-
-    const ConfigurationTarget = {
-        Global: 1,
-        Workspace: 2,
-        WorkspaceFolder: 3,
-    } satisfies typeof vscode.ConfigurationTarget;
-
-    class MockThemeIcon {
-        constructor(public readonly id: string, public readonly color?: unknown) { }
-    }
-
-    class MockThemeColor {
-        constructor(public readonly id: string) { }
-    }
-
-    class MockShellExecution {
-        constructor(
-            public readonly command: string,
-            public readonly args: unknown[],
-            public readonly options?: unknown,
-        ) { }
-    }
-
-    class MockTask {
-        public presentationOptions: vscode.TaskPresentationOptions = {};
-        constructor(
-            public readonly definition: vscode.TaskDefinition,
-            public readonly scope: vscode.TaskScope | vscode.WorkspaceFolder,
-            public readonly name: string,
-            public readonly source: string,
-            public readonly execution?: unknown,
-        ) { }
-    }
-
-    const TaskScope = {
-        Global: 1,
-        Workspace: 2,
-    } satisfies typeof vscode.TaskScope;
 
     class MockRelativePattern {
         public readonly baseUri: vscode.Uri;
@@ -412,14 +369,14 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         l10n: { t },
         QuickInputButtons,
         TreeItem: MockTreeItem,
-        TreeItemCollapsibleState,
-        ConfigurationTarget,
+        TreeItemCollapsibleState: MockTreeItemCollapsibleState,
+        ConfigurationTarget: MockConfigurationTarget,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
         ShellExecution: MockShellExecution,
         RelativePattern: MockRelativePattern,
         Task: MockTask,
-        TaskScope,
+        TaskScope: MockTaskScope,
         Uri: MockUri,
         ...overrides,
     } as unknown as IVsCode;
