@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockSubscriptionProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -124,7 +125,7 @@ describe('AzdProvisionStep (unit)', () => {
 
             await step.execute(context);
             // Let microtasks settle (the final readAndTrack is in the finally block)
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
             expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
             expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentId);
@@ -147,7 +148,7 @@ describe('AzdProvisionStep (unit)', () => {
             } as AzdWizardContext;
 
             await step.execute(context);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
             expect(armProvider.trackDeployment.mock.callCount()).to.equal(2);
             const tracked = [
@@ -167,7 +168,7 @@ describe('AzdProvisionStep (unit)', () => {
             } as AzdWizardContext;
 
             await step.execute(context);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
             expect(armProvider.trackDeployment.mock.callCount()).to.equal(0);
         });
@@ -189,7 +190,7 @@ describe('AzdProvisionStep (unit)', () => {
             } as AzdWizardContext;
 
             await step.execute(context);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
             expect(armProvider.trackDeployment.mock.callCount()).to.equal(0);
         });
@@ -211,7 +212,7 @@ describe('AzdProvisionStep (unit)', () => {
             } as AzdWizardContext;
 
             await step.execute(context);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
             expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
         });
@@ -233,7 +234,7 @@ describe('AzdProvisionStep (unit)', () => {
             } as AzdWizardContext;
 
             await step.execute(context);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
             expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
             expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentId);

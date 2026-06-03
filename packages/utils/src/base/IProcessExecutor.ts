@@ -213,15 +213,6 @@ export class ProcessExecutor implements IProcessExecutor {
         return new Promise<void>((resolve, reject) => {
             let ctDisposable: Disposable | undefined;
 
-            if (cancellationToken) {
-                ctDisposable = cancellationToken.onCancellationRequested(() => {
-                    taskExecution.terminate();
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
-                    reject(new CancellationError());
-                });
-            }
-
             const endDisposable = this.code.tasks.onDidEndTaskProcess((e) => {
                 if (e.execution === taskExecution) {
                     ctDisposable?.dispose();
@@ -241,6 +232,15 @@ export class ProcessExecutor implements IProcessExecutor {
                     }
                 }
             });
+
+            if (cancellationToken) {
+                ctDisposable = cancellationToken.onCancellationRequested(() => {
+                    taskExecution.terminate();
+                    ctDisposable?.dispose();
+                    endDisposable.dispose();
+                    reject(new CancellationError());
+                });
+            }
         });
     }
 

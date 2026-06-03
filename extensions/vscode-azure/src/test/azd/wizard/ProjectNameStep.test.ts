@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -94,7 +95,7 @@ describe('ProjectNameStep (unit)', () => {
             const step = new ProjectNameStep(ctx);
             const stepPromise = step.prompt({});
             while (mock.inputBoxes.length === 0) {
-                await new Promise(resolve => { setTimeout(resolve, 0); });
+                await delay(0);
             }
             return { stepPromise, ib: mock.inputBoxes[0] };
         }

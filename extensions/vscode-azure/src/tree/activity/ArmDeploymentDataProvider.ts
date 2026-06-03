@@ -9,7 +9,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, flattenPages, IActionExecutor, IVsCode,
+    delay, EventEmitter, flattenPages, IActionExecutor, IVsCode,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -171,15 +171,6 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
             this.activePolls.add(activity.id);
 
-            // Single abort handler that clears the pending timer.
-            // `currentTimer` is updated each iteration so only one listener is needed.
-            let currentTimer: ReturnType<typeof setTimeout> | undefined;
-            abortSignal.addEventListener('abort', () => {
-                if (currentTimer !== undefined) {
-                    clearTimeout(currentTimer);
-                }
-            }, { once: true });
-
             while (!abortSignal.aborted) {
                 let nextPollMs = 10 * 1000; // Default to 10s if server doesn't provide guidance
                 this.executor.output.debug(`[activity] poll cycle start deployment=${activity.id}`);
@@ -249,13 +240,11 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
                 }
 
-                // Wait for the next poll interval
-                await new Promise<void>(resolve => {
-                    currentTimer = setTimeout(resolve, nextPollMs);
-                });
+                // Wait for the next poll interval (rejects with CancellationError on abort)
+                await delay(nextPollMs, { signal: abortSignal });
             }
         } catch {
-            // AbortError or signal.throwIfAborted -- exit cleanly
+            // CancellationError, AbortError, or signal.throwIfAborted -- exit cleanly
         } finally {
             this.activePolls.delete(activity.id);
         }
