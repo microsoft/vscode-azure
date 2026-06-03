@@ -7,14 +7,12 @@ import { Environment } from '@azure/ms-rest-azure-env';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import type { Mock } from 'node:test';
 import { VsCodeExtensionCredential } from '../../auth/VsCodeExtensionCredential';
 
 function createCredential(options?: { tenantId?: string; environment?: Environment }) {
-    const { vscode: code } = createMockVsCode();
-    const getSession = code.authentication.getSession as Mock<typeof code.authentication.getSession>;
+    const { vscode: code, authentication } = createMockVsCode();
     const credential = new VsCodeExtensionCredential({ authentication: code.authentication, ...options });
-    return { credential, getSession };
+    return { credential, getSession: authentication.getSession };
 }
 
 describe('VsCodeExtensionCredential (unit)', () => {

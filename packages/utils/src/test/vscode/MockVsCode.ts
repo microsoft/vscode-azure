@@ -19,6 +19,19 @@ import { MockTreeItem } from './tree/MockTreeItem';
 import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './valueTypes';
 
 /**
+ * Maps each method of a `vscode` namespace to its `node:test` {@linkcode Mock}
+ * wrapper so tests can read `.mock` (call counts, arguments,
+ * `mockImplementation`) without casting. Non-function members pass through
+ * unchanged. Passing the original member type to {@linkcode Mock} preserves
+ * overload signatures, and because {@linkcode Mock} is `F & { mock }`, a mapped
+ * namespace is still callable and remains assignable to the real `vscode`
+ * namespace it stands in for.
+ */
+type MockedNamespace<T> = {
+    [K in keyof T]: T[K] extends (...args: never[]) => unknown ? Mock<T[K]> : T[K];
+};
+
+/**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
  * `IVsCode` value and test-inspection surfaces.
  *
@@ -64,19 +77,19 @@ export interface MockVsCodeResult {
     readonly workspaceFolders: vscode.WorkspaceFolder[];
 
     /** The mock `authentication` namespace -- access `.getSession.mock` for assertions. */
-    readonly authentication: typeof vscode.authentication;
+    readonly authentication: MockedNamespace<typeof vscode.authentication>;
 
     /** The mock `commands` namespace -- access `.executeCommand.mock` etc. for assertions. */
-    readonly commands: typeof vscode.commands;
+    readonly commands: MockedNamespace<typeof vscode.commands>;
 
     /** The mock `env` namespace -- access `.openExternal.mock` for assertions. */
-    readonly env: typeof vscode.env;
+    readonly env: MockedNamespace<typeof vscode.env>;
 
     /** The mock `window` namespace -- access `.showWarningMessage.mock` etc. for assertions. */
-    readonly window: typeof vscode.window;
+    readonly window: MockedNamespace<typeof vscode.window>;
 
     /** The mock `workspace` namespace -- access `.getConfiguration.mock` etc. for assertions. */
-    readonly workspace: typeof vscode.workspace;
+    readonly workspace: MockedNamespace<typeof vscode.workspace>;
 
     /**
      * Pre-programmed responses for `showInformationMessage`,
@@ -125,7 +138,7 @@ export interface MockVsCodeResult {
     readonly workspaceFoldersChangeEmitter: EventEmitter<vscode.WorkspaceFoldersChangeEvent>;
 
     /** The mock `tasks` namespace. */
-    readonly tasks: typeof vscode.tasks;
+    readonly tasks: MockedNamespace<typeof vscode.tasks>;
 
     /**
      * Fire this emitter to simulate a task process ending.
@@ -207,7 +220,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     );
 
     const QuickInputButtons = {
-        Back: { iconPath: { id: 'arrow-left' } } satisfies vscode.QuickInputButton,
+        Back: { iconPath: new MockThemeIcon('arrow-left') } satisfies vscode.QuickInputButton,
     };
 
     const settings = new Map<string, unknown>();

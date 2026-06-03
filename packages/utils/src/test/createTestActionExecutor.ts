@@ -8,20 +8,23 @@ import { NullTelemetryReporter, type ITelemetryReporter } from '../base/ITelemet
 import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { IVsCode } from '../vscode/IVsCode';
 import { MockOutputChannel } from './vscode/MockOutputChannel';
-import { createMockVsCode } from './vscode/MockVsCode';
+import { createMockVsCode, type MockVsCodeResult } from './vscode/MockVsCode';
 
 /**
  * Creates an {@linkcode ActionExecutor} suitable for unit tests, backed
  * by a {@linkcode NullTelemetryReporter} and a mock `IVsCode` by default.
  *
  * Returns the executor along with the `IVsCode` mock, reporter, and
- * output channel so tests can inspect calls on them.
+ * output channel so tests can inspect calls on them. The full
+ * {@linkcode MockVsCodeResult} is exposed as `mockVsCode` for assertions on
+ * mock namespaces (e.g. `mockVsCode.window.showErrorMessage.mock`).
  */
 export function createTestActionExecutor(options?: {
     reporter?: ITelemetryReporter;
     output?: IOutputChannel;
-}): { executor: ActionExecutor; code: IVsCode; reporter: ITelemetryReporter; output: IOutputChannel } {
-    const { vscode: code } = createMockVsCode();
+}): { executor: ActionExecutor; code: IVsCode; reporter: ITelemetryReporter; output: IOutputChannel; mockVsCode: MockVsCodeResult } {
+    const mockVsCode = createMockVsCode();
+    const code = mockVsCode.vscode;
     const reporter = options?.reporter ?? new NullTelemetryReporter();
     const output = options?.output ?? new MockOutputChannel('test');
     return {
@@ -29,5 +32,6 @@ export function createTestActionExecutor(options?: {
         code,
         reporter,
         output,
+        mockVsCode,
     };
 }
