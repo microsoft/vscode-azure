@@ -15,7 +15,7 @@ import { MockFileSystem } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
 import { MockTreeItem } from './tree/MockTreeItem';
-import { MockConfigurationTarget, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './valueTypes';
+import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './valueTypes';
 
 /**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
@@ -214,16 +214,6 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const getConfiguration = mock.fn(
         (section?: string) => new MockWorkspaceConfiguration(settings, section),
     );
-
-    class MockRelativePattern {
-        public readonly baseUri: vscode.Uri;
-        constructor(
-            base: vscode.WorkspaceFolder | vscode.Uri,
-            public readonly pattern: string,
-        ) {
-            this.baseUri = 'uri' in base ? base.uri : base;
-        }
-    }
 
     const openExternal = mock.fn(
         () => Promise.resolve(true),

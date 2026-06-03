@@ -5,6 +5,7 @@
 
 import type * as vscode from 'vscode';
 import type { Satisfies } from '../../types/Satisfies';
+import { MockUri } from './MockUri';
 
 /**
  * Test-only stand-ins for `vscode`'s pure value/data types.
@@ -57,6 +58,23 @@ export class MockTask implements vscode.Task {
     ) { }
 }
 
+/** Test stand-in for {@linkcode vscode.RelativePattern}. */
+export class MockRelativePattern implements vscode.RelativePattern {
+    public readonly baseUri: vscode.Uri;
+    public readonly base: string;
+
+    constructor(
+        from: vscode.WorkspaceFolder | vscode.Uri | string,
+        public readonly pattern: string,
+    ) {
+        this.baseUri = typeof from === 'string' ? MockUri.file(from)
+            : 'uri' in from ? from.uri
+                : from;
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- mirrors vscode's deprecated `base` string form
+        this.base = typeof from === 'string' ? from : this.baseUri.fsPath;
+    }
+}
+
 /** Test stand-in for {@linkcode vscode.TreeItemCollapsibleState}. */
 export const MockTreeItemCollapsibleState = {
     None: 0,
@@ -88,4 +106,6 @@ type ForwardCheckShellExecution = Satisfies<MockShellExecution, vscode.ShellExec
 type ReverseCheckShellExecution = Satisfies<vscode.ShellExecution, MockShellExecution>;
 type ForwardCheckTask = Satisfies<MockTask, vscode.Task>;
 type ReverseCheckTask = Satisfies<vscode.Task, MockTask>;
+type ForwardCheckRelativePattern = Satisfies<MockRelativePattern, vscode.RelativePattern>;
+type ReverseCheckRelativePattern = Satisfies<vscode.RelativePattern, MockRelativePattern>;
 /* eslint-enable @typescript-eslint/no-unused-vars */
