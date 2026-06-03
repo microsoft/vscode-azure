@@ -63,7 +63,7 @@ it('(unit) should invalidate the cache', async () => {
 - `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`- `tasks` -- the mock `tasks` namespace (includes `executeTask` with call tracking)
 - `taskProcessEndEmitter` -- fire to simulate a task process ending with an exit code- `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
 
-All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior.
+All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior. The namespace objects exposed on the result (`authentication`, `commands`, `env`, `window`, `workspace`, `tasks`) are typed so their methods expose `.mock` directly -- read `mockResult.window.showErrorMessage.mock.callCount()` with no cast. (Note: the namespaces on `mockResult.vscode` are typed as the real `IVsCode` module, so reach for the top-level handles when you need `.mock`.)
 
 #### MockFileSystem
 
@@ -113,7 +113,7 @@ const { ctx, mock: mockResult } = createMockCodeContext();
 Key patterns:
 - Prefer `createMockVsCode()` / `createMockCodeContext()` over hand-rolled mocks for consistency and completeness
 - Use the built-in `fs`, `workspaceFolders`, and `messageResponses` on the result instead of passing `overrides` or using `mockImplementation` to set up workspace/fs/message state
-- Access namespace objects directly from the result (e.g. `mockResult.commands.executeCommand`) for call-count assertions instead of casting from `code.commands.executeCommand as unknown as Mock<...>`
+- Access namespace objects directly from the result (e.g. `mockResult.commands.executeCommand.mock.callCount()`) for call-count assertions -- they are typed to expose `.mock`, so no `as unknown as Mock<...>` cast is needed
 - Use real implementations (`ActionExecutor`, `createActionContext`, `TempDirManager`) instead of mocking them when they work against `MockVsCode` — they often do
 - Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` for the `ActionExecutor` constructor
 - Use `Mock` from `node:test` to track call counts and arguments — prefer over manual `let callCount = 0` patterns
