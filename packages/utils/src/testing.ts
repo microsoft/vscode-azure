@@ -12,7 +12,7 @@ export * from './test/vscode/input/MockQuickPick';
 export * from './test/vscode/MockFileSystem';
 export * from './test/vscode/MockOutputChannel';
 export * from './test/vscode/MockUri';
+export * from './test/vscode/MockValueTypes';
 export * from './test/vscode/MockVsCode';
 export * from './test/vscode/tree/MockTreeItem';
-export * from './test/vscode/valueTypes';
 export { DebugOutputChannel } from './vscode/IOutputChannel';

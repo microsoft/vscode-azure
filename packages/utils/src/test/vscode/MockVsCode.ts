@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { mock, type Mock } from 'node:test';
 import { matchesGlob } from 'node:path/posix';
+import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { EventEmitter } from '../../vscode/EventEmitter';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
@@ -15,8 +15,8 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileSystem } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
+import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
-import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './valueTypes';
 
 /**
  * Maps each method of a `vscode` namespace to its `node:test` {@linkcode Mock}
@@ -35,16 +35,20 @@ type MockedNamespace<T> = {
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
  * `IVsCode` value and test-inspection surfaces.
  *
- * All tracked methods on the `IVsCode` are Node.js `mock.fn()` instances.
- * To access the `.mock` property for assertions, cast to the concrete type:
+ * The namespace handles exposed here (e.g. {@linkcode MockVsCodeResult.window window},
+ * {@linkcode MockVsCodeResult.commands commands}) are typed via
+ * {@linkcode MockedNamespace} so their methods expose `.mock` directly -- no
+ * cast is needed:
  *
  * ```ts
- * const fn = result.vscode.window.createQuickPick as unknown as Mock<...>;
- * expect(fn.mock.callCount()).to.equal(1);
+ * const result = createMockVsCode();
+ * expect(result.window.createQuickPick.mock.callCount()).to.equal(1);
  * ```
  *
  * Or use the collected {@linkcode quickPicks} / {@linkcode inputBoxes} arrays to
- * inspect and drive the created UI elements directly.
+ * inspect and drive the created UI elements directly. (Note: the namespaces on
+ * {@linkcode MockVsCodeResult.vscode vscode} are typed as the real `IVsCode`
+ * module, so reach for these top-level handles when you need `.mock`.)
  */
 export interface MockVsCodeResult {
     /** The mock suitable for DI injection as {@linkcode IVsCode}. */
@@ -276,7 +280,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
                     break;
                 }
                 if (matchesGlob(filePath, pattern)) {
-                    matched.push(MockUri.file(filePath));
+                    // `fs.files` is keyed by `uri.path`, so rehydrate from URI
+                    // components rather than treating the key as a filesystem
+                    // path (which would mishandle drive letters / schemes).
+                    matched.push(MockUri.from({ scheme: 'file', path: filePath }));
                 }
             }
             return Promise.resolve(matched);
