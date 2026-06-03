@@ -190,17 +190,19 @@ function sendJson(res: ServerResponse, statusCode: number, body: Record<string, 
 }
 
 function listen(server: Server): Promise<number> {
-    return new Promise<number>((resolve, reject) => {
-        server.listen(0, '127.0.0.1', () => {
-            const addr = server.address();
-            if (addr && typeof addr === 'object') {
-                resolve(addr.port);
-            } else {
-                reject(new Error('Failed to get server address'));
-            }
-        });
-        server.on('error', reject);
+    const { promise, resolve, reject } = Promise.withResolvers<number>();
+
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        if (addr && typeof addr === 'object') {
+            resolve(addr.port);
+        } else {
+            reject(new Error('Failed to get server address'));
+        }
     });
+
+    return promise;
 }
 
 /**

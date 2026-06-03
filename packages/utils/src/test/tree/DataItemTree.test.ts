@@ -501,14 +501,13 @@ describe('DataItemTree (unit)', () => {
         it('should not fire spurious change event when enrichment resolves after removal', async () => {
             const tree = createTree();
 
-            let resolveEnrich!: () => void;
+            const { promise: enrichPromise, resolve: resolveEnrichInner } = Promise.withResolvers<boolean>();
+            const resolveEnrich = () => { resolveEnrichInner(false); };
             tree.registerProvider({
                 isRoot: true,
                 canHandle: canHandleAll,
                 getChildren: () => [{ id: 'item' }],
-                enrich: () => new Promise<boolean>(resolve => {
-                    resolveEnrich = () => { resolve(false); };
-                }),
+                enrich: () => enrichPromise,
             });
 
             await tree.getChildren();
@@ -530,15 +529,13 @@ describe('DataItemTree (unit)', () => {
             const tree = createTree();
             tree.registerProvider(createRootProvider([{ id: 'parent' }]));
 
-            let resolveNextPage!: () => void;
-            const pagePromise = new Promise<IteratorResult<Page<TestResource>>>(resolve => {
-                resolveNextPage = () => {
-                    resolve({
-                        done: false,
-                        value: { items: [{ id: 'orphan' }], hasMore: false },
-                    });
-                };
-            });
+            const { promise: pagePromise, resolve: resolvePage } = Promise.withResolvers<IteratorResult<Page<TestResource>>>();
+            const resolveNextPage = () => {
+                resolvePage({
+                    done: false,
+                    value: { items: [{ id: 'orphan' }], hasMore: false },
+                });
+            };
 
             tree.registerProvider({
                 isRoot: false,
