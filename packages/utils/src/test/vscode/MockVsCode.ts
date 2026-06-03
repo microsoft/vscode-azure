@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { mock, type Mock } from 'node:test';
+import { matchesGlob } from 'node:path/posix';
 import type * as vscode from 'vscode';
 import { EventEmitter } from '../../vscode/EventEmitter';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../vscode/IVsCode';
@@ -246,38 +247,24 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
     );
 
+    // Matches files in the mock file system against a glob, using Node's
+    // pure `path.matchesGlob` (no real filesystem access). VS Code resolves a
+    // relative glob against workspace folders, so a pattern without a path
+    // separator matches by basename anywhere; we mirror that with a `**/`
+    // prefix. The RelativePattern base is not scoped.
     const findFiles = mock.fn(
-        (include: unknown, _exclude?: unknown, maxResults?: number) => {
-            let baseUri: vscode.Uri | undefined;
-            let pattern: string;
-            if (include instanceof MockRelativePattern) {
-                baseUri = (include).baseUri;
-                pattern = (include).pattern;
-            } else {
-                pattern = String(include);
-            }
-
-            // Expand brace patterns like {azure.yaml,azure.yml}
-            const braceMatch = /^\{([^}]+)\}$/.exec(pattern);
-            const names = braceMatch ? braceMatch[1].split(',') : [pattern];
+        (include: vscode.GlobPattern, _exclude?: unknown, maxResults?: number) => {
+            const raw = typeof include === 'string' ? include : include.pattern;
+            const pattern = raw.includes('/') ? raw : `**/${raw}`;
 
             const matched: vscode.Uri[] = [];
-            for (const [filePath] of fs.files) {
+            for (const filePath of fs.files.keys()) {
                 if (maxResults !== undefined && matched.length >= maxResults) {
                     break;
                 }
-                const fileName = filePath.split('/').pop() ?? '';
-                if (!names.includes(fileName)) {
-                    continue;
+                if (matchesGlob(filePath, pattern)) {
+                    matched.push(MockUri.file(filePath));
                 }
-                if (baseUri) {
-                    const basePath = baseUri.path.endsWith('/') ? baseUri.path : baseUri.path + '/';
-                    // Only match files directly inside the base (not in subdirectories)
-                    if (filePath !== basePath + fileName) {
-                        continue;
-                    }
-                }
-                matched.push(MockUri.parse(`file://${filePath}`));
             }
             return Promise.resolve(matched);
         },
