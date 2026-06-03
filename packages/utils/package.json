@@ -46,6 +46,7 @@
     },
     "dependencies": {
         "@microsoft/vscode-processutils": "^0.2.2",
+        "vscode-uri": "^3.1.0",
         "which": "^5.0.0"
     },
     "devDependencies": {
