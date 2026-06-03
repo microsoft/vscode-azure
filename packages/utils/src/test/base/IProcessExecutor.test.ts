@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { delay } from '../../base/delay';
 import { ChildProcessError, ProcessExecutor, isChildProcessError, type SpawnFn } from '../../base/IProcessExecutor';
 import { CancellationError } from '../../vscode/CancellationError';
 import { EventEmitter } from '../../vscode/EventEmitter';
@@ -189,7 +190,7 @@ describe('ProcessExecutor (unit)', () => {
     describe('foreground execution', () => {
         async function getTaskExecution(m: ReturnType<typeof createMockVsCode>): Promise<vscode.TaskExecution> {
             // Yield to let spawn's async internals call executeTask
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
             const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;
             expect(executeTask.mock.callCount()).to.equal(1);
             return executeTask.mock.calls[0].result as Promise<vscode.TaskExecution>;
@@ -312,7 +313,7 @@ describe('ProcessExecutor (unit)', () => {
             });
 
             const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
             const task = executeTask.mock.calls[0].arguments[0];
 
             expect(task.definition.idRandomizer).to.be.a('number');
@@ -338,7 +339,7 @@ describe('ProcessExecutor (unit)', () => {
             });
 
             const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
             const task = executeTask.mock.calls[0].arguments[0];
 
             expect(task.scope).to.equal(folder);
@@ -359,7 +360,7 @@ describe('ProcessExecutor (unit)', () => {
             });
 
             const executeTask = m.tasks.executeTask as unknown as Mock<typeof m.vscode.tasks.executeTask>;
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
             const task = executeTask.mock.calls[0].arguments[0];
 
             expect(task.source).to.equal('process');
@@ -454,7 +455,7 @@ describe('ProcessExecutor (integration)', () => {
                 env,
             }, token);
 
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await delay(50);
             token.isCancellationRequested = true;
             emitter.fire();
 

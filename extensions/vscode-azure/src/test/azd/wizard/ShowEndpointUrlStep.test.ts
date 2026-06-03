@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
@@ -151,7 +152,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
             await step.execute(context);
 
             // Let the promise chain settle
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
             const openExternal = mockResult.env.openExternal as unknown as Mock<typeof mockResult.env.openExternal>;
             expect(openExternal.mock.callCount()).to.equal(1);

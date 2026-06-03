@@ -6,6 +6,7 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock, type Mock } from 'node:test';
+import { delay } from '../../base/delay';
 import type { ITelemetryReporter } from '../../base/ITelemetryReporter';
 import { CancellationError } from '../../vscode/CancellationError';
 import { createTestActionExecutor } from '../createTestActionExecutor';
@@ -257,7 +258,7 @@ describe('ActionExecutor (unit)', () => {
             });
 
             // Give the async toast handler a tick to complete
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
             expect(executeCommand.mock.callCount()).to.equal(1);
             expect(executeCommand.mock.calls[0].arguments[0]).to.equal('vscode.openIssueReporter');

@@ -6,6 +6,7 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import { mock } from 'node:test';
+import { delay } from '../../base/delay';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider } from '../../tree/DataProvider';
@@ -520,7 +521,7 @@ describe('DataItemTree (unit)', () => {
 
             // Now let enrichment resolve -- should be a no-op
             resolveEnrich();
-            await new Promise(r => { setTimeout(r, 10); });
+            await delay(10);
 
             expect(onChange.mock.callCount()).to.equal(0);
         });
