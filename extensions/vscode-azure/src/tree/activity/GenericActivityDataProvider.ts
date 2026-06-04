@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, stringifyError } from '@microsoft/vscode-azure-utils';
 import { injectable, type ServiceIdentifier } from 'inversify';
-import { type Activity, isActivity } from './Activity';
+import * as crypto from 'node:crypto';
+import { type Activity, type ActivityStatus, isActivity, isTerminalActivityStatus } from './Activity';
 
 /** Identifier for the generic activity data provider */
 export const IGenericActivityDataProvider: ServiceIdentifier<GenericActivityDataProvider> = Symbol.for('IGenericActivityDataProvider');
@@ -19,9 +20,10 @@ interface GenericActivity extends Activity {
  * Data-layer provider for simple, flat {@linkcode Activity} items that are
  * pushed imperatively by commands (e.g. long-running CLI operations).
  *
- * Activities are tracked via {@linkcode trackActivity} and updated in-place
- * via {@linkcode updateActivity}; change events are fired so the tree
- * re-renders. These activities do not have children.
+ * Activities are tracked via {@linkcode trackActivity}, which returns a
+ * {@linkcode GenericActivityHandle} the caller uses to update the activity
+ * in-place; change events are fired so the tree re-renders. These activities
+ * do not have children.
  */
 @injectable()
 export class GenericActivityDataProvider implements DataProvider<GenericActivity>, Disposable {
@@ -47,30 +49,21 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
 
     /**
      * Add a new generic activity to the tree. The `type` and `startTime`
-     * are assigned automatically. Returns the fully-populated activity so
-     * callers can mutate it later (e.g. set `status`/`endTime`).
+     * are assigned automatically. Returns a {@linkcode GenericActivityHandle}
+     * the caller uses to update the activity's status/title/description later.
      */
-    public trackActivity(activity: Omit<GenericActivity, 'type' | 'startTime'>): GenericActivity {
-        const full: GenericActivity = {
-            ...activity,
+    public trackActivity(opts: { readonly title: string; readonly status?: ActivityStatus; readonly description?: string }): GenericActivityHandle {
+        const activity: GenericActivity = {
+            id: crypto.randomUUID(),
             type: 'generic',
+            status: opts.status ?? 'InProgress',
+            title: opts.title,
+            description: opts.description,
             startTime: new Date(),
         };
-        this.rootActivities.set(full.id, full);
+        this.rootActivities.set(activity.id, activity);
         this.onDidChangeEmitter.fire({ includeChildren: true });
-        return full;
-    }
-
-    /**
-     * Apply a partial update to an existing activity and fire `onDidChange`
-     * so the tree re-renders. No-op if `id` is unknown.
-     */
-    public updateActivity(id: string, changes: Partial<Pick<GenericActivity, 'status' | 'title' | 'description' | 'endTime'>>): void {
-        const activity = this.rootActivities.get(id);
-        if (activity) {
-            Object.assign(activity, changes);
-            this.onDidChangeEmitter.fire({ resource: activity, includeChildren: false });
-        }
+        return new GenericActivityHandle(activity, (e) => { this.onDidChangeEmitter.fire(e); });
     }
 
     /** Remove all root activities matching `filter`. */
@@ -90,5 +83,55 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
     /** @inheritdoc */
     public dispose(): void {
         this.onDidChangeEmitter.dispose();
+    }
+}
+
+/**
+ * Handle returned by {@linkcode GenericActivityDataProvider.trackActivity}
+ * for controlling a generic activity's lifecycle. Mutating the activity
+ * through the handle fires `onDidChange` so the tree re-renders.
+ */
+export class GenericActivityHandle {
+    /** The underlying activity ID. */
+    public readonly id: string;
+
+    public constructor(
+        private readonly activity: GenericActivity,
+        private readonly fireChange: (event: DataProviderChangeEvent<GenericActivity>) => void,
+    ) {
+        this.id = activity.id;
+    }
+
+    /**
+     * Apply a partial update to the activity and fire `onDidChange` so the
+     * tree re-renders.
+     *
+     * When `changes.status` is a terminal state (Completed/Failed/Canceled/
+     * Info/Warn), {@linkcode Activity.endTime endTime} is set automatically.
+     * When `changes.error` is provided, its message becomes the activity's
+     * {@linkcode Activity.description description} (an explicit `description`
+     * takes precedence).
+     *
+     * @throws if the activity has already reached a terminal state and
+     * `changes.status` would move it back to a non-terminal one.
+     */
+    public update(changes: Partial<Pick<Activity, 'status' | 'title' | 'description'>> & { readonly error?: unknown }): void {
+        const { error, ...fields } = changes;
+
+        if (fields.status !== undefined && !isTerminalActivityStatus(fields.status) && isTerminalActivityStatus(this.activity.status)) {
+            throw new Error(`Cannot move activity '${this.activity.id}' from terminal status '${this.activity.status}' to '${fields.status}'.`);
+        }
+
+        if (error !== undefined) {
+            this.activity.description = stringifyError(error);
+        }
+
+        // An explicit `description` in `changes` takes precedence over `error`.
+        Object.assign(this.activity, fields);
+
+        if (fields.status !== undefined && isTerminalActivityStatus(fields.status)) {
+            this.activity.endTime = new Date();
+        }
+        this.fireChange({ resource: this.activity, includeChildren: false });
     }
 }
