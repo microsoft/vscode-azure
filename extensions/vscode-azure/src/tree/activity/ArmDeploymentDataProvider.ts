@@ -5,7 +5,7 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import {
-    IDeploymentClientProvider,
+    IDeploymentClientProvider, KnownProvisioningState,
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
@@ -401,30 +401,34 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 }
 
 function toActivityStatus(provisioningState: ProvisioningState | undefined): Activity['status'] {
-    // TODO: future: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
-    switch (provisioningState?.toLowerCase()) {
-        case 'succeeded':
+    switch (provisioningState) {
+        case KnownProvisioningState.Succeeded:
+        case KnownProvisioningState.Ready:
+        case KnownProvisioningState.Deleted:
             return 'Completed';
-        case 'failed':
+        case KnownProvisioningState.Failed:
             return 'Failed';
-        case 'canceled':
+        case KnownProvisioningState.Canceled:
             return 'Canceled';
-        case 'running':
-        case 'accepted':
-        case 'creating':
-        case 'created':
-        case 'deleting':
-        case 'updating':
+        case KnownProvisioningState.Running:
+        case KnownProvisioningState.Accepted:
+        case KnownProvisioningState.Creating:
+        case KnownProvisioningState.Created:
+        case KnownProvisioningState.Deleting:
+        case KnownProvisioningState.Updating:
             return 'InProgress';
+        case KnownProvisioningState.NotSpecified:
         default:
             return 'NotStarted';
     }
 }
 
 function isTerminalState(provisioningState: ProvisioningState | undefined): boolean {
-    const lower = provisioningState?.toLowerCase();
-    // TODO: future: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
-    return lower === 'succeeded' || lower === 'failed' || lower === 'canceled';
+    return provisioningState === KnownProvisioningState.Succeeded
+        || provisioningState === KnownProvisioningState.Ready
+        || provisioningState === KnownProvisioningState.Deleted
+        || provisioningState === KnownProvisioningState.Failed
+        || provisioningState === KnownProvisioningState.Canceled;
 }
 
 /**

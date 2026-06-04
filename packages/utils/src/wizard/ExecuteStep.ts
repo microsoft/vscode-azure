@@ -15,9 +15,11 @@
 export abstract class ExecuteStep<TContext> {
     /**
      * Perform the operation using the fully-populated context.
-     * Modifying the {@linkcode context} is allowed. // TODO: future: should we allow it? Or change to be consistent with `PromptStep`?
+     *
+     * @param context - The fully-populated wizard context (read-only view,
+     *   for symmetry with {@linkcode PromptStep.prompt}).
      */
-    public abstract execute(context: TContext): void | Promise<void>;
+    public abstract execute(context: Readonly<TContext>): void | Promise<void>;
 
     /**
      * Return `false` to skip this step. Defaults to `true` when not

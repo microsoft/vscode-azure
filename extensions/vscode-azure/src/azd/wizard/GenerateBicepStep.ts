@@ -52,7 +52,7 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         return true;
     }
 
-    public async execute(context: TContext): Promise<void> {
+    public async execute(context: Readonly<TContext>): Promise<void> {
         const templateUri = this.ctx.code.Uri.joinPath(this.ctx.extensionContext.extensionUri, 'resources', 'templates', this.templateName);
         const bicepFolder = this.ctx.code.Uri.joinPath(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
@@ -80,7 +80,7 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         ]);
     }
 
-    private pickParameters(context: TContext): Record<string, { value: unknown }> {
+    private pickParameters(context: Readonly<TContext>): Record<string, { value: unknown }> {
         const result: Record<string, { value: unknown }> = {};
         for (const key of this.parameterKeys) {
             const value = context[key];

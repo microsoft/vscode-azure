@@ -35,7 +35,7 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
         );
     }
 
-    public async execute(context: TContext): Promise<void> {
+    public async execute(context: Readonly<TContext>): Promise<void> {
         /* eslint-disable @typescript-eslint/no-non-null-assertion */
         const name = context.environmentName!;
         const location = context.hydratedLocationName ?? context.location!.name!;

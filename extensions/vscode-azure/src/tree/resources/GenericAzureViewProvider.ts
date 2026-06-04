@@ -383,7 +383,6 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
     }
 }
 
-// TODO: future: can we eliminate this? Make the providers all return `AzureNodeId`?
 function toKey(node: AzureNode): string {
     return AzureNodeId.from(node).toString();
 }

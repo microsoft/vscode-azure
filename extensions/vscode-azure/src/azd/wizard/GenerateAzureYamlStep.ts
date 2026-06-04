@@ -32,7 +32,7 @@ export class GenerateAzureYamlStep<TContext extends AzdWizardContext> extends Ex
         return (await this.azd.findAzureYaml(context.iacFolder)).length === 0;
     }
 
-    public async execute(context: TContext): Promise<void> {
+    public async execute(context: Readonly<TContext>): Promise<void> {
         await this.azd.init(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 }
