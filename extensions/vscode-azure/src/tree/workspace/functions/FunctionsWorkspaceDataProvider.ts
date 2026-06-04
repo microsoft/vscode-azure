@@ -71,7 +71,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
         }
     }
 
-    // TODO: show the individual functions
+    // Showing the individual functions under a project is tracked by https://github.com/microsoft/vscode-azure/issues/178
     private async discoverProjects(): Promise<FunctionsProjectNode[]> {
         const hostJsons = await this.code.workspace.findFiles(FunctionsHostFileName, undefined, 5);
         const projects: FunctionsProjectNode[] = [];

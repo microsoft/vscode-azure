@@ -22,7 +22,8 @@ import { isAcrRegistry } from './AcrRegistry';
  * - **`getChildren`**: stubbed -- will return repositories and tags once
  *   the data-plane client is integrated.
  *
- * TODO: this is a demonstration provider and needs to be removed
+ * @remarks This is demonstration code; removal is tracked by
+ * {@link https://github.com/microsoft/vscode-azure/issues/177}.
  */
 @injectable()
 export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
