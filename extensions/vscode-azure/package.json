@@ -313,7 +313,7 @@
         "build": "npm run build:esbuild & npm run build:check",
         "build:esbuild": "node esbuild.mjs",
         "build:check": "tsgo --noEmit",
-        "package": "vsce package",
+        "package": "vsce package --no-dependencies",
         "test": "vscode-test",
         "testcov": "vscode-test --coverage",
         "clean": "node ../../scripts/clean.mjs"
