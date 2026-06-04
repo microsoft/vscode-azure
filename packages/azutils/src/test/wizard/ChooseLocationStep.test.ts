@@ -8,7 +8,6 @@ import type { PickContext } from '@microsoft/vscode-azure-utils';
 import { Wizard } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import type { Location } from '../../rest/clients/SubscriptionClient';
 import { ChooseLocationStep } from '../../wizard/ChooseLocationStep';
 import { makeSubscription } from '../mockAzure';

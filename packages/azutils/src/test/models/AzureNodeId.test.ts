@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { afterEach, describe, it } from 'mocha';
 import { AzureNodeId } from '../../models/AzureNodeId';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, makeVirtualGroup, makeVirtualResource } from '../mockAzure';
 

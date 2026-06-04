@@ -5,7 +5,6 @@
 
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { AzureNodeId } from '../../../models/AzureNodeId';
 import { subscriptionExperience } from '../../../tree/pick/subscriptionExperience';
 import { makeSubscription } from '../../mockAzure';

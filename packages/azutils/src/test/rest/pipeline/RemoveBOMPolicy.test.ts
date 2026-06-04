@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { RemoveBOMPolicy } from '../../../rest/pipeline/RemoveBOMPolicy';
 import { makeRequest, makeResponse } from '../../mockPipeline';
 

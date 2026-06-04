@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { ClearActivities } from '../../commands/ClearActivities';
 import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';

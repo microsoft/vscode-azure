@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { CommandRegistry } from '../../base/ICommandRegistry';
 import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';

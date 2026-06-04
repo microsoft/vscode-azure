@@ -5,7 +5,6 @@
 
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { TempDirManager } from '../../azd/TempDirManager';
 
 describe('TempDirManager (unit)', () => {

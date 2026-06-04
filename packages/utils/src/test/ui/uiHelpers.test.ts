@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { getWorkspaceFolder, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../ui/uiHelpers';
 import { CancellationError } from '../../vscode/CancellationError';
 import type { IVsCode } from '../../vscode/IVsCode';

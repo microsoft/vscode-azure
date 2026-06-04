@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { getResourceGroupArmId, getSubscriptionArmId, parseAzureResourceId } from '../../utils/azureResourceId';
 
 describe('azureResourceId (unit)', () => {
@@ -75,6 +74,27 @@ describe('azureResourceId (unit)', () => {
 
         it('should throw for an empty string', () => {
             expect(() => parseAzureResourceId('')).to.throw('Invalid ARM resource ID');
+        });
+
+        it('should throw when the resource group name is missing', () => {
+            expect(() => parseAzureResourceId('/subscriptions/abc/resourceGroups')).to.throw('missing resource group name');
+        });
+
+        it('should throw when the provider namespace is missing', () => {
+            expect(() => parseAzureResourceId('/subscriptions/abc/resourceGroups/myRg/providers')).to.throw('missing provider namespace');
+        });
+
+        it('should throw when the provider has no type/name pair', () => {
+            expect(() => parseAzureResourceId('/subscriptions/abc/providers/Microsoft.Web')).to.throw('expected provider type/name pairs');
+        });
+
+        it('should throw when the provider type has no name', () => {
+            expect(() => parseAzureResourceId('/subscriptions/abc/providers/Microsoft.Web/sites')).to.throw('expected provider type/name pairs');
+        });
+
+        it('should throw for a dangling child type without a child name', () => {
+            const id = '/subscriptions/abc/resourceGroups/myRg/providers/Microsoft.ContainerRegistry/registries/myReg/replications';
+            expect(() => parseAzureResourceId(id)).to.throw('expected provider type/name pairs');
         });
 
         it('should handle a trailing slash', () => {

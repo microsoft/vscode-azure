@@ -6,7 +6,6 @@
 import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { TempDirManager } from '../../../azd/TempDirManager';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../../../azd/wizard/SelectIacFolderStep';
@@ -40,7 +39,7 @@ describe('SelectIacFolderStep (unit)', () => {
             const result = await step.prompt({ job: 'createNew' });
 
             // TempDirManager creates dirs under storageUri/tmp/.
-            expect((result.iacFolder as MockUri).path).to.include('/tmp/d-');
+            expect((result.iacFolder!).path).to.include('/tmp/d-');
             // No quick picks shown.
             expect(mockResult.quickPicks.length).to.equal(0);
         });
@@ -54,7 +53,7 @@ describe('SelectIacFolderStep (unit)', () => {
 
             const result = await step.prompt({ job: 'deploy' });
 
-            expect((result.iacFolder as MockUri).path).to.equal('/repo');
+            expect((result.iacFolder!).path).to.equal('/repo');
         });
 
         it('deploy: throws an explanatory error when no workspace folder is open', async () => {

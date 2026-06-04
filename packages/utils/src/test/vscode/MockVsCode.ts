@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { matchesGlob } from 'node:path/posix';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { EventEmitter } from '../../vscode/EventEmitter';
@@ -14,22 +15,40 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileSystem } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
+import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
+
+/**
+ * Maps each method of a `vscode` namespace to its `node:test` {@linkcode Mock}
+ * wrapper so tests can read `.mock` (call counts, arguments,
+ * `mockImplementation`) without casting. Non-function members pass through
+ * unchanged. Passing the original member type to {@linkcode Mock} preserves
+ * overload signatures, and because {@linkcode Mock} is `F & { mock }`, a mapped
+ * namespace is still callable and remains assignable to the real `vscode`
+ * namespace it stands in for.
+ */
+type MockedNamespace<T> = {
+    [K in keyof T]: T[K] extends (...args: never[]) => unknown ? Mock<T[K]> : T[K];
+};
 
 /**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
  * `IVsCode` value and test-inspection surfaces.
  *
- * All tracked methods on the `IVsCode` are Node.js `mock.fn()` instances.
- * To access the `.mock` property for assertions, cast to the concrete type:
+ * The namespace handles exposed here (e.g. {@linkcode MockVsCodeResult.window window},
+ * {@linkcode MockVsCodeResult.commands commands}) are typed via
+ * {@linkcode MockedNamespace} so their methods expose `.mock` directly -- no
+ * cast is needed:
  *
  * ```ts
- * const fn = result.vscode.window.createQuickPick as unknown as Mock<...>;
- * expect(fn.mock.callCount()).to.equal(1);
+ * const result = createMockVsCode();
+ * expect(result.window.createQuickPick.mock.callCount()).to.equal(1);
  * ```
  *
  * Or use the collected {@linkcode quickPicks} / {@linkcode inputBoxes} arrays to
- * inspect and drive the created UI elements directly.
+ * inspect and drive the created UI elements directly. (Note: the namespaces on
+ * {@linkcode MockVsCodeResult.vscode vscode} are typed as the real `IVsCode`
+ * module, so reach for these top-level handles when you need `.mock`.)
  */
 export interface MockVsCodeResult {
     /** The mock suitable for DI injection as {@linkcode IVsCode}. */
@@ -62,19 +81,19 @@ export interface MockVsCodeResult {
     readonly workspaceFolders: vscode.WorkspaceFolder[];
 
     /** The mock `authentication` namespace -- access `.getSession.mock` for assertions. */
-    readonly authentication: typeof vscode.authentication;
+    readonly authentication: MockedNamespace<typeof vscode.authentication>;
 
     /** The mock `commands` namespace -- access `.executeCommand.mock` etc. for assertions. */
-    readonly commands: typeof vscode.commands;
+    readonly commands: MockedNamespace<typeof vscode.commands>;
 
     /** The mock `env` namespace -- access `.openExternal.mock` for assertions. */
-    readonly env: typeof vscode.env;
+    readonly env: MockedNamespace<typeof vscode.env>;
 
     /** The mock `window` namespace -- access `.showWarningMessage.mock` etc. for assertions. */
-    readonly window: typeof vscode.window;
+    readonly window: MockedNamespace<typeof vscode.window>;
 
     /** The mock `workspace` namespace -- access `.getConfiguration.mock` etc. for assertions. */
-    readonly workspace: typeof vscode.workspace;
+    readonly workspace: MockedNamespace<typeof vscode.workspace>;
 
     /**
      * Pre-programmed responses for `showInformationMessage`,
@@ -123,7 +142,7 @@ export interface MockVsCodeResult {
     readonly workspaceFoldersChangeEmitter: EventEmitter<vscode.WorkspaceFoldersChangeEvent>;
 
     /** The mock `tasks` namespace. */
-    readonly tasks: typeof vscode.tasks;
+    readonly tasks: MockedNamespace<typeof vscode.tasks>;
 
     /**
      * Fire this emitter to simulate a task process ending.
@@ -205,68 +224,14 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     );
 
     const QuickInputButtons = {
-        Back: { iconPath: { id: 'arrow-left' } } satisfies vscode.QuickInputButton,
+        Back: { iconPath: new MockThemeIcon('arrow-left') } satisfies vscode.QuickInputButton,
     };
-
-    const TreeItemCollapsibleState = {
-        None: 0,
-        Collapsed: 1,
-        Expanded: 2,
-    } satisfies typeof vscode.TreeItemCollapsibleState;
 
     const settings = new Map<string, unknown>();
 
     const getConfiguration = mock.fn(
         (section?: string) => new MockWorkspaceConfiguration(settings, section),
     );
-
-    const ConfigurationTarget = {
-        Global: 1,
-        Workspace: 2,
-        WorkspaceFolder: 3,
-    } satisfies typeof vscode.ConfigurationTarget;
-
-    class MockThemeIcon {
-        constructor(public readonly id: string, public readonly color?: unknown) { }
-    }
-
-    class MockThemeColor {
-        constructor(public readonly id: string) { }
-    }
-
-    class MockShellExecution {
-        constructor(
-            public readonly command: string,
-            public readonly args: unknown[],
-            public readonly options?: unknown,
-        ) { }
-    }
-
-    class MockTask {
-        public presentationOptions: vscode.TaskPresentationOptions = {};
-        constructor(
-            public readonly definition: vscode.TaskDefinition,
-            public readonly scope: vscode.TaskScope | vscode.WorkspaceFolder,
-            public readonly name: string,
-            public readonly source: string,
-            public readonly execution?: unknown,
-        ) { }
-    }
-
-    const TaskScope = {
-        Global: 1,
-        Workspace: 2,
-    } satisfies typeof vscode.TaskScope;
-
-    class MockRelativePattern {
-        public readonly baseUri: MockUri;
-        constructor(
-            base: vscode.WorkspaceFolder | vscode.Uri,
-            public readonly pattern: string,
-        ) {
-            this.baseUri = 'uri' in base ? base.uri : base;
-        }
-    }
 
     const openExternal = mock.fn(
         () => Promise.resolve(true),
@@ -293,44 +258,33 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const workspaceFolders: vscode.WorkspaceFolder[] = [];
 
     const getWorkspaceFolder = mock.fn(
-        (uri: MockUri): vscode.WorkspaceFolder | undefined => {
+        (uri: vscode.Uri): vscode.WorkspaceFolder | undefined => {
             const uriStr = uri.toString();
             return workspaceFolders.find(f => uriStr.startsWith((f.uri).toString()));
         },
     );
 
+    // Matches files in the mock file system against a glob, using Node's
+    // pure `path.matchesGlob` (no real filesystem access). VS Code resolves a
+    // relative glob against workspace folders, so a pattern without a path
+    // separator matches by basename anywhere; we mirror that with a `**/`
+    // prefix. The RelativePattern base is not scoped.
     const findFiles = mock.fn(
-        (include: unknown, _exclude?: unknown, maxResults?: number) => {
-            let baseUri: MockUri | undefined;
-            let pattern: string;
-            if (include instanceof MockRelativePattern) {
-                baseUri = (include).baseUri;
-                pattern = (include).pattern;
-            } else {
-                pattern = String(include);
-            }
+        (include: vscode.GlobPattern, _exclude?: unknown, maxResults?: number) => {
+            const raw = typeof include === 'string' ? include : include.pattern;
+            const pattern = raw.includes('/') ? raw : `**/${raw}`;
 
-            // Expand brace patterns like {azure.yaml,azure.yml}
-            const braceMatch = /^\{([^}]+)\}$/.exec(pattern);
-            const names = braceMatch ? braceMatch[1].split(',') : [pattern];
-
-            const matched: MockUri[] = [];
-            for (const [filePath] of fs.files) {
+            const matched: vscode.Uri[] = [];
+            for (const filePath of fs.files.keys()) {
                 if (maxResults !== undefined && matched.length >= maxResults) {
                     break;
                 }
-                const fileName = filePath.split('/').pop() ?? '';
-                if (!names.includes(fileName)) {
-                    continue;
+                if (matchesGlob(filePath, pattern)) {
+                    // `fs.files` is keyed by `uri.path`, so rehydrate from URI
+                    // components rather than treating the key as a filesystem
+                    // path (which would mishandle drive letters / schemes).
+                    matched.push(MockUri.from({ scheme: 'file', path: filePath }));
                 }
-                if (baseUri) {
-                    const basePath = baseUri.path.endsWith('/') ? baseUri.path : baseUri.path + '/';
-                    // Only match files directly inside the base (not in subdirectories)
-                    if (filePath !== basePath + fileName) {
-                        continue;
-                    }
-                }
-                matched.push(MockUri.parse(`file://${filePath}`));
             }
             return Promise.resolve(matched);
         },
@@ -412,14 +366,14 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         l10n: { t },
         QuickInputButtons,
         TreeItem: MockTreeItem,
-        TreeItemCollapsibleState,
-        ConfigurationTarget,
+        TreeItemCollapsibleState: MockTreeItemCollapsibleState,
+        ConfigurationTarget: MockConfigurationTarget,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
         ShellExecution: MockShellExecution,
         RelativePattern: MockRelativePattern,
         Task: MockTask,
-        TaskScope,
+        TaskScope: MockTaskScope,
         Uri: MockUri,
         ...overrides,
     } as unknown as IVsCode;

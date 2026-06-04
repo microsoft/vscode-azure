@@ -104,6 +104,13 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             (req, res) => { void this.handleRequest(req, res, key, credential); },
         );
 
+        // Permanent handler for runtime 'error' events (e.g. TLS handshake failures
+        // during request handling). Without this, an 'error' emitted after listen()
+        // succeeds would have no listeners and crash the extension host.
+        server.on('error', (err) => {
+            this.output.warn(this.code.l10n.t('[auth] AZD auth server error: {0}', err.message));
+        });
+
         const port = await listen(server);
         this.output.debug(`[auth] AZD auth server listening on port ${port}`);
 
@@ -190,17 +197,21 @@ function sendJson(res: ServerResponse, statusCode: number, body: Record<string, 
 }
 
 function listen(server: Server): Promise<number> {
-    return new Promise<number>((resolve, reject) => {
-        server.listen(0, '127.0.0.1', () => {
-            const addr = server.address();
-            if (addr && typeof addr === 'object') {
-                resolve(addr.port);
-            } else {
-                reject(new Error('Failed to get server address'));
-            }
-        });
-        server.on('error', reject);
+    const { promise, resolve, reject } = Promise.withResolvers<number>();
+
+    // Use .once so this temporary listener doesn't fire on later runtime errors;
+    // the caller installs a permanent 'error' listener before calling listen().
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        if (addr && typeof addr === 'object') {
+            resolve(addr.port);
+        } else {
+            reject(new Error('Failed to get server address'));
+        }
     });
+
+    return promise;
 }
 
 /**

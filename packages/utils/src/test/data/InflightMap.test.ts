@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { InflightMap } from '../../data/InflightMap';
 
@@ -17,8 +16,8 @@ describe('InflightMap (unit)', () => {
 
         it('should return true while an operation is in-flight', async () => {
             const map = new InflightMap<string>();
-            let resolve!: (v: string) => void;
-            const promise = map.getOrRun('key', () => new Promise(r => { resolve = r; }));
+            const { promise: inner, resolve } = Promise.withResolvers<string>();
+            const promise = map.getOrRun('key', () => inner);
 
             expect(map.has('key')).to.be.true;
             resolve('done');

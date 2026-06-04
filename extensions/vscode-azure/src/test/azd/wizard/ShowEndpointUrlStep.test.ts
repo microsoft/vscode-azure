@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
-import type { Mock } from 'node:test';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { ShowEndpointUrlStep } from '../../../azd/wizard/ShowEndpointUrlStep';
 import { createMockAzdService } from '../MockAzdService';
@@ -53,10 +52,8 @@ describe('ShowEndpointUrlStep (unit)', () => {
             } as AzdWizardContext;
 
             await step.execute(context);
-
-            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
-            expect(showInfo.mock.callCount()).to.equal(1);
-            const msg = showInfo.mock.calls[0].arguments[0];
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(1);
+            const msg = mockResult.window.showInformationMessage.mock.calls[0].arguments[0];
             expect(msg).to.include('https://myapp.azurewebsites.net');
         });
 
@@ -77,9 +74,8 @@ describe('ShowEndpointUrlStep (unit)', () => {
 
             await step.execute(context);
 
-            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
-            expect(showInfo.mock.callCount()).to.equal(1);
-            const msg = showInfo.mock.calls[0].arguments[0];
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(1);
+            const msg = mockResult.window.showInformationMessage.mock.calls[0].arguments[0];
             expect(msg).to.include('https://first.azurewebsites.net');
         });
 
@@ -96,8 +92,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
 
             await step.execute(context);
 
-            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
-            expect(showInfo.mock.callCount()).to.equal(0);
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(0);
         });
 
         it('should not show a toast when services have no ingress URLs', async () => {
@@ -116,8 +111,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
 
             await step.execute(context);
 
-            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
-            expect(showInfo.mock.callCount()).to.equal(0);
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(0);
         });
 
         it('should not show a toast when azd show fails', async () => {
@@ -130,8 +124,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
 
             await step.execute(context);
 
-            const showInfo = mockResult.window.showInformationMessage as unknown as Mock<typeof mockResult.window.showInformationMessage>;
-            expect(showInfo.mock.callCount()).to.equal(0);
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(0);
         });
 
         it('should open the URL in a browser when user clicks Open in Browser', async () => {
@@ -151,10 +144,9 @@ describe('ShowEndpointUrlStep (unit)', () => {
             await step.execute(context);
 
             // Let the promise chain settle
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await delay(0);
 
-            const openExternal = mockResult.env.openExternal as unknown as Mock<typeof mockResult.env.openExternal>;
-            expect(openExternal.mock.callCount()).to.equal(1);
+            expect(mockResult.env.openExternal.mock.callCount()).to.equal(1);
         });
     });
 });

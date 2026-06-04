@@ -5,7 +5,6 @@
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import {
     EmulatorsWorkspaceDataProvider,
 } from '../../../../tree/workspace/emulators/EmulatorsWorkspaceDataProvider';

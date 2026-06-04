@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { delay } from '../../base/delay';
 import { CancellationError } from '../../vscode/CancellationError';
 import { EventEmitter } from '../../vscode/EventEmitter';

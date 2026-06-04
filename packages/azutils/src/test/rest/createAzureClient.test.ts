@@ -7,7 +7,6 @@ import type { ClientOptions as RestClientOptions } from '@azure-rest/core-client
 import type { TokenCredential } from '@azure/core-auth';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { createAzureRestClient, createAzureRestSubscriptionClient } from '../../rest/createAzureClient';
 import { makeSubscription } from '../mockAzure';
 

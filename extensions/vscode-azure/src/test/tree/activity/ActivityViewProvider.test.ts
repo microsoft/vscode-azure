@@ -5,7 +5,6 @@
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
 import type { Activity } from '../../../tree/activity/Activity';
 import { ActivityViewProvider, toActivityTreeItem } from '../../../tree/activity/ActivityViewProvider';

@@ -5,7 +5,6 @@
 
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import type * as vscode from 'vscode';
 import { FunctionsWorkspaceViewProvider } from '../../../../tree/workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../tree/workspace/WorkspaceNode';
@@ -43,7 +42,7 @@ describe('FunctionsWorkspaceViewProvider (unit)', () => {
         const item = provider.getTreeItem(node.id);
         expect(item.label).to.equal('my-fn');
         expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.None);
-        expect((item.iconPath as vscode.Uri).fsPath).to.include('microsoft.web/sites~functionapp.svg');
+        expect((item.iconPath as vscode.Uri).path).to.include('microsoft.web/sites~functionapp.svg');
         expect((item.contextValue ?? '')).to.include('revealInExplorer');
     });
 

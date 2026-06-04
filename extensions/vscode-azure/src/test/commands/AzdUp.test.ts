@@ -7,7 +7,6 @@ import { createMockDataItemTree, createMockSubscriptionProvider, makeSubscriptio
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../azd/TempDirManager';
@@ -67,7 +66,7 @@ describe('AzdUp (unit)', () => {
         await cmd.execute();
 
         expect(azd.provision.mock.callCount()).to.equal(1);
-        expect((azd.provision.mock.calls[0].arguments[0] as MockUri).path).to.equal('/workspace');
+        expect((azd.provision.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/workspace');
     });
 
     it('should show error when no workspace folders are open', async () => {

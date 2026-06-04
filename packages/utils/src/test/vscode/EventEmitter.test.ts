@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import type { Disposable } from '../../vscode/Disposable';
 import { EventEmitter } from '../../vscode/EventEmitter';
 

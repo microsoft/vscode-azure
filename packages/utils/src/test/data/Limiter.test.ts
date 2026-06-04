@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { Limiter } from '../../data/Limiter';
 
 describe('Limiter (unit)', () => {

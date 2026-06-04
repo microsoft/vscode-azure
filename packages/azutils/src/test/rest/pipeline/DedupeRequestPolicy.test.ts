@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelineRequest } from '@azure/core-rest-pipeline';
+import { delay } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { DedupeRequestPolicy } from '../../../rest/pipeline/DedupeRequestPolicy';
 import { makeRequest, makeResponse } from '../../mockPipeline';
 
@@ -22,7 +22,7 @@ describe('DedupeRequestPolicy (unit)', () => {
         const next = async (req: PipelineRequest) => {
             callCount++;
             // Simulate async delay
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await delay(10);
             return makeResponse(req, 200, `{"call":${callCount}}`);
         };
 
@@ -52,7 +52,7 @@ describe('DedupeRequestPolicy (unit)', () => {
 
         const next = async (req: PipelineRequest) => {
             callCount++;
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await delay(10);
             return makeResponse(req);
         };
 
@@ -73,7 +73,7 @@ describe('DedupeRequestPolicy (unit)', () => {
 
         const next = async (req: PipelineRequest) => {
             callCount++;
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await delay(10);
             return makeResponse(req);
         };
 
@@ -114,7 +114,7 @@ describe('DedupeRequestPolicy (unit)', () => {
 
         const next = async (req: PipelineRequest) => {
             callCount++;
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await delay(10);
             return makeResponse(req);
         };
 
@@ -135,7 +135,7 @@ describe('DedupeRequestPolicy (unit)', () => {
 
         const next = async (req: PipelineRequest) => {
             callCount++;
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await delay(10);
             return makeResponse(req);
         };
 
@@ -156,7 +156,7 @@ describe('DedupeRequestPolicy (unit)', () => {
         const policy = new DedupeRequestPolicy();
 
         const next = async (req: PipelineRequest) => {
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await delay(10);
             return makeResponse(req, 200, '{"data":true}');
         };
 

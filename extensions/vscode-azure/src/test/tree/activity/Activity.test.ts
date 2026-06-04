@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { isActivity, isTerminalActivityStatus } from '../../../tree/activity/Activity';
 import { makeActivity } from './mockActivity';
 

@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { combineContextValues } from '../../tree/combineContextValues';
 
 describe('combineContextValues (unit)', () => {

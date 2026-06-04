@@ -55,7 +55,6 @@
     "mocha": {
         "node-option": [
             "experimental-transform-types",
-            "disable-warning=ExperimentalWarning",
             "import=@microsoft/vscode-azext-eng/mocha"
         ],
         "spec": [

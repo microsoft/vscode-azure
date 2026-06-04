@@ -65,6 +65,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     quickPick.step = options?.step;
     quickPick.totalSteps = options?.totalSteps;
     quickPick.value = options?.value ?? '';
+    quickPick.prompt = options?.prompt;
 
     // Filter items through predicates to safely set active/selected items
     if (options?.isActiveItem) {
@@ -105,68 +106,67 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         }
     }
 
-    return new Promise<TItem | TItem[]>((resolve, reject) => {
-        let settled = false;
-        const finish = (finishAction: () => void) => {
-            if (!settled) {
-                settled = true;
-                quickPick.dispose();
-                finishAction();
-            }
-        };
+    const { promise, resolve, reject } = Promise.withResolvers<TItem | TItem[]>();
+    let settled = false;
+    const finish = (finishAction: () => void) => {
+        if (!settled) {
+            settled = true;
+            quickPick.dispose();
+            finishAction();
+        }
+    };
 
-        quickPick.onDidAccept(() => {
-            try {
-                if (quickPick.canSelectMany) {
-                    const selected = [...quickPick.selectedItems];
-                    if (selected.length > 0) {
-                        finish(() => {
-                            void ctx.extensionContext.workspaceState.update(recentKey, selected.map(s => s.label));
-                            resolve(selected);
-                        });
-                    } else {
-                        // If no items are selected, treat it as a cancellation (similar to how hitting escape with no active item doesn't select the active item)
-                        finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
-                    }
+    quickPick.onDidAccept(() => {
+        try {
+            if (quickPick.canSelectMany) {
+                const selected = [...quickPick.selectedItems];
+                if (selected.length > 0) {
+                    finish(() => {
+                        void ctx.extensionContext.workspaceState.update(recentKey, selected.map(s => s.label));
+                        resolve(selected);
+                    });
                 } else {
-                    const selected = quickPick.activeItems[0] as TItem | undefined;
-                    if (selected) {
-                        finish(() => {
-                            void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
-                            resolve(selected);
-                        });
-                    }
+                    // If no items are selected, treat it as a cancellation (similar to how hitting escape with no active item doesn't select the active item)
+                    finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
                 }
+            } else {
+                const selected = quickPick.activeItems[0] as TItem | undefined;
+                if (selected) {
+                    finish(() => {
+                        void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
+                        resolve(selected);
+                    });
+                }
+            }
+        } catch (e: unknown) {
+            finish(() => { reject(e); });
+        }
+    });
+
+    quickPick.onDidTriggerButton((button) => {
+        if (button === ctx.code.QuickInputButtons.Back) {
+            finish(() => { reject(new GoBackError()); });
+        }
+    });
+
+    const itemButtonHandler = options?.onDidTriggerItemButton;
+    if (itemButtonHandler) {
+        quickPick.onDidTriggerItemButton((event) => {
+            try {
+                itemButtonHandler(event);
             } catch (e: unknown) {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
                 finish(() => { reject(e); });
             }
         });
+    }
 
-        quickPick.onDidTriggerButton((button) => {
-            if (button === ctx.code.QuickInputButtons.Back) {
-                finish(() => { reject(new GoBackError()); });
-            }
-        });
-
-        const itemButtonHandler = options?.onDidTriggerItemButton;
-        if (itemButtonHandler) {
-            quickPick.onDidTriggerItemButton((event) => {
-                try {
-                    itemButtonHandler(event);
-                } catch (e: unknown) {
-                    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-                    finish(() => { reject(e); });
-                }
-            });
-        }
-
-        quickPick.onDidHide(() => {
-            finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
-        });
-
-        quickPick.show();
+    quickPick.onDidHide(() => {
+        finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
     });
+
+    quickPick.show();
+
+    return promise;
 }
 
 /**
@@ -234,93 +234,91 @@ export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxO
         }
     }
 
-    return new Promise<string>((resolve, reject) => {
-        let settled = false;
-        const finish = (finishAction: () => void) => {
-            if (!settled) {
-                settled = true;
-                input.dispose();
-                finishAction();
-            }
-        };
+    const { promise, resolve, reject } = Promise.withResolvers<string>();
+    let settled = false;
+    const finish = (finishAction: () => void) => {
+        if (!settled) {
+            settled = true;
+            input.dispose();
+            finishAction();
+        }
+    };
 
-        input.onDidAccept(() => {
-            try {
-                const value = input.value;
+    input.onDidAccept(() => {
+        try {
+            const value = input.value;
 
-                // Run sync validation first
-                if (options?.validateInput) {
-                    const syncMsg = options.validateInput(value);
-                    if (syncMsg) {
-                        input.validationMessage = syncMsg;
-                        return;
-                    }
-                }
-
-                // Run async validation if provided
-                if (options?.validateInputAsync) {
-                    input.enabled = false;
-                    input.busy = true;
-                    options.validateInputAsync(value).then((msg) => {
-                        if (!settled) {
-                            input.enabled = true;
-                            input.busy = false;
-                            if (msg) {
-                                input.validationMessage = msg;
-                            } else {
-                                finish(() => {
-                                    if (recentKey) {
-                                        void ctx.extensionContext.workspaceState.update(recentKey, value);
-                                    }
-                                    resolve(value);
-                                });
-                            }
-                        }
-                    }, (e: unknown) => {
-                        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-                        finish(() => { reject(e); });
-                    });
+            // Run sync validation first
+            if (options?.validateInput) {
+                const syncMsg = options.validateInput(value);
+                if (syncMsg) {
+                    input.validationMessage = syncMsg;
                     return;
                 }
+            }
 
-                finish(() => {
-                    if (recentKey) {
-                        void ctx.extensionContext.workspaceState.update(recentKey, value);
+            // Run async validation if provided
+            if (options?.validateInputAsync) {
+                input.enabled = false;
+                input.busy = true;
+                options.validateInputAsync(value).then((msg) => {
+                    if (!settled) {
+                        input.enabled = true;
+                        input.busy = false;
+                        if (msg) {
+                            input.validationMessage = msg;
+                        } else {
+                            finish(() => {
+                                if (recentKey) {
+                                    void ctx.extensionContext.workspaceState.update(recentKey, value);
+                                }
+                                resolve(value);
+                            });
+                        }
                     }
-                    resolve(value);
+                }, (e: unknown) => {
+                    finish(() => { reject(e); });
                 });
-            } catch (e: unknown) {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-                finish(() => { reject(e); });
+                return;
             }
-        });
 
-        input.onDidChangeValue((value) => {
-            try {
-                // Run sync validation on every keystroke
-                if (options?.validateInput) {
-                    input.validationMessage = options.validateInput(value);
-                } else {
-                    input.validationMessage = undefined;
+            finish(() => {
+                if (recentKey) {
+                    void ctx.extensionContext.workspaceState.update(recentKey, value);
                 }
-            } catch (e: unknown) {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-                finish(() => { reject(e); });
-            }
-        });
-
-        input.onDidTriggerButton((button) => {
-            if (button === ctx.code.QuickInputButtons.Back) {
-                finish(() => { reject(new GoBackError()); });
-            }
-        });
-
-        input.onDidHide(() => {
-            finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
-        });
-
-        input.show();
+                resolve(value);
+            });
+        } catch (e: unknown) {
+            finish(() => { reject(e); });
+        }
     });
+
+    input.onDidChangeValue((value) => {
+        try {
+            // Run sync validation on every keystroke
+            if (options?.validateInput) {
+                input.validationMessage = options.validateInput(value);
+            } else {
+                input.validationMessage = undefined;
+            }
+        } catch (e: unknown) {
+            finish(() => { reject(e); });
+        }
+    });
+
+    input.onDidTriggerButton((button) => {
+        if (button === ctx.code.QuickInputButtons.Back) {
+            finish(() => { reject(new GoBackError()); });
+        }
+    });
+
+    input.onDidHide(() => {
+        finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
+    });
+
+    input.show();
+
+    return promise;
 }
 
 /**
