@@ -80,6 +80,13 @@ export function parseAzureResourceId(resourceId: string): ParsedAzureResourceId 
         provider = segments[i + 1]; // e.g. Microsoft.ContainerRegistry
         i += 2;
 
+        // After the namespace, the remainder must be one or more {type}/{name}
+        // pairs -- an empty, odd, or dangling tail is a malformed ARM ID.
+        const remaining = segments.length - i;
+        if (remaining < 2 || remaining % 2 !== 0) {
+            throw new Error(`Invalid ARM resource ID (expected provider type/name pairs): ${resourceId}`);
+        }
+
         // Collect type/name pairs -- the type path can be nested (e.g. registries/replications)
         const typeParts: string[] = [];
         while (i + 1 < segments.length) {

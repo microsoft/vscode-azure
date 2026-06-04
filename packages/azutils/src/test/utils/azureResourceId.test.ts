@@ -85,6 +85,19 @@ describe('azureResourceId (unit)', () => {
             expect(() => parseAzureResourceId('/subscriptions/abc/resourceGroups/myRg/providers')).to.throw('missing provider namespace');
         });
 
+        it('should throw when the provider has no type/name pair', () => {
+            expect(() => parseAzureResourceId('/subscriptions/abc/providers/Microsoft.Web')).to.throw('expected provider type/name pairs');
+        });
+
+        it('should throw when the provider type has no name', () => {
+            expect(() => parseAzureResourceId('/subscriptions/abc/providers/Microsoft.Web/sites')).to.throw('expected provider type/name pairs');
+        });
+
+        it('should throw for a dangling child type without a child name', () => {
+            const id = '/subscriptions/abc/resourceGroups/myRg/providers/Microsoft.ContainerRegistry/registries/myReg/replications';
+            expect(() => parseAzureResourceId(id)).to.throw('expected provider type/name pairs');
+        });
+
         it('should handle a trailing slash', () => {
             const result = parseAzureResourceId('/subscriptions/abc-123/');
             expect(result.subscriptionId).to.equal('abc-123');
