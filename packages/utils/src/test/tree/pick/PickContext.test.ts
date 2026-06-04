@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { getLastPick, type PickContext } from '../../../tree/pick/PickContext';
 
 describe('getLastPick (unit)', () => {

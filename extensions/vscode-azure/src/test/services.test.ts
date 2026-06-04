@@ -5,7 +5,6 @@
 
 import { Disposable, IExtensionContext } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { pushDisposable } from '../services';
 

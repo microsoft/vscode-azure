@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { NodeMap } from '../../tree/NodeMap';
 
 interface TestNode {

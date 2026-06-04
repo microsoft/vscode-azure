@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProviderChangeEvent } from '../../tree/DataProvider';

@@ -8,7 +8,6 @@ import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeR
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
 import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';

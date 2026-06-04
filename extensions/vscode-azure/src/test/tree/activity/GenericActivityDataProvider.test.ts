@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { GenericActivityDataProvider } from '../../../tree/activity/GenericActivityDataProvider';
 import { makeActivity } from './mockActivity';

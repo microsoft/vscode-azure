@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { flattenPages, isAsyncIterable, type Page } from '../../data/Page';
 
 describe('Page (unit)', () => {

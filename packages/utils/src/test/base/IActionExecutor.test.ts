@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock, type Mock } from 'node:test';
 import { delay } from '../../base/delay';
 import type { ITelemetryReporter } from '../../base/ITelemetryReporter';

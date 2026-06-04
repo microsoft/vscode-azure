@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import * as os from 'os';
 import { getUsernameReplacementOptions } from '../../base/ITelemetryReporter';
 

@@ -6,7 +6,6 @@
 import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { TempDirManager } from '../../../azd/TempDirManager';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../../../azd/wizard/SelectIacFolderStep';

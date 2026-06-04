@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { createActionContext } from '../../base/IActionContext';
 
 describe('createActionContext (unit)', () => {

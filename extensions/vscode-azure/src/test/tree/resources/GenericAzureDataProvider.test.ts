@@ -7,7 +7,6 @@ import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, 
 import { Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { ConfigurationSection } from '../../../constants';
 import { GenericAzureDataProvider } from '../../../tree/resources/GenericAzureDataProvider';

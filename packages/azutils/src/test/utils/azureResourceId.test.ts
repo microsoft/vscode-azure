@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { getResourceGroupArmId, getSubscriptionArmId, parseAzureResourceId } from '../../utils/azureResourceId';
 
 describe('azureResourceId (unit)', () => {

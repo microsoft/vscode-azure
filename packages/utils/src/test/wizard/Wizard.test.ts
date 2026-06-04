@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import type * as vscode from 'vscode';
 import { showSmartInputBox, showSmartQuickPick } from '../../ui/uiHelpers';
 import { CancellationError } from '../../vscode/CancellationError';

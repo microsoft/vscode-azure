@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type { ActionExecutor } from '../../base/IActionExecutor';
 import type { Page } from '../../data/Page';

@@ -7,7 +7,6 @@ import type { TokenCredential } from '@azure/core-auth';
 import type { ServiceClient, ServiceClientOptions } from '@azure/core-client';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { createAzureSubscriptionClient } from '../../rest/createAzureClient';
 import { makeSubscription } from '../mockAzure';
 

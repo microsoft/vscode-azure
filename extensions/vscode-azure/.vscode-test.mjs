@@ -12,6 +12,11 @@
 import { azExtSrcTestConfig } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
 import { defineConfig } from '@vscode/test-cli';
 
+// The vscode-test runner defaults mocha to the TDD interface (suite/test), but
+// the rest of the repo (and @types/mocha) uses the BDD interface (describe/it).
+// Force BDD so the global describe/it are available without importing them.
+azExtSrcTestConfig.mocha.ui = 'bdd';
+
 export default defineConfig({
     tests: [azExtSrcTestConfig],
     coverage: {

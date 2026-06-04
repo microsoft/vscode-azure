@@ -7,7 +7,6 @@ import { createMockSubscriptionProvider, makeSubscription } from '@microsoft/vsc
 import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../azd/TempDirManager';

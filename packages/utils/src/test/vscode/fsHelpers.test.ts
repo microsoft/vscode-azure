@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { basename, fileExists } from '../../vscode/fsHelpers';
 import { MockUri } from './MockUri';
 import { createMockVsCode } from './MockVsCode';

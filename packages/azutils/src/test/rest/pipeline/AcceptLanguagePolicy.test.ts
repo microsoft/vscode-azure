@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { AcceptLanguagePolicy } from '../../../rest/pipeline/AcceptLanguagePolicy';
 import { makeRequest, makeResponse } from '../../mockPipeline';
 

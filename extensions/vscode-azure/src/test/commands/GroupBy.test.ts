@@ -5,7 +5,6 @@
 
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { GroupBy } from '../../commands/GroupBy';
 
 describe('GroupBy (unit)', () => {

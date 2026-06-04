@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { GenericPickStep, type PickClassification } from '../../../tree/pick/GenericPickStep';
 import type { PickContext } from '../../../tree/pick/PickContext';
 import { RecursivePickStep } from '../../../tree/pick/RecursivePickStep';
