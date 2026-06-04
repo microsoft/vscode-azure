@@ -15,22 +15,19 @@
     "author": "Microsoft Corporation",
     "scripts": {
         "postinstall": "node ./scripts/postinstall.mjs",
-        "lint": "npm run --workspaces lint",
-        "build": "npm run --workspaces build",
-        "package": "npm run --workspaces package",
-        "test": "npm run --workspaces test",
-        "clean": "npm run --workspaces clean"
+        "lint": "pnpm -r --parallel run lint",
+        "build": "pnpm -r run build",
+        "package": "pnpm -r --parallel run package",
+        "test": "pnpm -r --parallel run test",
+        "clean": "pnpm -r --parallel run clean"
     },
-    "workspaces": [
-        "packages/utils",
-        "packages/azutils",
-        "extensions/vscode-azure"
-    ],
+    "packageManager": "pnpm@11.3.0",
     "engines": {
         "vscode": "^1.123.0"
     },
     "devDependencies": {
         "@microsoft/vscode-azext-eng": "^1.1.0-alpha.1",
+        "@types/mocha": "^10.0.10",
         "@types/node": "24.x",
         "@types/vscode": "1.120.0",
         "@typescript/native-preview": "^7.0.0-dev.20260604.1",
