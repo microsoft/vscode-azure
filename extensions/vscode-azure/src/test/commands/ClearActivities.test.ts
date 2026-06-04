@@ -21,8 +21,8 @@ describe('ClearActivities (unit)', () => {
     it('should clear all activities in all mode', async () => {
         const { generic, code, arm } = createProviders();
 
-        generic.trackActivity({ id: 'g1', status: 'InProgress', title: 'Running' });
-        generic.trackActivity({ id: 'g2', status: 'Completed', title: 'Done' });
+        generic.trackActivity({ status: 'InProgress', title: 'Running' });
+        generic.trackActivity({ status: 'Completed', title: 'Done' });
         code.trackDeployment({ title: 'Failed deploy', status: 'Failed' });
 
         const cmd = new ClearActivities(arm as never, code, generic);
@@ -36,31 +36,31 @@ describe('ClearActivities (unit)', () => {
     it('should clear only completed activities in completed mode', async () => {
         const { generic, code, arm } = createProviders();
 
-        generic.trackActivity({ id: 'g1', status: 'Completed', title: 'Done' });
-        generic.trackActivity({ id: 'g2', status: 'InProgress', title: 'Running' });
-        generic.trackActivity({ id: 'g3', status: 'Failed', title: 'Errored' });
+        generic.trackActivity({ status: 'Completed', title: 'Done' });
+        const running = generic.trackActivity({ status: 'InProgress', title: 'Running' });
+        generic.trackActivity({ status: 'Failed', title: 'Errored' });
 
         const cmd = new ClearActivities(arm as never, code, generic);
         cmd.execute('completed');
 
         const remaining = await generic.getChildren();
         expect(remaining).to.have.length(1);
-        expect(remaining[0].id).to.equal('g2');
+        expect(remaining[0].id).to.equal(running.id);
     });
 
     it('should clear only successful activities in successful mode', async () => {
         const { generic, code, arm } = createProviders();
 
-        generic.trackActivity({ id: 'g1', status: 'Completed', title: 'Success' });
-        generic.trackActivity({ id: 'g2', status: 'Failed', title: 'Fail' });
-        generic.trackActivity({ id: 'g3', status: 'InProgress', title: 'Running' });
+        generic.trackActivity({ status: 'Completed', title: 'Success' });
+        const failed = generic.trackActivity({ status: 'Failed', title: 'Fail' });
+        const running = generic.trackActivity({ status: 'InProgress', title: 'Running' });
 
         const cmd = new ClearActivities(arm as never, code, generic);
         cmd.execute('successful');
 
         const remaining = await generic.getChildren();
         expect(remaining).to.have.length(2);
-        expect(remaining.map(r => r.id)).to.include('g2');
-        expect(remaining.map(r => r.id)).to.include('g3');
+        expect(remaining.map(r => r.id)).to.include(failed.id);
+        expect(remaining.map(r => r.id)).to.include(running.id);
     });
 });

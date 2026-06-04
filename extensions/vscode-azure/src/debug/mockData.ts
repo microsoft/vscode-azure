@@ -64,14 +64,14 @@ const registryDetails: Record<string, { loginServer: string; sku: { name: string
 };
 
 // One generic activity per status.
-const mockGenericActivities: ReadonlyArray<{ readonly id: string; readonly status: ActivityStatus; readonly title: string }> = [
-    { id: 'mock-not-started', status: 'NotStarted', title: 'Waiting to start' },
-    { id: 'mock-in-progress', status: 'InProgress', title: 'Provisioning resources' },
-    { id: 'mock-completed', status: 'Completed', title: 'Deployment succeeded' },
-    { id: 'mock-failed', status: 'Failed', title: 'Build failed' },
-    { id: 'mock-canceled', status: 'Canceled', title: 'User canceled' },
-    { id: 'mock-info', status: 'Info', title: 'No changes detected' },
-    { id: 'mock-warn', status: 'Warn', title: 'Deprecated API version' },
+const mockGenericActivities: ReadonlyArray<{ readonly status: ActivityStatus; readonly title: string }> = [
+    { status: 'NotStarted', title: 'Waiting to start' },
+    { status: 'InProgress', title: 'Provisioning resources' },
+    { status: 'Completed', title: 'Deployment succeeded' },
+    { status: 'Failed', title: 'Build failed' },
+    { status: 'Canceled', title: 'User canceled' },
+    { status: 'Info', title: 'No changes detected' },
+    { status: 'Warn', title: 'Deprecated API version' },
 ];
 
 // Code deployments with children. `complete` is applied after children are
@@ -147,7 +147,6 @@ export function applyMockData(container: Container): void {
     // activation hooks that seed them as soon as they are constructed.
 
     container.onActivation(IGenericActivityDataProvider, (_context, genericProvider) => {
-        mockGenericActivities.forEach(activity => genericProvider.trackActivity(activity));
         for (const activity of mockGenericActivities) {
             genericProvider.trackActivity(activity);
         }
