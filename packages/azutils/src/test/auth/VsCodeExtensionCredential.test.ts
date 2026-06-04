@@ -6,7 +6,6 @@
 import { Environment } from '@azure/ms-rest-azure-env';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { VsCodeExtensionCredential } from '../../auth/VsCodeExtensionCredential';
 
 function createCredential(options?: { tenantId?: string; environment?: Environment }) {

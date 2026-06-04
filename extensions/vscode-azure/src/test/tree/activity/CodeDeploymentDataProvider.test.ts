@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { CodeDeploymentDataProvider } from '../../../tree/activity/CodeDeploymentDataProvider';
 import { makeActivity } from './mockActivity';

@@ -6,7 +6,6 @@
 import { type IProcessExecutor, type SpawnFn, ChildProcessError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { afterEach, describe, it } from 'mocha';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../azd/AzdAuthServer';
 import { AzdCommand, AzdService, MinAzdUpdateVersion, MinAzdVersion } from '../../azd/AzdService';

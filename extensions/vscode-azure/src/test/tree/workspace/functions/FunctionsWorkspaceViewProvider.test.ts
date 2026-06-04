@@ -5,7 +5,6 @@
 
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import type * as vscode from 'vscode';
 import { FunctionsWorkspaceViewProvider } from '../../../../tree/workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../tree/workspace/WorkspaceNode';

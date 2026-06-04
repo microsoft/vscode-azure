@@ -6,7 +6,6 @@
 import { Wizard } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { AzureNodeId } from '../../models/AzureNodeId';
 import { type ChooseResourceContext, ChooseResourceStep } from '../../wizard/ChooseResourceStep';
 import { makeGenericResource, makeSubscription } from '../mockAzure';

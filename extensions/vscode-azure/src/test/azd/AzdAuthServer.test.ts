@@ -5,7 +5,6 @@
 
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { after, afterEach, before, describe, it } from 'mocha';
 import { request as httpsRequest } from 'node:https';
 import { mock } from 'node:test';
 import { AzdAuthServer, certDerToPem } from '../../azd/AzdAuthServer';

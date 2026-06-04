@@ -6,7 +6,6 @@
 import type { PipelineRequest } from '@azure/core-rest-pipeline';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { MFAChallengePolicy } from '../../../rest/pipeline/MFAChallengePolicy';
 import { makeRequest, makeResponse } from '../../mockPipeline';
 

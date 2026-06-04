@@ -6,7 +6,6 @@
 import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import type * as vscode from 'vscode';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { CreateAzdEnvStep } from '../../../azd/wizard/CreateAzdEnvStep';

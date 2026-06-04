@@ -7,7 +7,6 @@ import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@micr
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import * as vscode from 'vscode';
 import { OpenInPortal } from '../../../../commands/OpenInPortal';
 import { AddOrEditAppSetting } from '../../../../commands/functions/AddOrEditAppSetting';

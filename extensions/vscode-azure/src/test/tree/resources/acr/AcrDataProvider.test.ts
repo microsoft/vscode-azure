@@ -6,7 +6,6 @@
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
 import { makeAcrRegistry } from './mockAcr';

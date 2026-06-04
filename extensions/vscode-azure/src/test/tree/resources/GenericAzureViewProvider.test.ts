@@ -7,7 +7,6 @@ import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azu
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import { mock } from 'node:test';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection } from '../../../constants';

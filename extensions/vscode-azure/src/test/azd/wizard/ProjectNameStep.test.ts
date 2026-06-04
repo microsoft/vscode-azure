@@ -6,7 +6,6 @@
 import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { ProjectNameStep } from '../../../azd/wizard/ProjectNameStep';
 
