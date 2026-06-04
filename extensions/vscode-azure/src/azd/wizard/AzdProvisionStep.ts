@@ -43,7 +43,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         return context.provision === true && !!context.iacFolder;
     }
 
-    public async execute(context: TContext): Promise<void> {
+    public async execute(context: Readonly<TContext>): Promise<void> {
         const deployIdDir = await this.tempDirManager.createTempDir();
         const deployIdFileUri = this.ctx.code.Uri.joinPath(deployIdDir, 'deployment-id.jsonl');
 
