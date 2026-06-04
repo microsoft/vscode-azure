@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
-import { IOutputChannel, IVsCode, type Disposable } from '@microsoft/vscode-azure-utils';
+import { IOutputChannel, IVsCode, stringifyError, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { generateKeyPair as cryptoGenerateKeyPair, sign as cryptoSign, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -108,7 +108,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         // during request handling). Without this, an 'error' emitted after listen()
         // succeeds would have no listeners and crash the extension host.
         server.on('error', (err) => {
-            this.output.warn(this.code.l10n.t('[auth] AZD auth server error: {0}', err.message));
+            this.output.warn(this.code.l10n.t('[auth] AZD auth server error: {0}', stringifyError(err)));
         });
 
         const port = await listen(server);
@@ -184,7 +184,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
 
             sendJson(res, 200, { status: 'success', token: token.token, expiresOn });
         } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
+            const message = stringifyError(e);
             this.output.warn(this.code.l10n.t('[auth] AZD auth server token request failed: {0}', message));
             sendJson(res, 200, { status: 'error', code: 'GetTokenError', message: this.code.l10n.t('Token request failed: {0}', message) });
         }

@@ -94,6 +94,27 @@ void this.code.window.showInformationMessage(message);
 promise.catch(() => { /* noop */ });
 ```
 
+## Error Handling
+
+A value caught in a `catch` clause has type `unknown`, so it may not be an `Error`. When you need a human-readable message string from it (for logging, telemetry, or display), use `stringifyError()` from `@microsoft/vscode-azure-utils` instead of hand-rolling the `instanceof Error` check.
+
+```typescript
+import { stringifyError } from '@microsoft/vscode-azure-utils';
+
+try {
+    await doWork();
+} catch (error) {
+    this.output.warn(this.code.l10n.t('[cmd] work failed: {0}', stringifyError(error)));
+}
+```
+
+```typescript
+// Bad — repeated inline coercion
+const message = error instanceof Error ? error.message : String(error);
+```
+
+`stringifyError()` returns the `message` for `Error` values, returns strings unchanged, and falls back to `util.inspect()` for everything else.
+
 ## ARM Resource Types
 
 When checking `GenericResource.type` or `GenericResource.logicalType`, always compare **case-insensitively** against a constant:

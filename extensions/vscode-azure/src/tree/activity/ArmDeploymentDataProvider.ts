@@ -9,7 +9,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    delay, EventEmitter, flattenPages, IActionExecutor, IVsCode,
+    delay, EventEmitter, flattenPages, IActionExecutor, IVsCode, stringifyError,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -236,7 +236,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                 } catch (error) {
                     abortSignal.throwIfAborted();
                     // Swallow other probably-transient errors and retry on next poll
-                    const message = error instanceof Error ? error.message : String(error);
+                    const message = stringifyError(error);
                     this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
                 }
 

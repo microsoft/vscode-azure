@@ -11,6 +11,7 @@ import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { IVsCode } from '../vscode/IVsCode';
 import { createActionContext, type IActionContext, type KnownTelemetryProperty, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
+import { stringifyError } from './stringifyError';
 
 export const IActionExecutor: ServiceIdentifier<IActionExecutor> = Symbol.for('IActionExecutor');
 
@@ -118,7 +119,7 @@ export class ActionExecutor implements IActionExecutor {
 
                     if (error instanceof Error) {
                         properties.error = error.name;
-                        properties.errorMessage = error.message;
+                        properties.errorMessage = stringifyError(error);
                         properties.stack = error.stack;
                     }
 
@@ -155,7 +156,7 @@ export class ActionExecutor implements IActionExecutor {
             : this.code.l10n.t('Report Issue');
 
         const items = reportIssue ? [reportIssue] : [];
-        const choice = await this.code.window.showErrorMessage(error.message, ...items);
+        const choice = await this.code.window.showErrorMessage(stringifyError(error), ...items);
 
         if (choice === reportIssue) {
             const data = [
