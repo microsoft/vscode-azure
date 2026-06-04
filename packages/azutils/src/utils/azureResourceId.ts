@@ -65,14 +65,27 @@ export function parseAzureResourceId(resourceId: string): ParsedAzureResourceId 
 
     // Optional: /resourceGroups/{name}
     if (i < segments.length && segments[i].toLowerCase() === 'resourcegroups') {
+        if (i + 1 >= segments.length) {
+            throw new Error(`Invalid ARM resource ID (missing resource group name): ${resourceId}`);
+        }
         resourceGroup = segments[i + 1];
         i += 2;
     }
 
     // Optional: /providers/{namespace}/{type}/{name}[/{childType}/{childName}...]
     if (i < segments.length && segments[i].toLowerCase() === 'providers') {
+        if (i + 1 >= segments.length) {
+            throw new Error(`Invalid ARM resource ID (missing provider namespace): ${resourceId}`);
+        }
         provider = segments[i + 1]; // e.g. Microsoft.ContainerRegistry
         i += 2;
+
+        // After the namespace, the remainder must be one or more {type}/{name}
+        // pairs -- an empty, odd, or dangling tail is a malformed ARM ID.
+        const remaining = segments.length - i;
+        if (remaining < 2 || remaining % 2 !== 0) {
+            throw new Error(`Invalid ARM resource ID (expected provider type/name pairs): ${resourceId}`);
+        }
 
         // Collect type/name pairs -- the type path can be nested (e.g. registries/replications)
         const typeParts: string[] = [];

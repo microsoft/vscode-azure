@@ -11,6 +11,8 @@
         ],
         "sourceMap": true,
         "strict": true,
+        "noImplicitOverride": true,
+        "verbatimModuleSyntax": true,
         "incremental": true,
         "declaration": true,
         "declarationMap": true,
@@ -18,5 +20,6 @@
     "exclude": [
         "**/node_modules",
         "**/dist",
+        "**/testProjects",
     ],
 }
