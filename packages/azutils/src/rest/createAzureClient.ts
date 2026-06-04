@@ -231,7 +231,3 @@ function applyDefaults<TOptions extends RestClientOptions | ServiceClientOptions
         ],
     } satisfies (RestClientOptions | ServiceClientOptions) as TOptions;
 }
-
-// TODO: future: Other policies we (maybe) need from before:
-// - missing content type?
-// - Status code?

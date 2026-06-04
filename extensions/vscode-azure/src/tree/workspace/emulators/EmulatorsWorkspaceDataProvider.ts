@@ -49,7 +49,7 @@ export class EmulatorsWorkspaceDataProvider implements DataProvider<EmulatorsGro
         };
     }
 
-    // TODO: Just mock data for now. Need to detect changes to emulator availability and update accordingly
+    // Static placeholder data for now; detecting actual emulator availability is tracked by https://github.com/microsoft/vscode-azure/issues/176
     private getEmulators(): EmulatorNode[] {
         return [
             {

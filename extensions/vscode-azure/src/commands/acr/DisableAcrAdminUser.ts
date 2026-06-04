@@ -20,7 +20,8 @@ import type { ManagedCommand } from '../ManagedCommand';
  * Today it only displays an informational message instead of making
  * the actual ARM call.
  *
- * TODO: this is a demonstration command and needs to be removed
+ * @remarks This is demonstration code; removal is tracked by
+ * {@link https://github.com/microsoft/vscode-azure/issues/177}.
  */
 @injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
