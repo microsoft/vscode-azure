@@ -33,6 +33,7 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
     step: number | undefined;
     totalSteps: number | undefined;
     keepScrollPosition?: boolean;
+    prompt: string | undefined;
     // #endregion
 
     // #region Internal emitters
