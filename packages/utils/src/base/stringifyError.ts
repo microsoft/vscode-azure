@@ -15,7 +15,9 @@ import * as util from 'node:util';
 export function stringifyError(error: unknown): string {
     if (typeof error === 'string') {
         return error;
+    } else if (error instanceof Error || Error.isError(error)) {
+        return error.message;
     }
 
-    return error instanceof Error ? error.message : util.inspect(error);
+    return util.inspect(error);
 }
