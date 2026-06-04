@@ -65,6 +65,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     quickPick.step = options?.step;
     quickPick.totalSteps = options?.totalSteps;
     quickPick.value = options?.value ?? '';
+    quickPick.prompt = options?.prompt;
 
     // Filter items through predicates to safely set active/selected items
     if (options?.isActiveItem) {

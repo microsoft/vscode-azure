@@ -319,7 +319,7 @@
         "clean": "node ../../scripts/clean.mjs"
     },
     "engines": {
-        "vscode": "^1.106.0"
+        "vscode": "^1.123.0"
     },
     "devDependencies": {
         "@types/semver": "^7.7.1",
