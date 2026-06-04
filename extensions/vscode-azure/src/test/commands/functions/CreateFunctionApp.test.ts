@@ -95,6 +95,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: 'East US' },                // ChooseLocationStep
             { input: 'my-app' },                // ProjectNameStep
             { pick: 'Node.js' },                // PickRuntimeStep
+            { pick: '24' },                     // PickRuntimeVersionStep
             { pick: 'Flex Consumption' },       // PickHostingPlanStep
         ]);
 
@@ -121,6 +122,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: 'East US' },
             { input: 'my-app' },
             { pick: 'Node.js' },
+            { pick: '24' },
             { pick: 'Flex Consumption' },
         ]);
 
@@ -204,6 +206,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: 'East US' },
             { input: 'my-app' },
             { pick: 'Node.js' },
+            { pick: '24' },
             { pick: 'Flex Consumption' },
         ]);
 

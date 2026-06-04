@@ -53,7 +53,8 @@ Using `CreateFunctionApp` as the concrete example:
 | 3 | `HydratableChooseSubscriptionStep` | Unless hydrated | `subscription` |
 | 4 | `HydratableChooseLocationStep` | Unless hydrated | `location` |
 | 5 | `ProjectNameStep` | Unless `environmentName` set | `environmentName`, `azdServiceName` (if not already hydrated) |
-| 6 | `PickRuntimeStep` | Unless `hasInfra` | `runtimeVersion` |
+| 6 | `PickRuntimeStep` | Unless `hasInfra` | `functionWorkerRuntime` |
+| 6a | `PickRuntimeVersionStep` (subprompt of `PickRuntimeStep`) | Unless `hasInfra` or version already set (only shows a pick when the runtime has more than one supported version) | `runtimeVersion` |
 | 7 | `PickHostingPlanStep` | Unless `hasInfra` | `hostingPlan` |
 | 8 | `ConfirmProvisionStep` | Only when Bootstrapped | `provision` (may flip to `false`) |
 
