@@ -7,11 +7,11 @@ import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import { showSmartInputBox, showSmartQuickPick } from '../../ui/uiHelpers';
 import { CancellationError } from '../../vscode/CancellationError';
-import { MockOutputChannel } from '../vscode/MockOutputChannel';
 import type { ICodeContext } from '../../vscode/IVsCode';
 import { ExecuteStep } from '../../wizard/ExecuteStep';
 import { PromptStep } from '../../wizard/PromptStep';
 import { Wizard } from '../../wizard/Wizard';
+import { MockOutputChannel } from '../vscode/MockOutputChannel';
 import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
 
 interface TestContext {
@@ -64,7 +64,7 @@ class RecordingExecuteStep extends ExecuteStep<TestContext> {
     public executed = false;
     public receivedContext: TestContext | undefined;
 
-    public execute(context: TestContext): void {
+    public execute(context: Readonly<TestContext>): void {
         this.executed = true;
         this.receivedContext = { ...context };
     }

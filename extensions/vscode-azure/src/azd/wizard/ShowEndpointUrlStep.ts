@@ -26,7 +26,7 @@ export class ShowEndpointUrlStep<TContext extends AzdWizardContext> extends Exec
         return !!context.iacFolder;
     }
 
-    public async execute(context: TContext): Promise<void> {
+    public async execute(context: Readonly<TContext>): Promise<void> {
         const showResult = await this.azd.show(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- guarded by shouldExecute
         if (!showResult?.services) {
             return;
