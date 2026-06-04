@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IActionExecutor } from '../base/IActionExecutor';
+import { stringifyError } from '../base/stringifyError';
 import { InflightMap } from '../data/InflightMap';
 import { Limiter } from '../data/Limiter';
 import { isAsyncIterable, type Page } from '../data/Page';
@@ -253,7 +254,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         }
                     })
                     .catch((error: unknown) => {
-                        const message = error instanceof Error ? error.message : String(error);
+                        const message = stringifyError(error);
                         this.executor.output.warn(this.code.l10n.t('[data] {0} enrich failed key={1} provider={2} message={3}', this.name, key, provider.constructor.name, message));
                         throw error;
                     });

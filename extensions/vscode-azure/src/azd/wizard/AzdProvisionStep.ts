@@ -5,7 +5,7 @@
 
 import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, delay, ExecuteStep, type ICodeContext, type IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { CancellationError, delay, ExecuteStep, stringifyError, type ICodeContext, type IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
@@ -83,7 +83,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             }
         } catch (e) {
             if (!CancellationError.test(e)) {
-                this.output.debug(`[provision] deployment ID polling failed: ${e instanceof Error ? e.message : String(e)}`);
+                this.output.debug(`[provision] deployment ID polling failed: ${stringifyError(e)}`);
             }
         }
     }
