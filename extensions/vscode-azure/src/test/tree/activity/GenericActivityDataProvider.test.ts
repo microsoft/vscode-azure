@@ -55,6 +55,22 @@ describe('GenericActivityDataProvider (unit)', () => {
         expect(second.id).to.not.equal(first.id);
     });
 
+    it('should set endTime when tracking an activity in a terminal status', async () => {
+        const provider = new GenericActivityDataProvider();
+        provider.trackActivity({ status: 'Completed', title: 'Done' });
+
+        const [activity] = await provider.getChildren();
+        expect(activity.endTime).to.be.an.instanceOf(Date);
+    });
+
+    it('should not set endTime when tracking an activity in a non-terminal status', async () => {
+        const provider = new GenericActivityDataProvider();
+        provider.trackActivity({ status: 'InProgress', title: 'Running' });
+
+        const [activity] = await provider.getChildren();
+        expect(activity.endTime).to.equal(undefined);
+    });
+
     it('should update an existing activity via the handle', async () => {
         const provider = new GenericActivityDataProvider();
         const handle = provider.trackActivity({ status: 'InProgress', title: 'Test' });
@@ -114,6 +130,16 @@ describe('GenericActivityDataProvider (unit)', () => {
 
         const [activity] = await provider.getChildren();
         expect(activity.description).to.equal('friendly message');
+    });
+
+    it('should keep the error message when description is explicitly undefined', async () => {
+        const provider = new GenericActivityDataProvider();
+        const handle = provider.trackActivity({ status: 'InProgress', title: 'Test' });
+
+        handle.update({ status: 'Failed', error: new Error('boom'), description: undefined });
+
+        const [activity] = await provider.getChildren();
+        expect(activity.description).to.equal('boom');
     });
 
     it('should allow transitioning between terminal statuses', async () => {

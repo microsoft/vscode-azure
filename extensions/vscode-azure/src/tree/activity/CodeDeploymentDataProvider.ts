@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, stringifyError } from '@microsoft/vscode-azure-utils';
-import * as crypto from 'crypto';
 import { injectable, type ServiceIdentifier } from 'inversify';
+import * as crypto from 'node:crypto';
 import { type Activity, type ActivityStatus, isActivity, isTerminalActivityStatus } from './Activity';
 
 /** Identifier for the code deployment data provider */

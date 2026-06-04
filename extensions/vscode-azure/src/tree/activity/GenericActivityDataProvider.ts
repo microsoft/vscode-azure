@@ -53,13 +53,16 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
      * the caller uses to update the activity's status/title/description later.
      */
     public trackActivity(opts: { readonly title: string; readonly status?: ActivityStatus; readonly description?: string }): GenericActivityHandle {
+        const status = opts.status ?? 'InProgress';
+        const now = new Date();
         const activity: GenericActivity = {
             id: crypto.randomUUID(),
             type: 'generic',
-            status: opts.status ?? 'InProgress',
+            status,
             title: opts.title,
             description: opts.description,
-            startTime: new Date(),
+            startTime: now,
+            endTime: isTerminalActivityStatus(status) ? now : undefined,
         };
         this.rootActivities.set(activity.id, activity);
         this.onDidChangeEmitter.fire({ includeChildren: true });
@@ -124,6 +127,11 @@ export class GenericActivityHandle {
 
         if (error !== undefined) {
             this.activity.description = stringifyError(error);
+            // A non-string `description` (e.g. an explicit `undefined`) must not
+            // clobber the error-derived message; only a real string wins.
+            if (typeof fields.description !== 'string') {
+                delete fields.description;
+            }
         }
 
         // An explicit `description` in `changes` takes precedence over `error`.
