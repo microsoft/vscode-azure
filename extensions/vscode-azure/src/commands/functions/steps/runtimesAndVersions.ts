@@ -10,17 +10,17 @@ import type { FunctionWorkerRuntime } from '../CreateFunctionAppContext';
  * ordered newest-first. The first entry is treated as the default. `custom` carries a single
  * empty version because the user supplies their own handler.
  *
- * This is the single source of truth consumed by {@linkcode PickRuntimeStep} (to auto-assign a
- * version when only one is supported) and {@linkcode PickRuntimeVersionStep} (to prompt when more
- * than one is supported).
+ * This is the single source of truth consumed by {@linkcode PickRuntimeVersionStep}, which
+ * resolves the runtime version by auto-assigning it when only one is supported and prompting when
+ * more than one is supported.
  *
  * The list is curated, not exhaustive.
  */
 export const runtimeVersions = {
-    node: ['26', '24'], // https://versionlog.com/nodejs/
-    python: ['3.14', '3.12'], // https://versionlog.com/python/
-    'dotnet-isolated': ['10.0'], // https://versionlog.com/dotnet-core/
-    java: ['25', '21'], // https://versionlog.com/java/
-    powershell: ['7.6'], // https://learn.microsoft.com/en-us/powershell/scripting/install/powershell-support-lifecycle
+    node: ['24', '22'], // https://learn.microsoft.com/en-us/azure/azure-functions/functions-versions?pivots=programming-language-typescript#languages
+    python: ['3.12'], // https://learn.microsoft.com/en-us/azure/azure-functions/functions-versions?pivots=programming-language-python#languages
+    'dotnet-isolated': ['10.0'], // https://learn.microsoft.com/en-us/azure/azure-functions/functions-versions?pivots=programming-language-csharp#languages
+    java: ['25', '21'], // https://learn.microsoft.com/en-us/azure/azure-functions/functions-versions?pivots=programming-language-java#languages
+    powershell: ['7.4'], // https://learn.microsoft.com/en-us/azure/azure-functions/functions-versions?pivots=programming-language-powershell#languages
     custom: [''],
 } as const satisfies Record<FunctionWorkerRuntime, readonly string[]>;
