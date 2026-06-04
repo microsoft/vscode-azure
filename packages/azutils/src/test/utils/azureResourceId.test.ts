@@ -77,6 +77,14 @@ describe('azureResourceId (unit)', () => {
             expect(() => parseAzureResourceId('')).to.throw('Invalid ARM resource ID');
         });
 
+        it('should throw when the resource group name is missing', () => {
+            expect(() => parseAzureResourceId('/subscriptions/abc/resourceGroups')).to.throw('missing resource group name');
+        });
+
+        it('should throw when the provider namespace is missing', () => {
+            expect(() => parseAzureResourceId('/subscriptions/abc/resourceGroups/myRg/providers')).to.throw('missing provider namespace');
+        });
+
         it('should handle a trailing slash', () => {
             const result = parseAzureResourceId('/subscriptions/abc-123/');
             expect(result.subscriptionId).to.equal('abc-123');

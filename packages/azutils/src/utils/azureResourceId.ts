@@ -65,12 +65,18 @@ export function parseAzureResourceId(resourceId: string): ParsedAzureResourceId 
 
     // Optional: /resourceGroups/{name}
     if (i < segments.length && segments[i].toLowerCase() === 'resourcegroups') {
+        if (i + 1 >= segments.length) {
+            throw new Error(`Invalid ARM resource ID (missing resource group name): ${resourceId}`);
+        }
         resourceGroup = segments[i + 1];
         i += 2;
     }
 
     // Optional: /providers/{namespace}/{type}/{name}[/{childType}/{childName}...]
     if (i < segments.length && segments[i].toLowerCase() === 'providers') {
+        if (i + 1 >= segments.length) {
+            throw new Error(`Invalid ARM resource ID (missing provider namespace): ${resourceId}`);
+        }
         provider = segments[i + 1]; // e.g. Microsoft.ContainerRegistry
         i += 2;
 
