@@ -21,4 +21,5 @@ jobs:
     # Use template from https://github.com/microsoft/vscode-azuretools/tree/main/.github/workflows
     uses: microsoft/vscode-azuretools/.github/workflows/jobs.yml@main
     with:
+      package_manager: pnpm
       use_no_optional: false
