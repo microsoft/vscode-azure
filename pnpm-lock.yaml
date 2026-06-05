@@ -11,9 +11,6 @@ importers:
       '@microsoft/vscode-azext-eng':
         specifier: ^1.1.0-alpha.1
         version: 1.1.0-alpha.1(@vscode/test-cli@0.0.12)(@vscode/test-electron@2.5.2)(@vscode/vsce@3.9.1)(esbuild-plugin-copy@2.1.1(esbuild@0.28.0))(esbuild@0.28.0)(tsx@4.22.4)
-      '@types/mocha':
-        specifier: ^10.0.10
-        version: 10.0.10
       '@types/node':
         specifier: 24.x
         version: 24.12.4

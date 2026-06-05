@@ -8,3 +8,10 @@ allowBuilds:
   keytar: true
 minimumReleaseAgeExclude:
   - '@typescript/native-preview*'
+publicHoistPattern:
+  - '*eslint*'
+  - 'typescript'
+  - 'mocha'
+  - '@types/mocha'
+  - 'chai'
+  - '@types/chai'
