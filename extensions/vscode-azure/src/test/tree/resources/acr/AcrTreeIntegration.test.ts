@@ -89,7 +89,7 @@ describe('ACR Tree Integration (integration)', () => {
         const resourceClient = createMockResourceClient([resourceGroup], resources);
         const acrClient = createMockAcrClient(options?.registryDetails ?? {});
 
-        const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
+        const resourceClientProvider: IResourceClientProvider = () => resourceClient;
         const acrClientProvider: IAcrClientProvider = () => acrClient;
 
         const genericDataProvider = new GenericAzureDataProvider(

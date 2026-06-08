@@ -26,7 +26,7 @@ describe('ResourceClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, rgBody),
         });
 
-        const client = await ResourceClient.create(ctx, executor, subscription, { httpClient });
+        const client = ResourceClient.create(ctx, executor, subscription, { httpClient });
         const pages = [];
         for await (const page of client.resourceGroups.list()) {
             pages.push(page);
@@ -56,7 +56,7 @@ describe('ResourceClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, resourcesBody),
         });
 
-        const client = await ResourceClient.create(ctx, executor, subscription, { httpClient });
+        const client = ResourceClient.create(ctx, executor, subscription, { httpClient });
         const pages = [];
         for await (const page of client.resources.listByResourceGroup('rg1')) {
             pages.push(page);
@@ -87,7 +87,7 @@ describe('ResourceClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, resourcesBody),
         });
 
-        const client = await ResourceClient.create(ctx, executor, subscription, { httpClient });
+        const client = ResourceClient.create(ctx, executor, subscription, { httpClient });
         const pages = [];
         for await (const page of client.resources.listByResourceGroup('rg1')) {
             pages.push(page);
@@ -120,7 +120,7 @@ describe('ResourceClient (unit)', () => {
             },
         });
 
-        const client = await ResourceClient.create(ctx, executor, subscription, { httpClient });
+        const client = ResourceClient.create(ctx, executor, subscription, { httpClient });
         const pages = [];
         for await (const page of client.resourceGroups.list()) {
             pages.push(page);

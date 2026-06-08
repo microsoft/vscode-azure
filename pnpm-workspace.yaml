@@ -9,6 +9,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@typescript/native-preview*'
   - '@microsoft/vscode-azext*'
+  - '@azure/arm-resources@8.0.0-beta.1'
 publicHoistPattern:
   - '*eslint*'
   - 'typescript'
