@@ -16,8 +16,8 @@ import { FunctionAppVirtualPaths } from '../../../../tree/resources/functions/Fu
 import { FunctionAppDataProvider } from '../../../../tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functions/FunctionAppViewProvider';
 import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
-import { createMockResourceClient } from '../mockResourceClient';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
+import { createMockResourceClient } from '../mockResourceClient';
 import { makeFunctionApp } from './mockFunctionApp';
 
 /**
@@ -114,7 +114,7 @@ describe('Function App Tree Integration (integration)', () => {
         });
         const resources = options?.resources ?? [functionApp, nonFuncResource];
         const resourceClient = createMockResourceClient([resourceGroup], resources);
-        const resourceClientProvider: IResourceClientProvider = () => Promise.resolve(resourceClient);
+        const resourceClientProvider: IResourceClientProvider = () => resourceClient;
 
         const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider);
         const genericDataProvider = new GenericAzureDataProvider(code, executor, resourceClientProvider, subProvider);

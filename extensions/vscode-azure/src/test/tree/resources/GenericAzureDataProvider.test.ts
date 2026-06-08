@@ -24,7 +24,7 @@ describe('GenericAzureDataProvider (unit)', () => {
             onRefreshSuggested: () => Disposable.None,
             ...subscriptionProvider,
         };
-        const createClient = clientFactory ?? mock.fn(() => Promise.resolve({}));
+        const createClient = clientFactory ?? mock.fn(() => ({}));
         return new GenericAzureDataProvider(code.vscode, executor, createClient as never, subProvider as never);
     }
 
@@ -91,7 +91,7 @@ describe('GenericAzureDataProvider (unit)', () => {
             const sub = makeSubscription();
             const rgs = [{ id: 'rg1', name: 'rg1' }];
             const mockClient = { resourceGroups: { list: () => rgs } };
-            const provider = createProvider({}, () => Promise.resolve(mockClient));
+            const provider = createProvider({}, () => mockClient);
 
             const children = await provider.getChildren(sub);
             expect(children).to.deep.equal(rgs);
@@ -101,7 +101,7 @@ describe('GenericAzureDataProvider (unit)', () => {
             const rg = makeResourceGroup();
             const resources = [{ id: 'res1', name: 'res1' }];
             const mockClient = { resources: { listByResourceGroup: () => resources } };
-            const provider = createProvider({}, () => Promise.resolve(mockClient));
+            const provider = createProvider({}, () => mockClient);
 
             const children = await provider.getChildren(rg);
             expect(children).to.deep.equal(resources);
@@ -125,7 +125,7 @@ describe('GenericAzureDataProvider (unit)', () => {
                     list: (options?: Record<string, unknown>) => { capturedOptions = options; return []; },
                 },
             };
-            const provider = createProvider({}, () => Promise.resolve(mockClient));
+            const provider = createProvider({}, () => mockClient);
 
             await withSettings(code, { [`${ConfigurationSection}.pageSize`]: 25 }, () => provider.getChildren(sub));
             expect(capturedOptions?.top).to.equal(25);

@@ -128,7 +128,7 @@ export function applyMockData(container: Container): void {
     );
 
     container.rebind(IResourceClientProvider).toConstantValue(
-        () => Promise.resolve(createMockResourceClient([demoRg, stagingRg], resourcesByGroup)),
+        () => createMockResourceClient([demoRg, stagingRg], resourcesByGroup),
     );
     container.rebind(IAcrClientProvider).toConstantValue(
         () => createMockAcrClient(registryDetails),
