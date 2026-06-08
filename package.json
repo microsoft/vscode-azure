@@ -21,7 +21,7 @@
         "test": "pnpm -r run test",
         "clean": "pnpm -r --parallel run clean"
     },
-    "packageManager": "pnpm@11.3.0",
+    "packageManager": "pnpm@11.5.2",
     "engines": {
         "vscode": "^1.123.0"
     },
