@@ -3,20 +3,18 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type {
-    DeploymentOperationsListAtScopeOptionalParams,
-    DeploymentsGetAtScopeOptionalParams,
-} from '@azure/arm-resourcesdeployments';
-import type {
-    DeploymentExtended as SdkDeploymentExtended,
-    DeploymentOperation as SdkDeploymentOperation,
-    ProvisioningOperation as SdkProvisioningOperation,
-    ProvisioningState as SdkProvisioningState,
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- The new-style SDK bundles smaller if it is eagerly imported
+import {
+    KnownProvisioningState as SdkKnownProvisioningState,
+    type DeploymentExtended as SdkDeploymentExtended,
+    type DeploymentOperation as SdkDeploymentOperation,
+    type ProvisioningOperation as SdkProvisioningOperation,
+    type ProvisioningState as SdkProvisioningState,
 } from '@azure/arm-resourcesdeployments/models';
 /* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
 import { createDeployments, type DeploymentsClientOptionalParams, type DeploymentsContext } from '@azure/arm-resourcesdeployments/api';
-import { listAtScope as sdkListAtScope } from '@azure/arm-resourcesdeployments/api/deploymentOperations';
-import { getAtScope as sdkGetAtScope } from '@azure/arm-resourcesdeployments/api/deployments';
+import { listAtScope as sdkListAtScope, type DeploymentOperationsListAtScopeOptionalParams } from '@azure/arm-resourcesdeployments/api/deploymentOperations';
+import { getAtScope as sdkGetAtScope, type DeploymentsGetAtScopeOptionalParams } from '@azure/arm-resourcesdeployments/api/deployments';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
@@ -31,6 +29,7 @@ export type DeploymentExtended = WithRequired<SdkDeploymentExtended, 'id' | 'nam
 export type DeploymentOperation = SdkDeploymentOperation;
 export type ProvisioningOperation = SdkProvisioningOperation;
 export type ProvisioningState = SdkProvisioningState;
+export { SdkKnownProvisioningState as KnownProvisioningState };
 
 /** Factory that creates an {@linkcode IDeploymentClient} for a given subscription. */
 export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');

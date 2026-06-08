@@ -5,6 +5,7 @@
 
 import { expect } from 'chai';
 import { mock } from 'node:test';
+import * as util from 'node:util';
 import { CodeDeploymentDataProvider } from '../../../tree/activity/CodeDeploymentDataProvider';
 import { makeActivity } from './mockActivity';
 
@@ -198,12 +199,12 @@ describe('CodeDeploymentDataProvider (unit)', () => {
         const provider = new CodeDeploymentDataProvider();
         const handle = provider.trackDeployment({ title: 'Deploy' });
 
-        handle.complete('Failed', 'plain string error');
+        handle.complete('Failed', { code: 'ETIMEDOUT' });
 
         const roots = await provider.getChildren();
         const children = await provider.getChildren(roots[0]);
         expect(children).to.have.length(1);
-        expect(children[0].title).to.equal('plain string error');
+        expect(children[0].title).to.equal(util.inspect({ code: 'ETIMEDOUT' }));
         expect(children[0].status).to.equal('Failed');
     });
 

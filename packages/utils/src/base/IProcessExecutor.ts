@@ -18,6 +18,7 @@ import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
 import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
+import { stringifyError } from './stringifyError';
 
 export {
     ChildProcessError, isChildProcessError,
@@ -306,7 +307,7 @@ function enrichError(e: unknown, stderr: string): unknown {
     if (isProcessUtilsCancellationError(e)) {
         return new CancellationError();
     } else if (isChildProcessError(e)) {
-        const msg = stderr.trim() || e.message;
+        const msg = stderr.trim() || stringifyError(e);
         const enriched = new ChildProcessError(msg, e.code, e.signal);
         enriched.cause = e;
         return enriched;

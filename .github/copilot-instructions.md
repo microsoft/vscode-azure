@@ -37,6 +37,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * Use scoped `eslint-disable` comments on specific lines, avoid file-wide unless it requires repeating the same disable many times
 * Strings that will be seen by the user must use `IVsCode.l10n.t()` for localization (debug and trace output to the output channel is exempt from this requirement)
 * Logging must follow `docs/conventions.md` (Logging section), and log messages must never include PII/secrets (tokens, auth secrets, user emails/display names, request/response bodies, or file contents)
+* When coercing a caught `unknown` error into a message string (for logging, telemetry, or display), use `stringifyError()` from `@microsoft/vscode-azure-utils` instead of hand-rolling an `error instanceof Error ? error.message : String(error)` check
 * In product code, use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` and string paths. Use `Uri.fsPath` only when an API requires a string (e.g., `child_process` `cwd`). Use `vscode.workspace.fs.stat()` to check file existence (prefer over `workspace.findFiles()` which is workspace-scoped). Use `extensionContext.extensionUri` with `Uri.joinPath()` instead of `extensionContext.asAbsolutePath()`.
 * Any time ARM resource types (`GenericResource.type`) or logical types (`GenericResource.logicalType`) are checked, they should be compared **case-insensitively** to a constant (e.g., `AcrResourceType`) rather than a string literal
 * Azure SDK types used in client wrapper public APIs must be re-exported from the wrapper file in `packages/azutils/src/rest/clients/`. The extension and other consumers import these types from `@microsoft/vscode-azure-azutils`, never directly from `@azure/*` packages.
@@ -94,11 +95,19 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 ## How to Lint, Build, and Test
 
 * Before submitting PRs, always lint, build, and test locally to catch errors early
-* Run `npm run lint` to check for linting errors
-* Run `npm run build` to compile TypeScript to JavaScript
-* Run `npm run test` to execute tests
-* Run `npm run testcov` to run tests with code coverage (via c8)
-* For individual workspaces, use the above commands, adding `--workspace=<workspace-name>` to target a specific package
+* Run `pnpm run lint` to check for linting errors
+* Run `pnpm run build` to compile TypeScript to JavaScript
+* Run `pnpm run test` to execute tests
+* Run `pnpm run testcov` to run tests with code coverage (via c8)
+* For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
+
+
+## Managing Dependencies
+
+* This is a pnpm workspace; its configuration lives in `pnpm-workspace.yaml`.
+* When a dependency is used by more than one workspace package, add it to the pnpm `catalog:` in `pnpm-workspace.yaml` and reference it from each `package.json` with the `"catalog:"` specifier. This keeps every package on a single, consistent version.
+* Keep dependencies that are only used by a single package as a direct version specifier in that package's `package.json` -- don't add them to the catalog, since a catalog entry provides no dedup benefit for a single consumer.
+* After changing any dependency versions or catalog entries, run `pnpm install` to update `pnpm-lock.yaml`, then build to confirm nothing broke.
 
 
 ## Writing Tests

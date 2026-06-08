@@ -13,7 +13,7 @@ import { list as sdkListResourceGroups } from '@azure/arm-resources/api/resource
 import { listByResourceGroup as sdkListByResourceGroup } from '@azure/arm-resources/api/resources';
 /* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext, Page } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
@@ -53,7 +53,7 @@ export const AIFoundryProjectLogicalType = `${MLWorkspaceType}~project`;
 
 /** Factory that creates an {@linkcode IResourceClient} for a given subscription. */
 export const IResourceClientProvider: ServiceIdentifier<IResourceClientProvider> = Symbol.for('IResourceClientProvider');
-export type IResourceClientProvider = AsyncFactory<IResourceClient, [AzureSubscription]>;
+export type IResourceClientProvider = SyncFactory<IResourceClient, [AzureSubscription]>;
 
 /**
  * Interface describing the resource management APIs we use.
@@ -92,7 +92,7 @@ export class ResourceClient implements IResourceClient {
         executor: IActionExecutor,
         subscription: AzureSubscription,
         options?: ResourceManagementClientOptionalParams,
-    ): Promise<ResourceClient> {
+    ): ResourceClient {
         const context = createAzureRestSubscriptionClient(
             ctx,
             executor,
@@ -100,7 +100,7 @@ export class ResourceClient implements IResourceClient {
             subscription,
             options,
         );
-        return Promise.resolve(new ResourceClient(context, subscription));
+        return new ResourceClient(context, subscription);
     }
 
     public get resourceGroups(): IResourceClient['resourceGroups'] {
@@ -120,16 +120,14 @@ export class ResourceClient implements IResourceClient {
                     groupingStrategy: 'resourceGroup' as const,
                     groupingValue: resourceGroup.name,
                 });
-            },
-            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
+            }
         );
     }
 
     private listResources(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>> {
         return toPages(
             sdkListByResourceGroup(this.inner, resourceGroupName, options),
-            r => attachMetadata(r, this.subscription),
-            ResourceClient.sdk!.getContinuationToken, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- SDK is imported during client creation
+            r => attachMetadata(r, this.subscription)
         );
     }
 }

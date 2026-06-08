@@ -168,7 +168,3 @@ function applyDefaults<TOptions extends RestClientOptions>(
         ],
     } satisfies RestClientOptions as TOptions;
 }
-
-// TODO: future: Other policies we (maybe) need from before:
-// - missing content type?
-// - Status code?

@@ -9,7 +9,7 @@ import {
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, IActionExecutor, InflightMap, IVsCode,
+    EventEmitter, IActionExecutor, IVsCode,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -43,9 +43,9 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
     /**
      * Cached REST clients per subscription ID, so all calls for the same
-     * subscription share one pipeline (and thus one {@linkcode DedupeRequestPolicy}).
+     * subscription share one client instance.
      */
-    private readonly clientCache = new InflightMap<IResourceClient>();
+    private readonly clientCache = new Map<string, IResourceClient>();
 
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
@@ -111,13 +111,13 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
                 return await this.subscriptionProvider.getSubscriptionsForTenant(resource);
 
             case isSubscription(resource): {
-                const client = await this.getOrCreateClient(resource);
+                const client = this.getOrCreateClient(resource);
                 this.executor.output.debug(`[data] discover resource groups subscription=${resource.subscriptionId} pageSize=${this.pageSize}`);
                 return client.resourceGroups.list({ top: this.pageSize });
             }
 
             case isResourceGroup(resource): {
-                const client = await this.getOrCreateClient(resource.subscription);
+                const client = this.getOrCreateClient(resource.subscription);
                 this.executor.output.debug(`[data] discover resources resourceGroup=${resource.subscription.subscriptionId}/${resource.name} pageSize=${this.pageSize}`);
                 return client.resources.listByResourceGroup(resource.name, { top: this.pageSize });
             }
@@ -129,11 +129,16 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
 
     /**
      * Get or create a cached REST client for the given subscription.
-     * All callers for the same subscription share the same client and pipeline,
-     * so {@linkcode DedupeRequestPolicy} can deduplicate concurrent requests.
+     * All callers for the same subscription share the same client instance.
      */
-    private getOrCreateClient(subscription: AzureSubscription): Promise<IResourceClient> {
-        return this.clientCache.getOrCreate(subscription.subscriptionId, () => this.createClient(subscription));
+    private getOrCreateClient(subscription: AzureSubscription): IResourceClient {
+        let client = this.clientCache.get(subscription.subscriptionId);
+        if (!client) {
+            client = this.createClient(subscription);
+            this.clientCache.set(subscription.subscriptionId, client);
+        }
+
+        return client;
     }
 
     private get pageSize(): number {

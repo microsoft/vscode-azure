@@ -46,8 +46,8 @@ Execute steps run after all prompts complete:
 
 ```typescript
 export abstract class ExecuteStep<TContext> {
-    // Perform the operation
-    abstract execute(context: TContext): void | Promise<void>;
+    // Perform the operation (context is read-only; execute steps must not modify it)
+    abstract execute(context: Readonly<TContext>): void | Promise<void>;
 
     // Return false to skip (default: true)
     shouldExecute(context: Readonly<TContext>): boolean | Promise<boolean>;
@@ -95,7 +95,7 @@ class SelectResourceStep extends PromptStep<MyContext> {
 }
 
 class DeployStep extends ExecuteStep<MyContext> {
-    async execute(context: MyContext) {
+    async execute(context: Readonly<MyContext>) {
         await deploy(context.selectedResource);
     }
 }

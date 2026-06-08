@@ -167,17 +167,17 @@ All tests use **chai** for assertions (`expect` style).
 
 ```bash
 # All workspaces
-npm run test
+pnpm run test
 
 # Single workspace
-npm run test --workspace=packages/utils
-npm run test --workspace=extensions/vscode-azure
+pnpm --filter @microsoft/vscode-azure-utils run test
+pnpm --filter vscode-azure run test
 
 # With coverage (packages)
-npm run testcov --workspace=packages/utils
+pnpm --filter @microsoft/vscode-azure-utils run testcov
 
 # With coverage (extension)
-npm run testcov --workspace=extensions/vscode-azure
+pnpm --filter vscode-azure run testcov
 ```
 
 ## Coverage
@@ -187,8 +187,8 @@ npm run testcov --workspace=extensions/vscode-azure
 Packages use **c8** (V8 native coverage) with Mocha:
 
 ```bash
-npm run testcov --workspace=packages/utils
-npm run testcov --workspace=packages/azutils
+pnpm --filter @microsoft/vscode-azure-utils run testcov
+pnpm --filter @microsoft/vscode-azure-azutils run testcov
 ```
 
 ### Extension Coverage

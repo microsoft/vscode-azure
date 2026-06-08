@@ -29,7 +29,7 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
         return context.deploy === true && !!context.iacFolder;
     }
 
-    public async execute(context: TContext): Promise<void> {
+    public async execute(context: Readonly<TContext>): Promise<void> {
         const handle = this.codeProvider.trackDeployment({ title: 'azd deploy' });
 
         void this.code.commands.executeCommand(`${ActivityTreeViewId}.focus`);
