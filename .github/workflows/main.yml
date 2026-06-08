@@ -22,4 +22,3 @@ jobs:
     uses: microsoft/vscode-azuretools/.github/workflows/jobs.yml@main
     with:
       package_manager: pnpm
-      use_no_optional: false
