@@ -18,9 +18,6 @@ catalogs:
     inversify:
       specifier: ^8.1.0
       version: 8.1.0
-    which:
-      specifier: ^5.0.0
-      version: 5.0.0
 
 importers:
 
@@ -143,7 +140,7 @@ importers:
         specifier: ^3.1.0
         version: 3.1.0
       which:
-        specifier: 'catalog:'
+        specifier: ^5.0.0
         version: 5.0.0
     devDependencies:
       '@types/which':

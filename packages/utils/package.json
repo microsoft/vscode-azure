@@ -46,7 +46,7 @@
     "dependencies": {
         "@microsoft/vscode-processutils": "catalog:",
         "vscode-uri": "^3.1.0",
-        "which": "catalog:"
+        "which": "^5.0.0"
     },
     "devDependencies": {
         "@types/which": "^3.0.4",
