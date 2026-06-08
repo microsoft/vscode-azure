@@ -95,11 +95,11 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 ## How to Lint, Build, and Test
 
 * Before submitting PRs, always lint, build, and test locally to catch errors early
-* Run `npm run lint` to check for linting errors
-* Run `npm run build` to compile TypeScript to JavaScript
-* Run `npm run test` to execute tests
-* Run `npm run testcov` to run tests with code coverage (via c8)
-* For individual workspaces, use the above commands, adding `--workspace=<workspace-name>` to target a specific package
+* Run `pnpm run lint` to check for linting errors
+* Run `pnpm run build` to compile TypeScript to JavaScript
+* Run `pnpm run test` to execute tests
+* Run `pnpm run testcov` to run tests with code coverage (via c8)
+* For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
 
 
 ## Writing Tests
