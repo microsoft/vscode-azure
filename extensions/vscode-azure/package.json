@@ -331,12 +331,12 @@
         "tsx": "*"
     },
     "dependencies": {
-        "@microsoft/vscode-azext-azureauth": "^6.1.0-alpha.1",
+        "@microsoft/vscode-azext-azureauth": "catalog:",
         "@microsoft/vscode-azure-azutils": "workspace:*",
         "@microsoft/vscode-azure-utils": "workspace:*",
-        "@microsoft/vscode-processutils": "^0.2.2",
-        "@vscode/extension-telemetry": "^1.5.1",
-        "inversify": "^8.1.0",
+        "@microsoft/vscode-processutils": "catalog:",
+        "@vscode/extension-telemetry": "catalog:",
+        "inversify": "catalog:",
         "semver": "^7.8.0"
     }
 }

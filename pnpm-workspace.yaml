@@ -16,3 +16,9 @@ publicHoistPattern:
   - '@types/mocha'
   - 'chai'
   - '@types/chai'
+catalog:
+  '@microsoft/vscode-azext-azureauth': ^6.1.0-alpha.1
+  '@microsoft/vscode-processutils': ^0.2.2
+  '@vscode/extension-telemetry': ^1.5.1
+  inversify: ^8.1.0
+  which: ^5.0.0
