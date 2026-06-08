@@ -1,0 +1,24 @@
+packages:
+  - packages/utils
+  - packages/azutils
+  - extensions/vscode-azure
+allowBuilds:
+  '@vscode/vsce-sign': true
+  esbuild: true
+  keytar: true
+minimumReleaseAgeExclude:
+  - '@typescript/native-preview*'
+  - '@microsoft/vscode-azext*'
+  - '@azure/arm-resources@8.0.0-beta.1'
+publicHoistPattern:
+  - '*eslint*'
+  - 'typescript'
+  - 'mocha'
+  - '@types/mocha'
+  - 'chai'
+  - '@types/chai'
+catalog:
+  '@microsoft/vscode-azext-azureauth': ^6.1.0-alpha.1
+  '@microsoft/vscode-processutils': ^0.2.2
+  '@vscode/extension-telemetry': ^1.5.1
+  inversify: ^8.1.0
