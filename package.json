@@ -29,7 +29,6 @@
         "@microsoft/vscode-azext-eng": "^1.1.0-alpha.1",
         "@types/node": "24.x",
         "@types/vscode": "1.120.0",
-        "@typescript/native-preview": "^7.0.0-dev.20260604.1",
-        "which": "catalog:"
+        "@typescript/native-preview": "^7.0.0-dev.20260604.1"
     }
 }

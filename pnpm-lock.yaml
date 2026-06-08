@@ -38,9 +38,6 @@ importers:
       '@typescript/native-preview':
         specifier: ^7.0.0-dev.20260604.1
         version: 7.0.0-dev.20260604.1
-      which:
-        specifier: 'catalog:'
-        version: 5.0.0
 
   extensions/vscode-azure:
     dependencies:
