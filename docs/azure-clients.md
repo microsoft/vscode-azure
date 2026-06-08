@@ -178,7 +178,7 @@ export type Registry = SdkRegistry;
 export type Sku = SdkSku;
 
 // In SubscriptionClient.ts — direct re-export
-export type { Location } from '@azure/arm-resources-subscriptions';
+export type { Location } from '@azure/arm-resources-subscriptions/models';
 ```
 
 When adding a new client or exposing a new SDK type:

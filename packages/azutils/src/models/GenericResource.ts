@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { GenericResource as SdkGenericResource } from '@azure/arm-resources';
+import type { GenericResource as SdkGenericResource } from '@azure/arm-resources/models';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { WithRequired } from '@microsoft/vscode-azure-utils';
 
