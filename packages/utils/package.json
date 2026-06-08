@@ -44,13 +44,13 @@
         ]
     },
     "dependencies": {
-        "@microsoft/vscode-processutils": "^0.2.2",
+        "@microsoft/vscode-processutils": "catalog:",
         "vscode-uri": "^3.1.0",
         "which": "^5.0.0"
     },
     "devDependencies": {
         "@types/which": "^3.0.4",
-        "@vscode/extension-telemetry": "*",
-        "inversify": "*"
+        "@vscode/extension-telemetry": "catalog:",
+        "inversify": "catalog:"
     }
 }

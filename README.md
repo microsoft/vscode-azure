@@ -24,7 +24,7 @@ We are open to all ideas and we want to get rid of bugs! Use the Issues section 
 To contribute bug fixes, features, or design changes:
   * Clone the repository locally and open in VS Code.
   * Install [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint), [TypeScript Native Preview](https://marketplace.visualstudio.com/items?itemName=typescriptteam.native-preview) and [esbuild Problem Matchers](https://marketplace.visualstudio.com/items?itemName=connor4312.esbuild-problem-matchers) for Visual Studio Code.
-  * Open the terminal (<kbd>Ctrl</kbd>+ <kbd>\`</kbd> by default) and run `npm install`.
+  * Open the terminal (<kbd>Ctrl</kbd>+ <kbd>\`</kbd> by default) and run `pnpm install`.
   * To build, open the Command Palette (<kbd>F1</kbd> by default) and type in `Tasks: Run Build Task`.
   * Debug: press <kbd>F5</kbd> (by default) to start debugging the extension.
 

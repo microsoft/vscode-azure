@@ -95,11 +95,19 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 ## How to Lint, Build, and Test
 
 * Before submitting PRs, always lint, build, and test locally to catch errors early
-* Run `npm run lint` to check for linting errors
-* Run `npm run build` to compile TypeScript to JavaScript
-* Run `npm run test` to execute tests
-* Run `npm run testcov` to run tests with code coverage (via c8)
-* For individual workspaces, use the above commands, adding `--workspace=<workspace-name>` to target a specific package
+* Run `pnpm run lint` to check for linting errors
+* Run `pnpm run build` to compile TypeScript to JavaScript
+* Run `pnpm run test` to execute tests
+* Run `pnpm run testcov` to run tests with code coverage (via c8)
+* For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
+
+
+## Managing Dependencies
+
+* This is a pnpm workspace; its configuration lives in `pnpm-workspace.yaml`.
+* When a dependency is used by more than one workspace package, add it to the pnpm `catalog:` in `pnpm-workspace.yaml` and reference it from each `package.json` with the `"catalog:"` specifier. This keeps every package on a single, consistent version.
+* Keep dependencies that are only used by a single package as a direct version specifier in that package's `package.json` -- don't add them to the catalog, since a catalog entry provides no dedup benefit for a single consumer.
+* After changing any dependency versions or catalog entries, run `pnpm install` to update `pnpm-lock.yaml`, then build to confirm nothing broke.
 
 
 ## Writing Tests
