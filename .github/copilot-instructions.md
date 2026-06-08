@@ -102,6 +102,14 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
 
 
+## Managing Dependencies
+
+* This is a pnpm workspace; its configuration lives in `pnpm-workspace.yaml`.
+* When a dependency is used by more than one workspace package, add it to the pnpm `catalog:` in `pnpm-workspace.yaml` and reference it from each `package.json` with the `"catalog:"` specifier. This keeps every package on a single, consistent version.
+* Keep dependencies that are only used by a single package as a direct version specifier in that package's `package.json` -- don't add them to the catalog, since a catalog entry provides no dedup benefit for a single consumer.
+* After changing any dependency versions or catalog entries, run `pnpm install` to update `pnpm-lock.yaml`, then build to confirm nothing broke.
+
+
 ## Writing Tests
 
 * Use `createMockCodeContext()` or `createMockVsCode()` from `@microsoft/vscode-azure-utils/testing` instead of hand-rolling `IVsCode`, `IExtensionContext`, or `ICodeContext` mocks. If the mock needs new capabilities, add them to `MockVsCode.ts` in the utils package.
