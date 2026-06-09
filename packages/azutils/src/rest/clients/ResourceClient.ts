@@ -3,15 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type {
-    ResourceGroupsListOptionalParams,
-    ResourcesListByResourceGroupOptionalParams,
-} from '@azure/arm-resources';
-/* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
-import { type ResourceManagementClientOptionalParams, type ResourceManagementContext, createResourceManagement } from '@azure/arm-resources/api';
-import { list as sdkListResourceGroups } from '@azure/arm-resources/api/resourceGroups';
-import { listByResourceGroup as sdkListByResourceGroup } from '@azure/arm-resources/api/resources';
-/* eslint-enable @typescript-eslint/no-restricted-imports */
+import { createResourceManagement, type ResourceManagementClientOptionalParams, type ResourceManagementContext } from '@azure/arm-resources/api';
+import { list as sdkListResourceGroups, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
+import { listByResourceGroup as sdkListByResourceGroup, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';

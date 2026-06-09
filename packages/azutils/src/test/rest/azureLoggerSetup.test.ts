@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- Test needs direct access to the global AzureLogger / getLogLevel helpers.
 import { AzureLogger, createClientLogger, getLogLevel, setLogLevel } from '@azure/logger';
 import { MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';

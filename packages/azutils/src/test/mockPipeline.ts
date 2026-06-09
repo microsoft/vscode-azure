@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { HttpClient, PipelineRequest, PipelineResponse } from '@azure/core-rest-pipeline';
-import { createHttpHeaders } from '@azure/core-rest-pipeline'; // eslint-disable-line @typescript-eslint/no-restricted-imports -- Test utility
+import { createHttpHeaders } from '@azure/core-rest-pipeline';
 
 /**
  * Creates a mock {@linkcode PipelineRequest} with sensible defaults.

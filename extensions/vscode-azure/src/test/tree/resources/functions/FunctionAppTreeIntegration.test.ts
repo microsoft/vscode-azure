@@ -96,7 +96,7 @@ describe('Function App Tree Integration (integration)', () => {
         const code = ctx.code;
 
         const { client: webAppClient, settings: backingSettings } = createMockWebAppClient(options?.initialSettings);
-        const webAppClientProvider = () => Promise.resolve(webAppClient);
+        const webAppClientProvider = () => webAppClient;
 
         // Data layer
         const dataTree = new DataItemTree<ConcreteAzureNode>(

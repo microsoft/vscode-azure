@@ -10,7 +10,7 @@ import {
     parseAzureResourceId,
     type ConcreteAzureNode, type GenericResource, type IWebAppClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, InflightMap, type DataProvider } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes, isFunctionApp } from './FunctionApp';
 
@@ -30,7 +30,7 @@ export type IFunctionAppDataProvider = FunctionAppDataProvider;
 @injectable()
 export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> {
 
-    private readonly clientCache = new InflightMap<IWebAppClient>();
+    private readonly clientCache = new Map<string, IWebAppClient>();
 
     /**
      * In-memory cache of app settings keyed by ARM resource ID.
@@ -87,7 +87,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
      * @throws if the resource's ARM ID does not contain a resource group segment.
      */
     public async addOrUpdateSetting(resource: GenericResource, key: string, value: string): Promise<void> {
-        const { client, resourceGroupName } = await this.resolveClient(resource);
+        const { client, resourceGroupName } = this.resolveClient(resource);
 
         const current = await client.webApps.listApplicationSettings(resourceGroupName, resource.name);
         const properties = { ...current.properties, [key]: value };
@@ -103,7 +103,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
      * @throws if the resource's ARM ID does not contain a resource group segment.
      */
     public async deleteSetting(resource: GenericResource, key: string): Promise<void> {
-        const { client, resourceGroupName } = await this.resolveClient(resource);
+        const { client, resourceGroupName } = this.resolveClient(resource);
 
         const current = await client.webApps.listApplicationSettings(resourceGroupName, resource.name);
         const remaining = Object.fromEntries(
@@ -116,7 +116,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
     }
 
     private async listAppSettings(resource: VirtualResource): Promise<ConcreteAzureNode[]> {
-        const { client, resourceGroupName } = await this.resolveClient(resource.azureResource);
+        const { client, resourceGroupName } = this.resolveClient(resource.azureResource);
 
         const settings = await client.webApps.listApplicationSettings(resourceGroupName, resource.azureResource.name);
         const properties = settings.properties ?? {};
@@ -131,8 +131,8 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
         }));
     }
 
-    private async resolveClient(resource: GenericResource): Promise<{ client: IWebAppClient; resourceGroupName: string }> {
-        const client = await this.getOrCreateClient(resource);
+    private resolveClient(resource: GenericResource): { client: IWebAppClient; resourceGroupName: string } {
+        const client = this.getOrCreateClient(resource);
         const { resourceGroup: resourceGroupName } = parseAzureResourceId(resource.id);
         if (!resourceGroupName) {
             throw new Error(`Cannot extract resource group name from resource ID: ${resource.id}`);
@@ -140,8 +140,13 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
         return { client, resourceGroupName };
     }
 
-    private getOrCreateClient(resource: GenericResource): Promise<IWebAppClient> {
-        return this.clientCache.getOrCreate(resource.subscription.subscriptionId, () => this.createClient(resource.subscription));
+    private getOrCreateClient(resource: GenericResource): IWebAppClient {
+        let client = this.clientCache.get(resource.subscription.subscriptionId);
+        if (!client) {
+            client = this.createClient(resource.subscription);
+            this.clientCache.set(resource.subscription.subscriptionId, client);
+        }
+        return client;
     }
 }
 

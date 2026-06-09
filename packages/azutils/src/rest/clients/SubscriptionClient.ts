@@ -3,13 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createSubscription, type SubscriptionClientOptionalParams, type SubscriptionContext } from '@azure/arm-resources-subscriptions/api';
+import { listLocations as sdkListLocations, type SubscriptionsListLocationsOptionalParams } from '@azure/arm-resources-subscriptions/api/subscriptions';
 import type {
     Location,
 } from '@azure/arm-resources-subscriptions/models';
-/* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
-import { createSubscription, type SubscriptionClientOptionalParams, type SubscriptionContext } from '@azure/arm-resources-subscriptions/api';
-import { listLocations as sdkListLocations, type SubscriptionsListLocationsOptionalParams } from '@azure/arm-resources-subscriptions/api/subscriptions';
-/* eslint-enable @typescript-eslint/no-restricted-imports */
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
