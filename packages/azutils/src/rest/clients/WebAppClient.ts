@@ -3,19 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { StringDictionary } from '@azure/arm-appservice/models';
-/* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
 import { type WebSiteManagementClientOptionalParams, type WebSiteManagementContext, createWebSiteManagement } from '@azure/arm-appservice/api';
 import { listApplicationSettings as sdkListApplicationSettings, updateApplicationSettings as sdkUpdateApplicationSettings } from '@azure/arm-appservice/api/webApps';
-/* eslint-enable @typescript-eslint/no-restricted-imports */
+import type { StringDictionary } from '@azure/arm-appservice/models';
 import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AsyncFactory, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { createAzureRestSubscriptionClient } from '../createAzureClient';
 
 /** Factory that creates an {@linkcode IWebAppClient} for a given subscription. */
 export const IWebAppClientProvider: ServiceIdentifier<IWebAppClientProvider> = Symbol.for('IWebAppClientProvider');
-export type IWebAppClientProvider = AsyncFactory<IWebAppClient, [AzureSubscription]>;
+export type IWebAppClientProvider = SyncFactory<IWebAppClient, [AzureSubscription]>;
 
 /**
  * Interface describing the App Service management APIs we use.
@@ -46,7 +44,7 @@ export class WebAppClient implements IWebAppClient {
         executor: IActionExecutor,
         subscription: AzureSubscription,
         options?: WebSiteManagementClientOptionalParams,
-    ): Promise<WebAppClient> {
+    ): WebAppClient {
         const context = createAzureRestSubscriptionClient(
             ctx,
             executor,
@@ -54,7 +52,7 @@ export class WebAppClient implements IWebAppClient {
             subscription,
             options,
         );
-        return Promise.resolve(new WebAppClient(context));
+        return new WebAppClient(context);
     }
 
     public get webApps(): IWebAppClient['webApps'] {

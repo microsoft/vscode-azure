@@ -24,7 +24,7 @@ describe('FunctionAppDataProvider (unit)', () => {
                 ),
             },
         };
-        const createClient = mock.fn(() => Promise.resolve(mockClient));
+        const createClient = mock.fn(() => mockClient);
         const provider = new FunctionAppDataProvider(executor, createClient);
         return { provider, mockClient, createClient };
     }

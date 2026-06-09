@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- Tiny dependency
 import { AzureLogger, getLogLevel, setLogLevel, type AzureLogLevel } from '@azure/logger';
 import { Disposable, type IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
