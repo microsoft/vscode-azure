@@ -92,6 +92,22 @@ describe('createAzureRestSubscriptionClient (unit)', () => {
         expect((client.opts as Record<string, unknown>).endpoint).to.equal('https://management.azure.com');
     });
 
+    it('should not set endpoint when using TokenCredential with explicit subscription ID', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
+
+        const client = createAzureRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            credential,
+            'my-sub-id',
+        ) as unknown as FakeSubResult;
+
+        expect((client.opts as Record<string, unknown>).endpoint).to.be.undefined;
+    });
+
     it('should add pipeline policies via additionalPolicies', () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
@@ -129,6 +145,81 @@ describe('createAzureRestSubscriptionClient (unit)', () => {
         const userAgentPrefix = client.opts?.userAgentOptions?.userAgentPrefix;
         expect(userAgentPrefix).to.include('test-publisher.test-extension/0.0.0-test');
     });
+
+    it('should concatenate user agent prefix with existing custom prefix', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+        const customOptions = {
+            userAgentOptions: {
+                userAgentPrefix: 'CustomClient/1.0.0',
+            },
+        } as unknown as RestClientOptions;
+
+        const client = createAzureRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            subscription,
+            customOptions,
+        ) as unknown as FakeSubResult;
+
+        const userAgentPrefix = client.opts?.userAgentOptions?.userAgentPrefix;
+        expect(userAgentPrefix).to.include('test-publisher.test-extension/0.0.0-test');
+        expect(userAgentPrefix).to.include('CustomClient/1.0.0');
+    });
+
+    it('should preserve custom additionalPolicies alongside defaults', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
+
+        const customPolicy = { name: 'CustomPolicy' };
+        const customOptions = {
+            additionalPolicies: [
+                { policy: customPolicy as any, position: 'perCall' as const },
+            ],
+        } as unknown as RestClientOptions;
+
+        const client = createAzureRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            credential,
+            'my-sub-id',
+            customOptions,
+        ) as unknown as FakeSubResult;
+
+        const policies = client.opts?.additionalPolicies ?? [];
+        const policyNames = policies.map(p => p.policy.name);
+
+        expect(policyNames).to.include('CustomPolicy');
+        expect(policyNames).to.include('DedupeRequestPolicy');
+    });
+
+    it('should verify perCall and perRetry policy positions', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+
+        const client = createAzureRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            subscription,
+        ) as unknown as FakeSubResult;
+
+        const policies = client.opts?.additionalPolicies ?? [];
+        const perCallPolicies = policies.filter(p => p.position === 'perCall').map(p => p.policy.name);
+        const perRetryPolicies = policies.filter(p => p.position === 'perRetry').map(p => p.policy.name);
+
+        expect(perCallPolicies).to.include('DedupeRequestPolicy');
+        expect(perCallPolicies).to.include('CorrelationIdPolicy');
+        expect(perCallPolicies).to.include('AcceptLanguagePolicy');
+
+        expect(perRetryPolicies).to.include('MFAChallengePolicy');
+        expect(perRetryPolicies).to.include('RemoveBOMPolicy');
+    });
 });
 
 describe('createAzureRestClient (unit)', () => {
@@ -147,6 +238,21 @@ describe('createAzureRestClient (unit)', () => {
         expect(client.credential).to.equal(subscription.credential);
     });
 
+    it('should accept a TokenCredential directly', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
+
+        const client = createAzureRestClient(
+            ctx,
+            executor,
+            typedFactory,
+            credential,
+        ) as unknown as FakeResult;
+
+        expect(client.credential).to.equal(credential);
+    });
+
     it('should set the endpoint from AzureSubscription.environment', () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
@@ -160,6 +266,21 @@ describe('createAzureRestClient (unit)', () => {
         ) as unknown as FakeResult;
 
         expect((client.opts as Record<string, unknown>).endpoint).to.equal('https://management.azure.com');
+    });
+
+    it('should not set endpoint when using TokenCredential directly', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
+
+        const client = createAzureRestClient(
+            ctx,
+            executor,
+            typedFactory,
+            credential,
+        ) as unknown as FakeResult;
+
+        expect((client.opts as Record<string, unknown>).endpoint).to.be.undefined;
     });
 
     it('should add pipeline policies via additionalPolicies', () => {
@@ -182,5 +303,95 @@ describe('createAzureRestClient (unit)', () => {
         expect(policyNames).to.include('AcceptLanguagePolicy');
         expect(policyNames).to.include('MFAChallengePolicy');
         expect(policyNames).to.include('RemoveBOMPolicy');
+    });
+
+    it('should set user agent prefix with extension ID and version', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+
+        const client = createAzureRestClient(
+            ctx,
+            executor,
+            typedFactory,
+            subscription,
+        ) as unknown as FakeResult;
+
+        const userAgentPrefix = client.opts?.userAgentOptions?.userAgentPrefix;
+        expect(userAgentPrefix).to.include('test-publisher.test-extension/0.0.0-test');
+    });
+
+    it('should concatenate user agent prefix with existing custom prefix', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
+        const customOptions = {
+            userAgentOptions: {
+                userAgentPrefix: 'CustomClient/1.0.0',
+            },
+        } as unknown as RestClientOptions;
+
+        const client = createAzureRestClient(
+            ctx,
+            executor,
+            typedFactory,
+            credential,
+            customOptions,
+        ) as unknown as FakeResult;
+
+        const userAgentPrefix = client.opts?.userAgentOptions?.userAgentPrefix;
+        expect(userAgentPrefix).to.include('test-publisher.test-extension/0.0.0-test');
+        expect(userAgentPrefix).to.include('CustomClient/1.0.0');
+    });
+
+    it('should preserve custom additionalPolicies alongside defaults', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
+
+        const customPolicy = { name: 'CustomPolicy' };
+        const customOptions = {
+            additionalPolicies: [
+                { policy: customPolicy as any, position: 'perCall' as const },
+            ],
+        } as unknown as RestClientOptions;
+
+        const client = createAzureRestClient(
+            ctx,
+            executor,
+            typedFactory,
+            credential,
+            customOptions,
+        ) as unknown as FakeResult;
+
+        const policies = client.opts?.additionalPolicies ?? [];
+        const policyNames = policies.map(p => p.policy.name);
+
+        expect(policyNames).to.include('CustomPolicy');
+        expect(policyNames).to.include('DedupeRequestPolicy');
+    });
+
+    it('should verify perCall and perRetry policy positions', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const credential: TokenCredential = { getToken: () => Promise.resolve(null) };
+
+        const client = createAzureRestClient(
+            ctx,
+            executor,
+            typedFactory,
+            credential,
+        ) as unknown as FakeResult;
+
+        const policies = client.opts?.additionalPolicies ?? [];
+        const perCallPolicies = policies.filter(p => p.position === 'perCall').map(p => p.policy.name);
+        const perRetryPolicies = policies.filter(p => p.position === 'perRetry').map(p => p.policy.name);
+
+        expect(perCallPolicies).to.include('DedupeRequestPolicy');
+        expect(perCallPolicies).to.include('CorrelationIdPolicy');
+        expect(perCallPolicies).to.include('AcceptLanguagePolicy');
+
+        expect(perRetryPolicies).to.include('MFAChallengePolicy');
+        expect(perRetryPolicies).to.include('RemoveBOMPolicy');
     });
 });
