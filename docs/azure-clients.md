@@ -13,23 +13,56 @@ Four factory functions in `createAzureClient.ts` create Azure SDK clients with c
 | `createAzureRestClient` | REST-style `@azure-rest/core-client` | No |
 | `createAzureRestSubscriptionClient` | REST-style `@azure-rest/core-client` | Yes |
 
-All four accept `ICodeContext` and `IActionExecutor` (for telemetry context and user agent) and inject the same set of pipeline policies. Usage:
+All four accept `ICodeContext` and `IActionExecutor` (for telemetry context and user agent) and inject the same set of pipeline policies.
+
+### Credential Handling
+
+REST-style functions (`createAzureRestClient` and `createAzureRestSubscriptionClient`) accept either an `AzureSubscription` or raw credential + arguments:
 
 ```typescript
-// Classic SDK (constructor-based)
-const client = createAzureSubscriptionClient(
+// With AzureSubscription (environment endpoint is set automatically)
+const client = createAzureRestSubscriptionClient(
     ctx, executor,
-    ResourceManagementClient,     // SDK class constructor
-    subscription.credential,
-    subscription.subscriptionId,
+    createContainerRegistryManagement,
+    subscription,  // AzureSubscription object
 );
 
-// REST-style SDK (factory-function-based)
+// With TokenCredential (no endpoint set; caller-provided options used as-is)
 const context = createAzureRestSubscriptionClient(
     ctx, executor,
-    createContainerRegistryManagement, // SDK factory function
-    subscription.credential,
-    subscription.subscriptionId,
+    createContainerRegistryManagement,
+    credential,    // TokenCredential
+    subscriptionId, // string
+    options,       // optional ClientOptions
+);
+```
+
+**Endpoint behavior:** When an `AzureSubscription` is provided, its `environment.resourceManagerEndpointUrl` is used automatically. When a `TokenCredential` is provided directly, no endpoint is set unless explicitly passed in `options`.
+
+### User Agent Prefix
+
+All factory functions set a `userAgentPrefix` that includes the extension's ID and version. If the caller provides a custom `userAgentPrefix` in options, both prefixes are concatenated:
+
+```typescript
+// Resulting user agent: "my-publisher.my-extension/1.0.0 CustomClient/2.0.0"
+const client = createAzureRestClient(
+    ctx, executor, factory, credential,
+    { userAgentOptions: { userAgentPrefix: 'CustomClient/2.0.0' } }
+);
+```
+
+### Custom Policies
+
+Callers can provide custom pipeline policies via `options.additionalPolicies`, which are preserved and placed **before** the standard factory policies:
+
+```typescript
+const client = createAzureRestClient(
+    ctx, executor, factory, credential,
+    {
+        additionalPolicies: [
+            { policy: myPolicy, position: 'perCall' }
+        ]
+    }
 );
 ```
 

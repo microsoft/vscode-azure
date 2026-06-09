@@ -23,8 +23,13 @@ let azureAuth: typeof import('@microsoft/vscode-azext-azureauth') | undefined;
  * Applies the standard set of pipeline policies (see
  * {@linkcode DedupeRequestPolicy}, {@linkcode CorrelationIdPolicy},
  * {@linkcode AcceptLanguagePolicy}, {@linkcode MFAChallengePolicy},
- * {@linkcode RemoveBOMPolicy}) and a user-agent prefix derived from
- * the extension id/version.
+ * {@linkcode RemoveBOMPolicy}), a user-agent prefix derived from the
+ * extension id/version, and merges any caller-provided `options`.
+ *
+ * @param credentialOrSubscription - An {@linkcode AzureSubscription} (endpoint set from environment)
+ *   or a {@linkcode TokenCredential} (no endpoint set unless in `options`).
+ * @param options - Optional client options; custom policies and user agent prefixes are merged
+ *   with the factory defaults (factory policies come after custom policies).
  */
 export function createAzureRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
@@ -46,7 +51,17 @@ export function createAzureRestClient<TClient extends RestClient, TOptions exten
  * instead of a class constructor (e.g. `@azure/arm-containerregistry`).
  *
  * Applies the standard set of pipeline policies (see
- * {@linkcode createAzureRestClient}).
+ * {@linkcode createAzureRestClient}). Merges any caller-provided `options`
+ * with factory defaults (custom policies and user agent prefixes come first).
+ *
+ * @param credentialOrSubscription - An {@linkcode AzureSubscription} (endpoint set from environment)
+ *   or a {@linkcode TokenCredential} (no endpoint set unless in `options`).
+ * @param subscriptionIdOrOptions - When `credentialOrSubscription` is a `TokenCredential`, this is
+ *   the subscription ID string. When `credentialOrSubscription` is an `AzureSubscription`, this is
+ *   the optional `options` parameter. If a `TokenCredential` is used, passing an empty subscription
+ *   ID string raises a `TypeError`.
+ * @param optionsOrUndefined - Optional client options (only used when `credentialOrSubscription`
+ *   is an `AzureSubscription`); custom policies and user agent prefixes are merged with factory defaults.
  */
 export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
