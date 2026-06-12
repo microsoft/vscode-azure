@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockDataItemTree, createMockSubscriptionProvider, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockDataItemTree, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -67,7 +67,6 @@ describe('CreateFunctionApp (unit)', () => {
 
         const armProvider = createMockArmProvider();
         const codeProvider = createMockCodeProvider();
-        const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
 
         const cmd = new CreateFunctionApp(
             createActionContext('test'),
@@ -80,7 +79,6 @@ describe('CreateFunctionApp (unit)', () => {
             azd,
             armProvider,
             codeProvider,
-            subscriptionProvider,
         );
 
         return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree };

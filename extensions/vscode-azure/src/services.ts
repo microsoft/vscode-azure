@@ -3,15 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription, ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
+import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { Activity } from './tree/activity/Activity';
 import type { WorkspaceNode } from './tree/workspace/WorkspaceNode';
-
-/** Identifier for the Azure subscription provider */
-export const IAzureSubscriptionProvider: ServiceIdentifier<IAzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
 
 // #region Azure resource tree and view identifiers
 

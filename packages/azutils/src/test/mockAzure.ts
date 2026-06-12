@@ -136,22 +136,10 @@ export function makeVirtualResource(overrides?: Partial<VirtualResource>): Virtu
 }
 
 /** Options for overriding mock account/tenant/subscription data defaults. */
-export interface MockSubscriptionProviderOptions {
+export interface MockAccountDataProviderOptions {
     readonly accounts?: AzureAccount[];
     readonly tenants?: AzureTenant[];
     readonly subscriptions?: AzureSubscription[];
-}
-
-/**
- * Creates a mock subscription provider exposing `getAvailableSubscriptions`,
- * matching the extension's command-consumer service shape. The method is wrapped
- * with `mock.fn()` from `node:test` so callers can assert call counts.
- */
-export function createMockSubscriptionProvider(options?: MockSubscriptionProviderOptions): { getAvailableSubscriptions: () => Promise<AzureSubscription[]> } {
-    const subscriptions = options?.subscriptions ?? [makeSubscription()];
-    return {
-        getAvailableSubscriptions: mock.fn(() => Promise.resolve(subscriptions)),
-    };
 }
 
 /**
@@ -162,7 +150,7 @@ export function createMockSubscriptionProvider(options?: MockSubscriptionProvide
  * {@linkcode DataProvider.getChildren getChildren} is wrapped with `mock.fn()`
  * so callers can assert call counts and arguments.
  */
-export function createMockAccountDataProvider(options?: MockSubscriptionProviderOptions): DataProvider<ConcreteAzureNode> {
+export function createMockAccountDataProvider(options?: MockAccountDataProviderOptions): DataProvider<ConcreteAzureNode> {
     const accounts = options?.accounts ?? [makeAccount()];
     const tenants = options?.tenants ?? [makeTenant()];
     const subscriptions = options?.subscriptions ?? [makeSubscription()];

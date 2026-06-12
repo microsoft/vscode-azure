@@ -9,9 +9,8 @@
 // so none of this code ends up in the main extension bundle.
 
 import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockAccountDataProvider, createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
-import { IAzureSubscriptionProvider } from '../services';
 import { createMockAcrClient } from '../test/tree/resources/acr/mockAcr';
 import { createMockResourceClient } from '../test/tree/resources/mockResourceClient';
 import type { ActivityStatus } from '../tree/activity/Activity';
@@ -125,12 +124,6 @@ export function applyMockData(container: Container): void {
         createMockAccountDataProvider({
             accounts: [account],
             tenants: [tenant],
-            subscriptions: [subscription],
-        }),
-    );
-
-    container.rebind(IAzureSubscriptionProvider).toConstantValue(
-        createMockSubscriptionProvider({
             subscriptions: [subscription],
         }),
     );

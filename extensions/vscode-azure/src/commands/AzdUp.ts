@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { findSubscriptionById } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
@@ -13,7 +14,7 @@ import { AzdProvisionStep } from '../azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../azd/wizard/ShowEndpointUrlStep';
-import { IAzureSubscriptionProvider, IAzureViewDataTree } from '../services';
+import { IAzureViewDataTree } from '../services';
 import { IArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
 import { ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
@@ -36,7 +37,6 @@ export class AzdUp implements ManagedCommand {
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
         @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
-        @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: IAzureSubscriptionProvider,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
     ) { }
@@ -57,7 +57,7 @@ export class AzdUp implements ManagedCommand {
                 new SelectIacFolderStep(this.actionContext, this.ctx, this.tempManager, this.azd),
             ],
             [
-                new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider, this.tempManager),
+                new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, (id) => findSubscriptionById(this.dataTree, id), this.tempManager),
                 new AzdDeployStep(this.actionContext, this.ctx.code, this.azd, this.codeProvider),
                 new ShowEndpointUrlStep(this.ctx, this.azd),
             ],

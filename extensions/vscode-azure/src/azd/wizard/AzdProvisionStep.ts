@@ -7,7 +7,6 @@ import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { CancellationError, delay, ExecuteStep, stringifyError, type ICodeContext, type IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import type { IAzureSubscriptionProvider } from '../../services';
 import type { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import type { IAzdService } from '../AzdService';
 import type { ITempDirManager } from '../TempDirManager';
@@ -17,6 +16,13 @@ import type { AzdWizardContext } from './AzdWizardContext';
 interface DeploymentIdEntry {
     readonly deploymentId: string;
 }
+
+/**
+ * Resolves a bare subscription id into a fully-populated
+ * {@linkcode AzureSubscription}, or `undefined` when it cannot be resolved.
+ * Typically backed by `findSubscriptionById` against the resource data tree.
+ */
+export type SubscriptionResolver = (subscriptionId: string) => Promise<AzureSubscription | undefined>;
 
 /** Interval in milliseconds between polls for the deployment ID file. */
 const pollIntervalMs = 3000;
@@ -34,7 +40,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         private readonly azd: IAzdService,
         private readonly output: IOutputChannel,
         private readonly armProvider: ArmDeploymentDataProvider,
-        private readonly subscriptionProvider: IAzureSubscriptionProvider,
+        private readonly subscriptionResolver: SubscriptionResolver,
         private readonly tempDirManager: ITempDirManager,
     ) {
         super();
@@ -147,8 +153,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
 
     private async resolveSubscription(subscriptionId: string): Promise<AzureSubscription | undefined> {
         try {
-            const subscriptions = await this.subscriptionProvider.getAvailableSubscriptions();
-            return subscriptions.find(s => s.subscriptionId.toLowerCase() === subscriptionId.toLowerCase());
+            return await this.subscriptionResolver(subscriptionId);
         } catch {
             this.output.debug(`[provision] failed to resolve subscription ${subscriptionId}`);
         }

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockSubscriptionProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -19,12 +19,11 @@ function createStep(options?: { subscriptionId?: string }) {
     const azd = createMockAzdService();
     const output = new MockOutputChannel('test');
     const armProvider = { trackDeployment: mock.fn() } as never;
-    const subscriptions = options?.subscriptionId
-        ? [makeSubscription({ subscriptionId: options.subscriptionId })]
-        : [];
-    const subscriptionProvider = createMockSubscriptionProvider({ subscriptions });
+    const sub = options?.subscriptionId ? makeSubscription({ subscriptionId: options.subscriptionId }) : undefined;
+    const subscriptionResolver = mock.fn((id: string) =>
+        Promise.resolve(sub?.subscriptionId.toLowerCase() === id.toLowerCase() ? sub : undefined));
     const tempDirManager = new TempDirManager(ctx);
-    const step = new AzdProvisionStep(ctx, azd, output, armProvider, subscriptionProvider, tempDirManager);
+    const step = new AzdProvisionStep(ctx, azd, output, armProvider, subscriptionResolver, tempDirManager);
     return {
         azd,
         step,

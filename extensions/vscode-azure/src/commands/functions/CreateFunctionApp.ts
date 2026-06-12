@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import { findSubscriptionById, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, ICodeContext, IOutputChannel, Wizard, type ExecuteStep } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzdService } from '../../azd/AzdService';
@@ -20,7 +20,7 @@ import { HydrateAzdInfoStep } from '../../azd/wizard/HydrateAzdInfoStep';
 import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
-import { IAzureSubscriptionProvider, IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
+import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
 import { IArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -52,7 +52,6 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
         @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
-        @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: IAzureSubscriptionProvider,
     ) { }
 
     /** @inheritdoc */
@@ -72,7 +71,7 @@ export class CreateFunctionApp implements ManagedCommand {
             new GenerateBicepStep(this.ctx, 'functionApp.bicep', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName', 'azdServiceName']),
             new GenerateAzureYamlStep(this.azd),
             new CreateAzdEnvStep(this.azd),
-            new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.subscriptionProvider, this.tempManager),
+            new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, (id) => findSubscriptionById(this.dataTree, id), this.tempManager),
         ];
 
         if (job === 'deploy') {

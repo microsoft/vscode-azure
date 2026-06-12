@@ -40,7 +40,7 @@ import { AzdAuthServer, IAzdAuthServer } from './azd/AzdAuthServer';
 import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { registerCommands } from './commands/registerCommands';
-import { IAzureSubscriptionProvider, pushDisposable } from './services';
+import { pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
 
@@ -126,10 +126,6 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(ICredentialFactory).toDynamicValue(context => {
         return createDefaultCredentialFactory(context.get(IVsCode), context.get(IOutputChannel));
     }).inSingletonScope();
-
-    container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
-        return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
-    }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ITempDirManager).to(TempDirManager).inSingletonScope().onActivation(pushDisposable);
 

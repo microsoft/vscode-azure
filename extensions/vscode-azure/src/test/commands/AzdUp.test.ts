@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockDataItemTree, createMockSubscriptionProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -23,7 +23,6 @@ describe('AzdUp (unit)', () => {
         const azd = createMockAzdService();
         const armProvider = createMockArmProvider();
         const codeProvider = createMockCodeProvider();
-        const subscriptionProvider = createMockSubscriptionProvider({ subscriptions: [] });
         const dataTree = createMockDataItemTree([sub]);
 
         if (options.workspaceFolders !== false) {
@@ -43,7 +42,7 @@ describe('AzdUp (unit)', () => {
 
         }
 
-        const cmd = new AzdUp(createActionContext('test'), ctx, output, azd, armProvider, codeProvider, subscriptionProvider, dataTree, new TempDirManager(ctx));
+        const cmd = new AzdUp(createActionContext('test'), ctx, output, azd, armProvider, codeProvider, dataTree, new TempDirManager(ctx));
         return { cmd, ctx, mockResult, azd, dataTree };
     }
 

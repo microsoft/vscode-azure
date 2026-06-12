@@ -56,7 +56,7 @@ The VS Code extension that wires everything together:
   - Resources: `AzureAccountDataProvider` (account/tenant/subscription), `GenericAzureDataProvider`/`ViewProvider` (resource groups + resources), `AcrDataProvider`/`ViewProvider`, `FunctionAppDataProvider`/`ViewProvider`
   - Workspace (local): `AzdWorkspaceDataProvider`/`ViewProvider`, `FunctionsWorkspaceDataProvider`/`ViewProvider`, `EmulatorsWorkspaceDataProvider`/`ViewProvider`
   - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`
-- **Services**: Extension-scoped DI identifiers (`IAzureSubscriptionProvider`, `ICredentialFactory`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)
+- **Services**: Extension-scoped DI identifiers (`ICredentialFactory`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)
 
 ## Activation Flow
 
