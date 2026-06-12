@@ -25,7 +25,8 @@ const account = makeAccount({ id: 'mock-account', label: 'Mock Account' });
 const tenant = makeTenant({ tenantId: 'mock-tenant', displayName: 'Mock Tenant', account });
 const subscription = makeSubscription({
     subscriptionId: 'mock-sub-1',
-    name: 'Mock Subscription',
+    displayName: 'Mock Subscription',
+    tenant,
     account,
 });
 

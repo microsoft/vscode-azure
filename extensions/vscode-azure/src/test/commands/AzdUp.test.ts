@@ -15,7 +15,7 @@ import { createMockAzdService } from '../azd/MockAzdService';
 import { createMockArmProvider, createMockCodeProvider } from '../tree/activity/MockActivityProviders';
 
 describe('AzdUp (unit)', () => {
-    const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });
+    const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
 
     function createCommand(options: { workspaceFolders?: boolean } = {}) {
         const { ctx, mock: mockResult } = createMockCodeContext();

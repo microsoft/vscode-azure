@@ -120,7 +120,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
 
             case isTenant(resource): {
-                const label = resource.displayName ?? resource.tenantId;
+                const label = resource.displayName;
                 const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.iconPath = new this.ctx.code.ThemeIcon('organization');
@@ -128,7 +128,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
 
             case isSubscription(resource): {
-                const item = new this.ctx.code.TreeItem(resource.name, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
+                const item = new this.ctx.code.TreeItem(resource.displayName, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
                 item.iconPath = getResourceTypeIconUri(this.ctx, SubscriptionArmType);

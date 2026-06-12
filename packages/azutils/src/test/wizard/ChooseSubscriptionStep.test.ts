@@ -13,8 +13,8 @@ import { createMockDataItemTree, createMockViewItemTree } from '../tree/mockTree
 
 const account = makeAccount();
 const tenant = makeTenant();
-const sub1 = makeSubscription({ subscriptionId: 'sub-1', name: 'Sub One' });
-const sub2 = makeSubscription({ subscriptionId: 'sub-2', name: 'Sub Two' });
+const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One' });
+const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two' });
 
 const accountId = AzureNodeId.from(account).toString();
 const tenantId = AzureNodeId.from(tenant).toString();

@@ -4,54 +4,50 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AccessToken, GetTokenOptions, TokenCredential } from '@azure/core-auth';
-import { Environment } from '@azure/ms-rest-azure-env';
 import type { IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
+import { getAuthProviderId, getConfiguredAzureEnv } from './Environment';
 
 /**
  * Options for constructing a {@linkcode VsCodeExtensionCredential}.
  */
 export interface VsCodeExtensionCredentialOptions {
     /**
-     * (Required) The namespace the credential will use to access VS Code APIs. Pass in
-     * `vscode.authentication` for easiest use.
+     * (Required) The VS Code namespace. Used to read the configured Azure
+     * environment (to select the auth provider for sovereign clouds), call the
+     * `authentication` API, and localize log messages.
      */
-    authentication: IVsCode['authentication'];
+    readonly code: IVsCode;
 
     /**
      * (Optional) The tenant ID to authenticate to. Defaults to the tenant of the currently signed-in account.
      */
-    tenantId?: string;
-
-    /**
-     * (Optional) The Azure environment to authenticate to. Defaults to `Azure`, the public Azure cloud.
-     */
-    environment?: Environment;
+    readonly tenantId?: string;
 
     /** (Optional) Output channel for auth lifecycle logging. */
-    output?: IOutputChannel;
-
-    /** (Optional) The VS Code namespace, used for localizing log messages. */
-    code?: IVsCode;
+    readonly output?: IOutputChannel;
 
     /**
      * (Optional) Options forwarded to {@linkcode vscode.authentication.getSession getSession}.
-     * Controls session creation behavior (e.g. `silent`, `createIfNone`).
+     * Controls session creation behavior (e.g. `silent`, `createIfNone`, `account`).
      */
-    sessionOptions?: vscode.AuthenticationGetSessionOptions;
+    readonly sessionOptions?: vscode.AuthenticationGetSessionOptions;
 }
-
-const PublicProviderId = 'microsoft' as const;
-const SovereignProviderId = 'microsoft-sovereign-cloud' as const;
-const DefaultEnvironment = Environment.AzureCloud;
 
 /**
  * A `TokenCredential` implementation that defers to the VS Code
  * `authentication` API to acquire Microsoft/Azure access tokens.
  *
- * Selects the `microsoft` auth provider for the public Azure cloud and
- * `microsoft-sovereign-cloud` for sovereign clouds based on
- * {@linkcode VsCodeExtensionCredentialOptions.environment}.
+ * The credential owns the decision of which authentication provider to use: it
+ * reads the configured Azure environment (the `microsoft-sovereign-cloud`
+ * setting) on every token request and selects the `microsoft` provider for the
+ * public cloud or `microsoft-sovereign-cloud` for sovereign / custom clouds.
+ *
+ * CAE and MFA step-up challenges are handled transparently: when the built-in
+ * `bearerTokenAuthenticationPolicy` re-invokes {@linkcode getToken} with
+ * {@linkcode GetTokenOptions.claims claims}, the credential forwards them to
+ * `getSession` as a `WWW-Authenticate` challenge so VS Code can satisfy the
+ * step-up.
  */
 export class VsCodeExtensionCredential implements TokenCredential {
     public constructor(private readonly options: VsCodeExtensionCredentialOptions) { }
@@ -61,41 +57,72 @@ export class VsCodeExtensionCredential implements TokenCredential {
      * authentication API. Returns `null` when no session is available.
      */
     public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
-        const scopesArray = Array.isArray(scopes) ? [...scopes] : [scopes];
+        const { code, output } = this.options;
+        const environment = getConfiguredAzureEnv(code);
+        const provider = getAuthProviderId(environment);
 
-        let provider: string;
-        if (!this.options.environment || this.options.environment.name === DefaultEnvironment.name) {
-            provider = PublicProviderId;
-        } else {
-            provider = SovereignProviderId;
-        }
+        const scopesArray = normalizeScopes(scopes, environment.managementEndpointUrl);
 
         const tenantId = options?.tenantId || this.options.tenantId;
         if (tenantId) {
             scopesArray.push(`VSCODE_TENANT:${tenantId}`);
         }
 
-        this.options.output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} scopes=${JSON.stringify(scopesArray)}`);
-        const session = await this.options.authentication.getSession(provider, scopesArray, this.options.sessionOptions);
+        // When the bearer-token policy hands us CAE/MFA claims, forward them to VS
+        // Code as a synthetic WWW-Authenticate challenge so it can step up the session.
+        const claims = options?.claims;
+        const scopesOrChallenge: string[] | vscode.AuthenticationWwwAuthenticateRequest = claims
+            ? { wwwAuthenticate: buildClaimsChallenge(claims), fallbackScopes: scopesArray }
+            : scopesArray;
+
+        output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} challenge=${claims ? 'true' : 'false'} scopes=${JSON.stringify(scopesArray)}`);
+        const session = await code.authentication.getSession(provider, scopesOrChallenge, this.options.sessionOptions);
 
         if (!session) {
             return null;
-        } else {
-            const { expiresOnTimestamp, refreshAfterTimestamp } = getTokenExpiry(session.idToken);
-
-            const scopes = JSON.stringify(scopesArray);
-            const msg = this.options.code?.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn={2}', provider, scopes, expiresOnTimestamp)
-                ?? `[auth] token acquired provider=${provider} scopes=${scopes} expiresOn=${expiresOnTimestamp}`;
-            this.options.output?.info(msg);
-
-            return {
-                token: session.accessToken,
-                expiresOnTimestamp,
-                refreshAfterTimestamp,
-                tokenType: 'Bearer',
-            };
         }
+
+        const { expiresOnTimestamp, refreshAfterTimestamp } = getTokenExpiry(session.idToken);
+
+        const scopesJson = JSON.stringify(scopesArray);
+        output?.info(code.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn={2}', provider, scopesJson, expiresOnTimestamp));
+
+        return {
+            token: session.accessToken,
+            expiresOnTimestamp,
+            refreshAfterTimestamp,
+            tokenType: 'Bearer',
+        };
     }
+}
+
+/**
+ * Normalize scopes to an array of `.default` resource scopes, falling back to
+ * the environment's management endpoint when none are provided.
+ */
+function normalizeScopes(scopes: string | string[], managementEndpointUrl: string): string[] {
+    let list = Array.isArray(scopes) ? [...scopes] : scopes ? [scopes] : [];
+    if (list.length === 0) {
+        list = [ensureEndingSlash(managementEndpointUrl)];
+    }
+
+    const normalized = list.map(scope => (scope.endsWith('.default') ? scope : `${scope}.default`));
+    return Array.from(new Set(normalized));
+}
+
+function ensureEndingSlash(value: string): string {
+    return value.endsWith('/') ? value : `${value}/`;
+}
+
+/**
+ * Build a synthetic `WWW-Authenticate` header value carrying a CAE/MFA claims
+ * challenge that VS Code's authentication provider can parse. The `claims`
+ * received from the bearer-token policy are the decoded challenge string; VS
+ * Code expects them base64-encoded in the header.
+ */
+function buildClaimsChallenge(claims: string): string {
+    const encoded = Buffer.from(claims, 'utf8').toString('base64');
+    return `Bearer error="insufficient_claims", claims="${encoded}"`;
 }
 
 /**

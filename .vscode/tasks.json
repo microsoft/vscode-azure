@@ -4,12 +4,12 @@
         {
             "label": "Extension: ESBuild+Watch",
             "type": "shell",
-            "command": "npm",
+            "command": "pnpm",
             "args": [
+                "--filter",
+                "vscode-azure",
                 "run",
-                "--workspace=extensions/vscode-azure",
                 "build:esbuild",
-                "--",
                 "--watch"
             ],
             "problemMatcher": "$esbuild-watch",
@@ -24,12 +24,12 @@
         {
             "label": "Extension: Check+Watch",
             "type": "shell",
-            "command": "npm",
+            "command": "pnpm",
             "args": [
+                "--filter",
+                "vscode-azure",
                 "run",
-                "--workspace=extensions/vscode-azure",
                 "build:check",
-                "--",
                 "--watch"
             ],
             "problemMatcher": {
@@ -51,12 +51,12 @@
         {
             "label": "azutils: Build+Watch",
             "type": "shell",
-            "command": "npm",
+            "command": "pnpm",
             "args": [
+                "--filter",
+                "@microsoft/vscode-azure-azutils",
                 "run",
-                "--workspace=packages/azutils",
                 "build",
-                "--",
                 "--watch",
             ],
             "group": {
@@ -77,12 +77,12 @@
         {
             "label": "utils: Build+Watch",
             "type": "shell",
-            "command": "npm",
+            "command": "pnpm",
             "args": [
+                "--filter",
+                "@microsoft/vscode-azure-utils",
                 "run",
-                "--workspace=packages/utils",
                 "build",
-                "--",
                 "--watch",
             ],
             "group": {

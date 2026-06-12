@@ -33,27 +33,32 @@ export function makeAccount(overrides?: Partial<AzureAccount>): AzureAccount {
  * {@linkcode makeAccount} instance.
  */
 export function makeTenant(overrides?: Partial<AzureTenant>): AzureTenant {
+    const account = makeAccount(overrides?.account);
     return {
         tenantId: 'test-tenant',
         displayName: 'Test Tenant',
-        account: makeAccount(),
         ...overrides,
+        environment: account.environment,
+        account,
     };
 }
 
 /**
  * Builds a mock {@linkcode AzureSubscription}. Default account and environment
- * come from {@linkcode makeAccount} and {@linkcode AzurePublicCloud}.
+ * come from {@linkcode makeAccount} and {@linkcode AzurePublicCloud}, and the
+ * default tenant from {@linkcode makeTenant}.
  */
 export function makeSubscription(overrides?: Partial<AzureSubscription>): AzureSubscription {
-    const account = makeAccount();
+    const account = makeAccount(overrides?.account);
+    const tenant = makeTenant({ account, ...overrides?.tenant });
     return {
         subscriptionId: 'test-sub',
-        tenantId: 'test-tenant',
-        name: 'Test Subscription',
-        account,
-        environment: defaultEnvironment,
+        displayName: 'Test Subscription',
         ...overrides,
+        tenant,
+        account,
+        tenantId: tenant.tenantId,
+        environment: tenant.environment,
     };
 }
 

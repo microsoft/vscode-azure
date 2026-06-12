@@ -16,7 +16,7 @@ import { createMockAzdService } from '../../azd/MockAzdService';
 import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
 
 describe('CreateFunctionApp (unit)', () => {
-    const sub = makeSubscription({ subscriptionId: 'sub-1', name: 'Test Sub' });
+    const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
     const subKey = AzureNodeId.from(sub).toString();
 
     function createCommand(options: { workspaceFolder?: boolean } = {}) {
