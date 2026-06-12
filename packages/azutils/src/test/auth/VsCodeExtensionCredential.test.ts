@@ -210,5 +210,20 @@ describe('VsCodeExtensionCredential (unit)', () => {
             const hasTenantScope = scopes.some(s => s.startsWith('VSCODE_TENANT:'));
             expect(hasTenantScope).to.be.false;
         });
+
+        it('should read the cloud configuration only once across repeated getToken calls', async () => {
+            const mock = createMockVsCode();
+            const credential = new VsCodeExtensionCredential({ code: mock.vscode });
+            mock.authentication.getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
+
+            const before = mock.workspace.getConfiguration.mock.callCount();
+            await credential.getToken('scope1');
+            await credential.getToken('scope2');
+            await credential.getToken('scope3');
+            const after = mock.workspace.getConfiguration.mock.callCount();
+
+            // The configured cloud is resolved once and cached for the credential's lifetime.
+            expect(after - before).to.equal(1);
+        });
     });
 });

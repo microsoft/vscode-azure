@@ -57,8 +57,13 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const abortCtl = new AbortController();
         const trackedIds = new Set<string>();
 
+        // The wizard may have already picked the target subscription. When set, the
+        // deployment is guaranteed to land in it (CreateAzdEnvStep provisions with
+        // exactly this subscription), so we can skip resolution entirely.
+        const knownSubscription = context.subscription;
+
         // Start polling in the background (fire-and-forget)
-        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal);
+        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal, knownSubscription);
 
         try {
             await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
@@ -67,7 +72,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         } finally {
             abortCtl.abort();
             // Final read to catch any entries written just before exit
-            await this.readAndTrack(deployIdFileUri, trackedIds);
+            await this.readAndTrack(deployIdFileUri, trackedIds, knownSubscription);
         }
     }
 
@@ -82,10 +87,10 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * still-running provision -- a brand new deployment is a brand new event
      * and should appear in the tree.
      */
-    private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal): Promise<void> {
+    private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal, knownSubscription?: AzureSubscription): Promise<void> {
         try {
             while (!signal.aborted) {
-                await this.readAndTrack(fileUri, trackedIds);
+                await this.readAndTrack(fileUri, trackedIds, knownSubscription);
                 await delay(pollIntervalMs, { signal });
             }
         } catch (e) {
@@ -101,7 +106,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * ignores missing files, parse errors, and subscription resolution
      * failures.
      */
-    private async readAndTrack(fileUri: vscode.Uri, trackedIds: Set<string>): Promise<void> {
+    private async readAndTrack(fileUri: vscode.Uri, trackedIds: Set<string>, knownSubscription?: AzureSubscription): Promise<void> {
         const entries = await this.readDeploymentIdFile(fileUri);
         for (const entry of entries) {
             if (trackedIds.has(entry.deploymentId)) {
@@ -112,7 +117,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
 
             try {
                 const { subscriptionId } = parseAzureResourceId(entry.deploymentId);
-                const subscription = await this.resolveSubscription(subscriptionId);
+                const subscription = await this.resolveSubscription(subscriptionId, knownSubscription);
                 if (subscription) {
                     this.armProvider.trackDeployment(entry.deploymentId, subscription);
                 }
@@ -151,7 +156,17 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         }
     }
 
-    private async resolveSubscription(subscriptionId: string): Promise<AzureSubscription | undefined> {
+    /**
+     * Resolve the {@linkcode AzureSubscription} for a deployment's subscription
+     * id. Prefers {@linkcode knownSubscription} when it matches (avoiding a tree
+     * lookup), otherwise falls back to the injected {@linkcode subscriptionResolver}.
+     * Returns `undefined` when resolution fails.
+     */
+    private async resolveSubscription(subscriptionId: string, knownSubscription?: AzureSubscription): Promise<AzureSubscription | undefined> {
+        if (knownSubscription?.subscriptionId.toLowerCase() === subscriptionId.toLowerCase()) {
+            return knownSubscription;
+        }
+
         try {
             return await this.subscriptionResolver(subscriptionId);
         } catch {

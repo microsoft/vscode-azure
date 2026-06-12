@@ -27,6 +27,7 @@ function createStep(options?: { subscriptionId?: string }) {
     return {
         azd,
         step,
+        subscriptionResolver,
         armProvider: armProvider as unknown as { trackDeployment: ReturnType<typeof mock.fn> },
         output,
         fs: mockResult.fs,
@@ -129,6 +130,58 @@ describe('AzdProvisionStep (unit)', () => {
             expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
             expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentId);
         });
+
+        it('should use context.subscription without calling the resolver when it matches', async () => {
+            const deploymentId = '/subscriptions/sub-ctx/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, subscriptionResolver, fs } = createStep();
+            const subscription = makeSubscription({ subscriptionId: 'sub-ctx' });
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                subscription,
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            expect(subscriptionResolver.mock.callCount()).to.equal(0);
+            expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.equal(subscription);
+        });
+
+        it('should fall back to the resolver when context.subscription does not match the deployment', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, subscriptionResolver, fs } = createStep({ subscriptionId: 'sub-1' });
+            // Context carries a different subscription than the deployment's.
+            const otherSubscription = makeSubscription({ subscriptionId: 'sub-other' });
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                subscription: otherSubscription,
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            expect(subscriptionResolver.mock.callCount()).to.be.greaterThan(0);
+            expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
+            expect((armProvider.trackDeployment.mock.calls[0].arguments[1] as { subscriptionId: string }).subscriptionId).to.equal('sub-1');
+        });
+
 
         it('should track multiple deployments from JSONL', async () => {
             const id1 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';

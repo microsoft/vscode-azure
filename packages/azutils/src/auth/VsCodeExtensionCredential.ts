@@ -6,7 +6,7 @@
 import type { AccessToken, GetTokenOptions, TokenCredential } from '@azure/core-auth';
 import type { IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import { getAuthProviderId, getConfiguredAzureEnv } from './Environment';
+import { getAuthProviderId, getConfiguredAzureEnv, type EnvironmentLike } from './Environment';
 
 /**
  * Options for constructing a {@linkcode VsCodeExtensionCredential}.
@@ -40,8 +40,11 @@ export interface VsCodeExtensionCredentialOptions {
  *
  * The credential owns the decision of which authentication provider to use: it
  * reads the configured Azure environment (the `microsoft-sovereign-cloud`
- * setting) on every token request and selects the `microsoft` provider for the
- * public cloud or `microsoft-sovereign-cloud` for sovereign / custom clouds.
+ * setting) once, on the first token request, and caches the resolved
+ * environment for its lifetime, deriving the provider id from it on each
+ * request. It selects the `microsoft` provider for the public cloud or
+ * `microsoft-sovereign-cloud` for sovereign / custom clouds. A cloud switch is
+ * rare and recreates the credential graph, so the per-instance cache stays correct.
  *
  * CAE and MFA step-up challenges are handled transparently: when the built-in
  * `bearerTokenAuthenticationPolicy` re-invokes {@linkcode getToken} with
@@ -50,6 +53,8 @@ export interface VsCodeExtensionCredentialOptions {
  * step-up.
  */
 export class VsCodeExtensionCredential implements TokenCredential {
+    private environment: EnvironmentLike | undefined;
+
     public constructor(private readonly options: VsCodeExtensionCredentialOptions) { }
 
     /**
@@ -58,10 +63,10 @@ export class VsCodeExtensionCredential implements TokenCredential {
      */
     public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
         const { code, output } = this.options;
-        const environment = getConfiguredAzureEnv(code);
-        const provider = getAuthProviderId(environment);
+        this.environment ??= getConfiguredAzureEnv(code);
+        const provider = getAuthProviderId(this.environment);
 
-        const scopesArray = normalizeScopes(scopes, environment.managementEndpointUrl);
+        const scopesArray = normalizeScopes(scopes, this.environment.managementEndpointUrl);
 
         const tenantId = options?.tenantId || this.options.tenantId;
         if (tenantId) {
@@ -97,8 +102,11 @@ export class VsCodeExtensionCredential implements TokenCredential {
 }
 
 /**
- * Normalize scopes to an array of `.default` resource scopes, falling back to
- * the environment's management endpoint when none are provided.
+ * Normalize scopes to an array of unique `.default` resource scopes, falling
+ * back to the environment's management endpoint when none are provided.
+ *
+ * Each scope that does not already end in `.default` has the suffix appended,
+ * and duplicates are removed.
  *
  * `managementEndpointUrl` is guaranteed to have no trailing slash (see
  * {@linkcode createEnvironment}), so the slash required by the AAD `.default`
