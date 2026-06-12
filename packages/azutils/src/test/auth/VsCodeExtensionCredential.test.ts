@@ -8,20 +8,60 @@ import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import { VsCodeExtensionCredential } from '../../auth/VsCodeExtensionCredential';
 
-function createCredential(options?: { tenantId?: string; cloud?: 'public' | 'china'; sessionOptions?: vscode.AuthenticationGetSessionOptions }) {
+interface CreateCredentialOptions {
+    readonly tenantId?: string;
+    readonly cloud?: 'public' | 'china';
+    readonly sessionOptions?: vscode.AuthenticationGetSessionOptions;
+    /**
+     * The session `getSession` should resolve to. Defaults to a minimal session
+     * with an access token. Pass `null` to simulate no available session.
+     */
+    readonly session?: Record<string, unknown> | null;
+}
+
+function createCredential(options?: CreateCredentialOptions) {
     const mock = createMockVsCode();
     if (options?.cloud === 'china') {
         mock.settings.set('microsoft-sovereign-cloud.environment', 'ChinaCloud');
     }
     const credential = new VsCodeExtensionCredential({ code: mock.vscode, tenantId: options?.tenantId, sessionOptions: options?.sessionOptions });
-    return { credential, getSession: mock.authentication.getSession };
+
+    const getSession = mock.authentication.getSession;
+    const session = options?.session === undefined ? { accessToken: 'tok' } : options.session;
+    if (session !== null) {
+        getSession.mock.mockImplementation(() => Promise.resolve(session as never));
+    }
+
+    return { credential, getSession, mock };
+}
+
+/**
+ * Build a fake JWT `idToken` (`header.payload.signature`) whose payload encodes
+ * the given claims. Set `base64url` to exercise base64url (rather than base64)
+ * payload decoding.
+ */
+function makeIdToken(claims: Record<string, unknown>, base64url = false): string {
+    let payload = Buffer.from(JSON.stringify(claims)).toString('base64');
+    if (base64url) {
+        payload = payload.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    return `header.${payload}.signature`;
+}
+
+/** Read the scopes argument passed to the most recent `getSession` call. */
+function lastScopes(getSession: ReturnType<typeof createCredential>['getSession']): string[] {
+    return getSession.mock.calls[0].arguments[1] as string[];
+}
+
+/** Read the session-options argument passed to the most recent `getSession` call. */
+function lastSessionOptions(getSession: ReturnType<typeof createCredential>['getSession']): vscode.AuthenticationGetSessionOptions {
+    return getSession.mock.calls[0].arguments[2]!;
 }
 
 describe('VsCodeExtensionCredential (unit)', () => {
     describe('getToken', () => {
         it('should use the "microsoft" provider for the default (public) cloud', async () => {
             const { credential, getSession } = createCredential();
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('https://management.azure.com/.default');
 
@@ -31,7 +71,6 @@ describe('VsCodeExtensionCredential (unit)', () => {
 
         it('should use the "microsoft-sovereign-cloud" provider for non-default environments', async () => {
             const { credential, getSession } = createCredential({ cloud: 'china' });
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('https://management.chinacloudapi.cn/.default');
 
@@ -40,7 +79,6 @@ describe('VsCodeExtensionCredential (unit)', () => {
 
         it('should use "microsoft" provider when no sovereign cloud is configured', async () => {
             const { credential, getSession } = createCredential({ cloud: 'public' });
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
 
@@ -49,47 +87,38 @@ describe('VsCodeExtensionCredential (unit)', () => {
 
         it('should pass scopes as an array (single scope)', async () => {
             const { credential, getSession } = createCredential();
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
 
-            const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            expect(scopes).to.deep.equal(['scope1.default']);
+            expect(lastScopes(getSession)).to.deep.equal(['scope1.default']);
         });
 
         it('should pass scopes as an array (multiple scopes)', async () => {
             const { credential, getSession } = createCredential();
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken(['scope1', 'scope2']);
 
-            const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            expect(scopes).to.deep.equal(['scope1.default', 'scope2.default']);
+            expect(lastScopes(getSession)).to.deep.equal(['scope1.default', 'scope2.default']);
         });
 
         it('should add VSCODE_TENANT scope when tenantId is set in options', async () => {
             const { credential, getSession } = createCredential({ tenantId: 'my-tenant' });
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
 
-            const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            expect(scopes).to.include('VSCODE_TENANT:my-tenant');
+            expect(lastScopes(getSession)).to.include('VSCODE_TENANT:my-tenant');
         });
 
         it('should add VSCODE_TENANT scope from GetTokenOptions.tenantId over constructor tenantId', async () => {
             const { credential, getSession } = createCredential({ tenantId: 'default-tenant' });
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1', { tenantId: 'override-tenant' });
 
-            const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            expect(scopes).to.include('VSCODE_TENANT:override-tenant');
+            expect(lastScopes(getSession)).to.include('VSCODE_TENANT:override-tenant');
         });
 
         it('should return null if getSession returns undefined', async () => {
-            const { credential } = createCredential();
-            // Default mock returns undefined
+            const { credential } = createCredential({ session: null });
 
             const result = await credential.getToken('scope1');
 
@@ -98,38 +127,32 @@ describe('VsCodeExtensionCredential (unit)', () => {
 
         it('should default to createIfNone when no session options are provided', async () => {
             const { credential, getSession } = createCredential();
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
 
-            const sessionOptions = getSession.mock.calls[0].arguments[2] as { createIfNone?: boolean };
-            expect(sessionOptions.createIfNone).to.equal(true);
+            expect(lastSessionOptions(getSession).createIfNone).to.equal(true);
         });
 
         it('should not set createIfNone when the caller requests silent acquisition', async () => {
             const { credential, getSession } = createCredential({ sessionOptions: { silent: true } });
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
 
-            const sessionOptions = getSession.mock.calls[0].arguments[2] as { createIfNone?: boolean; silent?: boolean };
+            const sessionOptions = lastSessionOptions(getSession);
             expect(sessionOptions.silent).to.equal(true);
             expect(sessionOptions.createIfNone).to.equal(undefined);
         });
 
         it('should let an explicit createIfNone:false override the default', async () => {
             const { credential, getSession } = createCredential({ sessionOptions: { createIfNone: false } });
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
 
-            const sessionOptions = getSession.mock.calls[0].arguments[2] as { createIfNone?: boolean };
-            expect(sessionOptions.createIfNone).to.equal(false);
+            expect(lastSessionOptions(getSession).createIfNone).to.equal(false);
         });
 
         it('should return an AccessToken when session is available', async () => {
-            const { credential, getSession } = createCredential();
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'my-token-value' } as never));
+            const { credential } = createCredential({ session: { accessToken: 'my-token-value' } });
 
             const result = await credential.getToken('scope1');
 
@@ -140,11 +163,8 @@ describe('VsCodeExtensionCredential (unit)', () => {
         });
 
         it('should extract expiresOnTimestamp from idToken exp claim', async () => {
-            const { credential, getSession } = createCredential();
             const exp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-            const payload = Buffer.from(JSON.stringify({ exp })).toString('base64');
-            const idToken = `header.${payload}.signature`;
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+            const { credential } = createCredential({ session: { accessToken: 'tok', idToken: makeIdToken({ exp }) } });
 
             const result = await credential.getToken('scope1');
 
@@ -153,12 +173,9 @@ describe('VsCodeExtensionCredential (unit)', () => {
         });
 
         it('should set refreshAfterTimestamp to 2/3 of remaining lifetime', async () => {
-            const { credential, getSession } = createCredential();
             const now = Date.now();
             const exp = Math.floor(now / 1000) + 3600;
-            const payload = Buffer.from(JSON.stringify({ exp })).toString('base64');
-            const idToken = `header.${payload}.signature`;
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+            const { credential } = createCredential({ session: { accessToken: 'tok', idToken: makeIdToken({ exp }) } });
 
             const result = await credential.getToken('scope1');
 
@@ -169,8 +186,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
         });
 
         it('should fall back to 0 when idToken is undefined', async () => {
-            const { credential, getSession } = createCredential();
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
+            const { credential } = createCredential();
 
             const result = await credential.getToken('scope1');
 
@@ -180,8 +196,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
         });
 
         it('should fall back to 0 when idToken is malformed', async () => {
-            const { credential, getSession } = createCredential();
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken: 'not-a-jwt' } as never));
+            const { credential } = createCredential({ session: { accessToken: 'tok', idToken: 'not-a-jwt' } });
 
             const result = await credential.getToken('scope1');
 
@@ -191,10 +206,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
         });
 
         it('should fall back to 0 when idToken payload has no exp claim', async () => {
-            const { credential, getSession } = createCredential();
-            const payload = Buffer.from(JSON.stringify({ sub: 'user' })).toString('base64');
-            const idToken = `header.${payload}.signature`;
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+            const { credential } = createCredential({ session: { accessToken: 'tok', idToken: makeIdToken({ sub: 'user' }) } });
 
             const result = await credential.getToken('scope1');
 
@@ -204,11 +216,8 @@ describe('VsCodeExtensionCredential (unit)', () => {
         });
 
         it('should handle an already-expired token by setting refreshAfterTimestamp to expiresOnTimestamp', async () => {
-            const { credential, getSession } = createCredential();
             const exp = Math.floor(Date.now() / 1000) - 60; // expired 1 minute ago
-            const payload = Buffer.from(JSON.stringify({ exp })).toString('base64');
-            const idToken = `header.${payload}.signature`;
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+            const { credential } = createCredential({ session: { accessToken: 'tok', idToken: makeIdToken({ exp }) } });
 
             const result = await credential.getToken('scope1');
 
@@ -218,13 +227,8 @@ describe('VsCodeExtensionCredential (unit)', () => {
         });
 
         it('should decode base64url-encoded idToken payloads', async () => {
-            const { credential, getSession } = createCredential();
             const exp = Math.floor(Date.now() / 1000) + 3600;
-            const json = JSON.stringify({ exp });
-            // Encode using base64url: replace + with -, / with _, strip padding
-            const payload = Buffer.from(json).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-            const idToken = `header.${payload}.signature`;
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok', idToken } as never));
+            const { credential } = createCredential({ session: { accessToken: 'tok', idToken: makeIdToken({ exp }, true) } });
 
             const result = await credential.getToken('scope1');
 
@@ -234,19 +238,15 @@ describe('VsCodeExtensionCredential (unit)', () => {
 
         it('should not add tenant scope when no tenantId is provided anywhere', async () => {
             const { credential, getSession } = createCredential();
-            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
 
-            const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            const hasTenantScope = scopes.some(s => s.startsWith('VSCODE_TENANT:'));
+            const hasTenantScope = lastScopes(getSession).some(s => s.startsWith('VSCODE_TENANT:'));
             expect(hasTenantScope).to.be.false;
         });
 
         it('should read the cloud configuration only once across repeated getToken calls', async () => {
-            const mock = createMockVsCode();
-            const credential = new VsCodeExtensionCredential({ code: mock.vscode });
-            mock.authentication.getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
+            const { credential, mock } = createCredential();
 
             const before = mock.workspace.getConfiguration.mock.callCount();
             await credential.getToken('scope1');
