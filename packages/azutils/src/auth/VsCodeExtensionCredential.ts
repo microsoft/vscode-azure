@@ -30,6 +30,10 @@ export interface VsCodeExtensionCredentialOptions {
     /**
      * (Optional) Options forwarded to {@linkcode vscode.authentication.getSession getSession}.
      * Controls session creation behavior (e.g. `silent`, `createIfNone`, `account`).
+     *
+     * When omitted, the credential defaults to `createIfNone: true` so a token
+     * request prompts interactive sign-in. Pass `silent: true` for
+     * non-interactive acquisition.
      */
     readonly sessionOptions?: vscode.AuthenticationGetSessionOptions;
 }
@@ -51,6 +55,11 @@ export interface VsCodeExtensionCredentialOptions {
  * {@linkcode GetTokenOptions.claims claims}, the credential forwards them to
  * `getSession` as a `WWW-Authenticate` challenge so VS Code can satisfy the
  * step-up.
+ *
+ * By default the credential requests interactive sign-in (`createIfNone: true`),
+ * so simply acquiring a token will prompt the user when no session exists.
+ * Callers wanting non-interactive acquisition pass `silent: true` via
+ * {@linkcode VsCodeExtensionCredentialOptions.sessionOptions}.
  */
 export class VsCodeExtensionCredential implements TokenCredential {
     private environment: EnvironmentLike | undefined;
@@ -59,7 +68,10 @@ export class VsCodeExtensionCredential implements TokenCredential {
 
     /**
      * Acquire an access token for the given scopes via the VS Code
-     * authentication API. Returns `null` when no session is available.
+     * authentication API. Prompts interactive sign-in by default (see
+     * {@linkcode resolveSessionOptions}). Returns `null` when no session is
+     * available (e.g. silent acquisition with no existing session, or the user
+     * cancels sign-in).
      */
     public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
         const { code, output } = this.options;
@@ -80,8 +92,10 @@ export class VsCodeExtensionCredential implements TokenCredential {
             ? { wwwAuthenticate: buildClaimsChallenge(claims), fallbackScopes: scopesArray }
             : scopesArray;
 
+        const sessionOptions = this.resolveSessionOptions();
+
         output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} challenge=${claims ? 'true' : 'false'} scopes=${JSON.stringify(scopesArray)}`);
-        const session = await code.authentication.getSession(provider, scopesOrChallenge, this.options.sessionOptions);
+        const session = await code.authentication.getSession(provider, scopesOrChallenge, sessionOptions);
 
         if (!session) {
             return null;
@@ -98,6 +112,26 @@ export class VsCodeExtensionCredential implements TokenCredential {
             refreshAfterTimestamp,
             tokenType: 'Bearer',
         };
+    }
+
+    /**
+     * Resolve the {@linkcode vscode.authentication.getSession getSession} options
+     * for a token request.
+     *
+     * Defaults to interactive sign-in (`createIfNone: true`) so that simply
+     * requesting a token will prompt the user when no session exists. Callers
+     * that need non-interactive acquisition pass `silent: true` in
+     * {@linkcode VsCodeExtensionCredentialOptions.sessionOptions}; because
+     * `createIfNone` and `silent` are mutually exclusive in the VS Code API, the
+     * `createIfNone` default is omitted in that case. Any other caller-provided
+     * options (including an explicit `createIfNone: false`) override the default.
+     */
+    private resolveSessionOptions(): vscode.AuthenticationGetSessionOptions | undefined {
+        const sessionOptions = this.options.sessionOptions;
+        if (sessionOptions?.silent) {
+            return sessionOptions;
+        }
+        return { createIfNone: true, ...sessionOptions };
     }
 }
 

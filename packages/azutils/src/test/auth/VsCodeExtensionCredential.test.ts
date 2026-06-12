@@ -5,14 +5,15 @@
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import type * as vscode from 'vscode';
 import { VsCodeExtensionCredential } from '../../auth/VsCodeExtensionCredential';
 
-function createCredential(options?: { tenantId?: string; cloud?: 'public' | 'china' }) {
+function createCredential(options?: { tenantId?: string; cloud?: 'public' | 'china'; sessionOptions?: vscode.AuthenticationGetSessionOptions }) {
     const mock = createMockVsCode();
     if (options?.cloud === 'china') {
         mock.settings.set('microsoft-sovereign-cloud.environment', 'ChinaCloud');
     }
-    const credential = new VsCodeExtensionCredential({ code: mock.vscode, tenantId: options?.tenantId });
+    const credential = new VsCodeExtensionCredential({ code: mock.vscode, tenantId: options?.tenantId, sessionOptions: options?.sessionOptions });
     return { credential, getSession: mock.authentication.getSession };
 }
 
@@ -93,6 +94,37 @@ describe('VsCodeExtensionCredential (unit)', () => {
             const result = await credential.getToken('scope1');
 
             expect(result).to.be.null;
+        });
+
+        it('should default to createIfNone when no session options are provided', async () => {
+            const { credential, getSession } = createCredential();
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
+
+            await credential.getToken('scope1');
+
+            const sessionOptions = getSession.mock.calls[0].arguments[2] as { createIfNone?: boolean };
+            expect(sessionOptions.createIfNone).to.equal(true);
+        });
+
+        it('should not set createIfNone when the caller requests silent acquisition', async () => {
+            const { credential, getSession } = createCredential({ sessionOptions: { silent: true } });
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
+
+            await credential.getToken('scope1');
+
+            const sessionOptions = getSession.mock.calls[0].arguments[2] as { createIfNone?: boolean; silent?: boolean };
+            expect(sessionOptions.silent).to.equal(true);
+            expect(sessionOptions.createIfNone).to.equal(undefined);
+        });
+
+        it('should let an explicit createIfNone:false override the default', async () => {
+            const { credential, getSession } = createCredential({ sessionOptions: { createIfNone: false } });
+            getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
+
+            await credential.getToken('scope1');
+
+            const sessionOptions = getSession.mock.calls[0].arguments[2] as { createIfNone?: boolean };
+            expect(sessionOptions.createIfNone).to.equal(false);
         });
 
         it('should return an AccessToken when session is available', async () => {

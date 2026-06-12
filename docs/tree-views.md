@@ -147,7 +147,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 | `AcrDataProvider` / `FunctionAppDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
 | `GenericAzureDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
 
-`AzureAccountDataProvider` lazily signs in, then lists accounts → tenants → subscriptions via the auth helpers in `azutils/src/auth/azureAuth.ts` (`signIn`, `listAccounts`, `listTenantsForAccount`, `listSubscriptionsForTenant`). It obtains tokens through the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes.
+`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes.
 
 ### Subscription / tenant filtering
 
