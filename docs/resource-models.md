@@ -30,6 +30,51 @@ Each variant has a type guard function:
 | `isGenericResource(node)` | GenericResource nodes |
 | `isVirtualResource(node)` | VirtualResource nodes |
 
+## Account / Tenant / Subscription
+
+`Account`, `Tenant`, and `Subscription` are the identity-layer node types, defined in `packages/azutils/src/auth/AzureSubscription.ts` (exported as `AzureAccount`, `AzureTenant`, `AzureSubscription`). They are produced by `AzureAccountDataProvider` (in the extension) and form the top three levels of the resources tree.
+
+```typescript
+type AzureAccount = Readonly<vscode.AuthenticationSessionAccountInformation> & {
+    readonly environment: EnvironmentLike; // the cloud this account belongs to
+};
+
+interface AzureTenant extends TenantIdDescription {
+    readonly account: AzureAccount;
+    readonly tenantId: string;
+}
+
+interface AzureSubscription {
+    readonly environment: EnvironmentLike;
+    readonly name: string;
+    readonly subscriptionId: string;
+    readonly tenantId: string;
+    readonly account: AzureAccount;
+}
+```
+
+**No credential on the subscription.** Unlike the removed `@microsoft/vscode-azext-azureauth` model, `AzureSubscription` carries no credential or authentication object — only the `environment` (an [`EnvironmentLike`](#environmentlike)) plus ids/name/account. Tokens are produced on demand via the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. See [Azure Client Wrappers — DI Integration](azure-clients.md#di-integration).
+
+## `EnvironmentLike`
+
+`EnvironmentLike` (in `packages/azutils/src/auth/Environment.ts`) replaces the deprecated `Environment` type from `@azure/ms-rest-azure-env`. It captures only the endpoints the extension actually uses:
+
+```typescript
+interface EnvironmentLike {
+    readonly name: string;
+    readonly isCustomCloud: boolean;
+    readonly resourceManagerEndpointUrl: string;
+    readonly managementEndpointUrl: string;
+    readonly portalUrl: string;
+    // string-in / string-out endpoint builders:
+    storageEndpoint(...): string;
+    containerRegistryEndpoint(...): string;
+    azureWebSitesEndpoint(...): string;
+}
+```
+
+Presets are provided for the three live clouds: `AzurePublicCloud`, `AzureUSGovernment`, and `AzureChinaCloud` (Azure Germany is deprecated and omitted). `getConfiguredAzureEnv(code)` reads the `microsoft-sovereign-cloud.{environment,customEnvironment}` setting to select the active cloud, and `getAuthProviderId(env)` maps it to the VS Code authentication provider id (`microsoft` or `microsoft-sovereign-cloud`). `createEnvironment` strips trailing slashes from the URL endpoints (`resourceManagerEndpointUrl`, `managementEndpointUrl`, `portalUrl`) so they match the Azure SDK convention and user-configured custom clouds are sanitized.
+
 ## `GenericResource`
 
 The base interface for all ARM resources (including resource groups):

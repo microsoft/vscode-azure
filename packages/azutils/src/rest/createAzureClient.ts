@@ -5,15 +5,12 @@
 
 import type { Client as RestClient, ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import type { AzureSubscription } from '../auth/AzureSubscription';
+import type { EnvironmentLike } from '../auth/Environment';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
 import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
-import { MFAChallengePolicy } from './pipeline/MFAChallengePolicy';
-import { RemoveBOMPolicy } from './pipeline/RemoveBOMPolicy';
-
-let azureAuth: typeof import('@microsoft/vscode-azext-azureauth') | undefined;
 
 /**
  * REST-style (`@azure-rest/core-client`) factory for SDKs whose
@@ -22,25 +19,28 @@ let azureAuth: typeof import('@microsoft/vscode-azext-azureauth') | undefined;
  *
  * Applies the standard set of pipeline policies (see
  * {@linkcode DedupeRequestPolicy}, {@linkcode CorrelationIdPolicy},
- * {@linkcode AcceptLanguagePolicy}, {@linkcode MFAChallengePolicy},
- * {@linkcode RemoveBOMPolicy}), a user-agent prefix derived from the
+ * {@linkcode AcceptLanguagePolicy}), a user-agent prefix derived from the
  * extension id/version, and merges any caller-provided `options`.
  *
- * @param credentialOrSubscription - An {@linkcode AzureSubscription} (endpoint set from environment)
- *   or a {@linkcode TokenCredential} (no endpoint set unless in `options`).
- * @param options - Optional client options; custom policies and user agent prefixes are merged
- *   with the factory defaults (factory policies come after custom policies).
+ * CAE and MFA step-up challenges are handled by the SDK's built-in
+ * `bearerTokenAuthenticationPolicy` together with the supplied
+ * {@linkcode TokenCredential} (see `VsCodeExtensionCredential`).
+ *
+ * @param credential - The token credential used to authenticate requests.
+ * @param environment - The Azure environment (cloud) whose ARM endpoint is used.
+ * @param options - Optional client options merged over the factory defaults.
  */
-export function createAzureRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
+export function createArmRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
     getClient: (credential: TokenCredential, options?: TOptions) => TClient,
-    credentialOrSubscription: TokenCredential | AzureSubscription,
+    credential: TokenCredential,
+    environment: EnvironmentLike,
     options?: TOptions,
 ): TClient {
-    const { credential, resolvedOptions } = resolveCredentialArgs<TOptions>(credentialOrSubscription, options);
+    const endpoint = environment.resourceManagerEndpointUrl;
     executor.output.debug(`[rest] create rest client ${getClient.name}`);
-    return getClient(credential, applyDefaults(ctx, executor, resolvedOptions));
+    return getClient(credential, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions));
 }
 
 /**
@@ -51,95 +51,31 @@ export function createAzureRestClient<TClient extends RestClient, TOptions exten
  * instead of a class constructor (e.g. `@azure/arm-containerregistry`).
  *
  * Applies the standard set of pipeline policies (see
- * {@linkcode createAzureRestClient}). Merges any caller-provided `options`
- * with factory defaults (custom policies and user agent prefixes come first).
+ * {@linkcode createArmRestClient}). The subscription ID and ARM endpoint are
+ * taken from the supplied {@linkcode AzureSubscription}, and any caller-provided
+ * `options` are merged over the factory defaults.
  *
- * @param credentialOrSubscription - An {@linkcode AzureSubscription} (endpoint set from environment)
- *   or a {@linkcode TokenCredential} (no endpoint set unless in `options`).
- * @param subscriptionIdOrOptions - When `credentialOrSubscription` is a `TokenCredential`, this is
- *   the subscription ID string. When `credentialOrSubscription` is an `AzureSubscription`, this is
- *   the optional `options` parameter. If a `TokenCredential` is used, passing an empty subscription
- *   ID string raises a `TypeError`.
- * @param optionsOrUndefined - Optional client options (only used when `credentialOrSubscription`
- *   is an `AzureSubscription`); custom policies and user agent prefixes are merged with factory defaults.
+ * @param credential - The token credential used to authenticate requests.
+ * @param subscription - The subscription whose ID and environment endpoint are used.
+ *   A subscription with an empty `subscriptionId` raises a `TypeError`.
+ * @param options - Optional client options merged over the factory defaults.
  */
-export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
-    ctx: ICodeContext,
-    executor: IActionExecutor,
-    getClient: (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
-    subscription: AzureSubscription,
-    options?: TOptions,
-): TClient;
-export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
+export function createArmRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
     getClient: (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
     credential: TokenCredential,
-    subscriptionId: string,
+    subscription: AzureSubscription,
     options?: TOptions,
-): TClient;
-export function createAzureRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
-    ctx: ICodeContext,
-    executor: IActionExecutor,
-    getClient: (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
-    credentialOrSubscription: TokenCredential | AzureSubscription,
-    subscriptionIdOrOptions?: string | TOptions,
-    optionsOrUndefined?: TOptions,
 ): TClient {
-    const { credential, subscriptionId, resolvedOptions } = resolveSubscriptionArgs<TOptions>(credentialOrSubscription, subscriptionIdOrOptions, optionsOrUndefined);
+    const subscriptionId = subscription.subscriptionId;
+    if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
+        throw new TypeError('Invalid arguments: a non-empty subscription ID string is required.');
+    }
+
+    const endpoint = subscription.environment.resourceManagerEndpointUrl;
     executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
-    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, resolvedOptions));
-}
-
-function isTokenCredential(value: TokenCredential | AzureSubscription): value is TokenCredential {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    return !!value && typeof value === 'object' && 'getToken' in value && typeof value.getToken === 'function';
-}
-
-function resolveCredentialArgs<TOptions>(
-    credentialOrSubscription: TokenCredential | AzureSubscription,
-    options?: TOptions,
-): { credential: TokenCredential; resolvedOptions: TOptions | undefined } {
-    if (isTokenCredential(credentialOrSubscription)) {
-        return { credential: credentialOrSubscription, resolvedOptions: options };
-    } else {
-        return {
-            credential: credentialOrSubscription.credential,
-            resolvedOptions: {
-                ...options,
-                // TODO: future: this won't work for non-ARM clients. Is that a problem?
-                endpoint: credentialOrSubscription.environment.resourceManagerEndpointUrl.replace(/\/+$/, ''),
-            } as TOptions,
-        };
-    }
-}
-
-function resolveSubscriptionArgs<TOptions>(
-    credentialOrSubscription: TokenCredential | AzureSubscription,
-    subscriptionIdOrOptions?: string | TOptions,
-    optionsOrUndefined?: TOptions,
-): { credential: TokenCredential; subscriptionId: string; resolvedOptions: TOptions | undefined } {
-    if (isTokenCredential(credentialOrSubscription)) {
-        if (typeof subscriptionIdOrOptions !== 'string' || subscriptionIdOrOptions.length === 0) {
-            throw new TypeError('Invalid arguments: when using a TokenCredential, the second argument must be a non-empty subscription ID string.');
-        }
-
-        return {
-            credential: credentialOrSubscription,
-            subscriptionId: subscriptionIdOrOptions,
-            resolvedOptions: optionsOrUndefined,
-        };
-    } else {
-        return {
-            credential: credentialOrSubscription.credential,
-            subscriptionId: credentialOrSubscription.subscriptionId,
-            resolvedOptions: {
-                ...subscriptionIdOrOptions as TOptions | undefined,
-                // TODO: future: this won't work for non-ARM clients. Is that a problem? Probably not since only ARM clients care about subscriptions?
-                endpoint: credentialOrSubscription.environment.resourceManagerEndpointUrl.replace(/\/+$/, ''),
-            } as TOptions,
-        };
-    }
+    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions));
 }
 
 function applyDefaults<TOptions extends RestClientOptions>(
@@ -168,17 +104,6 @@ function applyDefaults<TOptions extends RestClientOptions>(
             {
                 policy: new AcceptLanguagePolicy(ctx.code.env.language),
                 position: 'perCall',
-            },
-            {
-                policy: new MFAChallengePolicy(executor, async (request) => {
-                    azureAuth ??= await import('@microsoft/vscode-azext-azureauth');
-                    return azureAuth.getSessionFromVSCode(request);
-                }, options?.endpoint),
-                position: 'perRetry',
-            },
-            {
-                policy: new RemoveBOMPolicy(),
-                position: 'perRetry',
             },
         ],
     } satisfies RestClientOptions as TOptions;

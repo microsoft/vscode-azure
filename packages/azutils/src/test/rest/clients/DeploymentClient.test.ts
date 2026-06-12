@@ -6,7 +6,7 @@
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { DeploymentClient } from '../../../rest/clients/DeploymentClient';
-import { makeSubscription } from '../../mockAzure';
+import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('DeploymentClient (unit)', () => {
@@ -28,7 +28,7 @@ describe('DeploymentClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, deploymentBody),
         });
 
-        const client = DeploymentClient.create(ctx, executor, subscription, { httpClient });
+        const client = DeploymentClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
         const deployment = await client.deployments.getAtScope(
             '/subscriptions/test-sub/resourceGroups/rg1',
             'myDeploy',
@@ -55,7 +55,7 @@ describe('DeploymentClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, operationsBody),
         });
 
-        const client = DeploymentClient.create(ctx, executor, subscription, { httpClient });
+        const client = DeploymentClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
         const pages: unknown[][] = [];
         for await (const page of client.deploymentOperations.listAtScope(
             '/subscriptions/test-sub/resourceGroups/rg1',

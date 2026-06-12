@@ -118,7 +118,7 @@ Key patterns:
 - Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` for the `ActionExecutor` constructor
 - Use `Mock` from `node:test` to track call counts and arguments — prefer over manual `let callCount = 0` patterns
 - Use `makeVirtualResource()` from `@microsoft/vscode-azure-azutils/testing` instead of hand-rolling `VirtualResource` objects
-- For Azure environments in azutils tests, use `Environment.AzureCloud` from `@azure/ms-rest-azure-env` instead of hand-rolled environment objects
+- For Azure environments in azutils tests, use the `AzurePublicCloud` preset (or `AzureUSGovernment` / `AzureChinaCloud`) from `@microsoft/vscode-azure-azutils` instead of hand-rolled environment objects. Test credentials come from `makeCredential()` in `mockAzure.ts`.
 
 ### Driving Wizard UI in Tests
 
@@ -145,7 +145,7 @@ Note: intermediate items in the pick step get ` $(chevron-right)` appended to th
 ### Shared Test Fixtures (azutils)
 
 `packages/azutils/src/test/` provides shared helpers, exported from the `@microsoft/vscode-azure-azutils/testing` barrel:
-- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()`, `makeResourceGroup()`, `makeGenericResource()`, `makeVirtualGroup()`, `makeVirtualResource()` using `Environment.AzureCloud`
+- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()`, `makeCredential()`, `makeResourceGroup()`, `makeGenericResource()`, `makeVirtualGroup()`, `makeVirtualResource()` using the `AzurePublicCloud` preset; plus `createMockSubscriptionProvider()` and `createMockAccountDataProvider()`
 - `mockPipeline.ts` — `makeRequest()`, `makeResponse()` (using SDK's `createHttpHeaders`), and `MockHttpClient` for injecting into Azure SDK clients
 - `tree/mockTree.ts` — `createMockViewItemTree()`, `createMockDataItemTree()`, `createMockHierarchicalDataItemTree()` for testing `Choose*Step` classes and pick-based wizards
 

@@ -6,7 +6,7 @@
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { WebAppClient } from '../../../rest/clients/WebAppClient';
-import { makeSubscription } from '../../mockAzure';
+import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('WebAppClient (unit)', () => {
@@ -26,7 +26,7 @@ describe('WebAppClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, settingsBody),
         });
 
-        const client = WebAppClient.create(ctx, executor, subscription, { httpClient });
+        const client = WebAppClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
         const result = await client.webApps.listApplicationSettings('rg1', 'myapp');
 
         expect(result.properties).to.deep.equal({
@@ -53,7 +53,7 @@ describe('WebAppClient (unit)', () => {
             },
         });
 
-        const client = WebAppClient.create(ctx, executor, subscription, { httpClient });
+        const client = WebAppClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
         const result = await client.webApps.updateApplicationSettings('rg1', 'myapp', {
             properties: { greeting: 'updated' },
         });

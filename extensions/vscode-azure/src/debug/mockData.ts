@@ -9,7 +9,7 @@
 // so none of this code ends up in the main extension bundle.
 
 import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
 import { IAzureSubscriptionProvider } from '../services';
 import { createMockAcrClient } from '../test/tree/resources/acr/mockAcr';
@@ -17,6 +17,7 @@ import { createMockResourceClient } from '../test/tree/resources/mockResourceCli
 import type { ActivityStatus } from '../tree/activity/Activity';
 import { type AddChildOptions, ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import { IGenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
+import { IAzureAccountDataProvider } from '../tree/resources/AzureAccountDataProvider';
 
 // -- Mock data ----------------------------------------------------------------
 
@@ -119,10 +120,16 @@ const mockCodeDeployments: ReadonlyArray<{
 export function applyMockData(container: Container): void {
     // -- Rebind Azure providers with mock implementations ---------------------
 
-    container.rebind(IAzureSubscriptionProvider).toConstantValue(
-        createMockSubscriptionProvider({
+    container.rebind(IAzureAccountDataProvider).toConstantValue(
+        createMockAccountDataProvider({
             accounts: [account],
             tenants: [tenant],
+            subscriptions: [subscription],
+        }),
+    );
+
+    container.rebind(IAzureSubscriptionProvider).toConstantValue(
+        createMockSubscriptionProvider({
             subscriptions: [subscription],
         }),
     );

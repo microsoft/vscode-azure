@@ -4,40 +4,42 @@ Azure SDK client wrappers live in `packages/azutils/src/rest/`. They provide typ
 
 ## Factory Functions
 
-Four factory functions in `createAzureClient.ts` create Azure SDK clients with custom pipeline policies injected:
+Two REST-style factory functions in `createAzureClient.ts` create Azure SDK clients with custom pipeline policies injected:
 
 | Function | SDK Style | Subscription-Scoped? |
 |----------|-----------|---------------------|
-| `createAzureClient` | Classic `ServiceClient` | No |
-| `createAzureSubscriptionClient` | Classic `ServiceClient` | Yes |
-| `createAzureRestClient` | REST-style `@azure-rest/core-client` | No |
-| `createAzureRestSubscriptionClient` | REST-style `@azure-rest/core-client` | Yes |
+| `createArmRestClient` | REST-style `@azure-rest/core-client` | No |
+| `createArmRestSubscriptionClient` | REST-style `@azure-rest/core-client` | Yes |
 
-All four accept `ICodeContext` and `IActionExecutor` (for telemetry context and user agent) and inject the same set of pipeline policies.
+Both accept `ICodeContext`, `IActionExecutor` (for telemetry context and user agent), and a `TokenCredential`, and inject the same set of pipeline policies.
 
 ### Credential Handling
 
-REST-style functions (`createAzureRestClient` and `createAzureRestSubscriptionClient`) accept either an `AzureSubscription` or raw credential + arguments:
+Both functions take an explicit `TokenCredential` (produced by the credential-factory DI service `ICredentialFactory`, which by default builds a `VsCodeExtensionCredential`). The subscription-scoped factory also takes the `AzureSubscription` itself, and the non-subscription factory takes an `EnvironmentLike` — each factory derives the subscription ID and/or ARM endpoint internally, so callers don't compute endpoints:
 
 ```typescript
-// With AzureSubscription (environment endpoint is set automatically)
-const client = createAzureRestSubscriptionClient(
+// Subscription-scoped REST client — pass the AzureSubscription
+const client = createArmRestSubscriptionClient(
     ctx, executor,
     createContainerRegistryManagement,
-    subscription,  // AzureSubscription object
+    credential,     // TokenCredential from ICredentialFactory
+    subscription,   // AzureSubscription (empty subscriptionId throws TypeError)
+    options,        // optional ClientOptions
 );
 
-// With TokenCredential (no endpoint set; caller-provided options used as-is)
-const context = createAzureRestSubscriptionClient(
+// Non-subscription REST client — pass the environment
+const context = createArmRestClient(
     ctx, executor,
-    createContainerRegistryManagement,
-    credential,    // TokenCredential
-    subscriptionId, // string
-    options,       // optional ClientOptions
+    createSubscription,
+    credential,     // TokenCredential
+    environment,    // EnvironmentLike (its resourceManagerEndpointUrl is used)
+    options,        // optional ClientOptions
 );
 ```
 
-**Endpoint behavior:** When an `AzureSubscription` is provided, its `environment.resourceManagerEndpointUrl` is used automatically. When a `TokenCredential` is provided directly, no endpoint is set unless explicitly passed in `options`.
+**Endpoint behavior:** The factories set the SDK endpoint to `environment.resourceManagerEndpointUrl` — taken from `subscription.environment` for the subscription-scoped factory, or from the supplied `environment` for the non-subscription one. Endpoints are already stored without a trailing slash (`createEnvironment` strips them, which also sanitizes user-configured custom clouds), so the factory forwards the value as-is. The subscription-scoped factory also extracts `subscription.subscriptionId` (throwing a `TypeError` if it is empty). Concrete client wrappers (`ResourceClient`, `SubscriptionClient`, etc.) simply forward their `AzureSubscription`/`EnvironmentLike` to the factory.
+
+**CAE / MFA step-up:** Conditional Access Evaluation and MFA step-up challenges are handled by the SDK's built-in `bearerTokenAuthenticationPolicy` together with `VsCodeExtensionCredential`. The credential reads `GetTokenOptions.claims` and forwards them to VS Code's `getSession` as a synthetic `WWW-Authenticate` / claims challenge. There is no custom MFA policy.
 
 ### User Agent Prefix
 
@@ -45,7 +47,7 @@ All factory functions set a `userAgentPrefix` that includes the extension's ID a
 
 ```typescript
 // Resulting user agent: "my-publisher.my-extension/1.0.0 CustomClient/2.0.0"
-const client = createAzureRestClient(
+const client = createArmRestClient(
     ctx, executor, factory, credential,
     { userAgentOptions: { userAgentPrefix: 'CustomClient/2.0.0' } }
 );
@@ -56,7 +58,7 @@ const client = createAzureRestClient(
 Callers can provide custom pipeline policies via `options.additionalPolicies`, which are preserved and placed **before** the standard factory policies:
 
 ```typescript
-const client = createAzureRestClient(
+const client = createArmRestClient(
     ctx, executor, factory, credential,
     {
         additionalPolicies: [
@@ -68,15 +70,15 @@ const client = createAzureRestClient(
 
 ## Pipeline Policies
 
-Every client created through the factory functions gets five custom pipeline policies:
+Every client created through the factory functions gets three custom pipeline policies:
 
 | Policy | Position | Description |
 |--------|----------|-------------|
 | `DedupeRequestPolicy` | perCall | Deduplicates concurrent identical GET requests using `InflightMap`. If two concurrent calls hit the same URL, the second reuses the first's response (with a cloned response object). Streaming requests are excluded. |
 | `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command or tree operation that initiated them. The context is looked up via `IActionExecutor.currentContext` (backed by `AsyncLocalStorage`), so policies don't need `IActionContext` passed explicitly — it's established by whichever scope wraps the call (command execution or `DataItemTree` provider call). |
 | `AcceptLanguagePolicy` | perCall | Sets the `accept-language` header to VS Code's UI language (`vscode.env.language`), so ARM responses match the user's locale. |
-| `MFAChallengePolicy` | perRetry | Handles 401 responses with a `WWW-Authenticate` header by requesting a stepped-up token. Records `challenge` and `challengeSuccess` telemetry properties. |
-| `RemoveBOMPolicy` | perRetry | Strips a leading UTF-8 BOM (`U+FEFF`) from response body text, which some Azure endpoints include. |
+
+Authentication (including CAE/MFA step-up) is handled by the SDK's built-in `bearerTokenAuthenticationPolicy`, which is wired up by the SDK's own credential plumbing from the supplied `TokenCredential` — not added by these factories. There are no custom MFA or BOM-stripping policies.
 
 The factory also sets a `userAgentPrefix` combining the extension's ID and version with any caller-provided prefix.
 
@@ -138,7 +140,7 @@ interface IAcrClient {
 }
 ```
 
-Unlike the other clients, ACR uses `createAzureRestSubscriptionClient` because the `@azure/arm-containerregistry` SDK follows the newer REST-style pattern with `createContainerRegistryManagement` and free function operations.
+Unlike the other clients, ACR uses `createArmRestSubscriptionClient` because the `@azure/arm-containerregistry` SDK follows the newer REST-style pattern with `createContainerRegistryManagement` and free function operations.
 
 ### `SubscriptionClient`
 
@@ -146,15 +148,21 @@ Wraps `@azure/arm-resources-subscriptions` using the REST-style SDK pattern (fre
 
 ```typescript
 interface ISubscriptionClient {
+    readonly tenants: {
+        list(options?): Promise<TenantIdDescription[]>;
+    };
     readonly subscriptions: {
+        list(options?): Promise<Subscription[]>;
         listLocations(subscriptionId, options?): Promise<Location[]>;
     };
 }
 ```
 
+`create()` takes `(ctx, executor, credential, environment, options?)` — note it takes an `EnvironmentLike` (for the endpoint) rather than an `AzureSubscription`, since listing tenants/subscriptions happens before any specific subscription is known.
+
 Key behaviors:
 - **Static location cache**: Location lists are cached by subscription ID in a static `Map` across all instances, since locations rarely change.
-- Used by `ChooseLocationStep` to populate the location picker.
+- `tenants.list` / `subscriptions.list` back the account/tenant/subscription auth helpers (see [tree-views.md](./tree-views.md)); `subscriptions.listLocations` is used by `ChooseLocationStep` to populate the location picker.
 
 ## `toPages`
 
@@ -179,15 +187,22 @@ For classic `ServiceClient`-style SDKs (e.g. `@azure/arm-resources`), the contin
 
 ## DI Integration
 
-Client providers are registered as factory bindings in `extension.ts`:
+Client providers are registered as factory bindings in `extension.ts`. Each factory resolves a `TokenCredential` from the credential-factory DI service (`ICredentialFactory`) before constructing the client:
 
 ```typescript
 container.bind(IResourceClientProvider).toFactory(context => {
     const ctx = context.get(ICodeContext);
     const executor = context.get(IActionExecutor);
-    return (subscription) => ResourceClient.create(ctx, executor, subscription);
+    const credentialFactory = context.get(ICredentialFactory);
+    return (subscription) => ResourceClient.create(
+        ctx, executor,
+        credentialFactory({ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }),
+        subscription,
+    );
 });
 ```
+
+`ICredentialFactory` is bound in singleton scope to `createDefaultCredentialFactory(code, output)`, which produces `VsCodeExtensionCredential` instances. The credential owns sovereign-cloud detection and CAE/MFA claims handling, so client wrappers and the pipeline stay auth-agnostic.
 
 The resulting type is `SyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `IResourceClient` directly. This matches `ResourceClient.create(...)`, which is synchronous. The sibling `AsyncFactory<T, TArgs>` type is used for clients whose `create()` returns a promise. Both types live in `packages/utils/src/types/Factory.ts`. Commands and data providers inject the factory and call it with the relevant subscription:
 
@@ -210,8 +225,8 @@ Client wrappers **re-export** any Azure SDK types that appear in their public AP
 export type Registry = SdkRegistry;
 export type Sku = SdkSku;
 
-// In SubscriptionClient.ts — direct re-export
-export type { Location } from '@azure/arm-resources-subscriptions/models';
+// In SubscriptionClient.ts — re-export the imported SDK model types
+export type { Location, Subscription, TenantIdDescription };
 ```
 
 When adding a new client or exposing a new SDK type:

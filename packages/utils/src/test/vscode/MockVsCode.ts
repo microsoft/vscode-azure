@@ -130,6 +130,18 @@ export interface MockVsCodeResult {
     readonly configChangeEmitter: EventEmitter<{ affectsConfiguration(section: string): boolean }>;
 
     /**
+     * Fire this emitter to simulate a change in authentication sessions
+     * (e.g. sign-in / sign-out) for a given provider.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * m.sessionsChangeEmitter.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
+     * ```
+     */
+    readonly sessionsChangeEmitter: EventEmitter<vscode.AuthenticationSessionsChangeEvent>;
+
+    /**
      * Fire this emitter to simulate a workspace folder change.
      *
      * @example
@@ -254,6 +266,12 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(undefined),
     );
 
+    const getAccounts = mock.fn(
+        () => Promise.resolve([] as readonly vscode.AuthenticationSessionAccountInformation[]),
+    );
+
+    const sessionsChangeEmitter = new EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+
     const fs = new MockFileSystem();
     const workspaceFolders: vscode.WorkspaceFolder[] = [];
 
@@ -291,6 +309,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     );
     const authentication = {
         getSession,
+        getAccounts,
+        onDidChangeSessions: sessionsChangeEmitter.event,
     };
     const commands = {
         executeCommand,
@@ -393,6 +413,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspace,
         messageResponses,
         configChangeEmitter,
+        sessionsChangeEmitter,
         workspaceFoldersChangeEmitter,
         tasks,
         taskProcessEndEmitter,

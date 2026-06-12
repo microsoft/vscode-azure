@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { type ICodeContext, type IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
+import type { AzureSubscription } from '../../auth/AzureSubscription';
 import type { ConcreteAzureNodeTree } from '../../models/AzureNode';
 import type { ResourceGroup } from '../../models/Grouping';
 import { type ChooseResourceGroupContext, ChooseResourceGroupStep } from '../../wizard/ChooseResourceGroupStep';

@@ -3,15 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Environment } from '@azure/ms-rest-azure-env';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { VsCodeExtensionCredential } from '../../auth/VsCodeExtensionCredential';
 
-function createCredential(options?: { tenantId?: string; environment?: Environment }) {
-    const { vscode: code, authentication } = createMockVsCode();
-    const credential = new VsCodeExtensionCredential({ authentication: code.authentication, ...options });
-    return { credential, getSession: authentication.getSession };
+function createCredential(options?: { tenantId?: string; cloud?: 'public' | 'china' }) {
+    const mock = createMockVsCode();
+    if (options?.cloud === 'china') {
+        mock.settings.set('microsoft-sovereign-cloud.environment', 'ChinaCloud');
+    }
+    const credential = new VsCodeExtensionCredential({ code: mock.vscode, tenantId: options?.tenantId });
+    return { credential, getSession: mock.authentication.getSession };
 }
 
 describe('VsCodeExtensionCredential (unit)', () => {
@@ -27,7 +29,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
         });
 
         it('should use the "microsoft-sovereign-cloud" provider for non-default environments', async () => {
-            const { credential, getSession } = createCredential({ environment: Environment.ChinaCloud });
+            const { credential, getSession } = createCredential({ cloud: 'china' });
             getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('https://management.chinacloudapi.cn/.default');
@@ -35,8 +37,8 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(getSession.mock.calls[0].arguments[0]).to.equal('microsoft-sovereign-cloud');
         });
 
-        it('should use "microsoft" provider when environment is explicitly Azure public cloud', async () => {
-            const { credential, getSession } = createCredential({ environment: Environment.AzureCloud });
+        it('should use "microsoft" provider when no sovereign cloud is configured', async () => {
+            const { credential, getSession } = createCredential({ cloud: 'public' });
             getSession.mock.mockImplementation(() => Promise.resolve({ accessToken: 'tok' } as never));
 
             await credential.getToken('scope1');
@@ -51,7 +53,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
             await credential.getToken('scope1');
 
             const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            expect(scopes).to.deep.equal(['scope1']);
+            expect(scopes).to.deep.equal(['scope1.default']);
         });
 
         it('should pass scopes as an array (multiple scopes)', async () => {
@@ -61,7 +63,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
             await credential.getToken(['scope1', 'scope2']);
 
             const scopes = getSession.mock.calls[0].arguments[1] as string[];
-            expect(scopes).to.deep.equal(['scope1', 'scope2']);
+            expect(scopes).to.deep.equal(['scope1.default', 'scope2.default']);
         });
 
         it('should add VSCODE_TENANT scope when tenantId is set in options', async () => {

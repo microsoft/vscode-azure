@@ -3,6 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+export * from './auth/azureAuth';
+export * from './auth/AzureSubscription';
+export * from './auth/CredentialFactory';
+export * from './auth/Environment';
 export * from './auth/VsCodeExtensionCredential';
 export * from './models/AzureNode';
 export * from './models/AzureNodeId';

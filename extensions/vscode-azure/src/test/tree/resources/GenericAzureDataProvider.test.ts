@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { Disposable, EventEmitter } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -14,27 +13,19 @@ import { GenericAzureDataProvider } from '../../../tree/resources/GenericAzureDa
 describe('GenericAzureDataProvider (unit)', () => {
     const code = createMockVsCode();
 
-    function createProvider(subscriptionProvider?: Record<string, unknown>, clientFactory?: unknown) {
+    function createProvider(clientFactory?: unknown) {
         const { executor } = createTestActionExecutor();
-        const subProvider = {
-            signIn: mock.fn(() => Promise.resolve(true)),
-            getAccounts: mock.fn(() => Promise.resolve([])),
-            getTenantsForAccount: mock.fn(() => Promise.resolve([])),
-            getSubscriptionsForTenant: mock.fn(() => Promise.resolve([])),
-            onRefreshSuggested: () => Disposable.None,
-            ...subscriptionProvider,
-        };
         const createClient = clientFactory ?? mock.fn(() => ({}));
-        return new GenericAzureDataProvider(code.vscode, executor, createClient as never, subProvider as never);
+        return new GenericAzureDataProvider(code.vscode, executor, createClient as never);
     }
 
     describe('canHandle', () => {
-        it('should return true for account nodes', () => {
-            expect(createProvider().canHandle(makeAccount())).to.be.true;
+        it('should return false for account nodes', () => {
+            expect(createProvider().canHandle(makeAccount())).to.be.false;
         });
 
-        it('should return true for tenant nodes', () => {
-            expect(createProvider().canHandle(makeTenant())).to.be.true;
+        it('should return false for tenant nodes', () => {
+            expect(createProvider().canHandle(makeTenant())).to.be.false;
         });
 
         it('should return true for subscription nodes', () => {
@@ -61,37 +52,22 @@ describe('GenericAzureDataProvider (unit)', () => {
     });
 
     describe('getChildren', () => {
-        it('should sign in and return accounts at root', async () => {
-            const accounts = [makeAccount()];
-            const provider = createProvider({ getAccounts: () => Promise.resolve(accounts) });
-
-            const children = await provider.getChildren();
-            expect(children).to.deep.equal(accounts);
-        });
-
-        it('should return tenants for an account', async () => {
-            const account = makeAccount();
-            const tenants = [makeTenant()];
-            const provider = createProvider({ getTenantsForAccount: () => Promise.resolve(tenants) });
-
-            const children = await provider.getChildren(account);
-            expect(children).to.deep.equal(tenants);
-        });
-
-        it('should return subscriptions for a tenant', async () => {
-            const tenant = makeTenant();
-            const subs = [makeSubscription()];
-            const provider = createProvider({ getSubscriptionsForTenant: () => Promise.resolve(subs) });
-
-            const children = await provider.getChildren(tenant);
-            expect(children).to.deep.equal(subs);
+        it('should throw when called as a root provider', async () => {
+            const provider = createProvider();
+            let error: unknown;
+            try {
+                await provider.getChildren();
+            } catch (e) {
+                error = e;
+            }
+            expect((error as Error).message).to.include('not a root provider');
         });
 
         it('should return resource groups for a subscription', async () => {
             const sub = makeSubscription();
             const rgs = [{ id: 'rg1', name: 'rg1' }];
             const mockClient = { resourceGroups: { list: () => rgs } };
-            const provider = createProvider({}, () => mockClient);
+            const provider = createProvider(() => mockClient);
 
             const children = await provider.getChildren(sub);
             expect(children).to.deep.equal(rgs);
@@ -101,20 +77,21 @@ describe('GenericAzureDataProvider (unit)', () => {
             const rg = makeResourceGroup();
             const resources = [{ id: 'res1', name: 'res1' }];
             const mockClient = { resources: { listByResourceGroup: () => resources } };
-            const provider = createProvider({}, () => mockClient);
+            const provider = createProvider(() => mockClient);
 
             const children = await provider.getChildren(rg);
             expect(children).to.deep.equal(resources);
         });
 
-        it('should only sign in once across multiple calls', async () => {
-            const signIn = mock.fn(() => Promise.resolve(true));
-            const provider = createProvider({ signIn, getAccounts: () => Promise.resolve([]) });
+        it('should reuse a cached client across calls for the same subscription', async () => {
+            const sub = makeSubscription();
+            const createClient = mock.fn(() => ({ resourceGroups: { list: () => [] } }));
+            const provider = createProvider(createClient);
 
-            await provider.getChildren();
-            await provider.getChildren();
+            await provider.getChildren(sub);
+            await provider.getChildren(sub);
 
-            expect(signIn.mock.callCount()).to.equal(1);
+            expect(createClient.mock.callCount()).to.equal(1);
         });
 
         it('should pass configured page size to resource list calls', async () => {
@@ -125,7 +102,7 @@ describe('GenericAzureDataProvider (unit)', () => {
                     list: (options?: Record<string, unknown>) => { capturedOptions = options; return []; },
                 },
             };
-            const provider = createProvider({}, () => mockClient);
+            const provider = createProvider(() => mockClient);
 
             await withSettings(code, { [`${ConfigurationSection}.pageSize`]: 25 }, () => provider.getChildren(sub));
             expect(capturedOptions?.top).to.equal(25);
@@ -162,34 +139,6 @@ describe('GenericAzureDataProvider (unit)', () => {
             });
 
             expect(listener.mock.callCount()).to.equal(0);
-        });
-    });
-
-    describe('subscription provider refresh', () => {
-        it('should fire onDidChange and clear signInPromise when refresh is suggested', async () => {
-            const refreshEmitter = new EventEmitter<void>();
-            const signIn = mock.fn(() => Promise.resolve(true));
-            const provider = createProvider({
-                signIn,
-                getAccounts: () => Promise.resolve([]),
-                onRefreshSuggested: refreshEmitter.event,
-            });
-
-            // First call triggers sign-in
-            await provider.getChildren();
-            expect(signIn.mock.callCount()).to.equal(1);
-
-            const listener = mock.fn();
-            provider.onDidChange(listener);
-
-            // Fire refresh suggested
-            refreshEmitter.fire();
-
-            expect(listener.mock.callCount()).to.equal(1);
-
-            // Next getChildren should trigger sign-in again
-            await provider.getChildren();
-            expect(signIn.mock.callCount()).to.equal(2);
         });
     });
 });

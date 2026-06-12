@@ -9,7 +9,6 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - "@typescript/native-preview*"
   - "@microsoft/vscode-azext*"
-  - "@azure/arm-appservice@19.0.0" # TODO: Temporary
 publicHoistPattern:
   - "*eslint*"
   - "typescript"
@@ -18,7 +17,6 @@ publicHoistPattern:
   - "chai"
   - "@types/chai"
 catalog:
-  "@microsoft/vscode-azext-azureauth": ^6.1.0-alpha.1
   "@microsoft/vscode-processutils": ^0.2.2
   "@vscode/extension-telemetry": ^1.5.1
   inversify: ^8.1.0

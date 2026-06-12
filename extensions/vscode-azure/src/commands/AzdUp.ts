@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { IActionContext, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
@@ -37,7 +36,7 @@ export class AzdUp implements ManagedCommand {
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
         @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
-        @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
+        @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: IAzureSubscriptionProvider,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
     ) { }

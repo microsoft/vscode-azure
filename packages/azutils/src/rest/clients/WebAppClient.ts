@@ -6,10 +6,11 @@
 import { type WebSiteManagementClientOptionalParams, type WebSiteManagementContext, createWebSiteManagement } from '@azure/arm-appservice/api';
 import { listApplicationSettings as sdkListApplicationSettings, updateApplicationSettings as sdkUpdateApplicationSettings } from '@azure/arm-appservice/api/webApps';
 import type { StringDictionary } from '@azure/arm-appservice/models';
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { createAzureRestSubscriptionClient } from '../createAzureClient';
+import type { AzureSubscription } from '../../auth/AzureSubscription';
+import { createArmRestSubscriptionClient } from '../createAzureClient';
 
 /** Factory that creates an {@linkcode IWebAppClient} for a given subscription. */
 export const IWebAppClientProvider: ServiceIdentifier<IWebAppClientProvider> = Symbol.for('IWebAppClientProvider');
@@ -42,13 +43,15 @@ export class WebAppClient implements IWebAppClient {
     public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
+        credential: TokenCredential,
         subscription: AzureSubscription,
         options?: WebSiteManagementClientOptionalParams,
     ): WebAppClient {
-        const context = createAzureRestSubscriptionClient(
+        const context = createArmRestSubscriptionClient(
             ctx,
             executor,
             createWebSiteManagement,
+            credential,
             subscription,
             options,
         );

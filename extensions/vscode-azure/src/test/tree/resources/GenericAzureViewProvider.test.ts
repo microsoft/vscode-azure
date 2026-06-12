@@ -18,6 +18,7 @@ describe('GenericAzureViewProvider (unit)', () => {
     function createProvider(
         nodes?: ConcreteAzureNode[],
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
+        onGetChildren?: (node: ConcreteAzureNode) => void,
     ) {
         const { executor } = createTestActionExecutor();
         const allNodes = nodes ?? [];
@@ -34,6 +35,7 @@ describe('GenericAzureViewProvider (unit)', () => {
                     const allChildIds = new Set([...children.values()].flat().map(n => AzureNodeId.from(n).toString()));
                     return Promise.resolve(allNodes.filter(n => !allChildIds.has(AzureNodeId.from(n).toString())));
                 }
+                onGetChildren?.(node);
                 return Promise.resolve(children.get(node) ?? []);
             },
             loadAll: () => Promise.resolve(),
@@ -150,6 +152,104 @@ describe('GenericAzureViewProvider (unit)', () => {
             const roots = await withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.alwaysShowAccountNodes`]: true }, () => provider.getChildren());
             expect(roots).to.have.length(1);
             expect(AzureNodeId.parse(roots[0]).isAccountNodeId()).to.be.true;
+        });
+    });
+
+    describe('subscription filtering', () => {
+        const filterKey = 'azureResourceGroups.selectedSubscriptions';
+
+        it('should hide subscriptions not present in the filter', async () => {
+            const account = makeAccount();
+            const tenant = makeTenant({ tenantId: 'tenant-1' });
+            const sub1 = makeSubscription({ subscriptionId: 'sub-1', name: 'Sub 1', tenantId: 'tenant-1' });
+            const sub2 = makeSubscription({ subscriptionId: 'sub-2', name: 'Sub 2', tenantId: 'tenant-1' });
+            const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                [account, [tenant]],
+                [tenant, [sub1, sub2]],
+            ]);
+            const provider = createProvider([account, tenant, sub1, sub2], childrenMap);
+
+            const roots = await withSettings(mockCodeContext.mock, { [filterKey]: ['tenant-1/sub-1'] }, () => provider.getChildren());
+
+            expect(roots).to.have.length(1);
+            const parsed = AzureNodeId.parse(roots[0]);
+            expect(parsed.isSubscriptionNodeId()).to.be.true;
+            expect(roots[0]).to.contain('sub-1');
+        });
+
+        it('should hide tenants not present in the filter', async () => {
+            const account = makeAccount();
+            const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant 1' });
+            const tenant2 = makeTenant({ tenantId: 'tenant-2', displayName: 'Tenant 2' });
+            const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                [account, [tenant1, tenant2]],
+            ]);
+            // alwaysShowAccountNodes keeps the account level so tenants are the next level
+            const provider = createProvider([account, tenant1, tenant2], childrenMap);
+
+            const accountKey = AzureNodeId.from(account).toString();
+            const children = await withSettings(mockCodeContext.mock, { [filterKey]: ['tenant-1/sub-x'] }, () => provider.getChildren(accountKey));
+
+            expect(children).to.have.length(1);
+            expect(AzureNodeId.parse(children[0]).isTenantNodeId()).to.be.true;
+            expect(children[0]).to.contain('tenant-1');
+        });
+
+        it('should apply no filtering when the setting is empty', async () => {
+            const account = makeAccount();
+            const tenant = makeTenant({ tenantId: 'tenant-1' });
+            const sub1 = makeSubscription({ subscriptionId: 'sub-1', name: 'Sub 1', tenantId: 'tenant-1' });
+            const sub2 = makeSubscription({ subscriptionId: 'sub-2', name: 'Sub 2', tenantId: 'tenant-1' });
+            const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                [account, [tenant]],
+                [tenant, [sub1, sub2]],
+            ]);
+            const provider = createProvider([account, tenant, sub1, sub2], childrenMap);
+
+            const roots = await withSettings(mockCodeContext.mock, { [filterKey]: [] }, () => provider.getChildren());
+            expect(roots).to.have.length(2);
+        });
+
+        it('should not request subscriptions for a tenant excluded by the filter', async () => {
+            const account = makeAccount();
+            const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant 1' });
+            const tenant2 = makeTenant({ tenantId: 'tenant-2', displayName: 'Tenant 2' });
+            const sub1 = makeSubscription({ subscriptionId: 'sub-1', name: 'Sub 1', tenantId: 'tenant-1' });
+            const sub2 = makeSubscription({ subscriptionId: 'sub-2', name: 'Sub 2', tenantId: 'tenant-2' });
+            const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                [account, [tenant1, tenant2]],
+                [tenant1, [sub1]],
+                [tenant2, [sub2]],
+            ]);
+            const getChildrenSpy = mock.fn((_node: ConcreteAzureNode) => { /* noop */ });
+            const provider = createProvider([account, tenant1, tenant2, sub1, sub2], childrenMap, getChildrenSpy);
+
+            // Only tenant-1 is in the filter. The single account is skipped, then
+            // tenant-2 is filtered out, leaving tenant-1 as the lone tenant which
+            // gets auto-skipped -- listing only its subscriptions.
+            const roots = await withSettings(mockCodeContext.mock, { [filterKey]: ['tenant-1/sub-1'] }, () => provider.getChildren());
+
+            // The visible roots are tenant-1's subscriptions, never tenant-2's.
+            expect(roots).to.have.length(1);
+            expect(roots[0]).to.contain('sub-1');
+
+            // The invariant: we never asked the cache to list children for the
+            // filtered-out tenant (which would trigger an Azure subscription request).
+            const requestedNodes = getChildrenSpy.mock.calls.map(call => call.arguments[0]);
+            expect(requestedNodes).to.include(tenant1);
+            expect(requestedNodes).to.not.include(tenant2);
+        });
+
+        it('should fire onDidChange when the subscription filter setting changes', () => {
+            const provider = createProvider();
+            const listener = mock.fn();
+            provider.onDidChange(listener);
+
+            mockCodeContext.mock.configChangeEmitter.fire({
+                affectsConfiguration: (s: string) => s === filterKey,
+            });
+
+            expect(listener.mock.callCount()).to.equal(1);
         });
     });
 

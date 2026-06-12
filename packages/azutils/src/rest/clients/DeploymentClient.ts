@@ -13,10 +13,11 @@ import {
     type ProvisioningOperation as SdkProvisioningOperation,
     type ProvisioningState as SdkProvisioningState,
 } from '@azure/arm-resourcesdeployments/models';
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { createAzureRestSubscriptionClient } from '../createAzureClient';
+import type { AzureSubscription } from '../../auth/AzureSubscription';
+import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 /**
@@ -61,13 +62,15 @@ export class DeploymentClient implements IDeploymentClient {
     public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
+        credential: TokenCredential,
         subscription: AzureSubscription,
         options?: DeploymentsClientOptionalParams,
     ): DeploymentClient {
-        const context = createAzureRestSubscriptionClient(
+        const context = createArmRestSubscriptionClient(
             ctx,
             executor,
             createDeployments,
+            credential,
             subscription,
             options,
         );

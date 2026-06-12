@@ -331,7 +331,6 @@
         "tsx": "*"
     },
     "dependencies": {
-        "@microsoft/vscode-azext-azureauth": "catalog:",
         "@microsoft/vscode-azure-azutils": "workspace:*",
         "@microsoft/vscode-azure-utils": "workspace:*",
         "@microsoft/vscode-processutils": "catalog:",

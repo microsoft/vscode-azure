@@ -154,12 +154,32 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey}`);
             return node;
         });
-        this.rootsStaleAt = Date.now() + this.ttl;
+        this.rootsStaleAt = this.computeStaleAt(this.rootTtl(rootProviders));
         this.executor.output.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
 
         this.enrichAll(resources);
 
         return resources;
+    }
+
+    /**
+     * Determine the TTL (in milliseconds) to use for the root level. If any root
+     * provider defines {@linkcode DataProvider.getTtl}, the smallest such value is
+     * used; otherwise the tree's default TTL applies.
+     */
+    private rootTtl(rootProviders: DataProvider<T>[]): number {
+        const ttls = rootProviders
+            .filter(p => typeof p.getTtl === 'function')
+            .map(p => p.getTtl!()); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- filtered above
+        return ttls.length > 0 ? Math.min(...ttls) : this.ttl;
+    }
+
+    /**
+     * Compute an absolute staleness timestamp from a TTL. A TTL of `Infinity`
+     * yields `Infinity` (never stale); any finite TTL yields `Date.now() + ttl`.
+     */
+    private computeStaleAt(ttl: number): number {
+        return ttl === Infinity ? Infinity : Date.now() + ttl;
     }
 
     private async getBranchChildren(resource: T): Promise<T[]> {
@@ -180,7 +200,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         const provider = this.findProvider(resource);
         if (!provider) {
             node.children = [];
-            node.staleAt = Date.now() + this.ttl;
+            node.staleAt = this.computeStaleAt(this.ttl);
             this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=0 provider=<none>`);
             return [];
         }
@@ -213,7 +233,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             node.children = this.addChildNodes(result, node);
         }
 
-        node.staleAt = Date.now() + this.ttl;
+        node.staleAt = this.computeStaleAt(provider.getTtl?.(resource) ?? this.ttl);
         this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=${node.children.length} provider=${provider.constructor.name}`);
 
         return node.children.map(n => n.resource);

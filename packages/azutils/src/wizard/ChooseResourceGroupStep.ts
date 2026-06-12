@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import type { AzureSubscription } from '../auth/AzureSubscription';
 import {
     getLastPick, RecursivePickStep,
     type ExclusivePickManyOrCreate, type GenericPickOptions, type IOutputChannel, type ITreeItem, type PickClassification, type PickContext

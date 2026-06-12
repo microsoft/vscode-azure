@@ -3,17 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Environment } from '@azure/ms-rest-azure-env';
-import type { AzureAccount, AzureSubscription, AzureSubscriptionProvider, AzureTenant } from '@microsoft/vscode-azext-azureauth';
-import { EventEmitter } from '@microsoft/vscode-azure-utils';
+import type { AccessToken, TokenCredential } from '@azure/core-auth';
+import type { ChildResult, DataProvider } from '@microsoft/vscode-azure-utils';
 import { mock } from 'node:test';
+import type { AzureAccount, AzureSubscription, AzureTenant } from '../auth/AzureSubscription';
+import { AzurePublicCloud, type EnvironmentLike } from '../auth/Environment';
+import { isAccount, isTenant, type ConcreteAzureNode } from '../models/AzureNode';
 import type { GenericResource } from '../models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../models/Grouping';
 import type { VirtualResource } from '../models/VirtualResource';
 
-const defaultEnvironment = Object.assign(Object.create(Environment.AzureCloud) as Environment, {
-    isCustomCloud: false,
-});
+const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
 
 /**
  * Builds a mock {@linkcode AzureAccount} with sensible defaults.
@@ -42,9 +42,8 @@ export function makeTenant(overrides?: Partial<AzureTenant>): AzureTenant {
 }
 
 /**
- * Builds a mock {@linkcode AzureSubscription} with a stub `credential`
- * that returns a fixed token valid for one hour. Default account and
- * environment come from {@linkcode makeAccount} and `Environment.AzureCloud`.
+ * Builds a mock {@linkcode AzureSubscription}. Default account and environment
+ * come from {@linkcode makeAccount} and {@linkcode AzurePublicCloud}.
  */
 export function makeSubscription(overrides?: Partial<AzureSubscription>): AzureSubscription {
     const account = makeAccount();
@@ -54,11 +53,20 @@ export function makeSubscription(overrides?: Partial<AzureSubscription>): AzureS
         name: 'Test Subscription',
         account,
         environment: defaultEnvironment,
-        credential: { getToken: () => Promise.resolve({ token: 'mock-token', expiresOnTimestamp: Date.now() + 3600000 }) },
-        isCustomCloud: false,
-        authentication: { getSession: () => Promise.resolve(undefined) },
         ...overrides,
-    } as AzureSubscription;
+    };
+}
+
+/**
+ * Builds a mock {@linkcode TokenCredential} whose `getToken` returns a fixed
+ * token valid for one hour. The method is wrapped with `mock.fn()` from
+ * `node:test` so callers can assert call counts and inspect `GetTokenOptions`
+ * (e.g. `claims` for CAE/MFA challenge handling).
+ */
+export function makeCredential(token = 'mock-token'): TokenCredential {
+    return {
+        getToken: mock.fn((): Promise<AccessToken> => Promise.resolve({ token, expiresOnTimestamp: Date.now() + 3600000 })),
+    };
 }
 
 /**
@@ -122,7 +130,7 @@ export function makeVirtualResource(overrides?: Partial<VirtualResource>): Virtu
     };
 }
 
-/** Options for overriding {@linkcode createMockSubscriptionProvider} defaults. */
+/** Options for overriding mock account/tenant/subscription data defaults. */
 export interface MockSubscriptionProviderOptions {
     readonly accounts?: AzureAccount[];
     readonly tenants?: AzureTenant[];
@@ -130,22 +138,50 @@ export interface MockSubscriptionProviderOptions {
 }
 
 /**
- * Creates a mock {@linkcode AzureSubscriptionProvider} backed by canned data.
- * All methods are wrapped with `mock.fn()` from `node:test` so callers can
- * assert call counts and arguments.
+ * Creates a mock subscription provider exposing `getAvailableSubscriptions`,
+ * matching the extension's command-consumer service shape. The method is wrapped
+ * with `mock.fn()` from `node:test` so callers can assert call counts.
  */
-export function createMockSubscriptionProvider(options?: MockSubscriptionProviderOptions): AzureSubscriptionProvider {
+export function createMockSubscriptionProvider(options?: MockSubscriptionProviderOptions): { getAvailableSubscriptions: () => Promise<AzureSubscription[]> } {
+    const subscriptions = options?.subscriptions ?? [makeSubscription()];
+    return {
+        getAvailableSubscriptions: mock.fn(() => Promise.resolve(subscriptions)),
+    };
+}
+
+/**
+ * Creates a mock root {@linkcode DataProvider} that yields canned accounts,
+ * tenants, and subscriptions -- a stand-in for the real
+ * `AzureAccountDataProvider` in tree tests and mock-data mode.
+ *
+ * {@linkcode DataProvider.getChildren getChildren} is wrapped with `mock.fn()`
+ * so callers can assert call counts and arguments.
+ */
+export function createMockAccountDataProvider(options?: MockSubscriptionProviderOptions): DataProvider<ConcreteAzureNode> {
     const accounts = options?.accounts ?? [makeAccount()];
     const tenants = options?.tenants ?? [makeTenant()];
     const subscriptions = options?.subscriptions ?? [makeSubscription()];
-    const emitter = new EventEmitter<unknown>();
+
     return {
-        onRefreshSuggested: emitter.event,
-        signIn: mock.fn(() => Promise.resolve(true)),
-        getAccounts: mock.fn(() => Promise.resolve(accounts)),
-        getAvailableSubscriptions: mock.fn(() => Promise.resolve(subscriptions)),
-        getUnauthenticatedTenantsForAccount: mock.fn(() => Promise.resolve([])),
-        getTenantsForAccount: mock.fn(() => Promise.resolve(tenants)),
-        getSubscriptionsForTenant: mock.fn(() => Promise.resolve(subscriptions)),
-    } as unknown as AzureSubscriptionProvider;
+        isRoot: true,
+        getTtl: () => Infinity,
+        canHandle: (resource: unknown): resource is ConcreteAzureNode => {
+            if (!resource || typeof resource !== 'object') {
+                return false;
+            }
+            const node = resource as ConcreteAzureNode;
+            return isAccount(node) || isTenant(node);
+        },
+        getChildren: mock.fn((resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> => {
+            if (!resource) {
+                return Promise.resolve(accounts as ConcreteAzureNode[]);
+            } else if (isAccount(resource)) {
+                return Promise.resolve(tenants as ConcreteAzureNode[]);
+            } else if (isTenant(resource)) {
+                return Promise.resolve(subscriptions as ConcreteAzureNode[]);
+            } else {
+                throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
+            }
+        }),
+    };
 }

@@ -6,7 +6,7 @@
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { SubscriptionClient } from '../../../rest/clients/SubscriptionClient';
-import { makeSubscription } from '../../mockAzure';
+import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('SubscriptionClient (unit)', () => {
@@ -31,7 +31,7 @@ describe('SubscriptionClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, locationsBody),
         });
 
-        const client = SubscriptionClient.create(ctx, executor, subscription, { httpClient });
+        const client = SubscriptionClient.create(ctx, executor, makeCredential(), subscription.environment, { httpClient });
         const locations = await client.subscriptions.listLocations(subscription.subscriptionId);
 
         expect(locations).to.have.length(2);
@@ -59,7 +59,7 @@ describe('SubscriptionClient (unit)', () => {
             },
         });
 
-        const client = SubscriptionClient.create(ctx, executor, subscription, { httpClient });
+        const client = SubscriptionClient.create(ctx, executor, makeCredential(), subscription.environment, { httpClient });
 
         const first = await client.subscriptions.listLocations(subscription.subscriptionId);
         const second = await client.subscriptions.listLocations(subscription.subscriptionId);

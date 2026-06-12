@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { PickContext } from '@microsoft/vscode-azure-utils';
 import { Wizard } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import type { Location } from '../../rest/clients/SubscriptionClient';
+import type { AzureSubscription } from '../../auth/AzureSubscription';
+import type { ISubscriptionClientProvider, Location } from '../../rest/clients/SubscriptionClient';
 import { ChooseLocationStep } from '../../wizard/ChooseLocationStep';
 import { makeSubscription } from '../mockAzure';
 
@@ -23,12 +23,16 @@ interface TestContext extends PickContext<string> {
     readonly location?: Location;
 }
 
-function createMockSubscriptionClientProvider(locations: Location[]) {
+function createMockSubscriptionClientProvider(locations: Location[]): ISubscriptionClientProvider {
     return () => ({
+        tenants: {
+            list: () => ({ [Symbol.asyncIterator]: async function* () { /* no tenants */ } }),
+        },
         subscriptions: {
+            list: () => ({ [Symbol.asyncIterator]: async function* () { /* no subscriptions */ } }),
             listLocations: () => Promise.resolve(locations),
         },
-    });
+    }) as unknown as ReturnType<ISubscriptionClientProvider>;
 }
 
 describe('ChooseLocationStep (unit)', () => {

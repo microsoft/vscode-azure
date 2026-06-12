@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, ICodeContext, IOutputChannel, Wizard, type ExecuteStep } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -53,7 +52,7 @@ export class CreateFunctionApp implements ManagedCommand {
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
         @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
-        @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider,
+        @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: IAzureSubscriptionProvider,
     ) { }
 
     /** @inheritdoc */

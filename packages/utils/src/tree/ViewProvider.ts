@@ -23,7 +23,7 @@ import type { DataProvider } from './DataProvider';
  * @typeParam TResource - The base resource type this provider operates on.
  *   Implementations may narrow this to a service-specific subtype.
  */
-export interface ViewProvider<TResource> extends DataProvider<TResource> {
+export interface ViewProvider<TResource> extends Omit<DataProvider<TResource>, 'enrich' | 'getTtl'> {
     /**
      * Get children for the given resource. View providers always return
      * plain arrays (pagination is handled by the data layer).
@@ -44,6 +44,4 @@ export interface ViewProvider<TResource> extends DataProvider<TResource> {
      * {@linkcode getChildren} to load real data at each level.
      */
     getParent?(resource: Readonly<TResource>): ProviderResult<TResource | undefined>;
-
-    enrich?: never; // View providers are not allowed to enrich data resources
 }

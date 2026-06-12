@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode, type IAcrClientProvider, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -80,7 +80,7 @@ describe('ACR Tree Integration (integration)', () => {
             5 * 60 * 1000,
         );
 
-        const subProvider = createMockSubscriptionProvider({
+        const accountDataProvider = createMockAccountDataProvider({
             accounts: [account],
             tenants: [tenant],
             subscriptions: [subscription],
@@ -96,7 +96,6 @@ describe('ACR Tree Integration (integration)', () => {
             mockVscode.vscode,
             executor,
             resourceClientProvider,
-            subProvider,
         );
 
         const acrDataProvider = new AcrDataProvider(
@@ -104,9 +103,10 @@ describe('ACR Tree Integration (integration)', () => {
             acrClientProvider,
         );
 
-        // Register in correct order: ACR first, generic fallback second
+        // Register in correct order: ACR first, generic next, account root last
         dataTree.registerProvider(acrDataProvider);
         dataTree.registerProvider(genericDataProvider);
+        dataTree.registerProvider(accountDataProvider);
 
         // View layer
         const viewOptions: ViewItemTreeOptions<string, ConcreteAzureNode> = {
