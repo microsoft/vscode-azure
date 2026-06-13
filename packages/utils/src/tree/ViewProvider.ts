@@ -24,6 +24,10 @@ import type { DataProvider } from './DataProvider';
  *   Implementations may narrow this to a service-specific subtype.
  */
 export interface ViewProvider<TResource> extends Omit<DataProvider<TResource>, 'enrich' | 'getTtl'> {
+    /** View providers must not enrich data-layer resources. */
+    enrich?: never;
+    /** View providers must not override cache TTL. */
+    getTtl?: never;
     /**
      * Get children for the given resource. View providers always return
      * plain arrays (pagination is handled by the data layer).

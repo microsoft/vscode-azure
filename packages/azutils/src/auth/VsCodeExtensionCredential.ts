@@ -143,8 +143,8 @@ export class VsCodeExtensionCredential implements TokenCredential {
  * and duplicates are removed.
  *
  * `managementEndpointUrl` is guaranteed to have no trailing slash (see
- * {@linkcode createEnvironment}), so the slash required by the AAD `.default`
- * scope is appended directly here.
+ * {@linkcode createEnvironment}), so the `/.default` suffix is appended
+ * directly here. For arbitrary scopes, a slash is inserted if missing.
  */
 function normalizeScopes(scopes: string | string[], managementEndpointUrl: string): string[] {
     let list = Array.isArray(scopes) ? [...scopes] : scopes ? [scopes] : [];
@@ -152,7 +152,12 @@ function normalizeScopes(scopes: string | string[], managementEndpointUrl: strin
         list = [`${managementEndpointUrl}/.default`];
     }
 
-    const normalized = list.map(scope => (scope.endsWith('.default') ? scope : `${scope}.default`));
+    const normalized = list.map(scope => {
+        if (scope.endsWith('.default')) {
+            return scope;
+        }
+        return scope.endsWith('/') ? `${scope}.default` : `${scope}/.default`;
+    });
     return Array.from(new Set(normalized));
 }
 

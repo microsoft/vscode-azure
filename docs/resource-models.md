@@ -46,14 +46,15 @@ interface AzureTenant extends TenantIdDescription {
 
 interface AzureSubscription {
     readonly environment: EnvironmentLike;
-    readonly name: string;
+    readonly displayName: string;
     readonly subscriptionId: string;
     readonly tenantId: string;
+    readonly tenant: AzureTenant;
     readonly account: AzureAccount;
 }
 ```
 
-**No credential on the subscription.** Unlike the removed `@microsoft/vscode-azext-azureauth` model, `AzureSubscription` carries no credential or authentication object — only the `environment` (an [`EnvironmentLike`](#environmentlike)) plus ids/name/account. Tokens are produced on demand via the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. See [Azure Client Wrappers — DI Integration](azure-clients.md#di-integration).
+**No credential on the subscription.** Unlike the removed `@microsoft/vscode-azext-azureauth` model, `AzureSubscription` carries no credential or authentication object — only the `environment` (an [`EnvironmentLike`](#environmentlike)) plus ids/displayName/tenant/account. Tokens are produced on demand via the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. See [Azure Client Wrappers — DI Integration](azure-clients.md#di-integration).
 
 ## `EnvironmentLike`
 

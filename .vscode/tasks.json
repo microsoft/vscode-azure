@@ -10,6 +10,7 @@
                 "vscode-azure",
                 "run",
                 "build:esbuild",
+                "--",
                 "--watch"
             ],
             "problemMatcher": "$esbuild-watch",
@@ -30,6 +31,7 @@
                 "vscode-azure",
                 "run",
                 "build:check",
+                "--",
                 "--watch"
             ],
             "problemMatcher": {
@@ -57,6 +59,7 @@
                 "@microsoft/vscode-azure-azutils",
                 "run",
                 "build",
+                "--",
                 "--watch",
             ],
             "group": {
@@ -83,6 +86,7 @@
                 "@microsoft/vscode-azure-utils",
                 "run",
                 "build",
+                "--",
                 "--watch",
             ],
             "group": {

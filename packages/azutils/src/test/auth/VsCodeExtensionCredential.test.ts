@@ -90,7 +90,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
 
             await credential.getToken('scope1');
 
-            expect(lastScopes(getSession)).to.deep.equal(['scope1.default']);
+            expect(lastScopes(getSession)).to.deep.equal(['scope1/.default']);
         });
 
         it('should pass scopes as an array (multiple scopes)', async () => {
@@ -98,7 +98,7 @@ describe('VsCodeExtensionCredential (unit)', () => {
 
             await credential.getToken(['scope1', 'scope2']);
 
-            expect(lastScopes(getSession)).to.deep.equal(['scope1.default', 'scope2.default']);
+            expect(lastScopes(getSession)).to.deep.equal(['scope1/.default', 'scope2/.default']);
         });
 
         it('should add VSCODE_TENANT scope when tenantId is set in options', async () => {

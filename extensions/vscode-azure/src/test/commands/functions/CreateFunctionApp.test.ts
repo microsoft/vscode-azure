@@ -37,10 +37,10 @@ describe('CreateFunctionApp (unit)', () => {
         const subscriptionClientProvider: ISubscriptionClientProvider = () =>
             ({
                 tenants: {
-                    list: () => ({ [Symbol.asyncIterator]: async function* () { /* no tenants */ } }),
+                    list: () => Promise.resolve([]),
                 },
                 subscriptions: {
-                    list: () => ({ [Symbol.asyncIterator]: async function* () { /* no subscriptions */ } }),
+                    list: () => Promise.resolve([]),
                     listLocations: mock.fn(() => Promise.resolve([
                         { name: 'eastus', displayName: 'East US' },
                         { name: 'westus', displayName: 'West US' },

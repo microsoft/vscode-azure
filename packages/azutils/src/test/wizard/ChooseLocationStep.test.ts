@@ -26,10 +26,10 @@ interface TestContext extends PickContext<string> {
 function createMockSubscriptionClientProvider(locations: Location[]): ISubscriptionClientProvider {
     return () => ({
         tenants: {
-            list: () => ({ [Symbol.asyncIterator]: async function* () { /* no tenants */ } }),
+            list: () => Promise.resolve([]),
         },
         subscriptions: {
-            list: () => ({ [Symbol.asyncIterator]: async function* () { /* no subscriptions */ } }),
+            list: () => Promise.resolve([]),
             listLocations: () => Promise.resolve(locations),
         },
     }) as unknown as ReturnType<ISubscriptionClientProvider>;
