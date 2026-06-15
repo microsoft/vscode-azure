@@ -33,7 +33,7 @@ export function makeAccount(overrides?: Partial<AzureAccount>): AzureAccount {
  * {@linkcode makeAccount} instance.
  */
 export function makeTenant(overrides?: Partial<AzureTenant>): AzureTenant {
-    const account = makeAccount(overrides?.account);
+    const account = overrides?.account ?? makeAccount();
     return {
         tenantId: 'test-tenant',
         displayName: 'Test Tenant',
@@ -49,8 +49,8 @@ export function makeTenant(overrides?: Partial<AzureTenant>): AzureTenant {
  * default tenant from {@linkcode makeTenant}.
  */
 export function makeSubscription(overrides?: Partial<AzureSubscription>): AzureSubscription {
-    const account = makeAccount(overrides?.account);
-    const tenant = makeTenant({ account, ...overrides?.tenant });
+    const tenant = overrides?.tenant ?? makeTenant(overrides?.account ? { account: overrides.account } : undefined);
+    const account = tenant.account;
     return {
         subscriptionId: 'test-sub',
         displayName: 'Test Subscription',
