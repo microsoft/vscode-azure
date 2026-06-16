@@ -27,7 +27,7 @@ extensionConfig.alias = {
 };
 
 // Copy Azure resource type icons into dist/azureIcons/ so they are bundled
-// with the extension and cleaned up automatically by `npm run clean`.
+// with the extension and cleaned up automatically by `pnpm run clean`.
 extensionConfig.plugins.push(
     copy({
         assets: [
