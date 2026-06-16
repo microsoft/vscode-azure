@@ -32,7 +32,7 @@ function createMockSubscriptionClientProvider(locations: Location[]): ISubscript
             list: () => Promise.resolve([]),
             listLocations: () => Promise.resolve(locations),
         },
-    }) as unknown as ReturnType<ISubscriptionClientProvider>;
+    });
 }
 
 describe('ChooseLocationStep (unit)', () => {
