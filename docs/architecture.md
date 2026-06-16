@@ -38,7 +38,7 @@ Framework-level building blocks with no Azure-specific knowledge:
 Azure-specific models and helpers that build on `utils`:
 
 - **Resource models**: `GenericResource`, `AzureNode`, `VirtualResource`, `VirtualGroup`, `ResourceGroup`
-- **Identity**: `AzureNodeId` (URI-based resource identification)
+- **Identity**: `AzureNodeId` (URI-based node identification across account, tenant, subscription, grouping, resource, and virtual-resource nodes)
 - **Auth module** (`src/auth/`): `EnvironmentLike` + cloud presets (`AzurePublicCloud`, `AzureUSGovernment`, `AzureChinaCloud`); the identity models `AzureAccount`/`AzureTenant`/`AzureSubscription`; `VsCodeExtensionCredential` (a `TokenCredential` owning sovereign-cloud detection and CAE/MFA claims handling); and the `ICredentialFactory` DI service. Replaces the `@microsoft/vscode-azext-azureauth` and the deprecated `@azure/ms-rest-azure-env` packages. (The account/tenant/subscription listing logic lives in `AzureAccountDataProvider` in the extension, which signs in via the credential factory and lists accounts/tenants/subscriptions directly.)
 - **REST client wrappers**: `ResourceClient`, `DeploymentClient`, `SubscriptionClient`, `AcrClient`, `WebAppClient` — typed wrappers around Azure SDK clients. See [Azure Clients](azure-clients.md).
 - **Client factories**: `createArmRestClient`, `createArmRestSubscriptionClient` — inject custom pipeline policies (deduplication, correlation ID, accept language). Authentication, including CAE/MFA step-up, is handled by the SDK's built-in `bearerTokenAuthenticationPolicy` driven by the supplied `TokenCredential`.
@@ -50,7 +50,7 @@ Azure-specific models and helpers that build on `utils`:
 The VS Code extension that wires everything together:
 
 - **Activation**: Container setup, command and tree registration
-- **Commands**: `Hello`, `OpenInPortal`, `RefreshResourcesView`, `LoadMore`, `DisableAcrAdminUser`, `ClearActivities`
+- **Commands**: `RefreshResourcesView`, `GroupBy`, `OpenInPortal`, `LoadMore`, `RefreshWorkspaceView`, `RevealInExplorer`, `DisableAcrAdminUser`, `AddOrEditAppSetting`, `DeleteAppSetting`, `ClearActivities`, `AzdUp`, `InstallAzd`
 - **Resource creation wizards**: `CreateFunctionApp` — azd-backed wizard for creating and deploying Azure resources. See [Resource Creation](resource-creation.md).
 - **Tree providers**:
   - Resources: `AzureAccountDataProvider` (account/tenant/subscription), `GenericAzureDataProvider`/`ViewProvider` (resource groups + resources), `AcrDataProvider`/`ViewProvider`, `FunctionAppDataProvider`/`ViewProvider`

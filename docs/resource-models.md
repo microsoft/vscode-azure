@@ -30,25 +30,26 @@ Each variant has a type guard function:
 | `isGenericResource(node)` | GenericResource nodes |
 | `isVirtualResource(node)` | VirtualResource nodes |
 
+Additional helpers exported by `AzureNode.ts`:
+- `getNodeType(node)` returns a consistent telemetry-oriented type string across all concrete node kinds
+- `SubscriptionArmType` is the canonical ARM type constant for subscriptions (`Microsoft.Resources/subscriptions`)
+
 ## Account / Tenant / Subscription
 
 `Account`, `Tenant`, and `Subscription` are the identity-layer node types, defined in `packages/azutils/src/auth/AzureSubscription.ts` (exported as `AzureAccount`, `AzureTenant`, `AzureSubscription`). They are produced by `AzureAccountDataProvider` (in the extension) and form the top three levels of the resources tree.
 
 ```typescript
-type AzureAccount = Readonly<vscode.AuthenticationSessionAccountInformation> & {
+type AzureAccount = vscode.AuthenticationSessionAccountInformation & {
     readonly environment: EnvironmentLike; // the cloud this account belongs to
 };
 
-interface AzureTenant extends TenantIdDescription {
+interface AzureTenant extends WithRequired<TenantIdDescription, 'tenantId' | 'displayName'> {
+    readonly environment: EnvironmentLike;
     readonly account: AzureAccount;
-    readonly tenantId: string;
 }
 
-interface AzureSubscription {
+interface AzureSubscription extends WithRequired<Subscription, 'subscriptionId' | 'tenantId' | 'displayName'> {
     readonly environment: EnvironmentLike;
-    readonly displayName: string;
-    readonly subscriptionId: string;
-    readonly tenantId: string;
     readonly tenant: AzureTenant;
     readonly account: AzureAccount;
 }
@@ -81,20 +82,15 @@ Presets are provided for the three live clouds: `AzurePublicCloud`, `AzureUSGove
 The base interface for all ARM resources (including resource groups):
 
 ```typescript
-interface GenericResource {
-    id: string;           // ARM resource ID
-    name: string;         // Resource name
-    type: string;         // ARM resource type (e.g. 'Microsoft.ContainerRegistry/registries')
-    location: string;
-    tags?: Record<string, string>;
-    kind?: string;
-    subscription: AzureSubscription;
-    logicalType: string;  // Enriched type for more specific categorization (set by attachMetadata)
+interface GenericResource extends WithRequired<SdkGenericResource, 'id' | 'name' | 'type' | 'location'> {
+    readonly subscription: AzureSubscription;
+    readonly logicalType: string;
 }
 ```
 
 Key points:
 - `attachMetadata()` adds `subscription` and `logicalType` to raw REST API responses
+- `logicalType(...)` (used by `attachMetadata()`) normalizes selected ARM types based on `type` and `kind` (for example, Function Apps vs App Service, Cosmos Mongo vs Cosmos DB)
 - ARM resource types must be compared **case-insensitively** against constants (see [Conventions](conventions.md))
 
 ## `VirtualResource`
@@ -132,12 +128,13 @@ type ResourceGroup = GroupingBase & { readonly groupingStrategy: 'resourceGroup'
 
 ## `AzureNodeId`
 
-An opaque, URI-based identifier for resources using the `azr://` scheme. Lives in `packages/azutils/src/models/AzureNodeId.ts`.
+An opaque, URI-based identifier for nodes using the `azr://` scheme. Lives in `packages/azutils/src/models/AzureNodeId.ts`.
 
 ### URI Format
 
 ```
 azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}
+azr://{accountId}@{portalHost}/tenants/{tenantId}/subscriptions/{subscriptionId}/~{groupingStrategy}/{groupingValue}
 azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}#/{virtualType}/{virtualPath}
 ```
 
@@ -148,6 +145,8 @@ Examples:
 | Account | `azr://{accountId}@{portalHost}` |
 | Tenant | `azr://{accountId}@{portalHost}/tenants/{tenantId}` |
 | Subscription | `azr://{accountId}@{portalHost}/tenants/{tenantId}/subscriptions/{subId}` |
+| Resource Group | `azr://{accountId}@{portalHost}/tenants/{tenantId}/subscriptions/{subId}/resourceGroups/{rg}` |
+| Virtual Grouping | `azr://{accountId}@{portalHost}/tenants/{tenantId}/subscriptions/{subId}/~{groupingStrategy}/{groupingValue}` |
 | Resource | `azr://{accountId}@{portalHost}/tenants/{tenantId}/subscriptions/{subId}/resourceGroups/{rg}/providers/{type}/{name}` |
 | Virtual | `.../{armResourceId}#/{virtualType}/{virtualPath}` |
 
@@ -165,3 +164,8 @@ const parsed = AzureNodeId.parse(key);
 ```
 
 `AzureNodeId` is used as the key function for `DataItemTree` and `ViewItemTree`, providing a consistent, unique identifier for every node in the tree.
+
+It also exposes helpers for working with node IDs after parsing, including:
+- node-kind predicates (`isAccountNodeId`, `isTenantNodeId`, `isSubscriptionNodeId`, `isResourceGroupNodeId`, `isVirtualGroupNodeId`, `isGenericResourceNodeId`, `isVirtualResourceNodeId`)
+- `parentNodeId()` for ARM-structural parent traversal
+- `toPortalUrl()` for subscription/resource/resource-group portal links

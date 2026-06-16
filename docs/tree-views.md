@@ -70,7 +70,7 @@ Resources can be enriched with additional data lazily after loading:
 4. When enrichment completes, `onDidChange` fires so the view re-renders
 5. Commands that need enriched data call `await cache.whenEnriched<EnrichedType>(resource)`
 
-**Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (e.g. `id`, `name`, `type`, `subscription`). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
+**Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (for generic resources, effectively `id` plus subscription identity fields used by `AzureNodeId.from`, such as account id and tenant id). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
 
 The `enrich()` return value controls child invalidation:
 - Return `false` (or resolve to `false`) — only re-render the resource itself
@@ -135,7 +135,7 @@ dataProviders: [
 ],
 ```
 
-Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly — and so `mockData.ts` can rebind `IAzureAccountDataProvider` in mock mode). See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
+Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly. See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
 
 ## Azure Resources Tree Providers
 
