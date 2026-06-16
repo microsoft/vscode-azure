@@ -6,9 +6,6 @@ settings:
 
 catalogs:
   default:
-    '@microsoft/vscode-azext-azureauth':
-      specifier: ^6.1.0-alpha.1
-      version: 6.1.0-alpha.1
     '@microsoft/vscode-processutils':
       specifier: ^0.2.2
       version: 0.2.2
@@ -38,9 +35,6 @@ importers:
 
   extensions/vscode-azure:
     dependencies:
-      '@microsoft/vscode-azext-azureauth':
-        specifier: 'catalog:'
-        version: 6.1.0-alpha.1
       '@microsoft/vscode-azure-azutils':
         specifier: workspace:*
         version: link:../../packages/azutils
@@ -102,9 +96,6 @@ importers:
       '@azure/logger':
         specifier: ^1.3.0
         version: 1.3.0
-      '@azure/ms-rest-azure-env':
-        specifier: ^2.0.0
-        version: 2.0.0
       '@microsoft/vscode-azure-utils':
         specifier: workspace:^
         version: link:../utils
@@ -121,9 +112,6 @@ importers:
       '@azure/core-rest-pipeline':
         specifier: ^1.23.0
         version: 1.23.0
-      '@microsoft/vscode-azext-azureauth':
-        specifier: 'catalog:'
-        version: 6.1.0-alpha.1
       inversify:
         specifier: 'catalog:'
         version: 8.1.0(reflect-metadata@0.2.2)
@@ -221,10 +209,6 @@ packages:
   '@azure/logger@1.3.0':
     resolution: {integrity: sha512-fCqPIfOcLE+CGqGPd66c8bZpwAji98tZ4JI9i/mlTNTlsIWslCfpg48s/ypyLxZTump5sypjrKn2/kY7q8oAbA==}
     engines: {node: '>=20.0.0'}
-
-  '@azure/ms-rest-azure-env@2.0.0':
-    resolution: {integrity: sha512-dG76W7ElfLi+fbTjnZVGj+M9e0BIEJmRxU6fHaUQ12bZBe8EJKYb2GV50YWNaP2uJiVQ5+7nXEVj1VN1UQtaEw==}
-    deprecated: This package has been deprecated. new Azure Management SDK package from [Azure SDK for JavaScript](https://github.com/azure/azure-sdk-for-js) now have the cloud settings built-in, [for example](https://github.com/Azure/azure-sdk-for-js/blob/dc5f9743b05ea78f938eba31cbe704150889490c/sdk/sql/arm-sql/src/static-helpers/cloudSettingHelpers.ts).
 
   '@azure/msal-browser@5.11.0':
     resolution: {integrity: sha512-zkGNYS3TwY8lUpPIafAmsFCYZbgFixY9y/LZB9GUg0IILoHTqpN26j5OrkL1AQThh/YdZsawe4iWXfp85lFVxg==}
@@ -540,10 +524,6 @@ packages:
 
   '@microsoft/dynamicproto-js@2.0.5':
     resolution: {integrity: sha512-V+Zr7PDKIEaItVwF/OyWQlKeugNRYg7KJJ+RhEIL2FMW6NlG8FN2l4XA9Z42hNtsjwJFlcUiF38pmM/AaXsF7g==}
-
-  '@microsoft/vscode-azext-azureauth@6.1.0-alpha.1':
-    resolution: {integrity: sha512-iemkduHEotG4lqzM8Nz0rRXw/OGoQT0RIPzDy5++KZCSErDIgiRpR38JI7D1bHUODkjIQDRvtRCpBrYfG4c+Hw==}
-    engines: {vscode: ^1.106.0}
 
   '@microsoft/vscode-azext-eng@1.1.0-alpha.1':
     resolution: {integrity: sha512-oSnKh/2zMTuOtpjy6svxNXd5XwxW82NwHnOulKPRveqWt3vkSHooDDH6L6b7O1Q3hthC5CcjZY+vpaBj4B3zOA==}
@@ -2547,8 +2527,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@azure/ms-rest-azure-env@2.0.0': {}
-
   '@azure/msal-browser@5.11.0':
     dependencies:
       '@azure/msal-common': 16.6.2
@@ -2810,16 +2788,6 @@ snapshots:
   '@microsoft/dynamicproto-js@2.0.5':
     dependencies:
       '@nevware21/ts-utils': 0.15.0
-
-  '@microsoft/vscode-azext-azureauth@6.1.0-alpha.1':
-    dependencies:
-      '@azure/arm-resources-subscriptions': 3.0.0-beta.1
-      '@azure/core-auth': 1.10.1
-      '@azure/core-rest-pipeline': 1.23.0
-      '@azure/identity': 4.13.1
-      '@azure/ms-rest-azure-env': 2.0.0
-    transitivePeerDependencies:
-      - supports-color
 
   '@microsoft/vscode-azext-eng@1.1.0-alpha.1(@vscode/test-cli@0.0.12)(@vscode/test-electron@2.5.2)(@vscode/vsce@3.9.1)(esbuild-plugin-copy@2.1.1(esbuild@0.28.1))(esbuild@0.28.1)(tsx@4.22.4)':
     dependencies:
