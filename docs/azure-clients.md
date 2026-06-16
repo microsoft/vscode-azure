@@ -78,7 +78,7 @@ Every client created through the factory functions gets three custom pipeline po
 | `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command or tree operation that initiated them. The context is looked up via `IActionExecutor.currentContext` (backed by `AsyncLocalStorage`), so policies don't need `IActionContext` passed explicitly — it's established by whichever scope wraps the call (command execution or `DataItemTree` provider call). |
 | `AcceptLanguagePolicy` | perCall | Sets the `accept-language` header to VS Code's UI language (`vscode.env.language`), so ARM responses match the user's locale. |
 
-Authentication (including CAE/MFA step-up) is handled by the SDK's built-in `bearerTokenAuthenticationPolicy`, which is wired up by the SDK's own credential plumbing from the supplied `TokenCredential` — not added by these factories. There are no custom MFA or BOM-stripping policies.
+Authentication (including CAE/MFA step-up) is handled by the SDK's built-in `bearerTokenAuthenticationPolicy`, which is wired up by the SDK's own credential plumbing from the supplied `TokenCredential` — not added by these factories.
 
 The factory also sets a `userAgentPrefix` combining the extension's ID and version with any caller-provided prefix.
 

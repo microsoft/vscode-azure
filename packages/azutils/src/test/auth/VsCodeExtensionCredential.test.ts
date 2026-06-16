@@ -245,6 +245,27 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(hasTenantScope).to.be.false;
         });
 
+        it('should forward CAE/MFA claims as a WWW-Authenticate challenge with fallback scopes', async () => {
+            const { credential, getSession } = createCredential();
+            const claims = '{"access_token":{"nbf":{"essential":true,"value":"1234567890"}}}';
+
+            await credential.getToken('scope1', { claims });
+
+            const challenge = getSession.mock.calls[0].arguments[1] as vscode.AuthenticationWwwAuthenticateRequest;
+            expect(challenge).to.not.be.an('array');
+            const encoded = Buffer.from(claims, 'utf8').toString('base64');
+            expect(challenge.wwwAuthenticate).to.equal(`Bearer error="insufficient_claims", claims="${encoded}"`);
+            expect(challenge.fallbackScopes).to.deep.equal(['scope1/.default']);
+        });
+
+        it('should pass a plain scopes array (not a challenge) when no claims are provided', async () => {
+            const { credential, getSession } = createCredential();
+
+            await credential.getToken('scope1');
+
+            expect(getSession.mock.calls[0].arguments[1]).to.be.an('array');
+        });
+
         it('should read the cloud configuration only once across repeated getToken calls', async () => {
             const { credential, mock } = createCredential();
 

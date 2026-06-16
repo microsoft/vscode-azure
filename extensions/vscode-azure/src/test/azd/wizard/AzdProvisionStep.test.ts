@@ -182,7 +182,6 @@ describe('AzdProvisionStep (unit)', () => {
             expect((armProvider.trackDeployment.mock.calls[0].arguments[1] as { subscriptionId: string }).subscriptionId).to.equal('sub-1');
         });
 
-
         it('should track multiple deployments from JSONL', async () => {
             const id1 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
             const id2 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-2';
