@@ -22,9 +22,9 @@ import { GenericActivityDataProvider, IGenericActivityDataProvider } from './act
 import { AcrDataProvider } from './resources/acr/AcrDataProvider';
 import { AcrViewProvider } from './resources/acr/AcrViewProvider';
 import { AzureAccountDataProvider, IAzureAccountDataProvider } from './resources/AzureAccountDataProvider';
+import { AzureResourceDataProvider } from './resources/AzureResourceDataProvider';
 import { FunctionAppDataProvider, IFunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
-import { GenericAzureDataProvider } from './resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 import { AzdWorkspaceDataProvider } from './workspace/azd/AzdWorkspaceDataProvider';
 import { AzdWorkspaceViewProvider } from './workspace/azd/AzdWorkspaceViewProvider';
@@ -62,7 +62,7 @@ export function registerTrees(container: Container): void {
             AcrDataProvider,
             [IFunctionAppDataProvider, FunctionAppDataProvider], // singleton so commands can @inject it directly
             [IAzureAccountDataProvider, AzureAccountDataProvider], // singleton so mock-data mode can rebind it
-            GenericAzureDataProvider,
+            AzureResourceDataProvider,
         ],
         viewProviders: [
             AcrViewProvider,

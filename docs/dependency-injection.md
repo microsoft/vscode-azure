@@ -146,7 +146,7 @@ Registration order in the array determines dispatch order — specific providers
 dataProviders: [
     AcrDataProvider,                                     // specific
     [IFunctionAppDataProvider, FunctionAppDataProvider],  // specific, with direct-inject support
-    GenericAzureDataProvider,                             // fallback
+    AzureResourceDataProvider,                           // fallback
 ],
 ```
 

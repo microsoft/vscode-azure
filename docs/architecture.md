@@ -53,7 +53,7 @@ The VS Code extension that wires everything together:
 - **Commands**: `RefreshResourcesView`, `GroupBy`, `OpenInPortal`, `LoadMore`, `RefreshWorkspaceView`, `RevealInExplorer`, `DisableAcrAdminUser`, `AddOrEditAppSetting`, `DeleteAppSetting`, `ClearActivities`, `AzdUp`, `InstallAzd`
 - **Resource creation wizards**: `CreateFunctionApp` — azd-backed wizard for creating and deploying Azure resources. See [Resource Creation](resource-creation.md).
 - **Tree providers**:
-  - Resources: `AzureAccountDataProvider` (account/tenant/subscription), `GenericAzureDataProvider`/`ViewProvider` (resource groups + resources), `AcrDataProvider`/`ViewProvider`, `FunctionAppDataProvider`/`ViewProvider`
+  - Resources: `AzureAccountDataProvider` (account/tenant/subscription), `AzureResourceDataProvider`/`GenericAzureViewProvider` (resource groups + resources), `AcrDataProvider`/`ViewProvider`, `FunctionAppDataProvider`/`ViewProvider`
   - Workspace (local): `AzdWorkspaceDataProvider`/`ViewProvider`, `FunctionsWorkspaceDataProvider`/`ViewProvider`, `EmulatorsWorkspaceDataProvider`/`ViewProvider`
   - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`
 - **Services**: Extension-scoped DI identifiers (`ICredentialFactory`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)

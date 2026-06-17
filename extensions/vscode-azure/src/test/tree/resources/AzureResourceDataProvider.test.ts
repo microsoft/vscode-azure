@@ -8,15 +8,15 @@ import { createMockVsCode, createTestActionExecutor, withSettings } from '@micro
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { ConfigurationSection } from '../../../constants';
-import { GenericAzureDataProvider } from '../../../tree/resources/GenericAzureDataProvider';
+import { AzureResourceDataProvider } from '../../../tree/resources/AzureResourceDataProvider';
 
-describe('GenericAzureDataProvider (unit)', () => {
+describe('AzureResourceDataProvider (unit)', () => {
     const code = createMockVsCode();
 
     function createProvider(clientFactory?: unknown) {
         const { executor } = createTestActionExecutor();
         const createClient = clientFactory ?? mock.fn(() => ({}));
-        return new GenericAzureDataProvider(code.vscode, executor, createClient as never);
+        return new AzureResourceDataProvider(code.vscode, executor, createClient as never);
     }
 
     describe('canHandle', () => {

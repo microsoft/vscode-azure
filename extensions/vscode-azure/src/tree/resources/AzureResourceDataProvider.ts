@@ -33,7 +33,7 @@ const DEFAULT_PAGE_SIZE = 50;
  * Fires {@linkcode onDidChange} when configuration affecting pagination changes.
  */
 @injectable()
-export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
+export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
     /**
      * Cached REST clients per subscription ID, so all calls for the same
      * subscription share one client instance.
@@ -74,7 +74,7 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
      */
     public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
         if (!resource) {
-            throw new Error('GenericAzureDataProvider is not a root provider');
+            throw new Error('AzureResourceDataProvider is not a root provider');
         }
 
         this.executor.setTelProp('nodeType', getNodeType(resource));

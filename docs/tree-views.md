@@ -131,7 +131,7 @@ dataProviders: [
     AcrDataProvider,
     [IFunctionAppDataProvider, FunctionAppDataProvider],   // singleton+alias tuple
     [IAzureAccountDataProvider, AzureAccountDataProvider], // accounts/tenants/subscriptions (root)
-    GenericAzureDataProvider,                              // resource groups + resources (fallback)
+    AzureResourceDataProvider,                            // resource groups + resources (fallback)
 ],
 ```
 
@@ -145,7 +145,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 |----------|-------|---------|-----|-----------------|
 | `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud` configuration change |
 | `AcrDataProvider` / `FunctionAppDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
-| `GenericAzureDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
+| `AzureResourceDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
 
 `AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes.
 

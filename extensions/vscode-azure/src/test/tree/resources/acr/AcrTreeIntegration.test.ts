@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import { AcrDataProvider } from '../../../../tree/resources/acr/AcrDataProvider';
 import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../tree/resources/acr/AcrViewProvider';
-import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
+import { AzureResourceDataProvider } from '../../../../tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { createMockResourceClient } from '../mockResourceClient';
 import { createMockAcrClient } from './mockAcr';
@@ -92,7 +92,7 @@ describe('ACR Tree Integration (integration)', () => {
         const resourceClientProvider: IResourceClientProvider = () => resourceClient;
         const acrClientProvider: IAcrClientProvider = () => acrClient;
 
-        const genericDataProvider = new GenericAzureDataProvider(
+        const genericDataProvider = new AzureResourceDataProvider(
             mockVscode.vscode,
             executor,
             resourceClientProvider,

@@ -12,10 +12,10 @@ import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import { AddOrEditAppSetting } from '../../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../commands/functions/DeleteAppSetting';
+import { AzureResourceDataProvider } from '../../../../tree/resources/AzureResourceDataProvider';
 import { FunctionAppVirtualPaths } from '../../../../tree/resources/functions/FunctionApp';
 import { FunctionAppDataProvider } from '../../../../tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functions/FunctionAppViewProvider';
-import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { createMockResourceClient } from '../mockResourceClient';
 import { makeFunctionApp } from './mockFunctionApp';
@@ -117,7 +117,7 @@ describe('Function App Tree Integration (integration)', () => {
         const resourceClientProvider: IResourceClientProvider = () => resourceClient;
 
         const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider);
-        const genericDataProvider = new GenericAzureDataProvider(code, executor, resourceClientProvider);
+        const genericDataProvider = new AzureResourceDataProvider(code, executor, resourceClientProvider);
 
         // Register in correct order: Function App first, generic next, account root last
         dataTree.registerProvider(funcDataProvider);
