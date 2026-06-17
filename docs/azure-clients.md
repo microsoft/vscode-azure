@@ -149,10 +149,10 @@ Wraps `@azure/arm-resources-subscriptions` using the REST-style SDK pattern (fre
 ```typescript
 interface ISubscriptionClient {
     readonly tenants: {
-        list(options?): Promise<TenantIdDescription[]>;
+        list(options?): AsyncIterable<Page<TenantIdDescription>>;
     };
     readonly subscriptions: {
-        list(options?): Promise<Subscription[]>;
+        list(options?): AsyncIterable<Page<Subscription>>;
         listLocations(subscriptionId, options?): Promise<Location[]>;
     };
 }
