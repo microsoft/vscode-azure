@@ -126,6 +126,30 @@ describe('AzdProvisionStep (unit)', () => {
             expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentId);
         });
 
+        it('should forward the hydrated tenantId hint to trackDeployment', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, fs } = createStep();
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                hydratedTenantId: 'tenant-9',
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentId);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.equal('tenant-9');
+        });
+
         it('should track multiple deployments from JSONL', async () => {
             const id1 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
             const id2 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-2';

@@ -50,6 +50,13 @@ export interface AzdWizardContext {
      */
     readonly hydratedSubscriptionId?: string;
     /**
+     * `AZURE_TENANT_ID` from the existing default environment, if any (only set
+     * when the env is fully configured, so it is the owning tenant of
+     * {@linkcode hydratedSubscriptionId}). Used as a fast-path hint when resolving
+     * the subscription of deployments produced by this provision.
+     */
+    readonly hydratedTenantId?: string;
+    /**
      * `AZURE_LOCATION` from the existing default environment, if any.
      * Used by {@linkcode HydratableChooseLocationStep} to skip the picker.
      */

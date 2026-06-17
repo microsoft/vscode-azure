@@ -163,6 +163,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
                     AZURE_ENV_NAME: 'production',
                     AZURE_LOCATION: 'eastus',
                     AZURE_SUBSCRIPTION_ID: 'sub-1',
+                    AZURE_TENANT_ID: 'tenant-1',
                     /* eslint-enable @typescript-eslint/naming-convention */
                 },
             });
@@ -170,17 +171,38 @@ describe('HydrateAzdInfoStep (unit)', () => {
 
             expect(result.hydratedSubscriptionId).to.equal('sub-1');
             expect(result.hydratedLocationName).to.equal('eastus');
+            expect(result.hydratedTenantId).to.equal('tenant-1');
 
             // env values should be queried for the *default* env name.
             expect(azd.envGetValues.mock.callCount()).to.equal(1);
             expect(azd.envGetValues.mock.calls[0].arguments[0]).to.equal('production');
         });
 
+        it('leaves hydratedTenantId unset when the env has no AZURE_TENANT_ID', async () => {
+            const { step, context } = makeStep({
+                envs: [{ Name: 'production', IsDefault: true }],
+                envValues: {
+                    /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
+                    AZURE_LOCATION: 'eastus',
+                    AZURE_SUBSCRIPTION_ID: 'sub-1',
+                    /* eslint-enable @typescript-eslint/naming-convention */
+                },
+            });
+            const result = await step.prompt(context);
+
+            expect(result.hydratedSubscriptionId).to.equal('sub-1');
+            expect(result.hydratedTenantId).to.be.undefined;
+        });
+
         it('treats partial env (missing AZURE_LOCATION) as Post-clone with a suffixed env name', async () => {
             const { step, context } = makeStep({
                 envs: [{ Name: 'production', IsDefault: true }],
-                // eslint-disable-next-line @typescript-eslint/naming-convention -- azd env key
-                envValues: { AZURE_SUBSCRIPTION_ID: 'sub-1' },
+                envValues: {
+                    /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
+                    AZURE_SUBSCRIPTION_ID: 'sub-1',
+                    AZURE_TENANT_ID: 'tenant-1',
+                    /* eslint-enable @typescript-eslint/naming-convention */
+                },
             });
             const result = await step.prompt(context);
 
@@ -191,6 +213,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
             // prompted for both sub and location for the new env.
             expect(result.hydratedSubscriptionId).to.be.undefined;
             expect(result.hydratedLocationName).to.be.undefined;
+            expect(result.hydratedTenantId).to.be.undefined;
         });
 
         it('treats fully-empty env values as partial (Post-clone with suffix)', async () => {

@@ -153,7 +153,7 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
 
     container.bind(ISubscriptionResolver).toDynamicValue(context => {
         const tree = context.get(IAzureViewDataTree);
-        return (subscriptionId: string) => findSubscriptionById(tree, subscriptionId);
+        return (subscriptionId: string, tenantId?: string) => findSubscriptionById(tree, subscriptionId, tenantId);
     }).inSingletonScope();
 
     container.bind(IAcrClientProvider).toFactory(context => {

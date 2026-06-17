@@ -31,9 +31,12 @@ export type IAzureResourceTreeView = vscode.TreeView<string>;
  * Lets activity-tree components (e.g. the ARM deployment provider) obtain an
  * authenticatable subscription handle without taking a direct dependency on the
  * resource tree. Returns `undefined` when no signed-in account exposes the id.
+ *
+ * An optional `tenantId` hint narrows the drill to a single tenant when the
+ * owning tenant is known (e.g. hydrated from azd).
  */
 export const ISubscriptionResolver: ServiceIdentifier<ISubscriptionResolver> = Symbol.for('ISubscriptionResolver');
-export type ISubscriptionResolver = (subscriptionId: string) => Promise<AzureSubscription | undefined>;
+export type ISubscriptionResolver = (subscriptionId: string, tenantId?: string) => Promise<AzureSubscription | undefined>;
 
 // #endregion
 
