@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '../auth/AzureSubscription';
-import { isSubscription, type ConcreteAzureNodeTree } from '../models/AzureNode';
+import { isSubscription, isTenant, type ConcreteAzureNodeTree } from '../models/AzureNode';
 
 /**
  * Resolve a fully-populated {@linkcode AzureSubscription} from a bare
@@ -17,6 +17,9 @@ import { isSubscription, type ConcreteAzureNodeTree } from '../models/AzureNode'
  * UI. Loaded levels are cached by the tree, so repeated lookups within a single
  * operation are cheap.
  *
+ * When the owning `tenantId` is known, pass it to narrow the drill to that one
+ * tenant, so subscriptions for the other tenants are never loaded.
+ *
  * The drill short-circuits as soon as a match is found; comparison is
  * case-insensitive. Returns `undefined` when no signed-in account exposes a
  * subscription with the given id.
@@ -24,16 +27,24 @@ import { isSubscription, type ConcreteAzureNodeTree } from '../models/AzureNode'
  * @param tree - The Azure data-layer tree to drill.
  * @param subscriptionId - The subscription id to resolve (e.g. parsed from an
  *   ARM resource id).
+ * @param tenantId - (Optional) The owning tenant id. When provided, only that
+ *   tenant's subscriptions are searched.
  */
 export async function findSubscriptionById(
     tree: ConcreteAzureNodeTree,
     subscriptionId: string,
+    tenantId?: string,
 ): Promise<AzureSubscription | undefined> {
     const target = subscriptionId.toLowerCase();
+    const targetTenant = tenantId?.toLowerCase();
 
     const accounts = await tree.getChildren();
     for (const account of accounts) {
-        const tenants = await tree.getChildren(account);
+        let tenants = await tree.getChildren(account);
+        if (targetTenant) {
+            tenants = tenants.filter(node => isTenant(node) && node.tenantId.toLowerCase() === targetTenant);
+        }
+
         for (const tenant of tenants) {
             const subscriptions = await tree.getChildren(tenant);
             const match = subscriptions.find(
