@@ -122,10 +122,8 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * @returns The signed-in accounts, sorted by label.
      */
     private async listAccounts(): Promise<AzureAccount[]> {
-        const { code } = this.ctx;
-        const environment = getConfiguredAzureEnv(code);
-        const provider = getAuthProviderId(environment);
-        const accounts = await code.authentication.getAccounts(provider);
+        const environment = getConfiguredAzureEnv(this.ctx.code);
+        const accounts = await this.ctx.code.authentication.getAccounts(getAuthProviderId(environment));
         return accounts
             .map(account => ({
                 ...account,
