@@ -140,35 +140,35 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => ResourceClient.create(ctx, executor, credentialFactory({ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }), subscription);
+        return (subscription) => ResourceClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
 
     container.bind(IDeploymentClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => DeploymentClient.create(ctx, executor, credentialFactory({ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }), subscription);
+        return (subscription) => DeploymentClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
 
     container.bind(IAcrClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => AcrClient.create(ctx, executor, credentialFactory({ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }), subscription);
+        return (subscription) => AcrClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
 
     container.bind(ISubscriptionClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => SubscriptionClient.create(ctx, executor, credentialFactory({ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }), subscription.environment);
+        return (subscription) => SubscriptionClient.create(ctx, executor, credentialFactory(subscription), subscription.environment);
     });
 
     container.bind(IWebAppClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => WebAppClient.create(ctx, executor, credentialFactory({ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }), subscription);
+        return (subscription) => WebAppClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
 
     container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();

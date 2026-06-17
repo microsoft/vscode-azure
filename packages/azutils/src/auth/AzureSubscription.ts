@@ -48,3 +48,23 @@ export interface AzureSubscription extends WithRequired<Subscription, 'subscript
     /** The account associated with this subscription. */
     readonly account: AzureAccount;
 }
+
+/**
+ * Defensive type guard that narrows an arbitrary value to an
+ * {@linkcode AzureSubscription}.
+ *
+ * Checks that the value is a non-null object carrying the subscription's
+ * defining fields (`subscriptionId`, `tenantId`, and an owning `account` and
+ * `tenant`). This distinguishes a subscription from related shapes such as an
+ * {@linkcode AzureAccount}, {@linkcode AzureTenant}, or a plain options object.
+ */
+export function isAzureSubscription(value: unknown): value is AzureSubscription {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        'subscriptionId' in value &&
+        'tenantId' in value &&
+        'account' in value &&
+        'tenant' in value
+    );
+}

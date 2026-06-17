@@ -196,13 +196,13 @@ container.bind(IResourceClientProvider).toFactory(context => {
     const credentialFactory = context.get(ICredentialFactory);
     return (subscription) => ResourceClient.create(
         ctx, executor,
-        credentialFactory({ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }),
+        credentialFactory(subscription),
         subscription,
     );
 });
 ```
 
-`ICredentialFactory` is bound in singleton scope to `createDefaultCredentialFactory(code, output)`, which produces `VsCodeExtensionCredential` instances. The credential owns sovereign-cloud detection and CAE/MFA claims handling, so client wrappers and the pipeline stay auth-agnostic.
+`ICredentialFactory` is bound in singleton scope to `createDefaultCredentialFactory(code, output)`, which produces `VsCodeExtensionCredential` instances. The credential owns sovereign-cloud detection and CAE/MFA claims handling, so client wrappers and the pipeline stay auth-agnostic. The factory accepts either explicit `CredentialFactoryOptions` or an `AzureSubscription` directly (shorthand for `{ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }`).
 
 The resulting type is `SyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `IResourceClient` directly. This matches `ResourceClient.create(...)`, which is synchronous. The sibling `AsyncFactory<T, TArgs>` type is used for clients whose `create()` returns a promise. Both types live in `packages/utils/src/types/Factory.ts`. Commands and data providers inject the factory and call it with the relevant subscription:
 
