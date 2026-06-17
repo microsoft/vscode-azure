@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ReplacementOption, TelemetryReporter } from '@vscode/extension-telemetry';
+import type { TelemetryReporter } from '@vscode/extension-telemetry';
 import type { ServiceIdentifier } from 'inversify';
-import * as os from 'os';
 import type { IExtensionContext } from '../vscode/IVsCode';
 
 export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
@@ -28,7 +27,7 @@ export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEven
  */
 export function createTelemetryReporter(
     context: Readonly<IExtensionContext>,
-    reporterCtor: new (connectionString: string, replacementOptions?: ReplacementOption[]) => ITelemetryReporter,
+    reporterCtor: new (connectionString: string) => ITelemetryReporter,
 ): ITelemetryReporter {
     /* c8 ignore next 2 */
     const debugTelemetry = process.env.DEBUGTELEMETRY?.toLowerCase() ?? process.env.VSCODE_RUNNING_TESTS?.toLowerCase();
@@ -39,7 +38,7 @@ export function createTelemetryReporter(
             throw new Error('AI key is required for telemetry reporter');
         }
 
-        return new reporterCtor(aiKey, getUsernameReplacementOptions());
+        return new reporterCtor(aiKey);
         /* c8 ignore next 5 */
     } else if (debugTelemetry === 'v' || debugTelemetry === 'verbose') {
         return new DebugTelemetryReporter(context.extension.id);
@@ -83,28 +82,3 @@ class DebugTelemetryReporter implements ITelemetryReporter {
     }
 }
 /* c8 ignore stop */
-
-const minUsernameLength = 4;
-
-/**
- * Builds {@linkcode ReplacementOption}s that redact the OS username from
- * telemetry values. Returns an empty array if the username is too short
- * to mask safely (to avoid false-positive replacements).
- *
- * @internal Exported for testing only.
- */
-export function getUsernameReplacementOptions(): ReplacementOption[] {
-    try {
-        const username = os.userInfo().username;
-        if (username.length < minUsernameLength) {
-            return [];
-        }
-        return [{ lookup: new RegExp(`\\b${escapeRegExp(username)}\\b`, 'gi'), replacementString: '<REDACTED: username>' }];
-    } catch {
-        return [];
-    }
-}
-
-function escapeRegExp(str: string): string {
-    return str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
-}
