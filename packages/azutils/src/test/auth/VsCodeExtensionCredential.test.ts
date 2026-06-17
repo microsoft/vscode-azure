@@ -101,6 +101,14 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(lastScopes(getSession)).to.deep.equal(['scope1/.default', 'scope2/.default']);
         });
 
+        it('should fall back to the management endpoint scope when no scopes are provided', async () => {
+            const { credential, getSession } = createCredential();
+
+            await credential.getToken([]);
+
+            expect(lastScopes(getSession)).to.deep.equal(['https://management.azure.com/.default']);
+        });
+
         it('should add VSCODE_TENANT scope when tenantId is set in options', async () => {
             const { credential, getSession } = createCredential({ tenantId: 'my-tenant' });
 
@@ -210,6 +218,19 @@ describe('VsCodeExtensionCredential (unit)', () => {
 
         it('should fall back to a short positive TTL when idToken is malformed', async () => {
             const { credential } = createCredential({ session: { accessToken: 'tok', idToken: 'not-a-jwt' } });
+
+            const now = Date.now();
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            expect(result!.expiresOnTimestamp).to.be.closeTo(now + 5 * 60 * 1000, 2000);
+            expect(result!.refreshAfterTimestamp).to.be.closeTo(now + Math.floor(5 * 60 * 1000 * 2 / 3), 2000);
+        });
+
+        it('should fall back to a short positive TTL when the idToken payload is not valid JSON', async () => {
+            // A token with the right shape (three segments) but a payload that decodes to non-JSON,
+            // forcing JSON.parse to throw inside the expiry parser.
+            const { credential } = createCredential({ session: { accessToken: 'tok', idToken: 'header.bm90LWpzb24.signature' } });
 
             const now = Date.now();
             const result = await credential.getToken('scope1');
