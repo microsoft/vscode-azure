@@ -20,10 +20,9 @@ describe('Environment (unit)', () => {
             expect(AzurePublicCloud.isCustomCloud).to.be.false;
         });
 
-        it('should store ARM and management endpoints without a trailing slash', () => {
+        it('should store ARM and portal endpoints without a trailing slash', () => {
             for (const env of [AzurePublicCloud, AzureUSGovernment, AzureChinaCloud]) {
                 expect(env.resourceManagerEndpointUrl.endsWith('/'), env.name).to.be.false;
-                expect(env.managementEndpointUrl.endsWith('/'), env.name).to.be.false;
                 expect(env.portalUrl.endsWith('/'), env.name).to.be.false;
             }
             expect(AzurePublicCloud.resourceManagerEndpointUrl).to.equal('https://management.azure.com');

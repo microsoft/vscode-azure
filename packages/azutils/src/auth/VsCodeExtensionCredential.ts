@@ -78,7 +78,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
         this.environment ??= getConfiguredAzureEnv(code);
         const provider = getAuthProviderId(this.environment);
 
-        const scopesArray = normalizeScopes(scopes, this.environment.managementEndpointUrl);
+        const scopesArray = normalizeScopes(scopes, this.environment.resourceManagerEndpointUrl);
 
         const tenantId = options?.tenantId || this.options.tenantId;
         if (tenantId) {
@@ -137,19 +137,20 @@ export class VsCodeExtensionCredential implements TokenCredential {
 
 /**
  * Normalize scopes to an array of unique `.default` resource scopes, falling
- * back to the environment's management endpoint when none are provided.
+ * back to the environment's ARM (resource manager) endpoint when none are
+ * provided.
  *
  * Each scope that does not already end in `.default` has the suffix appended,
  * and duplicates are removed.
  *
- * `managementEndpointUrl` is guaranteed to have no trailing slash (see
+ * `resourceManagerEndpointUrl` is guaranteed to have no trailing slash (see
  * {@linkcode createEnvironment}), so the `/.default` suffix is appended
  * directly here. For arbitrary scopes, a slash is inserted if missing.
  */
-function normalizeScopes(scopes: string | string[], managementEndpointUrl: string): string[] {
+function normalizeScopes(scopes: string | string[], resourceManagerEndpointUrl: string): string[] {
     let list = Array.isArray(scopes) ? [...scopes] : scopes ? [scopes] : [];
     if (list.length === 0) {
-        list = [`${managementEndpointUrl}/.default`];
+        list = [`${resourceManagerEndpointUrl}/.default`];
     }
 
     const normalized = list.map(scope => {

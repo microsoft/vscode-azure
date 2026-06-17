@@ -32,14 +32,6 @@ export interface EnvironmentLike {
      */
     readonly resourceManagerEndpointUrl: string;
 
-    /**
-     * The management endpoint used to derive default token scopes, e.g.
-     * `https://management.core.windows.net`. Stored without a trailing slash
-     * (see {@linkcode createEnvironment}); the trailing slash required for an
-     * AAD scope is re-added where the scope is built.
-     */
-    readonly managementEndpointUrl: string;
-
     /** The Azure portal URL, e.g. `https://portal.azure.com`. */
     readonly portalUrl: string;
 
@@ -69,7 +61,6 @@ export interface EnvironmentLike {
 export interface EnvironmentParametersLike {
     readonly name: string;
     readonly resourceManagerEndpointUrl: string;
-    readonly managementEndpointUrl: string;
     readonly portalUrl: string;
     /** Storage DNS suffix, e.g. `core.windows.net`. */
     readonly storageEndpointSuffix: string;
@@ -85,7 +76,6 @@ export interface EnvironmentParametersLike {
  *
  * Trailing slashes are stripped from the URL endpoints
  * ({@linkcode EnvironmentLike.resourceManagerEndpointUrl resourceManagerEndpointUrl},
- * {@linkcode EnvironmentLike.managementEndpointUrl managementEndpointUrl},
  * {@linkcode EnvironmentLike.portalUrl portalUrl}) so they match the Azure SDK
  * convention regardless of whether the caller supplied them. This also sanitizes
  * user-configured custom clouds, whose values may or may not include a trailing
@@ -100,7 +90,6 @@ export function createEnvironment(parameters: EnvironmentParametersLike, isCusto
         name: parameters.name,
         isCustomCloud,
         resourceManagerEndpointUrl: stripTrailingSlash(parameters.resourceManagerEndpointUrl),
-        managementEndpointUrl: stripTrailingSlash(parameters.managementEndpointUrl),
         portalUrl: stripTrailingSlash(parameters.portalUrl),
         storageEndpoint: (accountName: string) => `https://${accountName}.blob.${storageEndpointSuffix}`,
         containerRegistryEndpoint: (registryName: string) => `https://${registryName}.${containerRegistryDnsSuffix}`,
@@ -117,7 +106,6 @@ function stripTrailingSlash(value: string): string {
 const publicCloudParameters: EnvironmentParametersLike = {
     name: 'AzureCloud',
     resourceManagerEndpointUrl: 'https://management.azure.com',
-    managementEndpointUrl: 'https://management.core.windows.net',
     portalUrl: 'https://portal.azure.com',
     storageEndpointSuffix: 'core.windows.net',
     containerRegistryDnsSuffix: 'azurecr.io',
@@ -131,7 +119,6 @@ export const AzurePublicCloud: EnvironmentLike = createEnvironment(publicCloudPa
 export const AzureUSGovernment: EnvironmentLike = createEnvironment({
     name: 'AzureUSGovernment',
     resourceManagerEndpointUrl: 'https://management.usgovcloudapi.net',
-    managementEndpointUrl: 'https://management.core.usgovcloudapi.net',
     portalUrl: 'https://portal.azure.us',
     storageEndpointSuffix: 'core.usgovcloudapi.net',
     containerRegistryDnsSuffix: 'azurecr.us',
@@ -142,7 +129,6 @@ export const AzureUSGovernment: EnvironmentLike = createEnvironment({
 export const AzureChinaCloud: EnvironmentLike = createEnvironment({
     name: 'AzureChinaCloud',
     resourceManagerEndpointUrl: 'https://management.chinacloudapi.cn',
-    managementEndpointUrl: 'https://management.core.chinacloudapi.cn',
     portalUrl: 'https://portal.azure.cn',
     storageEndpointSuffix: 'core.chinacloudapi.cn',
     containerRegistryDnsSuffix: 'azurecr.cn',
