@@ -20,6 +20,7 @@ import { OpenInPortal } from './OpenInPortal';
 import { RefreshResourcesView } from './RefreshResourcesView';
 import { RefreshWorkspaceView } from './RefreshWorkspaceView';
 import { RevealInExplorer } from './RevealInExplorer';
+import { SignIn } from './SignIn';
 
 /**
  * Registers every {@linkcode ManagedCommand} exposed by the extension
@@ -30,6 +31,7 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
     registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
     registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
+    registerManagedCommand(container, 'vscode-azure/signIn', SignIn);
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
 
     registerManagedCommand(container, 'vscode-azure/workspace/refresh', RefreshWorkspaceView);

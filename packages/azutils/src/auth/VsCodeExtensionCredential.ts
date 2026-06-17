@@ -85,8 +85,8 @@ export class VsCodeExtensionCredential implements TokenCredential {
             scopesArray.push(`VSCODE_TENANT:${tenantId}`);
         }
 
-        // When the bearer-token policy hands us CAE/MFA claims, forward them to VS
-        // Code as a synthetic WWW-Authenticate challenge so it can step up the session.
+        // When the bearer-token policy hands us CAE/MFA claims, forward them to VS Code
+        // as a synthetic WWW-Authenticate challenge so it can step up the session.
         const claims = options?.claims;
         const scopesOrChallenge: string[] | vscode.AuthenticationWwwAuthenticateRequest = claims
             ? { wwwAuthenticate: buildClaimsChallenge(claims), fallbackScopes: scopesArray }
