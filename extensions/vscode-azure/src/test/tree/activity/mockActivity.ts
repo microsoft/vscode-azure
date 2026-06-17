@@ -23,7 +23,7 @@ export function makeArmDeploymentActivity(overrides?: Partial<ArmDeploymentActiv
         type: 'armDeployment',
         title: 'd1',
         deploymentId: '/subscriptions/sub/providers/Microsoft.Resources/deployments/d1',
-        subscription: {} as never,
+        subscriptionId: 'sub',
         scope: '/subscriptions/sub',
         deploymentName: 'd1',
         rootDeploymentId: '/subscriptions/sub/providers/Microsoft.Resources/deployments/d1',
