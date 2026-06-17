@@ -12,11 +12,12 @@ import type {
     TenantIdDescription,
 } from '@azure/arm-resources-subscriptions/models';
 import type { TokenCredential } from '@azure/core-auth';
-import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
 import type { EnvironmentLike } from '../../auth/Environment';
 import { createArmRestClient } from '../createAzureClient';
+import { toPages } from '../toPages';
 
 export type { Location, Subscription, TenantIdDescription };
 
@@ -30,10 +31,10 @@ export type ISubscriptionClientProvider = SyncFactory<ISubscriptionClient, [Azur
  */
 export interface ISubscriptionClient {
     readonly tenants: {
-        list(options?: TenantsListOptionalParams): Promise<TenantIdDescription[]>;
+        list(options?: TenantsListOptionalParams): AsyncIterable<Page<TenantIdDescription>>;
     };
     readonly subscriptions: {
-        list(options?: SubscriptionsListOptionalParams): Promise<Subscription[]>;
+        list(options?: SubscriptionsListOptionalParams): AsyncIterable<Page<Subscription>>;
         listLocations(subscriptionId: string, options?: SubscriptionsListLocationsOptionalParams): Promise<Location[]>;
     };
 }
@@ -87,20 +88,12 @@ export class SubscriptionClient implements ISubscriptionClient {
         };
     }
 
-    private async listTenants(options?: TenantsListOptionalParams): Promise<TenantIdDescription[]> {
-        const tenants: TenantIdDescription[] = [];
-        for await (const tenant of sdkListTenants(this.inner, options)) {
-            tenants.push(tenant);
-        }
-        return tenants;
+    private listTenants(options?: TenantsListOptionalParams): AsyncIterable<Page<TenantIdDescription>> {
+        return toPages(sdkListTenants(this.inner, options));
     }
 
-    private async listSubscriptions(options?: SubscriptionsListOptionalParams): Promise<Subscription[]> {
-        const subscriptions: Subscription[] = [];
-        for await (const subscription of sdkListSubscriptions(this.inner, options)) {
-            subscriptions.push(subscription);
-        }
-        return subscriptions;
+    private listSubscriptions(options?: SubscriptionsListOptionalParams): AsyncIterable<Page<Subscription>> {
+        return toPages(sdkListSubscriptions(this.inner, options));
     }
 
     private static readonly locationsCache = new Map<string, Location[]>();

@@ -3,20 +3,43 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzurePublicCloud, PublicAuthProviderId, type AzureAccount } from '@microsoft/vscode-azure-azutils';
-import { makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant } from '@microsoft/vscode-azure-azutils';
+import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
+import type { ChildResult, Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../tree/resources/AzureAccountDataProvider';
 
 describe('AzureAccountDataProvider (unit)', () => {
+    afterEach(() => {
+        mock.restoreAll();
+    });
+
     function createProvider() {
         const { ctx, mock } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const credentialFactory = () => makeCredential();
         const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
         return { provider, mock };
+    }
+
+    /**
+     * Replaces the static {@linkcode SubscriptionClient.create} factory with a
+     * {@linkcode createMockSubscriptionClient} whose `tenants.list` /
+     * `subscriptions.list` yield the supplied pages, so the provider's lazy page
+     * streaming can be asserted without real HTTP.
+     */
+    function mockSubscriptionClient(options: MockSubscriptionClientOptions) {
+        return mock.method(SubscriptionClient, 'create', () => createMockSubscriptionClient(options) as never);
+    }
+
+    async function collectPages<T>(result: ChildResult<T> | null | undefined): Promise<Array<Page<T>>> {
+        const collected: Array<Page<T>> = [];
+        for await (const page of result as AsyncIterable<Page<T>>) {
+            collected.push(page);
+        }
+        return collected;
     }
 
     describe('canHandle', () => {
@@ -146,6 +169,114 @@ describe('AzureAccountDataProvider (unit)', () => {
                 error = e;
             }
             expect((error as Error).message).to.include('Unsupported resource type');
+        });
+    });
+
+    describe('getChildren tenant paging', () => {
+        it('should stream tenants across multiple pages preserving hasMore', async () => {
+            const { provider } = createProvider();
+            const account = makeAccount();
+            mockSubscriptionClient({
+                tenantPages: [
+                    { items: [{ tenantId: 't1', displayName: 'Tenant One' }], hasMore: true },
+                    { items: [{ tenantId: 't2', displayName: 'Tenant Two' }], hasMore: false },
+                ],
+            });
+
+            const pages = await collectPages(await provider.getChildren(account));
+
+            expect(pages).to.have.length(2);
+            expect(pages[0].hasMore).to.be.true;
+            expect(pages[1].hasMore).to.be.false;
+            expect(pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId))).to.deep.equal(['t1', 't2']);
+        });
+
+        it('should attach the account and environment to each tenant', async () => {
+            const { provider } = createProvider();
+            const account = makeAccount();
+            mockSubscriptionClient({
+                tenantPages: [{ items: [{ tenantId: 't1', displayName: 'Tenant One' }], hasMore: false }],
+            });
+
+            const pages = await collectPages(await provider.getChildren(account));
+
+            const tenant = (pages[0].items as AzureTenant[])[0];
+            expect(tenant.account).to.equal(account);
+            expect(tenant.environment).to.equal(AzurePublicCloud);
+        });
+
+        it('should filter out tenants missing a tenantId or displayName', async () => {
+            const { provider } = createProvider();
+            const account = makeAccount();
+            mockSubscriptionClient({
+                tenantPages: [{
+                    items: [
+                        { tenantId: undefined, displayName: 'No Id' },
+                        { tenantId: 't2', displayName: undefined },
+                        { tenantId: 't3', displayName: 'Valid' },
+                    ],
+                    hasMore: false,
+                }],
+            });
+
+            const pages = await collectPages(await provider.getChildren(account));
+
+            expect((pages[0].items as AzureTenant[]).map(t => t.tenantId)).to.deep.equal(['t3']);
+        });
+    });
+
+    describe('getChildren subscription paging', () => {
+        it('should stream subscriptions across multiple pages preserving hasMore', async () => {
+            const { provider } = createProvider();
+            const tenant = makeTenant();
+            mockSubscriptionClient({
+                subscriptionPages: [
+                    { items: [{ subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' }], hasMore: true },
+                    { items: [{ subscriptionId: 's2', tenantId: tenant.tenantId, displayName: 'Sub Two' }], hasMore: false },
+                ],
+            });
+
+            const pages = await collectPages(await provider.getChildren(tenant));
+
+            expect(pages).to.have.length(2);
+            expect(pages[0].hasMore).to.be.true;
+            expect(pages[1].hasMore).to.be.false;
+            expect(pages.flatMap(p => (p.items as AzureSubscription[]).map(s => s.subscriptionId))).to.deep.equal(['s1', 's2']);
+        });
+
+        it('should attach the tenant, account, and environment to each subscription', async () => {
+            const { provider } = createProvider();
+            const tenant = makeTenant();
+            mockSubscriptionClient({
+                subscriptionPages: [{ items: [{ subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' }], hasMore: false }],
+            });
+
+            const pages = await collectPages(await provider.getChildren(tenant));
+
+            const sub = (pages[0].items as AzureSubscription[])[0];
+            expect(sub.tenant).to.equal(tenant);
+            expect(sub.account).to.equal(tenant.account);
+            expect(sub.environment).to.equal(tenant.environment);
+        });
+
+        it('should filter out subscriptions missing a subscriptionId, tenantId, or displayName', async () => {
+            const { provider } = createProvider();
+            const tenant = makeTenant();
+            mockSubscriptionClient({
+                subscriptionPages: [{
+                    items: [
+                        { subscriptionId: undefined, tenantId: tenant.tenantId, displayName: 'No Id' },
+                        { subscriptionId: 's2', tenantId: undefined, displayName: 'No Tenant' },
+                        { subscriptionId: 's3', tenantId: tenant.tenantId, displayName: undefined },
+                        { subscriptionId: 's4', tenantId: tenant.tenantId, displayName: 'Valid' },
+                    ],
+                    hasMore: false,
+                }],
+            });
+
+            const pages = await collectPages(await provider.getChildren(tenant));
+
+            expect((pages[0].items as AzureSubscription[]).map(s => s.subscriptionId)).to.deep.equal(['s4']);
         });
     });
 });

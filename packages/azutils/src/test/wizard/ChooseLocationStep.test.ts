@@ -8,9 +8,9 @@ import { Wizard } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
-import type { ISubscriptionClientProvider, Location } from '../../rest/clients/SubscriptionClient';
+import type { Location } from '../../rest/clients/SubscriptionClient';
 import { ChooseLocationStep } from '../../wizard/ChooseLocationStep';
-import { makeSubscription } from '../mockAzure';
+import { createMockSubscriptionClientProvider, makeSubscription } from '../mockAzure';
 
 const subscription = makeSubscription();
 
@@ -21,18 +21,6 @@ const northeurope: Location = { name: 'northeurope', displayName: 'North Europe'
 interface TestContext extends PickContext<string> {
     readonly subscription: AzureSubscription;
     readonly location?: Location;
-}
-
-function createMockSubscriptionClientProvider(locations: Location[]): ISubscriptionClientProvider {
-    return () => ({
-        tenants: {
-            list: () => Promise.resolve([]),
-        },
-        subscriptions: {
-            list: () => Promise.resolve([]),
-            listLocations: () => Promise.resolve(locations),
-        },
-    });
 }
 
 describe('ChooseLocationStep (unit)', () => {

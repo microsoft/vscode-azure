@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockDataItemTree, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
+import { createMockDataItemTree, createMockSubscriptionClientProvider, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -34,19 +34,10 @@ describe('CreateFunctionApp (unit)', () => {
         const dataTree = createMockDataItemTree([sub]);
         const viewItemTree = createMockViewItemTree({ '': [subKey] });
 
-        const subscriptionClientProvider: ISubscriptionClientProvider = () =>
-        ({
-            tenants: {
-                list: () => Promise.resolve([]),
-            },
-            subscriptions: {
-                list: () => Promise.resolve([]),
-                listLocations: mock.fn(() => Promise.resolve([
-                    { name: 'eastus', displayName: 'East US' },
-                    { name: 'westus', displayName: 'West US' },
-                ])),
-            },
-        });
+        const subscriptionClientProvider = createMockSubscriptionClientProvider([
+            { name: 'eastus', displayName: 'East US' },
+            { name: 'westus', displayName: 'West US' },
+        ]);
 
         const tempManager = new TempDirManager(ctx);
 

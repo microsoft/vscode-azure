@@ -11,11 +11,10 @@ import {
     SubscriptionClient,
     type AzureAccount, type AzureSubscription, type AzureTenant,
     type ConcreteAzureNode,
-    type ISubscriptionClient,
 } from '@microsoft/vscode-azure-azutils';
 import {
     EventEmitter, IActionExecutor, ICodeContext,
-    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 
@@ -94,24 +93,20 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * @inheritdoc
      * @throws if `resource` is neither an account nor a tenant.
      */
-    public async getChildren(resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> {
+    public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
         if (!resource) {
             // Lists already-signed-in accounts without prompting. The user is
             // prompted to sign in lazily when an operation actually needs a
             // credential (the default credential uses `createIfNone`).
-            return await this.listAccounts() as ConcreteAzureNode[];
+            return this.listAccounts();
         }
 
         if (isAccount(resource)) {
-            const credential = this.credentialFactory({ sessionOptions: { account: resource } });
-            const client = SubscriptionClient.create(this.ctx, this.executor, credential, resource.environment);
-            return await this.listTenantsForAccount(resource, client) as ConcreteAzureNode[];
+            return this.listTenantsForAccount(resource);
         }
 
         if (isTenant(resource)) {
-            const credential = this.credentialFactory({ tenantId: resource.tenantId, sessionOptions: { account: resource.account } });
-            const client = SubscriptionClient.create(this.ctx, this.executor, credential, resource.account.environment);
-            return await this.listSubscriptionsForTenant(resource, client) as ConcreteAzureNode[];
+            return this.listSubscriptionsForTenant(resource);
         }
 
         throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
@@ -140,44 +135,50 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     }
 
     /**
-     * List the tenants belonging to the given account.
+     * List the tenants belonging to the given account, yielded one page at a
+     * time. Accounts can belong to a very large number of tenants, so pages are
+     * streamed lazily rather than buffered; ordering follows the service
+     * response (no cross-page sort).
      *
      * @param account - The account whose tenants are listed.
-     * @param client - A subscription client created with a credential scoped to
-     *   the account's home tenant.
-     * @returns The tenants, sorted by display name.
      */
-    private async listTenantsForAccount(account: AzureAccount, client: ISubscriptionClient): Promise<AzureTenant[]> {
-        const tenants = await client.tenants.list();
-        return tenants
-            .filter((tenant): tenant is typeof tenant & { tenantId: string; displayName: string } => !!tenant.tenantId && !!tenant.displayName)
-            .map(tenant => ({
-                ...tenant,
-                environment: account.environment,
-                account,
-            } satisfies AzureTenant))
-            .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    private async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
+        const credential = this.credentialFactory({ sessionOptions: { account } });
+        const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment);
+        for await (const page of client.tenants.list()) {
+            const items = page.items
+                .filter((tenant): tenant is typeof tenant & { tenantId: string; displayName: string } => !!tenant.tenantId && !!tenant.displayName)
+                .map(tenant => ({
+                    ...tenant,
+                    environment: account.environment,
+                    account,
+                } satisfies AzureTenant));
+            yield { items, hasMore: page.hasMore };
+        }
     }
 
     /**
-     * List the subscriptions belonging to the given tenant.
+     * List the subscriptions belonging to the given tenant, yielded one page at
+     * a time. A tenant can contain a very large number of subscriptions, so
+     * pages are streamed lazily rather than buffered; ordering follows the
+     * service response (no cross-page sort).
      *
      * @param tenant - The tenant whose subscriptions are listed.
-     * @param client - A subscription client created with a credential scoped to
-     *   the tenant.
-     * @returns The subscriptions, sorted by name.
      */
-    private async listSubscriptionsForTenant(tenant: AzureTenant, client: ISubscriptionClient): Promise<AzureSubscription[]> {
-        const subscriptions = await client.subscriptions.list();
-        return subscriptions
-            .filter((sub): sub is typeof sub & { subscriptionId: string; tenantId: string; displayName: string } => !!sub.subscriptionId && !!sub.tenantId && !!sub.displayName)
-            .map(sub => ({
-                ...sub,
-                environment: tenant.environment,
-                tenant,
-                account: tenant.account,
-            } satisfies AzureSubscription))
-            .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    private async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
+        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: tenant.account } });
+        const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.account.environment);
+        for await (const page of client.subscriptions.list()) {
+            const items = page.items
+                .filter((sub): sub is typeof sub & { subscriptionId: string; tenantId: string; displayName: string } => !!sub.subscriptionId && !!sub.tenantId && !!sub.displayName)
+                .map(sub => ({
+                    ...sub,
+                    environment: tenant.environment,
+                    tenant,
+                    account: tenant.account,
+                } satisfies AzureSubscription));
+            yield { items, hasMore: page.hasMore };
+        }
     }
 
     private invalidateAll(): void {

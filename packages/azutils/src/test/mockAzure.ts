@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
-import type { ChildResult, DataProvider } from '@microsoft/vscode-azure-utils';
+import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-utils';
 import { mock } from 'node:test';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../auth/AzureSubscription';
 import { AzurePublicCloud, type EnvironmentLike } from '../auth/Environment';
@@ -12,6 +12,7 @@ import { isAccount, isTenant, type ConcreteAzureNode } from '../models/AzureNode
 import type { GenericResource } from '../models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../models/Grouping';
 import type { VirtualResource } from '../models/VirtualResource';
+import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../rest/clients/SubscriptionClient';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
 
@@ -177,4 +178,50 @@ export function createMockAccountDataProvider(options?: MockAccountDataProviderO
             }
         }),
     };
+}
+
+/** Options for {@linkcode createMockSubscriptionClient}. */
+export interface MockSubscriptionClientOptions {
+    /** Pages yielded by `tenants.list`. Defaults to a single empty page. */
+    readonly tenantPages?: Array<Page<TenantIdDescription>>;
+    /** Pages yielded by `subscriptions.list`. Defaults to a single empty page. */
+    readonly subscriptionPages?: Array<Page<Subscription>>;
+    /** Locations resolved by `subscriptions.listLocations`. Defaults to `[]`. */
+    readonly locations?: Location[];
+}
+
+/**
+ * Creates a mock {@linkcode ISubscriptionClient} whose `tenants.list` and
+ * `subscriptions.list` lazily yield the supplied pages (a single empty page by
+ * default) and whose `subscriptions.listLocations` resolves to the supplied
+ * `locations`.
+ *
+ * `listLocations` is wrapped with `mock.fn()` so callers can assert call counts
+ * and arguments.
+ */
+export function createMockSubscriptionClient(options?: MockSubscriptionClientOptions): ISubscriptionClient {
+    const tenantPages = options?.tenantPages ?? [{ items: [], hasMore: false }];
+    const subscriptionPages = options?.subscriptionPages ?? [{ items: [], hasMore: false }];
+    const locations = options?.locations ?? [];
+    return {
+        tenants: {
+            // eslint-disable-next-line @typescript-eslint/require-await
+            list: () => (async function* () { yield* tenantPages; })(),
+        },
+        subscriptions: {
+            // eslint-disable-next-line @typescript-eslint/require-await
+            list: () => (async function* () { yield* subscriptionPages; })(),
+            listLocations: mock.fn(() => Promise.resolve(locations)),
+        },
+    };
+}
+
+/**
+ * Creates a mock {@linkcode ISubscriptionClientProvider} backed by a
+ * {@linkcode createMockSubscriptionClient} whose `subscriptions.listLocations`
+ * resolves to the supplied `locations`.
+ */
+export function createMockSubscriptionClientProvider(locations: Location[] = []): ISubscriptionClientProvider {
+    const client = createMockSubscriptionClient({ locations });
+    return () => client;
 }

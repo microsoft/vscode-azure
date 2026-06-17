@@ -162,7 +162,7 @@ interface ISubscriptionClient {
 
 Key behaviors:
 - **Static location cache**: Location lists are cached by subscription ID in a static `Map` across all instances, since locations rarely change.
-- `tenants.list` / `subscriptions.list` back the account/tenant/subscription auth helpers (see [tree-views.md](./tree-views.md)); `subscriptions.listLocations` is used by `ChooseLocationStep` to populate the location picker.
+- `tenants.list` / `subscriptions.list` return `AsyncIterable<Page<T>>` (via [`toPages`](#topages)) so the account/tenant/subscription data provider can stream large tenant/subscription sets lazily rather than buffering them; `subscriptions.listLocations` returns a cached array and is used by `ChooseLocationStep` to populate the location picker.
 
 ## `toPages`
 
