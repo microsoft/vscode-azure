@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscription, ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
@@ -23,6 +23,17 @@ export type IAzureViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');
 export type IAzureResourceTreeView = vscode.TreeView<string>;
+
+/**
+ * Identifier for a resolver that maps a bare subscription id to a fully-populated
+ * {@linkcode AzureSubscription} by drilling the Azure resource data tree.
+ *
+ * Lets activity-tree components (e.g. the ARM deployment provider) obtain an
+ * authenticatable subscription handle without taking a direct dependency on the
+ * resource tree. Returns `undefined` when no signed-in account exposes the id.
+ */
+export const ISubscriptionResolver: ServiceIdentifier<ISubscriptionResolver> = Symbol.for('ISubscriptionResolver');
+export type ISubscriptionResolver = (subscriptionId: string) => Promise<AzureSubscription | undefined>;
 
 // #endregion
 

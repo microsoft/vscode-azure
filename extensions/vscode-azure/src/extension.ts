@@ -7,6 +7,7 @@ import {
     AcrClient,
     createDefaultCredentialFactory,
     DeploymentClient,
+    findSubscriptionById,
     IAcrClientProvider,
     ICredentialFactory,
     IDeploymentClientProvider,
@@ -40,7 +41,7 @@ import { AzdAuthServer, IAzdAuthServer } from './azd/AzdAuthServer';
 import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { registerCommands } from './commands/registerCommands';
-import { pushDisposable } from './services';
+import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
 
@@ -149,6 +150,11 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         const credentialFactory = context.get(ICredentialFactory);
         return (subscription) => DeploymentClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
+
+    container.bind(ISubscriptionResolver).toDynamicValue(context => {
+        const tree = context.get(IAzureViewDataTree);
+        return (subscriptionId: string) => findSubscriptionById(tree, subscriptionId);
+    }).inSingletonScope();
 
     container.bind(IAcrClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);

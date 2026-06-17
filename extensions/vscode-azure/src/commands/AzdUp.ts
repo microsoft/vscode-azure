@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { findSubscriptionById } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
@@ -57,7 +56,7 @@ export class AzdUp implements ManagedCommand {
                 new SelectIacFolderStep(this.actionContext, this.ctx, this.tempManager, this.azd),
             ],
             [
-                new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, (id) => findSubscriptionById(this.dataTree, id), this.tempManager),
+                new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.tempManager),
                 new AzdDeployStep(this.actionContext, this.ctx.code, this.azd, this.codeProvider),
                 new ShowEndpointUrlStep(this.ctx, this.azd),
             ],

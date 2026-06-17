@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
-import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { CancellationError, delay, ExecuteStep, stringifyError, type ICodeContext, type IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
@@ -16,13 +14,6 @@ import type { AzdWizardContext } from './AzdWizardContext';
 interface DeploymentIdEntry {
     readonly deploymentId: string;
 }
-
-/**
- * Resolves a bare subscription id into a fully-populated
- * {@linkcode AzureSubscription}, or `undefined` when it cannot be resolved.
- * Typically backed by `findSubscriptionById` against the resource data tree.
- */
-export type SubscriptionResolver = (subscriptionId: string) => Promise<AzureSubscription | undefined>;
 
 /** Interval in milliseconds between polls for the deployment ID file. */
 const pollIntervalMs = 3000;
@@ -40,7 +31,6 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         private readonly azd: IAzdService,
         private readonly output: IOutputChannel,
         private readonly armProvider: ArmDeploymentDataProvider,
-        private readonly subscriptionResolver: SubscriptionResolver,
         private readonly tempDirManager: ITempDirManager,
     ) {
         super();
@@ -57,13 +47,8 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const abortCtl = new AbortController();
         const trackedIds = new Set<string>();
 
-        // The wizard may have already picked the target subscription. When set, the
-        // deployment is guaranteed to land in it (CreateAzdEnvStep provisions with
-        // exactly this subscription), so we can skip resolution entirely.
-        const knownSubscription = context.subscription;
-
         // Start polling in the background (fire-and-forget)
-        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal, knownSubscription);
+        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal);
 
         try {
             await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
@@ -72,7 +57,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         } finally {
             abortCtl.abort();
             // Final read to catch any entries written just before exit
-            await this.readAndTrack(deployIdFileUri, trackedIds, knownSubscription);
+            await this.readAndTrack(deployIdFileUri, trackedIds);
         }
     }
 
@@ -87,10 +72,10 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * still-running provision -- a brand new deployment is a brand new event
      * and should appear in the tree.
      */
-    private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal, knownSubscription?: AzureSubscription): Promise<void> {
+    private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal): Promise<void> {
         try {
             while (!signal.aborted) {
-                await this.readAndTrack(fileUri, trackedIds, knownSubscription);
+                await this.readAndTrack(fileUri, trackedIds);
                 await delay(pollIntervalMs, { signal });
             }
         } catch (e) {
@@ -103,10 +88,10 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     /**
      * Reads the deployment ID file and starts tracking any entries
      * not already in {@linkcode trackedIds}. Best-effort: silently
-     * ignores missing files, parse errors, and subscription resolution
-     * failures.
+     * ignores missing files and parse errors. The activity provider
+     * resolves each deployment's subscription on demand.
      */
-    private async readAndTrack(fileUri: vscode.Uri, trackedIds: Set<string>, knownSubscription?: AzureSubscription): Promise<void> {
+    private async readAndTrack(fileUri: vscode.Uri, trackedIds: Set<string>): Promise<void> {
         const entries = await this.readDeploymentIdFile(fileUri);
         for (const entry of entries) {
             if (trackedIds.has(entry.deploymentId)) {
@@ -116,13 +101,9 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             this.output.debug(`[provision] found deployment ID: ${entry.deploymentId}`);
 
             try {
-                const { subscriptionId } = parseAzureResourceId(entry.deploymentId);
-                const subscription = await this.resolveSubscription(subscriptionId, knownSubscription);
-                if (subscription) {
-                    this.armProvider.trackDeployment(entry.deploymentId, subscription);
-                }
-            } catch {
-                this.output.debug(`[provision] failed to track deployment: ${entry.deploymentId}`);
+                this.armProvider.trackDeployment(entry.deploymentId);
+            } catch (e) {
+                this.output.debug(`[provision] failed to track deployment ${entry.deploymentId}: ${stringifyError(e)}`);
             }
         }
     }
@@ -154,24 +135,5 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         } catch {
             return [];
         }
-    }
-
-    /**
-     * Resolve the {@linkcode AzureSubscription} for a deployment's subscription
-     * id. Prefers {@linkcode knownSubscription} when it matches (avoiding a tree
-     * lookup), otherwise falls back to the injected {@linkcode subscriptionResolver}.
-     * Returns `undefined` when resolution fails.
-     */
-    private async resolveSubscription(subscriptionId: string, knownSubscription?: AzureSubscription): Promise<AzureSubscription | undefined> {
-        if (knownSubscription?.subscriptionId.toLowerCase() === subscriptionId.toLowerCase()) {
-            return knownSubscription;
-        }
-
-        try {
-            return await this.subscriptionResolver(subscriptionId);
-        } catch {
-            this.output.debug(`[provision] failed to resolve subscription ${subscriptionId}`);
-        }
-        return undefined;
     }
 }

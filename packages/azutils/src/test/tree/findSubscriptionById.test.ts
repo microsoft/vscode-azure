@@ -5,9 +5,9 @@
 
 import { expect } from 'chai';
 import type { ConcreteAzureNode } from '../../models/AzureNode';
-import { findSubscriptionById } from '../../tree/findSubscription';
+import { findSubscriptionById } from '../../tree/findSubscriptionById';
 import { makeAccount, makeSubscription, makeTenant } from '../mockAzure';
-import { createMockHierarchicalDataItemTree } from '../tree/mockTree';
+import { createMockHierarchicalDataItemTree } from './mockTree';
 
 describe('findSubscriptionById (unit)', () => {
     function createTree() {

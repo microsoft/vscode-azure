@@ -19,7 +19,7 @@ export * from './rest/clients/ResourceClient';
 export * from './rest/clients/SubscriptionClient';
 export * from './rest/clients/WebAppClient';
 export * from './rest/createAzureClient';
-export * from './tree/findSubscription';
+export * from './tree/findSubscriptionById';
 export * from './tree/pick/resourceExperience';
 export * from './tree/pick/resourceGroupExperience';
 export * from './tree/pick/subscriptionExperience';
