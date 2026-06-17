@@ -90,34 +90,94 @@ describe('AzureAccountDataProvider (unit)', () => {
     });
 
     describe('onDidChange', () => {
-        it('should fire on authentication session changes for the Microsoft provider', () => {
-            const { provider, mock } = createProvider();
-            let fired = false;
-            provider.onDidChange(() => { fired = true; });
+        // Session-change handling debounces via setTimeout and gates on
+        // Date.now(); fake both so the timing can be driven deterministically.
+        beforeEach(() => {
+            mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+        });
 
-            mock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+        afterEach(() => {
+            mock.timers.reset();
+        });
 
-            expect(fired).to.be.true;
+        it('should fire (debounced) on authentication session changes for the Microsoft provider', () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            // Debounced: nothing fires until the timer elapses.
+            expect(fired).to.equal(0);
+
+            mock.timers.tick(500);
+            expect(fired).to.equal(1);
         });
 
         it('should not fire on authentication session changes for unrelated providers', () => {
-            const { provider, mock } = createProvider();
-            let fired = false;
-            provider.onDidChange(() => { fired = true; });
+            const { provider, mock: vscodeMock } = createProvider();
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
 
-            mock.sessionsChangeEmitter.fire({ provider: { id: 'github', label: 'GitHub' } });
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: 'github', label: 'GitHub' } });
+            mock.timers.tick(500);
 
-            expect(fired).to.be.false;
+            expect(fired).to.equal(0);
         });
 
-        it('should fire when the sovereign cloud configuration changes', () => {
-            const { provider, mock } = createProvider();
-            let fired = false;
-            provider.onDidChange(() => { fired = true; });
+        it('should coalesce a burst of session changes into a single invalidation', () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
 
-            mock.configChangeEmitter.fire({ affectsConfiguration: section => section === 'microsoft-sovereign-cloud' });
+            for (let i = 0; i < 5; i++) {
+                vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            }
+            mock.timers.tick(500);
 
-            expect(fired).to.be.true;
+            expect(fired).to.equal(1);
+        });
+
+        it('should suppress session-change events that occur within its own getAccounts window', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            // Listing accounts opens the suppression window.
+            await provider.getChildren();
+
+            // An event arriving inside the window is ignored, so nothing is scheduled.
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+
+            expect(fired).to.equal(0);
+        });
+
+        it('should resume handling session-change events after the suppression window elapses', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            await provider.getChildren();
+
+            // Advance past the suppression window, then fire and let the debounce elapse.
+            mock.timers.tick(1001);
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+
+            expect(fired).to.equal(1);
+        });
+
+        it('should fire (undebounced) when the sovereign cloud configuration changes', () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            vscodeMock.configChangeEmitter.fire({ affectsConfiguration: section => section === 'microsoft-sovereign-cloud' });
+
+            // Configuration changes invalidate immediately (the environment changed).
+            expect(fired).to.equal(1);
         });
     });
 

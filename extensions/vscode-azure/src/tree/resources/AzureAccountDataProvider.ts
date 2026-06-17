@@ -26,6 +26,20 @@ import { inject, injectable, type ServiceIdentifier } from 'inversify';
 export const IAzureAccountDataProvider: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IAzureAccountDataProvider');
 
 /**
+ * Debounce window (ms) for `authentication.onDidChangeSessions`. These events
+ * fire frequently and often for reasons we don't care about, so bursts are
+ * coalesced into a single invalidation.
+ */
+const SessionChangeDebounceMs = 500;
+
+/**
+ * Suppression window (ms) applied around our own `getAccounts()` call. Listing
+ * accounts can itself trigger an `onDidChangeSessions` event; ignoring events
+ * for a short window around the call breaks that self-induced feedback loop.
+ */
+const GetAccountsSuppressionMs = 1000;
+
+/**
  * Root data-layer provider for the account / tenant / subscription levels of the
  * Azure resources tree.
  *
@@ -51,6 +65,19 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
 
+    /**
+     * Pending debounce timer for coalescing `onDidChangeSessions` bursts, or
+     * `undefined` when no invalidation is scheduled.
+     */
+    private sessionDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /**
+     * Timestamp (epoch ms) before which incoming `onDidChangeSessions` events
+     * are ignored. Set around our own `getAccounts()` call to suppress
+     * self-induced events. See {@linkcode GetAccountsSuppressionMs}.
+     */
+    private suppressSessionEventsUntil = 0;
+
     public readonly onDidChange = this.changeEmitter.event;
 
     public constructor(
@@ -58,12 +85,19 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
     ) {
-        // TODO: This fires a lot, need to filter and/or debounce
         this.disposables.push(this.ctx.code.authentication.onDidChangeSessions(e => {
-            if (e.provider.id === PublicAuthProviderId || e.provider.id === SovereignAuthProviderId) {
-                this.executor.output.debug(`[auth] sessions changed provider=${e.provider.id}; invalidating accounts`);
-                this.invalidateAll();
+            if (e.provider.id !== PublicAuthProviderId && e.provider.id !== SovereignAuthProviderId) {
+                return;
             }
+
+            // Listing accounts can itself trigger a session-change event;
+            // ignore events inside the suppression window to avoid looping.
+            if (Date.now() < this.suppressSessionEventsUntil) {
+                this.executor.output.trace(`[auth] sessions changed provider=${e.provider.id}; suppressed (self-induced window)`);
+                return;
+            }
+
+            this.scheduleSessionInvalidation(e.provider.id);
         }));
 
         this.disposables.push(this.ctx.code.workspace.onDidChangeConfiguration(e => {
@@ -72,6 +106,27 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 this.invalidateAll();
             }
         }));
+    }
+
+    /**
+     * Schedule a debounced accounts invalidation in response to an
+     * authentication session change. Repeated calls within
+     * {@linkcode SessionChangeDebounceMs} collapse into a single invalidation.
+     *
+     * The invalidation body is intentionally a single seam
+     * ({@linkcode invalidateAll}) so the strategy can be refined independently
+     * of the debounce/suppression logic.
+     */
+    private scheduleSessionInvalidation(providerId: string): void {
+        if (this.sessionDebounceTimer !== undefined) {
+            clearTimeout(this.sessionDebounceTimer);
+        }
+
+        this.sessionDebounceTimer = setTimeout(() => {
+            this.sessionDebounceTimer = undefined;
+            this.executor.output.debug(`[auth] sessions changed provider=${providerId}; invalidating accounts`);
+            this.invalidateAll();
+        }, SessionChangeDebounceMs);
     }
 
     /** @inheritdoc */
@@ -123,7 +178,15 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private async listAccounts(): Promise<AzureAccount[]> {
         const environment = getConfiguredAzureEnv(this.ctx.code);
+
+        // Suppress session-change events around our own getAccounts() call:
+        // the call can itself trigger onDidChangeSessions, which would
+        // otherwise re-enter and loop. Set the window before and after so it
+        // covers both the in-flight call and any trailing event.
+        this.suppressSessionEventsUntil = Date.now() + GetAccountsSuppressionMs;
         const accounts = await this.ctx.code.authentication.getAccounts(getAuthProviderId(environment));
+        this.suppressSessionEventsUntil = Date.now() + GetAccountsSuppressionMs;
+
         return accounts
             .map(account => ({
                 ...account,
@@ -185,6 +248,10 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
 
     /** @inheritdoc */
     public dispose(): void {
+        if (this.sessionDebounceTimer !== undefined) {
+            clearTimeout(this.sessionDebounceTimer);
+            this.sessionDebounceTimer = undefined;
+        }
         this.disposables.forEach(d => void d.dispose());
     }
 }
