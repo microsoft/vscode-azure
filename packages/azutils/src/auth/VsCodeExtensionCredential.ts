@@ -101,7 +101,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
             return null;
         }
 
-        const { expiresOnTimestamp, refreshAfterTimestamp } = getTokenExpiry(session.idToken);
+        const { expiresOnTimestamp, refreshAfterTimestamp } = getTokenExpiry(session.accessToken, session.idToken);
 
         const scopesJson = JSON.stringify(scopesArray);
         output?.info(code.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn={2}', provider, scopesJson, expiresOnTimestamp));
@@ -173,35 +173,57 @@ function buildClaimsChallenge(claims: string): string {
 }
 
 /**
- * Best-effort extraction of `exp` from a JWT ID token. Returns `expiresOnTimestamp`
- * in milliseconds and `refreshAfterTimestamp` at 2/3 of the remaining lifetime.
- * Falls back to `0` for both if the token is missing or unparseable.
+ * Short fallback lifetime (in milliseconds) applied when neither the access
+ * token nor the ID token yields a usable `exp` claim. A small positive TTL keeps
+ * the token cached briefly (so the bearer-token policy doesn't re-acquire on
+ * every request) while still refreshing soon.
  */
-function getTokenExpiry(idToken: string | undefined): { expiresOnTimestamp: number; refreshAfterTimestamp: number } {
-    if (!idToken) {
-        return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+const FALLBACK_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Best-effort computation of the token expiry for the returned `AccessToken`.
+ *
+ * The access token is tried first; because it may be encrypted/opaque rather
+ * than a parseable JWT, the ID token is used as a fallback. Returns
+ * `expiresOnTimestamp` in milliseconds and `refreshAfterTimestamp` at 2/3 of the
+ * remaining lifetime.
+ *
+ * When neither token yields a usable `exp`, falls back to a short positive TTL
+ * ({@linkcode FALLBACK_TTL_MS}) so the token is cached briefly and refreshed
+ * soon, rather than being treated as already expired.
+ */
+function getTokenExpiry(accessToken: string | undefined, idToken: string | undefined): { expiresOnTimestamp: number; refreshAfterTimestamp: number } {
+    const now = Date.now();
+    const exp = parseJwtExp(accessToken) ?? parseJwtExp(idToken);
+    const expiresOnTimestamp = exp !== undefined ? exp * 1000 : now + FALLBACK_TTL_MS;
+
+    const remaining = expiresOnTimestamp - now;
+    const refreshAfterTimestamp = remaining > 0 ? now + Math.floor(remaining * 2 / 3) : expiresOnTimestamp;
+
+    return { expiresOnTimestamp, refreshAfterTimestamp };
+}
+
+/**
+ * Best-effort extraction of the numeric `exp` claim (in seconds) from a JWT.
+ * Returns `undefined` when the token is missing, not a parseable JWT (e.g. an
+ * encrypted/opaque access token), or lacks a numeric `exp` claim.
+ */
+function parseJwtExp(token: string | undefined): number | undefined {
+    if (!token) {
+        return undefined;
     }
 
     try {
-        const parts = idToken.split('.');
+        const parts = token.split('.');
         if (parts.length < 2 || !parts[1]) {
-            return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+            return undefined;
         }
 
         // JWT payloads use base64url encoding; Node's Buffer handles this natively
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const payload: { exp?: number } = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-        if (typeof payload.exp !== 'number') {
-            return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
-        }
-
-        const expiresOnTimestamp = payload.exp * 1000;
-        const now = Date.now();
-        const remaining = expiresOnTimestamp - now;
-        const refreshAfterTimestamp = remaining > 0 ? now + Math.floor(remaining * 2 / 3) : expiresOnTimestamp;
-
-        return { expiresOnTimestamp, refreshAfterTimestamp };
+        return typeof payload.exp === 'number' ? payload.exp : undefined;
     } catch {
-        return { expiresOnTimestamp: 0, refreshAfterTimestamp: 0 };
+        return undefined;
     }
 }

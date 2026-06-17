@@ -159,10 +159,22 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(result).to.not.be.null;
             expect(result!.token).to.equal('my-token-value');
             expect(result!.tokenType).to.equal('Bearer');
-            expect(result!.expiresOnTimestamp).to.equal(0);
         });
 
-        it('should extract expiresOnTimestamp from idToken exp claim', async () => {
+        it('should prefer the access token exp claim over the idToken exp claim', async () => {
+            const accessExp = Math.floor(Date.now() / 1000) + 3600;
+            const idExp = Math.floor(Date.now() / 1000) + 7200;
+            const { credential } = createCredential({
+                session: { accessToken: makeIdToken({ exp: accessExp }), idToken: makeIdToken({ exp: idExp }) },
+            });
+
+            const result = await credential.getToken('scope1');
+
+            expect(result).to.not.be.null;
+            expect(result!.expiresOnTimestamp).to.equal(accessExp * 1000);
+        });
+
+        it('should fall back to the idToken exp claim when the access token is not a parseable JWT', async () => {
             const exp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
             const { credential } = createCredential({ session: { accessToken: 'tok', idToken: makeIdToken({ exp }) } });
 
@@ -185,34 +197,37 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(result!.refreshAfterTimestamp).to.be.closeTo(expectedRefresh, 1000);
         });
 
-        it('should fall back to 0 when idToken is undefined', async () => {
+        it('should fall back to a short positive TTL when idToken is undefined', async () => {
+            const now = Date.now();
             const { credential } = createCredential();
 
             const result = await credential.getToken('scope1');
 
             expect(result).to.not.be.null;
-            expect(result!.expiresOnTimestamp).to.equal(0);
-            expect(result!.refreshAfterTimestamp).to.equal(0);
+            expect(result!.expiresOnTimestamp).to.be.closeTo(now + 5 * 60 * 1000, 2000);
+            expect(result!.refreshAfterTimestamp).to.be.closeTo(now + Math.floor(5 * 60 * 1000 * 2 / 3), 2000);
         });
 
-        it('should fall back to 0 when idToken is malformed', async () => {
+        it('should fall back to a short positive TTL when idToken is malformed', async () => {
             const { credential } = createCredential({ session: { accessToken: 'tok', idToken: 'not-a-jwt' } });
 
+            const now = Date.now();
             const result = await credential.getToken('scope1');
 
             expect(result).to.not.be.null;
-            expect(result!.expiresOnTimestamp).to.equal(0);
-            expect(result!.refreshAfterTimestamp).to.equal(0);
+            expect(result!.expiresOnTimestamp).to.be.closeTo(now + 5 * 60 * 1000, 2000);
+            expect(result!.refreshAfterTimestamp).to.be.closeTo(now + Math.floor(5 * 60 * 1000 * 2 / 3), 2000);
         });
 
-        it('should fall back to 0 when idToken payload has no exp claim', async () => {
+        it('should fall back to a short positive TTL when idToken payload has no exp claim', async () => {
             const { credential } = createCredential({ session: { accessToken: 'tok', idToken: makeIdToken({ sub: 'user' }) } });
 
+            const now = Date.now();
             const result = await credential.getToken('scope1');
 
             expect(result).to.not.be.null;
-            expect(result!.expiresOnTimestamp).to.equal(0);
-            expect(result!.refreshAfterTimestamp).to.equal(0);
+            expect(result!.expiresOnTimestamp).to.be.closeTo(now + 5 * 60 * 1000, 2000);
+            expect(result!.refreshAfterTimestamp).to.be.closeTo(now + Math.floor(5 * 60 * 1000 * 2 / 3), 2000);
         });
 
         it('should handle an already-expired token by setting refreshAfterTimestamp to expiresOnTimestamp', async () => {
