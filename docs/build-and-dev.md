@@ -134,7 +134,7 @@ See [Testing](testing.md) for details on test runners and coverage.
 
 ```bash
 pnpm --filter vscode-azure run package                   # vsce package
-pnpm --filter @microsoft/vscode-azure-utils run package  # pnpm pack
+pnpm --filter @microsoft/vscode-azure-utils run package  # npm pack
 ```
 
 ## Extension Entry Point

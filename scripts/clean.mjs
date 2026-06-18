@@ -7,7 +7,7 @@
  * Workspace clean script. Recursively removes build output folders (`dist`,
  * `coverage`) and packaging artifacts (`*.vsix`, `*.tgz`, `esbuild.meta.json`)
  * from the current working directory. Intended to be invoked per workspace via
- * `pnpm run clean`. Missing folders/files are ignored.
+ * `npm run clean`. Missing folders/files are ignored.
  */
 
 import * as fs from 'fs/promises';

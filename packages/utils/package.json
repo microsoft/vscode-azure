@@ -29,9 +29,9 @@
     "scripts": {
         "lint": "eslint --max-warnings 0",
         "build": "tsgo",
-        "package": "pnpm pack",
+        "package": "npm pack",
         "test": "mocha",
-        "testcov": "pnpx c8 --clean --reporter=html --exclude=\"**/test/**\" mocha",
+        "testcov": "npx c8 --clean --reporter=html --exclude=\"**/test/**\" mocha",
         "clean": "node ../../scripts/clean.mjs"
     },
     "mocha": {

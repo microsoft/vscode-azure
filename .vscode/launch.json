@@ -65,12 +65,11 @@
             "name": "azutils: Run Tests",
             "request": "launch",
             "runtimeArgs": [
-                "--filter",
-                "@microsoft/vscode-azure-azutils",
                 "run",
+                "--workspace=packages/azutils",
                 "test"
             ],
-            "runtimeExecutable": "pnpm",
+            "runtimeExecutable": "npm",
             "skipFiles": [
                 "<node_internals>/**"
             ],
@@ -80,12 +79,11 @@
             "name": "utils: Run Tests",
             "request": "launch",
             "runtimeArgs": [
-                "--filter",
-                "@microsoft/vscode-azure-utils",
                 "run",
+                "--workspace=packages/utils",
                 "test"
             ],
-            "runtimeExecutable": "pnpm",
+            "runtimeExecutable": "npm",
             "skipFiles": [
                 "<node_internals>/**"
             ],
