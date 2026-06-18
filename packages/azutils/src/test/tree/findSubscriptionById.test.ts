@@ -45,8 +45,52 @@ describe('findSubscriptionById (unit)', () => {
         const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> =>
             Promise.resolve(node ? childrenMap.get(node) ?? [] : [account]),
         );
-        const tree = { getChildren } as unknown as ConcreteAzureNodeTree;
+        const tree = { getChildren, hasMore: () => false, loadMore: () => Promise.resolve() } as unknown as ConcreteAzureNodeTree;
         return { tree, getChildren, tenant1, tenant2, subA, subB };
+    }
+
+    /**
+     * Builds a tree whose branch children are split across multiple pages,
+     * mirroring {@linkcode DataItemTree}'s paging contract: `getChildren`
+     * returns only the pages loaded so far, `hasMore` reports whether unloaded
+     * pages remain, and `loadMore` advances to the next page. Root children are
+     * never paged.
+     *
+     * @param rootChildren - The (unpaged) root nodes.
+     * @param pagesMap - Maps a node to its children split into pages.
+     */
+    function createPagedTree(
+        rootChildren: ConcreteAzureNode[],
+        pagesMap: Map<ConcreteAzureNode, ConcreteAzureNode[][]>,
+    ) {
+        const loaded = new Map<ConcreteAzureNode, number>();
+
+        function loadedCount(node: ConcreteAzureNode): number {
+            return loaded.get(node) ?? 1;
+        }
+
+        const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
+            if (!node) {
+                return Promise.resolve(rootChildren);
+            }
+            const pages = pagesMap.get(node) ?? [];
+            return Promise.resolve(pages.slice(0, loadedCount(node)).flat());
+        });
+
+        const hasMore = mock.fn((node?: ConcreteAzureNode): boolean => {
+            if (!node) {
+                return false;
+            }
+            return loadedCount(node) < (pagesMap.get(node)?.length ?? 0);
+        });
+
+        const loadMore = mock.fn((node: ConcreteAzureNode): Promise<void> => {
+            loaded.set(node, loadedCount(node) + 1);
+            return Promise.resolve();
+        });
+
+        const tree = { getChildren, hasMore, loadMore } as unknown as ConcreteAzureNodeTree;
+        return { tree, getChildren, hasMore, loadMore };
     }
 
     it('should resolve a subscription by drilling account -> tenant -> subscription', async () => {
@@ -105,5 +149,60 @@ describe('findSubscriptionById (unit)', () => {
         const result = await findSubscriptionById(tree, 'sub-a', 'tenant-2');
 
         expect(result).to.be.undefined;
+    });
+
+    it('should resolve a subscription that appears on a later subscription page', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const tenant = makeTenant({ tenantId: 'tenant-1', account });
+        const subA = makeSubscription({ subscriptionId: 'sub-a', tenant, account });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant, account });
+        const subC = makeSubscription({ subscriptionId: 'sub-c', tenant, account });
+
+        const { tree, loadMore } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+            [account, [[tenant]]],
+            [tenant, [[subA], [subB], [subC]]],
+        ]));
+
+        const result = await findSubscriptionById(tree, 'sub-c');
+
+        // Found only on the third page, so paging must have advanced twice.
+        expect(result).to.equal(subC);
+        expect(loadMore.mock.callCount()).to.equal(2);
+    });
+
+    it('should resolve a tenant that appears on a later tenant page', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', account });
+        const tenant2 = makeTenant({ tenantId: 'tenant-2', account });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant: tenant2, account });
+
+        const { tree } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+            [account, [[tenant1], [tenant2]]],
+            [tenant1, [[]]],
+            [tenant2, [[subB]]],
+        ]));
+
+        const result = await findSubscriptionById(tree, 'sub-b', 'tenant-2');
+
+        expect(result).to.equal(subB);
+    });
+
+    it('should stop paging subscriptions once a match is found', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const tenant = makeTenant({ tenantId: 'tenant-1', account });
+        const subA = makeSubscription({ subscriptionId: 'sub-a', tenant, account });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant, account });
+        const subC = makeSubscription({ subscriptionId: 'sub-c', tenant, account });
+
+        const { tree, loadMore } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+            [account, [[tenant]]],
+            [tenant, [[subA], [subB], [subC]]],
+        ]));
+
+        const result = await findSubscriptionById(tree, 'sub-a');
+
+        // Matched on the first page, so no later pages should have been pulled.
+        expect(result).to.equal(subA);
+        expect(loadMore.mock.callCount()).to.equal(0);
     });
 });

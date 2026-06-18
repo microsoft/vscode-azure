@@ -70,5 +70,12 @@ export function createMockHierarchicalDataItemTree(
         get(key: string): ConcreteAzureNode | undefined {
             return keyMap.get(key);
         },
-    } as DataItemTree<ConcreteAzureNode>;
+        // Non-paged mock: every resource's children fit in a single page.
+        hasMore(): boolean {
+            return false;
+        },
+        loadMore(): Promise<void> {
+            return Promise.resolve();
+        },
+    } as unknown as DataItemTree<ConcreteAzureNode>;
 }
