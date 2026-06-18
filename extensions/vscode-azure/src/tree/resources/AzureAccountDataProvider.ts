@@ -113,7 +113,12 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 return;
             }
 
-            this.scheduleSessionInvalidation(e.provider.id);
+            // Debounce bursts of session changes into a single invalidation.
+            const providerId = e.provider.id;
+            this.debouncer.debounce(SessionInvalidationKey, SessionChangeDebounceMs, () => {
+                this.executor.output.debug(`[auth] sessions changed provider=${providerId}; invalidating accounts`);
+                this.invalidateAll();
+            });
         }));
 
         this.disposables.push(this.ctx.code.workspace.onDidChangeConfiguration(e => {
@@ -122,22 +127,6 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 this.invalidateAll();
             }
         }));
-    }
-
-    /**
-     * Schedule a debounced accounts invalidation in response to an
-     * authentication session change. Repeated calls within
-     * {@linkcode SessionChangeDebounceMs} collapse into a single invalidation.
-     *
-     * The invalidation body is intentionally a single seam
-     * ({@linkcode invalidateAll}) so the strategy can be refined independently
-     * of the debounce/suppression logic.
-     */
-    private scheduleSessionInvalidation(providerId: string): void {
-        this.debouncer.debounce(SessionInvalidationKey, SessionChangeDebounceMs, () => {
-            this.executor.output.debug(`[auth] sessions changed provider=${providerId}; invalidating accounts`);
-            this.invalidateAll();
-        });
     }
 
     /** @inheritdoc */
