@@ -27,6 +27,13 @@ interface TreeNode<T> {
     parent: TreeNode<T> | undefined;
 
     /**
+     * Semantic identity tags carried by this node, recorded in the
+     * {@linkcode NodeMap}'s reverse index for {@linkcode DataItemTree.invalidateByTag}.
+     * Maintained by the {@linkcode NodeMap}; not mutated directly here.
+     */
+    tags?: string[];
+
+    /**
      * If the provider returned an `AsyncIterable<Page<T>>`, the in-progress
      * iterator is stored here between page pulls. `undefined` means no
      * more pages are available (or the provider returned a plain array).
@@ -115,10 +122,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
         this.executor.output.trace(`[cache] ${this.name} root cache miss`);
 
-        // Clear all cached nodes when recomputing roots since the whole tree may have changed
-        this.nodes.clear();
-        this.roots = undefined;
-
         // Each root provider gets its own telemetry scope so that
         // concurrent calls don't overwrite shared mutable properties.
         const rootProviders = this.getRootProviders();
@@ -147,19 +150,45 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             return result;
         });
 
+        // Reconcile the freshly-listed roots against the previously cached ones
+        // by key, rather than wiping the whole tree. This lets a reconciling
+        // root refresh (invalidateRoot) re-list the top level (e.g. accounts)
+        // while preserving the tenant / subscription subtrees under roots that
+        // are still present. After invalidateAll() the map is empty, so this
+        // degenerates to a full fresh fetch (the previous behavior).
+        const newKeySet = new Set(resources.map(resource => this.getKey(resource)));
+
+        // Evict roots (and their subtrees) that are no longer present.
+        for (const rootNode of this.roots ?? []) {
+            if (!newKeySet.has(this.getKey(rootNode.resource))) {
+                this.nodes.removeSubtrees([rootNode]);
+            }
+        }
+
         this.roots = resources.map(resource => {
-            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
             const resourceKey = this.getKey(resource);
+            const existing = this.nodes.get(resourceKey);
+            if (existing) {
+                // Root still present: keep its node (and cached subtree,
+                // staleAt, and pageIterator) as-is.
+                this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey} (preserved)`);
+                return existing;
+            }
+            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
             this.nodes.set(resourceKey, node);
+            // The producing provider for a root is the one that handles the
+            // resource itself (the root provider).
+            this.nodes.registerTags(node, this.findProvider(resource)?.getTags?.(resource) ?? []);
             this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey}`);
             return node;
         });
         this.rootsStaleAt = this.computeStaleAt(this.rootTtl(rootProviders));
         this.executor.output.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
 
-        this.enrichAll(resources);
+        const rootResources = this.roots.map(n => n.resource);
+        this.enrichAll(rootResources);
 
-        return resources;
+        return rootResources;
     }
 
     /**
@@ -421,10 +450,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * the {@linkcode NodeMap}, and kick off background enrichment.
      */
     private addChildNodes(children: T[], parent: TreeNode<T>): TreeNode<T>[] {
+        // The producing provider for these children is the one that handles
+        // the parent resource.
+        const producer = this.findProvider(parent.resource);
         const nodes = children.map(child => {
             const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0, parent };
             const childKey = this.getKey(child);
             this.nodes.set(childKey, childNode);
+            this.nodes.registerTags(childNode, producer?.getTags?.(child) ?? []);
             this.executor.output.trace(`[cache] ${this.name} child key=${childKey} parent=${this.getKey(parent.resource)}`);
             return childNode;
         });
@@ -518,12 +551,105 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event by
-     * invalidating the changed resource or the entire cache.
+     * Trigger a reconciling re-list of the root level. Marks the root listing
+     * stale and fires {@linkcode onDidChange} with `undefined`; the next root
+     * fetch reconciles the freshly-listed roots against the cached ones by key
+     * (see {@linkcode getRootChildren}), preserving the subtrees under roots
+     * that are still present and evicting the subtrees of roots that have
+     * disappeared.
+     *
+     * Unlike {@linkcode invalidateAll}, this does **not** wipe the tree -- it is
+     * the right tool when only the *set* of roots may have changed (e.g. an
+     * account signed in/out) but the data under surviving roots is still valid.
+     */
+    public invalidateRoot(): void {
+        this.executor.output.debug(`[cache] ${this.name} invalidate root (reconcile)`);
+        this.rootsStaleAt = 0;
+        this.changeEmitter.fire(undefined);
+    }
+
+    /**
+     * Hard-evict every cached node carrying the given tag, *plus* everything
+     * beneath those nodes, then fire a single coalesced {@linkcode onDidChange}.
+     *
+     * Tags come from {@linkcode DataProvider.getTags} (semantic identity, e.g.
+     * `account:<id>`, `type:<armType>`). The actual eviction is delegated to
+     * {@linkcode NodeMap.evictByTag}, which walks child pointers to compute the
+     * removal set, unlinks each node from any surviving parent's children array,
+     * prunes tags, and returns the removed nodes. This method adds the
+     * tree-level policy: unlinking removed roots, dropping pending enrichment,
+     * and firing the change event.
+     *
+     * A single change event is fired at the shallowest affected scope: the one
+     * surviving parent when the eviction is confined to a single branch,
+     * otherwise `undefined` (a root-level or cross-branch eviction triggers a
+     * full refresh).
+     *
+     * Resilient to unknown tags (no-op) and to a tag carried by many nodes.
+     */
+    public invalidateByTag(tag: string): void {
+        const removed = this.nodes.evictByTag(tag);
+        if (removed.length === 0) {
+            this.executor.output.debug(`[cache] ${this.name} invalidate tag=${tag} (no matches)`);
+            return;
+        }
+        this.executor.output.debug(`[cache] ${this.name} invalidate tag=${tag} evicting=${removed.length}`);
+
+        const removedSet = new Set(removed);
+
+        // Determine the surviving parents affected by the eviction (for a
+        // single, coalesced change event), unlink removed roots, and drop any
+        // pending enrichment for removed nodes. A parent is "affected" only if
+        // it survives -- i.e. it is not itself being removed.
+        const affectedParents = new Set<TreeNode<T> | undefined>();
+        for (const node of removed) {
+            this.enrichmentPromises.delete(this.getKey(node.resource));
+
+            const parent = node.parent;
+            if (parent === undefined) {
+                if (this.roots) {
+                    const rootIdx = this.roots.indexOf(node);
+                    if (rootIdx !== -1) {
+                        this.roots.splice(rootIdx, 1);
+                    }
+                }
+                affectedParents.add(undefined);
+            } else if (!removedSet.has(parent)) {
+                affectedParents.add(parent);
+            }
+        }
+
+        // Fire a single change event at the shallowest affected scope.
+        if (affectedParents.size === 1) {
+            const [only] = affectedParents;
+            if (only !== undefined) {
+                this.changeEmitter.fire(only.resource);
+                return;
+            }
+        }
+        this.changeEmitter.fire(undefined);
+    }
+
+    /**
+     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event.
+     *
+     * - {@linkcode DataProviderChangeEvent.tags} present -> dispatch each tag to
+     *   {@linkcode invalidateByTag}.
+     * - {@linkcode DataProviderChangeEvent.resource} present -> positional
+     *   {@linkcode invalidate}.
+     * - Root-level change (`resource` undefined) with `includeChildren: false`
+     *   -> reconciling {@linkcode invalidateRoot}.
+     * - Otherwise -> {@linkcode invalidateAll}.
      */
     protected override onProviderChanged(event: DataProviderChangeEvent<T>): void {
-        if (event.resource !== undefined && event.resource !== null) {
+        if (event.tags && event.tags.length > 0) {
+            for (const tag of event.tags) {
+                this.invalidateByTag(tag);
+            }
+        } else if (event.resource !== undefined && event.resource !== null) {
             this.invalidate(event.resource, event.includeChildren);
+        } else if (!event.includeChildren) {
+            this.invalidateRoot();
         } else {
             this.invalidateAll();
         }
