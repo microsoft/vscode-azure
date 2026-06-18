@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+export * from './base/Debouncer';
 export * from './base/delay';
 export * from './base/IActionContext';
 export * from './base/IActionExecutor';

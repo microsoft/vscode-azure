@@ -14,6 +14,7 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import {
     EventEmitter, IActionExecutor, ICodeContext,
+    Debouncer,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -38,6 +39,9 @@ const SessionChangeDebounceMs = 500;
  * for a short window around the call breaks that self-induced feedback loop.
  */
 const GetAccountsSuppressionMs = 1000;
+
+/** Debounce key for coalescing `onDidChangeSessions` bursts. */
+const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
 
 /**
  * Root data-layer provider for the account / tenant / subscription levels of the
@@ -66,10 +70,10 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     private readonly disposables: Disposable[] = [this.changeEmitter];
 
     /**
-     * Pending debounce timer for coalescing `onDidChangeSessions` bursts, or
-     * `undefined` when no invalidation is scheduled.
+     * Debounces `onDidChangeSessions` bursts into a single invalidation. Keyed
+     * so it can be shared if more debounced streams are added later.
      */
-    private sessionDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    private readonly debouncer = new Debouncer();
 
     /**
      * Timestamp (epoch ms) before which incoming `onDidChangeSessions` events
@@ -85,6 +89,8 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
     ) {
+        this.disposables.push(this.debouncer);
+
         this.disposables.push(this.ctx.code.authentication.onDidChangeSessions(e => {
             if (e.provider.id !== PublicAuthProviderId && e.provider.id !== SovereignAuthProviderId) {
                 return;
@@ -118,15 +124,10 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * of the debounce/suppression logic.
      */
     private scheduleSessionInvalidation(providerId: string): void {
-        if (this.sessionDebounceTimer !== undefined) {
-            clearTimeout(this.sessionDebounceTimer);
-        }
-
-        this.sessionDebounceTimer = setTimeout(() => {
-            this.sessionDebounceTimer = undefined;
+        this.debouncer.debounce(SessionInvalidationKey, SessionChangeDebounceMs, () => {
             this.executor.output.debug(`[auth] sessions changed provider=${providerId}; invalidating accounts`);
             this.invalidateAll();
-        }, SessionChangeDebounceMs);
+        });
     }
 
     /** @inheritdoc */
@@ -248,10 +249,6 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
 
     /** @inheritdoc */
     public dispose(): void {
-        if (this.sessionDebounceTimer !== undefined) {
-            clearTimeout(this.sessionDebounceTimer);
-            this.sessionDebounceTimer = undefined;
-        }
         this.disposables.forEach(d => void d.dispose());
     }
 }
