@@ -278,7 +278,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId))).to.deep.equal(['t1', 't2']);
         });
 
-        it('should attach the account and environment to each tenant', async () => {
+        it('should attach the account id and environment to each tenant', async () => {
             const { provider } = createProvider();
             const account = makeAccount();
             mockSubscriptionClient({
@@ -288,7 +288,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             const pages = await collectPages(await provider.getChildren(account));
 
             const tenant = (pages[0].items as AzureTenant[])[0];
-            expect(tenant.account).to.equal(account);
+            expect(tenant.accountId).to.equal(account.id);
             expect(tenant.environment).to.equal(AzurePublicCloud);
         });
 
@@ -331,7 +331,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(pages.flatMap(p => (p.items as AzureSubscription[]).map(s => s.subscriptionId))).to.deep.equal(['s1', 's2']);
         });
 
-        it('should attach the tenant, account, and environment to each subscription', async () => {
+        it('should attach the account id and environment to each subscription', async () => {
             const { provider } = createProvider();
             const tenant = makeTenant();
             mockSubscriptionClient({
@@ -341,8 +341,8 @@ describe('AzureAccountDataProvider (unit)', () => {
             const pages = await collectPages(await provider.getChildren(tenant));
 
             const sub = (pages[0].items as AzureSubscription[])[0];
-            expect(sub.tenant).to.equal(tenant);
-            expect(sub.account).to.equal(tenant.account);
+            expect(sub.tenantId).to.equal(tenant.tenantId);
+            expect(sub.accountId).to.equal(tenant.accountId);
             expect(sub.environment).to.equal(tenant.environment);
         });
 

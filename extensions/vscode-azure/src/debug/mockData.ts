@@ -21,12 +21,12 @@ import { IAzureAccountDataProvider } from '../tree/resources/AzureAccountDataPro
 // -- Mock data ----------------------------------------------------------------
 
 const account = makeAccount({ id: 'mock-account', label: 'Mock Account' });
-const tenant = makeTenant({ tenantId: 'mock-tenant', displayName: 'Mock Tenant', account });
+const tenant = makeTenant({ tenantId: 'mock-tenant', displayName: 'Mock Tenant', accountId: account.id });
 const subscription = makeSubscription({
     subscriptionId: 'mock-sub-1',
     displayName: 'Mock Subscription',
-    tenant,
-    account,
+    tenantId: tenant.tenantId,
+    accountId: account.id,
 });
 
 const subscriptionIdPrefix = `/subscriptions/${subscription.subscriptionId}`;

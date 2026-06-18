@@ -33,7 +33,7 @@ export function isAccount(node: AzureNode): node is AzureAccount {
 
 /** Narrows this node to an {@linkcode AzureTenant} node. */
 export function isTenant(node: AzureNode): node is AzureTenant {
-    return 'tenantId' in node && 'account' in node && !isSubscription(node);
+    return 'tenantId' in node && 'accountId' in node && !isSubscription(node);
 }
 
 /** Narrows this node to an {@linkcode AzureSubscription} node. */

@@ -218,8 +218,9 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 .filter((tenant): tenant is typeof tenant & { tenantId: string; displayName: string } => !!tenant.tenantId && !!tenant.displayName)
                 .map(tenant => ({
                     ...tenant,
+                    tenantId: tenant.tenantId.toLowerCase(),
                     environment: account.environment,
-                    account,
+                    accountId: account.id,
                 } satisfies AzureTenant));
             yield { items, hasMore: page.hasMore };
         }
@@ -234,16 +235,17 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * @param tenant - The tenant whose subscriptions are listed.
      */
     private async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
-        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: tenant.account } });
-        const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.account.environment);
+        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
+        const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment);
         for await (const page of client.subscriptions.list()) {
             const items = page.items
                 .filter((sub): sub is typeof sub & { subscriptionId: string; tenantId: string; displayName: string } => !!sub.subscriptionId && !!sub.tenantId && !!sub.displayName)
                 .map(sub => ({
                     ...sub,
+                    subscriptionId: sub.subscriptionId.toLowerCase(),
+                    tenantId: sub.tenantId.toLowerCase(),
                     environment: tenant.environment,
-                    tenant,
-                    account: tenant.account,
+                    accountId: tenant.accountId,
                 } satisfies AzureSubscription));
             yield { items, hasMore: page.hasMore };
         }

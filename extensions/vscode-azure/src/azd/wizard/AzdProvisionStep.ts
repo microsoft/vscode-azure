@@ -53,7 +53,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         // was picked interactively it also carries its owning account -- forward
         // that account id as an additional resolution hint.
         const tenantId = context.hydratedTenantId;
-        const accountId = context.subscription?.account.id;
+        const accountId = context.subscription?.accountId;
 
         // Start polling in the background (fire-and-forget)
         void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal, tenantId, accountId);

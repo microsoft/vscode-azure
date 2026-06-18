@@ -28,7 +28,7 @@ export interface CredentialFactoryOptions {
 /**
  * Input accepted by an {@linkcode ICredentialFactory}: either explicit
  * {@linkcode CredentialFactoryOptions}, or an {@linkcode AzureSubscription}
- * (whose `tenantId` and `account` are used to scope the credential).
+ * (whose `tenantId` and `accountId` are used to scope the credential).
  */
 export type CredentialFactoryInput = CredentialFactoryOptions | AzureSubscription;
 
@@ -39,7 +39,10 @@ export type CredentialFactoryInput = CredentialFactoryOptions | AzureSubscriptio
  *
  * Accepts either {@linkcode CredentialFactoryOptions} or an
  * {@linkcode AzureSubscription}; passing a subscription is shorthand for
- * `{ tenantId: subscription.tenantId, sessionOptions: { account: subscription.account } }`.
+ * `{ tenantId: subscription.tenantId, sessionOptions: { account: { id: subscription.accountId, label: '' } } }`.
+ *
+ * The account `label` is intentionally empty: {@linkcode vscode.authentication.getSession getSession}
+ * resolves the account by `id`, and `label` is a required-but-display-only field.
  */
 export type ICredentialFactory = SyncFactory<TokenCredential, [input?: CredentialFactoryInput]>;
 
@@ -49,7 +52,7 @@ export const ICredentialFactory: ServiceIdentifier<ICredentialFactory> = Symbol.
 /** Normalizes a {@linkcode CredentialFactoryInput} to {@linkcode CredentialFactoryOptions}. */
 function toCredentialFactoryOptions(input?: CredentialFactoryInput): CredentialFactoryOptions | undefined {
     if (isAzureSubscription(input)) {
-        return { tenantId: input.tenantId, sessionOptions: { account: input.account } };
+        return { tenantId: input.tenantId, sessionOptions: { account: { id: input.accountId, label: '' } } };
     }
     return input;
 }
