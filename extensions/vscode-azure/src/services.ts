@@ -33,10 +33,12 @@ export type IAzureResourceTreeView = vscode.TreeView<string>;
  * resource tree. Returns `undefined` when no signed-in account exposes the id.
  *
  * An optional `tenantId` hint narrows the drill to a single tenant when the
- * owning tenant is known (e.g. hydrated from azd).
+ * owning tenant is known (e.g. hydrated from azd). An optional `accountId` hint
+ * likewise narrows the drill to a single account when the owning account is
+ * known.
  */
 export const ISubscriptionResolver: ServiceIdentifier<ISubscriptionResolver> = Symbol.for('ISubscriptionResolver');
-export type ISubscriptionResolver = (subscriptionId: string, tenantId?: string) => Promise<AzureSubscription | undefined>;
+export type ISubscriptionResolver = (subscriptionId: string, tenantId?: string, accountId?: string) => Promise<AzureSubscription | undefined>;
 
 // #endregion
 

@@ -35,6 +35,8 @@ export interface ArmDeploymentActivity extends Activity {
     readonly subscriptionId: string;
     /** Optional id of the owning tenant, used as a hint when resolving {@linkcode subscriptionId} to a full subscription. */
     readonly tenantId?: string;
+    /** Optional id of the owning account, used as a hint when resolving {@linkcode subscriptionId} to a full subscription. */
+    readonly accountId?: string;
     /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
     readonly scope: string;
     readonly deploymentName: string;
@@ -123,7 +125,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             return false;
         }
 
-        const client = await this.getClient(resource.subscriptionId, resource.tenantId);
+        const client = await this.getClient(resource.subscriptionId, resource.tenantId, resource.accountId);
         if (!client) {
             // Subscription not resolvable (e.g. not signed in to the owning
             // account). Leave the deployment visible but unenriched; a manual
@@ -151,11 +153,12 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * The target subscription is parsed from {@linkcode deploymentId} and
      * resolved to an authenticatable handle lazily, the first time a client is
      * needed (see {@linkcode getClient}). An optional {@linkcode tenantId} hint
-     * (e.g. hydrated from azd) speeds up that resolution.
+     * and {@linkcode accountId} hint (e.g. hydrated from azd) speed up that
+     * resolution.
      *
      * @throws if {@linkcode deploymentId} is not a valid ARM deployment id.
      */
-    public trackDeployment(deploymentId: string, tenantId?: string): void {
+    public trackDeployment(deploymentId: string, tenantId?: string, accountId?: string): void {
         const { scope, deploymentName } = parseDeploymentId(deploymentId);
         const { subscriptionId } = parseAzureResourceId(deploymentId);
 
@@ -168,6 +171,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             deploymentId,
             subscriptionId,
             tenantId,
+            accountId,
             scope,
             deploymentName,
             rootDeploymentId: deploymentId,
@@ -199,7 +203,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                         context.telemetry.suppress = 'onSuccess';
                         context.telemetry.isUserEvent = false;
                         context.errorHandling.rethrow = true;
-                        const client = await this.getClient(activity.subscriptionId, activity.tenantId);
+                        const client = await this.getClient(activity.subscriptionId, activity.tenantId, activity.accountId);
                         if (!client) {
                             // Should not happen after a successful enrich (the
                             // client is cached), but guard defensively.
@@ -314,6 +318,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     deploymentId: op.targetResourceId,
                     subscriptionId: activity.subscriptionId,
                     tenantId: activity.tenantId,
+                    accountId: activity.accountId,
                     scope,
                     deploymentName,
                     rootDeploymentId: activity.rootDeploymentId,
@@ -377,14 +382,15 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * Returns a deployment client for {@linkcode subscriptionId}, resolving the
      * full subscription on first use and caching the client per subscription id.
      * An optional {@linkcode tenantId} hint narrows the resolution drill to the
-     * owning tenant. Returns `undefined` when the subscription cannot be resolved
+     * owning tenant, and an optional {@linkcode accountId} hint narrows it to the
+     * owning account. Returns `undefined` when the subscription cannot be resolved
      * (e.g. the owning account is not signed in).
      */
-    private async getClient(subscriptionId: string, tenantId?: string): Promise<IDeploymentClient | undefined> {
+    private async getClient(subscriptionId: string, tenantId?: string, accountId?: string): Promise<IDeploymentClient | undefined> {
         const key = subscriptionId.toLowerCase();
         let client = this.clientCache.get(key);
         if (!client) {
-            const subscription = await this.resolveSubscription(subscriptionId, tenantId);
+            const subscription = await this.resolveSubscription(subscriptionId, tenantId, accountId);
             if (!subscription) {
                 this.executor.output.debug(`[activity] could not resolve subscription ${subscriptionId} for deployment client`);
                 return undefined;

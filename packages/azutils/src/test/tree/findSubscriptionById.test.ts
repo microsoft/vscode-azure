@@ -93,6 +93,32 @@ describe('findSubscriptionById (unit)', () => {
         return { tree, getChildren, hasMore, loadMore };
     }
 
+    /**
+     * Two accounts, each with one tenant owning one subscription. The
+     * `getChildren` is a spy so tests can assert a non-matching account's
+     * tenants were never loaded.
+     */
+    function createMultiAccountTree() {
+        const account1 = makeAccount({ id: 'acct-1' });
+        const account2 = makeAccount({ id: 'acct-2' });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', account: account1 });
+        const tenant2 = makeTenant({ tenantId: 'tenant-2', account: account2 });
+        const subA = makeSubscription({ subscriptionId: 'sub-a', tenant: tenant1, account: account1 });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant: tenant2, account: account2 });
+
+        const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+            [account1, [tenant1]],
+            [account2, [tenant2]],
+            [tenant1, [subA]],
+            [tenant2, [subB]],
+        ]);
+        const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> =>
+            Promise.resolve(node ? childrenMap.get(node) ?? [] : [account1, account2]),
+        );
+        const tree = { getChildren, hasMore: () => false, loadMore: () => Promise.resolve() } as unknown as ConcreteAzureNodeTree;
+        return { tree, getChildren, account1, account2, subA, subB };
+    }
+
     it('should resolve a subscription by drilling account -> tenant -> subscription', async () => {
         const { tree, subB } = createTree();
 
@@ -147,6 +173,32 @@ describe('findSubscriptionById (unit)', () => {
         const { tree } = createMultiTenantTree();
 
         const result = await findSubscriptionById(tree, 'sub-a', 'tenant-2');
+
+        expect(result).to.be.undefined;
+    });
+
+    it('should search only the given account when an accountId is provided', async () => {
+        const { tree, getChildren, account1, subB } = createMultiAccountTree();
+
+        const result = await findSubscriptionById(tree, 'sub-b', undefined, 'acct-2');
+
+        expect(result).to.equal(subB);
+        // The other account's tenants must never be loaded.
+        expect(getChildren.mock.calls.some(call => call.arguments[0] === account1)).to.be.false;
+    });
+
+    it('should match the accountId case-insensitively', async () => {
+        const { tree, subB } = createMultiAccountTree();
+
+        const result = await findSubscriptionById(tree, 'sub-b', undefined, 'ACCT-2');
+
+        expect(result).to.equal(subB);
+    });
+
+    it('should not find a subscription that lives under a different account than the one provided', async () => {
+        const { tree } = createMultiAccountTree();
+
+        const result = await findSubscriptionById(tree, 'sub-a', undefined, 'acct-2');
 
         expect(result).to.be.undefined;
     });

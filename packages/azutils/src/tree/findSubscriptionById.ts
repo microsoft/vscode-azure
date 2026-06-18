@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '../auth/AzureSubscription';
-import { isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../models/AzureNode';
+import { isAccount, isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../models/AzureNode';
 
 /**
  * Resolve a fully-populated {@linkcode AzureSubscription} from a bare
@@ -22,7 +22,10 @@ import { isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNod
  * page.
  *
  * When the owning `tenantId` is known, pass it to narrow the drill to that one
- * tenant, so subscriptions for the other tenants are never loaded.
+ * tenant, so subscriptions for the other tenants are never loaded. Likewise,
+ * when the owning `accountId` is known, pass it to narrow the drill to that one
+ * account, so tenants (and their subscriptions) for the other accounts are
+ * never loaded.
  *
  * The drill short-circuits as soon as a match is found; comparison is
  * case-insensitive. Returns `undefined` when no signed-in account exposes a
@@ -33,16 +36,24 @@ import { isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNod
  *   ARM resource id).
  * @param tenantId - (Optional) The owning tenant id. When provided, only that
  *   tenant's subscriptions are searched.
+ * @param accountId - (Optional) The owning account id. When provided, only that
+ *   account's tenants are searched.
  */
 export async function findSubscriptionById(
     tree: ConcreteAzureNodeTree,
     subscriptionId: string,
     tenantId?: string,
+    accountId?: string,
 ): Promise<AzureSubscription | undefined> {
     const target = subscriptionId.toLowerCase();
     const targetTenant = tenantId?.toLowerCase();
+    const targetAccount = accountId?.toLowerCase();
 
     for await (const account of drillChildren(tree)) {
+        if (targetAccount && isAccount(account) && account.id.toLowerCase() !== targetAccount) {
+            continue;
+        }
+
         for await (const tenant of drillChildren(tree, account)) {
             if (!isTenant(tenant)) {
                 continue;

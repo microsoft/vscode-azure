@@ -193,6 +193,20 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(provider.getChildren()[0].tenantId).to.be.undefined;
         });
 
+        it('should store the accountId hint on the tracked deployment', () => {
+            const provider = createProvider();
+            provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9', 'acct-9');
+
+            expect(provider.getChildren()[0].accountId).to.equal('acct-9');
+        });
+
+        it('should leave the accountId unset when no hint is provided', () => {
+            const provider = createProvider();
+            provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1');
+
+            expect(provider.getChildren()[0].accountId).to.be.undefined;
+        });
+
         it('should fire onDidChange when tracking', () => {
             const provider = createProvider();
             const onChange = mock.fn();
@@ -252,6 +266,19 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(resolveSubscription.mock.callCount()).to.equal(1);
             expect(resolveSubscription.mock.calls[0].arguments[0]).to.equal('sub');
             expect(resolveSubscription.mock.calls[0].arguments[1]).to.equal('tenant-9');
+        });
+
+        it('should forward the accountId hint to the subscription resolver', async () => {
+            const { executor } = createTestActionExecutor();
+            const { vscode } = createMockVsCode();
+            const resolveSubscription = mock.fn((subscriptionId: string, _tenantId?: string, _accountId?: string) => Promise.resolve(makeSubscription({ subscriptionId })));
+            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription);
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9', 'acct-9');
+
+            await provider.enrich(provider.getChildren()[0]);
+
+            expect(resolveSubscription.mock.callCount()).to.equal(1);
+            expect(resolveSubscription.mock.calls[0].arguments[2]).to.equal('acct-9');
         });
 
         it('should return false when the subscription cannot be resolved', async () => {
