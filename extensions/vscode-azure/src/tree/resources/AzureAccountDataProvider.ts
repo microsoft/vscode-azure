@@ -13,8 +13,7 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, IActionExecutor, ICodeContext,
-    Debouncer,
+    Debouncer, EventEmitter, IActionExecutor, ICodeContext,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
