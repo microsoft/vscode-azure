@@ -11,7 +11,7 @@ import type { Disposable } from '../vscode/Disposable';
 import type { ITreeItem } from '../vscode/IVsCode';
 import type { DataItemTree } from './DataItemTree';
 import type { DataProviderChangeEvent } from './DataProvider';
-import { NodeMap } from './NodeMap';
+import { FlatNodeStore, type FlatNode } from './FlatNodeStore';
 import { ProviderRegistry } from './ProviderRegistry';
 import type { ViewProvider } from './ViewProvider';
 
@@ -128,13 +128,13 @@ export function createDefaultLoadMoreOptions<TViewItem>(adapter: LoadMoreAdapter
  */
 export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewItem, ViewProvider<TViewItem>> implements vscode.TreeDataProvider<TViewItem>, Disposable {
     /** Map from key to node for O(1) lookup. */
-    private readonly nodes = new NodeMap<ViewNode<TViewItem>>(node => this.getKey(node.viewItem));
+    private readonly nodes = new FlatNodeStore<ViewNode<TViewItem>>();
 
     /** Deduplicates concurrent loadMore calls per parent key. */
     private readonly loadsInFlight = new InflightMap<void>();
 
-    /** Cached root nodes. */
-    private roots: ViewNode<TViewItem>[] | undefined;
+    /** Cached root node keys. */
+    private roots: string[] | undefined;
 
     /** Subscription to the underlying {@linkcode DataItemTree}'s change event. */
     private readonly dataItemTreeSubscription: Disposable;
@@ -230,9 +230,10 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         // Evict the old root subtree and build new root nodes
         this.nodes.removeSubtrees(this.roots);
         this.roots = viewItems.map(viewItem => {
-            const node: ViewNode<TViewItem> = { viewItem, parent: undefined, children: undefined };
-            this.nodes.set(this.getKey(viewItem), node);
-            return node;
+            const key = this.getKey(viewItem);
+            const node: ViewNode<TViewItem> = { viewItem, parentKey: undefined, childKeys: undefined };
+            this.nodes.set(key, node);
+            return key;
         });
 
         return viewItems;
@@ -247,8 +248,8 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 
         const provider = this.findProvider(viewItem);
         if (!provider) {
-            this.nodes.removeSubtrees(parentNode.children);
-            parentNode.children = [];
+            this.nodes.removeSubtrees(parentNode.childKeys);
+            parentNode.childKeys = [];
             return [];
         }
 
@@ -261,11 +262,13 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
         }) ?? [];
 
         // Evict old children subtrees and build new child nodes
-        this.nodes.removeSubtrees(parentNode.children);
-        parentNode.children = childItems.map(child => {
-            const node: ViewNode<TViewItem> = { viewItem: child, parent: parentNode, children: undefined };
-            this.nodes.set(this.getKey(child), node);
-            return node;
+        this.nodes.removeSubtrees(parentNode.childKeys);
+        const parentKey = this.getKey(viewItem);
+        parentNode.childKeys = childItems.map(child => {
+            const childKey = this.getKey(child);
+            const node: ViewNode<TViewItem> = { viewItem: child, parentKey, childKeys: undefined };
+            this.nodes.set(childKey, node);
+            return childKey;
         });
 
         // Inject a synthetic "Load More" view item if the data layer has
@@ -342,7 +345,7 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
             // (root nodes), so we check the node itself rather than its parent.
             const node = this.nodes.get(this.getKey(viewItem));
             if (node) {
-                return node.parent?.viewItem;
+                return node.parentKey !== undefined ? this.nodes.get(node.parentKey)?.viewItem : undefined;
             }
 
             // Slow path: ask the provider to compute the parent on demand
@@ -407,11 +410,11 @@ export class ViewItemTree<TViewItem, TResource> extends ProviderRegistry<TViewIt
 }
 
 /**
- * Internal node wrapping a view item with its cached children and parent.
+ * Internal node wrapping a view item with its cached children and parent,
+ * both expressed as string keys (resolved against the owning
+ * {@linkcode FlatNodeStore}).
  * @internal
  */
-interface ViewNode<T> {
+interface ViewNode<T> extends FlatNode {
     readonly viewItem: T;
-    readonly parent: ViewNode<T> | undefined;
-    children: ViewNode<T>[] | undefined; // undefined = not yet loaded
 }

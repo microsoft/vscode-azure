@@ -17,6 +17,21 @@ export interface DataProviderChangeEvent<TResource> {
     readonly resource?: TResource;
     /** When `true`, cached children are invalidated and re-fetched. */
     readonly includeChildren: boolean;
+    /**
+     * Tags identifying which cached nodes to invalidate, as produced by
+     * {@linkcode DataProvider.getTags} (or auto-derived `ancestor:<key>` tags).
+     *
+     * When present and non-empty, the tree dispatches each tag to
+     * {@linkcode DataItemTree.invalidateByTag} and ignores {@linkcode resource}
+     * / {@linkcode includeChildren}. This lets a provider invalidate a logical
+     * slice of the tree (e.g. every node pertaining to one account) without
+     * knowing where those nodes currently live in the tree. When omitted, the
+     * tree falls back to the {@linkcode resource} / {@linkcode includeChildren}
+     * behavior; a root-level change (`resource` undefined) with
+     * `includeChildren: false` triggers a reconciling root re-list via
+     * {@linkcode DataItemTree.invalidateRoot}.
+     */
+    readonly tags?: string[];
 }
 
 /**
@@ -100,6 +115,38 @@ export interface DataProvider<TResource> {
      *   `undefined` for the root (root providers only).
      */
     getTtl?(resource?: TResource): number;
+
+    /**
+     * Optionally return the semantic tags that identify the given resource's
+     * own cache node (e.g. `account:<id>`, `tenant:<id>`, `type:<armType>`,
+     * `resourceId:<id>`).
+     *
+     * Tags label the node *itself*, not its children listing. The tree calls
+     * this on the provider that *produced* the resource (the provider that
+     * handles its parent, or the root provider for root resources) and records
+     * the returned tags in a reverse index (tag -> node keys). In addition, the
+     * tree auto-derives a structural `ancestor:<key>` tag for every ancestor of
+     * the node, so a whole subtree can be addressed without walking child
+     * links.
+     *
+     * A later {@linkcode DataItemTree.invalidateByTag} call hard-evicts every
+     * node carrying the tag *plus* everything beneath them (discovered via the
+     * `ancestor:<key>` tags), regardless of position in the tree, and fires a
+     * single coalesced change event. This lets a caller invalidate broadly
+     * ("everything pertaining to `account:foo`") or narrowly ("everything under
+     * one subscription") purely by choosing which tag to name.
+     *
+     * When this method is absent (or returns an empty array) the node carries
+     * only its auto-derived structural tags, which is fully back-compatible:
+     * such nodes are still invalidated positionally via
+     * {@linkcode DataItemTree.invalidate} / {@linkcode DataItemTree.invalidateAll}.
+     *
+     * @param resource - The resource whose identity tags are requested, or
+     *   `undefined` for the root listing (root providers only; typically
+     *   returns no tags since the root has no resource of its own).
+     * @returns The semantic tags identifying `resource`.
+     */
+    getTags?(resource?: TResource): string[];
 
     /**
      * Optional event fired when the provider's data changes externally.

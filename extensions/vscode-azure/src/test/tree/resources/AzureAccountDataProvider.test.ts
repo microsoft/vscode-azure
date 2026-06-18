@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant } from '@microsoft/vscode-azure-azutils';
+import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
-import type { ChildResult, Page } from '@microsoft/vscode-azure-utils';
+import type { ChildResult, DataProviderChangeEvent, Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -100,10 +100,11 @@ describe('AzureAccountDataProvider (unit)', () => {
             mock.timers.reset();
         });
 
-        it('should fire (debounced) on authentication session changes for the Microsoft provider', () => {
+        it('should emit a reconciling root re-list (debounced) on authentication session changes for the Microsoft provider', () => {
             const { provider, mock: vscodeMock } = createProvider();
+            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
             let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            provider.onDidChange(e => { event = e; fired++; });
 
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             // Debounced: nothing fires until the timer elapses.
@@ -111,6 +112,12 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             mock.timers.tick(500);
             expect(fired).to.equal(1);
+            // Only the set of accounts may have changed; a reconciling root
+            // re-list (resource undefined, includeChildren false) preserves
+            // tenant / subscription subtrees under surviving accounts.
+            expect(event?.resource).to.be.undefined;
+            expect(event?.includeChildren).to.be.false;
+            expect(event?.tags).to.be.undefined;
         });
 
         it('should not fire on authentication session changes for unrelated providers', () => {
@@ -124,7 +131,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(fired).to.equal(0);
         });
 
-        it('should coalesce a burst of session changes into a single invalidation', () => {
+        it('should coalesce a burst of session changes into a single re-list', () => {
             const { provider, mock: vscodeMock } = createProvider();
             let fired = 0;
             provider.onDidChange(() => { fired++; });
@@ -196,15 +203,43 @@ describe('AzureAccountDataProvider (unit)', () => {
             await childrenPromise;
         });
 
-        it('should fire (undebounced) when the sovereign cloud configuration changes', () => {
+        it('should emit a full invalidation (no tags, undebounced) when the sovereign cloud configuration changes', () => {
             const { provider, mock: vscodeMock } = createProvider();
+            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
             let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            provider.onDidChange(e => { event = e; fired++; });
 
             vscodeMock.configChangeEmitter.fire({ affectsConfiguration: section => section === 'microsoft-sovereign-cloud' });
 
             // Configuration changes invalidate immediately (the environment changed).
             expect(fired).to.equal(1);
+            // The environment itself changed, so every listing fetched against
+            // the old endpoint is invalid -- wipe everything, untagged.
+            expect(event?.resource).to.be.undefined;
+            expect(event?.includeChildren).to.be.true;
+            expect(event?.tags).to.be.undefined;
+        });
+    });
+
+    describe('getTags', () => {
+        it('should tag an account with its account: identity tag', () => {
+            const { provider } = createProvider();
+            expect(provider.getTags(makeAccount({ id: 'Acct-ID' }))).to.deep.equal(['account:acct-id']);
+        });
+
+        it('should tag a tenant with its tenant: identity tag', () => {
+            const { provider } = createProvider();
+            expect(provider.getTags(makeTenant({ tenantId: 'ten-id' }))).to.deep.equal(['tenant:ten-id']);
+        });
+
+        it('should tag a subscription with its subscription: identity tag', () => {
+            const { provider } = createProvider();
+            expect(provider.getTags(makeSubscription({ subscriptionId: 'sub-id' }))).to.deep.equal(['subscription:sub-id']);
+        });
+
+        it('should return no tags for the root listing', () => {
+            const { provider } = createProvider();
+            expect(provider.getTags()).to.deep.equal([]);
         });
     });
 

@@ -8,7 +8,7 @@ import { mock } from 'node:test';
 import { delay } from '../../base/delay';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
-import type { DataProvider } from '../../tree/DataProvider';
+import type { DataProvider, DataProviderChangeEvent } from '../../tree/DataProvider';
 import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
@@ -637,6 +637,313 @@ describe('DataItemTree (unit)', () => {
             await loadPromise;
 
             expect(tree.get('orphan')).to.be.undefined;
+        });
+    });
+
+    describe('tag-based invalidation', () => {
+        const handleIds = (...ids: string[]) =>
+            (r: unknown): r is TestResource => ids.includes((r as TestResource).id);
+
+        /**
+         * Build a tree shaped like the real account / tenant / subscription /
+         * resource hierarchy:
+         *
+         * - `acct` (root) -> `tenN` (tenant) -> `subN` (subscription) -> `resN` (resource)
+         *
+         * A single "account" provider (canHandle account + tenant, like the
+         * production {@linkcode AzureAccountDataProvider}) produces and tags the
+         * account / tenant / subscription levels with semantic identity tags. A
+         * separate "resource" provider produces leaf resources under each
+         * subscription. The tree additionally derives `ancestor:<key>` tags for
+         * every node.
+         *
+         * @param tenants - per-account tenant ids
+         * @param subsByTenant - tenant id -> subscription ids
+         */
+        function buildHierarchy(tenants: string[], subsByTenant: Record<string, string[]>) {
+            const tree = createTree();
+            const subIds = Object.values(subsByTenant).flat();
+
+            tree.registerProvider({
+                isRoot: true,
+                // Mirrors AzureAccountDataProvider: handles account + tenant.
+                canHandle: handleIds('acct', ...tenants),
+                getChildren: (r?: TestResource) => {
+                    if (!r) {
+                        return [{ id: 'acct' }];
+                    }
+                    if (r.id === 'acct') {
+                        return tenants.map(id => ({ id }));
+                    }
+                    return (subsByTenant[r.id] ?? []).map(id => ({ id }));
+                },
+                getTags: (r?: TestResource) => {
+                    if (!r) {
+                        return [];
+                    }
+                    if (r.id === 'acct') {
+                        return ['account:acct'];
+                    }
+                    if (tenants.includes(r.id)) {
+                        return [`tenant:${r.id}`];
+                    }
+                    if (subIds.includes(r.id)) {
+                        // A shared `kind:sub` tag lets one call sweep every
+                        // subscription regardless of which tenant it lives under.
+                        return [`subscription:${r.id}`, 'kind:sub'];
+                    }
+                    return [];
+                },
+            });
+
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: handleIds(...subIds),
+                getChildren: (r?: TestResource) => [{ id: `${r?.id ?? 'sub'}-res` }],
+            });
+
+            return { tree };
+        }
+
+        it('should evict a node and its subtree by semantic tag, firing for the surviving parent', async () => {
+            const { tree } = buildHierarchy(['ten'], { ten: ['sub'] });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'acct' });
+            await tree.getChildren({ id: 'ten' });
+            await tree.getChildren({ id: 'sub' });
+            expect(tree.get('sub')).to.not.be.undefined;
+            expect(tree.get('sub-res')).to.not.be.undefined;
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            tree.invalidateByTag('subscription:sub');
+
+            // Subtree gone, but the parent tenant survives and is the single
+            // affected scope.
+            expect(tree.get('sub')).to.be.undefined;
+            expect(tree.get('sub-res')).to.be.undefined;
+            expect(tree.get('ten')).to.not.be.undefined;
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('ten');
+        });
+
+        it('should evict the matched node itself when it carries the tag', async () => {
+            const { tree } = buildHierarchy(['ten'], { ten: ['sub'] });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'acct' });
+            await tree.getChildren({ id: 'ten' });
+            await tree.getChildren({ id: 'sub' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            // `account:acct` is carried by the account node itself, so the whole
+            // subtree including the account is removed and the root listing changes.
+            tree.invalidateByTag('account:acct');
+
+            expect(tree.get('acct')).to.be.undefined;
+            expect(tree.get('ten')).to.be.undefined;
+            expect(tree.get('sub')).to.be.undefined;
+            expect(tree.get('sub-res')).to.be.undefined;
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onChange.mock.calls[0].arguments[0]).to.be.undefined;
+
+            // Root listing no longer contains the evicted account.
+            const roots = await tree.getChildren();
+            expect(roots).to.deep.equal([]);
+        });
+
+        it('should wipe everything under an ancestor while preserving the ancestor node', async () => {
+            const { tree } = buildHierarchy(['ten'], { ten: ['sub'] });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'acct' });
+            await tree.getChildren({ id: 'ten' });
+            await tree.getChildren({ id: 'sub' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            // The auto-derived `ancestor:acct` tag is carried by every descendant
+            // but not by the account node itself.
+            tree.invalidateByTag('ancestor:acct');
+
+            expect(tree.get('acct')).to.not.be.undefined;
+            expect(tree.get('ten')).to.be.undefined;
+            expect(tree.get('sub')).to.be.undefined;
+            expect(tree.get('sub-res')).to.be.undefined;
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('acct');
+        });
+
+        it('should invalidate a tag shared across multiple branches with one call', async () => {
+            const { tree } = buildHierarchy(['ten1', 'ten2'], { ten1: ['sub1'], ten2: ['sub2'] });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'acct' });
+            await tree.getChildren({ id: 'ten1' });
+            await tree.getChildren({ id: 'ten2' });
+            await tree.getChildren({ id: 'sub1' });
+            await tree.getChildren({ id: 'sub2' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            // `kind:sub` is carried by every subscription across both tenants.
+            tree.invalidateByTag('kind:sub');
+
+            expect(tree.get('sub1')).to.be.undefined;
+            expect(tree.get('sub2')).to.be.undefined;
+            expect(tree.get('sub1-res')).to.be.undefined;
+            expect(tree.get('sub2-res')).to.be.undefined;
+            // Both tenants survive.
+            expect(tree.get('ten1')).to.not.be.undefined;
+            expect(tree.get('ten2')).to.not.be.undefined;
+            // A cross-branch eviction coalesces to a single full refresh.
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onChange.mock.calls[0].arguments[0]).to.be.undefined;
+        });
+
+        it('should reconcile roots on invalidateRoot: preserve survivors, evict removed, fetch new lazily', async () => {
+            const tree = createTree();
+            let rootList: TestResource[] = [{ id: 'a' }, { id: 'b' }];
+            tree.registerProvider({ isRoot: true, canHandle: handleIds('a', 'b', 'c'), getChildren: (r?: TestResource) => {
+                if (!r) {
+                    return rootList.map(x => ({ ...x }));
+                }
+                switch (r.id) {
+                    case 'a': return aChildren();
+                    case 'b': return bChildren();
+                    case 'c': return cChildren();
+                    default: return [];
+                }
+            } });
+
+            const aChildren = mock.fn(() => [{ id: 'a-child' }]);
+            const bChildren = mock.fn(() => [{ id: 'b-child' }]);
+            const cChildren = mock.fn(() => [{ id: 'c-child' }]);
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'a' });
+            await tree.getChildren({ id: 'b' });
+            expect(aChildren.mock.callCount()).to.equal(1);
+            expect(bChildren.mock.callCount()).to.equal(1);
+
+            // New listing: 'a' survives, 'b' removed, 'c' is new.
+            rootList = [{ id: 'a' }, { id: 'c' }];
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+            tree.invalidateRoot();
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onChange.mock.calls[0].arguments[0]).to.be.undefined;
+
+            const roots = await tree.getChildren();
+            expect(roots.map(r => r.id)).to.deep.equal(['a', 'c']);
+
+            // Surviving root: children subtree preserved (no re-fetch).
+            await tree.getChildren({ id: 'a' });
+            expect(aChildren.mock.callCount()).to.equal(1);
+
+            // Removed root: subtree fully evicted.
+            expect(tree.get('b')).to.be.undefined;
+            expect(tree.get('b-child')).to.be.undefined;
+
+            // New root: children fetched lazily on first access.
+            await tree.getChildren({ id: 'c' });
+            expect(cChildren.mock.callCount()).to.equal(1);
+        });
+
+        it('should dispatch provider change events carrying tags to invalidateByTag', async () => {
+            let fireChange!: (event: DataProviderChangeEvent<TestResource>) => void;
+            const { tree } = buildHierarchy(['ten'], { ten: ['sub'] });
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: handleIds('never'),
+                getChildren: () => [],
+                onDidChange: (listener) => { fireChange = listener; return { dispose: () => { /* noop */ } }; },
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'acct' });
+            await tree.getChildren({ id: 'ten' });
+            await tree.getChildren({ id: 'sub' });
+            expect(tree.get('sub')).to.not.be.undefined;
+
+            fireChange({ resource: undefined, includeChildren: true, tags: ['subscription:sub'] });
+
+            expect(tree.get('sub')).to.be.undefined;
+        });
+
+        it('should reconcile (not wipe) on a root change event with includeChildren false', async () => {
+            let fireChange!: (event: DataProviderChangeEvent<TestResource>) => void;
+            let rootList: TestResource[] = [{ id: 'a' }, { id: 'b' }];
+            const tree = createTree();
+            const aChildren = mock.fn(() => [{ id: 'a-child' }]);
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: handleIds('a', 'b'),
+                getChildren: (r?: TestResource) => (r ? (r.id === 'a' ? aChildren() : []) : rootList.map(x => ({ ...x }))),
+                onDidChange: (listener) => { fireChange = listener; return { dispose: () => { /* noop */ } }; },
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'a' });
+            expect(aChildren.mock.callCount()).to.equal(1);
+
+            rootList = [{ id: 'a' }];
+            fireChange({ resource: undefined, includeChildren: false });
+
+            const roots = await tree.getChildren();
+            expect(roots.map(r => r.id)).to.deep.equal(['a']);
+            // Survivor's subtree preserved (reconcile, not full wipe).
+            await tree.getChildren({ id: 'a' });
+            expect(aChildren.mock.callCount()).to.equal(1);
+        });
+
+        it('should be a no-op for unknown tags', () => {
+            const tree = createTree();
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            tree.invalidateByTag('does-not-exist');
+
+            expect(onChange.mock.callCount()).to.equal(0);
+        });
+
+        it('should not register tags for untagged providers (back-compat)', async () => {
+            const tree = createTree();
+            const fetch = mock.fn(() => [{ id: 'child' }]);
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider({ isRoot: false, canHandle: canHandleAll, getChildren: fetch });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+
+            tree.invalidateByTag('anything');
+            await tree.getChildren({ id: 'root' });
+
+            expect(fetch.mock.callCount()).to.equal(1);
+        });
+
+        it('should clear the tag index on invalidateAll', async () => {
+            const { tree } = buildHierarchy(['ten'], { ten: ['sub'] });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'acct' });
+            await tree.getChildren({ id: 'ten' });
+            await tree.getChildren({ id: 'sub' });
+
+            tree.invalidateAll();
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+            tree.invalidateByTag('subscription:sub');
+
+            expect(onChange.mock.callCount()).to.equal(0);
         });
     });
 });

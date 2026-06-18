@@ -13,7 +13,7 @@ The single source of truth for tree data. Lives in `packages/utils/src/tree/Data
 - **Pagination**: Providers can return `AsyncIterable<Page<T>>` for paged results. The tree stores the iterator and pulls pages on demand via `loadMore()`/`loadAll()`
 - **Enrichment**: After children load, the tree calls each provider's `enrich()` in the background, then fires `onDidChange` when done
 - **Telemetry scoping**: Every `getChildren()`, `enrich()`, and page-load call is wrapped in `callWithTelemetryAndErrorHandling`, establishing an `IActionContext` on the async call stack via `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`) pick up this context automatically without any changes to provider or client signatures. See [Telemetry](telemetry.md).
-- **Node map**: `NodeMap` provides O(1) key-based lookup and recursive subtree removal for cache eviction
+- **Flat node store**: `FlatNodeStore` provides O(1) key-based lookup, recursive subtree removal, and a **tag reverse index** with tag-based subtree eviction (`evictByTag`) for cache eviction. Nodes reference their parent and children by string key (`parentKey` / `childKeys`) rather than by object pointer, so re-listing a level (e.g. re-listing accounts) never leaves stale parent/child object references behind — surviving subtrees stay valid because nothing points at a replaced object. The store owns all structural key/tag mechanics; `DataItemTree` layers the policy on top (providers, TTL, paging, enrichment, and `onDidChange` events).
 
 Key methods:
 
@@ -22,6 +22,8 @@ Key methods:
 | `getChildren(resource?)` | Fetch and cache children (root if undefined) |
 | `invalidate(resource, includeChildren?)` | Clear a resource's cached data (optionally invalidate children) |
 | `invalidateAll()` | Clear the entire tree |
+| `invalidateRoot()` | Reconciling root re-list (preserve survivors' subtrees, evict departed roots) |
+| `invalidateByTag(tag)` | Hard-evict every node carrying the tag plus its subtree (see Tag-based invalidation) |
 | `whenEnriched<T>(resource)` | Await background enrichment completion |
 | `hasMore(resource)` | Whether more pages are available |
 | `loadMore(resource)` | Pull the next page |
@@ -38,6 +40,7 @@ interface DataProvider<TResource> {
     getChildren(resource?: TResource): ProviderResult<ChildResult<TResource>>; // Fetch children
     enrich?(resource: TResource): boolean | Promise<boolean>;                  // Background enrichment (mutate in-place); return true to invalidate children
     getTtl?(resource?: TResource): number;                                     // Per-resource cache TTL in ms (overrides DataItemTree default)
+    getTags?(resource?: TResource): string[];                                  // Semantic identity tags for this node (for invalidateByTag)
     readonly isRoot?: boolean;                                                 // Whether this provider returns root-level items
     readonly onDidChange?: Event<DataProviderChangeEvent<TResource>>;          // Provider-initiated change notifications
 }
@@ -55,10 +58,36 @@ When a provider implements `getTtl`, `DataItemTree` uses its return value (in mi
 interface DataProviderChangeEvent<TResource> {
     readonly resource?: TResource;     // Undefined = root changed
     readonly includeChildren: boolean; // Whether to clear cached children too
+    readonly tags?: string[];          // When set, dispatched to invalidateByTag (resource/includeChildren ignored)
 }
 ```
 
-`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it. This is used by activity providers that need to push real-time status updates.
+`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it. This is used by activity providers that need to push real-time status updates. A root-level change (`resource` undefined) with `includeChildren: false` is interpreted as a **reconciling root re-list** (`invalidateRoot`) rather than a full wipe.
+
+#### Tag-based invalidation
+
+Cache invalidation is **tag-driven and flat**: every node carries a set of tags, and a caller invalidates broadly or narrowly purely by choosing which tag to name — never by walking the tree.
+
+A node's tags are the union of:
+
+- **Provider semantic tags** — `getTags(resource)` returns identity tags for the resource *itself* (e.g. `account:<id>`, `tenant:<id>`, `subscription:<id>`, or `type:<armType>`). `DataItemTree` calls this on the provider that *produced* the resource (the provider that handles its parent, or the root provider for roots) and hands the tags to `FlatNodeStore.tag`, which records them in the reverse index (tag → node keys).
+- **Auto-derived structural tags** — `FlatNodeStore.tag` adds an `ancestor:<key>` tag for every ancestor of the node (walking `parentKey`). Because every descendant of node `K` carries `ancestor:<K>`, the whole subtree rooted at `K` is exactly `store.keysForTag('ancestor:' + K)` — a flat lookup with no child-link walking.
+
+`invalidateByTag(tag)` then:
+
+1. Delegates to `FlatNodeStore.evictByTag(tag)`, which collects the nodes directly carrying `tag`, unions each match's subtree via its `ancestor:<key>` tag, then hard-evicts every node in that set — deleting it (which prunes its tags) and unlinking it from any surviving parent's `childKeys` — and returns the removed nodes.
+2. Reconciles the tree-level state for the removed nodes: unlinking any removed roots from the roots list and dropping pending enrichment.
+3. Fires a single coalesced `onDidChange`: the one surviving parent when the eviction is confined to a single branch, otherwise `undefined` (a root-level or cross-branch eviction → full refresh).
+
+This gives the caller a spectrum of reach from one primitive:
+
+- `invalidateByTag(accountTag(id))` — the account node carries `account:<id>`, so its whole subtree **including the account** is evicted.
+- `invalidateByTag('ancestor:' + accountKey)` — only descendants carry the ancestor tag, so **everything under** the account is wiped while the account node itself survives.
+- `invalidateByTag('type:microsoft.web/sites')` — every Function App node (and its slots) across all subscriptions, in one call.
+
+Tagging is fully back-compatible: a provider without `getTags` produces nodes that carry only structural tags and are otherwise invalidated positionally via `invalidate` / `invalidateAll`.
+
+`AzureAccountDataProvider` emits `account:<id>` / `tenant:<id>` / `subscription:<id>` identity tags (via the exported `accountTag` / `tenantTag` / `subscriptionTag` helpers, lowercased to match key normalization). On an auth session change it fires `{ resource: undefined, includeChildren: false }` to trigger a reconciling root re-list — re-listing accounts while preserving tenant/subscription subtrees under surviving accounts, and evicting a signed-out account's subtree because it drops out of the new listing. (This event is noisy — it also fires on individual token acquisitions — but an unchanged account set reconciles to a no-op.) On a sovereign-cloud configuration change it fires a full `invalidateAll()` because the configured endpoint itself changed.
 
 ### Enrichment Pattern
 
@@ -70,7 +99,7 @@ Resources can be enriched with additional data lazily after loading:
 4. When enrichment completes, `onDidChange` fires so the view re-renders
 5. Commands that need enriched data call `await cache.whenEnriched<EnrichedType>(resource)`
 
-**Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (for generic resources, effectively `id` plus subscription identity fields used by `AzureNodeId.from`, such as account id and tenant id). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
+**Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (for generic resources, effectively `id` plus subscription identity fields used by `AzureNodeId.from`, such as account id and tenant id). The key is computed once when the resource is added to the `FlatNodeStore`, and changing key-contributing properties would make the resource unreachable in the cache.
 
 The `enrich()` return value controls child invalidation:
 - Return `false` (or resolve to `false`) — only re-render the resource itself
@@ -147,7 +176,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 | `AcrDataProvider` / `FunctionAppDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
 | `AzureResourceDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
 
-`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes.
+`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes. An auth session change fires a tag-based change (`{ tags: ['account-list'] }`) that re-lists accounts while preserving tenant/subscription caches under surviving accounts; a sovereign-cloud configuration change fires a full `invalidateAll()` since the endpoint itself changed (see Tag-based invalidation).
 
 ### Subscription / tenant filtering
 

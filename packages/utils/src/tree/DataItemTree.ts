@@ -11,20 +11,20 @@ import { isAsyncIterable, type Page } from '../data/Page';
 import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
 import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
-import { NodeMap } from './NodeMap';
+import { FlatNodeStore, type FlatNode } from './FlatNodeStore';
 import { ProviderRegistry } from './ProviderRegistry';
 
 /**
  * Internal node wrapping a resource with its cached children and staleness info.
+ *
+ * Parent / child relationships are stored as **string keys**
+ * ({@linkcode FlatNode.parentKey} / {@linkcode FlatNode.childKeys}), resolved
+ * against the owning {@linkcode FlatNodeStore}, rather than as object pointers.
  * @internal
  */
-interface TreeNode<T> {
+interface TreeNode<T> extends FlatNode {
     readonly resource: T;
-    children: TreeNode<T>[] | undefined;  // undefined = not yet loaded
     staleAt: number;            // Date.now() after which children should be re-fetched
-
-    /** Back-pointer to the parent node, or `undefined` for root nodes. */
-    parent: TreeNode<T> | undefined;
 
     /**
      * If the provider returned an `AsyncIterable<Page<T>>`, the in-progress
@@ -45,7 +45,13 @@ interface TreeNode<T> {
  * @typeParam T - The data item type stored in the tree.
  */
 export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implements Disposable {
-    private readonly nodes = new NodeMap<TreeNode<T>>(node => this.getKey(node.resource));
+    /**
+     * The flat node store: owns the key->node map plus the tag reverse index
+     * and tag-based subtree eviction ({@linkcode FlatNodeStore.evictByTag}).
+     * This tree adds the policy on top -- providers, TTL, paging, enrichment,
+     * and {@linkcode onDidChange} events.
+     */
+    private readonly nodes = new FlatNodeStore<TreeNode<T>>();
 
     /**
      * Per-resource enrichment promises, keyed by resource key.
@@ -62,8 +68,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private readonly loadsInFlight = new InflightMap<void>();
 
-    /** Cached root nodes and their staleness timestamp. */
-    private roots: TreeNode<T>[] | undefined;
+    /** Cached root node keys and their staleness timestamp. */
+    private roots: string[] | undefined;
     private rootsStaleAt = 0;
 
     public readonly onDidChange = this.changeEmitter.event;
@@ -111,13 +117,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private async getRootChildren(): Promise<T[]> {
         if (this.roots !== undefined && Date.now() < this.rootsStaleAt) {
             this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${this.roots.length})`);
-            return this.roots.map(n => n.resource);
+            return this.rootResources();
         }
         this.executor.output.trace(`[cache] ${this.name} root cache miss`);
-
-        // Clear all cached nodes when recomputing roots since the whole tree may have changed
-        this.nodes.clear();
-        this.roots = undefined;
 
         // Each root provider gets its own telemetry scope so that
         // concurrent calls don't overwrite shared mutable properties.
@@ -147,19 +149,53 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             return result;
         });
 
-        this.roots = resources.map(resource => {
-            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
+        // Reconcile the freshly-listed roots against the previously cached
+        // ones by key, rather than wiping the whole tree. This lets a
+        // reconciling root refresh (invalidateRoot) re-list the top level
+        // (e.g. accounts) while preserving the tenant / subscription subtrees
+        // under roots that are still present. Because every parent/child link
+        // is a string key, a surviving root's subtree stays valid without
+        // touching any object. After invalidateAll() the map is empty, so this
+        // degenerates to a full fresh fetch (the previous behavior).
+        const newKeys = resources.map(resource => this.getKey(resource));
+        const newKeySet = new Set(newKeys);
+
+        // Evict roots (and their subtrees) that are no longer present.
+        for (const key of this.roots ?? []) {
+            if (!newKeySet.has(key)) {
+                this.nodes.removeSubtrees([key]);
+            }
+        }
+
+        for (const resource of resources) {
             const resourceKey = this.getKey(resource);
+            if (this.nodes.has(resourceKey)) {
+                // Root still present: keep its node (and cached subtree,
+                // staleAt, and pageIterator) as-is.
+                this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey} (preserved)`);
+                continue;
+            }
+            const node: TreeNode<T> = { resource, childKeys: undefined, staleAt: 0, parentKey: undefined };
             this.nodes.set(resourceKey, node);
+            this.tagNode(resourceKey, resource, undefined);
             this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey}`);
-            return node;
-        });
+        }
+        this.roots = newKeys;
         this.rootsStaleAt = this.computeStaleAt(this.rootTtl(rootProviders));
         this.executor.output.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
 
-        this.enrichAll(resources);
+        const rootResources = this.rootResources();
+        this.enrichAll(rootResources);
 
-        return resources;
+        return rootResources;
+    }
+
+    /** Resolve the current root keys to their cached resources. */
+    private rootResources(): T[] {
+        return (this.roots ?? []).flatMap(key => {
+            const node = this.nodes.get(key);
+            return node ? [node.resource] : [];
+        });
     }
 
     /**
@@ -190,24 +226,25 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             throw new Error(`Resource not found in tree: ${key}`);
         }
 
-        if (node.children !== undefined && Date.now() < node.staleAt) {
-            this.executor.output.trace(`[cache] ${this.name} branch cache hit key=${key} count=${node.children.length}`);
-            return node.children.map(n => n.resource);
+        if (node.childKeys !== undefined && Date.now() < node.staleAt) {
+            this.executor.output.trace(`[cache] ${this.name} branch cache hit key=${key} count=${node.childKeys.length}`);
+            return this.childResources(node);
         }
         this.executor.output.trace(`[cache] ${this.name} branch cache miss key=${key}`);
 
         // Find the provider that handles this resource
         const provider = this.findProvider(resource);
         if (!provider) {
-            node.children = [];
+            node.childKeys = [];
             node.staleAt = this.computeStaleAt(this.ttl);
             this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=0 provider=<none>`);
             return [];
         }
 
         // Remove previously cached descendants that may no longer be present
-        this.nodes.removeSubtrees(node.children);
-        node.children = [];
+        // (their tags are pruned inside FlatNodeStore.removeSubtrees).
+        this.nodes.removeSubtrees(node.childKeys);
+        node.childKeys = [];
         node.pageIterator = undefined;
         this.executor.output.debug(`[data] ${this.name} branch fetch start key=${key} provider=${provider.constructor.name}`);
 
@@ -230,13 +267,21 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             node.pageIterator = result[Symbol.asyncIterator]();
             await this.loadOnePage(resource);
         } else {
-            node.children = this.addChildNodes(result, node);
+            node.childKeys = this.addChildNodes(result, key);
         }
 
         node.staleAt = this.computeStaleAt(provider.getTtl?.(resource) ?? this.ttl);
-        this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=${node.children.length} provider=${provider.constructor.name}`);
+        this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=${node.childKeys.length} provider=${provider.constructor.name}`);
 
-        return node.children.map(n => n.resource);
+        return this.childResources(node);
+    }
+
+    /** Resolve a node's child keys to their cached resources. */
+    private childResources(node: TreeNode<T>): T[] {
+        return (node.childKeys ?? []).flatMap(childKey => {
+            const child = this.nodes.get(childKey);
+            return child ? [child.resource] : [];
+        });
     }
 
     /**
@@ -338,7 +383,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     public async loadMore(resource: T): Promise<void> {
         const key = this.getKey(resource);
         const node = this.nodes.get(key);
-        if (node?.children === undefined) {
+        if (node?.childKeys === undefined) {
             throw new Error(`Cannot loadMore before getChildren has been called for: ${key}`);
         }
 
@@ -366,7 +411,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
             // Ensure children are initialized (first page pulled) before
             // exhausting remaining pages.
-            if (node?.children === undefined) {
+            if (node?.childKeys === undefined) {
                 await this.getChildren(resource);
                 loaded = true;
             }
@@ -408,7 +453,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                 // re-inserting orphaned children into the map.
                 node.pageIterator = undefined;
             } else {
-                node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items, node)];
+                node.childKeys = [...(node.childKeys ?? []), ...this.addChildNodes(next.value.items, key)];
                 if (!next.value.hasMore) {
                     node.pageIterator = undefined;
                 }
@@ -418,18 +463,20 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     /**
      * Create {@linkcode TreeNode}s for the given resources, register them in
-     * the {@linkcode NodeMap}, and kick off background enrichment.
+     * the {@linkcode FlatNodeStore} under the given parent key, and kick off
+     * background enrichment. Returns the child keys in order.
      */
-    private addChildNodes(children: T[], parent: TreeNode<T>): TreeNode<T>[] {
-        const nodes = children.map(child => {
-            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0, parent };
+    private addChildNodes(children: T[], parentKey: string): string[] {
+        const keys = children.map(child => {
             const childKey = this.getKey(child);
+            const childNode: TreeNode<T> = { resource: child, childKeys: undefined, staleAt: 0, parentKey };
             this.nodes.set(childKey, childNode);
-            this.executor.output.trace(`[cache] ${this.name} child key=${childKey} parent=${this.getKey(parent.resource)}`);
-            return childNode;
+            this.tagNode(childKey, child, parentKey);
+            this.executor.output.trace(`[cache] ${this.name} child key=${childKey} parent=${parentKey}`);
+            return childKey;
         });
         this.enrichAll(children);
-        return nodes;
+        return keys;
     }
 
     /**
@@ -454,8 +501,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         this.executor.output.debug(`[cache] ${this.name} invalidate key=${this.getKey(resource)} includeChildren=${includeChildren}`);
         const node = this.nodes.get(this.getKey(resource));
         if (node && includeChildren) {
-            this.nodes.removeSubtrees(node.children);
-            node.children = undefined;
+            // Evict the descendants (their tags are pruned inside removeSubtrees);
+            // the node itself survives and keeps its own identity/ancestor tags.
+            this.nodes.removeSubtrees(node.childKeys);
+            node.childKeys = undefined;
             node.staleAt = 0;
             node.pageIterator = undefined;
         }
@@ -479,21 +528,24 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
 
         // Remove the node and its entire subtree from the map
-        this.nodes.removeSubtrees([node]);
+        this.nodes.removeSubtrees([key]);
         this.enrichmentPromises.delete(key);
 
-        const parent = node.parent;
-        if (parent) {
-            // Splice out of the parent's children array
-            const childIdx = parent.children?.indexOf(node) ?? -1;
-            if (childIdx !== -1) {
-                parent.children!.splice(childIdx, 1); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- indexOf succeeded
+        const parentKey = node.parentKey;
+        if (parentKey !== undefined) {
+            // Splice out of the parent's child-key list
+            const parent = this.nodes.get(parentKey);
+            const childIdx = parent?.childKeys?.indexOf(key) ?? -1;
+            if (parent && childIdx !== -1) {
+                parent.childKeys!.splice(childIdx, 1); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- indexOf succeeded
             }
-            this.invalidate(parent.resource, false);
+            if (parent) {
+                this.invalidate(parent.resource, false);
+            }
         } else {
             // Root item -- splice out of roots array
             if (this.roots) {
-                const rootIdx = this.roots.indexOf(node);
+                const rootIdx = this.roots.indexOf(key);
                 if (rootIdx !== -1) {
                     this.roots.splice(rootIdx, 1);
                 }
@@ -505,8 +557,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Invalidate all cached data. Clears the entire node map and root cache.
-     * Fires {@linkcode onDidChange} once with `undefined` (full refresh).
+     * Invalidate all cached data. Clears the entire node map (and its tag
+     * index) and root cache. Fires {@linkcode onDidChange} once with
+     * `undefined` (full refresh).
      */
     public invalidateAll(): void {
         this.executor.output.debug(`[cache] ${this.name} invalidate all`);
@@ -518,12 +571,130 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event by
-     * invalidating the changed resource or the entire cache.
+     * Trigger a reconciling re-list of the root level. Marks the root listing
+     * stale and fires {@linkcode onDidChange} with `undefined`; the next root
+     * fetch reconciles the freshly-listed roots against the cached ones by key
+     * (see {@linkcode getRootChildren}), preserving the subtrees under roots
+     * that are still present and evicting the subtrees of roots that have
+     * disappeared.
+     *
+     * Unlike {@linkcode invalidateAll}, this does **not** wipe the tree -- it is
+     * the right tool when only the *set* of roots may have changed (e.g. an
+     * account signed in/out) but the data under surviving roots is still valid.
+     */
+    public invalidateRoot(): void {
+        this.executor.output.debug(`[cache] ${this.name} invalidate root (reconcile)`);
+        this.rootsStaleAt = 0;
+        this.changeEmitter.fire(undefined);
+    }
+
+    /**
+     * Hard-evict every cached node carrying the given tag, *plus* everything
+     * beneath those nodes, then fire a single coalesced {@linkcode onDidChange}.
+     *
+     * Tags come from {@linkcode DataProvider.getTags} (semantic identity, e.g.
+     * `account:<id>`, `type:<armType>`) and from the auto-derived
+     * `ancestor:<key>` structural tags. The actual eviction is delegated to
+     * {@linkcode FlatNodeStore.evictByTag}, which computes the removal set
+     * purely from the tag index (matched nodes union their `ancestor:` subtrees,
+     * no child-link walking), unlinks each from any surviving parent's
+     * `childKeys`, prunes tags, and returns the removed nodes. This method adds
+     * the tree-level policy: unlinking removed roots, dropping pending
+     * enrichment, and firing the change event.
+     *
+     * A single change event is fired at the shallowest affected scope: the one
+     * surviving parent when the eviction is confined to a single branch,
+     * otherwise `undefined` (a root-level or cross-branch eviction triggers a
+     * full refresh).
+     *
+     * Resilient to unknown tags (no-op) and to a tag carried by many nodes.
+     */
+    public invalidateByTag(tag: string): void {
+        // The store computes the full removal set (matched nodes + their
+        // subtrees via `ancestor:` tags), unlinks each from any surviving
+        // parent's childKeys, prunes tags, and returns the removed nodes. This
+        // tree owns the rest: roots-list unlinking, enrichment cleanup, and the
+        // single coalesced change event.
+        const removed = this.nodes.evictByTag(tag);
+        if (removed.length === 0) {
+            this.executor.output.debug(`[cache] ${this.name} invalidate tag=${tag} (no matches)`);
+            return;
+        }
+        this.executor.output.debug(`[cache] ${this.name} invalidate tag=${tag} evicting=${removed.length}`);
+
+        const removedKeys = new Set(removed.map(node => this.getKey(node.resource)));
+
+        // Determine the surviving parents affected by the eviction (for a
+        // single, coalesced change event), unlink removed roots, and drop any
+        // pending enrichment for removed nodes. A parent is "affected" only if
+        // it survives -- i.e. it is not itself being removed.
+        const affectedParents = new Set<string | undefined>();
+        for (const node of removed) {
+            const key = this.getKey(node.resource);
+            this.enrichmentPromises.delete(key);
+
+            const parentKey = node.parentKey;
+            if (parentKey === undefined) {
+                if (this.roots) {
+                    const rootIdx = this.roots.indexOf(key);
+                    if (rootIdx !== -1) {
+                        this.roots.splice(rootIdx, 1);
+                    }
+                }
+                affectedParents.add(undefined);
+            } else if (!removedKeys.has(parentKey)) {
+                affectedParents.add(parentKey);
+            }
+        }
+
+        // Fire a single change event at the shallowest affected scope.
+        if (affectedParents.size === 1) {
+            const [only] = affectedParents;
+            if (only !== undefined) {
+                this.changeEmitter.fire(this.nodes.get(only)?.resource);
+                return;
+            }
+        }
+        this.changeEmitter.fire(undefined);
+    }
+
+    /**
+     * Resolve the semantic identity tags for a freshly-created node from the
+     * provider that produced it, then hand them to {@linkcode FlatNodeStore.tag},
+     * which appends the structural `ancestor:<key>` tags and updates the reverse
+     * index. The node must already be stored under `key` with its `parentKey`
+     * set.
+     *
+     * The producing provider is the one that handles the node's parent (for
+     * root nodes, the provider that handles the resource itself, which is the
+     * root provider).
+     */
+    private tagNode(key: string, resource: T, parentKey: string | undefined): void {
+        const parentResource = parentKey !== undefined ? this.nodes.get(parentKey)?.resource : undefined;
+        const producer = parentResource !== undefined ? this.findProvider(parentResource) : this.findProvider(resource);
+        this.nodes.tag(key, producer?.getTags?.(resource) ?? []);
+    }
+
+    /**
+     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event.
+     *
+     * - {@linkcode DataProviderChangeEvent.tags} present -> dispatch each tag to
+     *   {@linkcode invalidateByTag}.
+     * - {@linkcode DataProviderChangeEvent.resource} present -> positional
+     *   {@linkcode invalidate}.
+     * - Root-level change (`resource` undefined) with `includeChildren: false`
+     *   -> reconciling {@linkcode invalidateRoot}.
+     * - Otherwise -> {@linkcode invalidateAll}.
      */
     protected override onProviderChanged(event: DataProviderChangeEvent<T>): void {
-        if (event.resource !== undefined && event.resource !== null) {
+        if (event.tags && event.tags.length > 0) {
+            for (const tag of event.tags) {
+                this.invalidateByTag(tag);
+            }
+        } else if (event.resource !== undefined && event.resource !== null) {
             this.invalidate(event.resource, event.includeChildren);
+        } else if (!event.includeChildren) {
+            this.invalidateRoot();
         } else {
             this.invalidateAll();
         }
