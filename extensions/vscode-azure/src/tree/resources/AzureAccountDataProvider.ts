@@ -75,9 +75,20 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     private readonly debouncer = new Debouncer();
 
     /**
+     * Count of in-flight {@linkcode listAccounts} calls. While greater than
+     * zero, incoming `onDidChangeSessions` events are treated as potentially
+     * self-induced and suppressed, regardless of how long the underlying
+     * `getAccounts()` call takes. A counter (rather than a boolean) tolerates
+     * overlapping calls. See {@linkcode suppressSessionEventsUntil} for the
+     * trailing window that covers events arriving just after the call resolves.
+     */
+    private getAccountsInFlight = 0;
+
+    /**
      * Timestamp (epoch ms) before which incoming `onDidChangeSessions` events
-     * are ignored. Set around our own `getAccounts()` call to suppress
-     * self-induced events. See {@linkcode GetAccountsSuppressionMs}.
+     * are ignored. Armed after our own `getAccounts()` call resolves to suppress
+     * self-induced events that arrive shortly afterward. See
+     * {@linkcode GetAccountsSuppressionMs}.
      */
     private suppressSessionEventsUntil = 0;
 
@@ -96,8 +107,9 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
             }
 
             // Listing accounts can itself trigger a session-change event;
-            // ignore events inside the suppression window to avoid looping.
-            if (Date.now() < this.suppressSessionEventsUntil) {
+            // ignore events while a getAccounts() call is in flight (any
+            // duration) or inside the trailing window, to avoid looping.
+            if (this.getAccountsInFlight > 0 || Date.now() < this.suppressSessionEventsUntil) {
                 this.executor.output.trace(`[auth] sessions changed provider=${e.provider.id}; suppressed (self-induced window)`);
                 return;
             }
@@ -179,13 +191,20 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     private async listAccounts(): Promise<AzureAccount[]> {
         const environment = getConfiguredAzureEnv(this.ctx.code);
 
-        // Suppress session-change events around our own getAccounts() call:
-        // the call can itself trigger onDidChangeSessions, which would
-        // otherwise re-enter and loop. Set the window before and after so it
-        // covers both the in-flight call and any trailing event.
-        this.suppressSessionEventsUntil = Date.now() + GetAccountsSuppressionMs;
-        const accounts = await this.ctx.code.authentication.getAccounts(getAuthProviderId(environment));
-        this.suppressSessionEventsUntil = Date.now() + GetAccountsSuppressionMs;
+        // Suppress session-change events around our own getAccounts() call: the
+        // call can itself trigger onDidChangeSessions, which would otherwise
+        // re-enter and loop. The in-flight counter covers the call no matter how
+        // long it takes; the trailing timestamp (armed in finally, so a thrown
+        // call still leaves a guarded tail) covers any event that arrives just
+        // after the call resolves.
+        this.getAccountsInFlight++;
+        let accounts;
+        try {
+            accounts = await this.ctx.code.authentication.getAccounts(getAuthProviderId(environment));
+        } finally {
+            this.suppressSessionEventsUntil = Date.now() + GetAccountsSuppressionMs;
+            this.getAccountsInFlight--;
+        }
 
         return accounts
             .map(account => ({

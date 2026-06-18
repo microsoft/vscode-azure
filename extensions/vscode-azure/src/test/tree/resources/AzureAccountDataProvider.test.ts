@@ -169,6 +169,33 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(fired).to.equal(1);
         });
 
+        it('should keep suppressing while getAccounts is in flight, even past the trailing-window duration', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            let resolveGetAccounts!: (accounts: AzureAccount[]) => void;
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(
+                () => new Promise<AzureAccount[]>(resolve => { resolveGetAccounts = resolve; }),
+            );
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            // Start listing accounts; getAccounts() stays pending (a slow call).
+            const childrenPromise = provider.getChildren();
+
+            // Simulate a slow call by advancing well past GetAccountsSuppressionMs
+            // (1000ms) while getAccounts() has not yet resolved. A purely
+            // timestamp-based window would have lapsed by now.
+            mock.timers.tick(5000);
+
+            // A self-induced event arriving mid-call must still be suppressed.
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+            expect(fired).to.equal(0);
+
+            // Let the in-flight call complete so the promise settles.
+            resolveGetAccounts([]);
+            await childrenPromise;
+        });
+
         it('should fire (undebounced) when the sovereign cloud configuration changes', () => {
             const { provider, mock: vscodeMock } = createProvider();
             let fired = 0;
