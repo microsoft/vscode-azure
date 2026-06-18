@@ -13,9 +13,9 @@ import { createMockHierarchicalDataItemTree } from './mockTree';
 describe('findSubscriptionById (unit)', () => {
     function createTree() {
         const account = makeAccount({ id: 'acct-1' });
-        const tenant = makeTenant({ tenantId: 'tenant-1', account });
-        const subA = makeSubscription({ subscriptionId: 'sub-a', tenant, account });
-        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant, account });
+        const tenant = makeTenant({ tenantId: 'tenant-1', accountId: account.id });
+        const subA = makeSubscription({ subscriptionId: 'sub-a', tenantId: tenant.tenantId, accountId: account.id });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant.tenantId, accountId: account.id });
 
         const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant]],
@@ -32,10 +32,10 @@ describe('findSubscriptionById (unit)', () => {
      */
     function createMultiTenantTree() {
         const account = makeAccount({ id: 'acct-1' });
-        const tenant1 = makeTenant({ tenantId: 'tenant-1', account });
-        const tenant2 = makeTenant({ tenantId: 'tenant-2', account });
-        const subA = makeSubscription({ subscriptionId: 'sub-a', tenant: tenant1, account });
-        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant: tenant2, account });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', accountId: account.id });
+        const tenant2 = makeTenant({ tenantId: 'tenant-2', accountId: account.id });
+        const subA = makeSubscription({ subscriptionId: 'sub-a', tenantId: tenant1.tenantId, accountId: account.id });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant2.tenantId, accountId: account.id });
 
         const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant1, tenant2]],
@@ -101,10 +101,10 @@ describe('findSubscriptionById (unit)', () => {
     function createMultiAccountTree() {
         const account1 = makeAccount({ id: 'acct-1' });
         const account2 = makeAccount({ id: 'acct-2' });
-        const tenant1 = makeTenant({ tenantId: 'tenant-1', account: account1 });
-        const tenant2 = makeTenant({ tenantId: 'tenant-2', account: account2 });
-        const subA = makeSubscription({ subscriptionId: 'sub-a', tenant: tenant1, account: account1 });
-        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant: tenant2, account: account2 });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', accountId: account1.id });
+        const tenant2 = makeTenant({ tenantId: 'tenant-2', accountId: account2.id });
+        const subA = makeSubscription({ subscriptionId: 'sub-a', tenantId: tenant1.tenantId, accountId: account1.id });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant2.tenantId, accountId: account2.id });
 
         const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account1, [tenant1]],
@@ -205,10 +205,10 @@ describe('findSubscriptionById (unit)', () => {
 
     it('should resolve a subscription that appears on a later subscription page', async () => {
         const account = makeAccount({ id: 'acct-1' });
-        const tenant = makeTenant({ tenantId: 'tenant-1', account });
-        const subA = makeSubscription({ subscriptionId: 'sub-a', tenant, account });
-        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant, account });
-        const subC = makeSubscription({ subscriptionId: 'sub-c', tenant, account });
+        const tenant = makeTenant({ tenantId: 'tenant-1', accountId: account.id });
+        const subA = makeSubscription({ subscriptionId: 'sub-a', tenantId: tenant.tenantId, accountId: account.id });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant.tenantId, accountId: account.id });
+        const subC = makeSubscription({ subscriptionId: 'sub-c', tenantId: tenant.tenantId, accountId: account.id });
 
         const { tree, loadMore } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant]]],
@@ -224,9 +224,9 @@ describe('findSubscriptionById (unit)', () => {
 
     it('should resolve a tenant that appears on a later tenant page', async () => {
         const account = makeAccount({ id: 'acct-1' });
-        const tenant1 = makeTenant({ tenantId: 'tenant-1', account });
-        const tenant2 = makeTenant({ tenantId: 'tenant-2', account });
-        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant: tenant2, account });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', accountId: account.id });
+        const tenant2 = makeTenant({ tenantId: 'tenant-2', accountId: account.id });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant2.tenantId, accountId: account.id });
 
         const { tree } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant1], [tenant2]]],
@@ -241,10 +241,10 @@ describe('findSubscriptionById (unit)', () => {
 
     it('should stop paging subscriptions once a match is found', async () => {
         const account = makeAccount({ id: 'acct-1' });
-        const tenant = makeTenant({ tenantId: 'tenant-1', account });
-        const subA = makeSubscription({ subscriptionId: 'sub-a', tenant, account });
-        const subB = makeSubscription({ subscriptionId: 'sub-b', tenant, account });
-        const subC = makeSubscription({ subscriptionId: 'sub-c', tenant, account });
+        const tenant = makeTenant({ tenantId: 'tenant-1', accountId: account.id });
+        const subA = makeSubscription({ subscriptionId: 'sub-a', tenantId: tenant.tenantId, accountId: account.id });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant.tenantId, accountId: account.id });
+        const subC = makeSubscription({ subscriptionId: 'sub-c', tenantId: tenant.tenantId, accountId: account.id });
 
         const { tree, loadMore } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant]]],

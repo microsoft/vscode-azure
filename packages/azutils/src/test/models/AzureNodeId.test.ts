@@ -174,6 +174,18 @@ describe('AzureNodeId (unit)', () => {
             const parsed = AzureNodeId.parse(nodeId.toString());
             expect(parsed).to.equal(nodeId);
         });
+
+        it('should lowercase the account id and tenant id in the serialized key', () => {
+            const tenant = makeTenant({ tenantId: 'TENANT-Mixed', accountId: 'Account-MixedCase' });
+            const nodeId = AzureNodeId.from(tenant);
+            expect(nodeId.toString()).to.equal('azr://account-mixedcase@portal.azure.com/tenants/tenant-mixed');
+        });
+
+        it('should produce identical keys for account/tenant ids that differ only in case', () => {
+            const lower = AzureNodeId.from(makeTenant({ tenantId: 'abc', accountId: 'acct' })).toString();
+            const upper = AzureNodeId.from(makeTenant({ tenantId: 'ABC', accountId: 'ACCT' })).toString();
+            expect(upper).to.equal(lower);
+        });
     });
 
     describe('narrowing methods', () => {

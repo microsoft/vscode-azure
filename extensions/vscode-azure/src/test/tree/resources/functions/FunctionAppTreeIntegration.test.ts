@@ -34,8 +34,8 @@ describe('Function App Tree Integration (integration)', () => {
     // -- Test data --------------------------------------------------------
 
     const account = makeAccount();
-    const tenant = makeTenant({ account });
-    const subscription = makeSubscription({ account });
+    const tenant = makeTenant({ accountId: account.id });
+    const subscription = makeSubscription({ accountId: tenant.accountId, tenantId: tenant.tenantId, environment: tenant.environment });
     const resourceGroup = makeResourceGroup({ subscription });
 
     const functionApp = makeFunctionApp({

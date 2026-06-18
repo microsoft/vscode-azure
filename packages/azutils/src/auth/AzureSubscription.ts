@@ -21,12 +21,22 @@ export type AzureAccount = vscode.AuthenticationSessionAccountInformation & {
 
 /**
  * An Azure tenant associated with a specific {@linkcode AzureAccount}.
+ *
+ * The owning account is referenced by id rather than by object embed so
+ * that tenants remain plain, immutable value objects: callers must not rely on
+ * reference equality against a shared {@linkcode AzureAccount} instance.
  */
 export interface AzureTenant extends WithRequired<TenantIdDescription, 'tenantId' | 'displayName'> {
     /** The Azure environment (cloud) this tenant belongs to. */
     readonly environment: EnvironmentLike;
-    /** The account associated with this tenant. */
-    readonly account: AzureAccount;
+    /**
+     * The id of the {@linkcode AzureAccount} this tenant belongs to.
+     *
+     * This is the VS Code authentication account id (used verbatim for
+     * `getSession`), so it is kept exactly as issued and is **not**
+     * case-normalized on the object.
+     */
+    readonly accountId: string;
 }
 
 /**
@@ -36,17 +46,22 @@ export interface AzureTenant extends WithRequired<TenantIdDescription, 'tenantId
  * **not** carry a credential or authentication object. Credentials are produced
  * on demand via the credential-factory DI service (see `ICredentialFactory`).
  *
- * The subscription carries its `tenantId` directly (required); the owning
- * {@linkcode AzureSubscription.tenant tenant} (which also exposes a `tenantId`)
- * is available for the full tenant details.
+ * The subscription carries its `tenantId` directly (required) and references its
+ * owning account by id rather than by object embed, so callers must not
+ * rely on reference equality against a shared {@linkcode AzureAccount} or
+ * {@linkcode AzureTenant} instance.
  */
 export interface AzureSubscription extends WithRequired<Subscription, 'subscriptionId' | 'tenantId' | 'displayName'> {
     /** The Azure environment (cloud) to which this subscription belongs. */
     readonly environment: EnvironmentLike;
-    /** The tenant to which this subscription belongs. */
-    readonly tenant: AzureTenant;
-    /** The account associated with this subscription. */
-    readonly account: AzureAccount;
+    /**
+     * The id of the {@linkcode AzureAccount} this subscription belongs to.
+     *
+     * This is the VS Code authentication account id (used verbatim for
+     * `getSession`), so it is kept exactly as issued and is **not**
+     * case-normalized on the object.
+     */
+    readonly accountId: string;
 }
 
 /**
@@ -54,8 +69,8 @@ export interface AzureSubscription extends WithRequired<Subscription, 'subscript
  * {@linkcode AzureSubscription}.
  *
  * Checks that the value is a non-null object carrying the subscription's
- * defining fields (`subscriptionId`, `tenantId`, and an owning `account` and
- * `tenant`). This distinguishes a subscription from related shapes such as an
+ * defining fields (`subscriptionId`, `tenantId`, and the owning `accountId`).
+ * This distinguishes a subscription from related shapes such as an
  * {@linkcode AzureAccount}, {@linkcode AzureTenant}, or a plain options object.
  */
 export function isAzureSubscription(value: unknown): value is AzureSubscription {
@@ -64,7 +79,6 @@ export function isAzureSubscription(value: unknown): value is AzureSubscription 
         value !== null &&
         'subscriptionId' in value &&
         'tenantId' in value &&
-        'account' in value &&
-        'tenant' in value
+        'accountId' in value
     );
 }

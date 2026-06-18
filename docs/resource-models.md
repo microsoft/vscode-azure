@@ -45,17 +45,18 @@ type AzureAccount = vscode.AuthenticationSessionAccountInformation & {
 
 interface AzureTenant extends WithRequired<TenantIdDescription, 'tenantId' | 'displayName'> {
     readonly environment: EnvironmentLike;
-    readonly account: AzureAccount;
+    readonly accountId: string;    // VS Code auth account id (kept verbatim)
 }
 
 interface AzureSubscription extends WithRequired<Subscription, 'subscriptionId' | 'tenantId' | 'displayName'> {
     readonly environment: EnvironmentLike;
-    readonly tenant: AzureTenant;
-    readonly account: AzureAccount;
+    readonly accountId: string;    // VS Code auth account id (kept verbatim)
 }
 ```
 
-**No credential on the subscription.** Unlike the removed `@microsoft/vscode-azext-azureauth` model, `AzureSubscription` carries no credential or authentication object — only the `environment` (an [`EnvironmentLike`](#environmentlike)) plus ids/displayName/tenant/account. Tokens are produced on demand via the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. See [Azure Client Wrappers — DI Integration](azure-clients.md#di-integration).
+**Branded ids, not object embeds.** Tenants and subscriptions reference their owning account by `accountId` rather than embedding an `AzureAccount` object, and a subscription carries its `tenantId` directly rather than embedding an `AzureTenant`. This keeps every node a flat, immutable value object: re-listing one level (e.g. re-listing accounts after an auth-session change) never leaves stale embedded parent objects behind, and callers must not rely on reference equality against a shared account/tenant instance. The producer (`AzureAccountDataProvider`) lowercases `tenantId` and `subscriptionId` (case-insensitive GUIDs) but keeps `accountId` verbatim because it doubles as the VS Code `getSession` identity; case-insensitive cache keys are achieved by lowercasing `accountId`/`tenantId` inside `AzureNodeId.toString()` instead. The account's display label is **not** carried on tenants/subscriptions: `getSession` resolves the account by `id`, so the credential factory passes an empty `label`.
+
+**No credential on the subscription.** Unlike the removed `@microsoft/vscode-azext-azureauth` model, `AzureSubscription` carries no credential or authentication object — only the `environment` (an [`EnvironmentLike`](#environmentlike)) plus ids/displayName/account-id. Tokens are produced on demand via the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. See [Azure Client Wrappers — DI Integration](azure-clients.md#di-integration).
 
 ## `EnvironmentLike`
 

@@ -65,8 +65,8 @@ describe('GenericAzureViewProvider (unit)', () => {
         it('should skip single account and single tenant to show subscriptions directly', async () => {
             const account = makeAccount();
             const tenant = makeTenant();
-            const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1' });
-            const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2' });
+            const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1', tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
+            const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2', tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
             const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
                 [account, [tenant]],
                 [tenant, [sub1, sub2]],
@@ -138,7 +138,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         it('should not skip single account when alwaysShowAccountNodes is true', async () => {
             const account = makeAccount();
             const tenant = makeTenant();
-            const sub = makeSubscription();
+            const sub = makeSubscription({ tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
             const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
                 [account, [tenant]],
                 [tenant, [sub]],
@@ -161,8 +161,8 @@ describe('GenericAzureViewProvider (unit)', () => {
         it('should hide subscriptions not present in the filter', async () => {
             const account = makeAccount();
             const tenant = makeTenant({ tenantId: 'tenant-1' });
-            const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1', tenant });
-            const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2', tenant });
+            const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1', tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
+            const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2', tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
             const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
                 [account, [tenant]],
                 [tenant, [sub1, sub2]],
@@ -198,8 +198,8 @@ describe('GenericAzureViewProvider (unit)', () => {
         it('should apply no filtering when the setting is empty', async () => {
             const account = makeAccount();
             const tenant = makeTenant({ tenantId: 'tenant-1' });
-            const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1', tenant });
-            const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2', tenant });
+            const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1', tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
+            const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2', tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
             const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
                 [account, [tenant]],
                 [tenant, [sub1, sub2]],
@@ -214,8 +214,8 @@ describe('GenericAzureViewProvider (unit)', () => {
             const account = makeAccount();
             const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant 1' });
             const tenant2 = makeTenant({ tenantId: 'tenant-2', displayName: 'Tenant 2' });
-            const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1', tenant: tenant1 });
-            const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2', tenant: tenant2 });
+            const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1', tenantId: tenant1.tenantId, accountId: tenant1.accountId, environment: tenant1.environment });
+            const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2', tenantId: tenant2.tenantId, accountId: tenant2.accountId, environment: tenant2.environment });
             const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
                 [account, [tenant1, tenant2]],
                 [tenant1, [sub1]],

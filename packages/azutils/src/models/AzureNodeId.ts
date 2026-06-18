@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureAccount } from '../auth/AzureSubscription';
+import type { EnvironmentLike } from '../auth/Environment';
 import { getResourceGroupArmId, getSubscriptionArmId, parseAzureResourceId } from '../utils/azureResourceId';
 import { type AzureNode, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, isVirtualGroup, isVirtualResource } from './AzureNode';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
@@ -174,16 +174,16 @@ export class AzureNodeId {
             case isTenant(node):
                 result = new AzureNodeId({
                     kind: 'tenant',
-                    accountId: node.account.id,
-                    portalHost: portalHost(node.account),
+                    accountId: node.accountId,
+                    portalHost: portalHost(node),
                     tenantId: node.tenantId,
                 });
                 break;
             case isSubscription(node):
                 result = new AzureNodeId({
                     kind: 'subscription',
-                    accountId: node.account.id,
-                    portalHost: portalHost(node.account),
+                    accountId: node.accountId,
+                    portalHost: portalHost(node),
                     tenantId: node.tenantId,
                     armResourceId: `/subscriptions/${node.subscriptionId}`,
                 });
@@ -191,8 +191,8 @@ export class AzureNodeId {
             case isResourceGroup(node):
                 result = new AzureNodeId({
                     kind: 'grouping',
-                    accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account),
+                    accountId: node.subscription.accountId,
+                    portalHost: portalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                     grouping: {
@@ -204,8 +204,8 @@ export class AzureNodeId {
             case isVirtualGroup(node):
                 result = new AzureNodeId({
                     kind: 'grouping',
-                    accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account),
+                    accountId: node.subscription.accountId,
+                    portalHost: portalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: `/subscriptions/${node.subscription.subscriptionId}/${virtualGroupingPrefix}${node.groupingStrategy}/${encodeURIComponent(node.groupingValue)}`,
                     grouping: node,
@@ -214,8 +214,8 @@ export class AzureNodeId {
             case isGenericResource(node):
                 result = new AzureNodeId({
                     kind: 'resource',
-                    accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account),
+                    accountId: node.subscription.accountId,
+                    portalHost: portalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                 });
@@ -223,8 +223,8 @@ export class AzureNodeId {
             case isVirtualResource(node):
                 result = new AzureNodeId({
                     kind: 'virtual',
-                    accountId: node.azureResource.subscription.account.id,
-                    portalHost: portalHost(node.azureResource.subscription.account),
+                    accountId: node.azureResource.subscription.accountId,
+                    portalHost: portalHost(node.azureResource.subscription),
                     tenantId: node.azureResource.subscription.tenantId,
                     armResourceId: node.azureResource.id,
                     virtual: node,
@@ -246,10 +246,17 @@ export class AzureNodeId {
      */
     public toString(): string {
         const d = this.data;
-        const parts = [schemePrefix, d.accountId, '@', d.portalHost];
+        // The account id and tenant id are case-insensitive identities (the
+        // account id is an AAD/object id, the tenant id is a GUID), so they are
+        // lowercased here to give every node a single canonical key regardless
+        // of the casing the provider happened to emit. The id is treated as
+        // opaque elsewhere, so normalizing only at serialization time keeps the
+        // verbatim values on the in-memory data objects (where the account id
+        // doubles as the VS Code `getSession` identity).
+        const parts = [schemePrefix, d.accountId.toLowerCase(), '@', d.portalHost];
 
         if (d.kind !== 'account') {
-            parts.push('/tenants/', d.tenantId);
+            parts.push('/tenants/', d.tenantId.toLowerCase());
         }
 
         if (d.kind !== 'account' && d.kind !== 'tenant') {
@@ -413,10 +420,14 @@ export class AzureNodeId {
 
 /**
  * Extracts the portal hostname (e.g. `"portal.azure.com"`) from an
- * {@linkcode AzureSubscription.environment}'s `portalUrl`.
+ * {@linkcode EnvironmentLike}'s `portalUrl`.
+ *
+ * Accepts any value carrying an `environment` (account, tenant, or
+ * subscription) so callers can pass the node directly without first
+ * resolving its owning account object.
  */
-function portalHost(account: AzureAccount): string {
-    return new URL(account.environment.portalUrl).hostname;
+function portalHost(entity: { readonly environment: EnvironmentLike }): string {
+    return new URL(entity.environment.portalUrl).hostname;
 }
 
 //#region Internal interfaces for narrowing AzureNodeId.data based on kind

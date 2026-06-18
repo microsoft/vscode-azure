@@ -163,7 +163,7 @@ describe('AzdProvisionStep (unit)', () => {
             const context = {
                 provision: true,
                 iacFolder: MockUri.file('/project'),
-                subscription: { account: { id: 'acct-9' } },
+                subscription: { accountId: 'acct-9' },
             } as AzdWizardContext;
 
             await step.execute(context);
