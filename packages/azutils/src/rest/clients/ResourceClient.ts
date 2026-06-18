@@ -6,12 +6,13 @@
 import { createResourceManagement, type ResourceManagementClientOptionalParams, type ResourceManagementContext } from '@azure/arm-resources/api';
 import { list as sdkListResourceGroups, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
 import { listByResourceGroup as sdkListByResourceGroup, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
+import type { AzureSubscription } from '../../auth/AzureSubscription';
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
-import { createAzureRestSubscriptionClient } from '../createAzureClient';
+import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 /** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
@@ -84,13 +85,15 @@ export class ResourceClient implements IResourceClient {
     public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
+        credential: TokenCredential,
         subscription: AzureSubscription,
         options?: ResourceManagementClientOptionalParams,
     ): ResourceClient {
-        const context = createAzureRestSubscriptionClient(
+        const context = createArmRestSubscriptionClient(
             ctx,
             executor,
             createResourceManagement,
+            credential,
             subscription,
             options,
         );

@@ -9,7 +9,7 @@ The tree UI is split into two independent layers: a **data layer** and a **view 
 The single source of truth for tree data. Lives in `packages/utils/src/tree/DataItemTree.ts`.
 
 - **Lazy loading**: Children are fetched on first access via registered `DataProvider`s
-- **Caching with TTL**: Results are cached and re-fetched once stale (default: 5 minutes, configured in `registerTrees.ts`)
+- **Caching with TTL**: Results are cached and re-fetched once stale. The default TTL is configured in `registerTrees.ts` (5 minutes for the resources tree), but a provider may override it per-resource via `getTtl` (see below) — e.g. the account/tenant/subscription provider returns `Infinity`
 - **Pagination**: Providers can return `AsyncIterable<Page<T>>` for paged results. The tree stores the iterator and pulls pages on demand via `loadMore()`/`loadAll()`
 - **Enrichment**: After children load, the tree calls each provider's `enrich()` in the background, then fires `onDidChange` when done
 - **Telemetry scoping**: Every `getChildren()`, `enrich()`, and page-load call is wrapped in `callWithTelemetryAndErrorHandling`, establishing an `IActionContext` on the async call stack via `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`) pick up this context automatically without any changes to provider or client signatures. See [Telemetry](telemetry.md).
@@ -37,12 +37,17 @@ interface DataProvider<TResource> {
     canHandle(resource: unknown): resource is TResource;                        // Type guard
     getChildren(resource?: TResource): ProviderResult<ChildResult<TResource>>; // Fetch children
     enrich?(resource: TResource): boolean | Promise<boolean>;                  // Background enrichment (mutate in-place); return true to invalidate children
+    getTtl?(resource?: TResource): number;                                     // Per-resource cache TTL in ms (overrides DataItemTree default)
     readonly isRoot?: boolean;                                                 // Whether this provider returns root-level items
     readonly onDidChange?: Event<DataProviderChangeEvent<TResource>>;          // Provider-initiated change notifications
 }
 ```
 
 `ChildResult<T>` can be either `T[]` (simple array) or `AsyncIterable<Page<T>>` (paginated).
+
+#### `getTtl`
+
+When a provider implements `getTtl`, `DataItemTree` uses its return value (in milliseconds) as the cache TTL for that resource's children instead of the tree-wide default; otherwise the default applies. It is consulted for both root (`getTtl()` with no argument) and branch (`getTtl(resource)`) loads. Returning `Infinity` makes the cached children never go stale — they only refresh on explicit `invalidate`/`invalidateAll` or a provider `onDidChange`. The account/tenant/subscription data provider uses `Infinity` because account/tenant/subscription lists change only on auth or cloud-configuration events, which it signals via `onDidChange`.
 
 `DataProviderChangeEvent<T>` allows providers to push changes without going through invalidation:
 
@@ -65,7 +70,7 @@ Resources can be enriched with additional data lazily after loading:
 4. When enrichment completes, `onDidChange` fires so the view re-renders
 5. Commands that need enriched data call `await cache.whenEnriched<EnrichedType>(resource)`
 
-**Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (e.g. `id`, `name`, `type`, `subscription`). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
+**Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (for generic resources, effectively `id` plus subscription identity fields used by `AzureNodeId.from`, such as account id and tenant id). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
 
 The `enrich()` return value controls child invalidation:
 - Return `false` (or resolve to `false`) — only re-render the resource itself
@@ -121,15 +126,34 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 **Registration order matters** — specific providers must be registered before broader fallback providers. In `registerTrees.ts`, each tree is configured via a `TreeConfig` object whose `dataProviders` and `viewProviders` arrays are processed in order:
 
 ```typescript
-// In registerTrees.ts — AcrDataProvider before GenericAzureDataProvider
+// In registerTrees.ts — resources tree dataProviders, most specific first
 dataProviders: [
     AcrDataProvider,
-    [IFunctionAppDataProvider, FunctionAppDataProvider], // singleton+alias tuple
-    GenericAzureDataProvider,                            // fallback
+    [IFunctionAppDataProvider, FunctionAppDataProvider],   // singleton+alias tuple
+    [IAzureAccountDataProvider, AzureAccountDataProvider], // accounts/tenants/subscriptions (root)
+    AzureResourceDataProvider,                            // resource groups + resources (fallback)
 ],
 ```
 
-Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly). See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
+Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly. See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
+
+## Azure Resources Tree Providers
+
+The Azure resources tree composes three data providers. They split responsibility so each level can have its own caching and refresh semantics:
+
+| Provider | Root? | Handles | TTL | Refresh trigger |
+|----------|-------|---------|-----|-----------------|
+| `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud` configuration change |
+| `AcrDataProvider` / `FunctionAppDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
+| `AzureResourceDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
+
+`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes.
+
+### Subscription / tenant filtering
+
+Tenant and subscription filtering is a **view-layer** concern, implemented in `GenericAzureViewProvider.applyFilter`. It reads `azureResourceGroups.selectedSubscriptions` (an array of `tenantId/subscriptionId` strings, the same setting `vscode-azext-azureauth` used). When the list is empty, no filtering applies. Otherwise, tenant nodes survive only when their `tenantId` is in the filter, and subscription nodes only when their `subscriptionId` is. Other node types pass through.
+
+Because the tree loads lazily, a filtered-out tenant is never expanded, so its subscriptions are never requested from Azure. The data layer may still cache subscriptions that don't pass the filter when they arrive in the *same* response as ones that do (e.g. two subscriptions in one tenant) — that's acceptable since it costs no extra request. The view provider fires `onDidChange` when the filter setting changes so the tree re-renders.
 
 ## Workspace (Local) Tree
 

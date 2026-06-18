@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { Location } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscription, Location } from '@microsoft/vscode-azure-azutils';
 import type * as vscode from 'vscode';
 
 /**
@@ -50,6 +49,13 @@ export interface AzdWizardContext {
      * Used by {@linkcode HydratableChooseSubscriptionStep} to skip the picker.
      */
     readonly hydratedSubscriptionId?: string;
+    /**
+     * `AZURE_TENANT_ID` from the existing default environment, if any (only set
+     * when the env is fully configured, so it is the owning tenant of
+     * {@linkcode hydratedSubscriptionId}). Used as a fast-path hint when resolving
+     * the subscription of deployments produced by this provision.
+     */
+    readonly hydratedTenantId?: string;
     /**
      * `AZURE_LOCATION` from the existing default environment, if any.
      * Used by {@linkcode HydratableChooseLocationStep} to skip the picker.

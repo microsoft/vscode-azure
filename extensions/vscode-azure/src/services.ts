@@ -3,16 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscription, ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
 import type { ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { Activity } from './tree/activity/Activity';
 import type { WorkspaceNode } from './tree/workspace/WorkspaceNode';
-
-/** Identifier for the Azure subscription provider */
-export const IAzureSubscriptionProvider: ServiceIdentifier<AzureSubscriptionProvider> = Symbol.for('IAzureSubscriptionProvider');
 
 // #region Azure resource tree and view identifiers
 
@@ -27,6 +23,22 @@ export type IAzureViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');
 export type IAzureResourceTreeView = vscode.TreeView<string>;
+
+/**
+ * Identifier for a resolver that maps a bare subscription id to a fully-populated
+ * {@linkcode AzureSubscription} by drilling the Azure resource data tree.
+ *
+ * Lets activity-tree components (e.g. the ARM deployment provider) obtain an
+ * authenticatable subscription handle without taking a direct dependency on the
+ * resource tree. Returns `undefined` when no signed-in account exposes the id.
+ *
+ * An optional `tenantId` hint narrows the drill to a single tenant when the
+ * owning tenant is known (e.g. hydrated from azd). An optional `accountId` hint
+ * likewise narrows the drill to a single account when the owning account is
+ * known.
+ */
+export const ISubscriptionResolver: ServiceIdentifier<ISubscriptionResolver> = Symbol.for('ISubscriptionResolver');
+export type ISubscriptionResolver = (subscriptionId: string, tenantId?: string, accountId?: string) => Promise<AzureSubscription | undefined>;
 
 // #endregion
 

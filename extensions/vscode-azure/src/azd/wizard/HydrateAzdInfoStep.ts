@@ -25,6 +25,9 @@ import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
  *   fully-configured env's values; used by the
  *   {@linkcode HydratableChooseSubscriptionStep} /
  *   {@linkcode HydratableChooseLocationStep} to skip their pickers.
+ * - `hydratedTenantId` -- `AZURE_TENANT_ID` from the fully-configured env;
+ *   forwarded as a hint when resolving the subscription of deployments this
+ *   env provisions.
  *
  * If a default env exists but is *partially* configured (missing one or both
  * azure values), this step intentionally treats the wizard as Post-clone:
@@ -89,6 +92,12 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
                 result.environmentName = defaultEnv;
                 result.hydratedSubscriptionId = sub;
                 result.hydratedLocationName = loc;
+                // The env is fully configured, so AZURE_TENANT_ID (when present)
+                // is the owning tenant of the hydrated subscription -- safe to use
+                // as a resolution hint for the deployments this env provisions.
+                if (values.AZURE_TENANT_ID) {
+                    result.hydratedTenantId = values.AZURE_TENANT_ID;
+                }
             } else {
                 // Partial Bootstrapped: the existing default env is missing
                 // one or both azure values, so it can't be provisioned. Treat

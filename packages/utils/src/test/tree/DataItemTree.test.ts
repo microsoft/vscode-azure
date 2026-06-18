@@ -135,6 +135,70 @@ describe('DataItemTree (unit)', () => {
         });
     });
 
+    describe('getTtl', () => {
+        it('should honor a provider getTtl over the tree default for root children', async () => {
+            const tree = createTree(0); // default TTL = 0 -> always stale
+            const fn = mock.fn(() => [{ id: 'a' }]);
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleNone,
+                getChildren: fn,
+                getTtl: () => Infinity, // never stale
+            });
+
+            await tree.getChildren();
+            await tree.getChildren();
+
+            expect(fn.mock.callCount()).to.equal(1);
+        });
+
+        it('should honor a provider getTtl over the tree default for branch children', async () => {
+            const tree = createTree(0); // default TTL = 0 -> always stale
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            const fn = mock.fn(() => [{ id: 'child' }]);
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: canHandleAll,
+                getChildren: fn,
+                getTtl: () => Infinity,
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+            await tree.getChildren({ id: 'root' });
+
+            expect(fn.mock.callCount()).to.equal(1);
+        });
+
+        it('should fall back to the tree default TTL when getTtl is absent', async () => {
+            const tree = createTree(0); // default TTL = 0 -> always stale
+            const fn = mock.fn(() => [{ id: 'a' }]);
+            tree.registerProvider({ isRoot: true, canHandle: canHandleNone, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren();
+
+            expect(fn.mock.callCount()).to.equal(2);
+        });
+
+        it('should still re-fetch infinite-TTL children after explicit invalidation', async () => {
+            const tree = createTree(0);
+            const fn = mock.fn(() => [{ id: 'a' }]);
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleNone,
+                getChildren: fn,
+                getTtl: () => Infinity,
+            });
+
+            await tree.getChildren();
+            tree.invalidateAll();
+            await tree.getChildren();
+
+            expect(fn.mock.callCount()).to.equal(2);
+        });
+    });
+
     describe('get', () => {
         it('should return a resource by key after loading', async () => {
             const tree = createTree();

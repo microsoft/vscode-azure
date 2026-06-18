@@ -6,7 +6,7 @@
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { AcrClient } from '../../../rest/clients/AcrClient';
-import { makeSubscription } from '../../mockAzure';
+import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('AcrClient (unit)', () => {
@@ -27,7 +27,7 @@ describe('AcrClient (unit)', () => {
             handler: (req) => makeResponse(req, 200, registryBody),
         });
 
-        const client = AcrClient.create(ctx, executor, subscription, { httpClient });
+        const client = AcrClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
         const registry = await client.registries.get('rg1', 'myReg');
 
         expect(registry.name).to.equal('myReg');

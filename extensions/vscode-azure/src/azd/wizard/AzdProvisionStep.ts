@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { CancellationError, delay, ExecuteStep, stringifyError, type ICodeContext, type IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
@@ -33,7 +31,6 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         private readonly azd: IAzdService,
         private readonly output: IOutputChannel,
         private readonly armProvider: ArmDeploymentDataProvider,
-        private readonly subscriptionProvider: AzureSubscriptionProvider,
         private readonly tempDirManager: ITempDirManager,
     ) {
         super();
@@ -50,8 +47,16 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const abortCtl = new AbortController();
         const trackedIds = new Set<string>();
 
+        // The hydrated tenant (when the env was fully configured) is the owning
+        // tenant of the subscription this provision targets -- forward it as a
+        // resolution hint for the deployments we discover. When the subscription
+        // was picked interactively it also carries its owning account -- forward
+        // that account id as an additional resolution hint.
+        const tenantId = context.hydratedTenantId;
+        const accountId = context.subscription?.account.id;
+
         // Start polling in the background (fire-and-forget)
-        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal);
+        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal, tenantId, accountId);
 
         try {
             await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
@@ -60,7 +65,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         } finally {
             abortCtl.abort();
             // Final read to catch any entries written just before exit
-            await this.readAndTrack(deployIdFileUri, trackedIds);
+            await this.readAndTrack(deployIdFileUri, trackedIds, tenantId, accountId);
         }
     }
 
@@ -75,10 +80,10 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * still-running provision -- a brand new deployment is a brand new event
      * and should appear in the tree.
      */
-    private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal): Promise<void> {
+    private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal, tenantId?: string, accountId?: string): Promise<void> {
         try {
             while (!signal.aborted) {
-                await this.readAndTrack(fileUri, trackedIds);
+                await this.readAndTrack(fileUri, trackedIds, tenantId, accountId);
                 await delay(pollIntervalMs, { signal });
             }
         } catch (e) {
@@ -91,10 +96,12 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     /**
      * Reads the deployment ID file and starts tracking any entries
      * not already in {@linkcode trackedIds}. Best-effort: silently
-     * ignores missing files, parse errors, and subscription resolution
-     * failures.
+     * ignores missing files and parse errors. The activity provider
+     * resolves each deployment's subscription on demand, using the
+     * optional {@linkcode tenantId} and {@linkcode accountId} hints to speed up
+     * resolution.
      */
-    private async readAndTrack(fileUri: vscode.Uri, trackedIds: Set<string>): Promise<void> {
+    private async readAndTrack(fileUri: vscode.Uri, trackedIds: Set<string>, tenantId?: string, accountId?: string): Promise<void> {
         const entries = await this.readDeploymentIdFile(fileUri);
         for (const entry of entries) {
             if (trackedIds.has(entry.deploymentId)) {
@@ -104,13 +111,9 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             this.output.debug(`[provision] found deployment ID: ${entry.deploymentId}`);
 
             try {
-                const { subscriptionId } = parseAzureResourceId(entry.deploymentId);
-                const subscription = await this.resolveSubscription(subscriptionId);
-                if (subscription) {
-                    this.armProvider.trackDeployment(entry.deploymentId, subscription);
-                }
-            } catch {
-                this.output.debug(`[provision] failed to track deployment: ${entry.deploymentId}`);
+                this.armProvider.trackDeployment(entry.deploymentId, tenantId, accountId);
+            } catch (e) {
+                this.output.debug(`[provision] failed to track deployment ${entry.deploymentId}: ${stringifyError(e)}`);
             }
         }
     }
@@ -142,15 +145,5 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         } catch {
             return [];
         }
-    }
-
-    private async resolveSubscription(subscriptionId: string): Promise<AzureSubscription | undefined> {
-        try {
-            const subscriptions = await this.subscriptionProvider.getAvailableSubscriptions();
-            return subscriptions.find(s => s.subscriptionId.toLowerCase() === subscriptionId.toLowerCase());
-        } catch {
-            this.output.debug(`[provision] failed to resolve subscription ${subscriptionId}`);
-        }
-        return undefined;
     }
 }

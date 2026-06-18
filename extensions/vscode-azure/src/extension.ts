@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import {
     AcrClient,
+    createDefaultCredentialFactory,
     DeploymentClient,
+    findSubscriptionById,
     IAcrClientProvider,
+    ICredentialFactory,
     IDeploymentClientProvider,
     IResourceClientProvider,
     ISubscriptionClientProvider,
@@ -39,7 +41,7 @@ import { AzdAuthServer, IAzdAuthServer } from './azd/AzdAuthServer';
 import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { registerCommands } from './commands/registerCommands';
-import { IAzureSubscriptionProvider, pushDisposable } from './services';
+import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
 
@@ -122,9 +124,9 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         );
     }).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(IAzureSubscriptionProvider).toDynamicValue(context => {
-        return new VSCodeAzureSubscriptionProvider(context.get(IOutputChannel));
-    }).inSingletonScope().onActivation(pushDisposable);
+    container.bind(ICredentialFactory).toDynamicValue(context => {
+        return createDefaultCredentialFactory(context.get(IVsCode), context.get(IOutputChannel));
+    }).inSingletonScope();
 
     container.bind(ITempDirManager).to(TempDirManager).inSingletonScope().onActivation(pushDisposable);
 
@@ -138,31 +140,41 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => ResourceClient.create(ctx, executor, subscription);
+        const credentialFactory = context.get(ICredentialFactory);
+        return (subscription) => ResourceClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
 
     container.bind(IDeploymentClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => DeploymentClient.create(ctx, executor, subscription);
+        const credentialFactory = context.get(ICredentialFactory);
+        return (subscription) => DeploymentClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
+
+    container.bind(ISubscriptionResolver).toDynamicValue(context => {
+        const tree = context.get(IAzureViewDataTree);
+        return (subscriptionId: string, tenantId?: string, accountId?: string) => findSubscriptionById(tree, subscriptionId, tenantId, accountId);
+    }).inSingletonScope();
 
     container.bind(IAcrClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => AcrClient.create(ctx, executor, subscription);
+        const credentialFactory = context.get(ICredentialFactory);
+        return (subscription) => AcrClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
 
     container.bind(ISubscriptionClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => SubscriptionClient.create(ctx, executor, subscription);
+        const credentialFactory = context.get(ICredentialFactory);
+        return (subscription) => SubscriptionClient.create(ctx, executor, credentialFactory(subscription), subscription.environment);
     });
 
     container.bind(IWebAppClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
-        return (subscription) => WebAppClient.create(ctx, executor, subscription);
+        const credentialFactory = context.get(ICredentialFactory);
+        return (subscription) => WebAppClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
 
     container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();

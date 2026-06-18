@@ -6,10 +6,11 @@
 import { type ContainerRegistryManagementClientOptionalParams, type ContainerRegistryManagementContext, createContainerRegistryManagement } from '@azure/arm-containerregistry/api';
 import { type RegistriesGetOptionalParams, get as sdkGetRegistry } from '@azure/arm-containerregistry/api/registries';
 import type { Registry as SdkRegistry, Sku as SdkSku } from '@azure/arm-containerregistry/models';
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { createAzureRestSubscriptionClient } from '../createAzureClient';
+import type { AzureSubscription } from '../../auth/AzureSubscription';
+import { createArmRestSubscriptionClient } from '../createAzureClient';
 
 /**
  * Subset of {@linkcode Registry} with fields that the ARM API always returns.
@@ -52,13 +53,15 @@ export class AcrClient implements IAcrClient {
     public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
+        credential: TokenCredential,
         subscription: AzureSubscription,
         options?: ContainerRegistryManagementClientOptionalParams,
     ): AcrClient {
-        const context = createAzureRestSubscriptionClient(
+        const context = createArmRestSubscriptionClient(
             ctx,
             executor,
             createContainerRegistryManagement,
+            credential,
             subscription,
             options,
         );

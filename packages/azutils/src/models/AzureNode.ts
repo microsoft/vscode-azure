@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import type { DataItemTree } from '@microsoft/vscode-azure-utils';
+import type { AzureAccount, AzureSubscription, AzureTenant } from '../auth/AzureSubscription';
 import type { GenericResource } from './GenericResource';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
 import type { VirtualResource } from './VirtualResource';

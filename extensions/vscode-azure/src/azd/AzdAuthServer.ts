@@ -94,7 +94,6 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         const { certPem, keyPem, certDerBase64 } = await generateSelfSignedCert();
 
         const credential = new VsCodeExtensionCredential({
-            authentication: this.code.authentication,
             output: this.output,
             code: this.code,
         });

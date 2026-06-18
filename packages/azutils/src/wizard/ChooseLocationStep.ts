@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { type ICodeContext, type IOutputChannel, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import type { AzureSubscription } from '../auth/AzureSubscription';
 import type { ISubscriptionClientProvider, Location } from '../rest/clients/SubscriptionClient';
 
 /**

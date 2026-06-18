@@ -70,7 +70,7 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 
 ### Concrete Azure implementation
 
-* `GenericAzureDataProvider` (extension layer) is a `DataProvider` that fetches Azure accounts, tenants, subscriptions, and resource groups via the Azure SDK.
+* `AzureResourceDataProvider` (extension layer) is a `DataProvider` that fetches resource groups and their resources via the Azure SDK.
 * `GenericAzureViewProvider` (extension layer) is a `ViewProvider` that maps Azure resources to tree items with icons, context values, grouping strategies, etc.
 * Service-specific providers (e.g. ACR) handle narrower resource types and are registered alongside the generic ones.
 

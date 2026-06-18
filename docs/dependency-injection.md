@@ -18,7 +18,6 @@ export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('Out
 export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for('IProcessExecutor');
 
 // In extensions/vscode-azure/src/services.ts
-export const IAzureSubscriptionProvider: ServiceIdentifier<...> = Symbol.for('IAzureSubscriptionProvider');
 export const IResourceClientProvider: ServiceIdentifier<...> = Symbol.for('IResourceClientProvider');
 export const IDeploymentClientProvider: ServiceIdentifier<...> = Symbol.for('IDeploymentClientProvider');
 export const IAcrClientProvider: ServiceIdentifier<...> = Symbol.for('IAcrClientProvider');
@@ -147,7 +146,7 @@ Registration order in the array determines dispatch order — specific providers
 dataProviders: [
     AcrDataProvider,                                     // specific
     [IFunctionAppDataProvider, FunctionAppDataProvider],  // specific, with direct-inject support
-    GenericAzureDataProvider,                             // fallback
+    AzureResourceDataProvider,                           // fallback
 ],
 ```
 

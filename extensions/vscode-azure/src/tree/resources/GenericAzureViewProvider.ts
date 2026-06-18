@@ -3,14 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
+import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
-import { AzdEnvNameTag, ConfigurationSection } from '../../constants';
+import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey, SubscriptionFilterConfigurationSection } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
@@ -58,6 +57,9 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 || e.affectsConfiguration(`${ConfigurationSection}.groupBy`)
                 || e.affectsConfiguration(`${ConfigurationSection}.groupByTag`)) {
                 this.executor.output.debug('[view] resources grouping configuration changed');
+                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            } else if (e.affectsConfiguration(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
+                this.executor.output.debug('[view] subscription filter configuration changed');
                 this.changeEmitter.fire({ resource: undefined, includeChildren: true });
             }
         }));
@@ -118,7 +120,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
 
             case isTenant(resource): {
-                const label = resource.displayName ?? resource.tenantId;
+                const label = resource.displayName;
                 const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.iconPath = new this.ctx.code.ThemeIcon('organization');
@@ -126,7 +128,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
 
             case isSubscription(resource): {
-                const item = new this.ctx.code.TreeItem(resource.name, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
+                const item = new this.ctx.code.TreeItem(resource.displayName, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
                 item.iconPath = getResourceTypeIconUri(this.ctx, SubscriptionArmType);
@@ -230,7 +232,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
      * exactly one tenant.
      */
     private async getRootChildren(): Promise<string[]> {
-        let nodes = await this.cache.getChildren(undefined);
+        let nodes = this.applyFilter(await this.cache.getChildren(undefined));
         this.rootKind = 'account';
         this.isOneRootSub = false;
 
@@ -238,13 +240,13 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (skip && nodes.length === 1 && isAccount(nodes[0])) {
             this.executor.output.debug('[view] skipping account level');
-            nodes = await this.cache.getChildren(nodes[0]);
+            nodes = this.applyFilter(await this.cache.getChildren(nodes[0]));
             this.rootKind = 'tenant';
         }
 
         if (skip && nodes.length === 1 && isTenant(nodes[0])) {
             this.executor.output.debug('[view] skipping tenant level');
-            nodes = await this.cache.getChildren(nodes[0]);
+            nodes = this.applyFilter(await this.cache.getChildren(nodes[0]));
             this.rootKind = 'subscription';
 
             if (nodes.length === 1) {
@@ -289,8 +291,43 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             return [];
         } else {
             this.executor.setTelProp('nodeType', getNodeType(resource));
-            return (await this.cache.getChildren(resource)).map(toKey);
+            return this.applyFilter(await this.cache.getChildren(resource)).map(toKey);
         }
+    }
+
+    /**
+     * Apply the tenant/subscription filter from
+     * `azureResourceGroups.selectedSubscriptions`.
+     *
+     * Each configured entry is a `tenantId/subscriptionId` pair. When the
+     * setting is empty, no filtering is applied. Tenant nodes are kept only when
+     * their tenant id appears in the filter; subscription nodes only when their
+     * subscription id appears. Other node types pass through unchanged.
+     *
+     * Because the tree loads lazily, filtered-out tenants are never expanded, so
+     * their subscriptions are never requested from Azure.
+     */
+    private applyFilter(nodes: ConcreteAzureNode[]): ConcreteAzureNode[] {
+        const selected = this.ctx.code.workspace
+            .getConfiguration(SubscriptionFilterConfigurationSection)
+            .get<string[]>(SelectedSubscriptionsConfigurationKey, []);
+
+        if (selected.length === 0) {
+            return nodes;
+        }
+
+        const tenantFilter = new Set(selected.map(id => id.split('/')[0]?.toLowerCase()).filter(Boolean));
+        const subscriptionFilter = new Set(selected.map(id => id.split('/')[1]?.toLowerCase()).filter(Boolean));
+
+        return nodes.filter(node => {
+            if (isTenant(node)) {
+                return tenantFilter.has(node.tenantId.toLowerCase());
+            } else if (isSubscription(node)) {
+                return subscriptionFilter.has(node.subscriptionId.toLowerCase());
+            } else {
+                return true;
+            }
+        });
     }
 
     /**

@@ -101,6 +101,12 @@
                 "category": "%commands.category.azure%",
                 "icon": "$(rocket)",
                 "title": "%commands.vscode-azure/azdUp%"
+            },
+            {
+                "command": "vscode-azure/signIn",
+                "category": "%commands.category.azure%",
+                "icon": "$(sign-in)",
+                "title": "%commands.vscode-azure/signIn%"
             }
         ],
         "menus": {
@@ -268,6 +274,12 @@
                 }
             ]
         },
+        "viewsWelcome": [
+            {
+                "view": "vscode-azure/resources",
+                "contents": "%views.vscode-azure/resources.welcome%"
+            }
+        ],
         "configuration": {
             "title": "%settings.title%",
             "properties": {
@@ -331,7 +343,6 @@
         "tsx": "*"
     },
     "dependencies": {
-        "@microsoft/vscode-azext-azureauth": "catalog:",
         "@microsoft/vscode-azure-azutils": "workspace:*",
         "@microsoft/vscode-azure-utils": "workspace:*",
         "@microsoft/vscode-processutils": "catalog:",

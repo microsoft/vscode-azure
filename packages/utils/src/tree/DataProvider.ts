@@ -87,6 +87,21 @@ export interface DataProvider<TResource> {
     readonly isRoot?: boolean;
 
     /**
+     * Optionally override the cache time-to-live (TTL), in milliseconds, for the
+     * children of the given resource.
+     *
+     * Called by {@linkcode DataItemTree} after children are fetched to decide
+     * when they become stale. When omitted, the tree's default TTL is used.
+     * Return `Infinity` to mark children as never-expiring (invalidated only by
+     * explicit {@linkcode DataItemTree.invalidate} / {@linkcode DataItemTree.invalidateAll}
+     * calls or {@linkcode onDidChange} events).
+     *
+     * @param resource - The parent resource whose children were fetched, or
+     *   `undefined` for the root (root providers only).
+     */
+    getTtl?(resource?: TResource): number;
+
+    /**
      * Optional event fired when the provider's data changes externally.
      * The tree automatically subscribes when the provider is registered
      * and calls {@linkcode DataItemTree.invalidate} or {@linkcode DataItemTree.invalidateAll}

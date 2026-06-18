@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import type { PickContext } from '@microsoft/vscode-azure-utils';
 import { Wizard } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import type { AzureSubscription } from '../../auth/AzureSubscription';
 import type { Location } from '../../rest/clients/SubscriptionClient';
 import { ChooseLocationStep } from '../../wizard/ChooseLocationStep';
-import { makeSubscription } from '../mockAzure';
+import { createMockSubscriptionClientProvider, makeSubscription } from '../mockAzure';
 
 const subscription = makeSubscription();
 
@@ -21,14 +21,6 @@ const northeurope: Location = { name: 'northeurope', displayName: 'North Europe'
 interface TestContext extends PickContext<string> {
     readonly subscription: AzureSubscription;
     readonly location?: Location;
-}
-
-function createMockSubscriptionClientProvider(locations: Location[]) {
-    return () => ({
-        subscriptions: {
-            listLocations: () => Promise.resolve(locations),
-        },
-    });
 }
 
 describe('ChooseLocationStep (unit)', () => {

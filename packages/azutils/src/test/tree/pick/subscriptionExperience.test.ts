@@ -10,8 +10,8 @@ import { subscriptionExperience } from '../../../tree/pick/subscriptionExperienc
 import { makeSubscription } from '../../mockAzure';
 import { createMockDataItemTree, createMockViewItemTree } from '../mockTree';
 
-const sub1 = makeSubscription({ subscriptionId: 'sub-1', name: 'Sub One' });
-const sub2 = makeSubscription({ subscriptionId: 'sub-2', name: 'Sub Two' });
+const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One' });
+const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two' });
 
 const sub1Id = AzureNodeId.from(sub1).toString();
 const sub2Id = AzureNodeId.from(sub2).toString();
@@ -33,6 +33,6 @@ describe('subscriptionExperience (unit)', () => {
         });
 
         expect(result.subscriptionId).to.equal('sub-2');
-        expect(result.name).to.equal('Sub Two');
+        expect(result.displayName).to.equal('Sub Two');
     });
 });

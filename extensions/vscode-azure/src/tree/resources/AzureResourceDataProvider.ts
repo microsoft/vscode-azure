@@ -3,18 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription, AzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import {
-    getNodeType, IResourceClientProvider, isAccount, isResourceGroup, isSubscription, isTenant,
+    getNodeType, IResourceClientProvider, isResourceGroup, isSubscription,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
 import {
     EventEmitter, IActionExecutor, IVsCode,
-    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type ProviderResult
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection } from '../../constants';
-import { IAzureSubscriptionProvider } from '../../services';
 
 /**
  * Default page size used when fetching paginated Azure resource lists.
@@ -22,25 +21,19 @@ import { IAzureSubscriptionProvider } from '../../services';
 const DEFAULT_PAGE_SIZE = 50;
 
 /**
- * Root data-layer provider for the Azure resources tree.
+ * Data-layer provider for the resource-group and resource levels of the Azure
+ * resources tree.
  *
- * Drives the top of the hierarchy -- accounts, tenants, subscriptions, and
- * resource groups -- using the shared {@linkcode AzureSubscriptionProvider}
- * and ARM {@linkcode IResourceClient}. Service-specific providers (e.g.
+ * Handles subscriptions (listing their resource groups) and resource groups
+ * (listing their resources) via the ARM {@linkcode IResourceClient}. The
+ * account / tenant / subscription levels above it are produced by
+ * {@linkcode AzureAccountDataProvider}; service-specific providers (e.g.
  * {@linkcode AcrDataProvider}) handle children below the resource group level.
  *
- * Fires {@linkcode onDidChange} when configuration affecting pagination
- * changes, or when the subscription provider suggests a refresh.
+ * Fires {@linkcode onDidChange} when configuration affecting pagination changes.
  */
 @injectable()
-export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
-    public readonly isRoot = true;
-
-    /**
-     * Lazy sign-in: resolved on first call to {@linkcode getChildren}, skipped thereafter.
-     */
-    private signInPromise: Promise<boolean> | undefined;
-
+export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
     /**
      * Cached REST clients per subscription ID, so all calls for the same
      * subscription share one client instance.
@@ -56,19 +49,12 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
-        @inject(IAzureSubscriptionProvider) private readonly subscriptionProvider: AzureSubscriptionProvider
     ) {
         this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.pageSize`)) {
                 this.executor.output.debug('[data] resources config changed: pageSize');
                 this.changeEmitter.fire({ resource: undefined, includeChildren: true });
             }
-        }));
-
-        this.disposables.push(subscriptionProvider.onRefreshSuggested(() => {
-            this.executor.output.debug('[data] resources refresh suggested by subscription provider');
-            this.signInPromise = undefined;
-            this.changeEmitter.fire({ resource: undefined, includeChildren: true });
         }));
     }
 
@@ -79,37 +65,21 @@ export class GenericAzureDataProvider implements DataProvider<ConcreteAzureNode>
         }
 
         const node = resource as ConcreteAzureNode;
-        return isAccount(node) || isTenant(node) || isSubscription(node) || isResourceGroup(node);
+        return isSubscription(node) || isResourceGroup(node);
     }
 
     /**
      * @inheritdoc
-     * @throws if `resource` is not an account, tenant, subscription, or resource group.
+     * @throws if `resource` is not a subscription or resource group.
      */
-    public async getChildren(resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> {
-        // Ensure sign-in has been initiated (lazy, only once)
-        if (!this.signInPromise) {
-            this.executor.output.debug('[auth] lazy sign-in start');
-            this.signInPromise = this.subscriptionProvider.signIn();
-        }
-        await this.signInPromise;
-
-        if (resource) {
-            this.executor.setTelProp('nodeType', getNodeType(resource));
-        }
-
+    public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
         if (!resource) {
-            // Root: return all signed-in accounts
-            return await this.subscriptionProvider.getAccounts() as ConcreteAzureNode[];
+            throw new Error('AzureResourceDataProvider is not a root provider');
         }
+
+        this.executor.setTelProp('nodeType', getNodeType(resource));
 
         switch (true) {
-            case isAccount(resource):
-                return await this.subscriptionProvider.getTenantsForAccount(resource);
-
-            case isTenant(resource):
-                return await this.subscriptionProvider.getSubscriptionsForTenant(resource);
-
             case isSubscription(resource): {
                 const client = this.getOrCreateClient(resource);
                 this.executor.output.debug(`[data] discover resource groups subscription=${resource.subscriptionId} pageSize=${this.pageSize}`);

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -12,10 +12,10 @@ import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import { AddOrEditAppSetting } from '../../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../commands/functions/DeleteAppSetting';
+import { AzureResourceDataProvider } from '../../../../tree/resources/AzureResourceDataProvider';
 import { FunctionAppVirtualPaths } from '../../../../tree/resources/functions/FunctionApp';
 import { FunctionAppDataProvider } from '../../../../tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../../../../tree/resources/functions/FunctionAppViewProvider';
-import { GenericAzureDataProvider } from '../../../../tree/resources/GenericAzureDataProvider';
 import { GenericAzureViewProvider } from '../../../../tree/resources/GenericAzureViewProvider';
 import { createMockResourceClient } from '../mockResourceClient';
 import { makeFunctionApp } from './mockFunctionApp';
@@ -107,7 +107,7 @@ describe('Function App Tree Integration (integration)', () => {
             5 * 60 * 1000,
         );
 
-        const subProvider = createMockSubscriptionProvider({
+        const accountDataProvider = createMockAccountDataProvider({
             accounts: [account],
             tenants: [tenant],
             subscriptions: [subscription],
@@ -117,11 +117,12 @@ describe('Function App Tree Integration (integration)', () => {
         const resourceClientProvider: IResourceClientProvider = () => resourceClient;
 
         const funcDataProvider = new FunctionAppDataProvider(executor, webAppClientProvider);
-        const genericDataProvider = new GenericAzureDataProvider(code, executor, resourceClientProvider, subProvider);
+        const genericDataProvider = new AzureResourceDataProvider(code, executor, resourceClientProvider);
 
-        // Register in correct order: Function App first, generic fallback second
+        // Register in correct order: Function App first, generic next, account root last
         dataTree.registerProvider(funcDataProvider);
         dataTree.registerProvider(genericDataProvider);
+        dataTree.registerProvider(accountDataProvider);
 
         // View layer
         const viewOptions: ViewItemTreeOptions<string, ConcreteAzureNode> = {

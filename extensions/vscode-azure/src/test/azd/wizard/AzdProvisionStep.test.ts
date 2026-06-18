@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockSubscriptionProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -14,17 +13,13 @@ import { AzdProvisionStep } from '../../../azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../../../azd/wizard/AzdWizardContext';
 import { createMockAzdService } from '../MockAzdService';
 
-function createStep(options?: { subscriptionId?: string }) {
+function createStep() {
     const { ctx, mock: mockResult } = createMockCodeContext();
     const azd = createMockAzdService();
     const output = new MockOutputChannel('test');
     const armProvider = { trackDeployment: mock.fn() } as never;
-    const subscriptions = options?.subscriptionId
-        ? [makeSubscription({ subscriptionId: options.subscriptionId })]
-        : [];
-    const subscriptionProvider = createMockSubscriptionProvider({ subscriptions });
     const tempDirManager = new TempDirManager(ctx);
-    const step = new AzdProvisionStep(ctx, azd, output, armProvider, subscriptionProvider, tempDirManager);
+    const step = new AzdProvisionStep(ctx, azd, output, armProvider, tempDirManager);
     return {
         azd,
         step,
@@ -109,7 +104,7 @@ describe('AzdProvisionStep (unit)', () => {
 
         it('should track a deployment from the JSONL file after provision completes', async () => {
             const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
-            const { azd, step, armProvider, fs } = createStep({ subscriptionId: 'sub-1' });
+            const { azd, step, armProvider, fs } = createStep();
 
             // Make provision write the JSONL file before resolving
             azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
@@ -131,10 +126,57 @@ describe('AzdProvisionStep (unit)', () => {
             expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentId);
         });
 
+        it('should forward the hydrated tenantId hint to trackDeployment', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, fs } = createStep();
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                hydratedTenantId: 'tenant-9',
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentId);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.equal('tenant-9');
+        });
+
+        it('should forward the selected subscription account id hint to trackDeployment', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, fs } = createStep();
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                subscription: { account: { id: 'acct-9' } },
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[2]).to.equal('acct-9');
+        });
+
         it('should track multiple deployments from JSONL', async () => {
             const id1 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
             const id2 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-2';
-            const { azd, step, armProvider, fs } = createStep({ subscriptionId: 'sub-1' });
+            const { azd, step, armProvider, fs } = createStep();
 
             azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
                 const filePath = env.AZD_DEPLOYMENT_ID_FILE;
@@ -160,29 +202,7 @@ describe('AzdProvisionStep (unit)', () => {
         });
 
         it('should not track when no JSONL file is written', async () => {
-            const { step, armProvider } = createStep({ subscriptionId: 'sub-1' });
-
-            const context = {
-                provision: true,
-                iacFolder: MockUri.file('/project'),
-            } as AzdWizardContext;
-
-            await step.execute(context);
-            await delay(0);
-
-            expect(armProvider.trackDeployment.mock.callCount()).to.equal(0);
-        });
-
-        it('should not track when subscription cannot be resolved', async () => {
-            const deploymentId = '/subscriptions/unknown-sub/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
-            // No subscriptions configured — resolveSubscription returns undefined
-            const { azd, step, armProvider, fs } = createStep();
-
-            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
-                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
-                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
-                return Promise.resolve();
-            });
+            const { step, armProvider } = createStep();
 
             const context = {
                 provision: true,
@@ -197,7 +217,7 @@ describe('AzdProvisionStep (unit)', () => {
 
         it('should deduplicate deployment IDs', async () => {
             const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
-            const { azd, step, armProvider, fs } = createStep({ subscriptionId: 'sub-1' });
+            const { azd, step, armProvider, fs } = createStep();
 
             azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
                 const filePath = env.AZD_DEPLOYMENT_ID_FILE;
@@ -219,7 +239,7 @@ describe('AzdProvisionStep (unit)', () => {
 
         it('should skip malformed JSONL lines gracefully', async () => {
             const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
-            const { azd, step, armProvider, fs } = createStep({ subscriptionId: 'sub-1' });
+            const { azd, step, armProvider, fs } = createStep();
 
             azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
                 const filePath = env.AZD_DEPLOYMENT_ID_FILE;

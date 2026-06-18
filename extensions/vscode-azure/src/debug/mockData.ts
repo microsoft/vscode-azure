@@ -9,14 +9,14 @@
 // so none of this code ends up in the main extension bundle.
 
 import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockSubscriptionProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
-import { IAzureSubscriptionProvider } from '../services';
 import { createMockAcrClient } from '../test/tree/resources/acr/mockAcr';
 import { createMockResourceClient } from '../test/tree/resources/mockResourceClient';
 import type { ActivityStatus } from '../tree/activity/Activity';
 import { type AddChildOptions, ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import { IGenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
+import { IAzureAccountDataProvider } from '../tree/resources/AzureAccountDataProvider';
 
 // -- Mock data ----------------------------------------------------------------
 
@@ -24,7 +24,8 @@ const account = makeAccount({ id: 'mock-account', label: 'Mock Account' });
 const tenant = makeTenant({ tenantId: 'mock-tenant', displayName: 'Mock Tenant', account });
 const subscription = makeSubscription({
     subscriptionId: 'mock-sub-1',
-    name: 'Mock Subscription',
+    displayName: 'Mock Subscription',
+    tenant,
     account,
 });
 
@@ -119,8 +120,8 @@ const mockCodeDeployments: ReadonlyArray<{
 export function applyMockData(container: Container): void {
     // -- Rebind Azure providers with mock implementations ---------------------
 
-    container.rebind(IAzureSubscriptionProvider).toConstantValue(
-        createMockSubscriptionProvider({
+    container.rebind(IAzureAccountDataProvider).toConstantValue(
+        createMockAccountDataProvider({
             accounts: [account],
             tenants: [tenant],
             subscriptions: [subscription],
