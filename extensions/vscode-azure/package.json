@@ -310,7 +310,7 @@
     },
     "scripts": {
         "lint": "eslint --max-warnings 0",
-        "build": "npm run build:esbuild & npm run build:check",
+        "build": "pnpm run --parallel \"/^build:(esbuild|check)$/\"",
         "build:esbuild": "node esbuild.mjs",
         "build:check": "tsgo --noEmit",
         "package": "vsce package --no-dependencies",
