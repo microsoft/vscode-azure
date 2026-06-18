@@ -179,7 +179,7 @@ function buildClaimsChallenge(claims: string): string {
  * the token cached briefly (so the bearer-token policy doesn't re-acquire on
  * every request) while still refreshing soon.
  */
-const FALLBACK_TTL_MS = 5 * 60 * 1000;
+const FallbackTtlMs = 5 * 60 * 1000;
 
 /**
  * Best-effort computation of the token expiry for the returned `AccessToken`.
@@ -190,13 +190,13 @@ const FALLBACK_TTL_MS = 5 * 60 * 1000;
  * remaining lifetime.
  *
  * When neither token yields a usable `exp`, falls back to a short positive TTL
- * ({@linkcode FALLBACK_TTL_MS}) so the token is cached briefly and refreshed
+ * ({@linkcode FallbackTtlMs}) so the token is cached briefly and refreshed
  * soon, rather than being treated as already expired.
  */
 function getTokenExpiry(accessToken: string | undefined, idToken: string | undefined): { expiresOnTimestamp: number; refreshAfterTimestamp: number } {
     const now = Date.now();
     const exp = parseJwtExp(accessToken) ?? parseJwtExp(idToken);
-    const expiresOnTimestamp = exp !== undefined ? exp * 1000 : now + FALLBACK_TTL_MS;
+    const expiresOnTimestamp = exp !== undefined ? exp * 1000 : now + FallbackTtlMs;
 
     const remaining = expiresOnTimestamp - now;
     const refreshAfterTimestamp = remaining > 0 ? now + Math.floor(remaining * 2 / 3) : expiresOnTimestamp;
