@@ -66,13 +66,14 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     public readonly isRoot = true;
 
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
-    private readonly disposables: Disposable[] = [this.changeEmitter];
 
     /**
      * Debounces `onDidChangeSessions` bursts into a single invalidation. Keyed
      * so it can be shared if more debounced streams are added later.
      */
     private readonly debouncer = new Debouncer();
+
+    private readonly disposables: Disposable[] = [this.changeEmitter, this.debouncer];
 
     /**
      * Count of in-flight {@linkcode listAccounts} calls. While greater than
@@ -99,8 +100,6 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
     ) {
-        this.disposables.push(this.debouncer);
-
         this.disposables.push(this.ctx.code.authentication.onDidChangeSessions(e => {
             if (e.provider.id !== PublicAuthProviderId && e.provider.id !== SovereignAuthProviderId) {
                 return;
