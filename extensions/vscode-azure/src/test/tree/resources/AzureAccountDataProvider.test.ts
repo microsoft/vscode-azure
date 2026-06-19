@@ -233,9 +233,8 @@ describe('AzureAccountDataProvider (unit)', () => {
             // in-flight suppression window swallows the re-entrant event, and the
             // unchanged-account-set check stops any event that slips through.
             const { provider, mock: vscodeMock } = createProvider();
-            let getAccountsCalls = 0;
-            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => {
-                getAccountsCalls++;
+            const getAccountsMock = vscodeMock.authentication.getAccounts.mock;
+            getAccountsMock.mockImplementation(() => {
                 // Re-emit a session change synchronously, as the buggy provider did.
                 vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
                 return Promise.resolve([{ id: 'a-id', label: 'Alpha' }]);
@@ -249,13 +248,13 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             // The first event drives exactly one reconcile (one getAccounts call)
             // and one onDidChange; the re-entrant event it triggers is suppressed.
-            expect(getAccountsCalls).to.equal(1);
+            expect(getAccountsMock.callCount()).to.equal(1);
             expect(fired).to.equal(1);
 
             // Advancing time must not surface any further re-lists.
             mock.timers.tick(5000);
             await flushMicrotasks();
-            expect(getAccountsCalls).to.equal(1);
+            expect(getAccountsMock.callCount()).to.equal(1);
             expect(fired).to.equal(1);
         });
 
