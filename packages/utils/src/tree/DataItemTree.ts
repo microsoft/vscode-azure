@@ -62,13 +62,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private readonly loadsInFlight = new InflightMap<void>();
 
-    /**
-     * The cached root nodes (those with no parent), in provider order, or
-     * `undefined` when the root level has not been listed yet. Mirrors the way
-     * {@linkcode ViewItemTree} keeps its own roots list -- the {@linkcode NodeMap}
-     * is purely structural and does not track roots. `undefined` distinguishes
-     * "never loaded" from "loaded but empty".
-     */
+    /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
     private rootsStaleAt = 0;
 
@@ -115,7 +109,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     private async getRootChildren(): Promise<T[]> {
-        if (this.roots && Date.now() < this.rootsStaleAt) {
+        if (this.roots !== undefined && Date.now() < this.rootsStaleAt) {
             this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${this.roots.length})`);
             return this.roots.map(n => n.resource);
         }
@@ -517,14 +511,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             }
             this.invalidate(parent.resource, false);
         } else {
-            // Root item -- splice it out of the cached roots list so it does
-            // not reappear on the next root cache hit. Must directly fire the
-            // emitter; `invalidate()` at the root [or `invalidateAll()`] would
-            // evict the entire tree which is not what we want.
-            const rootIdx = this.roots?.indexOf(node) ?? -1;
-            if (rootIdx !== -1) {
-                this.roots!.splice(rootIdx, 1); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- indexOf succeeded
+            // Root item -- splice out of roots array
+            if (this.roots) {
+                const rootIdx = this.roots.indexOf(node);
+                if (rootIdx !== -1) {
+                    this.roots.splice(rootIdx, 1);
+                }
             }
+
+            // Must directly fire the emitter; `invalidate()` at the root [or `invalidateAll()`] would evict the entire tree which is not what we want
             this.changeEmitter.fire(undefined);
         }
     }
