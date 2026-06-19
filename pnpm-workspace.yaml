@@ -7,9 +7,13 @@ allowBuilds:
   esbuild: true
   keytar: true
 minimumReleaseAgeExclude:
-  - "@typescript/native-preview*"
   - "@microsoft/vscode-azext*"
+overrides:
+  # Force a non-vulnerable version of these dependencies
+  serialize-javascript: ^7.0.0
+  diff: ^8.0.3
 publicHoistPattern:
+  # All of these are hoisted so they can be used by all packages without explicitly declaring them in each package.json
   - "*eslint*"
   - "typescript"
   - "mocha"
@@ -18,5 +22,11 @@ publicHoistPattern:
   - "@types/chai"
 catalog:
   "@microsoft/vscode-processutils": ^0.2.2
-  "@vscode/extension-telemetry": ^1.5.1
-  inversify: ^8.1.0
+  "@vscode/extension-telemetry": ^1.5.2
+  "@vscode/test-cli": ^0.0.12
+  "@vscode/test-electron": ^3.0.0
+  "@vscode/vsce": ^3.9.2
+  esbuild: ^0.28.1
+  esbuild-plugin-copy: ^2.1.1
+  inversify: ^8.1.1
+  tsx: ^4.22.4

@@ -4,9 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { delay } from '../../base/delay';
@@ -376,13 +373,6 @@ describe('ProcessExecutor (integration)', () => {
     // which pollutes the captured stdout/stderr that these tests assert on.
     const env: Record<string, string> = { NODE_OPTIONS: '' }; // eslint-disable-line @typescript-eslint/naming-convention
 
-    function script(code: string): string {
-        const dir = mkdtempSync(join(tmpdir(), 'proc-test-'));
-        const file = join(dir, 'test.mjs');
-        writeFileSync(file, code, 'utf-8');
-        return file;
-    }
-
     describe('background execution', () => {
         it('should capture stdout and stderr', async () => {
             const { vscode: code } = createMockVsCode();
@@ -391,7 +381,7 @@ describe('ProcessExecutor (integration)', () => {
             const result = await executor.spawn({
                 execution: 'background',
                 command: process.execPath,
-                args: [script('process.stdout.write("out"); process.stderr.write("err");')],
+                args: ['-e', 'process.stdout.write("out"); process.stderr.write("err");'],
                 env,
             });
 
@@ -406,7 +396,7 @@ describe('ProcessExecutor (integration)', () => {
             const result = await executor.spawn<{ key: string }>({
                 execution: 'background',
                 command: process.execPath,
-                args: [script('process.stdout.write(JSON.stringify({ key: "value" }));')],
+                args: ['-e', 'process.stdout.write(JSON.stringify({ key: "value" }));'],
                 parseJson: true,
                 env,
             });
@@ -423,7 +413,7 @@ describe('ProcessExecutor (integration)', () => {
                 await executor.spawn({
                     execution: 'background',
                     command: process.execPath,
-                    args: [script('process.stderr.write("failure reason"); process.exit(1);')],
+                    args: ['-e', 'process.stderr.write("failure reason"); process.exit(1);'],
                     env,
                 });
                 expect.fail('Expected error');
@@ -446,7 +436,7 @@ describe('ProcessExecutor (integration)', () => {
             const promise = executor.spawn({
                 execution: 'background',
                 command: process.execPath,
-                args: [script('setTimeout(() => {}, 30000);')],
+                args: ['-e', 'setTimeout(() => {}, 30000);'],
                 env,
             }, token);
 
@@ -466,16 +456,16 @@ describe('ProcessExecutor (integration)', () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
-            const f = script([
+            const f = [
                 'process.stderr.write(JSON.stringify({ step: 1 }) + "\\n");',
                 'process.stderr.write(JSON.stringify({ step: 2 }) + "\\n");',
                 'process.stdout.write(JSON.stringify({ done: true }));',
-            ].join('\n'));
+            ].join('\n');
 
             const result = await executor.spawn<{ done: boolean }>({
                 execution: 'background',
                 command: process.execPath,
-                args: [f],
+                args: ['-e', f],
                 parseJson: true,
                 jsonLines: true,
                 env,
@@ -497,17 +487,17 @@ describe('ProcessExecutor (integration)', () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
-            const f = script([
+            const f = [
                 'process.stderr.write("not json\\n");',
                 'process.stderr.write(JSON.stringify({ valid: true }) + "\\n");',
                 'process.stderr.write("also not json\\n");',
                 'process.stdout.write("{}");',
-            ].join('\n'));
+            ].join('\n');
 
             const result = await executor.spawn({
                 execution: 'background',
                 command: process.execPath,
-                args: [f],
+                args: ['-e', f],
                 parseJson: true,
                 jsonLines: true,
                 env,

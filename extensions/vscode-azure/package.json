@@ -335,12 +335,12 @@
     },
     "devDependencies": {
         "@types/semver": "^7.7.1",
-        "@vscode/test-cli": "*",
-        "@vscode/test-electron": "*",
-        "@vscode/vsce": "*",
-        "esbuild": "*",
-        "esbuild-plugin-copy": "*",
-        "tsx": "*"
+        "@vscode/test-cli": "catalog:",
+        "@vscode/test-electron": "catalog:",
+        "@vscode/vsce": "catalog:",
+        "esbuild": "catalog:",
+        "esbuild-plugin-copy": "catalog:",
+        "tsx": "catalog:"
     },
     "dependencies": {
         "@microsoft/vscode-azure-azutils": "workspace:*",
@@ -348,6 +348,6 @@
         "@microsoft/vscode-processutils": "catalog:",
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:",
-        "semver": "^7.8.0"
+        "semver": "^7.8.4"
     }
 }
