@@ -259,6 +259,25 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(fired).to.equal(1);
         });
 
+        it('should swallow a listAccounts failure during reconcile instead of rejecting', async () => {
+            // The debounced reconcile runs fire-and-forget, and listAccounts can
+            // throw (a transient getAccounts failure, or getConfiguredAzureEnv
+            // throwing on a misconfigured custom cloud). It must be caught so it
+            // does not surface as an unhandled rejection.
+            const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.reject(new Error('transient auth failure')));
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+            await flushMicrotasks();
+
+            // No change event fired, and the rejection was swallowed (the test
+            // completing without an unhandled rejection is the assertion).
+            expect(fired).to.equal(0);
+        });
+
         it('should suppress session-change events that occur within its own getAccounts window', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));

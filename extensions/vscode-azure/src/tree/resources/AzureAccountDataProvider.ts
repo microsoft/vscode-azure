@@ -13,7 +13,7 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    Debouncer, EventEmitter, IActionExecutor, ICodeContext,
+    Debouncer, EventEmitter, IActionExecutor, ICodeContext, stringifyError,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -253,22 +253,31 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * @param providerId - The auth provider id that triggered the burst (logging only).
      */
     private async reconcileAccountsOnSessionChange(providerId: string): Promise<void> {
-        const previousIds = this.knownAccountIds;
-        const accounts = await this.listAccounts();
-        const currentIds = new Set(accounts.map(account => account.id));
+        try {
+            const previousIds = this.knownAccountIds;
+            const accounts = await this.listAccounts();
+            const currentIds = new Set(accounts.map(account => account.id));
 
-        if (previousIds !== undefined && idSetsEqual(previousIds, currentIds)) {
-            this.executor.output.trace(`[auth] sessions changed provider=${providerId}; account set unchanged (count=${currentIds.size}), ignoring`);
-            return;
+            if (previousIds !== undefined && idSetsEqual(previousIds, currentIds)) {
+                this.executor.output.trace(`[auth] sessions changed provider=${providerId}; account set unchanged (count=${currentIds.size}), ignoring`);
+                return;
+            }
+
+            // The set of accounts changed, so trigger a reconciling root re-list
+            // (includeChildren: false). Tenant / subscription subtrees under accounts
+            // that survive the change are preserved by the tree's root reconciliation;
+            // a signed-out account's subtree is evicted because it drops out of the
+            // new listing.
+            this.executor.output.debug(`[auth] sessions changed provider=${providerId}; account set changed (count=${currentIds.size}), re-listing accounts`);
+            this.changeEmitter.fire({ resource: undefined, includeChildren: false });
+        } catch (error) {
+            // This runs as a fire-and-forget reconcile, and listAccounts() can
+            // throw (a transient getAccounts() failure, or getConfiguredAzureEnv()
+            // throwing on a misconfigured custom cloud). Swallow and log rather
+            // than surfacing an unhandled rejection; a later session event or the
+            // tree's own root fetch will retry.
+            this.executor.output.warn(`[auth] sessions changed provider=${providerId}; account reconcile failed: ${stringifyError(error)}`);
         }
-
-        // The set of accounts changed, so trigger a reconciling root re-list
-        // (includeChildren: false). Tenant / subscription subtrees under accounts
-        // that survive the change are preserved by the tree's root reconciliation;
-        // a signed-out account's subtree is evicted because it drops out of the
-        // new listing.
-        this.executor.output.debug(`[auth] sessions changed provider=${providerId}; account set changed (count=${currentIds.size}), re-listing accounts`);
-        this.changeEmitter.fire({ resource: undefined, includeChildren: false });
     }
 
     /**
