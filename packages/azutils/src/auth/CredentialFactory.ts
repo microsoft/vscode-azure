@@ -10,6 +10,8 @@ import type * as vscode from 'vscode';
 import { isAzureSubscription, type AzureSubscription } from './AzureSubscription';
 import { VsCodeExtensionCredential } from './VsCodeExtensionCredential';
 
+export type { TokenCredential };
+
 /**
  * Options passed to an {@linkcode ICredentialFactory} to scope the produced
  * credential to a particular tenant / account.
