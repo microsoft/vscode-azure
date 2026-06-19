@@ -9,15 +9,10 @@ import { NodeMap } from '../../tree/NodeMap';
 interface TestNode {
     id: string;
     children: TestNode[] | undefined;
-    parent?: TestNode | undefined;
 }
 
 function makeNode(id: string, children?: TestNode[]): TestNode {
-    const node: TestNode = { id, children: children ?? undefined };
-    for (const child of children ?? []) {
-        child.parent = node;
-    }
-    return node;
+    return { id, children: children ?? undefined };
 }
 
 describe('NodeMap (unit)', () => {
