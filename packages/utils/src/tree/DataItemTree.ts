@@ -63,11 +63,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private readonly loadsInFlight = new InflightMap<void>();
 
     /**
-     * Whether the root level has been listed at least once. Distinguishes
-     * "never loaded" from "loaded but empty" for the root cache-hit check; the
-     * root nodes themselves live in the {@linkcode NodeMap} root set.
+     * The cached root nodes (those with no parent), in provider order, or
+     * `undefined` when the root level has not been listed yet. Mirrors the way
+     * {@linkcode ViewItemTree} keeps its own roots list -- the {@linkcode NodeMap}
+     * is purely structural and does not track roots. `undefined` distinguishes
+     * "never loaded" from "loaded but empty".
      */
-    private rootsLoaded = false;
+    private roots: TreeNode<T>[] | undefined;
     private rootsStaleAt = 0;
 
     public readonly onDidChange = this.changeEmitter.event;
@@ -113,10 +115,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     private async getRootChildren(): Promise<T[]> {
-        if (this.rootsLoaded && Date.now() < this.rootsStaleAt) {
-            const cached = this.nodes.roots();
-            this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${cached.size})`);
-            return [...cached].map(n => n.resource);
+        if (this.roots && Date.now() < this.rootsStaleAt) {
+            this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${this.roots.length})`);
+            return this.roots.map(n => n.resource);
         }
         this.executor.output.trace(`[cache] ${this.name} root cache miss`);
 
@@ -152,13 +153,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         // by key, rather than wiping the whole tree. This lets a reconciling
         // root refresh (invalidateRoot) re-list the top level (e.g. accounts)
         // while preserving the tenant / subscription subtrees under roots that
-        // are still present. After invalidateAll() the map is empty, so this
-        // degenerates to a full fresh fetch (the previous behavior).
+        // are still present. After invalidateAll() this.roots is undefined, so
+        // this degenerates to a full fresh fetch (the previous behavior).
         const newKeySet = new Set(resources.map(resource => this.getKey(resource)));
 
-        // Evict roots (and their subtrees) that are no longer present. Snapshot
-        // the root set first since removeSubtrees mutates it.
-        for (const rootNode of [...this.nodes.roots()]) {
+        // Evict roots (and their subtrees) that are no longer present.
+        for (const rootNode of this.roots ?? []) {
             if (!newKeySet.has(this.getKey(rootNode.resource))) {
                 this.nodes.removeSubtrees([rootNode]);
             }
@@ -169,19 +169,17 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             const existing = this.nodes.get(resourceKey);
             if (existing) {
                 // Root still present: keep its node (and cached subtree,
-                // staleAt, and pageIterator) as-is. It is already in the
-                // NodeMap root set from when it was first listed.
+                // staleAt, and pageIterator) as-is.
                 this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey} (preserved)`);
                 return existing;
             }
             const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
             this.nodes.set(resourceKey, node);
-            this.nodes.registerRoot(node);
             this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey}`);
             return node;
         });
+        this.roots = rootNodes;
         this.rootsStaleAt = this.computeStaleAt(this.rootTtl(rootProviders));
-        this.rootsLoaded = true;
         this.executor.output.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
 
         const rootResources = rootNodes.map(n => n.resource);
@@ -519,10 +517,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             }
             this.invalidate(parent.resource, false);
         } else {
-            // Root item -- removeSubtrees already dropped it from the NodeMap
-            // root set. Must directly fire the emitter; `invalidate()` at the
-            // root [or `invalidateAll()`] would evict the entire tree which is
-            // not what we want.
+            // Root item -- splice it out of the cached roots list so it does
+            // not reappear on the next root cache hit. Must directly fire the
+            // emitter; `invalidate()` at the root [or `invalidateAll()`] would
+            // evict the entire tree which is not what we want.
+            const rootIdx = this.roots?.indexOf(node) ?? -1;
+            if (rootIdx !== -1) {
+                this.roots!.splice(rootIdx, 1); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- indexOf succeeded
+            }
             this.changeEmitter.fire(undefined);
         }
     }
@@ -535,7 +537,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         this.executor.output.debug(`[cache] ${this.name} invalidate all`);
         this.nodes.clear();
         this.enrichmentPromises.clear();
-        this.rootsLoaded = false;
+        this.roots = undefined;
         this.rootsStaleAt = 0;
         this.changeEmitter.fire(undefined);
     }

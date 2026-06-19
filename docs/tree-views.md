@@ -13,7 +13,7 @@ The single source of truth for tree data. Lives in `packages/utils/src/tree/Data
 - **Pagination**: Providers can return `AsyncIterable<Page<T>>` for paged results. The tree stores the iterator and pulls pages on demand via `loadMore()`/`loadAll()`
 - **Enrichment**: After children load, the tree calls each provider's `enrich()` in the background, then fires `onDidChange` when done
 - **Telemetry scoping**: Every `getChildren()`, `enrich()`, and page-load call is wrapped in `callWithTelemetryAndErrorHandling`, establishing an `IActionContext` on the async call stack via `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`) pick up this context automatically without any changes to provider or client signatures. See [Telemetry](telemetry.md).
-- **Node map**: `NodeMap` provides O(1) key-based lookup, recursive subtree removal, and a structural **root set** (`roots()`) of parent-less nodes that is kept consistent as nodes are removed. Parent/child relationships stay as object pointers on the nodes themselves (`children` / `parent`). `DataItemTree` owns the policy on top (providers, TTL, paging, enrichment, and `onDidChange` events).
+- **Node map**: `NodeMap` provides O(1) key-based lookup and recursive subtree removal. Parent/child relationships stay as object pointers on the nodes themselves (`children` / `parent`); the map is purely structural and does not track roots. `DataItemTree` (and `ViewItemTree`) each own their roots list and the policy on top (providers, TTL, paging, enrichment, and `onDidChange` events).
 
 Key methods:
 

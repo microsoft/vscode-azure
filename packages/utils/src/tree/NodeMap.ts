@@ -22,17 +22,16 @@ export interface MappedNode<TNode> {
 }
 
 /**
- * A string-keyed map of tree nodes that supports recursive subtree removal and
- * a structural **root set** (nodes with no parent).
+ * A string-keyed map of tree nodes that supports recursive subtree removal.
  *
  * The hierarchy lives in the node objects themselves
  * ({@linkcode MappedNode.children} / {@linkcode MappedNode.parent}); the map
- * only adds O(1) key lookup, subtree removal, and a root set
- * ({@linkcode roots}) that is kept consistent as nodes are removed.
+ * only adds O(1) key lookup and subtree removal.
  *
- * The map is deliberately ignorant of resources, providers, TTL, and change
- * events: it answers structural questions and leaves policy/event reactions to
- * its owner (e.g. {@linkcode DataItemTree}).
+ * The map is deliberately ignorant of resources, providers, TTL, roots, and
+ * change events: it answers structural questions and leaves policy (including
+ * which nodes are roots) to its owner (e.g. {@linkcode DataItemTree} /
+ * {@linkcode ViewItemTree}, each of which keeps its own roots list).
  *
  * @typeParam TNode - The node type stored in the map. Must satisfy
  *   {@linkcode MappedNode}.
@@ -40,19 +39,6 @@ export interface MappedNode<TNode> {
  */
 export class NodeMap<TNode extends MappedNode<TNode>> {
     private readonly map = new Map<string, TNode>();
-
-    /**
-     * The set of root nodes (those with no parent). Maintained as nodes are
-     * registered ({@linkcode registerRoot}) and removed
-     * ({@linkcode removeSubtrees} / {@linkcode clear}).
-     *
-     * Membership is structural -- a node is a root iff it has no parent -- so
-     * owners need not keep a parallel roots collection. The set preserves
-     * registration order, but callers should treat ordering as incidental: the
-     * data layer is order-agnostic and the view layer re-derives presentation
-     * order.
-     */
-    private readonly rootNodes = new Set<TNode>();
 
     /**
      * @param getKey - Extracts the unique string key for a node.
@@ -71,38 +57,20 @@ export class NodeMap<TNode extends MappedNode<TNode>> {
         this.map.set(key, node);
     }
 
-    /** Remove all entries from the map (and the root set). */
+    /** Remove all entries from the map. */
     public clear(): void {
         this.map.clear();
-        this.rootNodes.clear();
-    }
-
-    /**
-     * Record an already-stored node as a root (a node with no parent). Roots are
-     * tracked structurally so owners don't keep a parallel collection; the node
-     * is dropped from the set automatically when it is removed.
-     *
-     * Idempotent: registering a node that is already a root is a no-op.
-     *
-     * @param node - The root node (normally already stored via {@linkcode set}).
-     */
-    public registerRoot(node: TNode): void {
-        this.rootNodes.add(node);
-    }
-
-    /** The set of currently-registered root nodes, in registration order. */
-    public roots(): ReadonlySet<TNode> {
-        return this.rootNodes;
     }
 
     /**
      * Recursively remove nodes and all their descendants from the map,
      * discovered by walking each node's {@linkcode MappedNode.children}
-     * (children-first). Each removed node is dropped from the root set.
+     * (children-first).
      *
      * This does **not** unlink the removed nodes from any surviving parent's
-     * children array; callers that need that (e.g. removing a single item)
-     * splice the parent list themselves.
+     * children array (or from any roots list the owner keeps); callers that
+     * need that (e.g. removing a single item) splice the relevant list
+     * themselves.
      */
     public removeSubtrees(nodes: TNode[] | undefined): void {
         if (!nodes) {
@@ -110,13 +78,7 @@ export class NodeMap<TNode extends MappedNode<TNode>> {
         }
         for (const node of nodes) {
             this.removeSubtrees(node.children);
-            this.forget(node);
+            this.map.delete(this.getKey(node));
         }
-    }
-
-    /** Forget a node: drop it from the root set and delete it from the key map. */
-    private forget(node: TNode): void {
-        this.rootNodes.delete(node);
-        this.map.delete(this.getKey(node));
     }
 }
