@@ -718,5 +718,54 @@ describe('DataItemTree (unit)', () => {
             await tree.getChildren({ id: 'a' });
             expect(aChildren.mock.callCount()).to.equal(1);
         });
+
+        it('should preserve a surviving root\'s full multi-level subtree (account -> tenant -> subscription)', async () => {
+            // Mirrors the Azure account tree: an account (root) has tenants
+            // (level 1) which have subscriptions (level 2). A reconciling root
+            // re-list after a session change must keep the cached -- and
+            // expensive to rebuild -- tenant/subscription subtrees under accounts
+            // that are still signed in.
+            const tenantChildren = mock.fn(() => [{ id: 'tenant' }]);
+            const subscriptionChildren = mock.fn(() => [{ id: 'subscription' }]);
+            const tree = createTree();
+            let rootList: TestResource[] = [{ id: 'account' }, { id: 'other-account' }];
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: handleIds('account', 'other-account', 'tenant', 'subscription'),
+                getChildren: (r?: TestResource) => {
+                    if (!r) {
+                        return rootList.map(x => ({ ...x }));
+                    }
+                    switch (r.id) {
+                        case 'account': return tenantChildren();
+                        case 'tenant': return subscriptionChildren();
+                        default: return [];
+                    }
+                },
+            });
+
+            // Load the full account -> tenant -> subscription chain.
+            await tree.getChildren();
+            await tree.getChildren({ id: 'account' });
+            await tree.getChildren({ id: 'tenant' });
+            expect(tenantChildren.mock.callCount()).to.equal(1);
+            expect(subscriptionChildren.mock.callCount()).to.equal(1);
+
+            // A session change removes the other account but keeps 'account'.
+            rootList = [{ id: 'account' }];
+            tree.invalidateRoot();
+
+            const roots = await tree.getChildren();
+            expect(roots.map(r => r.id)).to.deep.equal(['account']);
+
+            // Neither the tenant level nor the deeper subscription level is
+            // re-fetched -- both cached nodes survive the reconcile.
+            await tree.getChildren({ id: 'account' });
+            await tree.getChildren({ id: 'tenant' });
+            expect(tenantChildren.mock.callCount()).to.equal(1);
+            expect(subscriptionChildren.mock.callCount()).to.equal(1);
+            expect(tree.get('tenant')).to.not.be.undefined;
+            expect(tree.get('subscription')).to.not.be.undefined;
+        });
     });
 });
