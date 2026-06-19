@@ -28,7 +28,7 @@ export const IAzureAccountDataProvider: ServiceIdentifier<DataProvider<ConcreteA
 /**
  * Debounce window (ms) for `authentication.onDidChangeSessions`. These events
  * fire frequently and often for reasons we don't care about, so bursts are
- * coalesced into a single invalidation.
+ * coalesced into a single reconciling root re-list.
  */
 const SessionChangeDebounceMs = 500;
 
@@ -68,8 +68,8 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
 
     /**
-     * Debounces `onDidChangeSessions` bursts into a single invalidation. Keyed
-     * so it can be shared if more debounced streams are added later.
+     * Debounces `onDidChangeSessions` bursts into a single reconciling root
+     * re-list. Keyed so it can be shared if more debounced streams are added later.
      */
     private readonly debouncer = new Debouncer();
 
