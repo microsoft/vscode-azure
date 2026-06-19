@@ -27,6 +27,11 @@ azExtSrcTestConfig.mocha.ui = 'bdd';
 // past that limit and the harness fails to launch with `EINVAL`. On those
 // platforms, relocate the user-data directory to a short, checkout-unique path
 // under the OS temp dir. Windows uses named pipes and is unaffected.
+//
+// TODO: Remove this local override once it is folded into the shared base
+// config (`baseConfig` in @microsoft/vscode-azext-eng) and that version is
+// released. Tracked by microsoft/vscode-azuretools#2352. This override composes
+// safely with the base config in the meantime (it appends to `launchArgs`).
 if (process.platform !== 'win32') {
     const checkoutHash = createHash('sha1').update(import.meta.url).digest('hex').slice(0, 8);
     azExtSrcTestConfig.launchArgs = [
