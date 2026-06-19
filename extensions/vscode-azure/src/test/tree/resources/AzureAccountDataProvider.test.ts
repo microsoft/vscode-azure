@@ -117,7 +117,6 @@ describe('AzureAccountDataProvider (unit)', () => {
             // tenant / subscription subtrees under surviving accounts.
             expect(event?.resource).to.be.undefined;
             expect(event?.includeChildren).to.be.false;
-            expect(event?.tags).to.be.undefined;
         });
 
         it('should not fire on authentication session changes for unrelated providers', () => {
@@ -203,7 +202,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             await childrenPromise;
         });
 
-        it('should emit a full invalidation (no tags, undebounced) when the sovereign cloud configuration changes', () => {
+        it('should emit a full invalidation (undebounced) when the sovereign cloud configuration changes', () => {
             const { provider, mock: vscodeMock } = createProvider();
             let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
             let fired = 0;
@@ -214,32 +213,9 @@ describe('AzureAccountDataProvider (unit)', () => {
             // Configuration changes invalidate immediately (the environment changed).
             expect(fired).to.equal(1);
             // The environment itself changed, so every listing fetched against
-            // the old endpoint is invalid -- wipe everything, untagged.
+            // the old endpoint is invalid -- wipe everything.
             expect(event?.resource).to.be.undefined;
             expect(event?.includeChildren).to.be.true;
-            expect(event?.tags).to.be.undefined;
-        });
-    });
-
-    describe('getTags', () => {
-        it('should tag an account with its account: identity tag', () => {
-            const { provider } = createProvider();
-            expect(provider.getTags(makeAccount({ id: 'Acct-ID' }))).to.deep.equal(['account:acct-id']);
-        });
-
-        it('should tag a tenant with its tenant: identity tag', () => {
-            const { provider } = createProvider();
-            expect(provider.getTags(makeTenant({ tenantId: 'ten-id' }))).to.deep.equal(['tenant:ten-id']);
-        });
-
-        it('should tag a subscription with its subscription: identity tag', () => {
-            const { provider } = createProvider();
-            expect(provider.getTags(makeSubscription({ subscriptionId: 'sub-id' }))).to.deep.equal(['subscription:sub-id']);
-        });
-
-        it('should return no tags for the root listing', () => {
-            const { provider } = createProvider();
-            expect(provider.getTags()).to.deep.equal([]);
         });
     });
 

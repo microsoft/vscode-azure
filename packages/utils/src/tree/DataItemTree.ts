@@ -27,13 +27,6 @@ interface TreeNode<T> {
     parent: TreeNode<T> | undefined;
 
     /**
-     * Semantic identity tags carried by this node, recorded in the
-     * {@linkcode NodeMap}'s reverse index for {@linkcode DataItemTree.invalidateByTag}.
-     * Maintained by the {@linkcode NodeMap}; not mutated directly here.
-     */
-    tags?: string[];
-
-    /**
      * If the provider returned an `AsyncIterable<Page<T>>`, the in-progress
      * iterator is stored here between page pulls. `undefined` means no
      * more pages are available (or the provider returned a plain array).
@@ -184,9 +177,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
             this.nodes.set(resourceKey, node);
             this.nodes.registerRoot(node);
-            // The producing provider for a root is the one that handles the
-            // resource itself (the root provider).
-            this.nodes.registerTags(node, this.findProvider(resource)?.getTags?.(resource) ?? []);
             this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey}`);
             return node;
         });
@@ -459,14 +449,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * the {@linkcode NodeMap}, and kick off background enrichment.
      */
     private addChildNodes(children: T[], parent: TreeNode<T>): TreeNode<T>[] {
-        // The producing provider for these children is the one that handles
-        // the parent resource.
-        const producer = this.findProvider(parent.resource);
         const nodes = children.map(child => {
             const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0, parent };
             const childKey = this.getKey(child);
             this.nodes.set(childKey, childNode);
-            this.nodes.registerTags(childNode, producer?.getTags?.(child) ?? []);
             this.executor.output.trace(`[cache] ${this.name} child key=${childKey} parent=${this.getKey(parent.resource)}`);
             return childNode;
         });
@@ -573,68 +559,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Hard-evict every cached node carrying the given tag, *plus* everything
-     * beneath those nodes, then fire a single coalesced {@linkcode onDidChange}.
-     *
-     * Tags come from {@linkcode DataProvider.getTags} (semantic identity, e.g.
-     * `account:<id>`, `type:<armType>`). The actual eviction is delegated to
-     * {@linkcode NodeMap.evictByTag}, which walks child pointers to compute the
-     * removal set, unlinks each node from any surviving parent's children array,
-     * drops removed nodes from the root set, prunes tags, and returns the
-     * removed nodes. This method adds the tree-level policy: dropping pending
-     * enrichment and firing the change event at the right scope.
-     *
-     * A single change event is fired at the shallowest affected scope: the one
-     * surviving parent when the eviction is confined to a single branch,
-     * otherwise `undefined` (a root-level or cross-branch eviction triggers a
-     * full refresh).
-     *
-     * Resilient to unknown tags (no-op) and to a tag carried by many nodes.
-     */
-    public invalidateByTag(tag: string): void {
-        const removed = this.nodes.evictByTag(tag);
-        if (removed.length === 0) {
-            this.executor.output.debug(`[cache] ${this.name} invalidate tag=${tag} (no matches)`);
-            return;
-        }
-        this.executor.output.debug(`[cache] ${this.name} invalidate tag=${tag} evicting=${removed.length}`);
-
-        const removedSet = new Set(removed);
-
-        // Determine the surviving parents affected by the eviction (for a
-        // single, coalesced change event) and drop any pending enrichment for
-        // removed nodes. A parent is "affected" only if it survives -- i.e. it
-        // is not itself being removed. Removed roots (no parent) contribute the
-        // `undefined` scope; NodeMap.evictByTag already dropped them from its
-        // root set.
-        const affectedParents = new Set<TreeNode<T> | undefined>();
-        for (const node of removed) {
-            this.enrichmentPromises.delete(this.getKey(node.resource));
-
-            const parent = node.parent;
-            if (parent === undefined) {
-                affectedParents.add(undefined);
-            } else if (!removedSet.has(parent)) {
-                affectedParents.add(parent);
-            }
-        }
-
-        // Fire a single change event at the shallowest affected scope.
-        if (affectedParents.size === 1) {
-            const [only] = affectedParents;
-            if (only !== undefined) {
-                this.changeEmitter.fire(only.resource);
-                return;
-            }
-        }
-        this.changeEmitter.fire(undefined);
-    }
-
-    /**
      * Handle a provider's optional {@linkcode DataProvider.onDidChange} event.
      *
-     * - {@linkcode DataProviderChangeEvent.tags} present -> dispatch each tag to
-     *   {@linkcode invalidateByTag}.
      * - {@linkcode DataProviderChangeEvent.resource} present -> positional
      *   {@linkcode invalidate}.
      * - Root-level change (`resource` undefined) with `includeChildren: false`
@@ -642,11 +568,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * - Otherwise -> {@linkcode invalidateAll}.
      */
     protected override onProviderChanged(event: DataProviderChangeEvent<T>): void {
-        if (event.tags && event.tags.length > 0) {
-            for (const tag of event.tags) {
-                this.invalidateByTag(tag);
-            }
-        } else if (event.resource !== undefined && event.resource !== null) {
+        if (event.resource !== undefined && event.resource !== null) {
             this.invalidate(event.resource, event.includeChildren);
         } else if (!event.includeChildren) {
             this.invalidateRoot();

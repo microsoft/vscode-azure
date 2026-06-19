@@ -6,7 +6,7 @@
 import {
     getAuthProviderId, getConfiguredAzureEnv,
     ICredentialFactory,
-    isAccount, isSubscription, isTenant,
+    isAccount, isTenant,
     PublicAuthProviderId, SovereignAuthProviderId, SovereignCloudConfigurationSection,
     SubscriptionClient,
     type AzureAccount, type AzureSubscription, type AzureTenant,
@@ -41,26 +41,6 @@ const GetAccountsSuppressionMs = 1000;
 
 /** Debounce key for coalescing `onDidChangeSessions` bursts. */
 const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
-
-/**
- * Build the semantic cache tag identifying a specific account (lowercased so it
- * matches the cache key normalization). A caller can pass this to
- * {@linkcode DataItemTree.invalidateByTag} to evict the account node and its
- * entire subtree.
- */
-export function accountTag(accountId: string): string {
-    return `account:${accountId.toLowerCase()}`;
-}
-
-/** Build the semantic cache tag identifying a specific tenant (and its subtree). */
-export function tenantTag(tenantId: string): string {
-    return `tenant:${tenantId.toLowerCase()}`;
-}
-
-/** Build the semantic cache tag identifying a specific subscription (and its subtree). */
-export function subscriptionTag(subscriptionId: string): string {
-    return `subscription:${subscriptionId.toLowerCase()}`;
-}
 
 /**
  * Root data-layer provider for the account / tenant / subscription levels of the
@@ -160,35 +140,6 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     /** @inheritdoc */
     public getTtl(): number {
         return Infinity;
-    }
-
-    /**
-     * @inheritdoc
-     *
-     * Emits semantic identity tags for each node so a caller can invalidate a
-     * slice of the tree via {@linkcode DataItemTree.invalidateByTag}:
-     * - an account -> {@linkcode accountTag} (`account:<id>`)
-     * - a tenant -> {@linkcode tenantTag} (`tenant:<id>`)
-     * - a subscription -> {@linkcode subscriptionTag} (`subscription:<id>`)
-     *
-     * Each tag addresses the node *and* its subtree (the tree evicts everything
-     * beneath a tagged node), so e.g. `invalidateByTag(accountTag(id))` wipes
-     * everything under one account.
-     */
-    public getTags(resource?: ConcreteAzureNode): string[] {
-        if (!resource) {
-            return [];
-        }
-        if (isAccount(resource)) {
-            return [accountTag(resource.id)];
-        }
-        if (isTenant(resource)) {
-            return [tenantTag(resource.tenantId)];
-        }
-        if (isSubscription(resource)) {
-            return [subscriptionTag(resource.subscriptionId)];
-        }
-        return [];
     }
 
     /** @inheritdoc */
