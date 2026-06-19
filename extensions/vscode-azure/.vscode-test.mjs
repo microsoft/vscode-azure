@@ -11,34 +11,11 @@
 
 import { azExtSrcTestConfig } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
 import { defineConfig } from '@vscode/test-cli';
-import { createHash } from 'node:crypto';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 // The vscode-test runner defaults mocha to the TDD interface (suite/test), but
 // the rest of the repo (and @types/mocha) uses the BDD interface (describe/it).
 // Force BDD so the global describe/it are available without importing them.
 azExtSrcTestConfig.mocha.ui = 'bdd';
-
-// The VS Code test harness opens an AF_UNIX IPC socket under the user-data
-// directory. On macOS/Linux the socket path (sockaddr_un.sun_path) is capped at
-// ~104 chars; a deeply nested checkout -- e.g. a git worktree under
-// copilot-worktrees/... -- pushes the default `.vscode-test/user-data/*.sock`
-// past that limit and the harness fails to launch with `EINVAL`. On those
-// platforms, relocate the user-data directory to a short, checkout-unique path
-// under the OS temp dir. Windows uses named pipes and is unaffected.
-//
-// TODO: Remove this local override once it is folded into the shared base
-// config (`baseConfig` in @microsoft/vscode-azext-eng) and that version is
-// released. Tracked by microsoft/vscode-azuretools#2352. This override composes
-// safely with the base config in the meantime (it appends to `launchArgs`).
-if (process.platform !== 'win32') {
-    const checkoutHash = createHash('sha1').update(import.meta.url).digest('hex').slice(0, 8);
-    azExtSrcTestConfig.launchArgs = [
-        ...(azExtSrcTestConfig.launchArgs ?? []),
-        '--user-data-dir', join(tmpdir(), `vscode-azure-test-${checkoutHash}`),
-    ];
-}
 
 export default defineConfig({
     tests: [azExtSrcTestConfig],
