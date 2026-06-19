@@ -13,7 +13,7 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    Debouncer, EventEmitter, IActionExecutor, ICodeContext,
+    Debouncer, EventEmitter, IActionExecutor, ICodeContext, stringifyError,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -28,7 +28,7 @@ export const IAzureAccountDataProvider: ServiceIdentifier<DataProvider<ConcreteA
 /**
  * Debounce window (ms) for `authentication.onDidChangeSessions`. These events
  * fire frequently and often for reasons we don't care about, so bursts are
- * coalesced into a single invalidation.
+ * coalesced into a single reconciling root re-list.
  */
 const SessionChangeDebounceMs = 500;
 
@@ -41,6 +41,11 @@ const GetAccountsSuppressionMs = 1000;
 
 /** Debounce key for coalescing `onDidChangeSessions` bursts. */
 const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
+
+/** Whether two sets contain exactly the same string ids. */
+function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+    return a.size === b.size && a.isSubsetOf(b);
+}
 
 /**
  * Root data-layer provider for the account / tenant / subscription levels of the
@@ -68,8 +73,8 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
 
     /**
-     * Debounces `onDidChangeSessions` bursts into a single invalidation. Keyed
-     * so it can be shared if more debounced streams are added later.
+     * Debounces `onDidChangeSessions` bursts into a single reconciling root
+     * re-list. Keyed so it can be shared if more debounced streams are added later.
      */
     private readonly debouncer = new Debouncer();
 
@@ -93,6 +98,17 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private suppressSessionEventsUntil = 0;
 
+    /**
+     * The set of account ids ({@linkcode AzureAccount.id}) seen by the most
+     * recent {@linkcode listAccounts} call, or `undefined` if accounts have
+     * never been listed. Used by {@linkcode reconcileAccountsOnSessionChange} to
+     * decide whether an `onDidChangeSessions` burst actually added or removed an
+     * account -- the only changes we act on. The vast majority of session events
+     * (token refreshes, other extensions' activity, re-auth of the same account)
+     * leave this set unchanged and are ignored.
+     */
+    private knownAccountIds: ReadonlySet<string> | undefined;
+
     public readonly onDidChange = this.changeEmitter.event;
 
     public constructor(
@@ -113,17 +129,20 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 return;
             }
 
-            // Debounce bursts of session changes into a single invalidation.
+            // Debounce bursts of session changes, then reconcile the account
+            // set. The reconcile itself decides whether anything actually
+            // changed (see reconcileAccountsOnSessionChange).
             const providerId = e.provider.id;
             this.debouncer.debounce(SessionInvalidationKey, SessionChangeDebounceMs, () => {
-                this.executor.output.debug(`[auth] sessions changed provider=${providerId}; invalidating accounts`);
-                this.invalidateAll();
+                void this.reconcileAccountsOnSessionChange(providerId);
             });
         }));
 
         this.disposables.push(this.ctx.code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(SovereignCloudConfigurationSection)) {
                 this.executor.output.debug('[auth] sovereign cloud configuration changed; invalidating accounts');
+                // The configured environment itself changed, so every cached
+                // listing was fetched against the old endpoint and is invalid.
                 this.invalidateAll();
             }
         }));
@@ -194,12 +213,71 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
             this.getAccountsInFlight--;
         }
 
-        return accounts
+        const result = accounts
             .map(account => ({
                 ...account,
                 environment,
             } satisfies AzureAccount))
             .sort((a, b) => a.label.localeCompare(b.label));
+
+        // Track the current account-id set so session-change events can be
+        // reconciled against it (see reconcileAccountsOnSessionChange).
+        this.knownAccountIds = new Set(result.map(account => account.id));
+
+        return result;
+    }
+
+    /**
+     * Reconcile the signed-in account set in response to a (debounced)
+     * `onDidChangeSessions` burst, firing a reconciling root re-list **only if
+     * the set of accounts actually changed**.
+     *
+     * `onDidChangeSessions` fires frequently and usually for reasons that don't
+     * change which accounts are signed in (token refreshes, other extensions'
+     * session activity, re-auth of the same account). We only care about a
+     * sign-in (new account id) or sign-out (removed account id); tenant /
+     * subscription membership under an existing account changes too rarely to
+     * justify discarding the (expensive to rebuild) cached subtrees, so those are
+     * intentionally left in place until a full invalidation.
+     *
+     * Listing accounts is a cheap local operation, so it is safe to do on every
+     * burst purely to detect whether the set changed. The {@linkcode listAccounts}
+     * call here also arms the self-induced-event suppression window
+     * ({@linkcode getAccountsInFlight} / {@linkcode suppressSessionEventsUntil}),
+     * which -- together with this set comparison -- defends against feedback
+     * loops should `getAccounts()` itself ever start emitting
+     * `onDidChangeSessions` again (a bug we have seen in the past): re-entrant
+     * events are suppressed while the call is in flight, and any that still slip
+     * through reconcile to an unchanged set and stop here without re-firing.
+     *
+     * @param providerId - The auth provider id that triggered the burst (logging only).
+     */
+    private async reconcileAccountsOnSessionChange(providerId: string): Promise<void> {
+        try {
+            const previousIds = this.knownAccountIds;
+            const accounts = await this.listAccounts();
+            const currentIds = new Set(accounts.map(account => account.id));
+
+            if (previousIds !== undefined && idSetsEqual(previousIds, currentIds)) {
+                this.executor.output.trace(`[auth] sessions changed provider=${providerId}; account set unchanged (count=${currentIds.size}), ignoring`);
+                return;
+            }
+
+            // The set of accounts changed, so trigger a reconciling root re-list
+            // (includeChildren: false). Tenant / subscription subtrees under accounts
+            // that survive the change are preserved by the tree's root reconciliation;
+            // a signed-out account's subtree is evicted because it drops out of the
+            // new listing.
+            this.executor.output.debug(`[auth] sessions changed provider=${providerId}; account set changed (count=${currentIds.size}), re-listing accounts`);
+            this.changeEmitter.fire({ resource: undefined, includeChildren: false });
+        } catch (error) {
+            // This runs as a fire-and-forget reconcile, and listAccounts() can
+            // throw (a transient getAccounts() failure, or getConfiguredAzureEnv()
+            // throwing on a misconfigured custom cloud). Swallow and log rather
+            // than surfacing an unhandled rejection; a later session event or the
+            // tree's own root fetch will retry.
+            this.executor.output.warn(`[auth] sessions changed provider=${providerId}; account reconcile failed: ${stringifyError(error)}`);
+        }
     }
 
     /**

@@ -22,6 +22,7 @@ Key methods:
 | `getChildren(resource?)` | Fetch and cache children (root if undefined) |
 | `invalidate(resource, includeChildren?)` | Clear a resource's cached data (optionally invalidate children) |
 | `invalidateAll()` | Clear the entire tree |
+| `invalidateRoot()` | Reconciling root re-list (preserve survivors' subtrees, evict departed roots) |
 | `whenEnriched<T>(resource)` | Await background enrichment completion |
 | `hasMore(resource)` | Whether more pages are available |
 | `loadMore(resource)` | Pull the next page |
@@ -58,7 +59,7 @@ interface DataProviderChangeEvent<TResource> {
 }
 ```
 
-`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it. This is used by activity providers that need to push real-time status updates.
+`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it. This is used by activity providers that need to push real-time status updates. A root-level change (`resource` undefined) with `includeChildren: false` is interpreted as a **reconciling root re-list** (`invalidateRoot`) rather than a full wipe.
 
 ### Enrichment Pattern
 
@@ -147,7 +148,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 | `AcrDataProvider` / `FunctionAppDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
 | `AzureResourceDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
 
-`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes.
+`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes. An auth session change fires a reconciling root re-list (`{ resource: undefined, includeChildren: false }`) that re-lists accounts — preserving tenant/subscription caches under surviving accounts and evicting a signed-out account's subtree because it drops out of the new listing. (This event is noisy — it also fires on individual token acquisitions — but an unchanged account set reconciles to a no-op.) A sovereign-cloud configuration change fires a full `invalidateAll()` since the endpoint itself changed.
 
 ### Subscription / tenant filtering
 

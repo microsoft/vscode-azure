@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant } from '@microsoft/vscode-azure-azutils';
+import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
-import type { ChildResult, Page } from '@microsoft/vscode-azure-utils';
+import type { ChildResult, DataProviderChangeEvent, Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -40,6 +40,16 @@ describe('AzureAccountDataProvider (unit)', () => {
             collected.push(page);
         }
         return collected;
+    }
+
+    /**
+     * Drain pending microtasks (e.g. the async session-change reconcile) while
+     * fake timers are enabled. `setImmediate` is not faked, so awaiting it lets
+     * queued promise continuations -- the `await listAccounts()` chain in the
+     * debounced session handler -- run to completion.
+     */
+    async function flushMicrotasks(): Promise<void> {
+        await new Promise(resolve => setImmediate(resolve));
     }
 
     describe('canHandle', () => {
@@ -100,17 +110,27 @@ describe('AzureAccountDataProvider (unit)', () => {
             mock.timers.reset();
         });
 
-        it('should fire (debounced) on authentication session changes for the Microsoft provider', () => {
+        it('should emit a reconciling root re-list (debounced) on the first authentication session change for the Microsoft provider', async () => {
             const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
+            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
             let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            provider.onDidChange(e => { event = e; fired++; });
 
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             // Debounced: nothing fires until the timer elapses.
             expect(fired).to.equal(0);
 
             mock.timers.tick(500);
+            await flushMicrotasks();
+
+            // First event (no prior known set), so the reconcile fires. A
+            // reconciling root re-list (resource undefined, includeChildren
+            // false) preserves tenant / subscription subtrees under surviving
+            // accounts.
             expect(fired).to.equal(1);
+            expect(event?.resource).to.be.undefined;
+            expect(event?.includeChildren).to.be.false;
         });
 
         it('should not fire on authentication session changes for unrelated providers', () => {
@@ -124,8 +144,9 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(fired).to.equal(0);
         });
 
-        it('should coalesce a burst of session changes into a single invalidation', () => {
+        it('should coalesce a burst of session changes into a single re-list', async () => {
             const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
             let fired = 0;
             provider.onDidChange(() => { fired++; });
 
@@ -133,8 +154,127 @@ describe('AzureAccountDataProvider (unit)', () => {
                 vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             }
             mock.timers.tick(500);
+            await flushMicrotasks();
 
             expect(fired).to.equal(1);
+        });
+
+        it('should fire a reconciling re-list when an account is added (sign-in)', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
+            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
+            let fired = 0;
+            provider.onDidChange(e => { event = e; fired++; });
+
+            // Prime the known account set with a single account.
+            await provider.getChildren();
+            // Move past the self-induced suppression window armed by listAccounts.
+            mock.timers.tick(1001);
+
+            // A new account signs in.
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([
+                { id: 'a-id', label: 'Alpha' },
+                { id: 'b-id', label: 'Beta' },
+            ]));
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+            await flushMicrotasks();
+
+            expect(fired).to.equal(1);
+            expect(event?.resource).to.be.undefined;
+            expect(event?.includeChildren).to.be.false;
+        });
+
+        it('should fire a reconciling re-list when an account is removed (sign-out)', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([
+                { id: 'a-id', label: 'Alpha' },
+                { id: 'b-id', label: 'Beta' },
+            ]));
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            await provider.getChildren();
+            mock.timers.tick(1001);
+
+            // One account signs out.
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+            await flushMicrotasks();
+
+            expect(fired).to.equal(1);
+        });
+
+        it('should NOT fire when the signed-in account set is unchanged', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            // Prime the known account set, then move past the suppression window.
+            await provider.getChildren();
+            mock.timers.tick(1001);
+
+            // A session event arrives but the account set is identical: the vast
+            // majority of onDidChangeSessions events (token refreshes, re-auth,
+            // other extensions' activity) look like this and must be ignored.
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+            await flushMicrotasks();
+
+            expect(fired).to.equal(0);
+        });
+
+        it('should not loop when listing accounts itself emits onDidChangeSessions', async () => {
+            // Guards against a historical auth-provider bug where calling
+            // getAccounts() re-emitted onDidChangeSessions, which could otherwise
+            // feed back into another re-list. Two defenses combine here: the
+            // in-flight suppression window swallows the re-entrant event, and the
+            // unchanged-account-set check stops any event that slips through.
+            const { provider, mock: vscodeMock } = createProvider();
+            const getAccountsMock = vscodeMock.authentication.getAccounts.mock;
+            getAccountsMock.mockImplementation(() => {
+                // Re-emit a session change synchronously, as the buggy provider did.
+                vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+                return Promise.resolve([{ id: 'a-id', label: 'Alpha' }]);
+            });
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+            await flushMicrotasks();
+
+            // The first event drives exactly one reconcile (one getAccounts call)
+            // and one onDidChange; the re-entrant event it triggers is suppressed.
+            expect(getAccountsMock.callCount()).to.equal(1);
+            expect(fired).to.equal(1);
+
+            // Advancing time must not surface any further re-lists.
+            mock.timers.tick(5000);
+            await flushMicrotasks();
+            expect(getAccountsMock.callCount()).to.equal(1);
+            expect(fired).to.equal(1);
+        });
+
+        it('should swallow a listAccounts failure during reconcile instead of rejecting', async () => {
+            // The debounced reconcile runs fire-and-forget, and listAccounts can
+            // throw (a transient getAccounts failure, or getConfiguredAzureEnv
+            // throwing on a misconfigured custom cloud). It must be caught so it
+            // does not surface as an unhandled rejection.
+            const { provider, mock: vscodeMock } = createProvider();
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.reject(new Error('transient auth failure')));
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            mock.timers.tick(500);
+            await flushMicrotasks();
+
+            // No change event fired, and the rejection was swallowed (the test
+            // completing without an unhandled rejection is the assertion).
+            expect(fired).to.equal(0);
         });
 
         it('should suppress session-change events that occur within its own getAccounts window', async () => {
@@ -149,6 +289,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             // An event arriving inside the window is ignored, so nothing is scheduled.
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
+            await flushMicrotasks();
 
             expect(fired).to.equal(0);
         });
@@ -161,10 +302,13 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             await provider.getChildren();
 
-            // Advance past the suppression window, then fire and let the debounce elapse.
+            // Advance past the suppression window. An account then signs in, so
+            // the resumed event represents a real change.
             mock.timers.tick(1001);
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
+            await flushMicrotasks();
 
             expect(fired).to.equal(1);
         });
@@ -189,6 +333,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             // A self-induced event arriving mid-call must still be suppressed.
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
+            await flushMicrotasks();
             expect(fired).to.equal(0);
 
             // Let the in-flight call complete so the promise settles.
@@ -196,15 +341,20 @@ describe('AzureAccountDataProvider (unit)', () => {
             await childrenPromise;
         });
 
-        it('should fire (undebounced) when the sovereign cloud configuration changes', () => {
+        it('should emit a full invalidation (undebounced) when the sovereign cloud configuration changes', () => {
             const { provider, mock: vscodeMock } = createProvider();
+            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
             let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            provider.onDidChange(e => { event = e; fired++; });
 
             vscodeMock.configChangeEmitter.fire({ affectsConfiguration: section => section === 'microsoft-sovereign-cloud' });
 
             // Configuration changes invalidate immediately (the environment changed).
             expect(fired).to.equal(1);
+            // The environment itself changed, so every listing fetched against
+            // the old endpoint is invalid -- wipe everything.
+            expect(event?.resource).to.be.undefined;
+            expect(event?.includeChildren).to.be.true;
         });
     });
 

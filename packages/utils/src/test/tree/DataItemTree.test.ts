@@ -8,7 +8,7 @@ import { mock } from 'node:test';
 import { delay } from '../../base/delay';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
-import type { DataProvider } from '../../tree/DataProvider';
+import type { DataProvider, DataProviderChangeEvent } from '../../tree/DataProvider';
 import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
@@ -637,6 +637,135 @@ describe('DataItemTree (unit)', () => {
             await loadPromise;
 
             expect(tree.get('orphan')).to.be.undefined;
+        });
+    });
+
+    describe('root reconciliation', () => {
+        const handleIds = (...ids: string[]) =>
+            (r: unknown): r is TestResource => ids.includes((r as TestResource).id);
+
+        it('should reconcile roots on invalidateRoot: preserve survivors, evict removed, fetch new lazily', async () => {
+            const aChildren = mock.fn(() => [{ id: 'a-child' }]);
+            const bChildren = mock.fn(() => [{ id: 'b-child' }]);
+            const cChildren = mock.fn(() => [{ id: 'c-child' }]);
+            const tree = createTree();
+            let rootList: TestResource[] = [{ id: 'a' }, { id: 'b' }];
+            tree.registerProvider({ isRoot: true, canHandle: handleIds('a', 'b', 'c'), getChildren: (r?: TestResource) => {
+                if (!r) {
+                    return rootList.map(x => ({ ...x }));
+                }
+                switch (r.id) {
+                    case 'a': return aChildren();
+                    case 'b': return bChildren();
+                    case 'c': return cChildren();
+                    default: return [];
+                }
+            } });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'a' });
+            await tree.getChildren({ id: 'b' });
+            expect(aChildren.mock.callCount()).to.equal(1);
+            expect(bChildren.mock.callCount()).to.equal(1);
+
+            // New listing: 'a' survives, 'b' removed, 'c' is new.
+            rootList = [{ id: 'a' }, { id: 'c' }];
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+            tree.invalidateRoot();
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onChange.mock.calls[0].arguments[0]).to.be.undefined;
+
+            const roots = await tree.getChildren();
+            expect(roots.map(r => r.id)).to.deep.equal(['a', 'c']);
+
+            // Surviving root: children subtree preserved (no re-fetch).
+            await tree.getChildren({ id: 'a' });
+            expect(aChildren.mock.callCount()).to.equal(1);
+
+            // Removed root: subtree fully evicted.
+            expect(tree.get('b')).to.be.undefined;
+            expect(tree.get('b-child')).to.be.undefined;
+
+            // New root: children fetched lazily on first access.
+            await tree.getChildren({ id: 'c' });
+            expect(cChildren.mock.callCount()).to.equal(1);
+        });
+
+        it('should reconcile (not wipe) on a root change event with includeChildren false', async () => {
+            let fireChange!: (event: DataProviderChangeEvent<TestResource>) => void;
+            let rootList: TestResource[] = [{ id: 'a' }, { id: 'b' }];
+            const tree = createTree();
+            const aChildren = mock.fn(() => [{ id: 'a-child' }]);
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: handleIds('a', 'b'),
+                getChildren: (r?: TestResource) => (r ? (r.id === 'a' ? aChildren() : []) : rootList.map(x => ({ ...x }))),
+                onDidChange: (listener) => { fireChange = listener; return { dispose: () => { /* noop */ } }; },
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'a' });
+            expect(aChildren.mock.callCount()).to.equal(1);
+
+            rootList = [{ id: 'a' }];
+            fireChange({ resource: undefined, includeChildren: false });
+
+            const roots = await tree.getChildren();
+            expect(roots.map(r => r.id)).to.deep.equal(['a']);
+            // Survivor's subtree preserved (reconcile, not full wipe).
+            await tree.getChildren({ id: 'a' });
+            expect(aChildren.mock.callCount()).to.equal(1);
+        });
+
+        it('should preserve a surviving root\'s full multi-level subtree (account -> tenant -> subscription)', async () => {
+            // Mirrors the Azure account tree: an account (root) has tenants
+            // (level 1) which have subscriptions (level 2). A reconciling root
+            // re-list after a session change must keep the cached -- and
+            // expensive to rebuild -- tenant/subscription subtrees under accounts
+            // that are still signed in.
+            const tenantChildren = mock.fn(() => [{ id: 'tenant' }]);
+            const subscriptionChildren = mock.fn(() => [{ id: 'subscription' }]);
+            const tree = createTree();
+            let rootList: TestResource[] = [{ id: 'account' }, { id: 'other-account' }];
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: handleIds('account', 'other-account', 'tenant', 'subscription'),
+                getChildren: (r?: TestResource) => {
+                    if (!r) {
+                        return rootList.map(x => ({ ...x }));
+                    }
+                    switch (r.id) {
+                        case 'account': return tenantChildren();
+                        case 'tenant': return subscriptionChildren();
+                        default: return [];
+                    }
+                },
+            });
+
+            // Load the full account -> tenant -> subscription chain.
+            await tree.getChildren();
+            await tree.getChildren({ id: 'account' });
+            await tree.getChildren({ id: 'tenant' });
+            expect(tenantChildren.mock.callCount()).to.equal(1);
+            expect(subscriptionChildren.mock.callCount()).to.equal(1);
+
+            // A session change removes the other account but keeps 'account'.
+            rootList = [{ id: 'account' }];
+            tree.invalidateRoot();
+
+            const roots = await tree.getChildren();
+            expect(roots.map(r => r.id)).to.deep.equal(['account']);
+
+            // Neither the tenant level nor the deeper subscription level is
+            // re-fetched -- both cached nodes survive the reconcile.
+            await tree.getChildren({ id: 'account' });
+            await tree.getChildren({ id: 'tenant' });
+            expect(tenantChildren.mock.callCount()).to.equal(1);
+            expect(subscriptionChildren.mock.callCount()).to.equal(1);
+            expect(tree.get('tenant')).to.not.be.undefined;
+            expect(tree.get('subscription')).to.not.be.undefined;
         });
     });
 });

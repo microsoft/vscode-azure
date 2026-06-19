@@ -115,10 +115,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
         this.executor.output.trace(`[cache] ${this.name} root cache miss`);
 
-        // Clear all cached nodes when recomputing roots since the whole tree may have changed
-        this.nodes.clear();
-        this.roots = undefined;
-
         // Each root provider gets its own telemetry scope so that
         // concurrent calls don't overwrite shared mutable properties.
         const rootProviders = this.getRootProviders();
@@ -147,19 +143,43 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             return result;
         });
 
-        this.roots = resources.map(resource => {
-            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
+        // Reconcile the freshly-listed roots against the previously cached ones
+        // by key, rather than wiping the whole tree. This lets a reconciling
+        // root refresh (invalidateRoot) re-list the top level (e.g. accounts)
+        // while preserving the tenant / subscription subtrees under roots that
+        // are still present. After invalidateAll() this.roots is undefined, so
+        // this degenerates to a full fresh fetch (the previous behavior).
+        const newKeySet = new Set(resources.map(resource => this.getKey(resource)));
+
+        // Evict roots (and their subtrees) that are no longer present.
+        for (const rootNode of this.roots ?? []) {
+            if (!newKeySet.has(this.getKey(rootNode.resource))) {
+                this.nodes.removeSubtrees([rootNode]);
+            }
+        }
+
+        const rootNodes = resources.map(resource => {
             const resourceKey = this.getKey(resource);
+            const existing = this.nodes.get(resourceKey);
+            if (existing) {
+                // Root still present: keep its node (and cached subtree,
+                // staleAt, and pageIterator) as-is.
+                this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey} (preserved)`);
+                return existing;
+            }
+            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
             this.nodes.set(resourceKey, node);
             this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey}`);
             return node;
         });
+        this.roots = rootNodes;
         this.rootsStaleAt = this.computeStaleAt(this.rootTtl(rootProviders));
         this.executor.output.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
 
-        this.enrichAll(resources);
+        const rootResources = rootNodes.map(n => n.resource);
+        this.enrichAll(rootResources);
 
-        return resources;
+        return rootResources;
     }
 
     /**
@@ -518,12 +538,37 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event by
-     * invalidating the changed resource or the entire cache.
+     * Trigger a reconciling re-list of the root level. Marks the root listing
+     * stale and fires {@linkcode onDidChange} with `undefined`; the next root
+     * fetch reconciles the freshly-listed roots against the cached ones by key
+     * (see {@linkcode getRootChildren}), preserving the subtrees under roots
+     * that are still present and evicting the subtrees of roots that have
+     * disappeared.
+     *
+     * Unlike {@linkcode invalidateAll}, this does **not** wipe the tree -- it is
+     * the right tool when only the *set* of roots may have changed (e.g. an
+     * account signed in/out) but the data under surviving roots is still valid.
+     */
+    public invalidateRoot(): void {
+        this.executor.output.debug(`[cache] ${this.name} invalidate root (reconcile)`);
+        this.rootsStaleAt = 0;
+        this.changeEmitter.fire(undefined);
+    }
+
+    /**
+     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event.
+     *
+     * - {@linkcode DataProviderChangeEvent.resource} present -> positional
+     *   {@linkcode invalidate}.
+     * - Root-level change (`resource` undefined) with `includeChildren: false`
+     *   -> reconciling {@linkcode invalidateRoot}.
+     * - Otherwise -> {@linkcode invalidateAll}.
      */
     protected override onProviderChanged(event: DataProviderChangeEvent<T>): void {
         if (event.resource !== undefined && event.resource !== null) {
             this.invalidate(event.resource, event.includeChildren);
+        } else if (!event.includeChildren) {
+            this.invalidateRoot();
         } else {
             this.invalidateAll();
         }
