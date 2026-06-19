@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
+import { ICredentialFactory, type TokenCredential } from '@microsoft/vscode-azure-azutils';
 import { IOutputChannel, IVsCode, stringifyError, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { generateKeyPair as cryptoGenerateKeyPair, sign as cryptoSign, randomBytes, randomUUID } from 'node:crypto';
@@ -33,8 +33,11 @@ const apiVersion = '2023-07-12-preview';
  *
  * AZD connects to this server via the `AZD_AUTH_ENDPOINT`,
  * `AZD_AUTH_KEY`, and `AZD_AUTH_CERT` environment variables. The
- * server uses {@linkcode VsCodeExtensionCredential} to acquire tokens
- * from the VS Code authentication API.
+ * server uses the injected {@linkcode ICredentialFactory} to acquire
+ * tokens. By default this produces a `VsCodeExtensionCredential`
+ * (tokens from the VS Code authentication API), but tests can supply a
+ * factory backed by any {@linkcode TokenCredential}
+ * (e.g. a service principal) for non-interactive runs.
  *
  * @remarks
  * The protocol is defined by the azd CLI's `RemoteCredential`:
@@ -64,6 +67,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
+        @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
     ) { }
 
     public async getEnv(): Promise<Readonly<Record<string, string>>> {
@@ -93,10 +97,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         const key = randomUUID();
         const { certPem, keyPem, certDerBase64 } = await generateSelfSignedCert();
 
-        const credential = new VsCodeExtensionCredential({
-            output: this.output,
-            code: this.code,
-        });
+        const credential = this.credentialFactory();
 
         const server = createServer(
             { cert: certPem, key: keyPem },
@@ -120,7 +121,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         req: IncomingMessage,
         res: ServerResponse,
         expectedKey: string,
-        credential: VsCodeExtensionCredential,
+        credential: TokenCredential,
     ): Promise<void> {
         try {
             // Only POST /token is supported

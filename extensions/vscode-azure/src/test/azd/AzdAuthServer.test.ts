@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createDefaultCredentialFactory } from '@microsoft/vscode-azure-azutils';
+import { makeCredential } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { request as httpsRequest } from 'node:https';
@@ -85,7 +87,7 @@ describe('AzdAuthServer (unit)', () => {
 
         it('should return env vars with endpoint, key, and cert', async () => {
             const { vscode: code } = createMockVsCode();
-            const server = new AzdAuthServer(code, new MockOutputChannel('test'));
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'), createDefaultCredentialFactory(code));
             servers.push(server);
             const env = await server.getEnv();
 
@@ -96,7 +98,7 @@ describe('AzdAuthServer (unit)', () => {
 
         it('should return the same env vars on subsequent calls', async () => {
             const { vscode: code } = createMockVsCode();
-            const server = new AzdAuthServer(code, new MockOutputChannel('test'));
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'), createDefaultCredentialFactory(code));
             servers.push(server);
             const env1 = await server.getEnv();
             const env2 = await server.getEnv();
@@ -112,7 +114,7 @@ describe('AzdAuthServer (unit)', () => {
         // repeatedly generating certs and keys.
         let server: AzdAuthServer;
         let env: Readonly<Record<string, string>>;
-        let getSession: ReturnType<typeof mock.fn>;
+        let getToken: ReturnType<typeof mock.fn>;
 
         /** Shorthand for a valid POST to `/token` with the shared server's key. */
         function tokenPost(body: unknown) {
@@ -125,10 +127,12 @@ describe('AzdAuthServer (unit)', () => {
         }
 
         before(async () => {
-            const mockResult = createMockVsCode();
-            getSession = mockResult.authentication.getSession;
+            const { vscode: code } = createMockVsCode();
+            const credential = makeCredential();
+            // eslint-disable-next-line @typescript-eslint/unbound-method -- mock.fn is a standalone function with no `this` binding
+            getToken = credential.getToken as unknown as ReturnType<typeof mock.fn>;
 
-            server = new AzdAuthServer(mockResult.vscode, new MockOutputChannel('test'));
+            server = new AzdAuthServer(code, new MockOutputChannel('test'), () => credential);
             env = await server.getEnv();
         });
 
@@ -137,16 +141,14 @@ describe('AzdAuthServer (unit)', () => {
         });
 
         afterEach(() => {
-            getSession.mock.resetCalls();
-            getSession.mock.restore();
+            getToken.mock.resetCalls();
+            getToken.mock.restore();
         });
 
         it('should return a token on valid request', async () => {
-            getSession.mock.mockImplementation(() => Promise.resolve({
-                accessToken: 'test-access-token',
-                id: 'session-1',
-                scopes: ['https://management.azure.com/.default'],
-                account: { id: 'user-1', label: 'test@example.com' },
+            getToken.mock.mockImplementation(() => Promise.resolve({
+                token: 'test-access-token',
+                expiresOnTimestamp: Date.now() + 3600000,
             }));
 
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
@@ -158,7 +160,7 @@ describe('AzdAuthServer (unit)', () => {
         });
 
         it('should return NotSignedInError when no session is available', async () => {
-            getSession.mock.mockImplementation(() => Promise.resolve(undefined));
+            getToken.mock.mockImplementation(() => Promise.resolve(null));
 
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
@@ -210,11 +212,9 @@ describe('AzdAuthServer (unit)', () => {
         });
 
         it('should pass tenantId to the credential', async () => {
-            getSession.mock.mockImplementation(() => Promise.resolve({
-                accessToken: 'tenant-token',
-                id: 'session-2',
-                scopes: ['https://management.azure.com/.default'],
-                account: { id: 'user-1', label: 'test@example.com' },
+            getToken.mock.mockImplementation(() => Promise.resolve({
+                token: 'tenant-token',
+                expiresOnTimestamp: Date.now() + 3600000,
             }));
 
             const result = await tokenPost({
@@ -225,8 +225,9 @@ describe('AzdAuthServer (unit)', () => {
             expect(result.statusCode).to.equal(200);
             expect(result.body.token).to.equal('tenant-token');
 
-            const callArgs = getSession.mock.calls[0].arguments as [string, string[]];
-            expect(callArgs[1]).to.include('VSCODE_TENANT:my-tenant');
+            const callArgs = getToken.mock.calls[0].arguments as [string[], { tenantId?: string }];
+            expect(callArgs[0]).to.deep.equal(['https://management.azure.com/.default']);
+            expect(callArgs[1]).to.deep.equal({ tenantId: 'my-tenant' });
         });
 
         it('should reject non-POST requests', async () => {
@@ -286,7 +287,7 @@ describe('AzdAuthServer (unit)', () => {
         });
 
         it('should return GetTokenError when credential throws', async () => {
-            getSession.mock.mockImplementation(() => Promise.reject(new Error('auth provider exploded')));
+            getToken.mock.mockImplementation(() => Promise.reject(new Error('auth provider exploded')));
 
             const result = await tokenPost({ scopes: ['https://management.azure.com/.default'] });
 
