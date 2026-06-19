@@ -19,16 +19,17 @@
         "build": "pnpm -r run build",
         "package": "pnpm -r --parallel run package",
         "test": "pnpm -r run test",
-        "clean": "pnpm -r --parallel run clean"
+        "clean": "pnpm -r --parallel run clean",
+        "all": "pnpm clean && pnpm lint && pnpm build && pnpm package && pnpm test"
     },
-    "packageManager": "pnpm@11.5.2",
+    "packageManager": "pnpm@11.8.0",
     "engines": {
         "vscode": "^1.123.0"
     },
     "devDependencies": {
-        "@microsoft/vscode-azext-eng": "^1.1.0-alpha.1",
+        "@microsoft/vscode-azext-eng": "alpha",
         "@types/node": "24.x",
         "@types/vscode": "1.120.0",
-        "@typescript/native-preview": "^7.0.0-dev.20260604.1"
+        "@typescript/native-preview": "beta"
     }
 }
