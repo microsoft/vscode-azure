@@ -31,15 +31,17 @@ export interface MappedNode<TNode> {
 }
 
 /**
- * A string-keyed map of tree nodes that supports recursive subtree removal and
- * a side **tag reverse index** for tag-based subtree eviction.
+ * A string-keyed map of tree nodes that supports recursive subtree removal, a
+ * side **tag reverse index** for tag-based subtree eviction, and a structural
+ * **root set** (nodes with no parent).
  *
  * The hierarchy lives in the node objects themselves
  * ({@linkcode MappedNode.children} / {@linkcode MappedNode.parent}); the map
- * only adds O(1) key lookup, subtree removal, and a `tag -> nodes` reverse index
- * that powers {@linkcode evictByTag}. Tags are purely *semantic* (owner-supplied
- * identity tags such as `account:<id>`) -- the map derives no structural
- * ancestor tags; subtree membership is discovered by walking
+ * only adds O(1) key lookup, subtree removal, a `tag -> nodes` reverse index
+ * that powers {@linkcode evictByTag}, and a root set ({@linkcode roots}) that is
+ * kept consistent as nodes are removed. Tags are purely *semantic*
+ * (owner-supplied identity tags such as `account:<id>`) -- the map derives no
+ * structural ancestor tags; subtree membership is discovered by walking
  * {@linkcode MappedNode.children}.
  *
  * The map is deliberately ignorant of resources, providers, TTL, and change
@@ -61,6 +63,19 @@ export class NodeMap<TNode extends MappedNode<TNode>> {
     private readonly tagIndex = new Map<string, Set<TNode>>();
 
     /**
+     * The set of root nodes (those with no parent). Maintained as nodes are
+     * registered ({@linkcode registerRoot}) and removed
+     * ({@linkcode removeSubtrees} / {@linkcode evictByTag} / {@linkcode clear}).
+     *
+     * Membership is structural -- a node is a root iff it has no parent -- so
+     * owners need not keep a parallel roots collection. The set preserves
+     * registration order, but callers should treat ordering as incidental: the
+     * data layer is order-agnostic and the view layer re-derives presentation
+     * order.
+     */
+    private readonly rootNodes = new Set<TNode>();
+
+    /**
      * @param getKey - Extracts the unique string key for a node.
      */
     public constructor(
@@ -77,10 +92,29 @@ export class NodeMap<TNode extends MappedNode<TNode>> {
         this.map.set(key, node);
     }
 
-    /** Remove all entries from the map (and the tag index). */
+    /** Remove all entries from the map (and the tag index and root set). */
     public clear(): void {
         this.map.clear();
         this.tagIndex.clear();
+        this.rootNodes.clear();
+    }
+
+    /**
+     * Record an already-stored node as a root (a node with no parent). Roots are
+     * tracked structurally so owners don't keep a parallel collection; the node
+     * is dropped from the set automatically when it is removed.
+     *
+     * Idempotent: registering a node that is already a root is a no-op.
+     *
+     * @param node - The root node (normally already stored via {@linkcode set}).
+     */
+    public registerRoot(node: TNode): void {
+        this.rootNodes.add(node);
+    }
+
+    /** The set of currently-registered root nodes, in registration order. */
+    public roots(): ReadonlySet<TNode> {
+        return this.rootNodes;
     }
 
     /**
@@ -132,8 +166,7 @@ export class NodeMap<TNode extends MappedNode<TNode>> {
         }
         for (const node of nodes) {
             this.removeSubtrees(node.children);
-            this.pruneTags(node);
-            this.map.delete(this.getKey(node));
+            this.forget(node);
         }
     }
 
@@ -141,14 +174,13 @@ export class NodeMap<TNode extends MappedNode<TNode>> {
      * Hard-evict every node carrying the given tag, *plus* everything beneath
      * those nodes (their subtrees, discovered by walking
      * {@linkcode MappedNode.children}). Each evicted node is unlinked from any
-     * surviving parent's children array, has its tags pruned, and is deleted
-     * from the map.
+     * surviving parent's children array, dropped from the root set, has its tags
+     * pruned, and is deleted from the map.
      *
-     * Root unlinking (a removed node whose {@linkcode MappedNode.parent} is
-     * `undefined`) and any change-event reaction are the caller's
-     * responsibility -- the returned array carries every removed node (with its
-     * {@linkcode MappedNode.parent} pointer intact) so the caller can reconcile
-     * its own auxiliary state (roots list, event scope).
+     * Any change-event reaction is the caller's responsibility -- the returned
+     * array carries every removed node (with its {@linkcode MappedNode.parent}
+     * pointer intact) so the caller can reconcile its own auxiliary state (e.g.
+     * pending enrichment, event scope).
      *
      * Resilient to unknown tags (returns `[]`) and to a tag carried by many
      * nodes.
@@ -189,11 +221,20 @@ export class NodeMap<TNode extends MappedNode<TNode>> {
                     parent.children.splice(childIdx, 1);
                 }
             }
-            this.pruneTags(node);
-            this.map.delete(this.getKey(node));
+            this.forget(node);
             removed.push(node);
         }
         return removed;
+    }
+
+    /**
+     * Forget a node: prune its tags from the reverse index, drop it from the
+     * root set, and delete it from the key map.
+     */
+    private forget(node: TNode): void {
+        this.pruneTags(node);
+        this.rootNodes.delete(node);
+        this.map.delete(this.getKey(node));
     }
 
     /** Remove a node's tags from the reverse index and clear its `tags`. */

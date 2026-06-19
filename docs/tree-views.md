@@ -13,7 +13,7 @@ The single source of truth for tree data. Lives in `packages/utils/src/tree/Data
 - **Pagination**: Providers can return `AsyncIterable<Page<T>>` for paged results. The tree stores the iterator and pulls pages on demand via `loadMore()`/`loadAll()`
 - **Enrichment**: After children load, the tree calls each provider's `enrich()` in the background, then fires `onDidChange` when done
 - **Telemetry scoping**: Every `getChildren()`, `enrich()`, and page-load call is wrapped in `callWithTelemetryAndErrorHandling`, establishing an `IActionContext` on the async call stack via `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`) pick up this context automatically without any changes to provider or client signatures. See [Telemetry](telemetry.md).
-- **Node map**: `NodeMap` provides O(1) key-based lookup, recursive subtree removal, and a side **tag reverse index** with tag-based subtree eviction (`evictByTag`) for cache eviction. Parent/child relationships stay as object pointers on the nodes themselves (`children` / `parent`); the map layers a `tag -> nodes` index on top — purely *semantic* identity tags (e.g. `account:<id>`), with no structural ancestor tags. `DataItemTree` owns the policy on top (providers, TTL, paging, enrichment, and `onDidChange` events).
+- **Node map**: `NodeMap` provides O(1) key-based lookup, recursive subtree removal, a side **tag reverse index** with tag-based subtree eviction (`evictByTag`) for cache eviction, and a structural **root set** (`roots()`) of parent-less nodes that is kept consistent as nodes are removed. Parent/child relationships stay as object pointers on the nodes themselves (`children` / `parent`); the map layers a `tag -> nodes` index on top — purely *semantic* identity tags (e.g. `account:<id>`), with no structural ancestor tags. `DataItemTree` owns the policy on top (providers, TTL, paging, enrichment, and `onDidChange` events).
 
 Key methods:
 
@@ -72,8 +72,8 @@ A node's tags come from `getTags(resource)`, which returns identity tags for the
 
 `invalidateByTag(tag)` then:
 
-1. Delegates to `NodeMap.evictByTag(tag)`, which collects the nodes directly carrying `tag`, unions each match's subtree (walking `children`), then hard-evicts every node in that set — deleting it (which prunes its tags) and unlinking it from any surviving parent's `children` array — and returns the removed nodes.
-2. Reconciles the tree-level state for the removed nodes: unlinking any removed roots from the roots list and dropping pending enrichment.
+1. Delegates to `NodeMap.evictByTag(tag)`, which collects the nodes directly carrying `tag`, unions each match's subtree (walking `children`), then hard-evicts every node in that set — deleting it (which prunes its tags and drops it from the root set) and unlinking it from any surviving parent's `children` array — and returns the removed nodes.
+2. Reconciles the tree-level state for the removed nodes: dropping pending enrichment (removed roots are already dropped from the `NodeMap` root set in step 1).
 3. Fires a single coalesced `onDidChange`: the one surviving parent when the eviction is confined to a single branch, otherwise `undefined` (a root-level or cross-branch eviction → full refresh).
 
 This gives the caller a spectrum of reach from one primitive:

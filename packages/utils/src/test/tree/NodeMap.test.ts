@@ -244,5 +244,81 @@ describe('NodeMap (unit)', () => {
 
             expect(map.nodesForTag('x')).to.be.undefined;
         });
+
+        it('should reset the root set', () => {
+            const map = new NodeMap<TestNode>(n => n.id);
+            const node = makeNode('a');
+            map.set('a', node);
+            map.registerRoot(node);
+
+            map.clear();
+
+            expect([...map.roots()]).to.deep.equal([]);
+        });
+    });
+
+    describe('roots', () => {
+        it('should track registered roots in registration order', () => {
+            const map = new NodeMap<TestNode>(n => n.id);
+            const a = makeNode('a');
+            const b = makeNode('b');
+            map.set('a', a);
+            map.set('b', b);
+            map.registerRoot(a);
+            map.registerRoot(b);
+
+            expect([...map.roots()]).to.deep.equal([a, b]);
+        });
+
+        it('should be idempotent when a node is registered twice', () => {
+            const map = new NodeMap<TestNode>(n => n.id);
+            const a = makeNode('a');
+            map.set('a', a);
+            map.registerRoot(a);
+            map.registerRoot(a);
+
+            expect([...map.roots()]).to.deep.equal([a]);
+        });
+
+        it('should drop a root removed via removeSubtrees', () => {
+            const map = new NodeMap<TestNode>(n => n.id);
+            const a = makeNode('a');
+            const b = makeNode('b');
+            map.set('a', a);
+            map.set('b', b);
+            map.registerRoot(a);
+            map.registerRoot(b);
+
+            map.removeSubtrees([a]);
+
+            expect([...map.roots()]).to.deep.equal([b]);
+        });
+
+        it('should leave roots untouched when removing a non-root subtree', () => {
+            const map = new NodeMap<TestNode>(n => n.id);
+            const child = makeNode('c');
+            const root = makeNode('r', [child]);
+            map.set('r', root);
+            map.set('c', child);
+            map.registerRoot(root);
+
+            map.removeSubtrees([child]);
+
+            expect([...map.roots()]).to.deep.equal([root]);
+        });
+
+        it('should drop roots evicted via evictByTag', () => {
+            const map = new NodeMap<TestNode>(n => n.id);
+            const child = makeNode('c');
+            const root = makeNode('r', [child]);
+            map.set('r', root);
+            map.set('c', child);
+            map.registerRoot(root);
+            map.registerTags(root, ['account:r']);
+
+            map.evictByTag('account:r');
+
+            expect([...map.roots()]).to.deep.equal([]);
+        });
     });
 });
