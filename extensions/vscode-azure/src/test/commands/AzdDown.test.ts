@@ -3,25 +3,26 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createActionContext } from '@microsoft/vscode-azure-utils';
+import { createMockDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createActionContext, Everything } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../azd/TempDirManager';
 import { AzdDown } from '../../commands/AzdDown';
-import type { IAzureViewDataTree } from '../../services';
 import { createMockAzdService } from '../azd/MockAzdService';
 
 describe('AzdDown (unit)', () => {
+    const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
+
     function createCommand() {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const output = new MockOutputChannel('test');
 
         const azd = createMockAzdService();
 
-        const invalidateAll = mock.fn();
-        const dataTree = { invalidateAll } as unknown as IAzureViewDataTree;
+        const dataTree = createMockDataItemTree([sub]);
 
         const tempManager = new TempDirManager(ctx);
 
@@ -34,7 +35,9 @@ describe('AzdDown (unit)', () => {
             tempManager,
         );
 
-        return { cmd, mockResult, azd, invalidateAll };
+        const invalidate = (dataTree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate;
+
+        return { cmd, mockResult, azd, dataTree, invalidate };
     }
 
     it('should be constructable with required dependencies', () => {
@@ -55,7 +58,7 @@ describe('AzdDown (unit)', () => {
     });
 
     it('should run azd down against the resolved folder when confirmed', async () => {
-        const { cmd, mockResult, azd, invalidateAll } = createCommand();
+        const { cmd, mockResult, azd, invalidate } = createCommand();
         mockResult.messageResponses.push('Delete');
 
         await cmd.execute(MockUri.file('/workspace/azure.yaml'));
@@ -65,16 +68,17 @@ describe('AzdDown (unit)', () => {
         expect(cwd.path).to.equal('/workspace');
 
         // The tree should be refreshed after the teardown
-        expect(invalidateAll.mock.callCount()).to.equal(1);
+        expect(invalidate.mock.callCount()).to.equal(1);
+        expect(invalidate.mock.calls[0].arguments[0]).to.equal(Everything);
     });
 
     it('should not run azd down when the user cancels confirmation', async () => {
-        const { cmd, azd, invalidateAll } = createCommand();
+        const { cmd, azd, invalidate } = createCommand();
         // No queued message response -> showWarningMessage resolves undefined (dismissed)
 
         await cmd.execute(MockUri.file('/workspace/azure.yaml'));
 
         expect(azd.down.mock.callCount()).to.equal(0);
-        expect(invalidateAll.mock.callCount()).to.equal(0);
+        expect(invalidate.mock.callCount()).to.equal(0);
     });
 });
