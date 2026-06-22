@@ -42,12 +42,12 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdService) private readonly azd: IAzdService,
     ) {
-        const invalidateAll = (reason: string) => {
+        const invalidateRoots = (reason: string) => {
             this.executor.output.debug(`[data] azd workspace: ${reason}`);
             this.changeEmitter.fire({ target: Roots });
         };
 
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));
+        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateRoots('folders changed'); }));
 
         // When passed a plain string glob (not a RelativePattern), VS Code
         // filters events from its existing recursive workspace watcher rather
@@ -55,9 +55,9 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
         const watcher = code.workspace.createFileSystemWatcher(AzureYamlGlobPattern);
         this.disposables.push(
             watcher,
-            watcher.onDidCreate(() => { invalidateAll('azure.yaml created'); }),
-            watcher.onDidChange(() => { invalidateAll('azure.yaml changed'); }),
-            watcher.onDidDelete(() => { invalidateAll('azure.yaml deleted'); }),
+            watcher.onDidCreate(() => { invalidateRoots('azure.yaml created'); }),
+            watcher.onDidChange(() => { invalidateRoots('azure.yaml changed'); }),
+            watcher.onDidDelete(() => { invalidateRoots('azure.yaml deleted'); }),
         );
     }
 

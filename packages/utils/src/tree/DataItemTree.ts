@@ -230,6 +230,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         // Find the provider that handles this resource
         const provider = this.findProvider(resource);
         if (!provider) {
+            this.wipeSubtree(node);
             node.children = [];
             node.staleAt = this.computeStaleAt(this.ttl);
             this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=0 provider=<none>`);

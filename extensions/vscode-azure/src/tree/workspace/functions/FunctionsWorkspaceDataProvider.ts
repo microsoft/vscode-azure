@@ -41,19 +41,19 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
     ) {
-        const invalidateAll = (reason: string) => {
+        const invalidateRoots = (reason: string) => {
             this.executor.output.debug(`[data] functions workspace: ${reason}`);
             this.changeEmitter.fire({ target: Roots });
         };
 
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));
+        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateRoots('folders changed'); }));
 
         const watcher = code.workspace.createFileSystemWatcher(FunctionsHostFileName);
         this.disposables.push(
             watcher,
-            watcher.onDidCreate(() => { invalidateAll('host.json created'); }),
-            watcher.onDidChange(() => { invalidateAll('host.json changed'); }),
-            watcher.onDidDelete(() => { invalidateAll('host.json deleted'); }),
+            watcher.onDidCreate(() => { invalidateRoots('host.json created'); }),
+            watcher.onDidChange(() => { invalidateRoots('host.json changed'); }),
+            watcher.onDidDelete(() => { invalidateRoots('host.json deleted'); }),
         );
     }
 

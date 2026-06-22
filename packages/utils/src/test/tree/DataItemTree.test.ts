@@ -285,6 +285,40 @@ describe('DataItemTree (unit)', () => {
             const tree = createTree();
             expect(tree.hasMore()).to.be.false;
         });
+
+        it('should wipe cached children and pagination state when no provider matches on refresh', async () => {
+            const tree = createTree(0);
+            let canHandleRoot = true;
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => canHandleRoot && (r as TestResource).id === 'root',
+                getChildren: () => {
+                    const iter = [
+                        { items: [{ id: 'p1' }], hasMore: true },
+                        { items: [{ id: 'p2' }], hasMore: false },
+                    ][Symbol.iterator]();
+                    return {
+                        [Symbol.asyncIterator]() {
+                            return { next: () => Promise.resolve(iter.next()) };
+                        },
+                    };
+                },
+            });
+
+            await tree.getChildren();
+            const firstPage = await tree.getChildren({ id: 'root' });
+            expect(firstPage.map(c => c.id)).to.deep.equal(['p1']);
+            expect(tree.get('p1')).to.not.be.undefined;
+            expect(tree.hasMore({ id: 'root' })).to.be.true;
+
+            canHandleRoot = false;
+            const refreshed = await tree.getChildren({ id: 'root' });
+
+            expect(refreshed).to.deep.equal([]);
+            expect(tree.get('p1')).to.be.undefined;
+            expect(tree.hasMore({ id: 'root' })).to.be.false;
+        });
     });
 
     describe('enrichment', () => {
