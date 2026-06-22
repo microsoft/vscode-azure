@@ -345,8 +345,8 @@ export class AzdService implements IAzdService {
                 command: AzdCommand,
                 args: composeArgs(
                     withArg('down'),
-                    withFlagArg('--force', true),
-                    withFlagArg('--purge', true),
+                    withArg('--force'),
+                    withArg('--purge'),
                 )(),
                 cwd,
                 env: authEnv,
