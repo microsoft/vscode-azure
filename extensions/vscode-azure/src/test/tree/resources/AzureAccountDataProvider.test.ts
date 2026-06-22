@@ -5,7 +5,7 @@
 
 import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
-import type { ChildResult, DataProviderChangeEvent, Page } from '@microsoft/vscode-azure-utils';
+import { Everything, Roots, type ChildResult, type DataProviderChangeEvent, type Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -125,12 +125,10 @@ describe('AzureAccountDataProvider (unit)', () => {
             await flushMicrotasks();
 
             // First event (no prior known set), so the reconcile fires. A
-            // reconciling root re-list (resource undefined, includeChildren
-            // false) preserves tenant / subscription subtrees under surviving
-            // accounts.
+            // reconciling root re-list (target Roots) preserves tenant /
+            // subscription subtrees under surviving accounts.
             expect(fired).to.equal(1);
-            expect(event?.resource).to.be.undefined;
-            expect(event?.includeChildren).to.be.false;
+            expect(event?.target).to.equal(Roots);
         });
 
         it('should not fire on authentication session changes for unrelated providers', () => {
@@ -181,8 +179,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             await flushMicrotasks();
 
             expect(fired).to.equal(1);
-            expect(event?.resource).to.be.undefined;
-            expect(event?.includeChildren).to.be.false;
+            expect(event?.target).to.equal(Roots);
         });
 
         it('should fire a reconciling re-list when an account is removed (sign-out)', async () => {
@@ -353,8 +350,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(fired).to.equal(1);
             // The environment itself changed, so every listing fetched against
             // the old endpoint is invalid -- wipe everything.
-            expect(event?.resource).to.be.undefined;
-            expect(event?.includeChildren).to.be.true;
+            expect(event?.target).to.equal(Everything);
         });
     });
 

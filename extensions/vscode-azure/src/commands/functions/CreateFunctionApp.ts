@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, ICodeContext, IOutputChannel, Wizard, type ExecuteStep } from '@microsoft/vscode-azure-utils';
+import { bySubscription, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import { IActionContext, ICodeContext, IOutputChannel, Wizard, type ExecuteStep, Everything } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzdService } from '../../azd/AzdService';
 import { ITempDirManager } from '../../azd/TempDirManager';
@@ -90,8 +90,9 @@ export class CreateFunctionApp implements ManagedCommand {
             executeSteps,
         );
 
-        await wizard.run();
+        const context = await wizard.run();
 
-        this.dataTree.invalidateAll();
+        const subscriptionId = context.subscription?.subscriptionId ?? context.hydratedSubscriptionId;
+        this.dataTree.invalidate(subscriptionId ? bySubscription(subscriptionId) : Everything);
     }
 }

@@ -19,6 +19,7 @@ export * from './tree/DataProvider';
 export * from './tree/pick/GenericPickStep';
 export * from './tree/pick/PickContext';
 export * from './tree/pick/RecursivePickStep';
+export * from './tree/Selector';
 export * from './tree/ViewItemTree';
 export * from './tree/ViewProvider';
 export * from './types/AsWritable';

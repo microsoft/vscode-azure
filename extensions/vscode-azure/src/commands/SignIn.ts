@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getAuthProviderId, getConfiguredAzureEnv } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, Roots } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../services';
 import type { ManagedCommand } from './ManagedCommand';
@@ -34,6 +34,6 @@ export class SignIn implements ManagedCommand {
         // `createIfNone: true` resolves to a session or rejects if the user
         // cancels, so a returned session always means a successful sign-in.
         await this.ctx.code.authentication.getSession(getAuthProviderId(environment), scopes, { createIfNone: true });
-        this.cache.invalidateAll();
+        this.cache.invalidate(Roots);
     }
 }

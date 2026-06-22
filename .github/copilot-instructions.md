@@ -56,7 +56,7 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 ### Data layer (`DataItemTree` + `DataProvider`)
 
 * `DataItemTree<T>` is the single source of truth for data. It lazily loads children via registered `DataProvider<T>` implementations and caches them with a configurable TTL.
-* Children are fetched on first access and re-fetched once stale (`staleAt` timestamp). Callers can force a refresh with `invalidate(resource)` or `invalidateAll()`.
+* Children are fetched on first access and re-fetched once stale (`staleAt` timestamp). Callers force a refresh through one of two methods that share a `Target<T>` surface: `invalidate(target)` (mark matched nodes stale and re-fetch on next access) and `remove(target)` (evict matched nodes and splice them out). A target may be a bare resource/key/array (matched by key, subtree scope), `selfOnly(...)` / `subtreeOf(...)`, a `Selector<T>` verdict predicate (e.g. `bySubscription(id)`), or the `Roots` / `Everything` sentinels. Prefer the narrowest target that's correct (`Roots` or a selector over `Everything`). See `docs/tree-views.md` (Targets & selectors).
 * **Enrichment** -- after children are loaded, `DataItemTree` calls each provider's optional `enrich(resource)` method in the background. Enrichment mutates the resource in-place (keeping the same object reference) and fires `onDidChange` when done. Callers that need the enriched data can `await cache.whenEnriched(resource)`.
 * A `NodeMap` provides O(1) key-based lookup and recursive subtree removal for cache eviction.
 

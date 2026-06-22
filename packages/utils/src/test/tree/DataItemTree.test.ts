@@ -9,6 +9,7 @@ import { delay } from '../../base/delay';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider, DataProviderChangeEvent } from '../../tree/DataProvider';
+import { Everything, Roots, selfOnly, subtreeOf } from '../../tree/Selector';
 import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
@@ -192,7 +193,7 @@ describe('DataItemTree (unit)', () => {
             });
 
             await tree.getChildren();
-            tree.invalidateAll();
+            tree.invalidate(Everything);
             await tree.getChildren();
 
             expect(fn.mock.callCount()).to.equal(2);
@@ -284,6 +285,40 @@ describe('DataItemTree (unit)', () => {
             const tree = createTree();
             expect(tree.hasMore()).to.be.false;
         });
+
+        it('should wipe cached children and pagination state when no provider matches on refresh', async () => {
+            const tree = createTree(0);
+            let canHandleRoot = true;
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => canHandleRoot && (r as TestResource).id === 'root',
+                getChildren: () => {
+                    const iter = [
+                        { items: [{ id: 'p1' }], hasMore: true },
+                        { items: [{ id: 'p2' }], hasMore: false },
+                    ][Symbol.iterator]();
+                    return {
+                        [Symbol.asyncIterator]() {
+                            return { next: () => Promise.resolve(iter.next()) };
+                        },
+                    };
+                },
+            });
+
+            await tree.getChildren();
+            const firstPage = await tree.getChildren({ id: 'root' });
+            expect(firstPage.map(c => c.id)).to.deep.equal(['p1']);
+            expect(tree.get('p1')).to.not.be.undefined;
+            expect(tree.hasMore({ id: 'root' })).to.be.true;
+
+            canHandleRoot = false;
+            const refreshed = await tree.getChildren({ id: 'root' });
+
+            expect(refreshed).to.deep.equal([]);
+            expect(tree.get('p1')).to.be.undefined;
+            expect(tree.hasMore({ id: 'root' })).to.be.false;
+        });
     });
 
     describe('enrichment', () => {
@@ -336,7 +371,7 @@ describe('DataItemTree (unit)', () => {
             expect(fn.mock.callCount()).to.equal(2);
         });
 
-        it('should not re-fetch when includeChildren is false', async () => {
+        it('should not re-fetch when invalidating self only', async () => {
             const tree = createTree();
             const fn = mock.fn(() => [{ id: 'child' }]);
             tree.registerProvider(createRootProvider([{ id: 'root' }]));
@@ -345,7 +380,7 @@ describe('DataItemTree (unit)', () => {
             await tree.getChildren();
             await tree.getChildren({ id: 'root' });
 
-            tree.invalidate({ id: 'root' }, false);
+            tree.invalidate(selfOnly({ id: 'root' }));
             await tree.getChildren({ id: 'root' });
 
             // Children are still cached, so provider is called only once
@@ -364,33 +399,227 @@ describe('DataItemTree (unit)', () => {
             expect(onChange.mock.callCount()).to.equal(1);
         });
 
-        it('should clear all caches on invalidateAll', async () => {
+        it('should clear all caches on invalidate(Everything)', async () => {
             const tree = createTree();
             const fn = mock.fn(() => [{ id: 'root' }]);
             tree.registerProvider({ isRoot: true, canHandle: canHandleNone, getChildren: fn });
 
             await tree.getChildren();
-            tree.invalidateAll();
+            tree.invalidate(Everything);
             await tree.getChildren();
 
             expect(fn.mock.callCount()).to.equal(2);
         });
 
-        it('should fire onDidChange with undefined on invalidateAll', () => {
+        it('should fire onDidChange with undefined on invalidate(Everything)', () => {
             const tree = createTree();
             const onChange = mock.fn();
             tree.onDidChange(onChange);
 
-            tree.invalidateAll();
+            tree.invalidate(Everything);
             expect(onChange.mock.callCount()).to.equal(1);
             expect(onChange.mock.calls[0].arguments[0]).to.be.undefined;
+        });
+    });
+
+    describe('target input forms', () => {
+        it('should invalidate a subtree when given a bare string key', async () => {
+            const tree = createTree();
+            const fn = mock.fn(() => [{ id: 'child' }]);
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider({ isRoot: false, canHandle: canHandleAll, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            tree.invalidate('root');
+            await tree.getChildren({ id: 'root' });
+
+            // Subtree was wiped, so children are re-fetched, and the loaded node fires.
+            expect(fn.mock.callCount()).to.equal(2);
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('root');
+        });
+
+        it('should invalidate every entry when given an array of resources/keys', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }, { id: 'b' }, { id: 'c' }]));
+            tree.registerProvider(createBranchProvider(new Map([
+                ['a', [{ id: 'a-child' }]],
+                ['b', [{ id: 'b-child' }]],
+            ])));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'a' });
+            await tree.getChildren({ id: 'b' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            // Mixed array: a resource object and a bare key.
+            tree.invalidate([{ id: 'a' }, 'b']);
+
+            expect(tree.get('a-child')).to.be.undefined;
+            expect(tree.get('b-child')).to.be.undefined;
+            expect(onChange.mock.callCount()).to.equal(2);
+            expect((onChange.mock.calls.map(c => (c.arguments[0] as TestResource).id))).to.have.members(['a', 'b']);
+        });
+
+        it('should wipe the subtree for an explicit subtreeOf descriptor', async () => {
+            const tree = createTree();
+            const fn = mock.fn(() => [{ id: 'child' }]);
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider({ isRoot: false, canHandle: canHandleAll, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+
+            tree.invalidate(subtreeOf({ id: 'root' }));
+            await tree.getChildren({ id: 'root' });
+
+            expect(fn.mock.callCount()).to.equal(2);
+        });
+
+        it('should remove nodes addressed by a bare string key', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+            tree.registerProvider(createBranchProvider(new Map([
+                ['parent', [{ id: 'keep' }, { id: 'drop' }]],
+            ])));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+
+            tree.remove('drop');
+
+            expect(tree.get('drop')).to.be.undefined;
+            expect(tree.get('keep')).to.not.be.undefined;
+        });
+
+        it('should remove nodes addressed by an array', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+            tree.registerProvider(createBranchProvider(new Map([
+                ['parent', [{ id: 'keep' }, { id: 'drop-1' }, { id: 'drop-2' }]],
+            ])));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+
+            tree.remove([{ id: 'drop-1' }, 'drop-2']);
+
+            expect(tree.get('drop-1')).to.be.undefined;
+            expect(tree.get('drop-2')).to.be.undefined;
+            expect(tree.get('keep')).to.not.be.undefined;
+        });
+
+        it('should throw when remove is given the Everything or Roots sentinel', () => {
+            const tree = createTree();
+            expect(() => { tree.remove(Everything); }).to.throw();
+            expect(() => { tree.remove(Roots); }).to.throw();
+        });
+    });
+
+    describe('selector-based targeting', () => {
+        it('should wipe the subtree of every node matched by a subtree selector and fire at the apex', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }, { id: 'b' }]));
+            tree.registerProvider(createBranchProvider(new Map([
+                ['a', [{ id: 'a-child' }]],
+                ['b', [{ id: 'b-child' }]],
+            ])));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'a' });
+            await tree.getChildren({ id: 'b' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            tree.invalidate((r: TestResource) => r.id === 'a' ? 'subtree' : undefined);
+
+            // Only 'a' subtree is evicted; 'b' is untouched.
+            expect(tree.get('a-child')).to.be.undefined;
+            expect(tree.get('b-child')).to.not.be.undefined;
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('a');
+        });
+
+        it('should stop descending past a subtree match (no double-fire for nested matches)', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            tree.registerProvider(createBranchProvider(new Map([
+                ['a', [{ id: 'a-child' }]],
+            ])));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'a' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            // Both 'a' and its descendant would match, but the apex absorbs the subtree.
+            tree.invalidate((r: TestResource) => r.id.startsWith('a') ? 'subtree' : undefined);
+
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('a');
+        });
+
+        it('should keep children cached for a self selector', async () => {
+            const tree = createTree();
+            const fn = mock.fn(() => [{ id: 'child' }]);
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            tree.registerProvider({ isRoot: false, canHandle: canHandleAll, getChildren: fn });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'root' });
+
+            tree.invalidate((r: TestResource) => r.id === 'root' ? 'self' : undefined);
+            await tree.getChildren({ id: 'root' });
+
+            // 'self' preserves cached children, so the provider is not called again.
+            expect(fn.mock.callCount()).to.equal(1);
+        });
+
+        it('should remove every node matched by a selector', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+            tree.registerProvider(createBranchProvider(new Map([
+                ['parent', [{ id: 'keep' }, { id: 'drop-1' }, { id: 'drop-2' }]],
+            ])));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+
+            tree.remove((r: TestResource) => r.id.startsWith('drop') ? 'subtree' : undefined);
+
+            expect(tree.get('drop-1')).to.be.undefined;
+            expect(tree.get('drop-2')).to.be.undefined;
+            expect(tree.get('keep')).to.not.be.undefined;
+        });
+
+        it('should be a no-op when a selector matches nothing', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            await tree.getChildren();
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            tree.invalidate((_r: TestResource) => undefined);
+            tree.remove((_r: TestResource) => undefined);
+
+            expect(onChange.mock.callCount()).to.equal(0);
         });
     });
 
     describe('provider change events', () => {
         it('should invalidate when provider fires onDidChange for a resource', async () => {
             const tree = createTree();
-            let fireChange!: (event: { resource: TestResource; includeChildren: boolean }) => void;
+            let fireChange!: (event: DataProviderChangeEvent<TestResource>) => void;
             const provider: DataProvider<TestResource> = {
                 isRoot: true,
                 canHandle: canHandleAll,
@@ -406,14 +635,14 @@ describe('DataItemTree (unit)', () => {
             tree.onDidChange(onChange);
 
             await tree.getChildren();
-            fireChange({ resource: { id: 'a' }, includeChildren: true });
+            fireChange({ target: { id: 'a' } });
 
             expect(onChange.mock.callCount()).to.be.greaterThan(0);
         });
 
-        it('should invalidateAll when provider fires onDidChange with undefined resource', async () => {
+        it('should invalidate(Everything) when provider fires onDidChange with undefined resource', async () => {
             const tree = createTree();
-            let fireChange!: (event: { resource: undefined; includeChildren: boolean }) => void;
+            let fireChange!: (event: DataProviderChangeEvent<TestResource>) => void;
             const provider: DataProvider<TestResource> = {
                 isRoot: true,
                 canHandle: canHandleAll,
@@ -426,14 +655,14 @@ describe('DataItemTree (unit)', () => {
             tree.registerProvider(provider);
             await tree.getChildren();
 
-            fireChange({ resource: undefined, includeChildren: true });
+            fireChange({ target: Everything });
 
-            // After invalidateAll, get('a') should be undefined
+            // After invalidate(Everything), get('a') should be undefined
             expect(tree.get('a')).to.be.undefined;
         });
     });
 
-    describe('removeItem', () => {
+    describe('remove', () => {
         it('should remove a branch child without evicting siblings', async () => {
             const tree = createTree();
             tree.registerProvider(createRootProvider([{ id: 'parent' }]));
@@ -444,7 +673,7 @@ describe('DataItemTree (unit)', () => {
             await tree.getChildren();
             await tree.getChildren({ id: 'parent' });
 
-            tree.removeItem({ id: 'b' });
+            tree.remove({ id: 'b' });
 
             expect(tree.get('b')).to.be.undefined;
             expect(tree.get('a')).to.not.be.undefined;
@@ -464,7 +693,7 @@ describe('DataItemTree (unit)', () => {
             const onChange = mock.fn();
             tree.onDidChange(onChange);
 
-            tree.removeItem({ id: 'child' });
+            tree.remove({ id: 'child' });
 
             expect(onChange.mock.callCount()).to.equal(1);
             expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('parent');
@@ -486,7 +715,7 @@ describe('DataItemTree (unit)', () => {
 
             expect(tree.get('grandchild')).to.not.be.undefined;
 
-            tree.removeItem({ id: 'child' });
+            tree.remove({ id: 'child' });
 
             expect(tree.get('child')).to.be.undefined;
             expect(tree.get('grandchild')).to.be.undefined;
@@ -500,7 +729,7 @@ describe('DataItemTree (unit)', () => {
             const onChange = mock.fn();
             tree.onDidChange(onChange);
 
-            tree.removeItem({ id: 'r1' });
+            tree.remove({ id: 'r1' });
 
             expect(tree.get('r1')).to.be.undefined;
             expect(tree.get('r2')).to.not.be.undefined;
@@ -528,7 +757,7 @@ describe('DataItemTree (unit)', () => {
             await tree.getChildren({ id: 'keep' });
             expect(siblingFetch.mock.callCount()).to.equal(1);
 
-            tree.removeItem({ id: 'remove' });
+            tree.remove({ id: 'remove' });
 
             await tree.getChildren({ id: 'keep' });
             expect(siblingFetch.mock.callCount()).to.equal(1);
@@ -540,7 +769,7 @@ describe('DataItemTree (unit)', () => {
             const onChange = mock.fn();
             tree.onDidChange(onChange);
 
-            tree.removeItem({ id: 'nonexistent' });
+            tree.remove({ id: 'nonexistent' });
 
             expect(onChange.mock.callCount()).to.equal(0);
         });
@@ -555,7 +784,7 @@ describe('DataItemTree (unit)', () => {
             await tree.getChildren();
             await tree.getChildren({ id: 'parent' });
 
-            tree.removeItem({ id: 'b' });
+            tree.remove({ id: 'b' });
 
             const children = await tree.getChildren({ id: 'parent' });
             expect(children.map(c => c.id)).to.deep.equal(['a', 'c']);
@@ -576,7 +805,7 @@ describe('DataItemTree (unit)', () => {
             await tree.getChildren();
 
             // Remove the item while enrichment is still in flight
-            tree.removeItem({ id: 'item' });
+            tree.remove({ id: 'item' });
 
             const onChange = mock.fn();
             tree.onDidChange(onChange);
@@ -630,7 +859,7 @@ describe('DataItemTree (unit)', () => {
             const loadPromise = tree.loadMore({ id: 'parent' });
 
             // Remove the parent while page load is in flight
-            tree.removeItem({ id: 'parent' });
+            tree.remove({ id: 'parent' });
 
             // Resolve the page -- should be discarded
             resolveNextPage();
@@ -638,13 +867,71 @@ describe('DataItemTree (unit)', () => {
 
             expect(tree.get('orphan')).to.be.undefined;
         });
+
+        it('should discard an in-flight page when the subtree is invalidated mid-load (generation guard)', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+
+            const { promise: pagePromise, resolve: resolvePage } = Promise.withResolvers<IteratorResult<Page<TestResource>>>();
+            const resolveNextPage = () => {
+                resolvePage({
+                    done: false,
+                    value: { items: [{ id: 'orphan' }], hasMore: false },
+                });
+            };
+
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'parent',
+                getChildren: () => ({
+                    [Symbol.asyncIterator]() {
+                        let firstPage = true;
+                        return {
+                            next() {
+                                if (firstPage) {
+                                    firstPage = false;
+                                    return Promise.resolve<IteratorResult<Page<TestResource>>>({
+                                        done: false,
+                                        value: { items: [{ id: 'p1' }], hasMore: true },
+                                    });
+                                }
+                                return pagePromise;
+                            },
+                        };
+                    },
+                }),
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+            expect(tree.hasMore({ id: 'parent' })).to.be.true;
+
+            // Start loading the next page (awaits the deferred promise)
+            const loadPromise = tree.loadMore({ id: 'parent' });
+
+            // Invalidate the parent's subtree while the page load is in flight.
+            // Unlike remove(), this keeps the parent node (and its map entry), so
+            // only the generation bump -- not the node-identity check -- can catch
+            // the stale page.
+            tree.invalidate(subtreeOf<TestResource>({ id: 'parent' }));
+
+            // Resolve the page -- should be discarded because the generation changed.
+            resolveNextPage();
+            await loadPromise;
+
+            // The parent node survives, but the stale page's child must not have
+            // been re-inserted into the cache.
+            expect(tree.get('parent')).to.not.be.undefined;
+            expect(tree.get('orphan')).to.be.undefined;
+            expect(tree.get('p1')).to.be.undefined;
+        });
     });
 
     describe('root reconciliation', () => {
         const handleIds = (...ids: string[]) =>
             (r: unknown): r is TestResource => ids.includes((r as TestResource).id);
 
-        it('should reconcile roots on invalidateRoot: preserve survivors, evict removed, fetch new lazily', async () => {
+        it('should reconcile roots on invalidate(Roots): preserve survivors, evict removed, fetch new lazily', async () => {
             const aChildren = mock.fn(() => [{ id: 'a-child' }]);
             const bChildren = mock.fn(() => [{ id: 'b-child' }]);
             const cChildren = mock.fn(() => [{ id: 'c-child' }]);
@@ -673,7 +960,7 @@ describe('DataItemTree (unit)', () => {
 
             const onChange = mock.fn();
             tree.onDidChange(onChange);
-            tree.invalidateRoot();
+            tree.invalidate(Roots);
             expect(onChange.mock.callCount()).to.equal(1);
             expect(onChange.mock.calls[0].arguments[0]).to.be.undefined;
 
@@ -693,7 +980,7 @@ describe('DataItemTree (unit)', () => {
             expect(cChildren.mock.callCount()).to.equal(1);
         });
 
-        it('should reconcile (not wipe) on a root change event with includeChildren false', async () => {
+        it('should reconcile (not wipe) on a root change event targeting Roots', async () => {
             let fireChange!: (event: DataProviderChangeEvent<TestResource>) => void;
             let rootList: TestResource[] = [{ id: 'a' }, { id: 'b' }];
             const tree = createTree();
@@ -710,7 +997,7 @@ describe('DataItemTree (unit)', () => {
             expect(aChildren.mock.callCount()).to.equal(1);
 
             rootList = [{ id: 'a' }];
-            fireChange({ resource: undefined, includeChildren: false });
+            fireChange({ target: Roots });
 
             const roots = await tree.getChildren();
             expect(roots.map(r => r.id)).to.deep.equal(['a']);
@@ -753,7 +1040,7 @@ describe('DataItemTree (unit)', () => {
 
             // A session change removes the other account but keeps 'account'.
             rootList = [{ id: 'account' }];
-            tree.invalidateRoot();
+            tree.invalidate(Roots);
 
             const roots = await tree.getChildren();
             expect(roots.map(r => r.id)).to.deep.equal(['account']);

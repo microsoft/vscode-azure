@@ -7,6 +7,7 @@ import { expect } from 'chai';
 import { mock } from 'node:test';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProviderChangeEvent } from '../../tree/DataProvider';
+import { Everything } from '../../tree/Selector';
 import { ViewItemTree } from '../../tree/ViewItemTree';
 import type { ViewProvider } from '../../tree/ViewProvider';
 import { EventEmitter } from '../../vscode/EventEmitter';
@@ -244,7 +245,7 @@ describe('ViewItemTree (unit)', () => {
             const onChange = mock.fn();
             viewTree.onDidChangeTreeData(onChange);
 
-            dataTree.invalidateAll();
+            dataTree.invalidate(Everything);
 
             // Should fire with undefined (full refresh)
             const firedUndefined = onChange.mock.calls.some(
@@ -272,7 +273,7 @@ describe('ViewItemTree (unit)', () => {
             viewTree.onDidChangeTreeData(onChange);
 
             // Fire provider change
-            changeEmitter.fire({ resource: undefined, includeChildren: true });
+            changeEmitter.fire({ target: Everything });
 
             // Should fire a full refresh (undefined)
             const firedUndefined = onChange.mock.calls.some(
@@ -447,7 +448,7 @@ describe('ViewItemTree (unit)', () => {
             viewTree.dispose();
 
             // After dispose, data tree changes should not propagate
-            dataTree.invalidateAll();
+            dataTree.invalidate(Everything);
             expect(onChange.mock.callCount()).to.equal(0);
         });
     });

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode, fileExists,
+    EventEmitter, IActionExecutor, IVsCode, Roots, fileExists,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -29,10 +29,10 @@ import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServic
  * changes so the tree re-discovers projects.
  */
 @injectable()
-export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | AzdServiceNode>, Disposable {
+export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
     public readonly isRoot = true;
 
-    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<AzdProjectNode | AzdServiceNode>>();
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
 
     public readonly onDidChange = this.changeEmitter.event;
@@ -42,12 +42,12 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdService) private readonly azd: IAzdService,
     ) {
-        const invalidateAll = (reason: string) => {
+        const invalidateRoots = (reason: string) => {
             this.executor.output.debug(`[data] azd workspace: ${reason}`);
-            this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            this.changeEmitter.fire({ target: Roots });
         };
 
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));
+        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateRoots('folders changed'); }));
 
         // When passed a plain string glob (not a RelativePattern), VS Code
         // filters events from its existing recursive workspace watcher rather
@@ -55,9 +55,9 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
         const watcher = code.workspace.createFileSystemWatcher(AzureYamlGlobPattern);
         this.disposables.push(
             watcher,
-            watcher.onDidCreate(() => { invalidateAll('azure.yaml created'); }),
-            watcher.onDidChange(() => { invalidateAll('azure.yaml changed'); }),
-            watcher.onDidDelete(() => { invalidateAll('azure.yaml deleted'); }),
+            watcher.onDidCreate(() => { invalidateRoots('azure.yaml created'); }),
+            watcher.onDidChange(() => { invalidateRoots('azure.yaml changed'); }),
+            watcher.onDidDelete(() => { invalidateRoots('azure.yaml deleted'); }),
         );
     }
 

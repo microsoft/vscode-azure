@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode,
+    EventEmitter, IActionExecutor, IVsCode, Roots,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -29,10 +29,10 @@ const FunctionsHostFileName = 'host.json';
  * changes so the tree re-discovers projects.
  */
 @injectable()
-export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsProjectNode>, Disposable {
+export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
     public readonly isRoot = true;
 
-    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<FunctionsProjectNode>>();
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
 
     public readonly onDidChange = this.changeEmitter.event;
@@ -41,19 +41,19 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
     ) {
-        const invalidateAll = (reason: string) => {
+        const invalidateRoots = (reason: string) => {
             this.executor.output.debug(`[data] functions workspace: ${reason}`);
-            this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            this.changeEmitter.fire({ target: Roots });
         };
 
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));
+        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateRoots('folders changed'); }));
 
         const watcher = code.workspace.createFileSystemWatcher(FunctionsHostFileName);
         this.disposables.push(
             watcher,
-            watcher.onDidCreate(() => { invalidateAll('host.json created'); }),
-            watcher.onDidChange(() => { invalidateAll('host.json changed'); }),
-            watcher.onDidDelete(() => { invalidateAll('host.json deleted'); }),
+            watcher.onDidCreate(() => { invalidateRoots('host.json created'); }),
+            watcher.onDidChange(() => { invalidateRoots('host.json changed'); }),
+            watcher.onDidDelete(() => { invalidateRoots('host.json deleted'); }),
         );
     }
 

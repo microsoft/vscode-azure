@@ -8,7 +8,8 @@ import { mock } from 'node:test';
 import type { ActionExecutor } from '../../base/IActionExecutor';
 import type { Page } from '../../data/Page';
 import { DataItemTree } from '../../tree/DataItemTree';
-import type { DataProvider } from '../../tree/DataProvider';
+import type { DataProvider, DataProviderChangeEvent } from '../../tree/DataProvider';
+import { Everything, selfOnly } from '../../tree/Selector';
 import { createDefaultLoadMoreOptions, ViewItemTree, type LoadMoreOptions, type ViewItemTreeOptions } from '../../tree/ViewItemTree';
 import type { ViewProvider } from '../../tree/ViewProvider';
 import { createTestActionExecutor } from '../createTestActionExecutor';
@@ -304,7 +305,7 @@ describe('Tree Integration Tests (integration)', () => {
             expect(onChange.mock.callCount()).to.be.greaterThan(0);
         });
 
-        it('should propagate invalidateAll as undefined (full refresh)', async () => {
+        it('should propagate invalidate(Everything) as undefined (full refresh)', async () => {
             const { dataTree, viewTree } = createPipeline();
 
             dataTree.registerProvider(createRootDataProvider([res('a')]));
@@ -315,7 +316,7 @@ describe('Tree Integration Tests (integration)', () => {
             const onChange = mock.fn();
             viewTree.onDidChangeTreeData(onChange);
 
-            dataTree.invalidateAll();
+            dataTree.invalidate(Everything);
 
             const firedUndefined = onChange.mock.calls.some(
                 c => c.arguments[0] === undefined,
@@ -326,7 +327,7 @@ describe('Tree Integration Tests (integration)', () => {
         it('should propagate provider onDidChange events through both layers', async () => {
             const { dataTree, viewTree } = createPipeline();
 
-            type ChangeHandler = (event: { resource: TestResource; includeChildren: boolean }) => void;
+            type ChangeHandler = (event: DataProviderChangeEvent<TestResource>) => void;
             let fireChange!: ChangeHandler;
 
             const provider: DataProvider<TestResource> = {
@@ -347,7 +348,7 @@ describe('Tree Integration Tests (integration)', () => {
             const onChange = mock.fn();
             viewTree.onDidChangeTreeData(onChange);
 
-            fireChange({ resource: res('x'), includeChildren: true });
+            fireChange({ target: res('x') });
 
             expect(onChange.mock.callCount()).to.be.greaterThan(0);
         });
@@ -448,7 +449,7 @@ describe('Tree Integration Tests (integration)', () => {
             expect(grandchildFetch.mock.callCount()).to.equal(2);
         });
 
-        it('should keep children cached when invalidate is called with includeChildren=false', async () => {
+        it('should keep children cached when invalidating self only', async () => {
             const { dataTree } = createPipeline();
 
             const childFetch = mock.fn(() => [res('child', 'file')]);
@@ -468,7 +469,7 @@ describe('Tree Integration Tests (integration)', () => {
             // Invalidate without clearing children
             const onChange = mock.fn();
             dataTree.onDidChange(onChange);
-            dataTree.invalidate(res('parent'), false);
+            dataTree.invalidate(selfOnly(res('parent')));
 
             // Change event should still fire
             expect(onChange.mock.callCount()).to.equal(1);
@@ -537,7 +538,7 @@ describe('Tree Integration Tests (integration)', () => {
             expect(firedItem.key).to.equal('target');
         });
 
-        it('should evict all deeply nested nodes on invalidateAll', async () => {
+        it('should evict all deeply nested nodes on invalidate(Everything)', async () => {
             const { dataTree } = createPipeline();
 
             dataTree.registerProvider(createRootDataProvider([res('l1')]));
@@ -560,7 +561,7 @@ describe('Tree Integration Tests (integration)', () => {
             expect(dataTree.get('l2')).to.not.be.undefined;
             expect(dataTree.get('l3')).to.not.be.undefined;
 
-            dataTree.invalidateAll();
+            dataTree.invalidate(Everything);
 
             expect(dataTree.get('l1')).to.be.undefined;
             expect(dataTree.get('l2')).to.be.undefined;
@@ -585,7 +586,7 @@ describe('Tree Integration Tests (integration)', () => {
             const first = await dataTree.getChildren();
             expect(first.map(r => r.id)).to.deep.equal(['original']);
 
-            dataTree.invalidateAll();
+            dataTree.invalidate(Everything);
 
             const second = await dataTree.getChildren();
             expect(second.map(r => r.id)).to.deep.equal(['updated']);
@@ -593,9 +594,9 @@ describe('Tree Integration Tests (integration)', () => {
     });
 
     // -----------------------------------------------------------------------
-    // removeItem
+    // remove
     // -----------------------------------------------------------------------
-    describe('removeItem', () => {
+    describe('remove', () => {
         it('should remove a branch child and fire change for the parent', async () => {
             const { dataTree } = createPipeline();
 
@@ -614,7 +615,7 @@ describe('Tree Integration Tests (integration)', () => {
             const onChange = mock.fn();
             dataTree.onDidChange(onChange);
 
-            dataTree.removeItem(res('b'));
+            dataTree.remove(res('b'));
 
             // 'b' should be gone
             expect(dataTree.get('b')).to.be.undefined;
@@ -645,7 +646,7 @@ describe('Tree Integration Tests (integration)', () => {
 
             expect(dataTree.get('grandchild')).to.not.be.undefined;
 
-            dataTree.removeItem(res('child'));
+            dataTree.remove(res('child'));
 
             expect(dataTree.get('child')).to.be.undefined;
             expect(dataTree.get('grandchild')).to.be.undefined;
@@ -663,7 +664,7 @@ describe('Tree Integration Tests (integration)', () => {
             const onChange = mock.fn();
             dataTree.onDidChange(onChange);
 
-            dataTree.removeItem(res('r1'));
+            dataTree.remove(res('r1'));
 
             expect(dataTree.get('r1')).to.be.undefined;
             expect(dataTree.get('r2')).to.not.be.undefined;
@@ -693,7 +694,7 @@ describe('Tree Integration Tests (integration)', () => {
             await dataTree.getChildren(res('keep'));
             expect(siblingFetch.mock.callCount()).to.equal(1);
 
-            dataTree.removeItem(res('remove'));
+            dataTree.remove(res('remove'));
 
             // sibling's children should still be cached
             await dataTree.getChildren(res('keep'));
@@ -706,7 +707,7 @@ describe('Tree Integration Tests (integration)', () => {
             const onChange = mock.fn();
             dataTree.onDidChange(onChange);
 
-            dataTree.removeItem(res('nonexistent'));
+            dataTree.remove(res('nonexistent'));
 
             expect(onChange.mock.callCount()).to.equal(0);
         });
@@ -1064,7 +1065,7 @@ describe('Tree Integration Tests (integration)', () => {
             expect(roots).to.have.length(1);
 
             disposable.dispose();
-            dataTree.invalidateAll(); // clear cached roots
+            dataTree.invalidate(Everything); // clear cached roots
 
             const afterDispose = await dataTree.getChildren();
             expect(afterDispose).to.have.length(0);
@@ -1124,7 +1125,7 @@ describe('Tree Integration Tests (integration)', () => {
 
             viewTree.dispose();
 
-            dataTree.invalidateAll();
+            dataTree.invalidate(Everything);
             expect(onChange.mock.callCount()).to.equal(0);
         });
     });

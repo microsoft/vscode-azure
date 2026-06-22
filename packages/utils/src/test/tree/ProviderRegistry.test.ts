@@ -7,6 +7,7 @@ import { expect } from 'chai';
 import { mock } from 'node:test';
 import type { DataProvider, DataProviderChangeEvent } from '../../tree/DataProvider';
 import { ProviderRegistry } from '../../tree/ProviderRegistry';
+import { Everything } from '../../tree/Selector';
 import { EventEmitter } from '../../vscode/EventEmitter';
 
 interface TestResource {
@@ -114,7 +115,7 @@ describe('ProviderRegistry (unit)', () => {
         };
 
         registry.registerProvider(provider);
-        const event: DataProviderChangeEvent<TestResource> = { resource: undefined, includeChildren: true };
+        const event: DataProviderChangeEvent<TestResource> = { target: Everything };
         emitter.fire(event);
 
         expect(registry.onProviderChangedFn.mock.callCount()).to.equal(1);
@@ -133,7 +134,7 @@ describe('ProviderRegistry (unit)', () => {
         const registration = registry.registerProvider(provider);
         registration.dispose();
 
-        emitter.fire({ resource: undefined, includeChildren: true });
+        emitter.fire({ target: Everything });
         expect(registry.onProviderChangedFn.mock.callCount()).to.equal(0);
     });
 });

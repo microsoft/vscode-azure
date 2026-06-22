@@ -5,16 +5,18 @@
 
 import { expect } from 'chai';
 import { mock } from 'node:test';
+import { Everything } from '@microsoft/vscode-azure-utils';
 import { RefreshResourcesView } from '../../commands/RefreshResourcesView';
 
 describe('RefreshResourcesView (unit)', () => {
-    it('should call invalidateAll on the data tree', () => {
-        const invalidateAll = mock.fn();
-        const cache = { invalidateAll } as never;
+    it('should invalidate everything on the data tree', () => {
+        const invalidate = mock.fn();
+        const cache = { invalidate } as never;
 
         const cmd = new RefreshResourcesView(cache);
         cmd.execute();
 
-        expect(invalidateAll.mock.callCount()).to.equal(1);
+        expect(invalidate.mock.callCount()).to.equal(1);
+        expect(invalidate.mock.calls[0].arguments[0]).to.equal(Everything);
     });
 });

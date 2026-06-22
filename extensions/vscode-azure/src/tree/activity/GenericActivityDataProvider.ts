@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, stringifyError } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, Roots, selfOnly, stringifyError } from '@microsoft/vscode-azure-utils';
 import { injectable, type ServiceIdentifier } from 'inversify';
 import * as crypto from 'node:crypto';
 import { type Activity, type ActivityStatus, isActivity, isTerminalActivityStatus } from './Activity';
@@ -26,12 +26,12 @@ interface GenericActivity extends Activity {
  * do not have children.
  */
 @injectable()
-export class GenericActivityDataProvider implements DataProvider<GenericActivity>, Disposable {
+export class GenericActivityDataProvider implements DataProvider<Activity>, Disposable {
     public readonly isRoot = true;
 
     private readonly rootActivities = new Map<string, GenericActivity>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<GenericActivity>>();
+    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<Activity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     /** @inheritdoc */
@@ -65,7 +65,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
             endTime: isTerminalActivityStatus(status) ? now : undefined,
         };
         this.rootActivities.set(activity.id, activity);
-        this.onDidChangeEmitter.fire({ includeChildren: true });
+        this.onDidChangeEmitter.fire({ target: Roots });
         return new GenericActivityHandle(activity, (e) => { this.onDidChangeEmitter.fire(e); });
     }
 
@@ -79,7 +79,7 @@ export class GenericActivityDataProvider implements DataProvider<GenericActivity
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ includeChildren: true });
+            this.onDidChangeEmitter.fire({ target: Roots });
         }
     }
 
@@ -100,7 +100,7 @@ export class GenericActivityHandle {
 
     public constructor(
         private readonly activity: GenericActivity,
-        private readonly fireChange: (event: DataProviderChangeEvent<GenericActivity>) => void,
+        private readonly fireChange: (event: DataProviderChangeEvent<Activity>) => void,
     ) {
         this.id = activity.id;
     }
@@ -140,6 +140,6 @@ export class GenericActivityHandle {
         if (fields.status !== undefined && isTerminalActivityStatus(fields.status)) {
             this.activity.endTime = new Date();
         }
-        this.fireChange({ resource: this.activity, includeChildren: false });
+        this.fireChange({ target: selfOnly(this.activity) });
     }
 }

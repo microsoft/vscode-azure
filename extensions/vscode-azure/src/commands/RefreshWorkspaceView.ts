@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Everything } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceViewDataTree } from '../services';
 import type { ManagedCommand } from './ManagedCommand';
@@ -16,6 +17,6 @@ export class RefreshWorkspaceView implements ManagedCommand {
 
     /** @inheritdoc */
     public execute(): void {
-        this.cache.invalidateAll();
+        this.cache.invalidate(Everything);
     }
 }

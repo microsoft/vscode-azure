@@ -205,7 +205,46 @@ describe('CreateFunctionApp (unit)', () => {
 
         await cmd.execute('createNew');
 
-        const invalidateAll = (dataTree as unknown as { invalidateAll: ReturnType<typeof mock.fn> }).invalidateAll;
-        expect(invalidateAll.mock.callCount()).to.equal(1);
+        const invalidate = (dataTree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate;
+        expect(invalidate.mock.callCount()).to.equal(1);
+        const target = invalidate.mock.calls[0].arguments[0] as (node: unknown) => string | undefined;
+        expect(target).to.be.a('function');
+        expect(target(sub)).to.equal('subtree');
+    });
+
+    it('should invalidate by hydrated subscription when no subscription was picked', async () => {
+        const { cmd, mockResult, azd, dataTree } = createCommand();
+
+        // Bootstrapped deploy flow: the subscription picker is skipped because the
+        // existing default env hydrates AZURE_SUBSCRIPTION_ID, so context.subscription
+        // is never set and we must fall back to context.hydratedSubscriptionId.
+        const workspaceYaml = MockUri.file('/workspace/azure.yaml');
+        mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
+        mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
+        azd.show.mock.mockImplementation(() => Promise.resolve({
+            name: 'my-app',
+            services: { api: { project: { path: './', language: 'node' } } },
+        }));
+        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
+        azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
+        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
+            /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
+            AZURE_LOCATION: 'eastus',
+            AZURE_SUBSCRIPTION_ID: 'sub-1',
+            /* eslint-enable @typescript-eslint/naming-convention */
+        }));
+
+        respondToPrompts(mockResult, [
+            { pick: 'Yes' }, // ConfirmProvisionStep
+        ]);
+
+        await cmd.execute('deploy');
+
+        const invalidate = (dataTree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate;
+        expect(invalidate.mock.callCount()).to.equal(1);
+        const target = invalidate.mock.calls[0].arguments[0] as (node: unknown) => string | undefined;
+        expect(target).to.be.a('function');
+        expect(target(sub)).to.equal('subtree');
     });
 });

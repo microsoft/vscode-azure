@@ -20,9 +20,8 @@ Key methods:
 | Method | Description |
 |--------|-------------|
 | `getChildren(resource?)` | Fetch and cache children (root if undefined) |
-| `invalidate(resource, includeChildren?)` | Clear a resource's cached data (optionally invalidate children) |
-| `invalidateAll()` | Clear the entire tree |
-| `invalidateRoot()` | Reconciling root re-list (preserve survivors' subtrees, evict departed roots) |
+| `invalidate(target)` | Mark matched nodes stale (re-fetched on next access) and fire `onDidChange`. See [Targets & selectors](#targets--selectors) |
+| `remove(target)` | Evict matched nodes (and their subtrees) from the cache entirely, splicing them out of their parent. See [Targets & selectors](#targets--selectors) |
 | `whenEnriched<T>(resource)` | Await background enrichment completion |
 | `hasMore(resource)` | Whether more pages are available |
 | `loadMore(resource)` | Pull the next page |
@@ -48,18 +47,40 @@ interface DataProvider<TResource> {
 
 #### `getTtl`
 
-When a provider implements `getTtl`, `DataItemTree` uses its return value (in milliseconds) as the cache TTL for that resource's children instead of the tree-wide default; otherwise the default applies. It is consulted for both root (`getTtl()` with no argument) and branch (`getTtl(resource)`) loads. Returning `Infinity` makes the cached children never go stale — they only refresh on explicit `invalidate`/`invalidateAll` or a provider `onDidChange`. The account/tenant/subscription data provider uses `Infinity` because account/tenant/subscription lists change only on auth or cloud-configuration events, which it signals via `onDidChange`.
+When a provider implements `getTtl`, `DataItemTree` uses its return value (in milliseconds) as the cache TTL for that resource's children instead of the tree-wide default; otherwise the default applies. It is consulted for both root (`getTtl()` with no argument) and branch (`getTtl(resource)`) loads. Returning `Infinity` makes the cached children never go stale — they only refresh on an explicit `invalidate` / `remove` or a provider `onDidChange`. The account/tenant/subscription data provider uses `Infinity` because account/tenant/subscription lists change only on auth or cloud-configuration events, which it signals via `onDidChange`.
 
-`DataProviderChangeEvent<T>` allows providers to push changes without going through invalidation:
+#### Targets & selectors
+
+`invalidate(target)` and `remove(target)` are the two entry points for cache mutation. Both accept the same `Target<T>` union (defined in `packages/utils/src/tree/Selector.ts`), so a single, broad surface covers every case:
+
+| Target form | Meaning |
+|-------------|---------|
+| a bare resource `T` | matched by key, treated as `'subtree'` (the node and its descendants) |
+| a `string` key | same, addressed by key |
+| an array of resources/keys | each entry matched by key, `'subtree'` |
+| `selfOnly(...resources/keys)` | matched by key, `'self'` — re-render the node's label only, keep its cached children |
+| `subtreeOf(...resources/keys)` | matched by key, `'subtree'` — the explicit, named form of passing a bare resource |
+| a `Selector<T>` — `(resource) => 'self' \| 'subtree' \| undefined` | a verdict predicate evaluated over every **loaded** node (e.g. `bySubscription(id)`) |
+| `Roots` (sentinel) | reconciling root re-list: re-list the top level, preserve surviving roots' subtrees, evict departed roots. Use when the *set* of roots changed (sign-in/out, activity add/clear, workspace marker change) but the data under survivors is still valid |
+| `Everything` (sentinel) | wipe the entire cache (all nodes, roots, enrichment promises) and fire a full refresh. Use only when a global precondition changed (e.g. sovereign cloud / page size) |
+
+Key semantics:
+
+- **`'self'` vs `'subtree'`** controls whether cached children are *evicted*. A `'subtree'` verdict wipes the matched node's whole cached subtree (re-fetched on next access) and stops descending — the apex absorbs everything beneath it. A `'self'` verdict keeps the cached children and keeps descending, so deeper nodes can still match independently.
+- **Apex-only firing.** A selector walk fires `onDidChange` once per apex (a matched node with no matched ancestor), after the whole traversal completes. This keeps the event count minimal and is re-entrancy-safe. Prefer narrow targets (`Roots`, `bySubscription(id)`, a specific resource) over `Everything` so the view re-renders the smallest possible subtree.
+- **`remove` vs `invalidate`.** `remove` evicts matched nodes and splices them out of their parent (firing the parent, or a single `undefined` full-refresh if any root was removed); `invalidate` keeps the node and re-fetches. `remove` does **not** accept the `Roots` / `Everything` sentinels — it throws.
+- Pre-canned Azure selectors live in `packages/azutils/src/tree/azureSelectors.ts`: `byAccount(id)`, `bySubscription(id)`, `byResource(armId)`, `byType(type)` (all case-insensitive, all `'subtree'`). They key on fields populated from the listing, so they are safe to evaluate over partially-enriched nodes. Selectors run over **data-layer** resources only, never view-layer virtual grouping nodes.
+
+`DataProviderChangeEvent<T>` lets providers push changes without holding a tree reference:
 
 ```typescript
 interface DataProviderChangeEvent<TResource> {
-    readonly resource?: TResource;     // Undefined = root changed
-    readonly includeChildren: boolean; // Whether to clear cached children too
+    readonly target: Target<TResource>; // What changed (selector, resource, key, array, or a Roots / Everything sentinel)
+    readonly remove?: boolean;          // When true, route to remove() instead of invalidate(); not valid for the sentinels
 }
 ```
 
-`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it. This is used by activity providers that need to push real-time status updates. A root-level change (`resource` undefined) with `includeChildren: false` is interpreted as a **reconciling root re-list** (`invalidateRoot`) rather than a full wipe.
+`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it and routes each event's `target` to `invalidate` (or `remove` when `remove: true`). This is used by activity providers that push real-time status updates — e.g. a per-activity update fires `{ target: selfOnly(activity) }` (label only) or `{ target: activity }` (subtree), while adding or clearing root activities fires `{ target: Roots }`.
 
 ### Enrichment Pattern
 
@@ -148,7 +169,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 | `AcrDataProvider` / `FunctionAppDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
 | `AzureResourceDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
 
-`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes. An auth session change fires a reconciling root re-list (`{ resource: undefined, includeChildren: false }`) that re-lists accounts — preserving tenant/subscription caches under surviving accounts and evicting a signed-out account's subtree because it drops out of the new listing. (This event is noisy — it also fires on individual token acquisitions — but an unchanged account set reconciles to a no-op.) A sovereign-cloud configuration change fires a full `invalidateAll()` since the endpoint itself changed.
+`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes. An auth session change fires a reconciling root re-list (`{ target: Roots }`) that re-lists accounts — preserving tenant/subscription caches under surviving accounts and evicting a signed-out account's subtree because it drops out of the new listing. (This event is noisy — it also fires on individual token acquisitions — but an unchanged account set reconciles to a no-op.) A sovereign-cloud configuration change fires a full `{ target: Everything }` since the endpoint itself changed.
 
 ### Subscription / tenant filtering
 
@@ -214,7 +235,7 @@ discriminator), keeping their `canHandle` checks self-contained.
 
 | Command | Context value | Behaviour |
 |---------|---------------|-----------|
-| `vscode-azure/workspace/refresh` | View title | `IWorkspaceViewDataTree.invalidateAll()` |
+| `vscode-azure/workspace/refresh` | View title | `IWorkspaceViewDataTree.invalidate(Everything)` |
 | `vscode-azure/workspace/revealInExplorer` | `revealInExplorer` (any node with `resourceUri`) | Forwards to VS Code's built-in `revealInExplorer` command. |
 
 ## Activity Tree

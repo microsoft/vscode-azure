@@ -6,7 +6,7 @@
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { EventEmitter, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
+import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey, SubscriptionFilterConfigurationSection } from '../../constants';
@@ -57,10 +57,10 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 || e.affectsConfiguration(`${ConfigurationSection}.groupBy`)
                 || e.affectsConfiguration(`${ConfigurationSection}.groupByTag`)) {
                 this.executor.output.debug('[view] resources grouping configuration changed');
-                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+                this.changeEmitter.fire({ target: Everything });
             } else if (e.affectsConfiguration(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
                 this.executor.output.debug('[view] subscription filter configuration changed');
-                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+                this.changeEmitter.fire({ target: Everything });
             }
         }));
     }
