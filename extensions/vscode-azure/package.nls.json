@@ -22,6 +22,7 @@
     "commands.vscode-azure/functions/createNew": "Create Empty Function App in Azure...",
     "commands.vscode-azure/functions/deploy": "Deploy Project as Function App...",
     "commands.vscode-azure/azdUp": "Provision & Deploy",
+    "commands.vscode-azure/azdDown": "Delete Deployment",
     "commands.vscode-azure/signIn": "Sign in to Azure...",
     "commands.vscode-azure/installAzd": "Install / Update Azure Developer CLI (azd)",
     "settings.title": "Azure",

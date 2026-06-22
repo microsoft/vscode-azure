@@ -85,6 +85,16 @@ export interface IAzdService {
     deploy(cwd: vscode.Uri): Promise<void>;
 
     /**
+     * Runs `azd down --force --purge` as a visible VS Code task, deleting
+     * all resources provisioned for the project's default environment and
+     * purging any soft-deleted resources.
+     *
+     * Resolves when the task completes successfully.
+     * Rejects on non-zero exit.
+     */
+    down(cwd: vscode.Uri): Promise<void>;
+
+    /**
      * Checks whether the installed `azd` version meets the given minimum.
      *
      * @param minVersion - Semver string to compare against (defaults to
@@ -318,6 +328,29 @@ export class AzdService implements IAzdService {
                 cwd,
                 env: authEnv,
                 name: 'azd deploy',
+                source: 'azd',
+            });
+        } catch (e) {
+            throw await this.wrapAzdError(e);
+        }
+    }
+
+    /** @inheritdoc */
+    public async down(cwd: vscode.Uri): Promise<void> {
+        const authEnv = await this.authServer.getEnv();
+
+        try {
+            await this.processExecutor.spawn({
+                execution: 'foreground',
+                command: AzdCommand,
+                args: composeArgs(
+                    withArg('down'),
+                    withArg('--force'),
+                    withArg('--purge'),
+                )(),
+                cwd,
+                env: authEnv,
+                name: 'azd down',
                 source: 'azd',
             });
         } catch (e) {

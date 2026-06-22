@@ -15,6 +15,12 @@ export const ActivityTreeViewId = 'vscode-azure/activity';
 /** Command id for loading the next page of children in the resource tree. */
 export const LoadMoreCommandId = 'vscode-azure/resources/loadMore';
 
+/** Command id for the azd "Provision & Deploy" (azd up) command. */
+export const AzdUpCommandId = 'vscode-azure/azdUp';
+
+/** Command id for the azd "Delete Deployment" (azd down) command. */
+export const AzdDownCommandId = 'vscode-azure/azdDown';
+
 /** Top-level configuration section name used with `workspace.getConfiguration()`. */
 export const ConfigurationSection = 'vscode-azure';
 
