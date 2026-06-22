@@ -833,6 +833,64 @@ describe('DataItemTree (unit)', () => {
 
             expect(tree.get('orphan')).to.be.undefined;
         });
+
+        it('should discard an in-flight page when the subtree is invalidated mid-load (generation guard)', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+
+            const { promise: pagePromise, resolve: resolvePage } = Promise.withResolvers<IteratorResult<Page<TestResource>>>();
+            const resolveNextPage = () => {
+                resolvePage({
+                    done: false,
+                    value: { items: [{ id: 'orphan' }], hasMore: false },
+                });
+            };
+
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'parent',
+                getChildren: () => ({
+                    [Symbol.asyncIterator]() {
+                        let firstPage = true;
+                        return {
+                            next() {
+                                if (firstPage) {
+                                    firstPage = false;
+                                    return Promise.resolve<IteratorResult<Page<TestResource>>>({
+                                        done: false,
+                                        value: { items: [{ id: 'p1' }], hasMore: true },
+                                    });
+                                }
+                                return pagePromise;
+                            },
+                        };
+                    },
+                }),
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+            expect(tree.hasMore({ id: 'parent' })).to.be.true;
+
+            // Start loading the next page (awaits the deferred promise)
+            const loadPromise = tree.loadMore({ id: 'parent' });
+
+            // Invalidate the parent's subtree while the page load is in flight.
+            // Unlike remove(), this keeps the parent node (and its map entry), so
+            // only the generation bump -- not the node-identity check -- can catch
+            // the stale page.
+            tree.invalidate(subtreeOf<TestResource>({ id: 'parent' }));
+
+            // Resolve the page -- should be discarded because the generation changed.
+            resolveNextPage();
+            await loadPromise;
+
+            // The parent node survives, but the stale page's child must not have
+            // been re-inserted into the cache.
+            expect(tree.get('parent')).to.not.be.undefined;
+            expect(tree.get('orphan')).to.be.undefined;
+            expect(tree.get('p1')).to.be.undefined;
+        });
     });
 
     describe('root reconciliation', () => {
