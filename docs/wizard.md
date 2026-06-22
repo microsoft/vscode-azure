@@ -143,7 +143,7 @@ public async execute(job: AzdJob): Promise<void> {
         // ...
     ];
     const executeSteps = [
-        get(IGenerateBicepStepFactory)<MyContext>('functionApp.bicep', ['azdServiceName']),
+        get(GenerateAzureYamlStep),
         // ...
     ];
     const wizard = new Wizard(this.output, { /* initial */ }, promptSteps, executeSteps);
@@ -153,4 +153,4 @@ public async execute(job: AzdJob): Promise<void> {
 
 Steps are constructed by the per-execution child container, which has `autobind` enabled (see [Dependency Injection](dependency-injection.md)) -- so an `@injectable` step resolves with no explicit binding. `IActionContext` resolves to the execution-scoped instance; the rest of a step's dependencies resolve from the root container.
 
-`GenerateBicepStep` is the exception: it needs both an injected `ICodeContext` **and** caller-supplied config (template name, parameter keys). That mix is handled with a **factory binding** rather than autobind -- `IGenerateBicepStepFactory` is bound with `toFactory` (in `extension.ts`), captures `ICodeContext`, and takes the per-command config as call arguments, returning a fully-constructed step. This keeps the step's config fields `readonly` and avoids any half-configured instance. See [Dependency Injection](dependency-injection.md) for the factory pattern.
+A step that needs both injected services **and** caller-supplied config (e.g. `GenerateBicepStep`) is resolved through a factory binding instead of autobind -- see [Factory Bindings](dependency-injection.md#factory-bindings-for-azure-clients) in the DI doc.
