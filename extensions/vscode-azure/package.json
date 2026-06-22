@@ -103,6 +103,12 @@
                 "title": "%commands.vscode-azure/azdUp%"
             },
             {
+                "command": "vscode-azure/azdDown",
+                "category": "%commands.category.azure%",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/azdDown%"
+            },
+            {
                 "command": "vscode-azure/signIn",
                 "category": "%commands.category.azure%",
                 "icon": "$(sign-in)",
@@ -226,6 +232,11 @@
             "explorer/context": [
                 {
                     "command": "vscode-azure/azdUp",
+                    "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
+                    "group": "navigation"
+                },
+                {
+                    "command": "vscode-azure/azdDown",
                     "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
                     "group": "navigation"
                 }

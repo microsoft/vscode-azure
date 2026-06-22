@@ -5,15 +5,16 @@
 
 import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
-import { LoadMoreCommandId } from '../constants';
+import { AzdDownCommandId, AzdUpCommandId, LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
+import { AzdDown } from './AzdDown';
 import { AzdUp } from './AzdUp';
 import { ClearActivities } from './ClearActivities';
-import { InstallAzd } from './InstallAzd';
 import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
 import { DeleteAppSetting } from './functions/DeleteAppSetting';
 import { GroupBy } from './GroupBy';
+import { InstallAzd } from './InstallAzd';
 import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';
 import { OpenInPortal } from './OpenInPortal';
@@ -50,7 +51,8 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registerManagedCommand(container, 'vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
 
-    registerManagedCommand(container, 'vscode-azure/azdUp', AzdUp);
+    registerManagedCommand(container, AzdUpCommandId, AzdUp);
+    registerManagedCommand(container, AzdDownCommandId, AzdDown);
     registerManagedCommand(container, 'vscode-azure/installAzd', InstallAzd);
 }
 
