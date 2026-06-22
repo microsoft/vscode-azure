@@ -13,6 +13,7 @@ import type { IVsCode } from '../vscode/IVsCode';
 import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
+import { Everything, isKeyMatch, Roots, subtreeOf, type KeyMatch, type MatchScope, type Selector, type Target } from './Selector';
 
 /**
  * Internal node wrapping a resource with its cached children and staleness info.
@@ -32,6 +33,16 @@ interface TreeNode<T> {
      * more pages are available (or the provider returned a plain array).
      */
     pageIterator?: AsyncIterator<Page<T>>;
+
+    /**
+     * Monotonic counter bumped every time this node's subtree is wiped (see
+     * {@linkcode DataItemTree.wipeSubtree}). An in-flight page load captures the
+     * generation before pulling a page and discards the page if the generation
+     * changed meanwhile -- this prevents a page from a superseded iterator from
+     * landing in a node that was invalidated (but whose object identity, and
+     * therefore map entry, survives) mid-flight.
+     */
+    generation?: number;
 }
 
 /**
@@ -226,9 +237,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
 
         // Remove previously cached descendants that may no longer be present
-        this.nodes.removeSubtrees(node.children);
+        // (also clears their enrichment promises and bumps this node's
+        // generation so any in-flight page load is discarded).
+        this.wipeSubtree(node);
         node.children = [];
-        node.pageIterator = undefined;
         this.executor.output.debug(`[data] ${this.name} branch fetch start key=${key} provider=${provider.constructor.name}`);
 
         const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
@@ -286,11 +298,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
                         this.executor.output.debug(`[data] ${this.name} enrich done key=${key} includeChildren=${includeChildren}`);
-                        // Guard: if the node was removed (e.g. via removeItem) while
+                        // Guard: if the node was removed (e.g. via remove) while
                         // enrichment was in flight, skip the invalidation to avoid
                         // spurious change events for items no longer in the tree.
                         if (this.nodes.get(key)) {
-                            this.invalidate(resource, includeChildren);
+                            // `includeChildren` is `undefined` only if enrichment was
+                            // suppressed/errored; default to re-fetching children, matching
+                            // the historical default-parameter behavior.
+                            this.invalidateEntries([resource], (includeChildren ?? true) ? 'subtree' : 'self');
                         }
                     })
                     .catch((error: unknown) => {
@@ -411,6 +426,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             if (!node?.pageIterator) {
                 return;
             }
+            const generation = node.generation;
 
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
             const next = (await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
@@ -420,12 +436,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                 return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
             }))!;
 
+            if (this.nodes.get(key) !== node || node.generation !== generation) {
+                // The node was removed (e.g. via remove()) or its subtree was
+                // wiped (e.g. via invalidate()) while this page was in flight.
+                // Discard the page without touching the node -- a fresh fetch
+                // may have installed a new iterator we must not clobber.
+                return;
+            }
+
             if (next.done) {
-                node.pageIterator = undefined;
-            } else if (this.nodes.get(key) !== node) {
-                // The node was removed (e.g. via removeItem) while the
-                // page load was in flight--discard the results to avoid
-                // re-inserting orphaned children into the map.
                 node.pageIterator = undefined;
             } else {
                 node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items, node)];
@@ -460,75 +479,289 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Invalidate a specific resource, optionally including its cached
-     * children. Fires {@linkcode onDidChange}.
+     * Invalidate part of the cache, marking matched nodes stale so they are
+     * re-fetched on next access, and firing {@linkcode onDidChange} so the view
+     * re-renders. Accepts the full {@linkcode Target} surface:
      *
-     * @param resource - The resource to invalidate. {@linkcode ViewItemTree}
-     *   will see the event and re-render the corresponding tree item.
-     * @param includeChildren - When `true` (default), cached children are
-     *   removed from the tree and will be re-fetched on next access. When
-     *   `false`, children will still be re-rendered, but the next access
-     *   will hit the cache, avoiding a re-fetch (unless they are stale).
+     * - a bare resource / key / array -> matched by key, treated as `'subtree'`
+     *   (the node and its descendants are evicted and re-fetched);
+     * - {@linkcode selfOnly}(...) -> matched by key, `'self'` (re-render the
+     *   node's label only, keep its cached children);
+     * - a {@linkcode Selector} -> a verdict predicate evaluated over every
+     *   loaded node (e.g. `bySubscription(id)`);
+     * - {@linkcode Roots} -> reconciling root re-list (preserve surviving roots'
+     *   subtrees);
+     * - {@linkcode Everything} -> wipe the entire cache.
+     *
+     * The change event fires once per *apex* (a matched node with no matched
+     * ancestor) after the whole traversal completes, so a single call produces
+     * the minimal set of re-renders and is safe against re-entrancy.
+     *
+     * @param target - What to invalidate.
      */
-    public invalidate(resource: T, includeChildren = true): void {
-        this.executor.output.debug(`[cache] ${this.name} invalidate key=${this.getKey(resource)} includeChildren=${includeChildren}`);
-        const node = this.nodes.get(this.getKey(resource));
-        if (node && includeChildren) {
-            this.nodes.removeSubtrees(node.children);
-            node.children = undefined;
-            node.staleAt = 0;
-            node.pageIterator = undefined;
+    public invalidate(target: Target<T>): void {
+        if (target === Everything) {
+            this.invalidateAllImpl();
+        } else if (target === Roots) {
+            this.invalidateRootImpl();
+        } else if (typeof target === 'function') {
+            this.invalidateSelector(target as Selector<T>);
+        } else {
+            const { match, scope } = this.toKeyMatch(target);
+            this.invalidateEntries(match, scope);
         }
-        this.changeEmitter.fire(resource);
     }
 
     /**
-     * Remove a single item from the cache. Its subtree is evicted and the
-     * item is spliced out of the parent's children list. For non-root items,
-     * fires {@linkcode onDidChange} for the parent so the view re-renders without
-     * re-fetching siblings. For root items, fires {@linkcode onDidChange} with
-     * `undefined` to signal a full refresh.
+     * Remove matched nodes (and their subtrees) from the cache entirely, as
+     * opposed to {@linkcode invalidate} which keeps the node and re-fetches.
+     * Each matched node is evicted and spliced out of its parent's child list;
+     * for non-root removals {@linkcode onDidChange} fires for the parent (so the
+     * view re-renders without re-fetching siblings), and for root removals it
+     * fires with `undefined` (full refresh). Matched apexes absorb their
+     * subtrees, and parent fires are de-duplicated.
      *
-     * If the item is not in the cache, this is a no-op.
+     * Accepts a {@linkcode Selector}, a bare resource / key / array, or a
+     * {@linkcode selfOnly} / {@linkcode subtreeOf} descriptor (both remove the
+     * whole subtree -- `scope` is irrelevant to removal). The {@linkcode Roots}
+     * and {@linkcode Everything} sentinels are **not** accepted.
+     *
+     * If nothing matches, this is a no-op.
+     *
+     * @param target - What to remove.
      */
-    public removeItem(resource: T): void {
-        const key = this.getKey(resource);
-        const node = this.nodes.get(key);
-        if (!node) {
-            return;
+    public remove(target: Target<T>): void {
+        if (target === Everything || target === Roots) {
+            throw new Error('remove() does not accept the Roots or Everything sentinels; use invalidate() instead.');
         }
 
-        // Remove the node and its entire subtree from the map
-        this.nodes.removeSubtrees([node]);
-        this.enrichmentPromises.delete(key);
+        const matched = typeof target === 'function'
+            ? this.collectMatches(target as Selector<T>)
+            : this.nodesForKeys(this.toKeySet(this.toKeyMatch(target).match));
+
+        this.removeNodes(matched);
+    }
+
+    /**
+     * Wipe a node's subtree: evict every descendant from the {@linkcode NodeMap}
+     * (clearing their enrichment promises too), drop this node's cached children
+     * and page iterator, mark it stale, and bump its generation so an in-flight
+     * page load for the previous generation is discarded.
+     *
+     * This is the single primitive every subtree-drop site routes through, so
+     * enrichment-promise eviction and the generation bump can never be skipped.
+     */
+    private wipeSubtree(node: TreeNode<T>): void {
+        for (const removedKey of this.nodes.removeSubtrees(node.children)) {
+            this.enrichmentPromises.delete(removedKey);
+        }
+        node.children = undefined;
+        node.pageIterator = undefined;
+        node.staleAt = 0;
+        node.generation = (node.generation ?? 0) + 1;
+    }
+
+    /** Normalize a resource / key / array input into a flat list of entries. */
+    private toEntries(input: T | string | ReadonlyArray<T | string>): ReadonlyArray<T | string> {
+        return Array.isArray(input) ? input as ReadonlyArray<T | string> : [input as T | string];
+    }
+
+    /**
+     * Normalize a by-key target into a {@linkcode KeyMatch}: a {@linkcode selfOnly}
+     * / {@linkcode subtreeOf} descriptor passes through unchanged, while a bare
+     * resource / key / array is wrapped as {@linkcode subtreeOf} (the subtree
+     * default for raw targets).
+     */
+    private toKeyMatch(target: KeyMatch<T> | T | string | ReadonlyArray<T | string>): KeyMatch<T> {
+        return isKeyMatch<T>(target) ? target : subtreeOf(...this.toEntries(target));
+    }
+
+    /** Map resources/keys to a set of cache keys, honoring {@linkcode getKey}. */
+    private toKeySet(input: T | string | ReadonlyArray<T | string>): Set<string> {
+        return new Set(this.toEntries(input).map(entry => typeof entry === 'string' ? entry : this.getKey(entry)));
+    }
+
+    /** Resolve the loaded nodes for the given keys (absent keys are skipped). */
+    private nodesForKeys(keys: Set<string>): TreeNode<T>[] {
+        const nodes: TreeNode<T>[] = [];
+        for (const key of keys) {
+            const node = this.nodes.get(key);
+            if (node) {
+                nodes.push(node);
+            }
+        }
+        return nodes;
+    }
+
+    /**
+     * Key-based invalidation over a list of resource/key entries.
+     *
+     * For a `'subtree'` scope, a *loaded* node's cached subtree is wiped so it
+     * re-fetches on next access. The change event is then fired so the view
+     * re-renders. When the entry is a resource object the *passed* resource is
+     * fired unconditionally -- even if the data layer has no node for it -- so a
+     * view-layer node that exists independently of the data layer still
+     * refreshes (the historical positional-`invalidate` behavior). When the
+     * entry is a bare key string and no node is loaded, there is no resource to
+     * fire, so it is skipped.
+     */
+    private invalidateEntries(entries: ReadonlyArray<T | string>, scope: MatchScope): void {
+        const fires: T[] = [];
+        for (const entry of entries) {
+            const isKey = typeof entry === 'string';
+            const node = this.nodes.get(isKey ? entry : this.getKey(entry));
+            if (node && scope === 'subtree') {
+                this.wipeSubtree(node);
+            }
+            if (!isKey) {
+                fires.push(entry);
+            } else if (node) {
+                fires.push(node.resource);
+            }
+        }
+        for (const resource of fires) {
+            this.changeEmitter.fire(resource);
+        }
+    }
+
+    /**
+     * Depth-first invalidation driven by a {@linkcode Selector} verdict. A
+     * `'subtree'` verdict wipes the node and stops descending (the apex absorbs
+     * its subtree); a `'self'` verdict re-renders the label and keeps
+     * descending. Each apex fires once; a match under an already-fired ancestor
+     * does not re-fire. Fires happen after the traversal for re-entrancy safety.
+     */
+    private invalidateSelector(selector: Selector<T>): void {
+        const fires: T[] = [];
+        const visit = (node: TreeNode<T>, ancestorFired: boolean): void => {
+            const scope = selector(node.resource);
+            let fired = ancestorFired;
+            if (scope === 'subtree') {
+                this.wipeSubtree(node);
+                if (!ancestorFired) {
+                    fires.push(node.resource);
+                }
+                return; // Stop descending: the subtree is evicted.
+            }
+            if (scope === 'self' && !ancestorFired) {
+                fires.push(node.resource);
+                fired = true;
+            }
+            for (const child of node.children ?? []) {
+                visit(child, fired);
+            }
+        };
+        for (const root of this.roots ?? []) {
+            visit(root, false);
+        }
+        for (const resource of fires) {
+            this.changeEmitter.fire(resource);
+        }
+    }
+
+    /**
+     * Collect the matched apexes for a selector-driven {@linkcode remove}: a
+     * matched node's subtree is removed wholesale, so the traversal stops
+     * descending past a match (a `'self'` vs `'subtree'` verdict is irrelevant
+     * to removal -- any verdict means "remove this subtree").
+     */
+    private collectMatches(selector: Selector<T>): TreeNode<T>[] {
+        const matched: TreeNode<T>[] = [];
+        const visit = (node: TreeNode<T>): void => {
+            if (selector(node.resource)) {
+                matched.push(node);
+                return; // Whole subtree will be removed; don't descend.
+            }
+            for (const child of node.children ?? []) {
+                visit(child);
+            }
+        };
+        for (const root of this.roots ?? []) {
+            visit(root);
+        }
+        return matched;
+    }
+
+    /**
+     * Evict the given matched nodes. Nodes that have a matched ancestor are
+     * skipped (their ancestor's removal already evicts them). Parent fires are
+     * de-duplicated; if any root was removed, a single full-refresh
+     * (`undefined`) fire subsumes the rest.
+     */
+    private removeNodes(matched: TreeNode<T>[]): void {
+        if (matched.length === 0) {
+            return;
+        }
+        const matchedSet = new Set(matched);
+        const parentFires = new Set<T>();
+        let fireRoot = false;
+        for (const node of matched) {
+            if (this.hasMatchedAncestor(node, matchedSet)) {
+                continue;
+            }
+            const parentResource = this.removeNodeInternal(node);
+            if (parentResource === undefined) {
+                fireRoot = true;
+            } else {
+                parentFires.add(parentResource);
+            }
+        }
+        if (fireRoot) {
+            // A full refresh re-renders every parent too, so skip the rest.
+            this.changeEmitter.fire(undefined);
+        } else {
+            for (const parentResource of parentFires) {
+                this.changeEmitter.fire(parentResource);
+            }
+        }
+    }
+
+    /** Whether any ancestor of {@linkcode node} is in the matched set. */
+    private hasMatchedAncestor(node: TreeNode<T>, matchedSet: Set<TreeNode<T>>): boolean {
+        for (let parent = node.parent; parent; parent = parent.parent) {
+            if (matchedSet.has(parent)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Evict a single node and its subtree from the map, clear the evicted
+     * enrichment promises, and splice the node out of its parent's children (or
+     * the roots array). Does **not** fire; returns the parent resource to fire
+     * (or `undefined` if the node was a root, signalling a full refresh).
+     */
+    private removeNodeInternal(node: TreeNode<T>): T | undefined {
+        for (const removedKey of this.nodes.removeSubtrees([node])) {
+            this.enrichmentPromises.delete(removedKey);
+        }
 
         const parent = node.parent;
         if (parent) {
-            // Splice out of the parent's children array
             const childIdx = parent.children?.indexOf(node) ?? -1;
             if (childIdx !== -1) {
                 parent.children!.splice(childIdx, 1); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- indexOf succeeded
             }
-            this.invalidate(parent.resource, false);
-        } else {
-            // Root item -- splice out of roots array
-            if (this.roots) {
-                const rootIdx = this.roots.indexOf(node);
-                if (rootIdx !== -1) {
-                    this.roots.splice(rootIdx, 1);
-                }
-            }
-
-            // Must directly fire the emitter; `invalidate()` at the root [or `invalidateAll()`] would evict the entire tree which is not what we want
-            this.changeEmitter.fire(undefined);
+            return parent.resource;
         }
+
+        // Root node -- splice out of the roots array.
+        if (this.roots) {
+            const rootIdx = this.roots.indexOf(node);
+            if (rootIdx !== -1) {
+                this.roots.splice(rootIdx, 1);
+            }
+        }
+        return undefined;
     }
 
     /**
-     * Invalidate all cached data. Clears the entire node map and root cache.
-     * Fires {@linkcode onDidChange} once with `undefined` (full refresh).
+     * Wipe all cached data: clear the node map, enrichment promises, and root
+     * cache, then fire {@linkcode onDidChange} once with `undefined`. Backs the
+     * {@linkcode Everything} target.
      */
-    public invalidateAll(): void {
+    private invalidateAllImpl(): void {
         this.executor.output.debug(`[cache] ${this.name} invalidate all`);
         this.nodes.clear();
         this.enrichmentPromises.clear();
@@ -543,34 +776,29 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * fetch reconciles the freshly-listed roots against the cached ones by key
      * (see {@linkcode getRootChildren}), preserving the subtrees under roots
      * that are still present and evicting the subtrees of roots that have
-     * disappeared.
+     * disappeared. Backs the {@linkcode Roots} target.
      *
-     * Unlike {@linkcode invalidateAll}, this does **not** wipe the tree -- it is
-     * the right tool when only the *set* of roots may have changed (e.g. an
+     * Unlike {@linkcode invalidateAllImpl}, this does **not** wipe the tree -- it
+     * is the right tool when only the *set* of roots may have changed (e.g. an
      * account signed in/out) but the data under surviving roots is still valid.
      */
-    public invalidateRoot(): void {
+    private invalidateRootImpl(): void {
         this.executor.output.debug(`[cache] ${this.name} invalidate root (reconcile)`);
         this.rootsStaleAt = 0;
         this.changeEmitter.fire(undefined);
     }
 
     /**
-     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event.
-     *
-     * - {@linkcode DataProviderChangeEvent.resource} present -> positional
-     *   {@linkcode invalidate}.
-     * - Root-level change (`resource` undefined) with `includeChildren: false`
-     *   -> reconciling {@linkcode invalidateRoot}.
-     * - Otherwise -> {@linkcode invalidateAll}.
+     * Handle a provider's optional {@linkcode DataProvider.onDidChange} event by
+     * routing its {@linkcode DataProviderChangeEvent.target target} to
+     * {@linkcode remove} (when {@linkcode DataProviderChangeEvent.remove} is
+     * `true`) or {@linkcode invalidate}.
      */
     protected override onProviderChanged(event: DataProviderChangeEvent<T>): void {
-        if (event.resource !== undefined && event.resource !== null) {
-            this.invalidate(event.resource, event.includeChildren);
-        } else if (!event.includeChildren) {
-            this.invalidateRoot();
+        if (event.remove) {
+            this.remove(event.target);
         } else {
-            this.invalidateAll();
+            this.invalidate(event.target);
         }
     }
 }
