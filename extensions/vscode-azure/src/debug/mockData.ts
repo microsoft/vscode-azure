@@ -117,7 +117,7 @@ const mockCodeDeployments: ReadonlyArray<{
  * Called from `main.js` after `setUpContainer` but before activation when
  * `AZURE_MOCK_DATA=1`.
  */
-export function applyMockData(container: Container): void {
+export function applyOverrides(container: Container): void {
     // -- Rebind Azure providers with mock implementations ---------------------
 
     container.rebind(IAzureAccountDataProvider).toConstantValue(

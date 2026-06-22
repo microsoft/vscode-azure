@@ -46,4 +46,12 @@ extensionConfig.entryPoints.push({
     out: 'debug.bundle',
 });
 
+// Add a separate entry point for the E2E credential override bundle so its
+// `@azure/identity` dependency stays out of the main extension bundle. Only
+// loaded by `main.js` when `RUN_E2E=1`.
+extensionConfig.entryPoints.push({
+    in: './src/debug/e2e.ts',
+    out: 'e2e.bundle',
+});
+
 await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });

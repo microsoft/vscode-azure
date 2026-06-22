@@ -12,6 +12,7 @@
 build/**
 dist/test/**
 dist/debug.bundle*
+dist/e2e.bundle*
 docs/**
 gulp*
 node_modules/**
