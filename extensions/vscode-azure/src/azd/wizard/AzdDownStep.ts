@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import type { IAzdService } from '../AzdService';
+import { inject, injectable } from 'inversify';
+import { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -15,9 +16,10 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * Skipped when {@linkcode AzdWizardContext.iacFolder iacFolder} is not set
  * (the only prompt, {@linkcode SelectIacFolderStep}, populates it).
  */
+@injectable()
 export class AzdDownStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly azd: IAzdService,
+        @inject(IAzdService) private readonly azd: IAzdService,
     ) {
         super();
     }

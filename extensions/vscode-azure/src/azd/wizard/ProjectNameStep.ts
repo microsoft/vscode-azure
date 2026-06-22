@@ -5,8 +5,9 @@
 
 import {
     PromptStep, showSmartInputBox,
-    type AsWritable, type ICodeContext
+    type AsWritable, ICodeContext
 } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import * as path from 'path';
 import type { AzdWizardContext } from './AzdWizardContext';
 
@@ -22,9 +23,10 @@ const NameRegex = /^[a-zA-Z0-9-]+$/;
  * {@linkcode HydrateAzdInfoStep} found an existing default azd environment in
  * {@linkcode AzdWizardContext.iacFolder iacFolder}.
  */
+@injectable()
 export class ProjectNameStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
-        private readonly ctx: ICodeContext,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
     ) {
         super();
     }

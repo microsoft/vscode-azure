@@ -84,7 +84,7 @@ It uses the inversify `ResolutionContext` to look up `IExtensionContext` and `Di
 
 ## Scoped Command Execution
 
-Each command execution gets a fresh child container with `IActionContext` bound. This allows commands to inject the current action's telemetry context without threading it as a parameter:
+Each command execution gets a fresh child container with `IActionContext` bound and `autobind` enabled. This allows commands to inject the current action's telemetry context without threading it as a parameter, and to resolve `@injectable` wizard steps directly from the container:
 
 ```typescript
 // In registerCommands.ts
@@ -92,8 +92,9 @@ function registerManagedCommand(container, commandId, commandClass) {
     const registry = container.get(ICommandRegistry);
     registry.registerCommand(commandId, (context, ...args) => {
         // Child container scoped to this execution
-        const executionContainer = new Container({ parent: container });
+        const executionContainer = new Container({ parent: container, autobind: true });
         executionContainer.bind(IActionContext).toConstantValue(context);
+        executionContainer.bind(Container).toConstantValue(executionContainer);
         return executionContainer.get(commandClass).execute(...args);
     });
 }
@@ -110,6 +111,10 @@ export class Hello implements ManagedCommand {
     ) { }
 }
 ```
+
+### Autobind and wizard step resolution
+
+`autobind: true` lets the child container construct any `@injectable` class with `executionContainer.get(SomeClass)` **without an explicit binding**. Commands that assemble wizards exploit this: instead of injecting every step's dependencies and threading them into `new StepX(...)`, the command injects `Container` (bound to itself above) and resolves each step with `this.container.get(SomeStep)`. The step's own `@inject(<token>)` decorators pull its dependencies -- `IActionContext` from the execution-scoped child, everything else from the root parent. Autobind is scoped to the child container only, so root-level resolution still requires explicit bindings (no masking of missing production bindings). See [Wizard](wizard.md) for the assembly pattern.
 
 ## Multi-Binding for Providers
 
@@ -177,6 +182,8 @@ container.bind(IResourceClientProvider).toFactory(context => {
 ```
 
 The resulting `IResourceClientProvider` type is a `SyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `IResourceClient` directly. This matches `ResourceClient.create(...)`, which is synchronous. The sibling `AsyncFactory<T, TArgs>` type (same shape but returns `Promise<T>`) is used for providers whose `create()` is async. Both types are defined in `packages/utils/src/types/Factory.ts`. See [Azure Clients](azure-clients.md) for details on the client wrappers.
+
+The same pattern handles any class that needs **both** injected services and caller-supplied arguments — for example `GenerateBicepStep`, which needs an injected `ICodeContext` plus a per-command template name and parameter keys. Rather than autobinding the step and mutating it after construction, `IGenerateBicepStepFactory` is bound with `.toFactory()`; it captures `ICodeContext` and returns a function taking the config, so the step's fields stay `readonly`. This is the canonical inversify answer to "construct with DI deps + runtime params" and is preferred over a post-construction `configure()` setter.
 
 ## Multi-Binding with Dual Registration
 

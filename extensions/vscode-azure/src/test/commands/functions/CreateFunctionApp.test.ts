@@ -5,7 +5,6 @@
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, createMockSubscriptionClientProvider, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -13,6 +12,7 @@ import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../azd/TempDirManager';
 import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
 import { createMockAzdService } from '../../azd/MockAzdService';
+import { createWizardCommandContainer } from '../createWizardCommandContainer';
 import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
 
 describe('CreateFunctionApp (unit)', () => {
@@ -59,18 +59,18 @@ describe('CreateFunctionApp (unit)', () => {
         const armProvider = createMockArmProvider();
         const codeProvider = createMockCodeProvider();
 
-        const cmd = new CreateFunctionApp(
-            createActionContext('test'),
+        const container = createWizardCommandContainer({
             ctx,
             output,
-            dataTree,
-            viewItemTree as never,
-            subscriptionClientProvider,
-            tempManager,
             azd,
+            dataTree,
+            tempManager,
+            viewItemTree,
+            subscriptionClientProvider,
             armProvider,
             codeProvider,
-        );
+        });
+        const cmd = container.get(CreateFunctionApp);
 
         return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree };
     }

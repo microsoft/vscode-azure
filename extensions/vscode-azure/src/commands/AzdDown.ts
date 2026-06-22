@@ -4,11 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, ICodeContext, IOutputChannel, Wizard, Everything } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
+import { ICodeContext, IOutputChannel, Wizard, Everything } from '@microsoft/vscode-azure-utils';
+import { Container, inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { IAzdService } from '../azd/AzdService';
-import { ITempDirManager } from '../azd/TempDirManager';
 import { AzdDownStep } from '../azd/wizard/AzdDownStep';
 import type { AzdWizardContext } from '../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../azd/wizard/SelectIacFolderStep';
@@ -29,12 +27,10 @@ import type { ManagedCommand } from './ManagedCommand';
 @injectable()
 export class AzdDown implements ManagedCommand {
     public constructor(
-        @inject(IActionContext) private readonly actionContext: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
-        @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
-        @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
+        @inject(Container) private readonly container: Container,
     ) { }
 
     /** @inheritdoc */
@@ -53,16 +49,18 @@ export class AzdDown implements ManagedCommand {
             return;
         }
 
+        const get = this.container.get.bind(this.container);
+
         const wizard = new Wizard<AzdWizardContext>(
             this.output,
             {
                 iacFolder,
             },
             [
-                new SelectIacFolderStep(this.actionContext, this.ctx, this.tempManager, this.azd),
+                get(SelectIacFolderStep),
             ],
             [
-                new AzdDownStep(this.azd),
+                get(AzdDownStep),
             ],
         );
 

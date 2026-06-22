@@ -76,9 +76,15 @@ function registerManagedCommand(
 
     const registry = container.get(ICommandRegistry);
     registry.registerCommand(commandId, (context, ...args) => {
-        // Create child container for this command execution
-        const executionContainer = new Container({ parent: container });
+        // Create child container for this command execution. autobind lets the
+        // command resolve wizard steps (and other @injectable classes) with
+        // executionContainer.get(Step) -- no explicit binding needed -- while
+        // their IActionContext resolves to this execution's context.
+        const executionContainer = new Container({ parent: container, autobind: true });
         executionContainer.bind(IActionContext).toConstantValue(context);
+        // Bind the container to itself so commands can @inject(Container) and
+        // resolve their wizard steps from this execution scope.
+        executionContainer.bind(Container).toConstantValue(executionContainer);
 
         return executionContainer.get(commandClass).execute(...prefixArgs, ...args);
     });

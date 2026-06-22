@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, type IActionContext, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import { ActivityTreeViewId } from '../../constants';
-import type { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
-import type { IAzdService } from '../AzdService';
+import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
+import { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -15,12 +16,13 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * Creates a code deployment activity in the activity view and
  * focuses the activity panel.
  */
+@injectable()
 export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly actionContext: IActionContext,
-        private readonly code: IVsCode,
-        private readonly azd: IAzdService,
-        private readonly codeProvider: CodeDeploymentDataProvider,
+        @inject(IActionContext) private readonly actionContext: IActionContext,
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
     ) {
         super();
     }

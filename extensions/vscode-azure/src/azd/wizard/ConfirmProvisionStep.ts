@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -28,9 +29,10 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * - Bootstrapped + No: existing env -> step prompts, sets `false`,
  *   provision skipped.
  */
+@injectable()
 export class ConfirmProvisionStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
-        private readonly ctx: ICodeContext,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
     ) {
         super();
     }

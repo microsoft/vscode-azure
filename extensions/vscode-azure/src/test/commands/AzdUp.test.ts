@@ -4,15 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createActionContext, Everything } from '@microsoft/vscode-azure-utils';
+import { Everything } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { TempDirManager } from '../../azd/TempDirManager';
 import { AzdUp } from '../../commands/AzdUp';
 import { createMockAzdService } from '../azd/MockAzdService';
 import { createMockArmProvider, createMockCodeProvider } from '../tree/activity/MockActivityProviders';
+import { createWizardCommandContainer } from './createWizardCommandContainer';
 
 describe('AzdUp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
@@ -42,7 +42,8 @@ describe('AzdUp (unit)', () => {
 
         }
 
-        const cmd = new AzdUp(createActionContext('test'), ctx, output, azd, armProvider, codeProvider, dataTree, new TempDirManager(ctx));
+        const container = createWizardCommandContainer({ ctx, output, azd, dataTree, armProvider, codeProvider });
+        const cmd = container.get(AzdUp);
         return { cmd, ctx, mockResult, azd, dataTree };
     }
 
