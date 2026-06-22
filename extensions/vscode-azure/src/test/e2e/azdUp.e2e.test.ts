@@ -34,8 +34,9 @@ import { describeE2e, getE2eConfig, type E2eConfig } from './e2eConfig';
  * {@linkcode IAzdService}, resolved from the exposed container. None of those
  * operations require Azure credentials.
  *
- * Skips automatically when the `azd` CLI is not installed (or is below the
- * minimum supported version).
+ * Fails (rather than skips) when the `azd` CLI is not installed or is below the
+ * minimum supported version, so a missing dependency is visible until CI
+ * installs it.
  */
 describeE2e('azd up', function () {
     let config: E2eConfig;
@@ -61,11 +62,12 @@ describeE2e('azd up', function () {
         }
         azdService = api.container.get(IAzdService);
 
-        // A sufficiently recent azd CLI is required; skip the suite gracefully
-        // when it is absent or too old (checkVersion returns undefined/false).
-        if (!(await azdService.checkVersion())) {
-            this.skip();
-        }
+        // A sufficiently recent azd CLI is required. Fail loudly rather than
+        // skipping so a missing/old azd is visible until CI installs it.
+        expect(
+            await azdService.checkVersion(),
+            'The azd CLI (at the minimum supported version) must be installed to run the E2E tests',
+        ).to.equal(true);
 
         projectDir = await copyFixtureToTempDir('azd-sample');
 
