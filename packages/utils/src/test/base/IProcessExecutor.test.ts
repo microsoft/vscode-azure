@@ -373,6 +373,21 @@ describe('ProcessExecutor (integration)', () => {
     // which pollutes the captured stdout/stderr that these tests assert on.
     const env: Record<string, string> = { NODE_OPTIONS: '' }; // eslint-disable-line @typescript-eslint/naming-convention
 
+    // Builds the spawn options needed to evaluate a snippet of JS in a child
+    // Node process without depending on shell quoting. The snippet is passed
+    // through an environment variable and evaluated with
+    // `eval(process.env.NODE_EVAL_SOURCE)`, keeping the command line free of
+    // the spaces and double quotes that Windows mangles under
+    // `windowsVerbatimArguments` (which spawnStreamAsync enables when no shell
+    // is used). Spread the result into the `spawn` options object.
+    function evalNode(source: string): { command: string; args: string[]; env: Record<string, string> } {
+        return {
+            command: process.execPath,
+            args: ['-e', 'eval(process.env.NODE_EVAL_SOURCE)'],
+            env: { ...env, NODE_EVAL_SOURCE: source }, // eslint-disable-line @typescript-eslint/naming-convention
+        };
+    }
+
     describe('background execution', () => {
         it('should capture stdout and stderr', async () => {
             const { vscode: code } = createMockVsCode();
@@ -380,9 +395,7 @@ describe('ProcessExecutor (integration)', () => {
 
             const result = await executor.spawn({
                 execution: 'background',
-                command: process.execPath,
-                args: ['-e', 'process.stdout.write("out"); process.stderr.write("err");'],
-                env,
+                ...evalNode('process.stdout.write("out"); process.stderr.write("err");'),
             });
 
             expect(result.stdout).to.equal('out');
@@ -395,10 +408,8 @@ describe('ProcessExecutor (integration)', () => {
 
             const result = await executor.spawn<{ key: string }>({
                 execution: 'background',
-                command: process.execPath,
-                args: ['-e', 'process.stdout.write(JSON.stringify({ key: "value" }));'],
+                ...evalNode('process.stdout.write(JSON.stringify({ key: "value" }));'),
                 parseJson: true,
-                env,
             });
 
             expect(result.json).to.deep.equal({ key: 'value' });
@@ -412,9 +423,7 @@ describe('ProcessExecutor (integration)', () => {
             try {
                 await executor.spawn({
                     execution: 'background',
-                    command: process.execPath,
-                    args: ['-e', 'process.stderr.write("failure reason"); process.exit(1);'],
-                    env,
+                    ...evalNode('process.stderr.write("failure reason"); process.exit(1);'),
                 });
                 expect.fail('Expected error');
             } catch (e) {
@@ -435,9 +444,7 @@ describe('ProcessExecutor (integration)', () => {
 
             const promise = executor.spawn({
                 execution: 'background',
-                command: process.execPath,
-                args: ['-e', 'setTimeout(() => {}, 30000);'],
-                env,
+                ...evalNode('setTimeout(() => {}, 30000);'),
             }, token);
 
             await delay(50);
@@ -464,11 +471,9 @@ describe('ProcessExecutor (integration)', () => {
 
             const result = await executor.spawn<{ done: boolean }>({
                 execution: 'background',
-                command: process.execPath,
-                args: ['-e', f],
+                ...evalNode(f),
                 parseJson: true,
                 jsonLines: true,
-                env,
             });
 
             const lines: unknown[] = [];
@@ -496,11 +501,9 @@ describe('ProcessExecutor (integration)', () => {
 
             const result = await executor.spawn({
                 execution: 'background',
-                command: process.execPath,
-                args: ['-e', f],
+                ...evalNode(f),
                 parseJson: true,
                 jsonLines: true,
-                env,
             });
 
             const lines: unknown[] = [];
