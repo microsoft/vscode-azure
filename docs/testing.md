@@ -42,13 +42,15 @@ Unit tests instantiate classes directly with mocked dependencies. Use `createMoc
 
 ```typescript
 import { createActionContext, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { Everything } from '@microsoft/vscode-azure-utils';
 
 it('(unit) should invalidate the cache', async () => {
-    const mockCache = { invalidateAll: mock.fn() };
+    const mockCache = { invalidate: mock.fn() };
     const command = new RefreshResourcesView(mockCache);
     command.execute();
 
-    expect(mockCache.invalidateAll.mock.callCount()).to.equal(1);
+    expect(mockCache.invalidate.mock.callCount()).to.equal(1);
+    expect(mockCache.invalidate.mock.calls[0].arguments[0]).to.equal(Everything);
 });
 ```
 
