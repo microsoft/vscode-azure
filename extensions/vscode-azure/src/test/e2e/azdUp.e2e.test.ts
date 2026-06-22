@@ -3,18 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ProcessExecutor } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
-import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { AzdDownCommandId, AzdUpCommandId, ExtensionId } from '../../constants';
 import { describeE2e, getE2eConfig, type E2eConfig } from './e2eConfig';
 
-const execFileAsync = promisify(execFile);
+// The real VS Code namespace satisfies IVsCode (the extension binds it the same
+// way). Only background execution is used here, which never touches it.
+const executor = new ProcessExecutor(vscode);
 
 /**
  * Full end-to-end coverage of the `azd up` path.
@@ -48,7 +49,7 @@ describeE2e('azd up', function () {
         envName = `e2e-${randomBytes(3).toString('hex')}`;
 
         // The azd CLI is required; skip the suite gracefully when it is absent.
-        if (!(await azdInstalled())) {
+        if (!(await executor.isOnPath('azd'))) {
             this.skip();
         }
 
@@ -119,18 +120,6 @@ describeE2e('azd up', function () {
 });
 
 /**
- * Returns `true` when the `azd` CLI is on the PATH.
- */
-async function azdInstalled(): Promise<boolean> {
-    try {
-        await execFileAsync('azd', ['version']);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-/**
  * Runs `azd` with the given args, rejecting on a non-zero exit.
  *
  * @param args - Arguments passed to the `azd` CLI.
@@ -138,7 +127,7 @@ async function azdInstalled(): Promise<boolean> {
  * @returns The captured stdout.
  */
 async function runAzd(args: string[], cwd: vscode.Uri): Promise<string> {
-    const { stdout } = await execFileAsync('azd', args, { cwd: cwd.fsPath });
+    const { stdout } = await executor.spawn({ execution: 'background', command: 'azd', args, cwd });
     return stdout;
 }
 
@@ -146,8 +135,8 @@ async function runAzd(args: string[], cwd: vscode.Uri): Promise<string> {
  * Runs `azd` with the given args and parses its stdout as JSON.
  */
 async function runAzdJson<T>(args: string[], cwd: vscode.Uri): Promise<T> {
-    const stdout = await runAzd(args, cwd);
-    return JSON.parse(stdout) as T;
+    const { json } = await executor.spawn<T>({ execution: 'background', command: 'azd', args, cwd, parseJson: true });
+    return json;
 }
 
 /**
