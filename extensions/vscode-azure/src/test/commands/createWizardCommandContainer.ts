@@ -18,13 +18,13 @@ export interface WizardCommandMocks {
     readonly ctx: ICodeContext;
     readonly output: IOutputChannel;
     readonly azd: IAzdService;
-    readonly dataTree: unknown;
+    readonly dataTree: IAzureViewDataTree;
     readonly actionContext?: IActionContext;
     readonly tempManager?: ITempDirManager;
     readonly viewItemTree?: unknown;
     readonly subscriptionClientProvider?: ISubscriptionClientProvider;
-    readonly armProvider?: unknown;
-    readonly codeProvider?: unknown;
+    readonly armProvider?: IArmDeploymentDataProvider;
+    readonly codeProvider?: ICodeDeploymentDataProvider;
 }
 
 /**
@@ -46,21 +46,21 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     container.bind(IOutputChannel).toConstantValue(mocks.output);
     container.bind(IAzdService).toConstantValue(mocks.azd);
     container.bind(ITempDirManager).toConstantValue(mocks.tempManager ?? new TempDirManager(mocks.ctx));
-    container.bind(IAzureViewDataTree).toConstantValue(mocks.dataTree as never);
+    container.bind(IAzureViewDataTree).toConstantValue(mocks.dataTree);
 
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 
     if (mocks.viewItemTree !== undefined) {
-        container.bind(IAzureViewViewItemTree).toConstantValue(mocks.viewItemTree as never);
+        container.bind(IAzureViewViewItemTree).toConstantValue(mocks.viewItemTree as IAzureViewViewItemTree);
     }
     if (mocks.subscriptionClientProvider !== undefined) {
         container.bind(ISubscriptionClientProvider).toConstantValue(mocks.subscriptionClientProvider);
     }
     if (mocks.armProvider !== undefined) {
-        container.bind(IArmDeploymentDataProvider).toConstantValue(mocks.armProvider as never);
+        container.bind(IArmDeploymentDataProvider).toConstantValue(mocks.armProvider);
     }
     if (mocks.codeProvider !== undefined) {
-        container.bind(ICodeDeploymentDataProvider).toConstantValue(mocks.codeProvider as never);
+        container.bind(ICodeDeploymentDataProvider).toConstantValue(mocks.codeProvider);
     }
 
     container.bind(Container).toConstantValue(container);
