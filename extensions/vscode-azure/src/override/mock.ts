@@ -5,7 +5,7 @@
 
 // Mock data setup for the "Extension: Run (Mock Data)" launch configuration.
 //
-// This file is compiled as a SEPARATE esbuild entry point (debug.bundle.js)
+// This file is compiled as a SEPARATE esbuild entry point (test/mock.bundle.js)
 // so none of this code ends up in the main extension bundle.
 
 import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
@@ -117,7 +117,7 @@ const mockCodeDeployments: ReadonlyArray<{
  * Called from `main.js` after `setUpContainer` but before activation when
  * `AZURE_MOCK_DATA=1`.
  */
-export function applyMockData(container: Container): void {
+export function applyOverrides(container: Container): void {
     // -- Rebind Azure providers with mock implementations ---------------------
 
     container.rebind(IAzureAccountDataProvider).toConstantValue(

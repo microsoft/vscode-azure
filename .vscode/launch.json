@@ -30,6 +30,7 @@
                 "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-azure",
                 "--disable-extension",
                 "ms-azuretools.vscode-azureresourcegroups", // This extension replaces Azure Resources, so disable it to avoid conflicts
+                "--profile=Azure Mock Data", // Isolated settings profile so a personal `azureResourceGroups.selectedSubscriptions` filter doesn't hide the mock subscription
             ],
             "env": {
                 "DEBUGTELEMETRY": "1",
@@ -54,6 +55,28 @@
             "env": {
                 "DEBUGTELEMETRY": "1",
                 "TSX_TSCONFIG_PATH": "${workspaceFolder}/extensions/vscode-azure/tsconfig.json", // Necessary only for F5 to get tsx to allow decorators
+            },
+            "outFiles": [
+                "${workspaceFolder}/extensions/vscode-azure/dist/**/*.{js,mjs,cjs}",
+                "${workspaceFolder}/extensions/vscode-azure/src/**/*.{ts,mts,cts}", // We are using TSX so out files *are* the source files
+            ],
+            "preLaunchTask": "Extension: ESBuild+Watch",
+        },
+        {
+            "name": "Extension: Run E2E Tests",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": [
+                "--disable-extension",
+                "ms-azuretools.vscode-azureresourcegroups", // This extension replaces Azure Resources, so disable it to avoid conflicts
+                "--disable-extension",
+                "github.copilot-chat", // GitHub Copilot Chat throws a lot of spurious errors when we rapidly launch then close during tests
+            ],
+            "testConfiguration": "${workspaceFolder}/extensions/vscode-azure/.vscode-test.mjs",
+            "env": {
+                "DEBUGTELEMETRY": "1",
+                "TSX_TSCONFIG_PATH": "${workspaceFolder}/extensions/vscode-azure/tsconfig.json", // Necessary only for F5 to get tsx to allow decorators
+                "RUN_E2E": "1", // Opt in to the live, long-running E2E suites (see src/test/e2e/README.md)
             },
             "outFiles": [
                 "${workspaceFolder}/extensions/vscode-azure/dist/**/*.{js,mjs,cjs}",

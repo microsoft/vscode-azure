@@ -3,6 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/** Fully-qualified extension id (`<publisher>.<name>`) as declared in `package.json`. */
+export const ExtensionId = 'ms-azuretools.vscode-azure';
+
 /** View id of the Azure resource tree (registered in `package.json`). */
 export const AzureResourceTreeViewId = 'vscode-azure/resources';
 

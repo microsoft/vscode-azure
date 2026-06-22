@@ -7,10 +7,11 @@ import { expect } from 'chai';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { ExtensionId } from '../constants';
 
 describe('extension', () => {
     it('should activate', async () => {
-        const extension = vscode.extensions.getExtension('ms-azuretools.vscode-azure');
+        const extension = vscode.extensions.getExtension(ExtensionId);
         if (!extension) {
             expect.fail('Extension not found');
         }
@@ -38,7 +39,7 @@ describe('bundle size guardrail (integration)', () => {
     const VSIX_WARN_THRESHOLD = 0.05;
 
     it('should be within 10% of the baseline size', function () {
-        const extension = vscode.extensions.getExtension('ms-azuretools.vscode-azure');
+        const extension = vscode.extensions.getExtension(ExtensionId);
         if (!extension) {
             expect.fail('Extension not found');
         }

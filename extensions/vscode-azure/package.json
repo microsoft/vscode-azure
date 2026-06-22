@@ -345,6 +345,7 @@
         "vscode": "^1.123.0"
     },
     "devDependencies": {
+        "@azure/identity": "^4.13.1",
         "@types/semver": "^7.7.1",
         "@vscode/test-cli": "catalog:",
         "@vscode/test-electron": "catalog:",
