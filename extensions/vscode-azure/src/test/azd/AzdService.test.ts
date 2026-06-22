@@ -389,6 +389,54 @@ describe('AzdService (unit)', () => {
         });
     });
 
+    describe('down', () => {
+        it('should spawn foreground execution with down --force --purge', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve());
+            const { service, spawnMock } = createService(spawnFn);
+
+            await service.down(MockUri.file('/project'));
+
+            expect(spawnMock.mock.callCount()).to.equal(1);
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(opts.execution).to.equal('foreground');
+            expect(opts.command).to.equal(AzdCommand);
+            expect(argValues(opts.args)).to.include('down');
+            expect(argValues(opts.args)).to.include('--force');
+            expect(argValues(opts.args)).to.include('--purge');
+            expect(opts.cwd.path).to.equal('/project');
+            expect(opts.source).to.equal('azd');
+        });
+
+        it('should pass the auth environment to the task', async () => {
+            const spawnFn = mock.fn((_opts: unknown) => Promise.resolve());
+            const mockResult = createMockVsCode();
+            const processExecutor = {
+                spawn: spawnFn,
+                isOnPath: mock.fn(() => Promise.resolve(false)),
+            } as unknown as IProcessExecutor;
+            const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH: 'token' })) }; // eslint-disable-line @typescript-eslint/naming-convention
+            const { executor } = createTestActionExecutor();
+            const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer);
+
+            await service.down(MockUri.file('/project'));
+
+            const opts = spawnFn.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(opts.env).to.have.property('AZD_AUTH', 'token');
+        });
+
+        it('should reject on non-zero exit code', async () => {
+            const spawnFn = mock.fn(() => Promise.reject(new ChildProcessError('Process exited with code 3', 3, null)));
+            const { service } = createService(spawnFn);
+
+            try {
+                await service.down(MockUri.file('/project'));
+                expect.fail('Expected error');
+            } catch (e) {
+                expect((e as Error).message).to.include('Process exited with code 3');
+            }
+        });
+    });
+
     describe('checkVersion', () => {
         function makeVersionSpawn(version: string): SpawnFn {
             return mock.fn(() => Promise.resolve({ json: { azd: { version, commit: 'abc' } } })) as unknown as SpawnFn;
