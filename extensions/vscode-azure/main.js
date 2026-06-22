@@ -9,6 +9,9 @@
 
 // @ts-check
 
+/** @type {import('vscode').ExtensionMode.Production} */
+const extensionModeProduction = 1;
+
 /** @type {{ loadStartTime: number, loadEndTime: number }} */
 const perfStats = {
     loadStartTime: Date.now(),
@@ -31,14 +34,18 @@ const extension = require('./dist/extension.bundle.js');
  * @param {import('vscode').ExtensionContext} ctx
  */
 exports.activate = async function activate(ctx) {
-    // ExtensionMode.Development === 2
-    if (process.env.AZURE_MOCK_DATA === '1' && ctx.extensionMode === 2) {
-        return await activateWithOverrides(ctx, './dist/debug.bundle.js');
-    }
+    if (ctx.extensionMode !== extensionModeProduction) {
+        let overrideBundlePath;
+        if (process.env.AZURE_MOCK_DATA === '1') {
+            overrideBundlePath = './dist/test/mock.bundle.js';
+        } else if (process.env.RUN_E2E === '1') {
+            overrideBundlePath = './dist/test/e2e.bundle.js';
+        }
 
-    // RUN_E2E is only set by the E2E launch config / CI.
-    if (process.env.RUN_E2E === '1') {
-        return await activateWithOverrides(ctx, './dist/e2e.bundle.js');
+        if (overrideBundlePath) {
+            const { applyOverrides } = require(overrideBundlePath);
+            return extension.activateInternal(ctx, perfStats, applyOverrides);
+        }
     }
 
     return await extension.activateInternal(ctx, perfStats);
@@ -52,22 +59,6 @@ exports.activate = async function activate(ctx) {
  */
 exports.deactivate = async function deactivate(ctx) {
     return await extension.deactivateInternal(ctx);
-}
-
-/**
- * Activates the extension after applying container overrides loaded from a
- * separate esbuild bundle. Each override bundle exports a common
- * `applyOverrides(container)` function (see `src/debug/mockData.ts` and
- * `src/debug/e2e.ts`). Kept out of the main bundle so their dev/test-only
- * dependencies do not ship in the VSIX.
- *
- * @param {import('vscode').ExtensionContext} ctx
- * @param {string} bundlePath - Path to the override bundle to require.
- */
-function activateWithOverrides(ctx, bundlePath) {
-    /** @type {{ applyOverrides: (container: import('inversify').Container) => void }} */
-    const { applyOverrides } = require(bundlePath);
-    return extension.activateInternal(ctx, perfStats, applyOverrides);
 }
 
 perfStats.loadEndTime = Date.now();

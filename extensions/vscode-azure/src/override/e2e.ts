@@ -18,7 +18,7 @@
 // bundle. It mirrors the debug mock-data bundle pattern and exposes the same
 // `applyOverrides(container)` contract.
 
-import { AzurePipelinesCredential, DefaultAzureCredential } from '@azure/identity';
+import { AzureCliCredential, AzurePipelinesCredential } from '@azure/identity';
 import { ICredentialFactory, type TokenCredential } from '@microsoft/vscode-azure-azutils';
 import type { Container } from 'inversify';
 
@@ -38,8 +38,8 @@ import type { Container } from 'inversify';
  *   pipeline template's test step:
  *   `FC_SERVICE_CONNECTION_TENANT_ID`, `FC_SERVICE_CONNECTION_CLIENT_ID`,
  *   `FC_SERVICE_CONNECTION_ID`, and `SYSTEM_ACCESSTOKEN`.
- * - Otherwise (local development), a {@linkcode DefaultAzureCredential} is used,
- *   which picks up `az login`, environment, and managed-identity credentials.
+ * - Otherwise (local development), a {@linkcode AzureCliCredential} is used,
+ *   which picks up `az login`.
  *
  * @param container - The DI container to mutate.
  */
@@ -51,7 +51,7 @@ export function applyOverrides(container: Container): void {
 
     const credential: TokenCredential = tenantId && clientId && serviceConnectionId && systemAccessToken
         ? new AzurePipelinesCredential(tenantId, clientId, serviceConnectionId, systemAccessToken)
-        : new DefaultAzureCredential();
+        : new AzureCliCredential();
 
     container.rebind(ICredentialFactory).toConstantValue(() => credential);
 }

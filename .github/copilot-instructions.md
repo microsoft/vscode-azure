@@ -31,7 +31,7 @@ For detailed documentation on the project architecture and patterns, see the `do
   - `Disposable` instead of `vscode.Disposable`
 * Mark interface properties as `readonly` by default, unless the property is intentionally mutable (e.g. set by a later step in a pipeline)
 * Use PascalCase for files containing classes/interfaces, camelCase for function-oriented files
-* Label test cases with `(unit)` or `(integration)` **after** the name in the root `describe` description (e.g., `describe('AzureNodeId (unit)', ...)`)
+* Label test cases with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description (e.g., `describe('AzureNodeId (unit)', ...)`)
 * Include the Microsoft copyright header on every TypeScript/JavaScript file
 * Use `void` prefix for intentionally un-awaited promises, unless they have a `.then()` with two arguments (for resolve and reject), or a `.catch()` handler
 * Use scoped `eslint-disable` comments on specific lines, avoid file-wide unless it requires repeating the same disable many times

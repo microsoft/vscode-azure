@@ -168,7 +168,11 @@ function bindProviders<T>(container: Container, collectionId: ServiceIdentifier<
             container.bind(collectionId).to(entry).onActivation(pushDisposable);
         } else {
             const [primaryId, providerClass] = entry;
-            container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
+            // An override (e.g. the "Run (Mock Data)" entry point) may have
+            // already bound `primaryId` before the trees are registered.
+            if (!container.isBound(primaryId)) {
+                container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
+            }
             container.bind(collectionId).toService(primaryId);
         }
     }

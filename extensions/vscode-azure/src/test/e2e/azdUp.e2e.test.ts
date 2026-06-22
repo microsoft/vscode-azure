@@ -45,7 +45,7 @@ describeE2e('azd up', function () {
     let provisioned = false;
 
     before(async function () {
-        config = getE2eConfig();
+        config = await getE2eConfig();
         envName = `e2e-${randomBytes(3).toString('hex')}`;
 
         // The azd CLI is required; skip the suite gracefully when it is absent.
