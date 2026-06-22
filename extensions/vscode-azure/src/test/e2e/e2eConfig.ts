@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { stringifyError } from '@microsoft/vscode-azure-utils';
-import { execFile } from 'node:child_process';
+import { ProcessExecutor, stringifyError } from '@microsoft/vscode-azure-utils';
+import * as vscode from 'vscode';
 
 /**
  * End-to-end (E2E) test support: configuration and suite gating.
@@ -92,29 +92,30 @@ let azAccountPromise: Promise<AzAccount> | undefined;
  * be parsed.
  */
 function getAzAccount(): Promise<AzAccount> {
-    azAccountPromise ??= new Promise<AzAccount>((resolve, reject) => {
-        // `az` is a `.cmd` shim on Windows, so it isn't directly executable
-        // by `execFile` without a shell.
-        execFile('az', ['account', 'show', '-o', 'json'], { shell: process.platform === 'win32' }, (error, stdout) => {
-            if (error) {
-                reject(new Error(
-                    `Failed to run 'az account show'. Ensure the Azure CLI is installed and 'az login' has been run. ${stringifyError(error)}`,
-                ));
-                return;
-            }
+    azAccountPromise ??= (async () => {
+        const executor = new ProcessExecutor(vscode);
+        let account: AzAccount;
+        try {
+            const result = await executor.spawn<AzAccount>({
+                execution: 'background',
+                command: 'az',
+                args: ['account', 'show', '-o', 'json'],
+                parseJson: true,
+            });
+            account = result.json;
+        } catch (error) {
+            throw new Error(
+                `Failed to run 'az account show'. Ensure the Azure CLI is installed and 'az login' has been run. ${stringifyError(error)}`,
+                { cause: error },
+            );
+        }
 
-            try {
-                const account = JSON.parse(stdout) as AzAccount;
-                if (!account.id || !account.tenantId) {
-                    reject(new Error("'az account show' did not return a subscription id and tenant id. Run 'az login' and select a subscription."));
-                    return;
-                }
-                resolve({ id: account.id, tenantId: account.tenantId });
-            } catch (parseError) {
-                reject(new Error(`Failed to parse 'az account show' output. ${stringifyError(parseError)}`));
-            }
-        });
-    });
+        if (!account.id || !account.tenantId) {
+            throw new Error("'az account show' did not return a subscription id and tenant id. Run 'az login' and select a subscription.");
+        }
+
+        return { id: account.id, tenantId: account.tenantId };
+    })();
 
     return azAccountPromise;
 }
