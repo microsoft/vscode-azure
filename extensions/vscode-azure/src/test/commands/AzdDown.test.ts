@@ -16,7 +16,7 @@ import { createMockAzdService } from '../azd/MockAzdService';
 describe('AzdDown (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
 
-    function createCommand() {
+    function createCommand(options: { workspaceFolders?: boolean } = {}) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const output = new MockOutputChannel('test');
 
@@ -25,6 +25,22 @@ describe('AzdDown (unit)', () => {
         const dataTree = createMockDataItemTree([sub]);
 
         const tempManager = new TempDirManager(ctx);
+
+        if (options.workspaceFolders !== false) {
+            mockResult.workspaceFolders.push({
+                uri: MockUri.file('/workspace'),
+                name: 'workspace',
+                index: 0,
+            });
+
+            // By default, findAzureYaml finds it in the workspace
+            azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
+                if (dir.path === '/workspace') {
+                    return Promise.resolve([MockUri.file('/workspace/azure.yaml')]);
+                }
+                return Promise.resolve([]);
+            });
+        }
 
         const cmd = new AzdDown(
             createActionContext('test'),
@@ -80,5 +96,44 @@ describe('AzdDown (unit)', () => {
 
         expect(azd.down.mock.callCount()).to.equal(0);
         expect(invalidate.mock.callCount()).to.equal(0);
+    });
+
+    it('should resolve cwd from workspace folder when invoked from the command palette', async () => {
+        const { cmd, mockResult, azd } = createCommand();
+        mockResult.messageResponses.push('Delete');
+
+        await cmd.execute();
+
+        expect(azd.down.mock.callCount()).to.equal(1);
+        expect((azd.down.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/workspace');
+    });
+
+    it('should show error when no workspace folders are open', async () => {
+        const { cmd, mockResult, azd } = createCommand({ workspaceFolders: false });
+        mockResult.messageResponses.push('Delete');
+
+        try {
+            await cmd.execute();
+            expect.fail('Expected error');
+        } catch (e) {
+            expect((e as Error).message).to.include('workspace folder');
+        }
+
+        expect(azd.down.mock.callCount()).to.equal(0);
+    });
+
+    it('should show error when no azure.yaml found in workspace', async () => {
+        const { cmd, mockResult, azd } = createCommand();
+        mockResult.messageResponses.push('Delete');
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([]));
+
+        try {
+            await cmd.execute();
+            expect.fail('Expected error');
+        } catch (e) {
+            expect((e as Error).message).to.include('azure.yaml');
+        }
+
+        expect(azd.down.mock.callCount()).to.equal(0);
     });
 });
