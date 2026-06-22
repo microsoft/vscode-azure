@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode, fileExists,
+    EventEmitter, Everything, IActionExecutor, IVsCode, fileExists,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -29,10 +29,10 @@ import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServic
  * changes so the tree re-discovers projects.
  */
 @injectable()
-export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | AzdServiceNode>, Disposable {
+export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
     public readonly isRoot = true;
 
-    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<AzdProjectNode | AzdServiceNode>>();
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
 
     public readonly onDidChange = this.changeEmitter.event;
@@ -44,7 +44,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<AzdProjectNode | A
     ) {
         const invalidateAll = (reason: string) => {
             this.executor.output.debug(`[data] azd workspace: ${reason}`);
-            this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            this.changeEmitter.fire({ target: Everything });
         };
 
         this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));

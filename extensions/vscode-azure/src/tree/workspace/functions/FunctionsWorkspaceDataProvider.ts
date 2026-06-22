@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode,
+    EventEmitter, Everything, IActionExecutor, IVsCode,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -29,10 +29,10 @@ const FunctionsHostFileName = 'host.json';
  * changes so the tree re-discovers projects.
  */
 @injectable()
-export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsProjectNode>, Disposable {
+export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
     public readonly isRoot = true;
 
-    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<FunctionsProjectNode>>();
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
 
     public readonly onDidChange = this.changeEmitter.event;
@@ -43,7 +43,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<FunctionsPro
     ) {
         const invalidateAll = (reason: string) => {
             this.executor.output.debug(`[data] functions workspace: ${reason}`);
-            this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+            this.changeEmitter.fire({ target: Everything });
         };
 
         this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));

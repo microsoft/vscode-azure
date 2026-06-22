@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, stringifyError } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, Everything, stringifyError } from '@microsoft/vscode-azure-utils';
 import { injectable, type ServiceIdentifier } from 'inversify';
 import * as crypto from 'node:crypto';
 import { type Activity, type ActivityStatus, isActivity, isTerminalActivityStatus } from './Activity';
@@ -25,12 +25,12 @@ interface CodeDeploymentActivity extends Activity {
  * through a separate data source.
  */
 @injectable()
-export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentActivity>, Disposable {
+export class CodeDeploymentDataProvider implements DataProvider<Activity>, Disposable {
     public readonly isRoot = true;
 
     private readonly rootDeployments = new Map<string, CodeDeploymentActivity>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<CodeDeploymentActivity>>();
+    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<Activity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     /** @inheritdoc */
@@ -60,7 +60,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
             startTime: new Date(),
         };
         this.rootDeployments.set(activity.id, activity);
-        this.onDidChangeEmitter.fire({ includeChildren: true });
+        this.onDidChangeEmitter.fire({ target: Everything });
         return new CodeDeploymentHandle(activity, (e) => { this.onDidChangeEmitter.fire(e); });
     }
 
@@ -74,7 +74,7 @@ export class CodeDeploymentDataProvider implements DataProvider<CodeDeploymentAc
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ includeChildren: true });
+            this.onDidChangeEmitter.fire({ target: Everything });
         }
     }
 
@@ -101,7 +101,7 @@ export class CodeDeploymentHandle {
 
     public constructor(
         private readonly activity: CodeDeploymentActivity,
-        private readonly fireChange: (event: DataProviderChangeEvent<CodeDeploymentActivity>) => void,
+        private readonly fireChange: (event: DataProviderChangeEvent<Activity>) => void,
     ) {
         this.id = activity.id;
     }
@@ -124,7 +124,7 @@ export class CodeDeploymentHandle {
         };
         this.activity.children ??= [];
         this.activity.children.push(child);
-        this.fireChange({ resource: this.activity, includeChildren: true });
+        this.fireChange({ target: this.activity });
         return new CodeDeploymentHandle(child, this.fireChange);
     }
 
@@ -153,7 +153,7 @@ export class CodeDeploymentHandle {
         // Auto-complete any pending descendants with their immediate parent's result
         this.completePendingDescendants(this.activity.children, this.activity.status);
 
-        this.fireChange({ resource: this.activity, includeChildren: true });
+        this.fireChange({ target: this.activity });
     }
 
     /** Recursively complete any pending descendants with their immediate parent's result. */

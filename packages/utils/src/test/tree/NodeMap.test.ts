@@ -84,5 +84,77 @@ describe('NodeMap (unit)', () => {
             map.removeSubtrees(undefined);
             expect(map.get('a')).to.not.be.undefined;
         });
+
+        describe('return value (evicted keys)', () => {
+            it('should return the keys of the node and all its descendants', () => {
+                const map = new NodeMap<TestNode>(n => n.id);
+                const grandchild = makeNode('gc');
+                const child = makeNode('c', [grandchild]);
+                const root = makeNode('r', [child]);
+
+                map.set('r', root);
+                map.set('c', child);
+                map.set('gc', grandchild);
+
+                const removed = map.removeSubtrees([root]);
+
+                expect(removed).to.have.members(['r', 'c', 'gc']);
+                expect(removed).to.have.lengthOf(3);
+            });
+
+            it('should return descendants before their ancestor', () => {
+                const map = new NodeMap<TestNode>(n => n.id);
+                const grandchild = makeNode('gc');
+                const child = makeNode('c', [grandchild]);
+                const root = makeNode('r', [child]);
+
+                map.set('r', root);
+                map.set('c', child);
+                map.set('gc', grandchild);
+
+                const removed = map.removeSubtrees([root]);
+
+                // A node's descendants are always evicted before the node itself,
+                // so side tables can be cleaned bottom-up.
+                expect(removed.indexOf('gc')).to.be.lessThan(removed.indexOf('c'));
+                expect(removed.indexOf('c')).to.be.lessThan(removed.indexOf('r'));
+            });
+
+            it('should return the keys of every input subtree', () => {
+                const map = new NodeMap<TestNode>(n => n.id);
+                const aChild = makeNode('a-c');
+                const a = makeNode('a', [aChild]);
+                const b = makeNode('b');
+                const unrelated = makeNode('z');
+
+                map.set('a', a);
+                map.set('a-c', aChild);
+                map.set('b', b);
+                map.set('z', unrelated);
+
+                const removed = map.removeSubtrees([a, b]);
+
+                expect(removed).to.have.members(['a', 'a-c', 'b']);
+                expect(removed).to.not.include('z');
+            });
+
+            it('should return a single key for a childless node', () => {
+                const map = new NodeMap<TestNode>(n => n.id);
+                const node = makeNode('a'); // children is undefined
+                map.set('a', node);
+
+                expect(map.removeSubtrees([node])).to.deep.equal(['a']);
+            });
+
+            it('should return an empty array for undefined input', () => {
+                const map = new NodeMap<TestNode>(n => n.id);
+                expect(map.removeSubtrees(undefined)).to.deep.equal([]);
+            });
+
+            it('should return an empty array for empty input', () => {
+                const map = new NodeMap<TestNode>(n => n.id);
+                expect(map.removeSubtrees([])).to.deep.equal([]);
+            });
+        });
     });
 });

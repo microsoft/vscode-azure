@@ -13,7 +13,7 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    Debouncer, EventEmitter, IActionExecutor, ICodeContext, stringifyError,
+    Debouncer, EventEmitter, Everything, IActionExecutor, ICodeContext, Roots, stringifyError,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -143,7 +143,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 this.executor.output.debug('[auth] sovereign cloud configuration changed; invalidating accounts');
                 // The configured environment itself changed, so every cached
                 // listing was fetched against the old endpoint and is invalid.
-                this.invalidateAll();
+                this.changeEmitter.fire({ target: Everything });
             }
         }));
     }
@@ -269,7 +269,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
             // a signed-out account's subtree is evicted because it drops out of the
             // new listing.
             this.executor.output.debug(`[auth] sessions changed provider=${providerId}; account set changed (count=${currentIds.size}), re-listing accounts`);
-            this.changeEmitter.fire({ resource: undefined, includeChildren: false });
+            this.changeEmitter.fire({ target: Roots });
         } catch (error) {
             // This runs as a fire-and-forget reconcile, and listAccounts() can
             // throw (a transient getAccounts() failure, or getConfiguredAzureEnv()
@@ -327,10 +327,6 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 } satisfies AzureSubscription));
             yield { items, hasMore: page.hasMore };
         }
-    }
-
-    private invalidateAll(): void {
-        this.changeEmitter.fire({ resource: undefined, includeChildren: true });
     }
 
     /** @inheritdoc */

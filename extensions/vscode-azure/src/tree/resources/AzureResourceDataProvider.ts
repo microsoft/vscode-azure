@@ -9,7 +9,7 @@ import {
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, IActionExecutor, IVsCode,
+    EventEmitter, Everything, IActionExecutor, IVsCode,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type ProviderResult
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -53,7 +53,7 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
         this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.pageSize`)) {
                 this.executor.output.debug('[data] resources config changed: pageSize');
-                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+                this.changeEmitter.fire({ target: Everything });
             }
         }));
     }

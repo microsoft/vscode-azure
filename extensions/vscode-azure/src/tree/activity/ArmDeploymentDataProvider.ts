@@ -8,7 +8,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    delay, EventEmitter, flattenPages, IActionExecutor, IVsCode, stringifyError,
+    delay, EventEmitter, Everything, flattenPages, IActionExecutor, IVsCode, selfOnly, stringifyError,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -74,7 +74,7 @@ export interface ArmDeploymentOperationActivity extends Activity {
  * preserve object identity.
  */
 @injectable()
-export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActivity>, Disposable {
+export class ArmDeploymentDataProvider implements DataProvider<Activity>, Disposable {
     public readonly isRoot = true;
 
     /** Top-level tracked deployments (user-initiated). */
@@ -86,7 +86,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
     /** Shared deployment clients per subscription to reuse pipelines and dedupe identical GET requests. */
     private readonly clientCache = new Map<string, IDeploymentClient>();
 
-    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<ArmDeploymentActivity>>();
+    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<Activity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public constructor(
@@ -180,7 +180,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
         this.trackedRoots.set(activity.id, activity);
         this.knownDeployments.set(activity.id, activity);
-        this.onDidChangeEmitter.fire({ includeChildren: true });
+        this.onDidChangeEmitter.fire({ target: Everything });
     }
 
     /**
@@ -250,11 +250,11 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                         if (isTerminalState(provisioningState)) {
                             activity.endTime = new Date();
                             this.executor.output.debug(`[activity] deployment reached terminal status deployment=${activity.id} status=${activity.status}`);
-                            this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
+                            this.onDidChangeEmitter.fire({ target: includeChildren ? activity : selfOnly(activity) });
                             return;
                         }
 
-                        this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
+                        this.onDidChangeEmitter.fire({ target: includeChildren ? activity : selfOnly(activity) });
                     });
 
                     // Exit the loop if the deployment reached a terminal state
@@ -416,7 +416,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ includeChildren: true });
+            this.onDidChangeEmitter.fire({ target: Everything });
         }
     }
 

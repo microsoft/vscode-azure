@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createActionContext } from '@microsoft/vscode-azure-utils';
+import { createActionContext, Everything } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -100,8 +100,9 @@ describe('AzdUp (unit)', () => {
 
         await cmd.execute();
 
-        const invalidateAll = (dataTree as unknown as { invalidateAll: ReturnType<typeof mock.fn> }).invalidateAll;
-        expect(invalidateAll.mock.callCount()).to.equal(1);
+        const invalidate = (dataTree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate;
+        expect(invalidate.mock.callCount()).to.equal(1);
+        expect(invalidate.mock.calls[0].arguments[0]).to.equal(Everything);
     });
 
     it('should call deploy after provision', async () => {
