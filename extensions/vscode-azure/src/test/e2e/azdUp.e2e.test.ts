@@ -3,43 +3,43 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProcessExecutor } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
 import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { IAzdService } from '../../azd/AzdService';
 import { AzdDownCommandId, AzdUpCommandId, ExtensionId } from '../../constants';
+import type { E2eExtensionApi } from '../../extension';
 import { describeE2e, getE2eConfig, type E2eConfig } from './e2eConfig';
-
-// The real VS Code namespace satisfies IVsCode (the extension binds it the same
-// way). Only background execution is used here, which never touches it.
-const executor = new ProcessExecutor(vscode);
 
 /**
  * Full end-to-end coverage of the `azd up` path.
  *
  * Activates the extension (with `RUN_E2E=1` rebinding the credential factory to
- * a real {@linkcode TokenCredential} via `applyOverrides`), copies the minimal
- * `azd-sample` fixture to a temp directory, creates an azd environment, then
- * exercises the extension exactly as a user would -- by running its real VS Code
- * commands:
+ * a real {@linkcode TokenCredential} via `applyOverrides`, and exposing the DI
+ * container via {@linkcode E2eExtensionApi}), copies the minimal `azd-sample`
+ * fixture to a temp directory, creates an azd environment, then exercises the
+ * extension exactly as a user would -- by running its real VS Code commands:
  *
  * - {@linkcode AzdUpCommandId} (passing the `azure.yaml` URI so the wizard's
  *   folder-selection prompt is skipped) provisions and deploys, with
  *   authentication delegated to the in-process `AzdAuthServer`.
  * - {@linkcode AzdDownCommandId} tears the deployment back down in `after()`.
  *
- * Only the harness work that has no command equivalent -- detecting whether
- * `azd` is installed, creating the environment, and reading back the deployed
- * outputs -- shells out to `azd` directly via {@linkcode runAzd}. None of those
+ * The operations *under test* always go through those commands. The surrounding
+ * harness work -- checking the `azd` version, creating the environment, and
+ * reading back the deployed outputs -- is delegated to the extension's own
+ * {@linkcode IAzdService}, resolved from the exposed container. None of those
  * operations require Azure credentials.
  *
- * Skips automatically when the `azd` CLI is not installed.
+ * Skips automatically when the `azd` CLI is not installed (or is below the
+ * minimum supported version).
  */
 describeE2e('azd up', function () {
     let config: E2eConfig;
+    let azdService: IAzdService;
     let projectDir: vscode.Uri | undefined;
     let envName: string;
     let provisioned = false;
@@ -48,27 +48,30 @@ describeE2e('azd up', function () {
         config = await getE2eConfig();
         envName = `e2e-${randomBytes(3).toString('hex')}`;
 
-        // The azd CLI is required; skip the suite gracefully when it is absent.
-        if (!(await executor.isOnPath('azd'))) {
-            this.skip();
-        }
-
         // Activate the extension so the azd commands are registered and the
         // RUN_E2E override rebinds ICredentialFactory to a real credential.
-        const ext = vscode.extensions.getExtension(ExtensionId);
+        // Activation also returns the DI container so we can resolve services.
+        const ext = vscode.extensions.getExtension<E2eExtensionApi | undefined>(ExtensionId);
         if (!ext) {
             expect.fail('Could not resolve the vscode-azure extension');
         }
-        await ext.activate();
+        const api = await ext.activate();
+        if (!api) {
+            expect.fail('Extension did not expose its container; ensure RUN_E2E=1 is set');
+        }
+        azdService = api.container.get(IAzdService);
+
+        // A sufficiently recent azd CLI is required; skip the suite gracefully
+        // when it is absent or too old (checkVersion returns undefined/false).
+        if (!(await azdService.checkVersion())) {
+            this.skip();
+        }
 
         projectDir = await copyFixtureToTempDir('azd-sample');
 
         // The azd up command provisions an existing environment; create one up
         // front. No Azure credentials are required for `azd env new`.
-        await runAzd(
-            ['env', 'new', envName, '--location', config.location, '--subscription', config.subscriptionId],
-            projectDir,
-        );
+        await azdService.envNew(envName, config.location, config.subscriptionId, projectDir);
     });
 
     after(async function () {
@@ -105,39 +108,16 @@ describeE2e('azd up', function () {
         // the wizard's iacFolder and skips its only interactive prompt.
         await vscode.commands.executeCommand(AzdUpCommandId, azureYaml);
 
-        const values = await runAzdJson<Record<string, string>>(
-            ['env', 'get-values', '--environment', envName, '--output', 'json'],
-            projectDir,
-        );
+        const values = await azdService.envGetValues(envName, projectDir);
         expect(
             values.STORAGE_ACCOUNT_NAME,
             `Expected STORAGE_ACCOUNT_NAME in azd env values, got ${JSON.stringify(values)}`,
         ).to.be.a('string').with.length.greaterThan(0);
 
-        const show = await runAzdJson<{ name?: string }>(['show', '--output', 'json'], projectDir);
-        expect(show.name).to.equal('vscode-azure-e2e-sample');
+        const show = await azdService.show(projectDir);
+        expect(show?.name).to.equal('vscode-azure-e2e-sample');
     });
 });
-
-/**
- * Runs `azd` with the given args, rejecting on a non-zero exit.
- *
- * @param args - Arguments passed to the `azd` CLI.
- * @param cwd - Working directory for the invocation.
- * @returns The captured stdout.
- */
-async function runAzd(args: string[], cwd: vscode.Uri): Promise<string> {
-    const { stdout } = await executor.spawn({ execution: 'background', command: 'azd', args, cwd });
-    return stdout;
-}
-
-/**
- * Runs `azd` with the given args and parses its stdout as JSON.
- */
-async function runAzdJson<T>(args: string[], cwd: vscode.Uri): Promise<T> {
-    const { json } = await executor.spawn<T>({ execution: 'background', command: 'azd', args, cwd, parseJson: true });
-    return json;
-}
 
 /**
  * Copy a fixture project from the extension source tree into a fresh temp

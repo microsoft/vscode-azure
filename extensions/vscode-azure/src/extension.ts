@@ -46,6 +46,19 @@ import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
 
 /**
+ * Public API surface returned from {@linkcode activateInternal} (and thus from
+ * the extension's `activate`) when `RUN_E2E=1`. Exposes the root DI container so
+ * E2E tests can resolve services such as {@linkcode IAzdService} for setup and
+ * result verification, while still driving the real operations under test
+ * through the extension's registered VS Code commands.
+ *
+ * Never returned during normal or production activation.
+ */
+export interface E2eExtensionApi {
+    readonly container: Container;
+}
+
+/**
  * Entry point called by the generated extension `activate` function.
  *
  * Builds the DI container, optionally applies overrides to it via
@@ -57,23 +70,34 @@ import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSe
  * @param applyOverrides - Optional callback to mutate the container after it is
  *   built but before activation (used by the "Run (Mock Data)" debug entry
  *   point to rebind services with mock implementations).
+ * @returns When `RUN_E2E=1`, an {@linkcode E2eExtensionApi} exposing the DI
+ *   container so E2E tests can resolve services; otherwise `undefined`.
  */
 export async function activateInternal(
     extensionContext: vscode.ExtensionContext,
     perfStats: { loadStartTime: number, loadEndTime: number },
     applyOverrides?: (container: Container) => void,
-): Promise<void> {
+): Promise<E2eExtensionApi | undefined> {
     const container = setUpContainer(extensionContext);
 
     applyOverrides?.(container);
 
-    return await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
+    await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
         activateContext.telemetry.isUserEvent = false;
 
         registerCommands(container);
         registerTrees(container);
     });
+
+    // Expose the DI container to E2E tests so they can resolve services (e.g.
+    // IAzdService) for setup and result verification. Gated on RUN_E2E so the
+    // container is never handed out during normal or production activation.
+    if (process.env.RUN_E2E === '1') {
+        return { container };
+    }
+
+    return undefined;
 }
 
 /** Entry point called by the generated extension `deactivate` function. */
