@@ -12,7 +12,7 @@ extensions/vscode-azure/src/test/
 
 ## Test Labels
 
-Label tests with `(unit)` or `(integration)` **after** the name in the root `describe` description:
+Label tests with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description:
 
 ```typescript
 describe('AzureNodeId (unit)', () => {
