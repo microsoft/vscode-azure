@@ -113,6 +113,37 @@ describe('ProcessExecutor (unit)', () => {
             }
         });
 
+        it('should reject promptly when the process fails to spawn (no pipe end)', async () => {
+            // Mirrors a spawn-time failure (e.g. EINVAL/ENOENT on Windows): the
+            // process never starts, so the stdout/stderr pipes are never ended.
+            // Reading captured stderr must not wait forever on a stream that
+            // never emits 'close'.
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = mock.fn(
+                (_cmd: string, _args: unknown[], _opts: { stdOutPipe?: NodeJS.WritableStream; stdErrPipe?: NodeJS.WritableStream }) => {
+                    // Intentionally do not end the pipes, just like a failed spawn.
+                    return Promise.reject(new Error('spawn test-cmd EINVAL'));
+                },
+            ) as unknown as SpawnFn;
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            const spawnResult = executor.spawn({
+                execution: 'background',
+                command: 'test-cmd',
+            });
+
+            // Without the fix this never settles; race against a short delay so
+            // a regression fails fast instead of hanging the suite.
+            const timedOut = Symbol('timed-out');
+            const outcome = await Promise.race([
+                spawnResult.then(() => undefined, (e: unknown) => e),
+                delay(2000).then(() => timedOut),
+            ]);
+
+            expect(outcome, 'spawn() hung instead of rejecting').to.not.equal(timedOut);
+            expect((outcome as Error).message).to.include('EINVAL');
+        });
+
         it('should stream JSON lines from stderr', async () => {
             const { vscode: code } = createMockVsCode();
             const stderrData = '{"step":1}\n{"step":2}\n';

@@ -101,6 +101,9 @@ function getAzAccount(): Promise<AzAccount> {
                 command: 'az',
                 args: ['account', 'show', '-o', 'json'],
                 parseJson: true,
+                // The Azure CLI is an `az.cmd` shim on Windows, which must be
+                // launched through a shell (spawning it directly fails EINVAL).
+                shell: process.platform === 'win32',
             });
             account = result.json;
         } catch (error) {

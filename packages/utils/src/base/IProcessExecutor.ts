@@ -39,6 +39,17 @@ export interface ProcessExecutorOptions {
     readonly args?: CommandLineArgs;
     readonly cwd?: vscode.Uri;
     readonly env?: Readonly<Record<string, string>>;
+    /**
+     * Runs the command through a shell (only honored for `'background'`
+     * execution). Required on Windows to launch `.cmd`/`.bat` shims such as the
+     * Azure CLI (`az`), which `child_process.spawn()` otherwise rejects with
+     * `EINVAL`. Native executables (e.g. `azd`) should leave this unset.
+     *
+     * @remarks
+     * Arguments are not shell-escaped, so only enable this for trusted,
+     * program-controlled arguments.
+     */
+    readonly shell?: boolean | string;
 }
 
 /**
@@ -263,6 +274,7 @@ export class ProcessExecutor implements IProcessExecutor {
             cwd: options.cwd?.fsPath,
             env: options.env ? { ...process.env, ...options.env } : undefined,
             cancellationToken,
+            shell: options.shell,
             stdOutPipe: stdOutStream,
             stdErrPipe: stdErrStream,
         });
@@ -274,7 +286,7 @@ export class ProcessExecutor implements IProcessExecutor {
                 const json: unknown = JSON.parse(stdout);
                 return { stdout, stderr, json };
             }, async (e: unknown) => {
-                const stderr = await stdErrAccumulator.getString();
+                const stderr = await readStderrAfterFailure(e, stdErrAccumulator);
                 throw enrichError(e, stderr);
             });
 
@@ -287,7 +299,7 @@ export class ProcessExecutor implements IProcessExecutor {
         try {
             await spawnPromise;
         } catch (e) {
-            const stderr = await stdErrAccumulator.getString();
+            const stderr = await readStderrAfterFailure(e, stdErrAccumulator);
             throw enrichError(e, stderr);
         }
 
@@ -301,6 +313,32 @@ export class ProcessExecutor implements IProcessExecutor {
 
         return { stdout, stderr };
     }
+}
+
+/**
+ * Reads accumulated stderr after a background spawn has failed, without hanging.
+ *
+ * {@linkcode AccumulatorStream.getString} resolves only once the stream emits
+ * `close`, which happens when the child process's piped stderr ends. When the
+ * process exits (even non-zero), that pipe ends naturally, so the full stderr is
+ * available. But when the process never starts (a spawn-time failure such as
+ * `EINVAL`/`ENOENT`), nothing is ever piped in and the stream never ends, so a
+ * naive `getString()` would wait forever. In that case there is no captured
+ * output, so the stream is force-ended to unblock the read.
+ *
+ * @param error - The rejection from the spawn promise.
+ * @param stderr - The accumulator capturing the process's stderr.
+ * @returns The captured stderr (empty for spawn-time failures).
+ */
+async function readStderrAfterFailure(error: unknown, stderr: AccumulatorStream): Promise<string> {
+    // A ChildProcessError means the process actually ran and exited, so its
+    // piped stderr stream will end on its own and getString() resolves with the
+    // full output. Any other failure means the process never started.
+    if (!isChildProcessError(error) && !stderr.writableEnded) {
+        stderr.end();
+    }
+
+    return stderr.getString();
 }
 
 function enrichError(e: unknown, stderr: string): unknown {

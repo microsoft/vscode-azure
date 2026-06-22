@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { IAzdService } from '../../azd/AzdService';
-import { AzdDownCommandId, AzdUpCommandId, ExtensionId } from '../../constants';
+import { AzdUpCommandId, ExtensionId } from '../../constants';
 import type { E2eExtensionApi } from '../../extension';
 import { describeE2e, getE2eConfig, type E2eConfig } from './e2eConfig';
 
@@ -26,7 +26,9 @@ import { describeE2e, getE2eConfig, type E2eConfig } from './e2eConfig';
  * - {@linkcode AzdUpCommandId} (passing the `azure.yaml` URI so the wizard's
  *   folder-selection prompt is skipped) provisions and deploys, with
  *   authentication delegated to the in-process `AzdAuthServer`.
- * - {@linkcode AzdDownCommandId} tears the deployment back down in `after()`.
+ * - The deployment is torn back down in `after()` via
+ *   {@linkcode IAzdService.down} (not the `azd down` command, whose modal
+ *   confirmation cannot be answered in the headless test host).
  *
  * The operations *under test* always go through those commands. The surrounding
  * harness work -- checking the `azd` version, creating the environment, and
@@ -79,10 +81,11 @@ describeE2e('azd up', function () {
     after(async function () {
         if (provisioned && projectDir) {
             try {
-                // Tear down through the real command so the extension's auth
-                // server authenticates `azd down` -- mirroring the user flow.
-                const azureYaml = vscode.Uri.joinPath(projectDir, 'azure.yaml');
-                await vscode.commands.executeCommand(AzdDownCommandId, azureYaml);
+                // Tear down via the service rather than the azd down command:
+                // the command opens a modal confirmation that cannot be answered
+                // in the headless test host. The service still runs the real
+                // `azd down` authenticated by the in-process auth server.
+                await azdService.down(projectDir);
             } catch {
                 // Best-effort teardown; surface nothing so a cleanup failure
                 // does not mask the test result.
