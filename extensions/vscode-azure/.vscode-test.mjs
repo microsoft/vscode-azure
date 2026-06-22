@@ -30,7 +30,7 @@ export default defineConfig({
             // the esbuild config (see esbuild.mjs)
         ],
         exclude: [
-            '**/extensions/vscode-azure/src/debug/**',
+            '**/extensions/vscode-azure/src/override/**',
             '**/extensions/vscode-azure/src/test/**',
         ],
         reporter: ['html'],

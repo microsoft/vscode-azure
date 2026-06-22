@@ -5,7 +5,7 @@
 
 // Mock data setup for the "Extension: Run (Mock Data)" launch configuration.
 //
-// This file is compiled as a SEPARATE esbuild entry point (debug.bundle.js)
+// This file is compiled as a SEPARATE esbuild entry point (test/mock.bundle.js)
 // so none of this code ends up in the main extension bundle.
 
 import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
