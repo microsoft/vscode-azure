@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, Everything, selfOnly, stringifyError } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, Roots, selfOnly, stringifyError } from '@microsoft/vscode-azure-utils';
 import { injectable, type ServiceIdentifier } from 'inversify';
 import * as crypto from 'node:crypto';
 import { type Activity, type ActivityStatus, isActivity, isTerminalActivityStatus } from './Activity';
@@ -65,7 +65,7 @@ export class GenericActivityDataProvider implements DataProvider<Activity>, Disp
             endTime: isTerminalActivityStatus(status) ? now : undefined,
         };
         this.rootActivities.set(activity.id, activity);
-        this.onDidChangeEmitter.fire({ target: Everything });
+        this.onDidChangeEmitter.fire({ target: Roots });
         return new GenericActivityHandle(activity, (e) => { this.onDidChangeEmitter.fire(e); });
     }
 
@@ -79,7 +79,7 @@ export class GenericActivityDataProvider implements DataProvider<Activity>, Disp
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ target: Everything });
+            this.onDidChangeEmitter.fire({ target: Roots });
         }
     }
 

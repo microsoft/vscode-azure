@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, Everything, stringifyError } from '@microsoft/vscode-azure-utils';
+import { type DataProvider, type DataProviderChangeEvent, type Disposable, EventEmitter, Roots, stringifyError } from '@microsoft/vscode-azure-utils';
 import { injectable, type ServiceIdentifier } from 'inversify';
 import * as crypto from 'node:crypto';
 import { type Activity, type ActivityStatus, isActivity, isTerminalActivityStatus } from './Activity';
@@ -60,7 +60,7 @@ export class CodeDeploymentDataProvider implements DataProvider<Activity>, Dispo
             startTime: new Date(),
         };
         this.rootDeployments.set(activity.id, activity);
-        this.onDidChangeEmitter.fire({ target: Everything });
+        this.onDidChangeEmitter.fire({ target: Roots });
         return new CodeDeploymentHandle(activity, (e) => { this.onDidChangeEmitter.fire(e); });
     }
 
@@ -74,7 +74,7 @@ export class CodeDeploymentDataProvider implements DataProvider<Activity>, Dispo
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ target: Everything });
+            this.onDidChangeEmitter.fire({ target: Roots });
         }
     }
 

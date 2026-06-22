@@ -8,7 +8,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    delay, EventEmitter, Everything, flattenPages, IActionExecutor, IVsCode, selfOnly, stringifyError,
+    delay, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
     type DataProvider, type DataProviderChangeEvent, type Disposable
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -180,7 +180,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
 
         this.trackedRoots.set(activity.id, activity);
         this.knownDeployments.set(activity.id, activity);
-        this.onDidChangeEmitter.fire({ target: Everything });
+        this.onDidChangeEmitter.fire({ target: Roots });
     }
 
     /**
@@ -416,7 +416,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ target: Everything });
+            this.onDidChangeEmitter.fire({ target: Roots });
         }
     }
 

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, Everything, IActionExecutor, IVsCode, fileExists,
+    EventEmitter, IActionExecutor, IVsCode, Roots, fileExists,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -44,7 +44,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
     ) {
         const invalidateAll = (reason: string) => {
             this.executor.output.debug(`[data] azd workspace: ${reason}`);
-            this.changeEmitter.fire({ target: Everything });
+            this.changeEmitter.fire({ target: Roots });
         };
 
         this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateAll('folders changed'); }));
