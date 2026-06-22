@@ -20,9 +20,9 @@ import { execFile } from 'node:child_process';
  * lives in `src/override/e2e.ts` (the override bundle).
  *
  * @remarks
- * Because `@vscode/test-cli`'s default glob (`src/test/**\/*.test.ts`) also
- * matches `*.e2e.test.ts`, the {@linkcode describeE2e} gate is the safety
- * mechanism that prevents accidental live runs during the normal test suite.
+ * The default test runner glob also matches the `*.e2e.test.ts` files, so the
+ * {@linkcode describeE2e} gate is the safety mechanism that prevents accidental
+ * live runs during the normal test suite.
  */
 
 /** Mocha timeout for E2E suites; live provisioning/deploys can take many minutes. */
@@ -32,10 +32,11 @@ const E2eTimeoutMs = 30 * 60 * 1000;
  * Registers an E2E test suite.
  *
  * When E2E is enabled, this is a normal {@linkcode describe} block (with an
- * `(e2e)` label appended per the repo's labeling convention) and a long mocha
- * timeout to accommodate real Azure provisioning/deployment. When disabled,
- * the suite is registered with {@linkcode describe.skip} so it never executes
- * but still shows up as pending in reporters.
+ * `(e2e)` label appended, mirroring the repo's `(unit)`/`(integration)` suffix
+ * style) and a long mocha timeout to accommodate real Azure
+ * provisioning/deployment. When disabled, the suite is registered with
+ * {@linkcode describe.skip} so it never executes but still shows up as pending
+ * in reporters.
  *
  * @param title - The suite title (the `(e2e)` label is appended automatically).
  * @param fn - The suite body.

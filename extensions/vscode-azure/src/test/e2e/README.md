@@ -50,12 +50,3 @@ from `AZURE_E2E_SUBSCRIPTION_ID`, so the CLI is never consulted.
   `$(System.AccessToken)` for the job.
 - **Local development:** otherwise an `AzureCliCredential` is used, which picks
   up `az login`. Run `az login` first.
-
-## Suites
-
-- [`azdUp.e2e.test.ts`](./azdUp.e2e.test.ts) -- copies the
-  [`azd-sample`](./fixtures/azd-sample) fixture to a temp directory, runs the
-  extension's `azd up` command (auth delegated to the in-process
-  `AzdAuthServer`), asserts the provisioned storage account is reported, then
-  tears the deployment back down via the extension's `azd down` command. Skips
-  automatically when the `azd` CLI is not installed.
