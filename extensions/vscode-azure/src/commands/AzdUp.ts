@@ -4,19 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, ICodeContext, IOutputChannel, Wizard, Everything } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
+import { ICodeContext, IOutputChannel, Wizard, Everything } from '@microsoft/vscode-azure-utils';
+import { Container, inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { IAzdService } from '../azd/AzdService';
-import { ITempDirManager } from '../azd/TempDirManager';
 import { AzdDeployStep } from '../azd/wizard/AzdDeployStep';
 import { AzdProvisionStep } from '../azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../azd/wizard/ShowEndpointUrlStep';
 import { IAzureViewDataTree } from '../services';
-import { IArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
-import { ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from './ManagedCommand';
 
 /**
@@ -31,20 +27,18 @@ import type { ManagedCommand } from './ManagedCommand';
 @injectable()
 export class AzdUp implements ManagedCommand {
     public constructor(
-        @inject(IActionContext) private readonly actionContext: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
-        @inject(IAzdService) private readonly azd: IAzdService,
-        @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
-        @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
-        @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
+        @inject(Container) private readonly container: Container,
     ) { }
 
     /** @inheritdoc */
     public async execute(fileUri?: vscode.Uri): Promise<void> {
         // Pre-seed iacFolder when invoked from a right-click on azure.yaml
         const iacFolder = fileUri ? this.ctx.code.Uri.joinPath(fileUri, '..') : undefined;
+
+        const get = this.container.get.bind(this.container);
 
         const wizard = new Wizard<AzdWizardContext>(
             this.output,
@@ -54,12 +48,12 @@ export class AzdUp implements ManagedCommand {
                 deploy: true,
             },
             [
-                new SelectIacFolderStep(this.actionContext, this.ctx, this.tempManager, this.azd),
+                get(SelectIacFolderStep),
             ],
             [
-                new AzdProvisionStep(this.ctx, this.azd, this.output, this.armProvider, this.tempManager),
-                new AzdDeployStep(this.actionContext, this.ctx.code, this.azd, this.codeProvider),
-                new ShowEndpointUrlStep(this.ctx, this.azd),
+                get(AzdProvisionStep),
+                get(AzdDeployStep),
+                get(ShowEndpointUrlStep),
             ],
         );
 

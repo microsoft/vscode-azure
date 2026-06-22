@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, type ICodeContext } from '@microsoft/vscode-azure-utils';
-import type { IAzdService } from '../AzdService';
+import { ExecuteStep, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
+import { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -14,10 +15,11 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * Best-effort: silently skips when no URLs are available or when
  * `azd show` fails.
  */
+@injectable()
 export class ShowEndpointUrlStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly ctx: ICodeContext,
-        private readonly azd: IAzdService,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(IAzdService) private readonly azd: IAzdService,
     ) {
         super();
     }

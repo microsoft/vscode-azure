@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PromptStep, fileExists, type AsWritable, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { PromptStep, fileExists, type AsWritable, IVsCode } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import type { AzdEnvironment, IAzdService } from '../AzdService';
+import { type AzdEnvironment, IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
 
@@ -39,10 +40,11 @@ import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
  * For the `createNew` job this step is a no-op: the temp `iacFolder` is
  * always empty, so all flags would be `false` anyway.
  */
+@injectable()
 export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
-        private readonly code: IVsCode,
-        private readonly azd: IAzdService,
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IAzdService) private readonly azd: IAzdService,
     ) {
         super();
     }

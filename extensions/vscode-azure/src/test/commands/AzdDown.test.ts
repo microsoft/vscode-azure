@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createActionContext, Everything } from '@microsoft/vscode-azure-utils';
+import { Everything } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { TempDirManager } from '../../azd/TempDirManager';
 import { AzdDown } from '../../commands/AzdDown';
 import { createMockAzdService } from '../azd/MockAzdService';
+import { createWizardCommandContainer } from './createWizardCommandContainer';
 
 describe('AzdDown (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
@@ -23,8 +23,6 @@ describe('AzdDown (unit)', () => {
         const azd = createMockAzdService();
 
         const dataTree = createMockDataItemTree([sub]);
-
-        const tempManager = new TempDirManager(ctx);
 
         if (options.workspaceFolders !== false) {
             mockResult.workspaceFolders.push({
@@ -42,14 +40,8 @@ describe('AzdDown (unit)', () => {
             });
         }
 
-        const cmd = new AzdDown(
-            createActionContext('test'),
-            ctx,
-            output,
-            azd,
-            dataTree,
-            tempManager,
-        );
+        const container = createWizardCommandContainer({ ctx, output, azd, dataTree });
+        const cmd = container.get(AzdDown);
 
         const invalidate = (dataTree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate;
 

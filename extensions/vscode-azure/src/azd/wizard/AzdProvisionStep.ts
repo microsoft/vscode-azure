@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, delay, ExecuteStep, stringifyError, type ICodeContext, type IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { CancellationError, delay, ExecuteStep, stringifyError, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import type { ArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
-import type { IAzdService } from '../AzdService';
-import type { ITempDirManager } from '../TempDirManager';
+import { IArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
+import { IAzdService } from '../AzdService';
+import { ITempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /** A single line from the JSONL deployment ID file written by azd. */
@@ -23,15 +24,16 @@ const pollIntervalMs = 3000;
  *
  * Sets `AZD_DEPLOYMENT_ID_FILE` so azd writes ARM deployment IDs
  * as JSONL. Polls for that file to start tracking each deployment
- * in the activity view via {@linkcode ArmDeploymentDataProvider}.
+ * in the activity view via {@linkcode IArmDeploymentDataProvider}.
  */
+@injectable()
 export class AzdProvisionStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly ctx: ICodeContext,
-        private readonly azd: IAzdService,
-        private readonly output: IOutputChannel,
-        private readonly armProvider: ArmDeploymentDataProvider,
-        private readonly tempDirManager: ITempDirManager,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(IOutputChannel) private readonly output: IOutputChannel,
+        @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
+        @inject(ITempDirManager) private readonly tempDirManager: ITempDirManager,
     ) {
         super();
     }

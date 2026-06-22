@@ -40,6 +40,7 @@ import * as vscode from 'vscode'; // eslint-disable-line @typescript-eslint/no-r
 import { AzdAuthServer, IAzdAuthServer } from './azd/AzdAuthServer';
 import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
+import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
 import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
@@ -178,6 +179,8 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     });
 
     container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
+
+    container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 
     return container;
 }

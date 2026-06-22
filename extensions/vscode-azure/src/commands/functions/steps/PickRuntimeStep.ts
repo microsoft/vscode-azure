@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import type { CreateFunctionAppContext, FunctionWorkerRuntime } from '../CreateFunctionAppContext';
 import { PickRuntimeVersionStep } from './PickRuntimeVersionStep';
 
@@ -30,9 +31,10 @@ function getRuntimeItems(ctx: ICodeContext): RuntimeItem[] {
  * Only the runtime is selected here; the version is resolved by the {@linkcode PickRuntimeVersionStep}
  * subprompt inserted immediately after this step.
  */
+@injectable()
 export class PickRuntimeStep extends PromptStep<CreateFunctionAppContext> {
     public constructor(
-        private readonly ctx: ICodeContext,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
     ) {
         super();
     }

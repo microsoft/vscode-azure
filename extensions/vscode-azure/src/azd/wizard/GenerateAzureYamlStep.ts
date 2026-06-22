@@ -4,15 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import type { IAzdService } from '../AzdService';
+import { inject, injectable } from 'inversify';
+import { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
  * Generates the `azure.yaml` stub for the project.
  */
+@injectable()
 export class GenerateAzureYamlStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly azd: IAzdService,
+        @inject(IAzdService) private readonly azd: IAzdService,
     ) {
         super();
     }

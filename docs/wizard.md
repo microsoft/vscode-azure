@@ -128,3 +128,29 @@ Convenience wrappers (`subscriptionExperience`, `resourceGroupExperience`, `reso
 ## Resource Creation Wizards
 
 The extension uses the wizard framework for azd-backed resource creation flows (e.g. Function App). These wizards combine shared prompt steps (folder selection, subscription/location pickers, project naming) with resource-specific steps and execute steps that generate IaC and run `azd provision`. See [Resource Creation](resource-creation.md) for the full step sequence, scenario matrix, and guide for adding new resource types.
+
+### Resolving steps from the container
+
+The generic `new SomeStep()` examples above apply to dependency-free steps. In the extension, wizard steps that need DI services (`ICodeContext`, `IAzdService`, providers, etc.) are `@injectable()` and declare those services with `@inject(<token>)` on their constructor. The assembling command does **not** thread those services through -- it injects `Container`, grabs a bound `get` handle, and resolves each step:
+
+```typescript
+public async execute(job: AzdJob): Promise<void> {
+    const get = this.container.get.bind(this.container);
+
+    const promptSteps = [
+        get(SelectIacFolderStep),
+        get(HydratableChooseSubscriptionStep),
+        // ...
+    ];
+    const executeSteps = [
+        get(GenerateAzureYamlStep),
+        // ...
+    ];
+    const wizard = new Wizard(this.output, { /* initial */ }, promptSteps, executeSteps);
+    await wizard.run();
+}
+```
+
+Steps are constructed by the per-execution child container, which has `autobind` enabled (see [Dependency Injection](dependency-injection.md)) -- so an `@injectable` step resolves with no explicit binding. `IActionContext` resolves to the execution-scoped instance; the rest of a step's dependencies resolve from the root container.
+
+A step that needs both injected services **and** caller-supplied config (e.g. `GenerateBicepStep`) is resolved through a factory binding instead of autobind -- see [Factory Bindings](dependency-injection.md#factory-bindings-for-azure-clients) in the DI doc.
