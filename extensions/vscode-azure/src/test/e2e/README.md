@@ -27,13 +27,19 @@ with the `FC_SERVICE_CONNECTION_*` variables) on its dedicated E2E job.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `AZURE_E2E_SUBSCRIPTION_ID` | Yes | -- | Target subscription. |
-| `AZURE_E2E_TENANT_ID` | Yes | -- | Owning tenant. |
-| `AZURE_E2E_LOCATION` | No | `eastus` | Region for created resources. |
+| `AZURE_E2E_SUBSCRIPTION_ID` | No | active `az` subscription | Target subscription. |
+| `AZURE_E2E_TENANT_ID` | No | active `az` tenant | Owning tenant. |
+| `AZURE_E2E_LOCATION` | No | `westus2` | Region for created resources. |
+
+Locally, the subscription and tenant default to whatever the Azure CLI (`az`)
+is currently logged into (`az account show`), matching the `AzureCliCredential`
+used for auth -- so a developer typically only needs to run `az login`. In CI,
+the tenant comes from `FC_SERVICE_CONNECTION_TENANT_ID` and the subscription
+from `AZURE_E2E_SUBSCRIPTION_ID`, so the CLI is never consulted.
 
 ## Authentication
 
-[`applyOverrides`](../../debug/e2e.ts) selects a credential automatically:
+[`applyOverrides`](../../override/e2e.ts) selects a credential automatically:
 
 - **CI (Azure Pipelines federated service connection):** when
   `FC_SERVICE_CONNECTION_TENANT_ID`, `FC_SERVICE_CONNECTION_CLIENT_ID`,
@@ -42,9 +48,8 @@ with the `FC_SERVICE_CONNECTION_*` variables) on its dedicated E2E job.
   are set by the shared `vscode-azuretools` pipeline template's test step (see
   `azdo-pipelines/templates/test.yml`). Map `SYSTEM_ACCESSTOKEN` to
   `$(System.AccessToken)` for the job.
-- **Local development:** otherwise a `DefaultAzureCredential` is used, which
-  picks up `az login`, environment, and managed-identity credentials. Run
-  `az login` first.
+- **Local development:** otherwise an `AzureCliCredential` is used, which picks
+  up `az login`. Run `az login` first.
 
 ## Suites
 

@@ -3,6 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { stringifyError } from '@microsoft/vscode-azure-utils';
+import { execFile } from 'node:child_process';
+
 /**
  * End-to-end (E2E) test support: configuration and suite gating.
  *
@@ -14,14 +17,13 @@
  * as skipped so the files remain harmless in the normal `*.test.ts` collection.
  *
  * The real Azure credential injected into the live extension for these tests
- * lives in `src/debug/e2e.ts` (the override bundle).
+ * lives in `src/override/e2e.ts` (the override bundle).
  *
  * @remarks
- * Because `@vscode/test-cli`'s default glob (`src/test/** /*.test.ts`) also
+ * Because `@vscode/test-cli`'s default glob (`src/test/**\/*.test.ts`) also
  * matches `*.e2e.test.ts`, the {@linkcode describeE2e} gate is the safety
  * mechanism that prevents accidental live runs during the normal test suite.
  */
-
 
 /** Mocha timeout for E2E suites; live provisioning/deploys can take many minutes. */
 const E2eTimeoutMs = 30 * 60 * 1000;
@@ -43,6 +45,7 @@ export function describeE2e(title: string, fn: (this: Mocha.Suite) => void) {
     if (process.env.RUN_E2E !== '1') {
         return describe.skip(label, fn);
     }
+
     return describe(label, function (this: Mocha.Suite) {
         this.timeout(E2eTimeoutMs);
         fn.call(this);
@@ -50,40 +53,96 @@ export function describeE2e(title: string, fn: (this: Mocha.Suite) => void) {
 }
 
 /**
- * Resolved configuration for an E2E run, sourced from environment variables.
+ * Resolved configuration for an E2E run.
+ *
+ * Values are sourced from environment variables when present (the CI path:
+ * `AZURE_E2E_*` and the `FC_SERVICE_CONNECTION_*` federated-connection vars).
+ * For local development, the subscription and tenant fall back to whatever the
+ * Azure CLI (`az`) is currently logged into, matching the
+ * {@linkcode AzureCliCredential} used by the E2E credential override.
  */
 export interface E2eConfig {
-    /** Target subscription ID (`AZURE_E2E_SUBSCRIPTION_ID`). */
+    /** Target subscription ID (`AZURE_E2E_SUBSCRIPTION_ID`, else the `az` active subscription). */
     readonly subscriptionId: string;
-    /** Owning tenant ID (`AZURE_E2E_TENANT_ID`). */
+    /** Owning tenant ID (`FC_SERVICE_CONNECTION_TENANT_ID`/`AZURE_E2E_TENANT_ID`, else the `az` active tenant). */
     readonly tenantId: string;
-    /** Azure region for created resources (`AZURE_E2E_LOCATION`, default `eastus`). */
+    /** Azure region for created resources (`AZURE_E2E_LOCATION`, default `westus2`). */
     readonly location: string;
 }
 
-/** Reads a required environment variable, throwing a descriptive error if missing. */
-function requireEnv(name: string): string {
-    const value = process.env[name];
-    if (!value) {
-        throw new Error(
-            `E2E tests require the ${name} environment variable to be set. ` +
-            `Set RUN_E2E=1 and the AZURE_E2E_* variables (see src/test/e2e/README.md).`,
-        );
-    }
-    return value;
+/** Subset of `az account show -o json` output that we consume. */
+interface AzAccount {
+    readonly id: string;
+    readonly tenantId: string;
 }
 
 /**
- * Resolve the {@linkcode E2eConfig} from the environment.
- *
- * Only call this from inside an enabled E2E suite (it throws when required
- * variables are missing). Required: `AZURE_E2E_SUBSCRIPTION_ID`,
- * `AZURE_E2E_TENANT_ID`.
+ * The active Azure CLI account, fetched at most once for the life of the test
+ * process and memoized (including a rejected promise, so a missing/failed `az`
+ * fails fast on every subsequent call rather than re-shelling out).
  */
-export function getE2eConfig(): E2eConfig {
+let azAccountPromise: Promise<AzAccount> | undefined;
+
+/**
+ * Resolve the active Azure CLI account via `az account show -o json`.
+ *
+ * The result is cached for the life of the process. Rejects if the `az` CLI is
+ * not installed, the user is not logged in (`az login`), or the output cannot
+ * be parsed.
+ */
+function getAzAccount(): Promise<AzAccount> {
+    azAccountPromise ??= new Promise<AzAccount>((resolve, reject) => {
+        // `az` is a `.cmd` shim on Windows, so it isn't directly executable
+        // by `execFile` without a shell.
+        execFile('az', ['account', 'show', '-o', 'json'], { shell: process.platform === 'win32' }, (error, stdout) => {
+            if (error) {
+                reject(new Error(
+                    `Failed to run 'az account show'. Ensure the Azure CLI is installed and 'az login' has been run. ${stringifyError(error)}`,
+                ));
+                return;
+            }
+
+            try {
+                const account = JSON.parse(stdout) as AzAccount;
+                if (!account.id || !account.tenantId) {
+                    reject(new Error("'az account show' did not return a subscription id and tenant id. Run 'az login' and select a subscription."));
+                    return;
+                }
+                resolve({ id: account.id, tenantId: account.tenantId });
+            } catch (parseError) {
+                reject(new Error(`Failed to parse 'az account show' output. ${stringifyError(parseError)}`));
+            }
+        });
+    });
+
+    return azAccountPromise;
+}
+
+/**
+ * Resolve the {@linkcode E2eConfig} for the current run.
+ *
+ * Only call this from inside an enabled E2E suite. Resolution order:
+ * - `subscriptionId`: `AZURE_E2E_SUBSCRIPTION_ID`, else the active `az` subscription.
+ * - `tenantId`: `FC_SERVICE_CONNECTION_TENANT_ID`, else `AZURE_E2E_TENANT_ID`,
+ *   else the active `az` tenant.
+ * - `location`: `AZURE_E2E_LOCATION`, else `westus2`.
+ *
+ * The Azure CLI is only consulted when one of the above env vars is missing, so
+ * the CI path (which sets them) never shells out to `az`. When it is consulted,
+ * `az account show` runs at most once per process (see {@linkcode getAzAccount}).
+ *
+ * @throws If a value must come from `az` but the CLI is missing, not logged in,
+ *   or returns unparseable output.
+ */
+export async function getE2eConfig(): Promise<E2eConfig> {
+    const subscriptionId = process.env.AZURE_E2E_SUBSCRIPTION_ID;
+    const tenantId = process.env.FC_SERVICE_CONNECTION_TENANT_ID || process.env.AZURE_E2E_TENANT_ID;
+
+    const account = subscriptionId && tenantId ? undefined : await getAzAccount();
+
     return {
-        subscriptionId: requireEnv('AZURE_E2E_SUBSCRIPTION_ID'),
-        tenantId: requireEnv('AZURE_E2E_TENANT_ID'),
-        location: process.env.AZURE_E2E_LOCATION || 'eastus',
+        subscriptionId: subscriptionId || account!.id, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- account is resolved whenever subscriptionId is missing
+        tenantId: tenantId || account!.tenantId, // eslint-disable-line @typescript-eslint/no-non-null-assertion -- account is resolved whenever tenantId is missing
+        location: process.env.AZURE_E2E_LOCATION || 'westus2',
     };
 }
