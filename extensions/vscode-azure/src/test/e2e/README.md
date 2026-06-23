@@ -4,9 +4,9 @@ These tests make **real network calls** against a live Azure subscription and
 create/destroy real resources (resource groups, storage accounts). They are
 long-running and **disabled by default**: they only run when `RUN_E2E=1` is set
 in the environment. In the normal test suite the
-[`describeE2e`](./e2eConfig.ts) gate registers each suite as skipped, so these
+[`describeE2E`](./e2eConfig.ts) gate registers each suite as skipped, so these
 files are harmless even though their `*.e2e.test.ts` names also match the
-default `*.test.ts` glob. `describeE2e` also applies a long mocha timeout to
+default `*.test.ts` glob. `describeE2E` also applies a long mocha timeout to
 accommodate real provisioning/deployment.
 
 ## Running
