@@ -11,15 +11,15 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { IAzdService } from '../../azd/AzdService';
 import { AzdDownCommandId, AzdUpCommandId, ExtensionId } from '../../constants';
-import type { E2eExtensionApi } from '../../extension';
-import { describeE2e, getE2eConfig, type E2eConfig } from './e2eConfig';
+import type { E2EExtensionApi } from '../../extension';
+import { describeE2E, getE2eConfig, type E2EConfig } from './e2eConfig';
 
 /**
  * Full end-to-end coverage of the `azd up` path.
  *
  * Activates the extension (with `RUN_E2E=1` rebinding the credential factory to
  * a real {@linkcode TokenCredential} via `applyOverrides`, and exposing the DI
- * container via {@linkcode E2eExtensionApi}), copies the minimal `azd-sample`
+ * container via {@linkcode E2EExtensionApi}), copies the minimal `azd-sample`
  * fixture to a temp directory, creates an azd environment, then exercises the
  * extension exactly as a user would -- by running its real VS Code commands:
  *
@@ -40,8 +40,8 @@ import { describeE2e, getE2eConfig, type E2eConfig } from './e2eConfig';
  * minimum supported version, so a missing dependency is visible until CI
  * installs it.
  */
-describeE2e('azd up', function () {
-    let config: E2eConfig;
+describeE2E('azd up', function () {
+    let config: E2EConfig;
     let azdService: IAzdService;
     let projectDir: vscode.Uri | undefined;
     let envName: string;
@@ -54,7 +54,7 @@ describeE2e('azd up', function () {
         // Activate the extension so the azd commands are registered and the
         // RUN_E2E override rebinds ICredentialFactory to a real credential.
         // Activation also returns the DI container so we can resolve services.
-        const ext = vscode.extensions.getExtension<E2eExtensionApi | undefined>(ExtensionId);
+        const ext = vscode.extensions.getExtension<E2EExtensionApi | undefined>(ExtensionId);
         if (!ext) {
             expect.fail('Could not resolve the vscode-azure extension');
         }
@@ -80,17 +80,17 @@ describeE2e('azd up', function () {
 
     after(async function () {
         if (provisioned && projectDir) {
-            try {
-                // Tear down via the real azd down command, the same code path a
-                // user would invoke. The modal confirmation it normally shows
-                // cannot be answered in the headless test host, so pass
-                // skipConfirmation to bypass it.
-                const azureYaml = vscode.Uri.joinPath(projectDir, 'azure.yaml');
-                await vscode.commands.executeCommand(AzdDownCommandId, azureYaml, { skipConfirmation: true });
-            } catch {
-                // Best-effort teardown; surface nothing so a cleanup failure
-                // does not mask the test result.
-            }
+            // Tear down via the real azd down command, the same code path a
+            // user would invoke. The modal confirmation it normally shows
+            // cannot be answered in the headless test host, so pass
+            // skipConfirmation to bypass it.
+            //
+            // Teardown failures are intentionally NOT swallowed: these tests
+            // provision real Azure resources, so a failed `azd down` must fail
+            // the run rather than silently leak resources. Mocha treats a throw
+            // in after() as a suite failure.
+            const azureYaml = vscode.Uri.joinPath(projectDir, 'azure.yaml');
+            await vscode.commands.executeCommand(AzdDownCommandId, azureYaml, { skipConfirmation: true });
         }
 
         if (projectDir) {

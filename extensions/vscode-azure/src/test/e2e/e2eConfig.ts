@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
  * create/destroy real resources. They are therefore long-running and disabled
  * by default. They run only when `RUN_E2E=1` is set in the environment (the
  * `Extension: Run E2E Tests` launch config sets this, and CI sets it on the
- * E2E job). When the flag is unset, {@linkcode describeE2e} registers the suite
+ * E2E job). When the flag is unset, {@linkcode describeE2E} registers the suite
  * as skipped so the files remain harmless in the normal `*.test.ts` collection.
  *
  * The real Azure credential injected into the live extension for these tests
@@ -21,12 +21,12 @@ import * as vscode from 'vscode';
  *
  * @remarks
  * The default test runner glob also matches the `*.e2e.test.ts` files, so the
- * {@linkcode describeE2e} gate is the safety mechanism that prevents accidental
+ * {@linkcode describeE2E} gate is the safety mechanism that prevents accidental
  * live runs during the normal test suite.
  */
 
 /** Mocha timeout for E2E suites; live provisioning/deploys can take many minutes. */
-const E2eTimeoutMs = 30 * 60 * 1000;
+const E2ETimeoutMs = 30 * 60 * 1000;
 
 /**
  * Registers an E2E test suite.
@@ -41,14 +41,14 @@ const E2eTimeoutMs = 30 * 60 * 1000;
  * @param title - The suite title (the `(e2e)` label is appended automatically).
  * @param fn - The suite body.
  */
-export function describeE2e(title: string, fn: (this: Mocha.Suite) => void) {
+export function describeE2E(title: string, fn: (this: Mocha.Suite) => void) {
     const label = `${title} (e2e)`;
     if (process.env.RUN_E2E !== '1') {
         return describe.skip(label, fn);
     }
 
     return describe(label, function (this: Mocha.Suite) {
-        this.timeout(E2eTimeoutMs);
+        this.timeout(E2ETimeoutMs);
         fn.call(this);
     });
 }
@@ -62,7 +62,7 @@ export function describeE2e(title: string, fn: (this: Mocha.Suite) => void) {
  * Azure CLI (`az`) is currently logged into, matching the
  * {@linkcode AzureCliCredential} used by the E2E credential override.
  */
-export interface E2eConfig {
+export interface E2EConfig {
     /** Target subscription ID (`AZURE_E2E_SUBSCRIPTION_ID`, else the `az` active subscription). */
     readonly subscriptionId: string;
     /** Owning tenant ID (`FC_SERVICE_CONNECTION_TENANT_ID`/`AZURE_E2E_TENANT_ID`, else the `az` active tenant). */
@@ -124,7 +124,7 @@ function getAzAccount(): Promise<AzAccount> {
 }
 
 /**
- * Resolve the {@linkcode E2eConfig} for the current run.
+ * Resolve the {@linkcode E2EConfig} for the current run.
  *
  * Only call this from inside an enabled E2E suite. Resolution order:
  * - `subscriptionId`: `AZURE_E2E_SUBSCRIPTION_ID`, else the active `az` subscription.
@@ -139,7 +139,7 @@ function getAzAccount(): Promise<AzAccount> {
  * @throws If a value must come from `az` but the CLI is missing, not logged in,
  *   or returns unparseable output.
  */
-export async function getE2eConfig(): Promise<E2eConfig> {
+export async function getE2eConfig(): Promise<E2EConfig> {
     const subscriptionId = process.env.AZURE_E2E_SUBSCRIPTION_ID;
     const tenantId = process.env.FC_SERVICE_CONNECTION_TENANT_ID || process.env.AZURE_E2E_TENANT_ID;
 

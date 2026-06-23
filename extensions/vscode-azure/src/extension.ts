@@ -54,7 +54,7 @@ import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSe
  *
  * Never returned during normal or production activation.
  */
-export interface E2eExtensionApi {
+export interface E2EExtensionApi {
     readonly container: Container;
 }
 
@@ -70,14 +70,14 @@ export interface E2eExtensionApi {
  * @param applyOverrides - Optional callback to mutate the container after it is
  *   built but before activation (used by the "Run (Mock Data)" debug entry
  *   point to rebind services with mock implementations).
- * @returns When `RUN_E2E=1`, an {@linkcode E2eExtensionApi} exposing the DI
+ * @returns When `RUN_E2E=1`, an {@linkcode E2EExtensionApi} exposing the DI
  *   container so E2E tests can resolve services; otherwise `undefined`.
  */
 export async function activateInternal(
     extensionContext: vscode.ExtensionContext,
     perfStats: { loadStartTime: number, loadEndTime: number },
     applyOverrides?: (container: Container) => void,
-): Promise<E2eExtensionApi | undefined> {
+): Promise<E2EExtensionApi | undefined> {
     const container = setUpContainer(extensionContext);
 
     applyOverrides?.(container);
