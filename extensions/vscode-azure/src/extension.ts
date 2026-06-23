@@ -44,6 +44,7 @@ import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd
 import { registerCommands } from './commands/registerCommands';
 import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
+import { AccountCacheStore, IAccountCacheStore } from './tree/resources/AccountCacheStore';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
 
 /**
@@ -154,6 +155,8 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     }).inSingletonScope();
 
     container.bind(ITempDirManager).to(TempDirManager).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IAccountCacheStore).to(AccountCacheStore).inSingletonScope();
 
     container.bind(IProcessExecutor).toDynamicValue(context => {
         return new ProcessExecutor(context.get(IVsCode));

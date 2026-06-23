@@ -3,25 +3,41 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AzurePublicCloud, buildAccountCacheData, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type CachedAccountData, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { Everything, Roots, type ChildResult, type DataProviderChangeEvent, type Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../tree/resources/AzureAccountDataProvider';
+import type { IAccountCacheStore } from '../../../tree/resources/AccountCacheStore';
 
 describe('AzureAccountDataProvider (unit)', () => {
     afterEach(() => {
         mock.restoreAll();
     });
 
-    function createProvider() {
+    /**
+     * A fake {@linkcode IAccountCacheStore}. By default {@linkcode load} resolves
+     * `undefined` (a cache miss) so the provider exercises its live streaming
+     * path. Pass `initial` to simulate a hydrated snapshot.
+     */
+    function createFakeStore(initial?: CachedAccountData) {
+        let current = initial;
+        const store: IAccountCacheStore = {
+            load: mock.fn(() => Promise.resolve(current)),
+            save: mock.fn((data: CachedAccountData) => { current = data; return Promise.resolve(); }),
+            clear: mock.fn(() => { current = undefined; return Promise.resolve(); }),
+        };
+        return store;
+    }
+
+    function createProvider(store: IAccountCacheStore = createFakeStore()) {
         const { ctx, mock } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const credentialFactory = () => makeCredential();
-        const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
-        return { provider, mock };
+        const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, store);
+        return { provider, mock, store };
     }
 
     /**
@@ -381,7 +397,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             const getToken = mock.fn(() => Promise.resolve({ token: 'tok', expiresOnTimestamp: Date.now() + 3600000 }));
             const { ctx, mock: vscodeMock } = createMockCodeContext();
             const { executor } = createTestActionExecutor();
-            const provider = new AzureAccountDataProvider(ctx, executor, () => ({ getToken }));
+            const provider = new AzureAccountDataProvider(ctx, executor, () => ({ getToken }), createFakeStore());
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
 
             await provider.getChildren();
@@ -510,6 +526,109 @@ describe('AzureAccountDataProvider (unit)', () => {
             const pages = await collectPages(await provider.getChildren(tenant));
 
             expect((pages[0].items as AzureSubscription[]).map(s => s.subscriptionId)).to.deep.equal(['s4']);
+        });
+    });
+
+    describe('stale-while-revalidate persistence', () => {
+        function snapshot(
+            accounts: AzureAccount[],
+            tenantsByAccountId = new Map<string, AzureTenant[]>(),
+            subsByTenantKey = new Map<string, AzureSubscription[]>(),
+        ): CachedAccountData {
+            return buildAccountCacheData(AzurePublicCloud, accounts, tenantsByAccountId, subsByTenantKey);
+        }
+
+        it('should serve a hydrated account snapshot immediately, re-attaching the configured environment', async () => {
+            const account = makeAccount({ id: 'a-id', label: 'Alpha' });
+            const { provider, mock: vscodeMock } = createProvider(createFakeStore(snapshot([account])));
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
+
+            const accounts = await provider.getChildren() as AzureAccount[];
+
+            expect(accounts.map(a => a.id)).to.deep.equal(['a-id']);
+            // The environment is re-hydrated from configuration, not persisted.
+            expect(accounts[0].environment).to.equal(AzurePublicCloud);
+        });
+
+        it('should not fire when a background account refresh finds the same set', async () => {
+            const account = makeAccount({ id: 'a-id', label: 'Alpha' });
+            const { provider, mock: vscodeMock } = createProvider(createFakeStore(snapshot([account])));
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            await provider.getChildren();
+            await flushMicrotasks();
+            await flushMicrotasks();
+
+            expect(fired).to.equal(0);
+        });
+
+        it('should fire a reconciling re-list and serve the fresh set when a background refresh detects a change', async () => {
+            const account = makeAccount({ id: 'a-id', label: 'Alpha' });
+            const { provider, mock: vscodeMock } = createProvider(createFakeStore(snapshot([account])));
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([
+                { id: 'a-id', label: 'Alpha' },
+                { id: 'b-id', label: 'Beta' },
+            ]));
+            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
+            let fired = 0;
+            provider.onDidChange(e => { event = e; fired++; });
+
+            const first = await provider.getChildren() as AzureAccount[];
+            // The stale snapshot is served first, without waiting for the network.
+            expect(first.map(a => a.id)).to.deep.equal(['a-id']);
+
+            await flushMicrotasks();
+            await flushMicrotasks();
+
+            // The background refresh saw a different set, so it fired a root re-list.
+            expect(fired).to.equal(1);
+            expect(event?.target).to.equal(Roots);
+
+            // The re-pull triggered by that fire serves the refreshed set directly,
+            // without kicking off another refresh (no loop).
+            const second = await provider.getChildren() as AzureAccount[];
+            expect(second.map(a => a.id)).to.deep.equal(['a-id', 'b-id']);
+        });
+
+        it('should persist accounts after a first-ever live listing', async () => {
+            const store = createFakeStore();
+            const { provider, mock: vscodeMock } = createProvider(store);
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
+
+            await provider.getChildren();
+            await flushMicrotasks();
+
+            const saved = await store.load();
+            expect(saved?.accounts.map(a => a.id)).to.deep.equal(['a-id']);
+        });
+
+        it('should serve cached tenants from a hydrated snapshot as an array rather than streaming', async () => {
+            const account = makeAccount({ id: 'a-id', label: 'Alpha' });
+            const tenant = makeTenant({ tenantId: 't-1', displayName: 'Tenant One', accountId: 'a-id' });
+            const { provider } = createProvider(createFakeStore(snapshot([account], new Map([['a-id', [tenant]]]))));
+            // The background refresh re-lists tenants; return the same one so it is a no-op.
+            mockSubscriptionClient({ tenantPages: [{ items: [{ tenantId: 't-1', displayName: 'Tenant One' }], hasMore: false }] });
+
+            const result = await provider.getChildren(account);
+
+            expect(Array.isArray(result)).to.be.true;
+            expect((result as AzureTenant[]).map(t => t.tenantId)).to.deep.equal(['t-1']);
+        });
+
+        it('should ignore a snapshot captured against a different cloud', async () => {
+            const account = makeAccount({ id: 'a-id', label: 'Alpha' });
+            const foreign = { ...snapshot([account]), environment: { name: 'OtherCloud', resourceManagerEndpointUrl: 'https://management.other.example/', isCustomCloud: true } };
+            const { provider, mock: vscodeMock } = createProvider(createFakeStore(foreign));
+            // Configured environment is public, so the foreign snapshot must be ignored.
+            vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
+
+            const accounts = await provider.getChildren() as AzureAccount[];
+
+            // The mismatched snapshot was not served; a live (empty) listing was used
+            // instead. Had it been served, the account 'a-id' would appear here.
+            expect(accounts).to.deep.equal([]);
         });
     });
 });
