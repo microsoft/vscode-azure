@@ -32,6 +32,18 @@ export interface EnvironmentLike {
      */
     readonly resourceManagerEndpointUrl: string;
 
+    /**
+     * The pre-built default `.default` token scope for ARM, e.g.
+     * `https://management.azure.com/.default`.
+     *
+     * Derived from the trailing-slash-stripped
+     * {@linkcode EnvironmentLike.resourceManagerEndpointUrl resourceManagerEndpointUrl}
+     * (see {@linkcode createEnvironment}), so it always has exactly one slash before
+     * `.default`. Prefer this over hand-building `${resourceManagerEndpointUrl}/.default`
+     * at call sites, which relies on the no-trailing-slash invariant being preserved.
+     */
+    readonly resourceManagerDefaultScope: string;
+
     /** The Azure portal URL, e.g. `https://portal.azure.com`. */
     readonly portalUrl: string;
 
@@ -86,10 +98,12 @@ export interface EnvironmentParametersLike {
  */
 export function createEnvironment(parameters: EnvironmentParametersLike, isCustomCloud = false): EnvironmentLike {
     const { storageEndpointSuffix, containerRegistryDnsSuffix, azureWebSitesEndpointSuffix } = parameters;
+    const resourceManagerEndpointUrl = stripTrailingSlash(parameters.resourceManagerEndpointUrl);
     return {
         name: parameters.name,
         isCustomCloud,
-        resourceManagerEndpointUrl: stripTrailingSlash(parameters.resourceManagerEndpointUrl),
+        resourceManagerEndpointUrl,
+        resourceManagerDefaultScope: `${resourceManagerEndpointUrl}/.default`,
         portalUrl: stripTrailingSlash(parameters.portalUrl),
         storageEndpoint: (accountName: string) => `https://${accountName}.blob.${storageEndpointSuffix}`,
         containerRegistryEndpoint: (registryName: string) => `https://${registryName}.${containerRegistryDnsSuffix}`,

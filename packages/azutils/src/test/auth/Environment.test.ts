@@ -28,6 +28,14 @@ describe('Environment (unit)', () => {
             expect(AzurePublicCloud.resourceManagerEndpointUrl).to.equal('https://management.azure.com');
         });
 
+        it('should expose a single-slash default ARM scope for each preset', () => {
+            for (const env of [AzurePublicCloud, AzureUSGovernment, AzureChinaCloud]) {
+                expect(env.resourceManagerDefaultScope, env.name).to.equal(`${env.resourceManagerEndpointUrl}/.default`);
+                expect(env.resourceManagerDefaultScope.includes('//.default'), env.name).to.be.false;
+            }
+            expect(AzurePublicCloud.resourceManagerDefaultScope).to.equal('https://management.azure.com/.default');
+        });
+
         it('should use US Government DNS suffixes', () => {
             expect(AzureUSGovernment.storageEndpoint('acct')).to.equal('https://acct.blob.core.usgovcloudapi.net');
             expect(AzureUSGovernment.containerRegistryEndpoint('reg')).to.equal('https://reg.azurecr.us');
@@ -83,6 +91,7 @@ describe('Environment (unit)', () => {
             expect(env.isCustomCloud).to.be.true;
             expect(env.name).to.equal('MyCloud');
             expect(env.resourceManagerEndpointUrl).to.equal('https://management.mycloud.example');
+            expect(env.resourceManagerDefaultScope).to.equal('https://management.mycloud.example/.default');
             expect(env.storageEndpoint('acct')).to.equal('https://acct.blob.core.mycloud.example');
         });
 
