@@ -14,7 +14,7 @@ describe('createDefaultCredentialFactory (unit)', () => {
         const factory = createDefaultCredentialFactory(vscode);
 
         const credential = factory();
-        expect(credential.getToken).to.be.a('function');
+        expect(typeof credential.getToken).to.equal('function');
     });
 
     it('should scope the credential to a subscription tenant and account', async () => {
