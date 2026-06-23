@@ -2,6 +2,7 @@ packages:
   - packages/utils
   - packages/azutils
   - extensions/vscode-azure
+enableGlobalVirtualStore: true
 allowBuilds:
   "@vscode/vsce-sign": true
   esbuild: true
