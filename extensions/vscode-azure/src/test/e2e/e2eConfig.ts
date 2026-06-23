@@ -139,7 +139,7 @@ function getAzAccount(): Promise<AzAccount> {
  * @throws If a value must come from `az` but the CLI is missing, not logged in,
  *   or returns unparseable output.
  */
-export async function getE2eConfig(): Promise<E2EConfig> {
+export async function getE2EConfig(): Promise<E2EConfig> {
     const subscriptionId = process.env.AZURE_E2E_SUBSCRIPTION_ID;
     const tenantId = process.env.FC_SERVICE_CONNECTION_TENANT_ID || process.env.AZURE_E2E_TENANT_ID;
 

@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import { IAzdService } from '../../azd/AzdService';
 import { AzdDownCommandId, AzdUpCommandId, ExtensionId } from '../../constants';
 import type { E2EExtensionApi } from '../../extension';
-import { describeE2E, getE2eConfig, type E2EConfig } from './e2eConfig';
+import { describeE2E, getE2EConfig, type E2EConfig } from './e2eConfig';
 
 /**
  * Full end-to-end coverage of the `azd up` path.
@@ -48,7 +48,7 @@ describeE2E('azd up', function () {
     let provisioned = false;
 
     before(async function () {
-        config = await getE2eConfig();
+        config = await getE2EConfig();
         envName = `e2e-${randomBytes(3).toString('hex')}`;
 
         // Activate the extension so the azd commands are registered and the
