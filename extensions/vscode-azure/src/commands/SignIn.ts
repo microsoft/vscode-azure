@@ -29,7 +29,7 @@ export class SignIn implements ManagedCommand {
     /** @inheritdoc */
     public async execute(): Promise<void> {
         const environment = getConfiguredAzureEnv(this.ctx.code);
-        const scopes = [`${environment.resourceManagerEndpointUrl}/.default`];
+        const scopes = [environment.resourceManagerDefaultScope];
 
         // `createIfNone: true` resolves to a session or rejects if the user
         // cancels, so a returned session always means a successful sign-in.
