@@ -15,7 +15,7 @@ export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdServi
 export const AzdCommand = 'azd';
 
 /** Minimum `azd` version required by this extension. */
-export const MinAzdVersion = '1.25.0';
+export const MinAzdVersion = '1.25.0-0';
 /** Minimum `azd` version that supports the `azd update` command (public preview). */
 export const MinAzdUpdateVersion = '1.23.14';
 

@@ -11,7 +11,7 @@
 // to a real Azure `TokenCredential`, so the live extension authenticates
 // against a real subscription instead of prompting for an interactive VS Code
 // sign-in. The suite-gating half lives in `src/test/e2e/e2eConfig.ts`
-// (`describeE2e`).
+// (`describeE2E`).
 //
 // Compiled as a SEPARATE esbuild entry point (e2e.bundle.js) so none of this
 // code -- nor its `@azure/identity` dependency -- ends up in the main extension
