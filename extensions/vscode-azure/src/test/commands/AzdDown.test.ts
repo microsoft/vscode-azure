@@ -98,6 +98,19 @@ describe('AzdDown (unit)', () => {
         expect(invalidate.mock.callCount()).to.equal(0);
     });
 
+    it('should skip the confirmation prompt when skipConfirmation is set', async () => {
+        const { cmd, mockResult, azd, invalidate } = createCommand();
+        // No queued message response: if the command prompted, showWarningMessage
+        // would resolve undefined and teardown would be skipped.
+
+        await cmd.execute(MockUri.file('/workspace/azure.yaml'), { skipConfirmation: true });
+
+        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(0);
+        expect(azd.down.mock.callCount()).to.equal(1);
+        expect((azd.down.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/workspace');
+        expect(invalidate.mock.callCount()).to.equal(1);
+    });
+
     it('should resolve cwd from workspace folder when invoked from the command palette', async () => {
         const { cmd, mockResult, azd } = createCommand();
         mockResult.messageResponses.push('Delete');

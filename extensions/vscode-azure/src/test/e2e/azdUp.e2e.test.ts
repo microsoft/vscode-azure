@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { IAzdService } from '../../azd/AzdService';
-import { AzdUpCommandId, ExtensionId } from '../../constants';
+import { AzdDownCommandId, AzdUpCommandId, ExtensionId } from '../../constants';
 import type { E2eExtensionApi } from '../../extension';
 import { describeE2e, getE2eConfig, type E2eConfig } from './e2eConfig';
 
@@ -81,11 +81,12 @@ describeE2e('azd up', function () {
     after(async function () {
         if (provisioned && projectDir) {
             try {
-                // Tear down via the service rather than the azd down command:
-                // the command opens a modal confirmation that cannot be answered
-                // in the headless test host. The service still runs the real
-                // `azd down` authenticated by the in-process auth server.
-                await azdService.down(projectDir);
+                // Tear down via the real azd down command, the same code path a
+                // user would invoke. The modal confirmation it normally shows
+                // cannot be answered in the headless test host, so pass
+                // skipConfirmation to bypass it.
+                const azureYaml = vscode.Uri.joinPath(projectDir, 'azure.yaml');
+                await vscode.commands.executeCommand(AzdDownCommandId, azureYaml, { skipConfirmation: true });
             } catch {
                 // Best-effort teardown; surface nothing so a cleanup failure
                 // does not mask the test result.

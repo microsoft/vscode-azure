@@ -16,11 +16,27 @@ import { IAzureViewDataTree } from '../services';
 import type { ManagedCommand } from './ManagedCommand';
 
 /**
+ * Options accepted by {@linkcode AzdDown.execute} as its second argument.
+ */
+export interface AzdDownOptions {
+    /**
+     * When `true`, skip the destructive-action confirmation prompt and
+     * proceed straight to teardown.
+     *
+     * Intended for automated callers (e.g. E2E tests) running in a headless
+     * host where the modal confirmation dialog cannot be answered. Leave
+     * unset for interactive use so users are always asked to confirm.
+     */
+    readonly skipConfirmation?: boolean;
+}
+
+/**
  * Runs `azd down --force --purge` in a visible terminal, deleting all
  * resources provisioned for the project's default azd environment.
  *
  * Prompts for explicit confirmation before doing anything, since the
- * operation is destructive and irreversible.
+ * operation is destructive and irreversible. The prompt can be bypassed
+ * by passing {@linkcode AzdDownOptions.skipConfirmation}.
  *
  * Accessible from the command palette (searches the workspace for
  * `azure.yaml` or `azure.yml`) or by right-clicking an `azure.yaml`
@@ -38,19 +54,22 @@ export class AzdDown implements ManagedCommand {
     ) { }
 
     /** @inheritdoc */
-    public async execute(fileUri?: vscode.Uri): Promise<void> {
+    public async execute(fileUri?: vscode.Uri, options?: AzdDownOptions): Promise<void> {
         // Pre-seed iacFolder when invoked from a right-click on azure.yaml
         const iacFolder = fileUri ? this.ctx.code.Uri.joinPath(fileUri, '..') : undefined;
 
         // Destructive, irreversible operation -- require explicit confirmation
-        const deleteLabel = this.ctx.code.l10n.t('Delete');
-        const confirmation = await this.ctx.code.window.showWarningMessage(
-            this.ctx.code.l10n.t('Are you sure you want to delete all resources provisioned for this project\'s default environment? This cannot be undone.'),
-            { modal: true },
-            deleteLabel,
-        );
-        if (confirmation !== deleteLabel) {
-            return;
+        // unless the caller has opted out (e.g. a headless E2E host).
+        if (!options?.skipConfirmation) {
+            const deleteLabel = this.ctx.code.l10n.t('Delete');
+            const confirmation = await this.ctx.code.window.showWarningMessage(
+                this.ctx.code.l10n.t('Are you sure you want to delete all resources provisioned for this project\'s default environment? This cannot be undone.'),
+                { modal: true },
+                deleteLabel,
+            );
+            if (confirmation !== deleteLabel) {
+                return;
+            }
         }
 
         const wizard = new Wizard<AzdWizardContext>(
