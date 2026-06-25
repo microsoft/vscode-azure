@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { drillChildren } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '../auth/AzureSubscription';
 import { isAccount, isSubscription, isTenant, type ConcreteAzureNodeTree } from '../models/AzureNode';
-import { drillChildren } from './drillChildren';
 
 /**
  * Resolve a fully-populated {@linkcode AzureSubscription} from a bare
