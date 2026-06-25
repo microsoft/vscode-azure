@@ -333,6 +333,25 @@ describe('uiHelpers (unit)', () => {
                 expect(result.label).to.equal('Use typed-id');
             });
 
+            it('should list the synthetic item after the existing suggestions', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('typed-id');
+
+                // Suggestions come first; the synthetic "use what I typed" entry is last.
+                expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Bravo', 'Use typed-id']);
+
+                qp.accept();
+                expect((await resultPromise).data).to.equal('typed-id');
+            });
+
             it('should return a suggested item when picked instead of synthesizing one', async () => {
                 const { ctx, mock } = createMockCodeContext();
                 respondToPrompts(mock, [{ pick: 'Bravo' }]);

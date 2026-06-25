@@ -37,10 +37,13 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
      *
      * If the returned item's `label` duplicates one of the existing `items`, the
      * synthetic item is suppressed and that real suggestion is activated instead, so
-     * the user never sees two identical-looking rows. When the user accepts the
-     * synthetic item, it is returned from {@linkcode showSmartQuickPick} like any other
-     * item, but is intentionally not stored as the "recently picked" choice (its label
-     * is not one of the suggestions, so it could never be restored).
+     * the user never sees two identical-looking rows. Otherwise the synthetic item is
+     * listed *after* the suggestions, so any real item matching the current filter is
+     * shown first and the synthetic "use what I typed" entry is the fallback below them.
+     * When the user accepts the synthetic item, it is returned from
+     * {@linkcode showSmartQuickPick} like any other item, but is intentionally not
+     * stored as the "recently picked" choice (its label is not one of the suggestions,
+     * so it could never be restored).
      *
      * Ignored when {@linkcode vscode.QuickPickOptions.canPickMany} is `true` (combo box is single-select only).
      */
@@ -134,7 +137,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     let syntheticItem: TItem | undefined;
     if (createItemFromValue) {
         // Snapshot the current item list and active item (after any recent-item
-        // reordering above) so the synthetic item can be prepended/removed
+        // reordering above) so the synthetic item can be appended/removed
         // without losing the suggestions or the pre-highlighted recent choice.
         const baseItems = quickPick.items;
         const baseActiveItems = quickPick.activeItems;
@@ -146,8 +149,11 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
             // identical-looking entries and lets the accepted choice be remembered.
             const existing = typedItem ? baseItems.find(item => item.label === typedItem.label) : undefined;
             if (typedItem && !existing) {
+                // List the synthetic item *after* the suggestions so any real item
+                // that matches the current filter is shown first; the synthetic
+                // "use what I typed" entry is the fallback below them.
                 syntheticItem = { ...typedItem, alwaysShow: true };
-                quickPick.items = [syntheticItem, ...baseItems];
+                quickPick.items = [...baseItems, syntheticItem];
                 quickPick.activeItems = [syntheticItem];
             } else {
                 syntheticItem = undefined;
