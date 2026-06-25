@@ -42,7 +42,7 @@ export class SelectSubscriptions implements ManagedCommand {
             return {
                 label: code.l10n.t('{0} ({1})', subscription.displayName, subscription.subscriptionId),
                 description: code.l10n.t('Tenant: {0}', tenant.displayName),
-                detail: code.l10n.t('Tenant ID: {0}  Account: {1}', tenant.tenantId, account.label),
+                detail: code.l10n.t('Tenant ID: {0} | Account: {1}', tenant.tenantId, account.label),
                 data: { id: selectionId },
             };
         });
