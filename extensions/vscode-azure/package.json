@@ -113,6 +113,11 @@
                 "category": "%commands.category.azure%",
                 "icon": "$(sign-in)",
                 "title": "%commands.vscode-azure/signIn%"
+            },
+            {
+                "command": "vscode-azure/selectSubscriptions",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/selectSubscriptions%"
             }
         ],
         "menus": {
