@@ -28,6 +28,18 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
 
     /** Called when a button on a specific quick pick item is triggered. */
     readonly onDidTriggerItemButton?: (event: vscode.QuickPickItemButtonEvent<TItem>) => void;
+
+    /**
+     * Turns the quick pick into a combo box ("pick or enter"): builds a synthetic,
+     * always-shown item from the user's typed text whenever it does not already match
+     * a suggestion. It receives the **trimmed** typed value and should return `undefined`
+     * when no custom item should be offered (typically when the value is empty or already
+     * matches one of the `items`). When the user accepts the synthetic item, it is returned
+     * from {@linkcode showSmartQuickPick} like any other item.
+     *
+     * Ignored when {@linkcode vscode.QuickPickOptions.canPickMany} is `true` (combo box is single-select only).
+     */
+    readonly createItemFromValue?: (value: string) => TItem | undefined;
 }
 
 /**
@@ -36,6 +48,8 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
  * **Key features:**
  *   - If {@linkcode ExtendedQuickPickOptions.isActiveItem} is not provided, the most recently picked item (based
  *     on `label`) will be pre-highlighted. For multi-select, recently picked items will be pre-checked.
+ *   - If {@linkcode ExtendedQuickPickOptions.createItemFromValue} is provided, the quick pick acts as a combo box
+ *     ("pick or enter"): the user can type a free-form value that is turned into a selectable item.
  *   - If {@linkcode ExtendedQuickPickOptions.showBack} is `true`, a back button will be shown that rejects with
  *     {@linkcode GoBackError} when pressed.
  *   - If the user cancels the quick pick, it rejects with {@linkcode CancellationError}.
@@ -106,6 +120,36 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         }
     }
 
+    // Combo box ("pick or enter"): when a factory is provided (single-select only),
+    // let the user type a free-form value that becomes a selectable item.
+    const createItemFromValue = quickPick.canSelectMany ? undefined : options?.createItemFromValue;
+    // The synthetic item currently offered for the typed value, if any. Tracked so
+    // accepting it does not pollute the "recently picked" memory with an
+    // un-restorable label (it is never part of `items`).
+    let syntheticItem: TItem | undefined;
+    if (createItemFromValue) {
+        // Snapshot the current item list (after any recent-item reordering above)
+        // so the synthetic item can be prepended/removed without losing it.
+        const baseItems = quickPick.items;
+        const syncItems = (rawValue: string) => {
+            const typedItem = createItemFromValue(rawValue.trim());
+            if (typedItem) {
+                syntheticItem = { ...typedItem, alwaysShow: true };
+                quickPick.items = [syntheticItem, ...baseItems];
+                quickPick.activeItems = [syntheticItem];
+            } else {
+                syntheticItem = undefined;
+                quickPick.items = baseItems;
+            }
+        };
+
+        // Honor a preset value so a synthetic item is offered before the first keystroke.
+        if (quickPick.value) {
+            syncItems(quickPick.value);
+        }
+        quickPick.onDidChangeValue(value => { syncItems(value); });
+    }
+
     const { promise, resolve, reject } = Promise.withResolvers<TItem | TItem[]>();
     let settled = false;
     const finish = (finishAction: () => void) => {
@@ -133,7 +177,12 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                 const selected = quickPick.activeItems[0] as TItem | undefined;
                 if (selected) {
                     finish(() => {
-                        void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
+                        // Don't remember a typed/synthesized value: its label is not
+                        // one of the suggestions, so it could never be restored and
+                        // would clobber a genuinely-pickable recent choice.
+                        if (selected !== syntheticItem) {
+                            void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
+                        }
                         resolve(selected);
                     });
                 }

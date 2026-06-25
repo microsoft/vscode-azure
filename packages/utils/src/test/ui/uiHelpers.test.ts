@@ -316,6 +316,79 @@ describe('uiHelpers (unit)', () => {
                 expect(GoBackError.test(e)).to.be.true;
             }
         });
+
+        describe('combo box (createItemFromValue)', () => {
+            it('should synthesize an item from the typed value when it matches no suggestion', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                respondToPrompts(mock, [{ value: 'typed-id' }]);
+
+                const result = await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], {
+                    createItemFromValue: (value) => value ? { label: `Use ${value}`, data: value } : undefined,
+                });
+
+                expect(result.data).to.equal('typed-id');
+                expect(result.label).to.equal('Use typed-id');
+            });
+
+            it('should return a suggested item when picked instead of synthesizing one', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                respondToPrompts(mock, [{ pick: 'Bravo' }]);
+
+                const result = await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], {
+                    createItemFromValue: (value) => value ? { label: `Use ${value}`, data: value } : undefined,
+                });
+
+                expect(result.data).to.equal('b');
+            });
+
+            it('should still allow entering a value when there are no suggestions', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                respondToPrompts(mock, [{ value: 'only-typed' }]);
+
+                const result = await showSmartQuickPick(ctx, [], {
+                    createItemFromValue: (value) => value ? { label: `Use ${value}`, data: value } : undefined,
+                });
+
+                expect(result.data).to.equal('only-typed');
+            });
+
+            it('should not let a typed value overwrite a remembered suggestion', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                // First call: pick a real suggestion so it is remembered.
+                respondToPrompts(mock, [{ pick: 'Bravo' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                // Second call: type a free-form value instead of picking. This must
+                // not clobber the remembered 'Bravo'.
+                respondToPrompts(mock, [{ value: 'typed-id' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                // Third call: 'Bravo' should still be the remembered choice.
+                respondToPrompts(mock, [{ pick: 'Alpha' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[2];
+                const bravo = qp.items.find(i => i.label === 'Bravo');
+                expect(bravo?.description, 'Bravo should still be remembered').to.include('recently selected');
+            });
+        });
     });
 
     describe('withDelayedProgress', () => {

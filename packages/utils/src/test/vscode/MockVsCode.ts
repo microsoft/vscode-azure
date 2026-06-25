@@ -540,6 +540,9 @@ export function withSettings<T>(
  * - `{ pick: 'label' }` -- select a QuickPick item by its label
  * - `{ pickMany: ['a', 'b'] }` -- select multiple QuickPick items by label
  * - `{ input: 'text' }` -- type a value into an InputBox and accept
+ * - `{ value: 'text' }` -- type a value into a combobox-style QuickPick (one
+ *   that reacts to {@linkcode vscode.QuickPick.onDidChangeValue}) and accept the
+ *   resulting active item
  * - `'acceptDefault'` -- accept the current value without changes
  * - `'goBack'` -- press the Back button (rejects with {@linkcode GoBackError})
  * - `'cancel'` -- dismiss the UI (rejects with {@linkcode CancellationError})
@@ -548,6 +551,7 @@ export type WizardResponse =
     | { readonly pick: string }
     | { readonly pickMany: readonly string[] }
     | { readonly input: string }
+    | { readonly value: string }
     | 'acceptDefault'
     | 'goBack'
     | 'cancel';
@@ -654,6 +658,12 @@ function applyToQuickPick(
         return;
     } else if ('input' in response) {
         throw new Error('Got an \'input\' response but a QuickPick was shown');
+    } else if ('value' in response) {
+        // Combobox: type a value (firing onDidChangeValue so the production
+        // code can synthesize an item), then accept whatever it made active.
+        qp.changeValue(response.value);
+        qp.accept();
+        return;
     } else if ('pickMany' in response) {
         const wanted = new Set(response.pickMany);
         const items = [...qp.items].filter(i => wanted.has(i.label));
@@ -694,8 +704,8 @@ function applyToInputBox(
     } else if (response === 'acceptDefault') {
         ib.accept();
         return;
-    } else if ('pick' in response || 'pickMany' in response) {
-        throw new Error('Got a \'pick\'/\'pickMany\' response but an InputBox was shown');
+    } else if ('pick' in response || 'pickMany' in response || 'value' in response) {
+        throw new Error('Got a \'pick\'/\'pickMany\'/\'value\' response but an InputBox was shown');
     } else {
         // { input: string }
         ib.changeValue(response.input);
