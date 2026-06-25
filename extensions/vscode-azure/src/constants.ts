@@ -37,5 +37,19 @@ export const SubscriptionFilterConfigurationSection = 'azureResourceGroups';
 /** Configuration key (within {@linkcode SubscriptionFilterConfigurationSection}) holding the selected `tenantId/subscriptionId` entries. */
 export const SelectedSubscriptionsConfigurationKey = 'selectedSubscriptions';
 
+/**
+ * Configuration key (within {@linkcode ConfigurationSection}) holding the
+ * tenants the user signed in to by manually entering a tenant id.
+ *
+ * When listing tenants is blocked outright (e.g. conditional access), a
+ * tenant-scoped session still works but the tenant never appears in the
+ * account's tenant listing, so the resources tree can't reach it. Each
+ * successful manual sign-in is recorded here as a
+ * `{@linkcode SignedInTenant}` so the data provider can merge it into the
+ * account's tenant listing on subsequent loads. Entries are additive and never
+ * pruned automatically; users can edit the setting to remove stale tenants.
+ */
+export const SignedInTenantsConfigurationKey = 'signedInTenants';
+
 /** ARM tag applied by azd to resources it manages, containing the environment name. */
 export const AzdEnvNameTag = 'azd-env-name';

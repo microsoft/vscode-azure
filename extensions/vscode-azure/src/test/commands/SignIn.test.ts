@@ -10,7 +10,9 @@ import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { SignIn } from '../../commands/SignIn';
+import { SignedInTenantsConfigurationKey } from '../../constants';
 import type { IAzureViewDataTree } from '../../services';
+import type { SignedInTenant } from '../../signedInTenants';
 
 describe('SignIn (unit)', () => {
     function createTree(
@@ -36,8 +38,13 @@ describe('SignIn (unit)', () => {
         };
     }
 
-    /** A minimal stand-in session; the production code never inspects its shape. */
-    const fakeSession: unknown = {};
+    /** A minimal stand-in session carrying the account a tenant resolved to. */
+    const fakeSession: unknown = { account: { id: 'resolved-account', label: '' } };
+
+    /** The persisted manual-tenant entries, as stored in configuration. */
+    function readPersistedTenants(settings: Map<string, unknown>): SignedInTenant[] {
+        return (settings.get(`vscode-azure.${SignedInTenantsConfigurationKey}`) as SignedInTenant[] | undefined) ?? [];
+    }
 
     it('should perform a default sign-in and invalidate roots when signed out', async () => {
         const { cache, invalidate } = createTree([]);
@@ -113,6 +120,73 @@ describe('SignIn (unit)', () => {
         // A typed tenant has no known account => invalidate everything.
         expect(invalidate.mock.callCount()).to.equal(1);
         expect(invalidate.mock.calls[0].arguments[0]).to.equal(Everything);
+    });
+
+    it('should persist a manually-entered tenant under the account it resolved to', async () => {
+        const account = makeAccount({ id: 'acct-1', label: 'Account One' });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
+        const { cache } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+            [account, [tenant1]],
+        ]));
+
+        const typedTenantId = 'AAAAAAAA-1111-2222-3333-444455556666';
+        const { ctx, mock: mockResult } = createMockCodeContext();
+        // The tenant-scoped sign-in resolves to a concrete account, which is the
+        // account the manual tenant is persisted under.
+        mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
+        respondToPrompts(mockResult, [{ value: typedTenantId }]);
+
+        const command = new SignIn(ctx, cache);
+        await command.execute();
+
+        // Persisted under the resolved account id, with the tenant id lowercased
+        // to match how listed tenants are stored.
+        expect(readPersistedTenants(mockResult.settings)).to.deep.equal([
+            { accountId: 'resolved-account', tenantId: typedTenantId.toLowerCase() },
+        ]);
+    });
+
+    it('should not persist a manually-entered tenant that is already saved', async () => {
+        const account = makeAccount({ id: 'acct-1', label: 'Account One' });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
+        const { cache } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+            [account, [tenant1]],
+        ]));
+
+        const typedTenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
+        const { ctx, mock: mockResult } = createMockCodeContext();
+        // Seed the setting with the same entry (different casing) already present.
+        mockResult.settings.set(`vscode-azure.${SignedInTenantsConfigurationKey}`, [
+            { accountId: 'resolved-account', tenantId: typedTenantId.toUpperCase() },
+        ]);
+        mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
+        respondToPrompts(mockResult, [{ value: typedTenantId }]);
+
+        const command = new SignIn(ctx, cache);
+        await command.execute();
+
+        // Idempotent: the pre-existing entry is left untouched (not duplicated).
+        expect(readPersistedTenants(mockResult.settings)).to.deep.equal([
+            { accountId: 'resolved-account', tenantId: typedTenantId.toUpperCase() },
+        ]);
+    });
+
+    it('should not persist anything when signing in to a listed tenant', async () => {
+        const account = makeAccount({ id: 'acct-1', label: 'Account One' });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
+        const { cache } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+            [account, [tenant1]],
+        ]));
+
+        const { ctx, mock: mockResult } = createMockCodeContext();
+        mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
+        respondToPrompts(mockResult, [{ pick: 'Tenant One (tenant-1)' }]);
+
+        const command = new SignIn(ctx, cache);
+        await command.execute();
+
+        // A listed tenant is already reachable, so there's nothing to persist.
+        expect(readPersistedTenants(mockResult.settings)).to.deep.equal([]);
     });
 
     it('should offer a tenant sign-in when default sign-in fails', async () => {

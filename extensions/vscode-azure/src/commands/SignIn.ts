@@ -6,7 +6,9 @@
 import { byAccount, getAuthProviderId, getConfiguredAzureEnv, isAccount } from '@microsoft/vscode-azure-azutils';
 import { Everything, ICodeContext, Roots } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import type * as vscode from 'vscode';
 import { IAzureViewDataTree } from '../services';
+import { addSignedInTenant } from '../signedInTenants';
 import { listFirstPageReachableTenants, type ReachableTenant } from './listReachableAuthNodes';
 import type { ManagedCommand } from './ManagedCommand';
 import { pickTenantOrEnterId, type TenantPick } from './pickTenant';
@@ -75,7 +77,16 @@ export class SignIn implements ManagedCommand {
         // single combobox: pick a reachable tenant or type a tenant ID.
         const tenants = await this.tryListTenants();
         const pick = await pickTenantOrEnterId(this.ctx, tenants);
-        await this.signInToTenant(providerId, defaultScopes, pick);
+        const session = await this.signInToTenant(providerId, defaultScopes, pick);
+
+        // A manually-entered tenant (no known account) won't show up when listing
+        // tenants is blocked (e.g. conditional access), so persist it now that we
+        // know the account it resolved to. The data provider merges these saved
+        // tenants into the account's tenant listing so the tree can reach them.
+        if (!pick.accountId && session?.account.id) {
+            await addSignedInTenant(code, { accountId: session.account.id, tenantId: pick.tenantId });
+        }
+
         this.cache.invalidate(pick.accountId ? byAccount(pick.accountId) : Everything);
     }
 
@@ -127,13 +138,19 @@ export class SignIn implements ManagedCommand {
         }
     }
 
-    /** Establish a tenant-scoped session for the chosen tenant. */
-    private async signInToTenant(providerId: string, defaultScopes: string[], pick: TenantPick): Promise<void> {
+    /**
+     * Establish a tenant-scoped session for the chosen tenant.
+     *
+     * @returns The established session (whose `account.id` identifies the
+     * account the tenant resolved to), or `undefined` if VS Code returned no
+     * session.
+     */
+    private async signInToTenant(providerId: string, defaultScopes: string[], pick: TenantPick): Promise<vscode.AuthenticationSession | undefined> {
         const scopes = [...defaultScopes, `VSCODE_TENANT:${pick.tenantId}`];
         const options = pick.accountId
             ? { createIfNone: true, account: { id: pick.accountId, label: '' } }
             : { createIfNone: true };
 
-        await this.ctx.code.authentication.getSession(providerId, scopes, options);
+        return await this.ctx.code.authentication.getSession(providerId, scopes, options);
     }
 }

@@ -17,6 +17,7 @@ import {
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import { readSignedInTenants } from '../../signedInTenants';
 
 /**
  * Identifier for the root account/tenant/subscription data provider. Bound as a
@@ -286,22 +287,74 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * streamed lazily rather than buffered; ordering follows the service
      * response (no cross-page sort).
      *
+     * Tenants the user signed in to by manually entering a tenant id (persisted
+     * via {@linkcode readSignedInTenants}) are merged into the listing so the
+     * tree can reach them even when listing tenants is blocked outright (e.g.
+     * conditional access). They are appended to the final page (or, if the
+     * listing itself fails, become the only page), and deduplicated against the
+     * listed tenants so a tenant that is both listed and saved keeps its real
+     * display name rather than the bare id stand-in.
+     *
      * @param account - The account whose tenants are listed.
      */
     private async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
+        const manualTenants = this.manualTenantsForAccount(account);
+        const seen = new Set<string>();
+        let emittedTerminalPage = false;
+
         const credential = this.credentialFactory({ sessionOptions: { account } });
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment);
-        for await (const page of client.tenants.list()) {
-            const items = page.items
-                .filter((tenant): tenant is typeof tenant & { tenantId: string; displayName: string } => !!tenant.tenantId && !!tenant.displayName)
-                .map(tenant => ({
-                    ...tenant,
-                    tenantId: tenant.tenantId.toLowerCase(),
-                    environment: account.environment,
-                    accountId: account.id,
-                } satisfies AzureTenant));
-            yield { items, hasMore: page.hasMore };
+        try {
+            for await (const page of client.tenants.list()) {
+                const items = page.items
+                    .filter((tenant): tenant is typeof tenant & { tenantId: string; displayName: string } => !!tenant.tenantId && !!tenant.displayName)
+                    .map(tenant => ({
+                        ...tenant,
+                        tenantId: tenant.tenantId.toLowerCase(),
+                        environment: account.environment,
+                        accountId: account.id,
+                    } satisfies AzureTenant));
+                items.forEach(tenant => seen.add(tenant.tenantId));
+
+                if (page.hasMore) {
+                    yield { items, hasMore: true };
+                } else {
+                    // Final page: fold in any manual tenants not already listed.
+                    const extras = manualTenants.filter(tenant => !seen.has(tenant.tenantId));
+                    yield { items: [...items, ...extras], hasMore: false };
+                    emittedTerminalPage = true;
+                }
+            }
+        } catch (error) {
+            // Listing tenants can fail outright (e.g. conditional access). Fall
+            // back to the manually-entered tenants below rather than surfacing an
+            // error: a tenant-scoped sign-in still works, so those tenants are
+            // reachable even though they can't be enumerated.
+            this.executor.output.warn(`[auth] listing tenants failed for account=${account.id}; falling back to ${manualTenants.length} manually-entered tenant(s): ${stringifyError(error)}`);
         }
+
+        if (!emittedTerminalPage) {
+            // The listing failed, or yielded nothing, so emit the manual tenants
+            // as the terminal page (deduped against anything already streamed).
+            const extras = manualTenants.filter(tenant => !seen.has(tenant.tenantId));
+            yield { items: extras, hasMore: false };
+        }
+    }
+
+    /**
+     * Build synthesized {@linkcode AzureTenant}s for the manually-entered
+     * tenants saved for the given account. No display name is available (listing
+     * is what's blocked), so the tenant id is used as the label stand-in.
+     */
+    private manualTenantsForAccount(account: AzureAccount): AzureTenant[] {
+        return readSignedInTenants(this.ctx.code)
+            .filter(entry => entry.accountId === account.id)
+            .map(entry => ({
+                tenantId: entry.tenantId.toLowerCase(),
+                displayName: entry.tenantId,
+                environment: account.environment,
+                accountId: account.id,
+            } satisfies AzureTenant));
     }
 
     /**

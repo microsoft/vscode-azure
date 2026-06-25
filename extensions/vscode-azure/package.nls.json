@@ -34,5 +34,6 @@
     "settings.vscode-azure.groupBy.resourceType": "Group by resource type.",
     "settings.vscode-azure.groupBy.location": "Group by Azure region.",
     "settings.vscode-azure.groupBy.armTag": "Group by an ARM tag. Specify the tag name with the 'Group By Tag' setting.",
-    "settings.vscode-azure.groupByTag": "The ARM tag name to group resources by when 'Group By' is set to 'armTag'."
+    "settings.vscode-azure.groupByTag": "The ARM tag name to group resources by when 'Group By' is set to 'armTag'.",
+    "settings.vscode-azure.signedInTenants": "Tenants you signed in to by entering a tenant ID. These are merged into the Resources tree so the tenants remain reachable when listing tenants is blocked (for example by conditional access). Remove entries here to stop showing a tenant."
 }

@@ -332,6 +332,26 @@
                     "type": "string",
                     "default": "",
                     "description": "%settings.vscode-azure.groupByTag%"
+                },
+                "vscode-azure.signedInTenants": {
+                    "type": "array",
+                    "default": [],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "accountId": {
+                                "type": "string"
+                            },
+                            "tenantId": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "accountId",
+                            "tenantId"
+                        ]
+                    },
+                    "description": "%settings.vscode-azure.signedInTenants%"
                 }
             }
         }
