@@ -373,6 +373,26 @@ describe('uiHelpers (unit)', () => {
                 expect((await resultPromise).data).to.equal('a');
             });
 
+            it('should make the synthetic item active when no suggestion matches the filter', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                // 'zzz' matches neither suggestion, so the synthetic is the only
+                // visible item and must be active -- hitting enter accepts it.
+                qp.changeValue('zzz');
+
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Use zzz']);
+
+                qp.accept();
+                expect((await resultPromise).data).to.equal('zzz');
+            });
+
             it('should return a suggested item when picked instead of synthesizing one', async () => {
                 const { ctx, mock } = createMockCodeContext();
                 respondToPrompts(mock, [{ pick: 'Bravo' }]);
