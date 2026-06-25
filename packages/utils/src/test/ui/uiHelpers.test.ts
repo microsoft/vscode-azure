@@ -316,6 +316,270 @@ describe('uiHelpers (unit)', () => {
                 expect(GoBackError.test(e)).to.be.true;
             }
         });
+
+        describe('combo box (createItemFromValue)', () => {
+            it('should synthesize an item from the typed value when it matches no suggestion', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                respondToPrompts(mock, [{ value: 'typed-id' }]);
+
+                const result = await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], {
+                    createItemFromValue: (value) => value ? { label: `Use ${value}`, data: value } : undefined,
+                });
+
+                expect(result.data).to.equal('typed-id');
+                expect(result.label).to.equal('Use typed-id');
+            });
+
+            it('should list the synthetic item after the existing suggestions', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('typed-id');
+
+                // Suggestions come first; the synthetic "use what I typed" entry is last.
+                expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Bravo', 'Use typed-id']);
+
+                qp.accept();
+                expect((await resultPromise).data).to.equal('typed-id');
+            });
+
+            it('should keep a filter-matching suggestion active instead of the synthetic item', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('Al');
+
+                // The synthetic is still offered (last), but the matching 'Alpha'
+                // suggestion -- not the synthetic -- is the active/default item.
+                expect(qp.items[qp.items.length - 1].label).to.equal('Use Al');
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Alpha']);
+
+                qp.accept();
+                expect((await resultPromise).data).to.equal('a');
+            });
+
+            it('should make the synthetic item active when no suggestion matches the filter', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                // 'zzz' matches neither suggestion, so the synthetic is the only
+                // visible item and must be active -- hitting enter accepts it.
+                qp.changeValue('zzz');
+
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Use zzz']);
+
+                qp.accept();
+                expect((await resultPromise).data).to.equal('zzz');
+            });
+
+            it('should accept the synthetic item even if nothing was auto-activated', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('zzz');
+
+                // Simulate a VS Code version/edge case where the synthetic is offered
+                // but not auto-focused: accepting must still resolve it rather than
+                // silently no-op and leave the picker hanging open.
+                qp.activeItems = [];
+                qp.accept();
+
+                expect((await resultPromise).data).to.equal('zzz');
+            });
+
+            it('should return a suggested item when picked instead of synthesizing one', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                respondToPrompts(mock, [{ pick: 'Bravo' }]);
+
+                const result = await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], {
+                    createItemFromValue: (value) => value ? { label: `Use ${value}`, data: value } : undefined,
+                });
+
+                expect(result.data).to.equal('b');
+            });
+
+            it('should still allow entering a value when there are no suggestions', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                respondToPrompts(mock, [{ value: 'only-typed' }]);
+
+                const result = await showSmartQuickPick(ctx, [], {
+                    createItemFromValue: (value) => value ? { label: `Use ${value}`, data: value } : undefined,
+                });
+
+                expect(result.data).to.equal('only-typed');
+            });
+
+            it('should not let a typed value overwrite a remembered suggestion', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                // First call: pick a real suggestion so it is remembered.
+                respondToPrompts(mock, [{ pick: 'Bravo' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                // Second call: type a free-form value instead of picking. This must
+                // not clobber the remembered 'Bravo'.
+                respondToPrompts(mock, [{ value: 'typed-id' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                // Third call: 'Bravo' should still be the remembered choice.
+                respondToPrompts(mock, [{ pick: 'Alpha' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[2];
+                const bravo = qp.items.find(i => i.label === 'Bravo');
+                expect(bravo?.description, 'Bravo should still be remembered').to.include('recently selected');
+            });
+
+            it('should clear the active synthetic item when the typed value is removed', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+
+                // Type a value: a synthetic item is offered and made active.
+                qp.changeValue('typed-id');
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Use typed-id']);
+
+                // Clear the value: the synthetic item is removed, so it can no
+                // longer be active (accepting it would resolve an item no longer
+                // in `items`). VS Code re-highlights the first real suggestion.
+                qp.changeValue('');
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Alpha']);
+                expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Bravo']);
+
+                // Pick a real suggestion to settle the prompt; only its label is remembered.
+                qp.activeItems = [qp.items[1]];
+                qp.accept();
+
+                const result = await resultPromise;
+                expect(result.data).to.equal('b');
+
+                // The synthetic 'Use typed-id' must not have been remembered: a
+                // follow-up prompt marks the real 'Bravo' as recently selected.
+                respondToPrompts(mock, [{ pick: 'Alpha' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const followUp = mock.quickPicks[1];
+                const bravo = followUp.items.find(i => i.label === 'Bravo');
+                expect(bravo?.description, 'Bravo should be remembered').to.include('recently selected');
+            });
+
+            it('should not offer a duplicate synthetic item when the typed value matches a suggestion', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                // Factory echoes the value as the item label so a typed 'Bravo'
+                // produces a label that collides with the real 'Bravo' suggestion.
+                const createItemFromValue = (value: string) => value ? { label: value, data: `typed:${value}` } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('Bravo');
+
+                // No duplicate row should be inserted, and exactly one item (the real
+                // suggestion, not a synthetic 'typed:Bravo') should be active.
+                expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Bravo']);
+                expect(qp.activeItems).to.have.lengthOf(1);
+
+                qp.accept();
+                const result = await resultPromise;
+                // data 'b' (not 'typed:Bravo') confirms the real suggestion was accepted.
+                expect(result.data).to.equal('b');
+
+                // Accepting the real suggestion remembers it (a synthetic item would not).
+                respondToPrompts(mock, [{ pick: 'Alpha' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+                const followUp = mock.quickPicks[1];
+                const bravo = followUp.items.find(i => i.label === 'Bravo');
+                expect(bravo?.description, 'Bravo should be remembered').to.include('recently selected');
+            });
+
+            it('should restore the recent pre-highlight after the typed value is cleared', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+                const items = () => [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ];
+
+                // First call: pick 'Bravo' so it becomes the remembered choice.
+                const firstPromise = showSmartQuickPick(ctx, items(), { createItemFromValue });
+                const qp0 = mock.quickPicks[0];
+                qp0.activeItems = [qp0.items[1]];
+                qp0.accept();
+                expect((await firstPromise).data).to.equal('b');
+
+                // Second call: 'Bravo' is pre-highlighted; type then clear the value.
+                const resultPromise = showSmartQuickPick(ctx, items(), { createItemFromValue });
+                const qp = mock.quickPicks[1];
+                const recentItem = qp.activeItems[0];
+                expect(recentItem.label, 'recent item pre-highlighted').to.equal('Bravo');
+
+                qp.changeValue('typed-id');
+                expect(qp.activeItems[0].label).to.equal('Use typed-id');
+
+                // Clearing restores the recent pre-highlight rather than blanking it.
+                qp.changeValue('');
+                expect(qp.activeItems).to.deep.equal([recentItem]);
+
+                qp.accept();
+                const result = await resultPromise;
+                expect(result.data).to.equal('b');
+            });
+        });
     });
 
     describe('withDelayedProgress', () => {

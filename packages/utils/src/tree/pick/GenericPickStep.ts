@@ -203,7 +203,7 @@ export interface FilteredChild<TItem> extends PickPair<TItem> {
 
 const CreateNew: unique symbol = Symbol('CreateNew');
 
-const DefaultQuickPickOptions: ExtendedQuickPickOptions<vscode.QuickPickItem> = {
+const DefaultQuickPickOptions = {
     showBack: true,
     matchOnDescription: true,
-};
+} satisfies ExtendedQuickPickOptions<vscode.QuickPickItem>;

@@ -28,6 +28,26 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
 
     /** Called when a button on a specific quick pick item is triggered. */
     readonly onDidTriggerItemButton?: (event: vscode.QuickPickItemButtonEvent<TItem>) => void;
+
+    /**
+     * Turns the quick pick into a combo box ("pick or enter"): builds a synthetic,
+     * always-shown item from the user's typed text whenever it does not already match
+     * a suggestion. It receives the **trimmed** typed value and should return `undefined`
+     * when no custom item should be offered (typically when the value is empty).
+     *
+     * If the returned item's `label` duplicates one of the existing `items`, the
+     * synthetic item is suppressed and that real suggestion is shown instead, so
+     * the user never sees two identical-looking rows. Otherwise the synthetic item is
+     * listed *after* the suggestions, so any real item matching the current filter is
+     * shown -- and highlighted -- first, with the synthetic "use what I typed" entry as
+     * the fallback below them. When the user accepts the synthetic item, it is returned
+     * from {@linkcode showSmartQuickPick} like any other item, but is intentionally not
+     * stored as the "recently picked" choice (its label is not one of the suggestions,
+     * so it could never be restored).
+     *
+     * Ignored when {@linkcode vscode.QuickPickOptions.canPickMany} is `true` (combo box is single-select only).
+     */
+    readonly createItemFromValue?: (value: string) => TItem | undefined;
 }
 
 /**
@@ -36,6 +56,8 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
  * **Key features:**
  *   - If {@linkcode ExtendedQuickPickOptions.isActiveItem} is not provided, the most recently picked item (based
  *     on `label`) will be pre-highlighted. For multi-select, recently picked items will be pre-checked.
+ *   - If {@linkcode ExtendedQuickPickOptions.createItemFromValue} is provided, the quick pick acts as a combo box
+ *     ("pick or enter"): the user can type a free-form value that is turned into a selectable item.
  *   - If {@linkcode ExtendedQuickPickOptions.showBack} is `true`, a back button will be shown that rejects with
  *     {@linkcode GoBackError} when pressed.
  *   - If the user cancels the quick pick, it rejects with {@linkcode CancellationError}.
@@ -106,6 +128,47 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         }
     }
 
+    // Combo box ("pick or enter"): when a factory is provided (single-select only),
+    // let the user type a free-form value that becomes a selectable item.
+    const createItemFromValue = quickPick.canSelectMany ? undefined : options?.createItemFromValue;
+    // The synthetic item currently offered for the typed value, if any. Tracked so
+    // accepting it does not pollute the "recently picked" memory with an
+    // un-restorable label (it is never part of `items`).
+    let syntheticItem: TItem | undefined;
+    if (createItemFromValue) {
+        // Snapshot the current item list (after any recent-item reordering above)
+        // so the synthetic item can be appended/removed without losing the
+        // suggestions. We deliberately do not manage `activeItems` here: VS Code
+        // highlights the first item that matches the typed value, so a real
+        // suggestion takes precedence and the synthetic is highlighted only when
+        // nothing else matches (and a removed synthetic can never linger active).
+        const baseItems = quickPick.items;
+        const syncItems = (rawValue: string) => {
+            const typedItem = createItemFromValue(rawValue.trim());
+            // If the typed value resolves to a label that already matches a real
+            // suggestion, prefer that suggestion over offering a duplicate
+            // synthetic row -- this keeps "pick or enter" from showing two
+            // identical-looking entries and lets the accepted choice be remembered.
+            const existing = typedItem ? baseItems.find(item => item.label === typedItem.label) : undefined;
+            if (typedItem && !existing) {
+                // List the synthetic item *after* the suggestions and mark it
+                // alwaysShow so it stays visible as a fallback below any real item
+                // that matches the current filter.
+                syntheticItem = { ...typedItem, alwaysShow: true };
+                quickPick.items = [...baseItems, syntheticItem];
+            } else {
+                syntheticItem = undefined;
+                quickPick.items = baseItems;
+            }
+        };
+
+        // Honor a preset value so a synthetic item is offered before the first keystroke.
+        if (quickPick.value) {
+            syncItems(quickPick.value);
+        }
+        quickPick.onDidChangeValue(value => { syncItems(value); });
+    }
+
     const { promise, resolve, reject } = Promise.withResolvers<TItem | TItem[]>();
     let settled = false;
     const finish = (finishAction: () => void) => {
@@ -130,10 +193,21 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                     finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
                 }
             } else {
-                const selected = quickPick.activeItems[0] as TItem | undefined;
+                // Fall back to the synthetic item when nothing is active: we rely
+                // on VS Code auto-highlighting the first visible item after each
+                // `items` reassignment, but if no item is active (e.g. the typed
+                // value matched no real suggestion and the synthetic was not
+                // auto-focused), accepting should still resolve the synthetic
+                // rather than silently doing nothing and leaving the picker open.
+                const selected = (quickPick.activeItems[0] as TItem | undefined) ?? syntheticItem;
                 if (selected) {
                     finish(() => {
-                        void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
+                        // Don't remember a typed/synthesized value: its label is not
+                        // one of the suggestions, so it could never be restored and
+                        // would clobber a genuinely-pickable recent choice.
+                        if (selected !== syntheticItem) {
+                            void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
+                        }
                         resolve(selected);
                     });
                 }

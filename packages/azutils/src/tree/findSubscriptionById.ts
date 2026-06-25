@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { drillChildren } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '../auth/AzureSubscription';
-import { isAccount, isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../models/AzureNode';
+import { isAccount, isSubscription, isTenant, type ConcreteAzureNodeTree } from '../models/AzureNode';
 
 /**
  * Resolve a fully-populated {@linkcode AzureSubscription} from a bare
@@ -71,35 +72,4 @@ export async function findSubscriptionById(
     }
 
     return undefined;
-}
-
-/**
- * Lazily yield every child of {@linkcode resource} across all pages.
- *
- * The account/tenant/subscription data providers return paged
- * `AsyncIterable`s, so {@linkcode ConcreteAzureNodeTree.getChildren} only
- * materializes the first page. This walks the remaining pages via
- * {@linkcode ConcreteAzureNodeTree.hasMore hasMore} /
- * {@linkcode ConcreteAzureNodeTree.loadMore loadMore}, pulling each subsequent
- * page only when the consumer asks for more -- so a caller that stops early
- * (e.g. after finding a match) never forces the later pages to load.
- *
- * Root-level children (`resource === undefined`) are not paged, so only the
- * single root page is yielded.
- */
-async function* drillChildren(tree: ConcreteAzureNodeTree, resource?: ConcreteAzureNode): AsyncIterable<ConcreteAzureNode> {
-    let children = await tree.getChildren(resource);
-    let index = 0;
-    for (;;) {
-        for (; index < children.length; index++) {
-            yield children[index];
-        }
-
-        if (resource === undefined || !tree.hasMore(resource)) {
-            return;
-        }
-
-        await tree.loadMore(resource);
-        children = await tree.getChildren(resource);
-    }
 }
