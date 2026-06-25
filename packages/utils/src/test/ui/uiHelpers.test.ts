@@ -388,6 +388,48 @@ describe('uiHelpers (unit)', () => {
                 const bravo = qp.items.find(i => i.label === 'Bravo');
                 expect(bravo?.description, 'Bravo should still be remembered').to.include('recently selected');
             });
+
+            it('should clear the active synthetic item when the typed value is removed', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+
+                // Type a value: a synthetic item is offered and made active.
+                qp.changeValue('typed-id');
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Use typed-id']);
+
+                // Clear the value: the synthetic item must no longer be active,
+                // otherwise accepting would resolve an item no longer in `items`
+                // and persist its un-restorable label to recents.
+                qp.changeValue('');
+                expect(qp.activeItems).to.be.empty;
+                expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Bravo']);
+
+                // Pick a real suggestion to settle the prompt; only its label is remembered.
+                qp.activeItems = [qp.items[1]];
+                qp.accept();
+
+                const result = await resultPromise;
+                expect(result.data).to.equal('b');
+
+                // The synthetic 'Use typed-id' must not have been remembered: a
+                // follow-up prompt marks the real 'Bravo' as recently selected.
+                respondToPrompts(mock, [{ pick: 'Alpha' }]);
+                await showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const followUp = mock.quickPicks[1];
+                const bravo = followUp.items.find(i => i.label === 'Bravo');
+                expect(bravo?.description, 'Bravo should be remembered').to.include('recently selected');
+            });
         });
     });
 

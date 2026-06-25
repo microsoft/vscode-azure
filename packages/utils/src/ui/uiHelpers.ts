@@ -140,6 +140,10 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
             } else {
                 syntheticItem = undefined;
                 quickPick.items = baseItems;
+                // Clear any active item left over from a previously-synthesized
+                // entry; otherwise accepting could resolve an item no longer in
+                // `items` and persist its un-restorable label to recents.
+                quickPick.activeItems = [];
             }
         };
 
