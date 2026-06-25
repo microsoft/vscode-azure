@@ -393,6 +393,27 @@ describe('uiHelpers (unit)', () => {
                 expect((await resultPromise).data).to.equal('zzz');
             });
 
+            it('should accept the synthetic item even if nothing was auto-activated', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('zzz');
+
+                // Simulate a VS Code version/edge case where the synthetic is offered
+                // but not auto-focused: accepting must still resolve it rather than
+                // silently no-op and leave the picker hanging open.
+                qp.activeItems = [];
+                qp.accept();
+
+                expect((await resultPromise).data).to.equal('zzz');
+            });
+
             it('should return a suggested item when picked instead of synthesizing one', async () => {
                 const { ctx, mock } = createMockCodeContext();
                 respondToPrompts(mock, [{ pick: 'Bravo' }]);

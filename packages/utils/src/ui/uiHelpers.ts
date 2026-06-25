@@ -193,7 +193,13 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                     finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
                 }
             } else {
-                const selected = quickPick.activeItems[0] as TItem | undefined;
+                // Fall back to the synthetic item when nothing is active: we rely
+                // on VS Code auto-highlighting the first visible item after each
+                // `items` reassignment, but if no item is active (e.g. the typed
+                // value matched no real suggestion and the synthetic was not
+                // auto-focused), accepting should still resolve the synthetic
+                // rather than silently doing nothing and leaving the picker open.
+                const selected = (quickPick.activeItems[0] as TItem | undefined) ?? syntheticItem;
                 if (selected) {
                     finish(() => {
                         // Don't remember a typed/synthesized value: its label is not
