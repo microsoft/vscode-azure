@@ -33,9 +33,14 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
      * Turns the quick pick into a combo box ("pick or enter"): builds a synthetic,
      * always-shown item from the user's typed text whenever it does not already match
      * a suggestion. It receives the **trimmed** typed value and should return `undefined`
-     * when no custom item should be offered (typically when the value is empty or already
-     * matches one of the `items`). When the user accepts the synthetic item, it is returned
-     * from {@linkcode showSmartQuickPick} like any other item.
+     * when no custom item should be offered (typically when the value is empty).
+     *
+     * If the returned item's `label` duplicates one of the existing `items`, the
+     * synthetic item is suppressed and that real suggestion is activated instead, so
+     * the user never sees two identical-looking rows. When the user accepts the
+     * synthetic item, it is returned from {@linkcode showSmartQuickPick} like any other
+     * item, but is intentionally not stored as the "recently picked" choice (its label
+     * is not one of the suggestions, so it could never be restored).
      *
      * Ignored when {@linkcode vscode.QuickPickOptions.canPickMany} is `true` (combo box is single-select only).
      */
@@ -128,22 +133,31 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     // un-restorable label (it is never part of `items`).
     let syntheticItem: TItem | undefined;
     if (createItemFromValue) {
-        // Snapshot the current item list (after any recent-item reordering above)
-        // so the synthetic item can be prepended/removed without losing it.
+        // Snapshot the current item list and active item (after any recent-item
+        // reordering above) so the synthetic item can be prepended/removed
+        // without losing the suggestions or the pre-highlighted recent choice.
         const baseItems = quickPick.items;
+        const baseActiveItems = quickPick.activeItems;
         const syncItems = (rawValue: string) => {
             const typedItem = createItemFromValue(rawValue.trim());
-            if (typedItem) {
+            // If the typed value resolves to a label that already matches a real
+            // suggestion, prefer that suggestion over offering a duplicate
+            // synthetic row -- this keeps "pick or enter" from showing two
+            // identical-looking entries and lets the accepted choice be remembered.
+            const existing = typedItem ? baseItems.find(item => item.label === typedItem.label) : undefined;
+            if (typedItem && !existing) {
                 syntheticItem = { ...typedItem, alwaysShow: true };
                 quickPick.items = [syntheticItem, ...baseItems];
                 quickPick.activeItems = [syntheticItem];
             } else {
                 syntheticItem = undefined;
                 quickPick.items = baseItems;
-                // Clear any active item left over from a previously-synthesized
-                // entry; otherwise accepting could resolve an item no longer in
-                // `items` and persist its un-restorable label to recents.
-                quickPick.activeItems = [];
+                // Never leave a stale synthetic item active (accepting it would
+                // resolve an entry no longer in `items` and persist its
+                // un-restorable label to recents). Activate the matching real
+                // suggestion when the typed value duplicated one, otherwise
+                // restore the initial active item (e.g. the recent pre-highlight).
+                quickPick.activeItems = existing ? [existing] : baseActiveItems;
             }
         };
 
