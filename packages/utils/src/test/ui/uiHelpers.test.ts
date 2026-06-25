@@ -352,6 +352,27 @@ describe('uiHelpers (unit)', () => {
                 expect((await resultPromise).data).to.equal('typed-id');
             });
 
+            it('should keep a filter-matching suggestion active instead of the synthetic item', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Bravo', data: 'b' },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('Al');
+
+                // The synthetic is still offered (last), but the matching 'Alpha'
+                // suggestion -- not the synthetic -- is the active/default item.
+                expect(qp.items[qp.items.length - 1].label).to.equal('Use Al');
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Alpha']);
+
+                qp.accept();
+                expect((await resultPromise).data).to.equal('a');
+            });
+
             it('should return a suggested item when picked instead of synthesizing one', async () => {
                 const { ctx, mock } = createMockCodeContext();
                 respondToPrompts(mock, [{ pick: 'Bravo' }]);
@@ -423,11 +444,11 @@ describe('uiHelpers (unit)', () => {
                 qp.changeValue('typed-id');
                 expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Use typed-id']);
 
-                // Clear the value: the synthetic item must no longer be active,
-                // otherwise accepting would resolve an item no longer in `items`
-                // and persist its un-restorable label to recents.
+                // Clear the value: the synthetic item is removed, so it can no
+                // longer be active (accepting it would resolve an item no longer
+                // in `items`). VS Code re-highlights the first real suggestion.
                 qp.changeValue('');
-                expect(qp.activeItems).to.be.empty;
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Alpha']);
                 expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Bravo']);
 
                 // Pick a real suggestion to settle the prompt; only its label is remembered.

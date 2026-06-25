@@ -88,6 +88,35 @@ export class MockQuickPick<T extends vscode.QuickPickItem> implements vscode.Qui
     changeValue(newValue: string): void {
         this.value = newValue;
         this._onDidChangeValue.fire(newValue);
+        // Simulate VS Code: after the value changes (and production updates
+        // `items` in its onDidChangeValue handler) the first *visible* item
+        // becomes active. This is a simplified stand-in for VS Code's fuzzy
+        // filtering -- enough to exercise combo-box ("pick or enter") behavior,
+        // where a real suggestion matching the typed value should take
+        // precedence over an always-shown synthetic fallback.
+        this.activeItems = this.computeActiveItems();
+    }
+
+    /**
+     * Pick the first item that would be visible for the current {@linkcode value}:
+     * any {@linkcode vscode.QuickPickItem.alwaysShow alwaysShow} item, or one whose
+     * label -- or description, when {@linkcode matchOnDescription} is set --
+     * contains the value (case-insensitively). Returns an empty array when nothing
+     * is visible.
+     */
+    private computeActiveItems(): readonly T[] {
+        const needle = this.value.trim().toLowerCase();
+        const isVisible = (item: T): boolean => {
+            if (item.alwaysShow || needle === '') {
+                return true;
+            }
+            if (item.label.toLowerCase().includes(needle)) {
+                return true;
+            }
+            return this.matchOnDescription && (item.description?.toLowerCase().includes(needle) ?? false);
+        };
+        const first = this.items.find(isVisible);
+        return first ? [first] : [];
     }
     // #endregion
 }

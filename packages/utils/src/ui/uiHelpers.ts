@@ -36,12 +36,12 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
      * when no custom item should be offered (typically when the value is empty).
      *
      * If the returned item's `label` duplicates one of the existing `items`, the
-     * synthetic item is suppressed and that real suggestion is activated instead, so
+     * synthetic item is suppressed and that real suggestion is shown instead, so
      * the user never sees two identical-looking rows. Otherwise the synthetic item is
      * listed *after* the suggestions, so any real item matching the current filter is
-     * shown first and the synthetic "use what I typed" entry is the fallback below them.
-     * When the user accepts the synthetic item, it is returned from
-     * {@linkcode showSmartQuickPick} like any other item, but is intentionally not
+     * shown -- and highlighted -- first, with the synthetic "use what I typed" entry as
+     * the fallback below them. When the user accepts the synthetic item, it is returned
+     * from {@linkcode showSmartQuickPick} like any other item, but is intentionally not
      * stored as the "recently picked" choice (its label is not one of the suggestions,
      * so it could never be restored).
      *
@@ -136,11 +136,13 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     // un-restorable label (it is never part of `items`).
     let syntheticItem: TItem | undefined;
     if (createItemFromValue) {
-        // Snapshot the current item list and active item (after any recent-item
-        // reordering above) so the synthetic item can be appended/removed
-        // without losing the suggestions or the pre-highlighted recent choice.
+        // Snapshot the current item list (after any recent-item reordering above)
+        // so the synthetic item can be appended/removed without losing the
+        // suggestions. We deliberately do not manage `activeItems` here: VS Code
+        // highlights the first item that matches the typed value, so a real
+        // suggestion takes precedence and the synthetic is highlighted only when
+        // nothing else matches (and a removed synthetic can never linger active).
         const baseItems = quickPick.items;
-        const baseActiveItems = quickPick.activeItems;
         const syncItems = (rawValue: string) => {
             const typedItem = createItemFromValue(rawValue.trim());
             // If the typed value resolves to a label that already matches a real
@@ -149,21 +151,14 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
             // identical-looking entries and lets the accepted choice be remembered.
             const existing = typedItem ? baseItems.find(item => item.label === typedItem.label) : undefined;
             if (typedItem && !existing) {
-                // List the synthetic item *after* the suggestions so any real item
-                // that matches the current filter is shown first; the synthetic
-                // "use what I typed" entry is the fallback below them.
+                // List the synthetic item *after* the suggestions and mark it
+                // alwaysShow so it stays visible as a fallback below any real item
+                // that matches the current filter.
                 syntheticItem = { ...typedItem, alwaysShow: true };
                 quickPick.items = [...baseItems, syntheticItem];
-                quickPick.activeItems = [syntheticItem];
             } else {
                 syntheticItem = undefined;
                 quickPick.items = baseItems;
-                // Never leave a stale synthetic item active (accepting it would
-                // resolve an entry no longer in `items` and persist its
-                // un-restorable label to recents). Activate the matching real
-                // suggestion when the typed value duplicated one, otherwise
-                // restore the initial active item (e.g. the recent pre-highlight).
-                quickPick.activeItems = existing ? [existing] : baseActiveItems;
             }
         };
 
