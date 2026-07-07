@@ -28,7 +28,7 @@
     },
     "devDependencies": {
         "@microsoft/vscode-azext-eng": "alpha",
-        "@types/node": "24.x",
+        "@types/node": "~24",
         "@types/vscode": "1.120.0",
         "@typescript/native-preview": "beta"
     }
