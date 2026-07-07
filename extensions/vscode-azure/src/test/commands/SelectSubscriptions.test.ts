@@ -9,7 +9,7 @@ import { createMockCodeContext, createTestActionExecutor, respondToPrompts } fro
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { SelectSubscriptions } from '../../commands/SelectSubscriptions';
-import { SelectedSubscriptionsConfigurationKey, SubscriptionFilterConfigurationSection } from '../../constants';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { CredentialOptionsScope } from '../../CredentialOptionsScope';
 import type { IAzureViewDataTree } from '../../services';
 
@@ -74,7 +74,7 @@ describe('SelectSubscriptions (unit)', () => {
 
         await command.execute();
 
-        expect(mockResult.settings.get(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
+        expect(mockResult.settings.get(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
             .to.deep.equal(['tenant-1/sub-1']);
         expect(loadMore.mock.callCount()).to.equal(1);
     });
@@ -94,7 +94,7 @@ describe('SelectSubscriptions (unit)', () => {
 
         await command.execute();
 
-        expect(mockResult.settings.get(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
+        expect(mockResult.settings.get(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
             .to.deep.equal([]);
     });
 
@@ -122,7 +122,7 @@ describe('SelectSubscriptions (unit)', () => {
         expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
         // ...and even though every *loaded* subscription was selected, the filter
         // is NOT collapsed to [] (which would unhide the un-enumerated tenant).
-        expect(mockResult.settings.get(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
+        expect(mockResult.settings.get(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
             .to.deep.equal(['tenant-1/sub-1', 'tenant-1/sub-2']);
     });
 

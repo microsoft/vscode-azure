@@ -9,7 +9,7 @@ import { createMockCodeContext, createTestActionExecutor, withSettings } from '@
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { OpenInPortal } from '../../../commands/OpenInPortal';
-import { AzdEnvNameTag, ConfigurationSection } from '../../../constants';
+import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../constants';
 import { GenericAzureViewProvider } from '../../../tree/resources/GenericAzureViewProvider';
 
 describe('GenericAzureViewProvider (unit)', () => {
@@ -156,7 +156,7 @@ describe('GenericAzureViewProvider (unit)', () => {
     });
 
     describe('subscription filtering', () => {
-        const filterKey = 'azureResourceGroups.selectedSubscriptions';
+        const filterKey = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
 
         it('should hide subscriptions not present in the filter', async () => {
             const account = makeAccount();

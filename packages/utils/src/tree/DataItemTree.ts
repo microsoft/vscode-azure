@@ -247,6 +247,11 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
+            // The data layer is a pure cache that rethrows; whoever consumes the
+            // rejection (the view layer, or a programmatic caller like the
+            // Select Subscriptions command) owns error display, so don't show a
+            // toast here as well.
+            context.errorHandling.suppress = 'display';
             context.telemetry.properties.tree = this.name;
             context.telemetry.properties.provider = provider.constructor.name;
             return provider.getChildren(resource);
@@ -394,6 +399,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         const didLoad = await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
+            // The data layer is a pure cache that rethrows; the caller owns
+            // error display, so don't show a toast here as well.
+            context.errorHandling.suppress = 'display';
             context.telemetry.properties.tree = this.name;
 
             const key = this.getKey(resource);
@@ -433,6 +441,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             const next = (await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
                 context.telemetry.isUserEvent = false;
                 context.errorHandling.rethrow = true;
+                // The data layer is a pure cache that rethrows; the caller owns
+                // error display, so don't show a toast here as well.
+                context.errorHandling.suppress = 'display';
                 context.telemetry.properties.tree = this.name;
                 return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
             }))!;

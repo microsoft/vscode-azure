@@ -5,11 +5,11 @@
 
 import { IActionExecutor, ICodeContext, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { SelectedSubscriptionsConfigurationKey, SubscriptionFilterConfigurationSection } from '../constants';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
 import { ICredentialOptionsScope } from '../CredentialOptionsScope';
 import { IAzureViewDataTree } from '../services';
-import type { ManagedCommand } from './ManagedCommand';
 import { listReachableSubscriptions, type UnreachableAuthNode } from './listReachableAuthNodes';
+import type { ManagedCommand } from './ManagedCommand';
 
 interface SubscriptionPickData {
     readonly id: string;
@@ -17,7 +17,7 @@ interface SubscriptionPickData {
 
 /**
  * Prompts the user to select which subscriptions should be visible in the
- * Azure resources tree and updates `azureResourceGroups.selectedSubscriptions`.
+ * Azure resources tree and updates `vscode-azure.selectedSubscriptions`.
  *
  * Subscription discovery runs under a silent {@linkcode ICredentialOptionsScope}
  * (`{ sessionOptions: { silent: true } }`): accounts/tenants that cannot mint a
@@ -37,7 +37,7 @@ export class SelectSubscriptions implements ManagedCommand {
     /** @inheritdoc */
     public async execute(): Promise<void> {
         const code = this.ctx.code;
-        const config = code.workspace.getConfiguration(SubscriptionFilterConfigurationSection);
+        const config = code.workspace.getConfiguration(ConfigurationSection);
         const currentSelected = config.get<string[]>(SelectedSubscriptionsConfigurationKey, []);
         const currentSet = new Set(currentSelected.map(id => id.toLowerCase()));
 

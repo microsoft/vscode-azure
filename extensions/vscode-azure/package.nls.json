@@ -34,5 +34,6 @@
     "settings.vscode-azure.groupBy.resourceType": "Group by resource type.",
     "settings.vscode-azure.groupBy.location": "Group by Azure region.",
     "settings.vscode-azure.groupBy.armTag": "Group by an ARM tag. Specify the tag name with the 'Group By Tag' setting.",
-    "settings.vscode-azure.groupByTag": "The ARM tag name to group resources by when 'Group By' is set to 'armTag'."
+    "settings.vscode-azure.groupByTag": "The ARM tag name to group resources by when 'Group By' is set to 'armTag'.",
+    "settings.vscode-azure.selectedSubscriptions": "The tenants and subscriptions to show in the Azure resources view, as an array of 'tenantId/subscriptionId' strings. When empty, all subscriptions are shown. Use the 'Azure: Select Subscriptions' command to edit this."
 }
