@@ -10,6 +10,7 @@ import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vsco
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../tree/resources/AzureAccountDataProvider';
+import { runWithSilentAuth } from '../../../tree/resources/silentAuthScope';
 
 describe('AzureAccountDataProvider (unit)', () => {
     afterEach(() => {
@@ -512,7 +513,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect((pages[0].items as AzureSubscription[]).map(s => s.subscriptionId)).to.deep.equal(['s4']);
         });
 
-        it('should acquire the token silently when interaction is disallowed', async () => {
+        it('should acquire the token silently when inside a runWithSilentAuth scope', async () => {
             const inputs: CredentialFactoryOptions[] = [];
             const { ctx } = createMockCodeContext();
             const { executor } = createTestActionExecutor();
@@ -526,7 +527,9 @@ describe('AzureAccountDataProvider (unit)', () => {
                 subscriptionPages: [{ items: [{ subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' }], hasMore: false }],
             });
 
-            await collectPages(await provider.getChildren(tenant, { allowInteraction: false }));
+            await runWithSilentAuth(async () => {
+                await collectPages(await provider.getChildren(tenant));
+            });
 
             expect(inputs[0]?.sessionOptions?.silent).to.equal(true);
         });

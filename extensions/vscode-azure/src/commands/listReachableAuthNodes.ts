@@ -5,7 +5,8 @@
 
 import type { AzureAccount, AzureSubscription, AzureTenant, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { isAccount, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
-import { drillChildren, type FetchOptions } from '@microsoft/vscode-azure-utils';
+import { drillChildren } from '@microsoft/vscode-azure-utils';
+import { runWithSilentAuth } from '../tree/resources/silentAuthScope';
 
 /**
  * A subscription that is reachable from a signed-in account/tenant pair.
@@ -40,23 +41,18 @@ export interface ReachableSubscriptionsResult {
 }
 
 /**
- * Silent discovery hint: bulk enumeration must never trigger an interactive
- * sign-in. Tenants that would require interaction fail fast and are reported via
- * {@linkcode ReachableSubscriptionsResult.failures} rather than prompting.
- */
-const silentDiscovery: FetchOptions = { allowInteraction: false };
-
-/**
  * Silently enumerate every subscription reachable from the currently signed-in
  * accounts, drilling account -> tenant -> subscription via the shared tree cache
  * (so results already loaded for the tree are reused).
  *
- * Discovery is best-effort and fault-isolated: a failure enumerating one
- * account's tenants, or one tenant's subscriptions, is captured in
- * {@linkcode ReachableSubscriptionsResult.failures} and does not abort the rest.
- * This matters because a single tenant that cannot mint a token silently would
- * otherwise reject the whole walk and prevent the user from selecting *any*
- * subscription.
+ * The entire walk runs inside a {@linkcode runWithSilentAuth} scope so that any
+ * cache *miss* fetches a credential silently rather than prompting an
+ * interactive sign-in. Discovery is best-effort and fault-isolated: a failure
+ * enumerating one account's tenants, or one tenant's subscriptions, is captured
+ * in {@linkcode ReachableSubscriptionsResult.failures} and does not abort the
+ * rest. This matters because a single tenant that cannot mint a token silently
+ * would otherwise reject the whole walk and prevent the user from selecting
+ * *any* subscription.
  *
  * @param tree - The Azure resources data tree (cache) to drill.
  * @returns The reachable subscriptions (deduped and sorted) and any failures.
@@ -65,44 +61,46 @@ export async function listReachableSubscriptions(tree: ConcreteAzureNodeTree): P
     const subscriptions = new Map<string, ReachableSubscription>();
     const failures: UnreachableAuthNode[] = [];
 
-    for await (const accountNode of drillChildren(tree, undefined, silentDiscovery)) {
-        if (!isAccount(accountNode)) {
-            continue;
-        }
-
-        try {
-            for await (const tenantNode of drillChildren(tree, accountNode, silentDiscovery)) {
-                if (!isTenant(tenantNode)) {
-                    continue;
-                }
-
-                try {
-                    for await (const subscriptionNode of drillChildren(tree, tenantNode, silentDiscovery)) {
-                        if (!isSubscription(subscriptionNode)) {
-                            continue;
-                        }
-
-                        const key = `${tenantNode.tenantId.toLowerCase()}/${subscriptionNode.subscriptionId.toLowerCase()}`;
-                        if (!subscriptions.has(key)) {
-                            subscriptions.set(key, {
-                                account: accountNode,
-                                tenant: tenantNode,
-                                subscription: subscriptionNode,
-                            });
-                        }
-                    }
-                } catch (error) {
-                    // One tenant could not be enumerated silently (e.g. token
-                    // acquisition needs interactive sign-in). Record and continue
-                    // so other tenants/accounts still contribute their subscriptions.
-                    failures.push({ account: accountNode, tenant: tenantNode, error });
-                }
+    await runWithSilentAuth(async () => {
+        for await (const accountNode of drillChildren(tree, undefined)) {
+            if (!isAccount(accountNode)) {
+                continue;
             }
-        } catch (error) {
-            // The account's tenant list itself failed; record and move on.
-            failures.push({ account: accountNode, error });
+
+            try {
+                for await (const tenantNode of drillChildren(tree, accountNode)) {
+                    if (!isTenant(tenantNode)) {
+                        continue;
+                    }
+
+                    try {
+                        for await (const subscriptionNode of drillChildren(tree, tenantNode)) {
+                            if (!isSubscription(subscriptionNode)) {
+                                continue;
+                            }
+
+                            const key = `${tenantNode.tenantId.toLowerCase()}/${subscriptionNode.subscriptionId.toLowerCase()}`;
+                            if (!subscriptions.has(key)) {
+                                subscriptions.set(key, {
+                                    account: accountNode,
+                                    tenant: tenantNode,
+                                    subscription: subscriptionNode,
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        // One tenant could not be enumerated silently (e.g. token
+                        // acquisition needs interactive sign-in). Record and continue
+                        // so other tenants/accounts still contribute their subscriptions.
+                        failures.push({ account: accountNode, tenant: tenantNode, error });
+                    }
+                }
+            } catch (error) {
+                // The account's tenant list itself failed; record and move on.
+                failures.push({ account: accountNode, error });
+            }
         }
-    }
+    });
 
     const sorted = [...subscriptions.values()].sort((a, b) => {
         return a.subscription.displayName.localeCompare(b.subscription.displayName)

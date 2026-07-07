@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { DataItemTree } from './DataItemTree';
-import type { FetchOptions } from './DataProvider';
 
 /**
  * Lazily yield every child of `resource` across all pages.
@@ -19,13 +18,9 @@ import type { FetchOptions } from './DataProvider';
  *
  * @param tree - The data-layer tree to drill.
  * @param resource - The node whose children to yield, or `undefined` for roots.
- * @param options - Optional {@linkcode FetchOptions} forwarded to the initial
- *   {@linkcode DataItemTree.getChildren} call (i.e. the first-page fetch). It
- *   is not re-applied to subsequent "Load More" pages, which continue the
- *   iterator established by that first fetch.
  */
-export async function* drillChildren<T>(tree: DataItemTree<T>, resource?: T, options?: FetchOptions): AsyncIterable<T> {
-    const firstPage = await tree.getChildren(resource, options);
+export async function* drillChildren<T>(tree: DataItemTree<T>, resource?: T): AsyncIterable<T> {
+    const firstPage = await tree.getChildren(resource);
     yield* firstPage;
 
     // Roots are not paged, so there is nothing more to drain. This also narrows
