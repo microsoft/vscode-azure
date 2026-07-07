@@ -9,17 +9,9 @@ import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
 import { ICredentialOptionsScope } from '../CredentialOptionsScope';
 import { IAzureViewDataTree } from '../services';
+import { subscriptionFilterKey } from '../subscriptionFilter';
 import { listReachableSubscriptions, type UnreachableAuthNode } from './listReachableAuthNodes';
 import type { ManagedCommand } from './ManagedCommand';
-
-/**
- * Build the `tenantId/subscriptionId` selection key (both halves lowercased)
- * used to persist the filter and to match against the currently-selected set.
- * The lowercasing keeps the config round-trip and lookups case-insensitive.
- */
-function selectionId(subscription: AzureSubscription): string {
-    return `${subscription.tenantId.toLowerCase()}/${subscription.subscriptionId.toLowerCase()}`;
-}
 
 /**
  * Prompts the user to select which subscriptions should be visible in the
@@ -82,10 +74,10 @@ export class SelectSubscriptions implements ManagedCommand {
         const selected = await showSmartQuickPick(this.ctx, picks, {
             canPickMany: true,
             placeHolder: code.l10n.t('Select subscriptions to include in the Azure resources view'),
-            isSelectedItem: item => currentSet.size === 0 || currentSet.has(selectionId(item.data)),
+            isSelectedItem: item => currentSet.size === 0 || currentSet.has(subscriptionFilterKey(item.data.tenantId, item.data.subscriptionId)),
         });
 
-        const selectedIds = [...new Set(selected.map(item => selectionId(item.data)))]
+        const selectedIds = [...new Set(selected.map(item => subscriptionFilterKey(item.data.tenantId, item.data.subscriptionId)))]
             .sort((a, b) => a.localeCompare(b));
 
         // Persisting an empty list means "no filtering" (show everything). Only

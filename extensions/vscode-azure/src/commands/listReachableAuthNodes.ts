@@ -6,6 +6,7 @@
 import type { AzureAccount, AzureSubscription, AzureTenant, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { isAccount, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
 import { drillChildren } from '@microsoft/vscode-azure-utils';
+import { subscriptionFilterKey } from '../subscriptionFilter';
 
 /**
  * A subscription that is reachable from a signed-in account/tenant pair.
@@ -81,7 +82,7 @@ export async function listReachableSubscriptions(tree: ConcreteAzureNodeTree): P
                             continue;
                         }
 
-                        const key = `${tenantNode.tenantId.toLowerCase()}/${subscriptionNode.subscriptionId.toLowerCase()}`;
+                        const key = subscriptionFilterKey(tenantNode.tenantId, subscriptionNode.subscriptionId);
                         if (!subscriptions.has(key)) {
                             subscriptions.set(key, {
                                 account: accountNode,

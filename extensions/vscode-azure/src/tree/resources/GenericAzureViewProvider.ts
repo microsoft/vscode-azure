@@ -11,6 +11,7 @@ import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
+import { parseSubscriptionFilterKey } from '../../subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
 
@@ -316,8 +317,9 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             return nodes;
         }
 
-        const tenantFilter = new Set(selected.map(id => id.split('/')[0]?.toLowerCase()).filter(Boolean));
-        const subscriptionFilter = new Set(selected.map(id => id.split('/')[1]?.toLowerCase()).filter(Boolean));
+        const parsed = selected.map(parseSubscriptionFilterKey);
+        const tenantFilter = new Set(parsed.map(entry => entry.tenantId).filter(Boolean));
+        const subscriptionFilter = new Set(parsed.map(entry => entry.subscriptionId).filter(Boolean));
 
         return nodes.filter(node => {
             if (isTenant(node)) {
