@@ -11,7 +11,7 @@ import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import { SelectSubscriptions } from '../../commands/SelectSubscriptions';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
-import { CredentialOptionsScope } from '../../CredentialOptionsScope';
+import { CredentialOptionsScope } from '../../utils/CredentialOptionsScope';
 import type { IAzureViewDataTree } from '../../services';
 
 describe('SelectSubscriptions (unit)', () => {

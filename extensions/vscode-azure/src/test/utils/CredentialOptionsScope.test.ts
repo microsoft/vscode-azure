@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { CredentialOptionsScope } from '../CredentialOptionsScope';
+import { CredentialOptionsScope } from '../../utils/CredentialOptionsScope';
 
 describe('CredentialOptionsScope (unit)', () => {
     it('should expose no ambient options outside a scope', () => {

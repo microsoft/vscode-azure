@@ -11,7 +11,7 @@ import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
-import { parseSubscriptionFilterKey } from '../../subscriptionFilter';
+import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
 

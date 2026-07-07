@@ -7,9 +7,9 @@ import { IActionContext, IActionExecutor, ICodeContext, showSmartQuickPick, stri
 import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
-import { ICredentialOptionsScope } from '../CredentialOptionsScope';
+import { ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
 import { IAzureViewDataTree } from '../services';
-import { subscriptionFilterKey } from '../subscriptionFilter';
+import { subscriptionFilterKey } from '../utils/subscriptionFilter';
 import { listReachableSubscriptions, type UnreachableAuthNode } from './listReachableAuthNodes';
 import type { ManagedCommand } from './ManagedCommand';
 

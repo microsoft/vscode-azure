@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { parseSubscriptionFilterKey, subscriptionFilterKey } from '../subscriptionFilter';
+import { parseSubscriptionFilterKey, subscriptionFilterKey } from '../../utils/subscriptionFilter';
 
 describe('subscriptionFilter (unit)', () => {
     describe('subscriptionFilterKey', () => {

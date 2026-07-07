@@ -6,7 +6,7 @@
 import type { AzureAccount, AzureSubscription, AzureTenant, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { isAccount, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
 import { drillChildren } from '@microsoft/vscode-azure-utils';
-import { subscriptionFilterKey } from '../subscriptionFilter';
+import { subscriptionFilterKey } from '../utils/subscriptionFilter';
 
 /**
  * A subscription that is reachable from a signed-in account/tenant pair.
