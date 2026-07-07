@@ -10,6 +10,7 @@ import { expect } from 'chai';
 import { mock } from 'node:test';
 import { SelectSubscriptions } from '../../commands/SelectSubscriptions';
 import { SelectedSubscriptionsConfigurationKey, SubscriptionFilterConfigurationSection } from '../../constants';
+import { CredentialOptionsScope } from '../../CredentialOptionsScope';
 import type { IAzureViewDataTree } from '../../services';
 
 describe('SelectSubscriptions (unit)', () => {
@@ -54,7 +55,7 @@ describe('SelectSubscriptions (unit)', () => {
     function createCommand(cache: IAzureViewDataTree) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const command = new SelectSubscriptions(ctx, executor, cache);
+        const command = new SelectSubscriptions(ctx, executor, cache, new CredentialOptionsScope());
         return { command, ctx, mockResult };
     }
 

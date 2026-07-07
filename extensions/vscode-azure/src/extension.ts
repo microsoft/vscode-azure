@@ -42,6 +42,7 @@ import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
+import { CredentialOptionsScope, ICredentialOptionsScope } from './CredentialOptionsScope';
 import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
@@ -149,8 +150,11 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         );
     }).inSingletonScope().onActivation(pushDisposable);
 
+    container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
+
     container.bind(ICredentialFactory).toDynamicValue(context => {
-        return createDefaultCredentialFactory(context.get(IVsCode), context.get(IOutputChannel));
+        const scope = context.get(ICredentialOptionsScope);
+        return createDefaultCredentialFactory(context.get(IVsCode), context.get(IOutputChannel), () => scope.current);
     }).inSingletonScope();
 
     container.bind(ITempDirManager).to(TempDirManager).inSingletonScope().onActivation(pushDisposable);

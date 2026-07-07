@@ -10,7 +10,6 @@ import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vsco
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../tree/resources/AzureAccountDataProvider';
-import { runWithCredentialOptions } from '../../../tree/resources/credentialOptionsScope';
 
 describe('AzureAccountDataProvider (unit)', () => {
     afterEach(() => {
@@ -513,31 +512,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect((pages[0].items as AzureSubscription[]).map(s => s.subscriptionId)).to.deep.equal(['s4']);
         });
 
-        it('should apply ambient credential options when inside a runWithCredentialOptions scope', async () => {
-            const inputs: CredentialFactoryOptions[] = [];
-            const { ctx } = createMockCodeContext();
-            const { executor } = createTestActionExecutor();
-            const credentialFactory: ICredentialFactory = (input) => {
-                inputs.push(input as CredentialFactoryOptions);
-                return makeCredential();
-            };
-            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
-            const tenant = makeTenant();
-            mockSubscriptionClient({
-                subscriptionPages: [{ items: [{ subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' }], hasMore: false }],
-            });
-
-            await runWithCredentialOptions({ sessionOptions: { silent: true } }, async () => {
-                await collectPages(await provider.getChildren(tenant));
-            });
-
-            // Ambient sessionOptions are merged beneath the call's account scoping.
-            expect(inputs[0]?.sessionOptions?.silent).to.equal(true);
-            expect(inputs[0]?.sessionOptions?.account?.id).to.equal(tenant.accountId);
-            expect(inputs[0]?.tenantId).to.equal(tenant.tenantId);
-        });
-
-        it('should acquire the token interactively by default (no silent flag)', async () => {
+        it('should scope the per-tenant credential to the tenant and account without requesting silent auth', async () => {
             const inputs: CredentialFactoryOptions[] = [];
             const { ctx } = createMockCodeContext();
             const { executor } = createTestActionExecutor();
@@ -553,6 +528,10 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             await collectPages(await provider.getChildren(tenant));
 
+            // The provider forwards only per-node scoping; ambient options (e.g.
+            // silent) are applied by the credential factory, not the provider.
+            expect(inputs[0]?.tenantId).to.equal(tenant.tenantId);
+            expect(inputs[0]?.sessionOptions?.account?.id).to.equal(tenant.accountId);
             expect(inputs[0]?.sessionOptions?.silent).to.be.undefined;
         });
     });

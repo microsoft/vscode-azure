@@ -6,7 +6,6 @@
 import type { AzureAccount, AzureSubscription, AzureTenant, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { isAccount, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
 import { drillChildren } from '@microsoft/vscode-azure-utils';
-import { runWithCredentialOptions } from '../tree/resources/credentialOptionsScope';
 
 /**
  * A subscription that is reachable from a signed-in account/tenant pair.
@@ -41,19 +40,22 @@ export interface ReachableSubscriptionsResult {
 }
 
 /**
- * Silently enumerate every subscription reachable from the currently signed-in
- * accounts, drilling account -> tenant -> subscription via the shared tree cache
- * (so results already loaded for the tree are reused).
+ * Enumerate every subscription reachable from the currently signed-in accounts,
+ * drilling account -> tenant -> subscription via the shared tree cache (so
+ * results already loaded for the tree are reused).
  *
- * The entire walk runs inside a {@linkcode runWithCredentialOptions} scope
- * requesting silent auth (`{ sessionOptions: { silent: true } }`), so that any
- * cache *miss* fetches a credential silently rather than prompting an
- * interactive sign-in. Discovery is best-effort and fault-isolated: a failure
- * enumerating one account's tenants, or one tenant's subscriptions, is captured
- * in {@linkcode ReachableSubscriptionsResult.failures} and does not abort the
- * rest. This matters because a single tenant that cannot mint a token silently
- * would otherwise reject the whole walk and prevent the user from selecting
- * *any* subscription.
+ * This function only drills and isolates faults; it does *not* establish any
+ * credential options itself. Callers that need silent acquisition (e.g. Select
+ * Subscriptions) should run it inside an {@linkcode ICredentialOptionsScope}
+ * requesting `{ sessionOptions: { silent: true } }`, so that any cache *miss*
+ * fetches a credential silently rather than prompting interactive sign-in.
+ *
+ * Discovery is best-effort and fault-isolated: a failure enumerating one
+ * account's tenants, or one tenant's subscriptions, is captured in
+ * {@linkcode ReachableSubscriptionsResult.failures} and does not abort the rest.
+ * This matters because a single tenant that cannot mint a token (silently or
+ * otherwise) would otherwise reject the whole walk and prevent the user from
+ * selecting *any* subscription.
  *
  * @param tree - The Azure resources data tree (cache) to drill.
  * @returns The reachable subscriptions (deduped and sorted) and any failures.
@@ -62,46 +64,45 @@ export async function listReachableSubscriptions(tree: ConcreteAzureNodeTree): P
     const subscriptions = new Map<string, ReachableSubscription>();
     const failures: UnreachableAuthNode[] = [];
 
-    await runWithCredentialOptions({ sessionOptions: { silent: true } }, async () => {
-        for await (const accountNode of drillChildren(tree, undefined)) {
-            if (!isAccount(accountNode)) {
-                continue;
-            }
-
-            try {
-                for await (const tenantNode of drillChildren(tree, accountNode)) {
-                    if (!isTenant(tenantNode)) {
-                        continue;
-                    }
-
-                    try {
-                        for await (const subscriptionNode of drillChildren(tree, tenantNode)) {
-                            if (!isSubscription(subscriptionNode)) {
-                                continue;
-                            }
-
-                            const key = `${tenantNode.tenantId.toLowerCase()}/${subscriptionNode.subscriptionId.toLowerCase()}`;
-                            if (!subscriptions.has(key)) {
-                                subscriptions.set(key, {
-                                    account: accountNode,
-                                    tenant: tenantNode,
-                                    subscription: subscriptionNode,
-                                });
-                            }
-                        }
-                    } catch (error) {
-                        // One tenant could not be enumerated silently (e.g. token
-                        // acquisition needs interactive sign-in). Record and continue
-                        // so other tenants/accounts still contribute their subscriptions.
-                        failures.push({ account: accountNode, tenant: tenantNode, error });
-                    }
-                }
-            } catch (error) {
-                // The account's tenant list itself failed; record and move on.
-                failures.push({ account: accountNode, error });
-            }
+    for await (const accountNode of drillChildren(tree, undefined)) {
+        if (!isAccount(accountNode)) {
+            continue;
         }
-    });
+
+        try {
+            for await (const tenantNode of drillChildren(tree, accountNode)) {
+                if (!isTenant(tenantNode)) {
+                    continue;
+                }
+
+                try {
+                    for await (const subscriptionNode of drillChildren(tree, tenantNode)) {
+                        if (!isSubscription(subscriptionNode)) {
+                            continue;
+                        }
+
+                        const key = `${tenantNode.tenantId.toLowerCase()}/${subscriptionNode.subscriptionId.toLowerCase()}`;
+                        if (!subscriptions.has(key)) {
+                            subscriptions.set(key, {
+                                account: accountNode,
+                                tenant: tenantNode,
+                                subscription: subscriptionNode,
+                            });
+                        }
+                    }
+                } catch (error) {
+                    // One tenant could not be enumerated (e.g. token acquisition
+                    // needs interactive sign-in under a silent scope). Record and
+                    // continue so other tenants/accounts still contribute their
+                    // subscriptions.
+                    failures.push({ account: accountNode, tenant: tenantNode, error });
+                }
+            }
+        } catch (error) {
+            // The account's tenant list itself failed; record and move on.
+            failures.push({ account: accountNode, error });
+        }
+    }
 
     const sorted = [...subscriptions.values()].sort((a, b) => {
         return a.subscription.displayName.localeCompare(b.subscription.displayName)

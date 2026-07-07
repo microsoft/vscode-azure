@@ -6,6 +6,7 @@
 import { IActionExecutor, ICodeContext, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { SelectedSubscriptionsConfigurationKey, SubscriptionFilterConfigurationSection } from '../constants';
+import { ICredentialOptionsScope } from '../CredentialOptionsScope';
 import { IAzureViewDataTree } from '../services';
 import type { ManagedCommand } from './ManagedCommand';
 import { listReachableSubscriptions, type UnreachableAuthNode } from './listReachableAuthNodes';
@@ -18,10 +19,11 @@ interface SubscriptionPickData {
  * Prompts the user to select which subscriptions should be visible in the
  * Azure resources tree and updates `azureResourceGroups.selectedSubscriptions`.
  *
- * Subscription discovery is *silent* (see {@linkcode listReachableSubscriptions}):
- * accounts/tenants that cannot mint a token without interactive sign-in are
- * skipped and surfaced as a non-blocking warning rather than aborting the whole
- * command, so the user can still filter the subscriptions that did load.
+ * Subscription discovery runs under a silent {@linkcode ICredentialOptionsScope}
+ * (`{ sessionOptions: { silent: true } }`): accounts/tenants that cannot mint a
+ * token without interactive sign-in are skipped and surfaced as a non-blocking
+ * warning (see {@linkcode listReachableSubscriptions}) rather than aborting the
+ * whole command, so the user can still filter the subscriptions that did load.
  */
 @injectable()
 export class SelectSubscriptions implements ManagedCommand {
@@ -29,6 +31,7 @@ export class SelectSubscriptions implements ManagedCommand {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(ICredentialOptionsScope) private readonly credentialOptions: ICredentialOptionsScope,
     ) { }
 
     /** @inheritdoc */
@@ -38,7 +41,13 @@ export class SelectSubscriptions implements ManagedCommand {
         const currentSelected = config.get<string[]>(SelectedSubscriptionsConfigurationKey, []);
         const currentSet = new Set(currentSelected.map(id => id.toLowerCase()));
 
-        const { subscriptions: reachable, failures } = await listReachableSubscriptions(this.cache);
+        // Discover subscriptions silently: any credential built during the walk
+        // (including cache misses) acquires its token without prompting, so an
+        // un-authable tenant fails fast instead of interrupting the user.
+        const { subscriptions: reachable, failures } = await this.credentialOptions.run(
+            { sessionOptions: { silent: true } },
+            () => listReachableSubscriptions(this.cache),
+        );
 
         if (failures.length > 0) {
             this.reportFailures(failures);

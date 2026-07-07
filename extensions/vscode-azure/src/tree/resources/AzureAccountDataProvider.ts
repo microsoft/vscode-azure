@@ -17,7 +17,6 @@ import {
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
-import { getAmbientCredentialOptions } from './credentialOptionsScope';
 
 /**
  * Identifier for the root account/tenant/subscription data provider. Bound as a
@@ -166,16 +165,6 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
 
     /**
      * @inheritdoc
-     *
-     * When called within a {@linkcode runWithCredentialOptions} scope, tenant
-     * and subscription listing merge that scope's
-     * {@linkcode CredentialFactoryOptions} into the per-node credential -- e.g.
-     * `{ sessionOptions: { silent: true } }` acquires the per-tenant token
-     * *silently*, so the fetch rejects instead of prompting interactive sign-in
-     * when no cached session exists. This lets bulk discovery (e.g. Select
-     * Subscriptions) skip un-authable tenants without interrupting the user.
-     * Account listing never prompts regardless.
-     *
      * @throws if `resource` is neither an account nor a tenant.
      */
     public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
@@ -297,17 +286,10 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * streamed lazily rather than buffered; ordering follows the service
      * response (no cross-page sort).
      *
-     * When invoked inside a {@linkcode runWithCredentialOptions} scope, that
-     * scope's {@linkcode CredentialFactoryOptions} are merged beneath this
-     * call's account scoping -- e.g. `{ sessionOptions: { silent: true } }` makes
-     * the token acquisition silent so the iteration rejects rather than
-     * prompting if no cached session exists.
-     *
      * @param account - The account whose tenants are listed.
      */
     private async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
-        const ambient = getAmbientCredentialOptions();
-        const credential = this.credentialFactory({ ...ambient, sessionOptions: { ...ambient?.sessionOptions, account } });
+        const credential = this.credentialFactory({ sessionOptions: { account } });
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment);
         for await (const page of client.tenants.list()) {
             const items = page.items
@@ -328,17 +310,10 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * pages are streamed lazily rather than buffered; ordering follows the
      * service response (no cross-page sort).
      *
-     * When invoked inside a {@linkcode runWithCredentialOptions} scope, that
-     * scope's {@linkcode CredentialFactoryOptions} are merged beneath this
-     * call's tenant/account scoping -- e.g. `{ sessionOptions: { silent: true } }`
-     * makes the per-tenant token acquisition silent so the iteration rejects
-     * rather than prompting if no cached session exists for the tenant.
-     *
      * @param tenant - The tenant whose subscriptions are listed.
      */
     private async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
-        const ambient = getAmbientCredentialOptions();
-        const credential = this.credentialFactory({ ...ambient, tenantId: tenant.tenantId, sessionOptions: { ...ambient?.sessionOptions, account: { id: tenant.accountId, label: '' } } });
+        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment);
         for await (const page of client.subscriptions.list()) {
             const items = page.items
