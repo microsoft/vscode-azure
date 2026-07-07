@@ -5,9 +5,10 @@
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, MockQuickPick, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
+import type * as vscode from 'vscode';
 import { SelectSubscriptions } from '../../commands/SelectSubscriptions';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { CredentialOptionsScope } from '../../CredentialOptionsScope';
@@ -77,6 +78,48 @@ describe('SelectSubscriptions (unit)', () => {
         expect(mockResult.settings.get(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
             .to.deep.equal(['tenant-1/sub-1']);
         expect(loadMore.mock.callCount()).to.equal(1);
+    });
+
+    it('should pre-check the currently-selected subscriptions case-insensitively', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
+        const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
+        const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
+        const { cache } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+            [account, [[tenant]]],
+            [tenant, [[sub1, sub2]]],
+        ]));
+
+        const { command, mockResult } = createCommand(cache);
+
+        // Seed the filter with an UPPERCASE id: the command lowercases both the
+        // stored ids and the computed selection key, so the pre-check must still
+        // match sub-2 despite the case difference.
+        mockResult.settings.set(
+            `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`,
+            ['TENANT-1/SUB-2'],
+        );
+
+        // Snapshot which items production pre-checks (assigned to selectedItems
+        // before show()), then accept that selection unchanged.
+        const preChecked: string[] = [];
+        mockResult.window.createQuickPick.mock.mockImplementation(() => {
+            const qp = new MockQuickPick<vscode.QuickPickItem>();
+            (mockResult.quickPicks as MockQuickPick<vscode.QuickPickItem>[]).push(qp);
+            qp.show.mock.mockImplementation(() => {
+                preChecked.push(...qp.selectedItems.map(item => item.label));
+                qp.accept();
+            });
+            return qp;
+        });
+
+        await command.execute();
+
+        // Only sub-2 was in the (upper-cased) filter, so only it is pre-checked...
+        expect(preChecked).to.deep.equal(['Sub Two (sub-2)']);
+        // ...and accepting the pre-checked set round-trips to the lowercased id.
+        expect(mockResult.settings.get(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
+            .to.deep.equal(['tenant-1/sub-2']);
     });
 
     it('should persist an empty filter when every reachable subscription is selected', async () => {
