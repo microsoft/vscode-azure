@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { Everything, Roots, type ChildResult, type DataProviderChangeEvent, type Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
@@ -510,6 +510,44 @@ describe('AzureAccountDataProvider (unit)', () => {
             const pages = await collectPages(await provider.getChildren(tenant));
 
             expect((pages[0].items as AzureSubscription[]).map(s => s.subscriptionId)).to.deep.equal(['s4']);
+        });
+
+        it('should acquire the token silently when interaction is disallowed', async () => {
+            const inputs: CredentialFactoryOptions[] = [];
+            const { ctx } = createMockCodeContext();
+            const { executor } = createTestActionExecutor();
+            const credentialFactory: ICredentialFactory = (input) => {
+                inputs.push(input as CredentialFactoryOptions);
+                return makeCredential();
+            };
+            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
+            const tenant = makeTenant();
+            mockSubscriptionClient({
+                subscriptionPages: [{ items: [{ subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' }], hasMore: false }],
+            });
+
+            await collectPages(await provider.getChildren(tenant, { allowInteraction: false }));
+
+            expect(inputs[0]?.sessionOptions?.silent).to.equal(true);
+        });
+
+        it('should acquire the token interactively by default (no silent flag)', async () => {
+            const inputs: CredentialFactoryOptions[] = [];
+            const { ctx } = createMockCodeContext();
+            const { executor } = createTestActionExecutor();
+            const credentialFactory: ICredentialFactory = (input) => {
+                inputs.push(input as CredentialFactoryOptions);
+                return makeCredential();
+            };
+            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
+            const tenant = makeTenant();
+            mockSubscriptionClient({
+                subscriptionPages: [{ items: [{ subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' }], hasMore: false }],
+            });
+
+            await collectPages(await provider.getChildren(tenant));
+
+            expect(inputs[0]?.sessionOptions?.silent).to.be.undefined;
         });
     });
 });

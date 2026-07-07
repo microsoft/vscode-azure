@@ -5,7 +5,7 @@
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { SelectSubscriptions } from '../../commands/SelectSubscriptions';
@@ -13,9 +13,15 @@ import { SelectedSubscriptionsConfigurationKey, SubscriptionFilterConfigurationS
 import type { IAzureViewDataTree } from '../../services';
 
 describe('SelectSubscriptions (unit)', () => {
+    /**
+     * Build a fake {@linkcode IAzureViewDataTree} whose children come from
+     * `pagesMap`. Any node listed in `failNodes` rejects on `getChildren`,
+     * simulating a tenant whose subscriptions cannot be enumerated silently.
+     */
     function createPagedTree(
         rootChildren: ConcreteAzureNode[],
         pagesMap: Map<ConcreteAzureNode, ConcreteAzureNode[][]>,
+        failNodes = new Set<ConcreteAzureNode>(),
     ): { cache: IAzureViewDataTree; loadMore: ReturnType<typeof mock.fn> } {
         const loaded = new Map<ConcreteAzureNode, number>();
         const loadedCount = (node: ConcreteAzureNode): number => loaded.get(node) ?? 1;
@@ -23,6 +29,10 @@ describe('SelectSubscriptions (unit)', () => {
         const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
             if (!node) {
                 return Promise.resolve(rootChildren);
+            }
+
+            if (failNodes.has(node)) {
+                return Promise.reject(new Error('token acquisition failed'));
             }
 
             const pages = pagesMap.get(node) ?? [];
@@ -41,6 +51,13 @@ describe('SelectSubscriptions (unit)', () => {
         };
     }
 
+    function createCommand(cache: IAzureViewDataTree) {
+        const { ctx, mock: mockResult } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const command = new SelectSubscriptions(ctx, executor, cache);
+        return { command, ctx, mockResult };
+    }
+
     it('should list reachable subscriptions across pages and save the selected values', async () => {
         const account = makeAccount({ id: 'acct-1' });
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
@@ -51,10 +68,9 @@ describe('SelectSubscriptions (unit)', () => {
             [tenant, [[sub1], [sub2]]],
         ]));
 
-        const { ctx, mock: mockResult } = createMockCodeContext();
+        const { command, mockResult } = createCommand(cache);
         respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)'] }]);
 
-        const command = new SelectSubscriptions(ctx, cache);
         await command.execute();
 
         expect(mockResult.settings.get(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
@@ -72,13 +88,65 @@ describe('SelectSubscriptions (unit)', () => {
             [tenant, [[sub1, sub2]]],
         ]));
 
-        const { ctx, mock: mockResult } = createMockCodeContext();
+        const { command, mockResult } = createCommand(cache);
         respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)', 'Sub Two (sub-2)'] }]);
 
-        const command = new SelectSubscriptions(ctx, cache);
         await command.execute();
 
         expect(mockResult.settings.get(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
             .to.deep.equal([]);
+    });
+
+    it('should skip a tenant whose subscriptions fail to load and warn instead of aborting', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const goodTenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Good Tenant', accountId: account.id });
+        const badTenant = makeTenant({ tenantId: 'tenant-2', displayName: 'Bad Tenant', accountId: account.id });
+        const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: goodTenant.tenantId, accountId: account.id });
+        const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: goodTenant.tenantId, accountId: account.id });
+        const { cache } = createPagedTree(
+            [account],
+            new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+                [account, [[goodTenant, badTenant]]],
+                [goodTenant, [[sub1, sub2]]],
+            ]),
+            new Set<ConcreteAzureNode>([badTenant]),
+        );
+
+        const { command, mockResult } = createCommand(cache);
+        respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)', 'Sub Two (sub-2)'] }]);
+
+        await command.execute();
+
+        // The failing tenant is surfaced as a non-blocking warning...
+        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
+        // ...and even though every *loaded* subscription was selected, the filter
+        // is NOT collapsed to [] (which would unhide the un-enumerated tenant).
+        expect(mockResult.settings.get(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
+            .to.deep.equal(['tenant-1/sub-1', 'tenant-1/sub-2']);
+    });
+
+    it('should throw when no tenant could be enumerated', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const badTenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Bad Tenant', accountId: account.id });
+        const { cache } = createPagedTree(
+            [account],
+            new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+                [account, [[badTenant]]],
+            ]),
+            new Set<ConcreteAzureNode>([badTenant]),
+        );
+
+        const { command, mockResult } = createCommand(cache);
+
+        let caught: unknown;
+        try {
+            await command.execute();
+        } catch (error) {
+            caught = error;
+        }
+
+        expect(caught).to.be.instanceOf(Error);
+        expect((caught as Error).message).to.match(/Could not load subscriptions for any tenant/);
+        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
     });
 });

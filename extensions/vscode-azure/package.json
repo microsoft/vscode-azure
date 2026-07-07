@@ -117,6 +117,7 @@
             {
                 "command": "vscode-azure/selectSubscriptions",
                 "category": "%commands.category.azure%",
+                "icon": "$(filter)",
                 "title": "%commands.vscode-azure/selectSubscriptions%"
             }
         ],
@@ -182,9 +183,14 @@
                     "group": "navigation@1"
                 },
                 {
-                    "command": "vscode-azure/resources/refresh",
+                    "command": "vscode-azure/selectSubscriptions",
                     "when": "view == vscode-azure/resources",
                     "group": "navigation@2"
+                },
+                {
+                    "command": "vscode-azure/resources/refresh",
+                    "when": "view == vscode-azure/resources",
+                    "group": "navigation@3"
                 },
                 {
                     "command": "vscode-azure/workspace/refresh",

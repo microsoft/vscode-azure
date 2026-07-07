@@ -41,6 +41,30 @@ export interface DataProviderChangeEvent<TResource> {
 export type ChildResult<TResource> = TResource[] | AsyncIterable<Page<TResource>>;
 
 /**
+ * Per-call hints passed to a {@linkcode DataProvider.getChildren} fetch.
+ *
+ * These options are **advisory** and are deliberately **not** part of the
+ * tree's cache key: they only influence how a cache *miss* is fetched. A cache
+ * *hit* returns the previously-loaded children regardless of the options
+ * supplied, and paged fetches bake the options into the iterator when the
+ * first page is pulled (subsequent "Load More" pages continue that iterator
+ * unchanged). The generic tree does not interpret these hints itself; it
+ * forwards them to the handling provider, which may honor or ignore them.
+ */
+export interface FetchOptions {
+    /**
+     * Whether the fetch is permitted to perform user-visible interactive work
+     * (e.g. an authentication sign-in prompt). Defaults to `true` when omitted.
+     *
+     * Pass `false` for background / bulk discovery that should stay silent and
+     * fail fast rather than prompting -- for example enumerating every tenant's
+     * subscriptions, where an un-authable tenant should be skipped (its fetch
+     * rejecting) instead of interrupting the user with a sign-in dialog.
+     */
+    readonly allowInteraction?: boolean;
+}
+
+/**
  * Data-layer provider for a resource tree.
  *
  * Each implementation handles a specific subset of resources (identified by
@@ -69,9 +93,14 @@ export interface DataProvider<TResource> {
      * tree will pull one page on first access and subsequent pages when
      * the user clicks "Load More".
      *
+     * @param resource - The parent resource whose children to fetch, or
+     *   `undefined` for the top-level resources (root providers only).
+     * @param options - Optional {@linkcode FetchOptions} hints for this fetch.
+     *   Advisory only; not part of the cache key. Providers may honor or ignore
+     *   them.
      * @returns Child resources or `undefined` / empty for leaf nodes.
      */
-    getChildren(resource?: TResource): ProviderResult<ChildResult<TResource>>;
+    getChildren(resource?: TResource, options?: FetchOptions): ProviderResult<ChildResult<TResource>>;
 
     /**
      * Enrich a resource in-place with provider-specific data.

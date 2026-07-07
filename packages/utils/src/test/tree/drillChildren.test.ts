@@ -18,7 +18,7 @@ describe('drillChildren (unit)', () => {
     function createPagedTree<T>(resource: T, pages: T[][]) {
         let loadedPages = 1;
 
-        const getChildren = mock.fn((node?: T): Promise<T[]> => {
+        const getChildren = mock.fn((node?: T, _options?: unknown): Promise<T[]> => {
             if (node !== resource) {
                 return Promise.resolve([]);
             }
@@ -104,5 +104,16 @@ describe('drillChildren (unit)', () => {
         const result = await collect(drillChildren(tree, 'parent'));
 
         expect(result).to.deep.equal([]);
+    });
+
+    it('should forward fetch options to the initial getChildren call', async () => {
+        const { tree, getChildren } = createPagedTree('parent', [['a', 'b']]);
+        const options = { allowInteraction: false };
+
+        await collect(drillChildren(tree, 'parent', options));
+
+        // The first-page fetch receives the options; the hint is not part of the
+        // cache key, so only the initial getChildren needs to carry it.
+        expect(getChildren.mock.calls[0].arguments[1]).to.deep.equal(options);
     });
 });

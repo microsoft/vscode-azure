@@ -10,7 +10,7 @@ import { Limiter } from '../data/Limiter';
 import { isAsyncIterable, type Page } from '../data/Page';
 import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
-import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
+import type { DataProvider, DataProviderChangeEvent, FetchOptions } from './DataProvider';
 import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 import { Everything, isKeyMatch, Roots, subtreeOf, type KeyMatch, type MatchScope, type Selector, type Target } from './Selector';
@@ -110,16 +110,21 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * {@linkcode vscode.TreeDataProvider.getChildren TreeDataProvider.getChildren}.
      *
      * Results are lazily loaded and cached with TTL.
+     *
+     * @param resource - The parent resource, or `undefined` for the roots.
+     * @param options - Optional {@linkcode FetchOptions} hints forwarded to the
+     *   handling provider on a cache *miss*. They do not participate in the
+     *   cache key, so a cache hit ignores them.
      */
-    public async getChildren(resource?: T): Promise<T[]> {
+    public async getChildren(resource?: T, options?: FetchOptions): Promise<T[]> {
         if (resource === undefined) {
-            return this.getRootChildren();
+            return this.getRootChildren(options);
         }
 
-        return this.getBranchChildren(resource);
+        return this.getBranchChildren(resource, options);
     }
 
-    private async getRootChildren(): Promise<T[]> {
+    private async getRootChildren(options?: FetchOptions): Promise<T[]> {
         if (this.roots !== undefined && Date.now() < this.rootsStaleAt) {
             this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${this.roots.length})`);
             return this.roots.map(n => n.resource);
@@ -139,7 +144,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                     context.telemetry.properties.tree = this.name;
                     context.telemetry.properties.provider = p.constructor.name;
 
-                    return Promise.resolve(p.getChildren()) as Promise<T[]>;
+                    return Promise.resolve(p.getChildren(undefined, options)) as Promise<T[]>;
                 }))),
         );
 
@@ -213,7 +218,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         return ttl === Infinity ? Infinity : Date.now() + ttl;
     }
 
-    private async getBranchChildren(resource: T): Promise<T[]> {
+    private async getBranchChildren(resource: T, options?: FetchOptions): Promise<T[]> {
         const key = this.getKey(resource);
         const node = this.nodes.get(key);
 
@@ -249,7 +254,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             context.errorHandling.rethrow = true;
             context.telemetry.properties.tree = this.name;
             context.telemetry.properties.provider = provider.constructor.name;
-            return provider.getChildren(resource);
+            return provider.getChildren(resource, options);
         });
 
         if (!result) {

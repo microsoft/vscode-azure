@@ -14,7 +14,7 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import {
     Debouncer, EventEmitter, Everything, IActionExecutor, ICodeContext, Roots, stringifyError,
-    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type FetchOptions, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 
@@ -165,9 +165,16 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
 
     /**
      * @inheritdoc
+     *
+     * When `options.allowInteraction` is `false`, tenant and subscription
+     * listing acquire their per-tenant tokens *silently*: if no cached session
+     * exists the fetch rejects instead of prompting interactive sign-in. This
+     * lets bulk discovery (e.g. Select Subscriptions) skip un-authable tenants
+     * without interrupting the user. Account listing never prompts regardless.
+     *
      * @throws if `resource` is neither an account nor a tenant.
      */
-    public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
+    public getChildren(resource?: ConcreteAzureNode, options?: FetchOptions): ProviderResult<ChildResult<ConcreteAzureNode>> {
         if (!resource) {
             // Lists already-signed-in accounts without prompting. The user is
             // prompted to sign in lazily when an operation actually needs a
@@ -175,12 +182,14 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
             return this.listAccounts();
         }
 
+        const silent = options?.allowInteraction === false;
+
         if (isAccount(resource)) {
-            return this.listTenantsForAccount(resource);
+            return this.listTenantsForAccount(resource, silent);
         }
 
         if (isTenant(resource)) {
-            return this.listSubscriptionsForTenant(resource);
+            return this.listSubscriptionsForTenant(resource, silent);
         }
 
         throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
@@ -287,9 +296,11 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * response (no cross-page sort).
      *
      * @param account - The account whose tenants are listed.
+     * @param silent - When `true`, acquire the token without prompting; the
+     *   iteration rejects rather than prompting if no cached session exists.
      */
-    private async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
-        const credential = this.credentialFactory({ sessionOptions: { account } });
+    private async *listTenantsForAccount(account: AzureAccount, silent: boolean): AsyncIterable<Page<ConcreteAzureNode>> {
+        const credential = this.credentialFactory({ sessionOptions: { account, ...(silent ? { silent: true } : {}) } });
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment);
         for await (const page of client.tenants.list()) {
             const items = page.items
@@ -311,9 +322,12 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      * service response (no cross-page sort).
      *
      * @param tenant - The tenant whose subscriptions are listed.
+     * @param silent - When `true`, acquire the per-tenant token without
+     *   prompting; the iteration rejects rather than prompting if no cached
+     *   session exists for the tenant.
      */
-    private async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
-        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
+    private async *listSubscriptionsForTenant(tenant: AzureTenant, silent: boolean): AsyncIterable<Page<ConcreteAzureNode>> {
+        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' }, ...(silent ? { silent: true } : {}) } });
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment);
         for await (const page of client.subscriptions.list()) {
             const items = page.items
