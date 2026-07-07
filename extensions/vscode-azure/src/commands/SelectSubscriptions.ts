@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, ICodeContext, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
+import { IActionContext, IActionExecutor, ICodeContext, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
@@ -38,6 +38,7 @@ export class SelectSubscriptions implements ManagedCommand {
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
         @inject(ICredentialOptionsScope) private readonly credentialOptions: ICredentialOptionsScope,
+        @inject(IActionContext) private readonly actionContext: IActionContext,
     ) { }
 
     /** @inheritdoc */
@@ -60,6 +61,9 @@ export class SelectSubscriptions implements ManagedCommand {
         }
 
         if (reachable.length === 0) {
+            // Both messages are user-actionable ("sign in"), not bugs, so show
+            // the toast but omit the "Report Issue" button.
+            this.actionContext.errorHandling.suppress = 'reportIssue';
             if (failures.length > 0) {
                 throw new Error(code.l10n.t('Could not load subscriptions for any tenant. Sign in to those tenants and try again.'));
             }

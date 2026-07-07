@@ -5,6 +5,7 @@
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, MockQuickPick, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -56,8 +57,9 @@ describe('SelectSubscriptions (unit)', () => {
     function createCommand(cache: IAzureViewDataTree) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const command = new SelectSubscriptions(ctx, executor, cache, new CredentialOptionsScope());
-        return { command, ctx, mockResult };
+        const actionContext = createActionContext('test');
+        const command = new SelectSubscriptions(ctx, executor, cache, new CredentialOptionsScope(), actionContext);
+        return { command, ctx, mockResult, actionContext };
     }
 
     it('should list reachable subscriptions across pages and save the selected values', async () => {
@@ -101,9 +103,14 @@ describe('SelectSubscriptions (unit)', () => {
         );
 
         // Snapshot which items production pre-checks (assigned to selectedItems
-        // before show()), then accept that selection unchanged.
+        // before show()), then accept that selection unchanged. Cast to a loose
+        // mock shape because the real `createQuickPick` signature is generic
+        // (`<T>() => QuickPick<T>`), which a concrete impl can't satisfy.
         const preChecked: string[] = [];
-        mockResult.window.createQuickPick.mock.mockImplementation(() => {
+        const createQuickPickMock = (mockResult.window.createQuickPick as unknown as {
+            mock: { mockImplementation: (fn: () => MockQuickPick<vscode.QuickPickItem>) => void };
+        }).mock;
+        createQuickPickMock.mockImplementation(() => {
             const qp = new MockQuickPick<vscode.QuickPickItem>();
             (mockResult.quickPicks as MockQuickPick<vscode.QuickPickItem>[]).push(qp);
             qp.show.mock.mockImplementation(() => {
@@ -180,7 +187,7 @@ describe('SelectSubscriptions (unit)', () => {
             new Set<ConcreteAzureNode>([badTenant]),
         );
 
-        const { command, mockResult } = createCommand(cache);
+        const { command, mockResult, actionContext } = createCommand(cache);
 
         let caught: unknown;
         try {
@@ -192,5 +199,8 @@ describe('SelectSubscriptions (unit)', () => {
         expect(caught).to.be.instanceOf(Error);
         expect((caught as Error).message).to.match(/Could not load subscriptions for any tenant/);
         expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
+        // The error is user-actionable ("sign in"), not a bug, so the toast
+        // should omit the "Report Issue" button.
+        expect(actionContext.errorHandling.suppress).to.equal('reportIssue');
     });
 });
