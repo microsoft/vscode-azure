@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IActionExecutor, ICodeContext, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
+import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
 import { ICredentialOptionsScope } from '../CredentialOptionsScope';
@@ -11,8 +12,13 @@ import { IAzureViewDataTree } from '../services';
 import { listReachableSubscriptions, type UnreachableAuthNode } from './listReachableAuthNodes';
 import type { ManagedCommand } from './ManagedCommand';
 
-interface SubscriptionPickData {
-    readonly id: string;
+/**
+ * Build the `tenantId/subscriptionId` selection key (both halves lowercased)
+ * used to persist the filter and to match against the currently-selected set.
+ * The lowercasing keeps the config round-trip and lookups case-insensitive.
+ */
+function selectionId(subscription: AzureSubscription): string {
+    return `${subscription.tenantId.toLowerCase()}/${subscription.subscriptionId.toLowerCase()}`;
 }
 
 /**
@@ -60,23 +66,22 @@ export class SelectSubscriptions implements ManagedCommand {
             throw new Error(code.l10n.t('No reachable subscriptions were found. Sign in to Azure and try again.'));
         }
 
-        const picks: QuickPickItemWithData<SubscriptionPickData>[] = reachable.map(({ account, tenant, subscription }) => {
-            const selectionId = `${tenant.tenantId.toLowerCase()}/${subscription.subscriptionId.toLowerCase()}`;
+        const picks: QuickPickItemWithData<AzureSubscription>[] = reachable.map(({ account, tenant, subscription }) => {
             return {
                 label: code.l10n.t('{0} ({1})', subscription.displayName, subscription.subscriptionId),
                 description: code.l10n.t('Tenant: {0}', tenant.displayName),
                 detail: code.l10n.t('Tenant ID: {0} | Account: {1}', tenant.tenantId, account.label),
-                data: { id: selectionId },
+                data: subscription,
             };
         });
 
         const selected = await showSmartQuickPick(this.ctx, picks, {
             canPickMany: true,
             placeHolder: code.l10n.t('Select subscriptions to include in the Azure resources view'),
-            isSelectedItem: item => currentSet.size === 0 || currentSet.has(item.data.id),
+            isSelectedItem: item => currentSet.size === 0 || currentSet.has(selectionId(item.data)),
         });
 
-        const selectedIds = [...new Set(selected.map(item => item.data.id))]
+        const selectedIds = [...new Set(selected.map(item => selectionId(item.data)))]
             .sort((a, b) => a.localeCompare(b));
 
         // Persisting an empty list means "no filtering" (show everything). Only
