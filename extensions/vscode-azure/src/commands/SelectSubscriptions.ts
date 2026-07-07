@@ -106,7 +106,7 @@ export class SelectSubscriptions implements ManagedCommand {
         const code = this.ctx.code;
 
         for (const failure of failures) {
-            this.executor.output.warn(`[selectSubscriptions] could not list subscriptions for tenant=${failure.tenant?.tenantId ?? '<all>'} account=${failure.account.id}: ${stringifyError(failure.error)}`);
+            this.executor.output.warn(code.l10n.t('[selectSubscriptions] could not list subscriptions for tenant={0} account={1}: {2}', failure.tenant?.tenantId ?? '<all>', failure.account.id, stringifyError(failure.error)));
         }
 
         const tenantNames = failures
