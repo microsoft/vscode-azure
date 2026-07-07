@@ -6,7 +6,7 @@
 import type { AzureAccount, AzureSubscription, AzureTenant, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { isAccount, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
 import { drillChildren } from '@microsoft/vscode-azure-utils';
-import { runWithSilentAuth } from '../tree/resources/silentAuthScope';
+import { runWithCredentialOptions } from '../tree/resources/credentialOptionsScope';
 
 /**
  * A subscription that is reachable from a signed-in account/tenant pair.
@@ -45,7 +45,8 @@ export interface ReachableSubscriptionsResult {
  * accounts, drilling account -> tenant -> subscription via the shared tree cache
  * (so results already loaded for the tree are reused).
  *
- * The entire walk runs inside a {@linkcode runWithSilentAuth} scope so that any
+ * The entire walk runs inside a {@linkcode runWithCredentialOptions} scope
+ * requesting silent auth (`{ sessionOptions: { silent: true } }`), so that any
  * cache *miss* fetches a credential silently rather than prompting an
  * interactive sign-in. Discovery is best-effort and fault-isolated: a failure
  * enumerating one account's tenants, or one tenant's subscriptions, is captured
@@ -61,7 +62,7 @@ export async function listReachableSubscriptions(tree: ConcreteAzureNodeTree): P
     const subscriptions = new Map<string, ReachableSubscription>();
     const failures: UnreachableAuthNode[] = [];
 
-    await runWithSilentAuth(async () => {
+    await runWithCredentialOptions({ sessionOptions: { silent: true } }, async () => {
         for await (const accountNode of drillChildren(tree, undefined)) {
             if (!isAccount(accountNode)) {
                 continue;
