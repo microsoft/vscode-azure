@@ -42,10 +42,10 @@ import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
-import { CredentialOptionsScope, ICredentialOptionsScope } from './utils/CredentialOptionsScope';
 import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
+import { CredentialOptionsScope, ICredentialOptionsScope } from './utils/CredentialOptionsScope';
 
 /**
  * Public API surface returned from {@linkcode activateInternal} (and thus from

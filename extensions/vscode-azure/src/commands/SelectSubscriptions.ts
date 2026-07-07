@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionContext, IActionExecutor, ICodeContext, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { IActionContext, IActionExecutor, ICodeContext, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
-import { ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
 import { IAzureViewDataTree } from '../services';
+import { ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
 import { subscriptionFilterKey } from '../utils/subscriptionFilter';
 import { listReachableSubscriptions, type UnreachableAuthNode } from './listReachableAuthNodes';
 import type { ManagedCommand } from './ManagedCommand';
