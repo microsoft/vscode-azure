@@ -4,11 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockPagedDataItemTree, makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, MockQuickPick, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { SelectSubscriptions } from '../../commands/SelectSubscriptions';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
@@ -16,44 +15,6 @@ import { CredentialOptionsScope } from '../../CredentialOptionsScope';
 import type { IAzureViewDataTree } from '../../services';
 
 describe('SelectSubscriptions (unit)', () => {
-    /**
-     * Build a fake {@linkcode IAzureViewDataTree} whose children come from
-     * `pagesMap`. Any node listed in `failNodes` rejects on `getChildren`,
-     * simulating a tenant whose subscriptions cannot be enumerated silently.
-     */
-    function createPagedTree(
-        rootChildren: ConcreteAzureNode[],
-        pagesMap: Map<ConcreteAzureNode, ConcreteAzureNode[][]>,
-        failNodes = new Set<ConcreteAzureNode>(),
-    ): { cache: IAzureViewDataTree; loadMore: ReturnType<typeof mock.fn> } {
-        const loaded = new Map<ConcreteAzureNode, number>();
-        const loadedCount = (node: ConcreteAzureNode): number => loaded.get(node) ?? 1;
-
-        const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
-            if (!node) {
-                return Promise.resolve(rootChildren);
-            }
-
-            if (failNodes.has(node)) {
-                return Promise.reject(new Error('token acquisition failed'));
-            }
-
-            const pages = pagesMap.get(node) ?? [];
-            return Promise.resolve(pages.slice(0, loadedCount(node)).flat());
-        });
-
-        const hasMore = mock.fn((node: ConcreteAzureNode): boolean => loadedCount(node) < (pagesMap.get(node)?.length ?? 0));
-        const loadMore = mock.fn((node: ConcreteAzureNode): Promise<void> => {
-            loaded.set(node, loadedCount(node) + 1);
-            return Promise.resolve();
-        });
-
-        return {
-            cache: { getChildren, hasMore, loadMore } as unknown as IAzureViewDataTree,
-            loadMore,
-        };
-    }
-
     function createCommand(cache: IAzureViewDataTree) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
@@ -67,7 +28,7 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { cache, loadMore } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree: cache, loadMore } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant]]],
             [tenant, [[sub1], [sub2]]],
         ]));
@@ -87,7 +48,7 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { cache } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree: cache } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant]]],
             [tenant, [[sub1, sub2]]],
         ]));
@@ -134,7 +95,7 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { cache } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree: cache } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant]]],
             [tenant, [[sub1, sub2]]],
         ]));
@@ -154,13 +115,13 @@ describe('SelectSubscriptions (unit)', () => {
         const badTenant = makeTenant({ tenantId: 'tenant-2', displayName: 'Bad Tenant', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: goodTenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: goodTenant.tenantId, accountId: account.id });
-        const { cache } = createPagedTree(
+        const { tree: cache } = createMockPagedDataItemTree(
             [account],
             new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
                 [account, [[goodTenant, badTenant]]],
                 [goodTenant, [[sub1, sub2]]],
             ]),
-            new Set<ConcreteAzureNode>([badTenant]),
+            { failNodes: new Set<ConcreteAzureNode>([badTenant]) },
         );
 
         const { command, mockResult } = createCommand(cache);
@@ -179,12 +140,12 @@ describe('SelectSubscriptions (unit)', () => {
     it('should throw when no tenant could be enumerated', async () => {
         const account = makeAccount({ id: 'acct-1' });
         const badTenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Bad Tenant', accountId: account.id });
-        const { cache } = createPagedTree(
+        const { tree: cache } = createMockPagedDataItemTree(
             [account],
             new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
                 [account, [[badTenant]]],
             ]),
-            new Set<ConcreteAzureNode>([badTenant]),
+            { failNodes: new Set<ConcreteAzureNode>([badTenant]) },
         );
 
         const { command, mockResult, actionContext } = createCommand(cache);

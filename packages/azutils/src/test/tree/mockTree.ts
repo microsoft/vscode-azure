@@ -79,3 +79,65 @@ export function createMockHierarchicalDataItemTree(
         },
     } as unknown as DataItemTree<ConcreteAzureNode>;
 }
+
+/** A paged mock {@linkcode DataItemTree} plus the underlying spies. */
+export interface MockPagedDataItemTree {
+    /** The mock tree, ready to pass where a {@linkcode DataItemTree} is expected. */
+    readonly tree: DataItemTree<ConcreteAzureNode>;
+    /** Spy for `getChildren` (root call passes `undefined`). */
+    readonly getChildren: ReturnType<typeof mock.fn>;
+    /** Spy for `hasMore`. */
+    readonly hasMore: ReturnType<typeof mock.fn>;
+    /** Spy for `loadMore`; assert its call count to verify paging advanced. */
+    readonly loadMore: ReturnType<typeof mock.fn>;
+}
+
+/**
+ * Creates a paged mock {@linkcode DataItemTree} that mirrors the paging
+ * contract: `getChildren` returns only the pages loaded so far, `hasMore`
+ * reports whether unloaded pages remain, and `loadMore` advances to the next
+ * page. Root children are never paged.
+ *
+ * Any node in `failNodes` rejects on `getChildren`, simulating a branch whose
+ * children cannot be enumerated (e.g. a tenant that can't mint a token). The
+ * returned spies let tests assert how far paging advanced.
+ *
+ * @param rootChildren - The (unpaged) root nodes.
+ * @param pagesMap - Maps a node to its children split into pages.
+ * @param options - Optional `failNodes`: nodes whose `getChildren` rejects.
+ */
+export function createMockPagedDataItemTree(
+    rootChildren: ConcreteAzureNode[],
+    pagesMap: Map<ConcreteAzureNode, ConcreteAzureNode[][]>,
+    options: { readonly failNodes?: Set<ConcreteAzureNode> } = {},
+): MockPagedDataItemTree {
+    const failNodes = options.failNodes ?? new Set<ConcreteAzureNode>();
+    const loaded = new Map<ConcreteAzureNode, number>();
+    const loadedCount = (node: ConcreteAzureNode): number => loaded.get(node) ?? 1;
+
+    const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
+        if (!node) {
+            return Promise.resolve(rootChildren);
+        }
+        if (failNodes.has(node)) {
+            return Promise.reject(new Error('token acquisition failed'));
+        }
+        const pages = pagesMap.get(node) ?? [];
+        return Promise.resolve(pages.slice(0, loadedCount(node)).flat());
+    });
+
+    const hasMore = mock.fn((node?: ConcreteAzureNode): boolean => {
+        if (!node) {
+            return false;
+        }
+        return loadedCount(node) < (pagesMap.get(node)?.length ?? 0);
+    });
+
+    const loadMore = mock.fn((node: ConcreteAzureNode): Promise<void> => {
+        loaded.set(node, loadedCount(node) + 1);
+        return Promise.resolve();
+    });
+
+    const tree = { getChildren, hasMore, loadMore } as unknown as DataItemTree<ConcreteAzureNode>;
+    return { tree, getChildren, hasMore, loadMore };
+}
