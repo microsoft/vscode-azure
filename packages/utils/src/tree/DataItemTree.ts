@@ -41,6 +41,22 @@ interface Pager<T> {
 }
 
 /**
+ * A per-node side table whose entries' lifetime is tied to a node's presence in
+ * the tree index. Registered in {@linkcode DataItemTree}'s `nodeSideTables` so
+ * that single-node teardown and full teardown drop every table in lockstep --
+ * adding a new per-node table becomes a one-line registration that no eviction
+ * call site can forget.
+ *
+ * @internal
+ */
+interface NodeSideTable {
+    /** Drop the entry for a single node key (a no-op if absent). */
+    evict(key: string): void;
+    /** Drop all entries. */
+    clear(): void;
+}
+
+/**
  * A lazily-loaded, cached tree of data items built up piecewise by
  * {@linkcode DataProvider}s.
  *
@@ -103,6 +119,20 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     /** Per-resource pagination state (present only for paginated nodes). */
     private readonly pagers = new Map<string, Pager<T>>();
 
+    /**
+     * The registry of per-node side tables kept consistent with the {@linkcode tree}
+     * index. {@linkcode evictEntry} (single node) and {@linkcode clearNodeState}
+     * (all nodes) iterate this list, so no teardown path can forget a table and
+     * adding a new one is a single registration below.
+     *
+     * The query {@linkcode client cache} is deliberately *not* a member: it is
+     * keyed by path (not node key) and torn down at subtree granularity -- one
+     * prefix removal drops a node and all descendants -- so it does not fit the
+     * per-key `evict(key)` contract. Full teardown handles it in
+     * {@linkcode clearAllState}.
+     */
+    private readonly nodeSideTables: readonly NodeSideTable[];
+
     public readonly onDidChange = this.changeEmitter.event;
 
     /**
@@ -129,6 +159,11 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     ) {
         super();
         this.tree = new TreeIndex<T>(getKey);
+        this.nodeSideTables = [
+            { evict: key => { this.tree.evict(key); }, clear: () => { this.tree.clear(); } },
+            { evict: key => { this.pagers.delete(key); }, clear: () => { this.pagers.clear(); } },
+            { evict: key => { this.enrichmentPromises.delete(key); }, clear: () => { this.enrichmentPromises.clear(); } },
+        ];
         this.client = new QueryClient({
             defaultOptions: {
                 queries: {
@@ -502,6 +537,38 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
+     * Test-only snapshot of the internal stores, used to assert the tree's
+     * cross-store consistency invariants (see `DataItemTree.consistency.test.ts`).
+     * Not part of the supported public API and must not be used in product code.
+     *
+     * @returns The indexed nodes (key -> path), every cached children path (the
+     *   `['children', ...path]` query keys with the `'children'` prefix stripped),
+     *   and the live pager / enrichment side-table keys.
+     * @internal
+     */
+    public snapshotState(): {
+        readonly indexed: ReadonlyMap<string, readonly string[]>;
+        readonly cachedPaths: readonly (readonly string[])[];
+        readonly pagerKeys: readonly string[];
+        readonly enrichmentKeys: readonly string[];
+    } {
+        const indexed = new Map<string, readonly string[]>();
+        for (const [key] of this.tree.entries()) {
+            indexed.set(key, this.tree.pathOf(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- key came from entries(), so it is indexed
+        }
+        const cachedPaths = this.client.getQueryCache().getAll()
+            .map(query => query.queryKey)
+            .filter((key): key is readonly unknown[] => Array.isArray(key) && key[0] === CHILDREN)
+            .map(key => key.slice(1) as string[]);
+        return {
+            indexed,
+            cachedPaths,
+            pagerKeys: [...this.pagers.keys()],
+            enrichmentKeys: [...this.enrichmentPromises.keys()],
+        };
+    }
+
+    /**
      * Invalidate part of the cache, marking matched nodes stale so they are
      * re-fetched on next access, and firing {@linkcode onDidChange} so the view
      * re-renders. Accepts the full {@linkcode Target} surface:
@@ -742,11 +809,34 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
     }
 
-    /** Drop a single key's flat-map / pager / enrichment-promise entries. */
+    /**
+     * The single choke point for single-node teardown: drop the given key from
+     * every registered {@linkcode nodeSideTables} table (index, pagers,
+     * enrichment promises). Does **not** touch the query cache -- callers remove
+     * cached children at subtree granularity via a prefix removal.
+     */
     private evictEntry(key: string): void {
-        this.tree.evict(key);
-        this.pagers.delete(key);
-        this.enrichmentPromises.delete(key);
+        for (const table of this.nodeSideTables) {
+            table.evict(key);
+        }
+    }
+
+    /** Clear every registered per-node {@linkcode nodeSideTables side table}. */
+    private clearNodeState(): void {
+        for (const table of this.nodeSideTables) {
+            table.clear();
+        }
+    }
+
+    /**
+     * The single choke point for full teardown: clear the query cache and every
+     * per-node side table. Shared by {@linkcode invalidateAllImpl} and
+     * {@linkcode dispose} so a new store added to {@linkcode nodeSideTables} is
+     * torn down by both without touching either.
+     */
+    private clearAllState(): void {
+        this.client.getQueryCache().clear();
+        this.clearNodeState();
     }
 
     /**
@@ -782,10 +872,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private invalidateAllImpl(): void {
         this.executor.output.debug(`[cache] ${this.name} invalidate all`);
-        this.client.getQueryCache().clear();
-        this.tree.clear();
-        this.pagers.clear();
-        this.enrichmentPromises.clear();
+        this.clearAllState();
         this.changeEmitter.fire(undefined);
     }
 
@@ -821,11 +908,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     public override dispose(): void {
-        this.client.getQueryCache().clear();
+        this.clearAllState();
         this.client.clear();
-        this.tree.clear();
-        this.pagers.clear();
-        this.enrichmentPromises.clear();
         super.dispose();
     }
 
