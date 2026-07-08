@@ -82,6 +82,8 @@ describe('Function App Tree Integration (integration)', () => {
         readonly viewTree: ViewItemTree<string, ConcreteAzureNode>;
         readonly mockCtx: ReturnType<typeof createMockCodeContext>;
         readonly funcDataProvider: FunctionAppDataProvider;
+        readonly funcViewProvider: FunctionAppViewProvider;
+        readonly genericViewProvider: GenericAzureViewProvider;
         readonly webAppClient: IWebAppClient;
         readonly backingSettings: Record<string, string>;
     }
@@ -145,7 +147,7 @@ describe('Function App Tree Integration (integration)', () => {
         viewTree.registerProvider(funcViewProvider);
         viewTree.registerProvider(genericViewProvider);
 
-        return { dataTree, viewTree, mockCtx, funcDataProvider, webAppClient, backingSettings };
+        return { dataTree, viewTree, mockCtx, funcDataProvider, funcViewProvider, genericViewProvider, webAppClient, backingSettings };
     }
 
     // -- Helpers -----------------------------------------------------------
@@ -454,6 +456,120 @@ describe('Function App Tree Integration (integration)', () => {
             expect(funcKey).to.exist;
             const funcItem = await viewTree.getTreeItem(funcKey!);
             expect(funcItem.label).to.equal('myFunc');
+        });
+    });
+
+    // -- Tests: Reveal of an unloaded node by a pre-constructed key --------
+
+    describe('reveal by constructed key', () => {
+        // Models the real-world scenario: a caller that already knows a
+        // resource's account, tenant, and ARM resource id can *construct* its
+        // node key up front (via AzureNodeId) and ask the tree to reveal it --
+        // before anything under that branch has ever been loaded. VS Code's
+        // TreeView.reveal() first walks getParent() from the target up to the
+        // root, so getParent() must resolve purely from the key.
+        //
+        // Note: because the target resource is not cached, the *specialized*
+        // provider (FunctionAppViewProvider) reports canHandle=false (its
+        // canHandle consults the cache), so GenericAzureViewProvider owns the
+        // reveal walk and resolves each ancestor via AzureNodeId parsing.
+
+        it('should walk getParent up an unloaded chain from a constructed Function App key', async () => {
+            const { viewTree, dataTree } = createTestPipeline();
+
+            const funcKey = AzureNodeId.from(functionApp).toString();
+            const rgKey = AzureNodeId.from(resourceGroup).toString();
+            const subKey = AzureNodeId.from(subscription).toString();
+
+            // Nothing has been loaded, so the node does not exist in the data tree.
+            expect(dataTree.get(funcKey), 'func app should not be loaded yet').to.be.undefined;
+
+            // Walk up from the constructed key exactly as reveal() would.
+            const rg = await viewTree.getParent(funcKey);
+            expect(rg).to.equal(rgKey);
+
+            const sub = await viewTree.getParent(rg!);
+            expect(sub).to.equal(subKey);
+
+            // With a single account and single tenant, both levels are skipped,
+            // so the subscription is the effective root and the walk stops here.
+            const aboveRoot = await viewTree.getParent(sub!);
+            expect(aboveRoot).to.be.undefined;
+
+            // The reveal walk must not have loaded anything into the data tree.
+            expect(dataTree.get(funcKey), 'walk must not populate the data tree').to.be.undefined;
+            expect(dataTree.get(rgKey), 'walk must not populate the data tree').to.be.undefined;
+            expect(dataTree.get(subKey), 'walk must not populate the data tree').to.be.undefined;
+        });
+
+        it('should lazily load and render the constructed node after the getParent walk', async () => {
+            const { viewTree, dataTree } = createTestPipeline();
+
+            const funcKey = AzureNodeId.from(functionApp).toString();
+            const rgKey = AzureNodeId.from(resourceGroup).toString();
+            const subKey = AzureNodeId.from(subscription).toString();
+
+            // Walk up first (nothing loaded)...
+            expect(await viewTree.getParent(funcKey)).to.equal(rgKey);
+            expect(await viewTree.getParent(rgKey)).to.equal(subKey);
+            expect(await viewTree.getParent(subKey)).to.be.undefined;
+
+            // ...then expand downward, loading real data at each level, just as
+            // reveal() drives the view (which sits on top of the data tree).
+            const roots = await viewTree.getChildren();
+            expect(roots).to.include(subKey);
+
+            const subChildren = await viewTree.getChildren(subKey);
+            expect(subChildren).to.include(rgKey);
+
+            const rgChildren = await viewTree.getChildren(rgKey);
+            expect(rgChildren).to.include(funcKey);
+
+            // The previously-unknown node is now materialized in the data tree,
+            // proving the constructed key reconciled with a real resource, and it
+            // renders through the specialized Function App view provider.
+            expect(dataTree.get(funcKey), 'func app should now be loaded').to.exist;
+            const item = await viewTree.getTreeItem(funcKey);
+            expect(item.label).to.equal('myFunc');
+        });
+
+        it('should walk getParent up an unloaded chain for a generic (non-Function) resource key', async () => {
+            const { viewTree, dataTree } = createTestPipeline();
+
+            // The storage account is handled end-to-end by GenericAzureViewProvider.
+            const storageKey = AzureNodeId.from(nonFuncResource).toString();
+            const rgKey = AzureNodeId.from(resourceGroup).toString();
+            const subKey = AzureNodeId.from(subscription).toString();
+
+            expect(dataTree.get(storageKey), 'storage account should not be loaded yet').to.be.undefined;
+
+            expect(await viewTree.getParent(storageKey)).to.equal(rgKey);
+            expect(await viewTree.getParent(rgKey)).to.equal(subKey);
+            expect(await viewTree.getParent(subKey)).to.be.undefined;
+        });
+
+        it('should use the cached fast path (no provider getParent) once fully loaded', async () => {
+            const { viewTree, funcViewProvider, genericViewProvider } = createTestPipeline();
+
+            const funcKey = AzureNodeId.from(functionApp).toString();
+            const rgKey = AzureNodeId.from(resourceGroup).toString();
+            const subKey = AzureNodeId.from(subscription).toString();
+
+            // Load the whole branch so every node is in the view node map.
+            await viewTree.getChildren();
+            await viewTree.getChildren(subKey);
+            await viewTree.getChildren(rgKey);
+
+            // Spy on both providers' getParent. The fast path resolves the parent
+            // from the node map and never dispatches to a provider, so any call
+            // here would mean the constructed-key slow path ran instead.
+            const funcSpy = mock.method(funcViewProvider, 'getParent');
+            const genericSpy = mock.method(genericViewProvider, 'getParent');
+
+            const parent = await viewTree.getParent(funcKey);
+            expect(parent).to.equal(rgKey);
+            expect(funcSpy.mock.callCount(), 'FunctionAppViewProvider.getParent should not run for a cached node').to.equal(0);
+            expect(genericSpy.mock.callCount(), 'GenericAzureViewProvider.getParent should not run for a cached node').to.equal(0);
         });
     });
 });
