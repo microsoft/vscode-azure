@@ -146,6 +146,9 @@ importers:
       '@microsoft/vscode-processutils':
         specifier: 'catalog:'
         version: 0.2.2
+      '@tanstack/query-core':
+        specifier: ^5.101.2
+        version: 5.101.2
       vscode-uri:
         specifier: ^3.1.0
         version: 3.1.0
@@ -642,6 +645,9 @@ packages:
   '@sindresorhus/merge-streams@2.3.0':
     resolution: {integrity: sha512-LtoMMhxAlorcGhmFYI+LhPgbPZCkgP6ra1YL604EeF6U98pLlQ3iWIGMdWSC+vWmPBWBNgmDBAhnAobLROJmwg==}
     engines: {node: '>=18'}
+
+  '@tanstack/query-core@5.101.2':
+    resolution: {integrity: sha512-hH5MLoJhF7KaIGd7q3xTXGXvslI+GYlM1Z/35aSHHWaCJWB7XvTSHYuV3eM7tw+aE0mT/xMro4M4Q9rCGHT0lw==}
 
   '@textlint/ast-node-types@15.7.1':
     resolution: {integrity: sha512-Wii5UgUKFEh9Uv6wbq1zr4/Kf+dtjiUuzPrrXzKp8H+ifkvKNzi23V4Nz+6wVyHQn5T28AFuc8VH8OtzvGYecA==}
@@ -2908,6 +2914,8 @@ snapshots:
   '@secretlint/types@10.2.2': {}
 
   '@sindresorhus/merge-streams@2.3.0': {}
+
+  '@tanstack/query-core@5.101.2': {}
 
   '@textlint/ast-node-types@15.7.1': {}
 

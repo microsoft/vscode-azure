@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { QueryClient, type QueryKey } from '@tanstack/query-core';
+import '../data/queryCoreGlobals';
 import type { IActionExecutor } from '../base/IActionExecutor';
 import { stringifyError } from '../base/stringifyError';
 import { InflightMap } from '../data/InflightMap';
@@ -11,71 +13,94 @@ import { isAsyncIterable, type Page } from '../data/Page';
 import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
 import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
-import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 import { Everything, isKeyMatch, Roots, subtreeOf, type KeyMatch, type MatchScope, type Selector, type Target } from './Selector';
 
+/** The query-key namespace under which a node's children list is cached. */
+const CHILDREN = 'children';
+
 /**
- * Internal node wrapping a resource with its cached children and staleness info.
+ * Per-node pagination state for a resource whose provider returned an
+ * `AsyncIterable<Page>`. Held in a side map keyed by resource key.
+ *
+ * The pager *object identity* is the structural replacement for the old
+ * per-node generation counter: an in-flight `loadOnePage` captures its pager and
+ * discards the resolved page if `pagers.get(key)` is no longer that same object
+ * (because an {@linkcode DataItemTree.invalidate}/{@linkcode DataItemTree.remove}
+ * deleted or replaced it). There is no monotonic counter to bump.
+ *
  * @internal
  */
-interface TreeNode<T> {
-    readonly resource: T;
-    children: TreeNode<T>[] | undefined;  // undefined = not yet loaded
-    staleAt: number;            // Date.now() after which children should be re-fetched
-
-    /** Back-pointer to the parent node, or `undefined` for root nodes. */
-    parent: TreeNode<T> | undefined;
-
-    /**
-     * If the provider returned an `AsyncIterable<Page<T>>`, the in-progress
-     * iterator is stored here between page pulls. `undefined` means no
-     * more pages are available (or the provider returned a plain array).
-     */
-    pageIterator?: AsyncIterator<Page<T>>;
-
-    /**
-     * Monotonic counter bumped every time this node's subtree is wiped (see
-     * {@linkcode DataItemTree.wipeSubtree}). An in-flight page load captures the
-     * generation before pulling a page and discards the page if the generation
-     * changed meanwhile -- this prevents a page from a superseded iterator from
-     * landing in a node that was invalidated (but whose object identity, and
-     * therefore map entry, survives) mid-flight.
-     */
-    generation?: number;
+interface Pager<T> {
+    /** The in-progress async iterator; `undefined` once exhausted. */
+    iterator: AsyncIterator<Page<T>> | undefined;
+    /** Whether another page is available (mirrors the last page's `hasMore`). */
+    hasMore: boolean;
+    /** The node's path (root -> node, inclusive), captured so page appends survive eviction races. */
+    readonly path: readonly string[];
 }
 
 /**
  * A lazily-loaded, cached tree of data items built up piecewise by
  * {@linkcode DataProvider}s.
  *
- * Each node's children are loaded on first access and cached until stale.
- * The tree is the single source of truth for the data layer -- the
+ * Each node's children are loaded on first access and cached until stale. The
+ * tree is the single source of truth for the data layer -- the
  * `TreeDataProvider`s are view-only and read from it.
+ *
+ * ## Backing store
+ *
+ * Children lists, their staleness (TTL), and in-flight de-duplication are
+ * delegated to a `@tanstack/query-core` {@linkcode QueryClient}: a node's
+ * children live under the query key `['children', ...path]`, where `path` is the
+ * chain of keys from a root down to the node. Because a child's path is its
+ * parent's path plus the child's own key, a *subtree* eviction is a query-key
+ * *prefix* removal -- query-core drops the node and every descendant with no
+ * manual tree walk. Hierarchy that query-core does not model (the tree's keys
+ * are opaque strings, not necessarily hierarchical) is recovered from two flat
+ * side maps populated at fetch time:
+ *
+ * - {@linkcode index} maps a key to its resource (for {@linkcode get} and
+ *   selector iteration);
+ * - {@linkcode paths} maps a key to its path (for building query keys and for
+ *   prefix/apex math).
+ *
+ * The public surface is deliberately *synchronous* where callers observe it
+ * (`invalidate` / `remove` / `get` / `onDidChange`), so those paths use only
+ * query-core's synchronous operations (`removeQueries` / `setQueryData` /
+ * `getQueryCache().clear()`), never the promise-returning `invalidateQueries` /
+ * `cancelQueries`.
  *
  * @typeParam T - The data item type stored in the tree.
  */
 export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implements Disposable {
-    private readonly nodes = new NodeMap<TreeNode<T>>(node => this.getKey(node.resource));
+    /**
+     * Backing cache for children lists. A node's children (a `T[]`, even when
+     * paginated -- pages are appended in place) live under `['children', ...path]`.
+     */
+    private readonly client: QueryClient;
+
+    /** Flat key -> resource index, populated as children/roots are fetched. */
+    private readonly index = new Map<string, T>();
+
+    /** Flat key -> path (root -> node, inclusive), the recovered hierarchy. */
+    private readonly paths = new Map<string, readonly string[]>();
 
     /**
-     * Per-resource enrichment promises, keyed by resource key.
-     * Stored when {@linkcode enrichAll} kicks off background enrichment so
-     * that callers (e.g. commands) can await completion via
-     * {@linkcode whenEnriched}.
+     * Per-resource enrichment promises, keyed by resource key. Stored when
+     * {@linkcode enrichAll} kicks off background enrichment so that callers (e.g.
+     * commands) can await completion via {@linkcode whenEnriched}.
      */
     private readonly enrichmentPromises = new Map<string, Promise<void>>();
 
     /**
-     * Per-resource in-flight page-load promises. Prevents concurrent
-     * `next()` calls on the same async iterator when `loadMore` /
-     * `loadAll` overlap (e.g. user click + programmatic load).
+     * Per-resource in-flight page-load promises. Prevents concurrent `next()`
+     * calls on the same async iterator when `loadMore` / `loadAll` overlap.
      */
     private readonly loadsInFlight = new InflightMap<void>();
 
-    /** Cached root nodes and their staleness timestamp. */
-    private roots: TreeNode<T>[] | undefined;
-    private rootsStaleAt = 0;
+    /** Per-resource pagination state (present only for paginated nodes). */
+    private readonly pagers = new Map<string, Pager<T>>();
 
     public readonly onDidChange = this.changeEmitter.event;
 
@@ -88,9 +113,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      *   {@linkcode DataProvider.enrich} call runs inside
      *   {@linkcode IActionExecutor.callWithTelemetryAndErrorHandling}, which
      *   establishes an {@linkcode IActionContext} on the async call stack via
-     *   `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`)
-     *   pick up this context automatically without any changes to provider
-     *   or client signatures.
+     *   `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`) pick
+     *   up this context automatically without any changes to provider or client
+     *   signatures.
      * @param getKey - Extracts a unique string key from a resource.
      * @param ttl - Time-to-live in milliseconds for cached children.
      */
@@ -102,6 +127,21 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         private readonly ttl: number,
     ) {
         super();
+        this.client = new QueryClient({
+            defaultOptions: {
+                queries: {
+                    staleTime: ttl,
+                    // Eviction is driven explicitly by invalidate/remove (and by
+                    // per-fetch staleness), never by query-core's garbage
+                    // collector -- otherwise the flat index/paths maps would drift
+                    // out of sync with the cache. `Infinity` disables GC.
+                    gcTime: Infinity,
+                    // The tree rethrows provider errors to its caller; a real
+                    // integration owns retry/backoff at the client layer.
+                    retry: false,
+                },
+            },
+        });
     }
 
     /**
@@ -109,43 +149,46 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * called with `undefined` -- mirroring VSCode's
      * {@linkcode vscode.TreeDataProvider.getChildren TreeDataProvider.getChildren}.
      *
-     * Results are lazily loaded and cached with TTL.
+     * Results are lazily loaded and cached with TTL, and concurrent calls for
+     * the same node share a single fetch.
      */
     public async getChildren(resource?: T): Promise<T[]> {
         if (resource === undefined) {
             return this.getRootChildren();
         }
-
         return this.getBranchChildren(resource);
     }
 
     private async getRootChildren(): Promise<T[]> {
-        if (this.roots !== undefined && Date.now() < this.rootsStaleAt) {
-            this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${this.roots.length})`);
-            return this.roots.map(n => n.resource);
-        }
-        this.executor.output.trace(`[cache] ${this.name} root cache miss`);
-
-        // Each root provider gets its own telemetry scope so that
-        // concurrent calls don't overwrite shared mutable properties.
         const rootProviders = this.getRootProviders();
+        const children = await this.client.fetchQuery({
+            queryKey: this.childrenKey([]),
+            staleTime: this.rootTtl(rootProviders),
+            queryFn: () => this.fetchRoots(rootProviders),
+        });
+        return [...children];
+    }
+
+    /** The children `queryFn` for the root level: fan out to all root providers. */
+    private async fetchRoots(rootProviders: DataProvider<T>[]): Promise<T[]> {
         this.executor.output.debug(`[data] ${this.name} root fetch start (providers=${rootProviders.length})`);
+
+        // Each root provider gets its own telemetry scope so that concurrent
+        // calls don't overwrite shared mutable properties.
         const limiter = new Limiter<T[] | null | undefined>(5);
         const results = await Promise.all(
-            rootProviders
-                .map(p => limiter.queue(() => this.executor.callWithTelemetryAndErrorHandling<T[]>('tree.getRootChildren', (context) => {
-                    context.telemetry.isUserEvent = false;
-                    context.errorHandling.rethrow = true;
-                    context.telemetry.properties.tree = this.name;
-                    context.telemetry.properties.provider = p.constructor.name;
-
-                    return Promise.resolve(p.getChildren()) as Promise<T[]>;
-                }))),
+            rootProviders.map(p => limiter.queue(() => this.executor.callWithTelemetryAndErrorHandling<T[]>('tree.getRootChildren', (context) => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                context.telemetry.properties.tree = this.name;
+                context.telemetry.properties.provider = p.constructor.name;
+                return Promise.resolve(p.getChildren()) as Promise<T[]>;
+            }))),
         );
 
-        // Root providers always return plain arrays (pagination at root
-        // level is not supported).
-        const resources = results.flatMap(result => {
+        // Root providers always return plain arrays (pagination at the root level
+        // is not supported).
+        const resources = results.flatMap((result) => {
             if (!result) {
                 return [];
             } else if (isAsyncIterable(result)) {
@@ -154,43 +197,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             return result;
         });
 
-        // Reconcile the freshly-listed roots against the previously cached ones
-        // by key, rather than wiping the whole tree. This lets a reconciling
-        // root refresh (invalidateRoot) re-list the top level (e.g. accounts)
-        // while preserving the tenant / subscription subtrees under roots that
-        // are still present. After invalidateAll() this.roots is undefined, so
-        // this degenerates to a full fresh fetch (the previous behavior).
-        const newKeySet = new Set(resources.map(resource => this.getKey(resource)));
-
-        // Evict roots (and their subtrees) that are no longer present.
-        for (const rootNode of this.roots ?? []) {
-            if (!newKeySet.has(this.getKey(rootNode.resource))) {
-                this.nodes.removeSubtrees([rootNode]);
-            }
-        }
-
-        const rootNodes = resources.map(resource => {
-            const resourceKey = this.getKey(resource);
-            const existing = this.nodes.get(resourceKey);
-            if (existing) {
-                // Root still present: keep its node (and cached subtree,
-                // staleAt, and pageIterator) as-is.
-                this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey} (preserved)`);
-                return existing;
-            }
-            const node: TreeNode<T> = { resource, children: undefined, staleAt: 0, parent: undefined };
-            this.nodes.set(resourceKey, node);
-            this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey}`);
-            return node;
-        });
-        this.roots = rootNodes;
-        this.rootsStaleAt = this.computeStaleAt(this.rootTtl(rootProviders));
+        // Reconcile the freshly-listed roots against the previously-indexed ones
+        // by key: surviving roots keep their (independently cached) subtrees,
+        // departed roots have their subtrees evicted. After invalidate(Everything)
+        // the index is empty, so this degenerates to a full fresh fetch.
+        this.reconcileChildren([], resources);
+        this.enrichAll(resources);
         this.executor.output.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
-
-        const rootResources = rootNodes.map(n => n.resource);
-        this.enrichAll(rootResources);
-
-        return rootResources;
+        return resources;
     }
 
     /**
@@ -205,85 +219,105 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         return ttls.length > 0 ? Math.min(...ttls) : this.ttl;
     }
 
-    /**
-     * Compute an absolute staleness timestamp from a TTL. A TTL of `Infinity`
-     * yields `Infinity` (never stale); any finite TTL yields `Date.now() + ttl`.
-     */
-    private computeStaleAt(ttl: number): number {
-        return ttl === Infinity ? Infinity : Date.now() + ttl;
-    }
-
     private async getBranchChildren(resource: T): Promise<T[]> {
         const key = this.getKey(resource);
-        const node = this.nodes.get(key);
-
-        if (!node) {
+        const path = this.paths.get(key);
+        if (path === undefined) {
             throw new Error(`Resource not found in tree: ${key}`);
         }
 
-        if (node.children !== undefined && Date.now() < node.staleAt) {
-            this.executor.output.trace(`[cache] ${this.name} branch cache hit key=${key} count=${node.children.length}`);
-            return node.children.map(n => n.resource);
-        }
-        this.executor.output.trace(`[cache] ${this.name} branch cache miss key=${key}`);
-
-        // Find the provider that handles this resource
         const provider = this.findProvider(resource);
+        const children = await this.client.fetchQuery({
+            queryKey: this.childrenKey(path),
+            staleTime: provider?.getTtl?.(resource) ?? this.ttl,
+            queryFn: () => this.fetchBranch(resource, path, provider),
+        });
+        return [...children];
+    }
+
+    /** The children `queryFn` for a branch node: dispatch to its provider. */
+    private async fetchBranch(resource: T, path: readonly string[], provider: DataProvider<T> | undefined): Promise<T[]> {
+        const key = this.getKey(resource);
+
+        // A node re-fetching its children restarts pagination; drop any prior pager.
+        this.pagers.delete(key);
+
         if (!provider) {
-            this.wipeSubtree(node);
-            node.children = [];
-            node.staleAt = this.computeStaleAt(this.ttl);
+            this.reconcileChildren(path, []);
             this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=0 provider=<none>`);
             return [];
         }
 
-        // Remove previously cached descendants that may no longer be present
-        // (also clears their enrichment promises and bumps this node's
-        // generation so any in-flight page load is discarded).
-        this.wipeSubtree(node);
-        node.children = [];
         this.executor.output.debug(`[data] ${this.name} branch fetch start key=${key} provider=${provider.constructor.name}`);
-
         const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
             // The data layer is a pure cache that rethrows; whoever consumes the
-            // rejection (the view layer, or a programmatic caller like the
-            // Select Subscriptions command) owns error display, so don't show a
-            // toast here as well.
+            // rejection (the view layer, or a programmatic caller like the Select
+            // Subscriptions command) owns error display, so don't show a toast
+            // here as well.
             context.errorHandling.suppress = 'display';
             context.telemetry.properties.tree = this.name;
             context.telemetry.properties.provider = provider.constructor.name;
             return provider.getChildren(resource);
         });
 
+        let children: T[];
         if (!result) {
-            // No children -- leave the empty array
+            children = [];
+            this.reconcileChildren(path, children);
         } else if (isAsyncIterable(result)) {
-            // Paged result: store the iterator, then pull the first page.
-            // Use loadOnePage directly (not loadMore) to avoid firing
-            // onDidChange before staleAt is set -- otherwise listeners
-            // could re-enter getChildren, see staleAt=0, and reset the
-            // iterator.
-            node.pageIterator = result[Symbol.asyncIterator]();
-            await this.loadOnePage(resource);
+            // Paged result: install a pager and pull the first page.
+            const pager: Pager<T> = { iterator: result[Symbol.asyncIterator](), hasMore: true, path };
+            this.pagers.set(key, pager);
+            children = await this.pullFirstPage(resource, pager);
         } else {
-            node.children = this.addChildNodes(result, node);
+            children = result;
+            this.reconcileChildren(path, children);
+            this.enrichAll(children);
         }
 
-        node.staleAt = this.computeStaleAt(provider.getTtl?.(resource) ?? this.ttl);
-        this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=${node.children.length} provider=${provider.constructor.name}`);
+        this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=${children.length} provider=${provider.constructor.name}`);
+        return children;
+    }
 
-        return node.children.map(n => n.resource);
+    /**
+     * Pull the first page for a freshly-installed pager, reconcile the node's
+     * direct children against it, and enrich. Returns the first page's items,
+     * which become the node's initial cached children list.
+     */
+    private async pullFirstPage(resource: T, pager: Pager<T>): Promise<T[]> {
+        const key = this.getKey(resource);
+        const next = await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
+            context.telemetry.isUserEvent = false;
+            context.errorHandling.rethrow = true;
+            context.errorHandling.suppress = 'display';
+            context.telemetry.properties.tree = this.name;
+            return pager.iterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- freshly created above
+        });
+
+        // If the pager was replaced/removed while the first page was in flight
+        // (e.g. a concurrent invalidate), discard the page.
+        if (this.pagers.get(key) !== pager) {
+            return [...(this.client.getQueryData<T[]>(this.childrenKey(pager.path)) ?? [])];
+        }
+
+        const items = next!.done ? [] : next!.value.items; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
+        pager.hasMore = next!.done ? false : next!.value.hasMore; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
+        if (!pager.hasMore) {
+            pager.iterator = undefined;
+        }
+        this.reconcileChildren(pager.path, items);
+        this.enrichAll(items);
+        return items;
     }
 
     /**
      * For each resource, find the provider that handles it and call
      * {@linkcode DataProvider.enrich enrich} if present. Enrichment runs in the
-     * background - each resolved call fires {@linkcode onDidChange} for that resource.
-     *
-     * The resulting promise for each resource is stored so that callers
-     * can await enrichment completion via {@linkcode whenEnriched}.
+     * background -- each resolved call fires {@linkcode onDidChange} for that
+     * resource. The per-resource promise is stored so callers can await
+     * completion via {@linkcode whenEnriched}.
      */
     private enrichAll(resources: T[]): void {
         const limiter = new Limiter<boolean | undefined>(5);
@@ -299,7 +333,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         context.errorHandling.rethrow = true;
                         context.telemetry.properties.tree = this.name;
                         context.telemetry.properties.provider = provider.constructor.name;
-                        return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
+                        return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- asserted non-null above
                     }))
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
@@ -307,10 +341,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         // Guard: if the node was removed (e.g. via remove) while
                         // enrichment was in flight, skip the invalidation to avoid
                         // spurious change events for items no longer in the tree.
-                        if (this.nodes.get(key)) {
-                            // `includeChildren` is `undefined` only if enrichment was
-                            // suppressed/errored; default to re-fetching children, matching
-                            // the historical default-parameter behavior.
+                        if (this.index.has(key)) {
+                            // `includeChildren` is `undefined` only if enrichment
+                            // was suppressed/errored; default to re-fetching
+                            // children, matching the historical default behavior.
                             this.invalidateEntries([resource], (includeChildren ?? true) ? 'subtree' : 'self');
                         }
                     })
@@ -320,26 +354,23 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         throw error;
                     });
                 this.enrichmentPromises.set(key, promise);
-                // Attach a rejection handler so background rejections are not unhandled
+                // Attach a rejection handler so background rejections are not unhandled.
                 void promise.catch(() => { /* noop */ });
             }
         }
     }
 
     /**
-     * Returns a promise that resolves once enrichment has completed for
-     * the given resource.
+     * Returns a promise that resolves once enrichment has completed for the given
+     * resource.
      *
-     * If no enrichment provider matched the resource (or enrichment has
-     * already finished), the promise resolves immediately.
+     * If no enrichment provider matched the resource (or enrichment has already
+     * finished), the promise resolves immediately. If enrichment fails, the
+     * promise rejects with the error but does not retry automatically.
      *
-     * If enrichment fails, the promise rejects with the error but does not
-     * retry automatically. Callers that await this method should be prepared
-     * to handle rejections.
-     *
-     * The optional type parameter `TEnriched` lets callers narrow the
-     * return type to a branded subtype whose once-optional enrichment
-     * properties are guaranteed to be populated:
+     * The optional type parameter `TEnriched` lets callers narrow the return type
+     * to a branded subtype whose once-optional enrichment properties are
+     * guaranteed to be populated:
      *
      * ```ts
      * const registry = await cache.whenEnriched<EnrichedAcrRegistry>(resource);
@@ -356,33 +387,30 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Returns `true` when the provider that produced children for the
-     * given resource has more pages available (i.e. the async iterator
-     * has not yet been exhausted).
+     * Returns `true` when the provider that produced children for the given
+     * resource has more pages available (i.e. the async iterator has not yet been
+     * exhausted).
      */
     public hasMore(resource?: T): boolean {
         if (resource === undefined) {
-            return false; // Root-level pagination not supported
+            return false; // Root-level pagination not supported.
         }
-        const key = this.getKey(resource);
-        return !!this.nodes.get(key)?.pageIterator;
+        return this.pagers.get(this.getKey(resource))?.hasMore ?? false;
     }
 
     /**
-     * Pull the next page from the stored async iterator for the given
-     * resource. The new children are appended to the cache and enriched.
-     * Fires {@linkcode onDidChange} so the view refreshes automatically;
-     * callers should use {@linkcode getChildren} to read the updated list.
+     * Pull the next page from the stored async iterator for the given resource.
+     * The new children are appended to the cache and enriched. Fires
+     * {@linkcode onDidChange} so the view refreshes automatically; callers should
+     * use {@linkcode getChildren} to read the updated list.
      *
      * @throws if {@linkcode getChildren} has not been called for this resource yet.
      */
     public async loadMore(resource: T): Promise<void> {
         const key = this.getKey(resource);
-        const node = this.nodes.get(key);
-        if (node?.children === undefined) {
+        if (this.client.getQueryData<T[]>(this.childrenKey(this.paths.get(key) ?? [key])) === undefined) {
             throw new Error(`Cannot loadMore before getChildren has been called for: ${key}`);
         }
-
         await this.loadOnePage(resource);
         this.changeEmitter.fire(resource);
     }
@@ -392,25 +420,22 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * exhausted. Fires {@linkcode onDidChange} after all pages are loaded so the
      * view refreshes only once.
      *
-     * If children have not been loaded yet (i.e. {@linkcode getChildren} was
-     * never called for this resource), the initial load is triggered first.
+     * If children have not been loaded yet (i.e. {@linkcode getChildren} was never
+     * called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
         const didLoad = await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
-            // The data layer is a pure cache that rethrows; the caller owns
-            // error display, so don't show a toast here as well.
             context.errorHandling.suppress = 'display';
             context.telemetry.properties.tree = this.name;
 
             const key = this.getKey(resource);
-            const node = this.nodes.get(key);
             let loaded = false;
 
             // Ensure children are initialized (first page pulled) before
-            // exhausting remaining pages.
-            if (node?.children === undefined) {
+            // exhausting the remaining pages.
+            if (this.client.getQueryData<T[]>(this.childrenKey(this.paths.get(key) ?? [key])) === undefined) {
                 await this.getChildren(resource);
                 loaded = true;
             }
@@ -419,7 +444,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                 await this.loadOnePage(resource);
                 loaded = true;
             }
-
             return loaded;
         });
 
@@ -431,63 +455,48 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private async loadOnePage(resource: T): Promise<void> {
         const key = this.getKey(resource);
         await this.loadsInFlight.getOrRun(key, async () => {
-            const node = this.nodes.get(key);
-            if (!node?.pageIterator) {
+            const pager = this.pagers.get(key);
+            if (!pager?.iterator) {
                 return;
             }
-            const generation = node.generation;
 
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
-            const next = (await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
+            const next = await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
                 context.telemetry.isUserEvent = false;
                 context.errorHandling.rethrow = true;
-                // The data layer is a pure cache that rethrows; the caller owns
-                // error display, so don't show a toast here as well.
                 context.errorHandling.suppress = 'display';
                 context.telemetry.properties.tree = this.name;
-                return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
-            }))!;
+                return pager.iterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- asserted non-null above
+            });
 
-            if (this.nodes.get(key) !== node || node.generation !== generation) {
-                // The node was removed (e.g. via remove()) or its subtree was
-                // wiped (e.g. via invalidate()) while this page was in flight.
-                // Discard the page without touching the node -- a fresh fetch
-                // may have installed a new iterator we must not clobber.
+            // The node was removed (remove) or its subtree wiped (invalidate)
+            // while this page was in flight -- the pager was deleted/replaced, so
+            // discard the page. This is the structural replacement for the old
+            // generation counter.
+            if (this.pagers.get(key) !== pager || !this.index.has(key)) {
                 return;
             }
 
-            if (next.done) {
-                node.pageIterator = undefined;
+            if (next!.done) { // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
+                pager.iterator = undefined;
+                pager.hasMore = false;
             } else {
-                node.children = [...(node.children ?? []), ...this.addChildNodes(next.value.items, node)];
-                if (!next.value.hasMore) {
-                    node.pageIterator = undefined;
+                const items = next!.value.items; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
+                this.client.setQueryData<T[]>(this.childrenKey(pager.path), old => [...(old ?? []), ...items]);
+                this.indexChildren(pager.path, items);
+                this.enrichAll(items);
+                pager.hasMore = next!.value.hasMore; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
+                if (!pager.hasMore) {
+                    pager.iterator = undefined;
                 }
             }
         });
     }
 
     /**
-     * Create {@linkcode TreeNode}s for the given resources, register them in
-     * the {@linkcode NodeMap}, and kick off background enrichment.
-     */
-    private addChildNodes(children: T[], parent: TreeNode<T>): TreeNode<T>[] {
-        const nodes = children.map(child => {
-            const childNode: TreeNode<T> = { resource: child, children: undefined, staleAt: 0, parent };
-            const childKey = this.getKey(child);
-            this.nodes.set(childKey, childNode);
-            this.executor.output.trace(`[cache] ${this.name} child key=${childKey} parent=${this.getKey(parent.resource)}`);
-            return childNode;
-        });
-        this.enrichAll(children);
-        return nodes;
-    }
-
-    /**
      * Get a resource by key from the tree, if it has been loaded.
      */
     public get(key: string): T | undefined {
-        return this.nodes.get(key)?.resource;
+        return this.index.get(key);
     }
 
     /**
@@ -499,15 +508,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      *   (the node and its descendants are evicted and re-fetched);
      * - {@linkcode selfOnly}(...) -> matched by key, `'self'` (re-render the
      *   node's label only, keep its cached children);
-     * - a {@linkcode Selector} -> a verdict predicate evaluated over every
-     *   loaded node (e.g. `bySubscription(id)`);
+     * - a {@linkcode Selector} -> a verdict predicate evaluated over every loaded
+     *   node (e.g. `bySubscription(id)`);
      * - {@linkcode Roots} -> reconciling root re-list (preserve surviving roots'
      *   subtrees);
      * - {@linkcode Everything} -> wipe the entire cache.
      *
      * The change event fires once per *apex* (a matched node with no matched
-     * ancestor) after the whole traversal completes, so a single call produces
-     * the minimal set of re-renders and is safe against re-entrancy.
+     * ancestor) after the whole traversal completes, so a single call produces the
+     * minimal set of re-renders and is safe against re-entrancy.
      *
      * @param target - What to invalidate.
      */
@@ -526,12 +535,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     /**
      * Remove matched nodes (and their subtrees) from the cache entirely, as
-     * opposed to {@linkcode invalidate} which keeps the node and re-fetches.
-     * Each matched node is evicted and spliced out of its parent's child list;
-     * for non-root removals {@linkcode onDidChange} fires for the parent (so the
-     * view re-renders without re-fetching siblings), and for root removals it
-     * fires with `undefined` (full refresh). Matched apexes absorb their
-     * subtrees, and parent fires are de-duplicated.
+     * opposed to {@linkcode invalidate} which keeps the node and re-fetches. Each
+     * matched node is evicted and spliced out of its parent's child list; for
+     * non-root removals {@linkcode onDidChange} fires for the parent (so the view
+     * re-renders without re-fetching siblings), and for root removals it fires
+     * with `undefined` (full refresh). Matched apexes absorb their subtrees, and
+     * parent fires are de-duplicated.
      *
      * Accepts a {@linkcode Selector}, a bare resource / key / array, or a
      * {@linkcode selfOnly} / {@linkcode subtreeOf} descriptor (both remove the
@@ -547,31 +556,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             throw new Error('remove() does not accept the Roots or Everything sentinels; use invalidate() instead.');
         }
 
-        const matched = typeof target === 'function'
+        const matchedKeys = typeof target === 'function'
             ? this.collectMatches(target as Selector<T>)
-            : this.nodesForKeys(this.toKeySet(this.toKeyMatch(target).match));
+            : [...this.toKeySet(this.toKeyMatch(target).match)].filter(key => this.index.has(key));
 
-        this.removeNodes(matched);
+        this.removeNodes(matchedKeys);
     }
 
-    /**
-     * Wipe a node's subtree: evict every descendant from the {@linkcode NodeMap}
-     * (clearing their enrichment promises too), drop this node's cached children
-     * and page iterator, mark it stale, and bump its generation so an in-flight
-     * page load for the previous generation is discarded.
-     *
-     * This is the single primitive every subtree-drop site routes through, so
-     * enrichment-promise eviction and the generation bump can never be skipped.
-     */
-    private wipeSubtree(node: TreeNode<T>): void {
-        for (const removedKey of this.nodes.removeSubtrees(node.children)) {
-            this.enrichmentPromises.delete(removedKey);
-        }
-        node.children = undefined;
-        node.pageIterator = undefined;
-        node.staleAt = 0;
-        node.generation = (node.generation ?? 0) + 1;
-    }
+    // -- target normalization ------------------------------------------------
 
     /** Normalize a resource / key / array input into a flat list of entries. */
     private toEntries(input: T | string | ReadonlyArray<T | string>): ReadonlyArray<T | string> {
@@ -581,8 +573,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     /**
      * Normalize a by-key target into a {@linkcode KeyMatch}: a {@linkcode selfOnly}
      * / {@linkcode subtreeOf} descriptor passes through unchanged, while a bare
-     * resource / key / array is wrapped as {@linkcode subtreeOf} (the subtree
-     * default for raw targets).
+     * resource / key / array is wrapped as {@linkcode subtreeOf}.
      */
     private toKeyMatch(target: KeyMatch<T> | T | string | ReadonlyArray<T | string>): KeyMatch<T> {
         return isKeyMatch<T>(target) ? target : subtreeOf(...this.toEntries(target));
@@ -593,17 +584,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         return new Set(this.toEntries(input).map(entry => typeof entry === 'string' ? entry : this.getKey(entry)));
     }
 
-    /** Resolve the loaded nodes for the given keys (absent keys are skipped). */
-    private nodesForKeys(keys: Set<string>): TreeNode<T>[] {
-        const nodes: TreeNode<T>[] = [];
-        for (const key of keys) {
-            const node = this.nodes.get(key);
-            if (node) {
-                nodes.push(node);
-            }
-        }
-        return nodes;
-    }
+    // -- key-based invalidation ---------------------------------------------
 
     /**
      * Key-based invalidation over a list of resource/key entries.
@@ -612,23 +593,23 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * re-fetches on next access. The change event is then fired so the view
      * re-renders. When the entry is a resource object the *passed* resource is
      * fired unconditionally -- even if the data layer has no node for it -- so a
-     * view-layer node that exists independently of the data layer still
-     * refreshes (the historical positional-`invalidate` behavior). When the
-     * entry is a bare key string and no node is loaded, there is no resource to
-     * fire, so it is skipped.
+     * view-layer node that exists independently of the data layer still refreshes.
+     * When the entry is a bare key string and no node is loaded, there is no
+     * resource to fire, so it is skipped.
      */
     private invalidateEntries(entries: ReadonlyArray<T | string>, scope: MatchScope): void {
         const fires: T[] = [];
         for (const entry of entries) {
             const isKey = typeof entry === 'string';
-            const node = this.nodes.get(isKey ? entry : this.getKey(entry));
-            if (node && scope === 'subtree') {
-                this.wipeSubtree(node);
+            const key = isKey ? entry : this.getKey(entry);
+            const loaded = this.index.has(key);
+            if (loaded && scope === 'subtree') {
+                this.wipeSubtreeKeepNode(key);
             }
             if (!isKey) {
                 fires.push(entry);
-            } else if (node) {
-                fires.push(node.resource);
+            } else if (loaded) {
+                fires.push(this.index.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- loaded checked above
             }
         }
         for (const resource of fires) {
@@ -637,34 +618,38 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Depth-first invalidation driven by a {@linkcode Selector} verdict. A
-     * `'subtree'` verdict wipes the node and stops descending (the apex absorbs
-     * its subtree); a `'self'` verdict re-renders the label and keeps
-     * descending. Each apex fires once; a match under an already-fired ancestor
-     * does not re-fire. Fires happen after the traversal for re-entrancy safety.
+     * Depth-first invalidation driven by a {@linkcode Selector} verdict, over the
+     * flat index. A `'subtree'` verdict wipes the node and its descendants; a
+     * `'self'` verdict re-renders the label and keeps its children. Apex
+     * minimization (a match nested under a matched-subtree ancestor does not fire
+     * again) is computed by path-prefix math. Fires happen after the traversal for
+     * re-entrancy safety.
      */
     private invalidateSelector(selector: Selector<T>): void {
-        const fires: T[] = [];
-        const visit = (node: TreeNode<T>, ancestorFired: boolean): void => {
-            const scope = selector(node.resource);
-            let fired = ancestorFired;
+        const subtreeKeys: string[] = [];
+        const selfKeys: string[] = [];
+        for (const [key, resource] of this.index) {
+            const scope = selector(resource);
             if (scope === 'subtree') {
-                this.wipeSubtree(node);
-                if (!ancestorFired) {
-                    fires.push(node.resource);
-                }
-                return; // Stop descending: the subtree is evicted.
+                subtreeKeys.push(key);
+            } else if (scope === 'self') {
+                selfKeys.push(key);
             }
-            if (scope === 'self' && !ancestorFired) {
-                fires.push(node.resource);
-                fired = true;
+        }
+
+        const subtreeApexes = this.apexes(subtreeKeys);
+        const subtreeApexSet = new Set(subtreeApexes);
+        const fires: T[] = [];
+
+        for (const key of subtreeApexes) {
+            this.wipeSubtreeKeepNode(key);
+            fires.push(this.index.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
+        }
+        // A 'self' node nested under a wiped subtree apex is subsumed by that apex's fire.
+        for (const key of selfKeys) {
+            if (!this.hasAncestorIn(key, subtreeApexSet)) {
+                fires.push(this.index.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
             }
-            for (const child of node.children ?? []) {
-                visit(child, fired);
-            }
-        };
-        for (const root of this.roots ?? []) {
-            visit(root, false);
         }
         for (const resource of fires) {
             this.changeEmitter.fire(resource);
@@ -672,50 +657,39 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Collect the matched apexes for a selector-driven {@linkcode remove}: a
-     * matched node's subtree is removed wholesale, so the traversal stops
-     * descending past a match (a `'self'` vs `'subtree'` verdict is irrelevant
-     * to removal -- any verdict means "remove this subtree").
+     * Collect the matched apex keys for a selector-driven {@linkcode remove}: a
+     * matched node's subtree is removed wholesale, so a match nested under another
+     * match is dropped (a `'self'` vs `'subtree'` verdict is irrelevant to
+     * removal -- any verdict means "remove this subtree").
      */
-    private collectMatches(selector: Selector<T>): TreeNode<T>[] {
-        const matched: TreeNode<T>[] = [];
-        const visit = (node: TreeNode<T>): void => {
-            if (selector(node.resource)) {
-                matched.push(node);
-                return; // Whole subtree will be removed; don't descend.
+    private collectMatches(selector: Selector<T>): string[] {
+        const matched: string[] = [];
+        for (const [key, resource] of this.index) {
+            if (selector(resource) !== undefined) {
+                matched.push(key);
             }
-            for (const child of node.children ?? []) {
-                visit(child);
-            }
-        };
-        for (const root of this.roots ?? []) {
-            visit(root);
         }
-        return matched;
+        return this.apexes(matched);
     }
 
     /**
-     * Evict the given matched nodes. Nodes that have a matched ancestor are
-     * skipped (their ancestor's removal already evicts them). Parent fires are
-     * de-duplicated; if any root was removed, a single full-refresh
-     * (`undefined`) fire subsumes the rest.
+     * Evict the given matched apex keys. Parent fires are de-duplicated; if any
+     * root was removed, a single full-refresh (`undefined`) fire subsumes the rest.
      */
-    private removeNodes(matched: TreeNode<T>[]): void {
-        if (matched.length === 0) {
+    private removeNodes(matchedKeys: string[]): void {
+        if (matchedKeys.length === 0) {
             return;
         }
-        const matchedSet = new Set(matched);
         const parentFires = new Set<T>();
         let fireRoot = false;
-        for (const node of matched) {
-            if (this.hasMatchedAncestor(node, matchedSet)) {
-                continue;
-            }
-            const parentResource = this.removeNodeInternal(node);
-            if (parentResource === undefined) {
+        for (const key of matchedKeys) {
+            const parent = this.parentResourceOf(key);
+            this.spliceFromParentList(key);
+            this.evictSubtree(key);
+            if (parent === undefined) {
                 fireRoot = true;
             } else {
-                parentFires.add(parentResource);
+                parentFires.add(parent);
             }
         }
         if (fireRoot) {
@@ -728,67 +702,108 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
     }
 
-    /** Whether any ancestor of {@linkcode node} is in the matched set. */
-    private hasMatchedAncestor(node: TreeNode<T>, matchedSet: Set<TreeNode<T>>): boolean {
-        for (let parent = node.parent; parent; parent = parent.parent) {
-            if (matchedSet.has(parent)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    // -- subtree / cache mutation (synchronous) -----------------------------
 
     /**
-     * Evict a single node and its subtree from the map, clear the evicted
-     * enrichment promises, and splice the node out of its parent's children (or
-     * the roots array). Does **not** fire; returns the parent resource to fire
-     * (or `undefined` if the node was a root, signalling a full refresh).
+     * Wipe a node's subtree while keeping the node itself: remove its children
+     * query (a prefix removal that also drops descendants' children queries),
+     * drop its pager, and evict every descendant from the flat index/paths maps
+     * (clearing their enrichment promises too). The node stays a valid tree item;
+     * its children re-fetch on next access.
      */
-    private removeNodeInternal(node: TreeNode<T>): T | undefined {
-        for (const removedKey of this.nodes.removeSubtrees([node])) {
-            this.enrichmentPromises.delete(removedKey);
+    private wipeSubtreeKeepNode(key: string): void {
+        const path = this.paths.get(key);
+        if (path === undefined) {
+            return;
         }
-
-        const parent = node.parent;
-        if (parent) {
-            const childIdx = parent.children?.indexOf(node) ?? -1;
-            if (childIdx !== -1) {
-                parent.children!.splice(childIdx, 1); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- indexOf succeeded
-            }
-            return parent.resource;
+        this.client.removeQueries({ queryKey: this.childrenKey(path) });
+        this.pagers.delete(key);
+        for (const descendantKey of this.descendantKeys(path)) {
+            this.evictEntry(descendantKey);
         }
-
-        // Root node -- splice out of the roots array.
-        if (this.roots) {
-            const rootIdx = this.roots.indexOf(node);
-            if (rootIdx !== -1) {
-                this.roots.splice(rootIdx, 1);
-            }
-        }
-        return undefined;
     }
 
     /**
-     * Wipe all cached data: clear the node map, enrichment promises, and root
-     * cache, then fire {@linkcode onDidChange} once with `undefined`. Backs the
-     * {@linkcode Everything} target.
+     * Remove a node and its whole subtree from the flat maps, pagers, enrichment
+     * promises, and the query cache. Does **not** fire or splice the node out of
+     * its parent's cached list (callers handle those).
+     */
+    private evictSubtree(key: string): void {
+        const path = this.paths.get(key);
+        if (path === undefined) {
+            return;
+        }
+        this.client.removeQueries({ queryKey: this.childrenKey(path) });
+        this.evictEntry(key);
+        for (const descendantKey of this.descendantKeys(path)) {
+            this.evictEntry(descendantKey);
+        }
+    }
+
+    /** Drop a single key's flat-map / pager / enrichment-promise entries. */
+    private evictEntry(key: string): void {
+        this.index.delete(key);
+        this.paths.delete(key);
+        this.pagers.delete(key);
+        this.enrichmentPromises.delete(key);
+    }
+
+    /**
+     * Reconcile a node's direct children against a freshly-fetched set: evict the
+     * subtrees of departed children, then (re-)index the new set. Surviving
+     * children keep their independently-cached subtrees.
+     */
+    private reconcileChildren(parentPath: readonly string[], children: T[]): void {
+        const newKeys = new Set(children.map(child => this.getKey(child)));
+        for (const oldKey of this.directChildKeys(parentPath)) {
+            if (!newKeys.has(oldKey)) {
+                this.evictSubtree(oldKey);
+            }
+        }
+        this.indexChildren(parentPath, children);
+    }
+
+    /** Index a set of children under a parent path (add/overwrite; no eviction). */
+    private indexChildren(parentPath: readonly string[], children: T[]): void {
+        for (const child of children) {
+            const key = this.getKey(child);
+            this.index.set(key, child);
+            this.paths.set(key, [...parentPath, key]);
+        }
+    }
+
+    /** Remove `key` from its parent's cached children list, if that list is cached. */
+    private spliceFromParentList(key: string): void {
+        const path = this.paths.get(key);
+        if (path === undefined) {
+            return;
+        }
+        const parentPath = path.slice(0, -1);
+        this.client.setQueryData<T[]>(this.childrenKey(parentPath), old =>
+            old?.filter(child => this.getKey(child) !== key));
+    }
+
+    /**
+     * Wipe all cached data: clear the query cache, flat maps, enrichment promises,
+     * and pagers, then fire {@linkcode onDidChange} once with `undefined`. Backs
+     * the {@linkcode Everything} target.
      */
     private invalidateAllImpl(): void {
         this.executor.output.debug(`[cache] ${this.name} invalidate all`);
-        this.nodes.clear();
+        this.client.getQueryCache().clear();
+        this.index.clear();
+        this.paths.clear();
+        this.pagers.clear();
         this.enrichmentPromises.clear();
-        this.roots = undefined;
-        this.rootsStaleAt = 0;
         this.changeEmitter.fire(undefined);
     }
 
     /**
-     * Trigger a reconciling re-list of the root level. Marks the root listing
-     * stale and fires {@linkcode onDidChange} with `undefined`; the next root
-     * fetch reconciles the freshly-listed roots against the cached ones by key
-     * (see {@linkcode getRootChildren}), preserving the subtrees under roots
-     * that are still present and evicting the subtrees of roots that have
-     * disappeared. Backs the {@linkcode Roots} target.
+     * Trigger a reconciling re-list of the root level. Drops only the root listing
+     * query and fires {@linkcode onDidChange} with `undefined`; the next root fetch
+     * reconciles the freshly-listed roots against the indexed ones (see
+     * {@linkcode fetchRoots}), preserving the subtrees under surviving roots and
+     * evicting the subtrees of departed roots. Backs the {@linkcode Roots} target.
      *
      * Unlike {@linkcode invalidateAllImpl}, this does **not** wipe the tree -- it
      * is the right tool when only the *set* of roots may have changed (e.g. an
@@ -796,7 +811,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private invalidateRootImpl(): void {
         this.executor.output.debug(`[cache] ${this.name} invalidate root (reconcile)`);
-        this.rootsStaleAt = 0;
+        this.client.removeQueries({ queryKey: this.childrenKey([]), exact: true });
         this.changeEmitter.fire(undefined);
     }
 
@@ -812,5 +827,89 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         } else {
             this.invalidate(event.target);
         }
+    }
+
+    public override dispose(): void {
+        this.client.getQueryCache().clear();
+        this.client.clear();
+        this.index.clear();
+        this.paths.clear();
+        this.pagers.clear();
+        this.enrichmentPromises.clear();
+        super.dispose();
+    }
+
+    // -- path / prefix helpers ----------------------------------------------
+
+    /** The children-query key for a node path (empty path = the root listing). */
+    private childrenKey(path: readonly string[]): QueryKey {
+        return [CHILDREN, ...path];
+    }
+
+    /** Whether `prefix` is a prefix of (or equal to) `path`. */
+    private isPrefixOrEqual(prefix: readonly string[], path: readonly string[]): boolean {
+        return prefix.length <= path.length && prefix.every((seg, i) => path[i] === seg);
+    }
+
+    /** Whether `prefix` is a *strict* prefix of `path` (i.e. `path` is a descendant). */
+    private isStrictPrefix(prefix: readonly string[], path: readonly string[]): boolean {
+        return prefix.length < path.length && this.isPrefixOrEqual(prefix, path);
+    }
+
+    /** Keys of the *direct* children of the node at `parentPath`. */
+    private directChildKeys(parentPath: readonly string[]): string[] {
+        const result: string[] = [];
+        for (const [key, path] of this.paths) {
+            if (path.length === parentPath.length + 1 && this.isPrefixOrEqual(parentPath, path)) {
+                result.push(key);
+            }
+        }
+        return result;
+    }
+
+    /** Keys of every *strict* descendant of the node at `path`. */
+    private descendantKeys(path: readonly string[]): string[] {
+        const result: string[] = [];
+        for (const [key, candidate] of this.paths) {
+            if (this.isStrictPrefix(path, candidate)) {
+                result.push(key);
+            }
+        }
+        return result;
+    }
+
+    /** Reduce a set of keys to their apexes: drop any key whose path has an ancestor in the set. */
+    private apexes(keys: readonly string[]): string[] {
+        const entries = keys
+            .map(key => ({ key, path: this.paths.get(key) }))
+            .filter((e): e is { key: string; path: readonly string[] } => e.path !== undefined);
+        return entries
+            .filter(({ path }) => !entries.some(other => this.isStrictPrefix(other.path, path)))
+            .map(({ key }) => key);
+    }
+
+    /** Whether any ancestor of `key` is in `ancestorKeys`. */
+    private hasAncestorIn(key: string, ancestorKeys: ReadonlySet<string>): boolean {
+        const path = this.paths.get(key);
+        if (path === undefined) {
+            return false;
+        }
+        // Ancestors are the strict prefixes of this path; their keys are the
+        // trailing segment of each prefix.
+        for (let i = 1; i < path.length; i++) {
+            if (ancestorKeys.has(path[i - 1])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The parent resource of `key`, or `undefined` if `key` is a root (or unknown). */
+    private parentResourceOf(key: string): T | undefined {
+        const path = this.paths.get(key);
+        if (path === undefined || path.length < 2) {
+            return undefined;
+        }
+        return this.index.get(path[path.length - 2]);
     }
 }
