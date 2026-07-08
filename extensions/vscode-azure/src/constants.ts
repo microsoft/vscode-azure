@@ -28,13 +28,9 @@ export const AzdDownCommandId = 'vscode-azure/azdDown';
 export const ConfigurationSection = 'vscode-azure';
 
 /**
- * Configuration section that holds the tenant/subscription filter, shared with
- * the Azure Resources extension. Entries are `tenantId/subscriptionId`
- * strings.
+ * Configuration key (within {@linkcode ConfigurationSection}) holding the
+ * tenant/subscription filter as an array of `tenantId/subscriptionId` strings.
  */
-export const SubscriptionFilterConfigurationSection = 'azureResourceGroups';
-
-/** Configuration key (within {@linkcode SubscriptionFilterConfigurationSection}) holding the selected `tenantId/subscriptionId` entries. */
 export const SelectedSubscriptionsConfigurationKey = 'selectedSubscriptions';
 
 /** ARM tag applied by azd to resources it manages, containing the environment name. */

@@ -45,6 +45,7 @@ import { registerCommands } from './commands/registerCommands';
 import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
+import { CredentialOptionsScope, ICredentialOptionsScope } from './utils/CredentialOptionsScope';
 
 /**
  * Public API surface returned from {@linkcode activateInternal} (and thus from
@@ -149,8 +150,11 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         );
     }).inSingletonScope().onActivation(pushDisposable);
 
+    container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
+
     container.bind(ICredentialFactory).toDynamicValue(context => {
-        return createDefaultCredentialFactory(context.get(IVsCode), context.get(IOutputChannel));
+        const scope = context.get(ICredentialOptionsScope);
+        return createDefaultCredentialFactory(context.get(IVsCode), context.get(IOutputChannel), () => scope.current);
     }).inSingletonScope();
 
     container.bind(ITempDirManager).to(TempDirManager).inSingletonScope().onActivation(pushDisposable);

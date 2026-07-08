@@ -8,7 +8,7 @@ import { mock } from 'node:test';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
 import { findSubscriptionById } from '../../tree/findSubscriptionById';
 import { makeAccount, makeSubscription, makeTenant } from '../mockAzure';
-import { createMockHierarchicalDataItemTree } from './mockTree';
+import { createMockHierarchicalDataItemTree, createMockPagedDataItemTree } from './mockTree';
 
 describe('findSubscriptionById (unit)', () => {
     function createTree() {
@@ -47,50 +47,6 @@ describe('findSubscriptionById (unit)', () => {
         );
         const tree = { getChildren, hasMore: () => false, loadMore: () => Promise.resolve() } as unknown as ConcreteAzureNodeTree;
         return { tree, getChildren, tenant1, tenant2, subA, subB };
-    }
-
-    /**
-     * Builds a tree whose branch children are split across multiple pages,
-     * mirroring {@linkcode DataItemTree}'s paging contract: `getChildren`
-     * returns only the pages loaded so far, `hasMore` reports whether unloaded
-     * pages remain, and `loadMore` advances to the next page. Root children are
-     * never paged.
-     *
-     * @param rootChildren - The (unpaged) root nodes.
-     * @param pagesMap - Maps a node to its children split into pages.
-     */
-    function createPagedTree(
-        rootChildren: ConcreteAzureNode[],
-        pagesMap: Map<ConcreteAzureNode, ConcreteAzureNode[][]>,
-    ) {
-        const loaded = new Map<ConcreteAzureNode, number>();
-
-        function loadedCount(node: ConcreteAzureNode): number {
-            return loaded.get(node) ?? 1;
-        }
-
-        const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
-            if (!node) {
-                return Promise.resolve(rootChildren);
-            }
-            const pages = pagesMap.get(node) ?? [];
-            return Promise.resolve(pages.slice(0, loadedCount(node)).flat());
-        });
-
-        const hasMore = mock.fn((node?: ConcreteAzureNode): boolean => {
-            if (!node) {
-                return false;
-            }
-            return loadedCount(node) < (pagesMap.get(node)?.length ?? 0);
-        });
-
-        const loadMore = mock.fn((node: ConcreteAzureNode): Promise<void> => {
-            loaded.set(node, loadedCount(node) + 1);
-            return Promise.resolve();
-        });
-
-        const tree = { getChildren, hasMore, loadMore } as unknown as ConcreteAzureNodeTree;
-        return { tree, getChildren, hasMore, loadMore };
     }
 
     /**
@@ -210,7 +166,7 @@ describe('findSubscriptionById (unit)', () => {
         const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant.tenantId, accountId: account.id });
         const subC = makeSubscription({ subscriptionId: 'sub-c', tenantId: tenant.tenantId, accountId: account.id });
 
-        const { tree, loadMore } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree, loadMore } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant]]],
             [tenant, [[subA], [subB], [subC]]],
         ]));
@@ -228,7 +184,7 @@ describe('findSubscriptionById (unit)', () => {
         const tenant2 = makeTenant({ tenantId: 'tenant-2', accountId: account.id });
         const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant2.tenantId, accountId: account.id });
 
-        const { tree } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant1], [tenant2]]],
             [tenant1, [[]]],
             [tenant2, [[subB]]],
@@ -246,7 +202,7 @@ describe('findSubscriptionById (unit)', () => {
         const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant.tenantId, accountId: account.id });
         const subC = makeSubscription({ subscriptionId: 'sub-c', tenantId: tenant.tenantId, accountId: account.id });
 
-        const { tree, loadMore } = createPagedTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree, loadMore } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
             [account, [[tenant]]],
             [tenant, [[subA], [subB], [subC]]],
         ]));

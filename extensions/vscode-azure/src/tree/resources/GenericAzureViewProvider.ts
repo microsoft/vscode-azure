@@ -9,8 +9,9 @@ import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/OpenInPortal';
-import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey, SubscriptionFilterConfigurationSection } from '../../constants';
+import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
+import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
 
@@ -58,7 +59,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 || e.affectsConfiguration(`${ConfigurationSection}.groupByTag`)) {
                 this.executor.output.debug('[view] resources grouping configuration changed');
                 this.changeEmitter.fire({ target: Everything });
-            } else if (e.affectsConfiguration(`${SubscriptionFilterConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
+            } else if (e.affectsConfiguration(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
                 this.executor.output.debug('[view] subscription filter configuration changed');
                 this.changeEmitter.fire({ target: Everything });
             }
@@ -297,7 +298,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
     /**
      * Apply the tenant/subscription filter from
-     * `azureResourceGroups.selectedSubscriptions`.
+     * `vscode-azure.selectedSubscriptions`.
      *
      * Each configured entry is a `tenantId/subscriptionId` pair. When the
      * setting is empty, no filtering is applied. Tenant nodes are kept only when
@@ -309,15 +310,16 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
      */
     private applyFilter(nodes: ConcreteAzureNode[]): ConcreteAzureNode[] {
         const selected = this.ctx.code.workspace
-            .getConfiguration(SubscriptionFilterConfigurationSection)
+            .getConfiguration(ConfigurationSection)
             .get<string[]>(SelectedSubscriptionsConfigurationKey, []);
 
         if (selected.length === 0) {
             return nodes;
         }
 
-        const tenantFilter = new Set(selected.map(id => id.split('/')[0]?.toLowerCase()).filter(Boolean));
-        const subscriptionFilter = new Set(selected.map(id => id.split('/')[1]?.toLowerCase()).filter(Boolean));
+        const parsed = selected.map(parseSubscriptionFilterKey);
+        const tenantFilter = new Set(parsed.map(entry => entry.tenantId).filter(Boolean));
+        const subscriptionFilter = new Set(parsed.map(entry => entry.subscriptionId).filter(Boolean));
 
         return nodes.filter(node => {
             if (isTenant(node)) {

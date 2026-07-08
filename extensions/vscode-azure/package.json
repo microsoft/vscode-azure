@@ -113,6 +113,12 @@
                 "category": "%commands.category.azure%",
                 "icon": "$(sign-in)",
                 "title": "%commands.vscode-azure/signIn%"
+            },
+            {
+                "command": "vscode-azure/selectSubscriptions",
+                "category": "%commands.category.azure%",
+                "icon": "$(filter)",
+                "title": "%commands.vscode-azure/selectSubscriptions%"
             }
         ],
         "menus": {
@@ -177,9 +183,14 @@
                     "group": "navigation@1"
                 },
                 {
-                    "command": "vscode-azure/resources/refresh",
+                    "command": "vscode-azure/selectSubscriptions",
                     "when": "view == vscode-azure/resources",
                     "group": "navigation@2"
+                },
+                {
+                    "command": "vscode-azure/resources/refresh",
+                    "when": "view == vscode-azure/resources",
+                    "group": "navigation@3"
                 },
                 {
                     "command": "vscode-azure/workspace/refresh",
@@ -327,6 +338,17 @@
                     "type": "string",
                     "default": "",
                     "description": "%settings.vscode-azure.groupByTag%"
+                },
+                "vscode-azure.selectedSubscriptions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                        "patternErrorMessage": "%settings.vscode-azure.selectedSubscriptions.patternError%"
+                    },
+                    "default": [],
+                    "scope": "application",
+                    "description": "%settings.vscode-azure.selectedSubscriptions%"
                 }
             }
         }

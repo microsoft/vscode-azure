@@ -173,7 +173,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 
 ### Subscription / tenant filtering
 
-Tenant and subscription filtering is a **view-layer** concern, implemented in `GenericAzureViewProvider.applyFilter`. It reads `azureResourceGroups.selectedSubscriptions` (an array of `tenantId/subscriptionId` strings, the same setting `vscode-azext-azureauth` used). When the list is empty, no filtering applies. Otherwise, tenant nodes survive only when their `tenantId` is in the filter, and subscription nodes only when their `subscriptionId` is. Other node types pass through.
+Tenant and subscription filtering is a **view-layer** concern, implemented in `GenericAzureViewProvider.applyFilter`. It reads `vscode-azure.selectedSubscriptions` (an array of `tenantId/subscriptionId` strings, written by the `Azure: Select Subscriptions` command). When the list is empty, no filtering applies. Otherwise, tenant nodes survive only when their `tenantId` is in the filter, and subscription nodes only when their `subscriptionId` is. Other node types pass through.
 
 Because the tree loads lazily, a filtered-out tenant is never expanded, so its subscriptions are never requested from Azure. The data layer may still cache subscriptions that don't pass the filter when they arrive in the *same* response as ones that do (e.g. two subscriptions in one tenant) — that's acceptable since it costs no extra request. The view provider fires `onDidChange` when the filter setting changes so the tree re-renders.
 

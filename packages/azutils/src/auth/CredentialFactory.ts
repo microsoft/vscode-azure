@@ -60,20 +60,57 @@ function toCredentialFactoryOptions(input?: CredentialFactoryInput): CredentialF
 }
 
 /**
+ * Merge caller-supplied session options over ambient `defaults`. The caller's
+ * per-request scoping (e.g. `account`) wins on a per-key basis, while
+ * `defaults` (e.g. `silent: true`) fill in any keys the caller did not set.
+ *
+ * Returns `undefined` when neither side supplies options, preserving the exact
+ * shape a credential sees when no ambient defaults are configured (so the
+ * common interactive path is byte-identical to having no defaults at all).
+ */
+function mergeSessionOptions(
+    defaults: vscode.AuthenticationGetSessionOptions | undefined,
+    caller: vscode.AuthenticationGetSessionOptions | undefined,
+): vscode.AuthenticationGetSessionOptions | undefined {
+    if (!defaults) {
+        return caller;
+    }
+    if (!caller) {
+        return defaults;
+    }
+    return { ...defaults, ...caller };
+}
+
+/**
  * Build the default {@linkcode ICredentialFactory}, which creates a
  * {@linkcode VsCodeExtensionCredential} for each request.
  *
+ * When `getDefaults` is supplied, it is consulted at *call* time (each time the
+ * factory produces a credential) for ambient {@linkcode CredentialFactoryOptions}
+ * to merge *beneath* the caller's per-request input. This lets an ambient scope
+ * (e.g. a discovery walk that wants `silent: true`) influence a credential built
+ * by a long-lived singleton without threading options through every call site.
+ * The caller's input always wins on a per-key basis; when `getDefaults` returns
+ * `undefined` the merge is a no-op.
+ *
  * @param code - The VS Code namespace, forwarded to each credential.
  * @param output - (Optional) Output channel for auth lifecycle logging.
+ * @param getDefaults - (Optional) Callback returning ambient options to merge
+ * beneath each request's input, evaluated per credential.
  */
-export function createDefaultCredentialFactory(code: IVsCode, output?: IOutputChannel): ICredentialFactory {
+export function createDefaultCredentialFactory(
+    code: IVsCode,
+    output?: IOutputChannel,
+    getDefaults?: () => CredentialFactoryOptions | undefined,
+): ICredentialFactory {
     return (input) => {
         const options = toCredentialFactoryOptions(input);
+        const defaults = getDefaults?.();
         return new VsCodeExtensionCredential({
             code,
             output,
-            tenantId: options?.tenantId,
-            sessionOptions: options?.sessionOptions,
+            tenantId: options?.tenantId ?? defaults?.tenantId,
+            sessionOptions: mergeSessionOptions(defaults?.sessionOptions, options?.sessionOptions),
         });
     };
 }

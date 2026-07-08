@@ -24,6 +24,7 @@
     "commands.vscode-azure/azdUp": "Provision & Deploy",
     "commands.vscode-azure/azdDown": "Delete Deployment",
     "commands.vscode-azure/signIn": "Sign in to Azure...",
+    "commands.vscode-azure/selectSubscriptions": "Select Subscriptions...",
     "commands.vscode-azure/installAzd": "Install / Update Azure Developer CLI (azd)",
     "settings.title": "Azure",
     "settings.vscode-azure.pageSize": "Number of items to load per page when fetching Azure resources.",
@@ -33,5 +34,7 @@
     "settings.vscode-azure.groupBy.resourceType": "Group by resource type.",
     "settings.vscode-azure.groupBy.location": "Group by Azure region.",
     "settings.vscode-azure.groupBy.armTag": "Group by an ARM tag. Specify the tag name with the 'Group By Tag' setting.",
-    "settings.vscode-azure.groupByTag": "The ARM tag name to group resources by when 'Group By' is set to 'armTag'."
+    "settings.vscode-azure.groupByTag": "The ARM tag name to group resources by when 'Group By' is set to 'armTag'.",
+    "settings.vscode-azure.selectedSubscriptions": "The tenants and subscriptions to show in the Azure resources view, as an array of 'tenantId/subscriptionId' strings. When empty, all subscriptions are shown. Use the 'Azure: Select Subscriptions' command to edit this.",
+    "settings.vscode-azure.selectedSubscriptions.patternError": "Each entry must be in the form 'tenantId/subscriptionId', where both are GUIDs (for example '00000000-0000-0000-0000-000000000000/11111111-1111-1111-1111-111111111111')."
 }

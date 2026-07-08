@@ -30,7 +30,7 @@
                 "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-azure",
                 "--disable-extension",
                 "ms-azuretools.vscode-azureresourcegroups", // This extension replaces Azure Resources, so disable it to avoid conflicts
-                "--profile=Azure Mock Data", // Isolated settings profile so a personal `azureResourceGroups.selectedSubscriptions` filter doesn't hide the mock subscription
+                "--profile=Azure Mock Data", // Isolated settings profile so a personal `vscode-azure.selectedSubscriptions` filter doesn't hide the mock subscription
             ],
             "env": {
                 "DEBUGTELEMETRY": "1",

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { Everything, Roots, type ChildResult, type DataProviderChangeEvent, type Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
@@ -510,6 +510,29 @@ describe('AzureAccountDataProvider (unit)', () => {
             const pages = await collectPages(await provider.getChildren(tenant));
 
             expect((pages[0].items as AzureSubscription[]).map(s => s.subscriptionId)).to.deep.equal(['s4']);
+        });
+
+        it('should scope the per-tenant credential to the tenant and account without requesting silent auth', async () => {
+            const inputs: CredentialFactoryOptions[] = [];
+            const { ctx } = createMockCodeContext();
+            const { executor } = createTestActionExecutor();
+            const credentialFactory: ICredentialFactory = (input) => {
+                inputs.push(input as CredentialFactoryOptions);
+                return makeCredential();
+            };
+            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
+            const tenant = makeTenant();
+            mockSubscriptionClient({
+                subscriptionPages: [{ items: [{ subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' }], hasMore: false }],
+            });
+
+            await collectPages(await provider.getChildren(tenant));
+
+            // The provider forwards only per-node scoping; ambient options (e.g.
+            // silent) are applied by the credential factory, not the provider.
+            expect(inputs[0]?.tenantId).to.equal(tenant.tenantId);
+            expect(inputs[0]?.sessionOptions?.account?.id).to.equal(tenant.accountId);
+            expect(inputs[0]?.sessionOptions?.silent).to.be.undefined;
         });
     });
 });
