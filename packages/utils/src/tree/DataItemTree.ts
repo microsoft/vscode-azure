@@ -15,6 +15,7 @@ import type { IVsCode } from '../vscode/IVsCode';
 import type { DataProvider, DataProviderChangeEvent } from './DataProvider';
 import { ProviderRegistry } from './ProviderRegistry';
 import { Everything, isKeyMatch, Roots, subtreeOf, type KeyMatch, type MatchScope, type Selector, type Target } from './Selector';
+import { TreeIndex } from './TreeIndex';
 
 /** The query-key namespace under which a node's children list is cached. */
 const CHILDREN = 'children';
@@ -57,13 +58,13 @@ interface Pager<T> {
  * parent's path plus the child's own key, a *subtree* eviction is a query-key
  * *prefix* removal -- query-core drops the node and every descendant with no
  * manual tree walk. Hierarchy that query-core does not model (the tree's keys
- * are opaque strings, not necessarily hierarchical) is recovered from two flat
- * side maps populated at fetch time:
- *
- * - {@linkcode index} maps a key to its resource (for {@linkcode get} and
- *   selector iteration);
- * - {@linkcode paths} maps a key to its path (for building query keys and for
- *   prefix/apex math).
+ * are opaque strings, not necessarily hierarchical) is recovered from a
+ * {@linkcode TreeIndex} -- the pure, synchronous half that records each loaded
+ * node's resource and path and answers the structural questions (direct
+ * children, descendants, parent, apexes) this orchestrator composes with the
+ * cache. This class owns the *policy* (fetch, evict, enrich, paginate, fire
+ * events) and keeps the two halves consistent: every cached path corresponds to
+ * an indexed node and vice versa.
  *
  * The public surface is deliberately *synchronous* where callers observe it
  * (`invalidate` / `remove` / `get` / `onDidChange`), so those paths use only
@@ -80,11 +81,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private readonly client: QueryClient;
 
-    /** Flat key -> resource index, populated as children/roots are fetched. */
-    private readonly index = new Map<string, T>();
-
-    /** Flat key -> path (root -> node, inclusive), the recovered hierarchy. */
-    private readonly paths = new Map<string, readonly string[]>();
+    /**
+     * The hierarchy half: key -> resource and key -> path, plus the prefix/apex
+     * math. Kept consistent with {@linkcode client} by this class (every cached
+     * path has an indexed node here and vice versa).
+     */
+    private readonly tree: TreeIndex<T>;
 
     /**
      * Per-resource enrichment promises, keyed by resource key. Stored when
@@ -127,6 +129,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         private readonly ttl: number,
     ) {
         super();
+        this.tree = new TreeIndex<T>(getKey);
         this.client = new QueryClient({
             defaultOptions: {
                 queries: {
@@ -221,7 +224,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     private async getBranchChildren(resource: T): Promise<T[]> {
         const key = this.getKey(resource);
-        const path = this.paths.get(key);
+        const path = this.tree.pathOf(key);
         if (path === undefined) {
             throw new Error(`Resource not found in tree: ${key}`);
         }
@@ -341,7 +344,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         // Guard: if the node was removed (e.g. via remove) while
                         // enrichment was in flight, skip the invalidation to avoid
                         // spurious change events for items no longer in the tree.
-                        if (this.index.has(key)) {
+                        if (this.tree.has(key)) {
                             // `includeChildren` is `undefined` only if enrichment
                             // was suppressed/errored; default to re-fetching
                             // children, matching the historical default behavior.
@@ -408,7 +411,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     public async loadMore(resource: T): Promise<void> {
         const key = this.getKey(resource);
-        if (this.client.getQueryData<T[]>(this.childrenKey(this.paths.get(key) ?? [key])) === undefined) {
+        if (this.client.getQueryData<T[]>(this.childrenKey(this.tree.pathOf(key) ?? [key])) === undefined) {
             throw new Error(`Cannot loadMore before getChildren has been called for: ${key}`);
         }
         await this.loadOnePage(resource);
@@ -435,7 +438,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
             // Ensure children are initialized (first page pulled) before
             // exhausting the remaining pages.
-            if (this.client.getQueryData<T[]>(this.childrenKey(this.paths.get(key) ?? [key])) === undefined) {
+            if (this.client.getQueryData<T[]>(this.childrenKey(this.tree.pathOf(key) ?? [key])) === undefined) {
                 await this.getChildren(resource);
                 loaded = true;
             }
@@ -472,7 +475,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             // while this page was in flight -- the pager was deleted/replaced, so
             // discard the page. This is the structural replacement for the old
             // generation counter.
-            if (this.pagers.get(key) !== pager || !this.index.has(key)) {
+            if (this.pagers.get(key) !== pager || !this.tree.has(key)) {
                 return;
             }
 
@@ -482,7 +485,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             } else {
                 const items = next!.value.items; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
                 this.client.setQueryData<T[]>(this.childrenKey(pager.path), old => [...(old ?? []), ...items]);
-                this.indexChildren(pager.path, items);
+                this.tree.indexChildren(pager.path, items);
                 this.enrichAll(items);
                 pager.hasMore = next!.value.hasMore; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
                 if (!pager.hasMore) {
@@ -496,7 +499,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * Get a resource by key from the tree, if it has been loaded.
      */
     public get(key: string): T | undefined {
-        return this.index.get(key);
+        return this.tree.get(key);
     }
 
     /**
@@ -558,7 +561,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
         const matchedKeys = typeof target === 'function'
             ? this.collectMatches(target as Selector<T>)
-            : [...this.toKeySet(this.toKeyMatch(target).match)].filter(key => this.index.has(key));
+            : [...this.toKeySet(this.toKeyMatch(target).match)].filter(key => this.tree.has(key));
 
         this.removeNodes(matchedKeys);
     }
@@ -602,14 +605,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         for (const entry of entries) {
             const isKey = typeof entry === 'string';
             const key = isKey ? entry : this.getKey(entry);
-            const loaded = this.index.has(key);
+            const loaded = this.tree.has(key);
             if (loaded && scope === 'subtree') {
                 this.wipeSubtreeKeepNode(key);
             }
             if (!isKey) {
                 fires.push(entry);
             } else if (loaded) {
-                fires.push(this.index.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- loaded checked above
+                fires.push(this.tree.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- loaded checked above
             }
         }
         for (const resource of fires) {
@@ -628,7 +631,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private invalidateSelector(selector: Selector<T>): void {
         const subtreeKeys: string[] = [];
         const selfKeys: string[] = [];
-        for (const [key, resource] of this.index) {
+        for (const [key, resource] of this.tree.entries()) {
             const scope = selector(resource);
             if (scope === 'subtree') {
                 subtreeKeys.push(key);
@@ -637,18 +640,18 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             }
         }
 
-        const subtreeApexes = this.apexes(subtreeKeys);
+        const subtreeApexes = this.tree.apexes(subtreeKeys);
         const subtreeApexSet = new Set(subtreeApexes);
         const fires: T[] = [];
 
         for (const key of subtreeApexes) {
             this.wipeSubtreeKeepNode(key);
-            fires.push(this.index.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
+            fires.push(this.tree.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
         }
         // A 'self' node nested under a wiped subtree apex is subsumed by that apex's fire.
         for (const key of selfKeys) {
-            if (!this.hasAncestorIn(key, subtreeApexSet)) {
-                fires.push(this.index.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
+            if (!this.tree.hasAncestorIn(key, subtreeApexSet)) {
+                fires.push(this.tree.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
             }
         }
         for (const resource of fires) {
@@ -664,12 +667,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private collectMatches(selector: Selector<T>): string[] {
         const matched: string[] = [];
-        for (const [key, resource] of this.index) {
+        for (const [key, resource] of this.tree.entries()) {
             if (selector(resource) !== undefined) {
                 matched.push(key);
             }
         }
-        return this.apexes(matched);
+        return this.tree.apexes(matched);
     }
 
     /**
@@ -683,7 +686,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         const parentFires = new Set<T>();
         let fireRoot = false;
         for (const key of matchedKeys) {
-            const parent = this.parentResourceOf(key);
+            const parent = this.tree.parentResourceOf(key);
             this.spliceFromParentList(key);
             this.evictSubtree(key);
             if (parent === undefined) {
@@ -712,13 +715,13 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * its children re-fetch on next access.
      */
     private wipeSubtreeKeepNode(key: string): void {
-        const path = this.paths.get(key);
+        const path = this.tree.pathOf(key);
         if (path === undefined) {
             return;
         }
         this.client.removeQueries({ queryKey: this.childrenKey(path) });
         this.pagers.delete(key);
-        for (const descendantKey of this.descendantKeys(path)) {
+        for (const descendantKey of this.tree.descendantKeys(path)) {
             this.evictEntry(descendantKey);
         }
     }
@@ -729,21 +732,20 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * its parent's cached list (callers handle those).
      */
     private evictSubtree(key: string): void {
-        const path = this.paths.get(key);
+        const path = this.tree.pathOf(key);
         if (path === undefined) {
             return;
         }
         this.client.removeQueries({ queryKey: this.childrenKey(path) });
         this.evictEntry(key);
-        for (const descendantKey of this.descendantKeys(path)) {
+        for (const descendantKey of this.tree.descendantKeys(path)) {
             this.evictEntry(descendantKey);
         }
     }
 
     /** Drop a single key's flat-map / pager / enrichment-promise entries. */
     private evictEntry(key: string): void {
-        this.index.delete(key);
-        this.paths.delete(key);
+        this.tree.evict(key);
         this.pagers.delete(key);
         this.enrichmentPromises.delete(key);
     }
@@ -755,26 +757,17 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private reconcileChildren(parentPath: readonly string[], children: T[]): void {
         const newKeys = new Set(children.map(child => this.getKey(child)));
-        for (const oldKey of this.directChildKeys(parentPath)) {
+        for (const oldKey of this.tree.directChildKeys(parentPath)) {
             if (!newKeys.has(oldKey)) {
                 this.evictSubtree(oldKey);
             }
         }
-        this.indexChildren(parentPath, children);
-    }
-
-    /** Index a set of children under a parent path (add/overwrite; no eviction). */
-    private indexChildren(parentPath: readonly string[], children: T[]): void {
-        for (const child of children) {
-            const key = this.getKey(child);
-            this.index.set(key, child);
-            this.paths.set(key, [...parentPath, key]);
-        }
+        this.tree.indexChildren(parentPath, children);
     }
 
     /** Remove `key` from its parent's cached children list, if that list is cached. */
     private spliceFromParentList(key: string): void {
-        const path = this.paths.get(key);
+        const path = this.tree.pathOf(key);
         if (path === undefined) {
             return;
         }
@@ -791,8 +784,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private invalidateAllImpl(): void {
         this.executor.output.debug(`[cache] ${this.name} invalidate all`);
         this.client.getQueryCache().clear();
-        this.index.clear();
-        this.paths.clear();
+        this.tree.clear();
         this.pagers.clear();
         this.enrichmentPromises.clear();
         this.changeEmitter.fire(undefined);
@@ -832,8 +824,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     public override dispose(): void {
         this.client.getQueryCache().clear();
         this.client.clear();
-        this.index.clear();
-        this.paths.clear();
+        this.tree.clear();
         this.pagers.clear();
         this.enrichmentPromises.clear();
         super.dispose();
@@ -844,72 +835,5 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     /** The children-query key for a node path (empty path = the root listing). */
     private childrenKey(path: readonly string[]): QueryKey {
         return [CHILDREN, ...path];
-    }
-
-    /** Whether `prefix` is a prefix of (or equal to) `path`. */
-    private isPrefixOrEqual(prefix: readonly string[], path: readonly string[]): boolean {
-        return prefix.length <= path.length && prefix.every((seg, i) => path[i] === seg);
-    }
-
-    /** Whether `prefix` is a *strict* prefix of `path` (i.e. `path` is a descendant). */
-    private isStrictPrefix(prefix: readonly string[], path: readonly string[]): boolean {
-        return prefix.length < path.length && this.isPrefixOrEqual(prefix, path);
-    }
-
-    /** Keys of the *direct* children of the node at `parentPath`. */
-    private directChildKeys(parentPath: readonly string[]): string[] {
-        const result: string[] = [];
-        for (const [key, path] of this.paths) {
-            if (path.length === parentPath.length + 1 && this.isPrefixOrEqual(parentPath, path)) {
-                result.push(key);
-            }
-        }
-        return result;
-    }
-
-    /** Keys of every *strict* descendant of the node at `path`. */
-    private descendantKeys(path: readonly string[]): string[] {
-        const result: string[] = [];
-        for (const [key, candidate] of this.paths) {
-            if (this.isStrictPrefix(path, candidate)) {
-                result.push(key);
-            }
-        }
-        return result;
-    }
-
-    /** Reduce a set of keys to their apexes: drop any key whose path has an ancestor in the set. */
-    private apexes(keys: readonly string[]): string[] {
-        const entries = keys
-            .map(key => ({ key, path: this.paths.get(key) }))
-            .filter((e): e is { key: string; path: readonly string[] } => e.path !== undefined);
-        return entries
-            .filter(({ path }) => !entries.some(other => this.isStrictPrefix(other.path, path)))
-            .map(({ key }) => key);
-    }
-
-    /** Whether any ancestor of `key` is in `ancestorKeys`. */
-    private hasAncestorIn(key: string, ancestorKeys: ReadonlySet<string>): boolean {
-        const path = this.paths.get(key);
-        if (path === undefined) {
-            return false;
-        }
-        // Ancestors are the strict prefixes of this path; their keys are the
-        // trailing segment of each prefix.
-        for (let i = 1; i < path.length; i++) {
-            if (ancestorKeys.has(path[i - 1])) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** The parent resource of `key`, or `undefined` if `key` is a root (or unknown). */
-    private parentResourceOf(key: string): T | undefined {
-        const path = this.paths.get(key);
-        if (path === undefined || path.length < 2) {
-            return undefined;
-        }
-        return this.index.get(path[path.length - 2]);
     }
 }
