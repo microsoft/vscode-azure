@@ -498,6 +498,8 @@ describe('Function App Tree Integration (integration)', () => {
 
             // The reveal walk must not have loaded anything into the data tree.
             expect(dataTree.get(funcKey), 'walk must not populate the data tree').to.be.undefined;
+            expect(dataTree.get(rgKey), 'walk must not populate the data tree').to.be.undefined;
+            expect(dataTree.get(subKey), 'walk must not populate the data tree').to.be.undefined;
         });
 
         it('should lazily load and render the constructed node after the getParent walk', async () => {
