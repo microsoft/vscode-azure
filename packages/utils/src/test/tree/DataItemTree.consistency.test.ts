@@ -4,10 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
+import type { QueryClient } from '@tanstack/query-core';
 import { delay } from '../../base/delay';
 import { DataItemTree } from '../../tree/DataItemTree';
 import type { DataProvider } from '../../tree/DataProvider';
 import { Everything, Roots, selfOnly, subtreeOf, type Selector } from '../../tree/Selector';
+import type { TreeIndex } from '../../tree/TreeIndex';
 import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
@@ -66,6 +68,52 @@ function pathKey(path: readonly string[]): string {
     return path.join('\u0000');
 }
 
+/** The query-key namespace {@linkcode DataItemTree} caches children under. */
+const CHILDREN = 'children';
+
+/**
+ * The shape of {@linkcode DataItemTree}'s internal stores, reached by an
+ * unchecked cast below. These fields are `private` (not `#private`), so a cast
+ * is enough to inspect them -- this keeps the cross-store consistency invariants
+ * entirely in the test without widening the class's public API with a
+ * test-only method.
+ */
+interface DataItemTreeInternals<T> {
+    readonly tree: TreeIndex<T>;
+    readonly client: QueryClient;
+    readonly pagers: ReadonlyMap<string, unknown>;
+    readonly enrichmentPromises: ReadonlyMap<string, unknown>;
+}
+
+/**
+ * Snapshot the internal stores of a {@linkcode DataItemTree} by reaching past
+ * `private` with a cast: the indexed nodes (key -> path), every cached children
+ * path (the `['children', ...path]` query keys with the prefix stripped), and
+ * the live pager / enrichment side-table keys.
+ */
+function snapshotState(tree: DataItemTree<Res>): {
+    indexed: Map<string, readonly string[]>;
+    cachedPaths: string[][];
+    pagerKeys: string[];
+    enrichmentKeys: string[];
+} {
+    const internals = tree as unknown as DataItemTreeInternals<Res>;
+    const indexed = new Map<string, readonly string[]>();
+    for (const [key] of internals.tree.entries()) {
+        indexed.set(key, internals.tree.pathOf(key)!);
+    }
+    const cachedPaths = internals.client.getQueryCache().getAll()
+        .map(query => query.queryKey)
+        .filter((key): key is readonly unknown[] => Array.isArray(key) && key[0] === CHILDREN)
+        .map(key => key.slice(1) as string[]);
+    return {
+        indexed,
+        cachedPaths,
+        pagerKeys: [...internals.pagers.keys()],
+        enrichmentKeys: [...internals.enrichmentPromises.keys()],
+    };
+}
+
 /**
  * Assert the three cross-store invariants that {@linkcode DataItemTree} must
  * uphold at all times. These are properties the class enforces by hand (the
@@ -74,7 +122,7 @@ function pathKey(path: readonly string[]): string {
  * store.
  */
 function assertConsistent(tree: DataItemTree<Res>, label: string): void {
-    const { indexed, cachedPaths, pagerKeys, enrichmentKeys } = tree.snapshotState();
+    const { indexed, cachedPaths, pagerKeys, enrichmentKeys } = snapshotState(tree);
 
     // (1) No orphan cached children: every cached non-root children list belongs
     // to a currently-indexed node whose path is exactly that path.
@@ -136,7 +184,7 @@ describe('DataItemTree consistency (unit)', () => {
                 assertConsistent(tree, `enrich=${enrich} seed=${seed} init`);
 
                 for (let step = 0; step < 80; step++) {
-                    const known = [...tree.snapshotState().indexed.keys()];
+                    const known = [...snapshotState(tree).indexed.keys()];
                     const node = pick(known);
                     const nodeRes = node !== undefined ? tree.get(node) : undefined;
 
@@ -173,7 +221,7 @@ describe('DataItemTree consistency (unit)', () => {
 
         tree.invalidate(Everything);
 
-        const state = tree.snapshotState();
+        const state = snapshotState(tree);
         expect(state.indexed.size, 'indexed').to.equal(0);
         expect(state.cachedPaths, 'cachedPaths').to.deep.equal([]);
         expect(state.pagerKeys, 'pagerKeys').to.deep.equal([]);
@@ -192,7 +240,7 @@ describe('DataItemTree consistency (unit)', () => {
 
         tree.remove({ id: 'a' });
 
-        const state = tree.snapshotState();
+        const state = snapshotState(tree);
         for (const key of ['a', 'a1', 'a2', 'a1x', 'a1y', 'a2x']) {
             expect(state.indexed.has(key), `indexed still has ${key}`).to.be.false;
         }
@@ -226,10 +274,10 @@ describe('DataItemTree consistency (unit)', () => {
 
         await tree.getChildren();
         await tree.getChildren({ id: 'root' }); // installs a pager
-        expect(tree.snapshotState().pagerKeys).to.deep.equal(['root']);
+        expect(snapshotState(tree).pagerKeys).to.deep.equal(['root']);
 
         tree.remove({ id: 'root' });
-        expect(tree.snapshotState().pagerKeys, 'pager survived removal').to.deep.equal([]);
+        expect(snapshotState(tree).pagerKeys, 'pager survived removal').to.deep.equal([]);
         assertConsistent(tree, 'after remove(paged root)');
     });
 });

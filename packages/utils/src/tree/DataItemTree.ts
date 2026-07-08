@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { QueryClient, type QueryKey } from '@tanstack/query-core';
+import '../data/queryCoreGlobals';
 import type { IActionExecutor } from '../base/IActionExecutor';
 import { stringifyError } from '../base/stringifyError';
 import { InflightMap } from '../data/InflightMap';
@@ -534,38 +535,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     public get(key: string): T | undefined {
         return this.tree.get(key);
-    }
-
-    /**
-     * Test-only snapshot of the internal stores, used to assert the tree's
-     * cross-store consistency invariants (see `DataItemTree.consistency.test.ts`).
-     * Not part of the supported public API and must not be used in product code.
-     *
-     * @returns The indexed nodes (key -> path), every cached children path (the
-     *   `['children', ...path]` query keys with the `'children'` prefix stripped),
-     *   and the live pager / enrichment side-table keys.
-     * @internal
-     */
-    public snapshotState(): {
-        readonly indexed: ReadonlyMap<string, readonly string[]>;
-        readonly cachedPaths: readonly (readonly string[])[];
-        readonly pagerKeys: readonly string[];
-        readonly enrichmentKeys: readonly string[];
-    } {
-        const indexed = new Map<string, readonly string[]>();
-        for (const [key] of this.tree.entries()) {
-            indexed.set(key, this.tree.pathOf(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- key came from entries(), so it is indexed
-        }
-        const cachedPaths = this.client.getQueryCache().getAll()
-            .map(query => query.queryKey)
-            .filter((key): key is readonly unknown[] => Array.isArray(key) && key[0] === CHILDREN)
-            .map(key => key.slice(1) as string[]);
-        return {
-            indexed,
-            cachedPaths,
-            pagerKeys: [...this.pagers.keys()],
-            enrichmentKeys: [...this.enrichmentPromises.keys()],
-        };
     }
 
     /**
