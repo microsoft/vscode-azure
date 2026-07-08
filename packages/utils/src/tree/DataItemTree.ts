@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { QueryClient, type QueryKey } from '@tanstack/query-core';
-import '../data/queryCoreGlobals';
 import type { IActionExecutor } from '../base/IActionExecutor';
 import { stringifyError } from '../base/stringifyError';
 import { InflightMap } from '../data/InflightMap';

@@ -6,13 +6,12 @@
 // `@tanstack/query-core`'s shipped `.d.ts` references the DOM-lib type
 // `VoidFunction`, but this package compiles with a Node-only `lib` (`ESNext`)
 // and deliberately excludes the DOM lib so shared code can't reach for browser
-// globals. Declaring the single missing alias here (as a program-wide global
-// augmentation) satisfies the type checker without adding `DOM` to `lib`.
-// Modules that import query-core types import this module for its side effect so
-// the augmentation is guaranteed to be part of the compilation.
+// globals. Declaring the single missing alias in this ambient `.d.ts` satisfies
+// the type checker program-wide without adding `DOM` to `lib`.
+//
+// This file has no top-level `import`/`export`, so it is an ambient script:
+// TypeScript picks it up automatically for every compilation and the type is
+// global, so no module needs to import it. (Adding an `import`/`export` here
+// would turn it into a module and silently drop the global -- keep it bare.)
 
-export {};
-
-declare global {
-    type VoidFunction = () => void;
-}
+type VoidFunction = () => void;
