@@ -5,11 +5,11 @@
 
 import { createMockCodeContext, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { SignedInTenantsConfigurationKey } from '../../constants';
+import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../constants';
 import { addSignedInTenant, readSignedInTenants, type SignedInTenant } from '../../utils/signedInTenants';
 
 describe('signedInTenants (unit)', () => {
-    const settingKey = `vscode-azure.${SignedInTenantsConfigurationKey}`;
+    const settingKey = `${ConfigurationSection}.${SignedInTenantsConfigurationKey}`;
     const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
     const otherTenantId = 'bbbbbbbb-1111-2222-3333-444455556666';
 

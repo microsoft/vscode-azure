@@ -11,7 +11,7 @@ import { expect } from 'chai';
 import { mock, type Mock } from 'node:test';
 import { pickTenantOrEnterId, SignIn } from '../../../commands/auth/SignIn';
 import type { ReachableTenant } from '../../../commands/auth/listReachableAuthNodes';
-import { SignedInTenantsConfigurationKey } from '../../../constants';
+import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../../constants';
 import type { IAzureViewDataTree } from '../../../services';
 import type { SignedInTenant } from '../../../utils/signedInTenants';
 
@@ -36,8 +36,9 @@ describe('SignIn (unit)', () => {
     const fakeSession: unknown = { account: { id: 'resolved-account', label: '' } };
 
     /** The persisted manual-tenant entries, as stored in configuration. */
+    const settingKey = `${ConfigurationSection}.${SignedInTenantsConfigurationKey}`;
     function readPersistedTenants(settings: Map<string, unknown>): SignedInTenant[] {
-        return (settings.get(`vscode-azure.${SignedInTenantsConfigurationKey}`) as SignedInTenant[] | undefined) ?? [];
+        return (settings.get(settingKey) as SignedInTenant[] | undefined) ?? [];
     }
 
     /**
@@ -232,7 +233,7 @@ describe('SignIn (unit)', () => {
         const typedTenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
         const { ctx, mock: mockResult } = createMockCodeContext();
         // Seed the setting with the same entry (different casing) already present.
-        mockResult.settings.set(`vscode-azure.${SignedInTenantsConfigurationKey}`, [
+        mockResult.settings.set(settingKey, [
             { accountId: 'resolved-account', tenantId: typedTenantId.toUpperCase() },
         ]);
         mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
