@@ -84,22 +84,45 @@ await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
 - `autoEsbuildOrWatch` builds in production mode by default, or enters watch mode when `--watch` is passed on the command line.
 - The `alias` configuration resolves local package imports to their source files so esbuild bundles them directly.
 
-## Watch Mode
+## Watch Mode / Iterative Development
 
-For development, run the watch mode build tasks:
+For fast, iterative work, prefer the **watch tasks** over re-running a full `pnpm run build` after every edit. Each watch task simply appends `-- --watch` to an existing build script, so the underlying compiler stays resident and only recompiles what changed.
+
+> These watch tasks live in `.vscode/tasks.json` (each is an `isBackground: true` build task) and are **not** exposed as npm scripts, so they are easy to miss. Run them from the command line as shown below, or via VS Code's **Run Build Task** (`Extension: Check+Watch` is the default build task).
+
+### Build watches
 
 ```bash
-# Extension: esbuild in watch mode
-pnpm --filter vscode-azure run build:esbuild -- --watch
-
-# Extension: type checking in watch mode
+# Extension: type checking in watch mode (tsgo --noEmit --watch)
+# Most useful for catching type errors while editing. This is the default
+# VS Code build task ("Extension: Check+Watch").
 pnpm --filter vscode-azure run build:check -- --watch
 
-# Package: type checking in watch mode
+# Extension: esbuild bundle in watch mode ("Extension: ESBuild+Watch")
+pnpm --filter vscode-azure run build:esbuild -- --watch
+
+# Library packages: tsgo in watch mode ("utils: Build+Watch" / "azutils: Build+Watch")
 pnpm --filter @microsoft/vscode-azure-utils run build -- --watch
+pnpm --filter @microsoft/vscode-azure-azutils run build -- --watch
 ```
 
-VS Code tasks are preconfigured in `.vscode/tasks.json` for these.
+The extension consumes the packages' built output, so when you change a package, run **that package's** watcher too (in addition to the extension watches).
+
+### Test watch (packages only)
+
+The `utils` and `azutils` packages support a Mocha watch mode:
+
+```bash
+pnpm --filter @microsoft/vscode-azure-utils run test -- --watch
+pnpm --filter @microsoft/vscode-azure-azutils run test -- --watch
+```
+
+This works because Mocha is configured (under the `"mocha"` key in each package's `package.json`) to run the `.ts` sources directly via `node --experimental-transform-types` (spec `src/test/**/*.test.ts`). There is no separate build step, so Mocha re-runs the suite whenever a source or test file changes.
+
+### No watch available for
+
+- **Lint** — the `lint` script is plain `eslint --max-warnings 0`; ESLint has no native `--watch` flag and no watch wrapper is installed. Run `pnpm run lint` manually.
+- **Extension tests** — the extension's `test` script is `vscode-test` (`@vscode/test-cli`), which has no re-running watch mode. Run the full `pnpm --filter vscode-azure run test` instead.
 
 ## Linting
 
