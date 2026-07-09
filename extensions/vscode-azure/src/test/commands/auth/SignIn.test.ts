@@ -113,6 +113,7 @@ describe('SignIn (unit)', () => {
         expect(invalidate.mock.callCount()).to.equal(1);
         expect(invalidate.mock.calls[0].arguments[0]).to.equal(Roots);
     });
+
     it('should sign in to a selected tenant when already signed in', async () => {
         const account = makeAccount({ id: 'acct-1', label: 'Account One' });
         const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
