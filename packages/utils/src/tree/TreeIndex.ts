@@ -78,6 +78,35 @@ export class TreeIndex<T> {
         }
     }
 
+    /**
+     * Reconcile the direct children of the node at `parentPath` against a
+     * freshly-fetched set: (re-)index the new children and report which
+     * previously-indexed direct children have *departed* (were present before,
+     * absent now).
+     *
+     * Departed nodes and their subtrees are deliberately left indexed so the
+     * caller can still resolve their paths / {@linkcode descendantKeys} to tear
+     * down the stores this index does not own (the children cache, pagers,
+     * enrichment). The caller completes removal by evicting each departed
+     * subtree from this index too.
+     *
+     * Indexing the new set never disturbs a departed node: the departed keys are
+     * exactly those absent from the new set, so {@linkcode indexChildren} only
+     * writes new/surviving entries and leaves every departed node's index / path
+     * (and thus its descendants) intact for the caller's teardown.
+     *
+     * @returns The keys of the direct children that departed.
+     */
+    public reconcile(parentPath: readonly string[], children: readonly T[]): { departed: string[] } {
+        const newKeys = new Set<string>();
+        for (const child of children) {
+            newKeys.add(this.getKey(child));
+        }
+        const departed = this.directChildKeys(parentPath).filter(key => !newKeys.has(key));
+        this.indexChildren(parentPath, children);
+        return { departed };
+    }
+
     /** Drop a single key's index / path entries. Does not touch descendants. */
     public evict(key: string): void {
         this.index.delete(key);

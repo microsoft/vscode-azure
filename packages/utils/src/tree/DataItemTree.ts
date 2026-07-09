@@ -809,18 +809,18 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Reconcile a node's direct children against a freshly-fetched set: evict the
-     * subtrees of departed children, then (re-)index the new set. Surviving
-     * children keep their independently-cached subtrees.
+     * Reconcile a node's direct children against a freshly-fetched set. The
+     * {@linkcode TreeIndex} (re-)indexes the new set and reports which direct
+     * children departed; this method tears down each departed subtree from the
+     * stores the index does not own (the children cache, pagers, enrichment) via
+     * {@linkcode evictSubtree}. Surviving children keep their independently-cached
+     * subtrees.
      */
     private reconcileChildren(parentPath: readonly string[], children: T[]): void {
-        const newKeys = new Set(children.map(child => this.getKey(child)));
-        for (const oldKey of this.tree.directChildKeys(parentPath)) {
-            if (!newKeys.has(oldKey)) {
-                this.evictSubtree(oldKey);
-            }
+        const { departed } = this.tree.reconcile(parentPath, children);
+        for (const key of departed) {
+            this.evictSubtree(key);
         }
-        this.tree.indexChildren(parentPath, children);
     }
 
     /** Remove `key` from its parent's cached children list, if that list is cached. */

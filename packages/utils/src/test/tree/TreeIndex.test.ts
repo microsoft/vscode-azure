@@ -87,6 +87,62 @@ describe('TreeIndex (unit)', () => {
         });
     });
 
+    describe('reconcile', () => {
+        it('should report no departures when the child set is unchanged', () => {
+            const { tree, nodes } = makeTree();
+            const { departed } = tree.reconcile(['r1'], [nodes.a, nodes.b]);
+            expect(departed).to.deep.equal([]);
+            expect(tree.directChildKeys(['r1'])).to.have.members(['a', 'b']);
+        });
+
+        it('should report a child that departed the set', () => {
+            const { tree, nodes } = makeTree();
+            const { departed } = tree.reconcile(['r1'], [nodes.a]);
+            expect(departed).to.deep.equal(['b']);
+        });
+
+        it('should report every direct child when the new set is empty', () => {
+            const { tree } = makeTree();
+            const { departed } = tree.reconcile(['r1'], []);
+            expect(departed).to.have.members(['a', 'b']);
+        });
+
+        it('should report no departures for brand-new children only', () => {
+            const { tree, nodes } = makeTree();
+            const { departed } = tree.reconcile(['r2'], [nodes.c, res('d')]);
+            expect(departed).to.deep.equal([]);
+            expect(tree.directChildKeys(['r2'])).to.have.members(['c', 'd']);
+            expect(tree.pathOf('d')).to.deep.equal(['r2', 'd']);
+        });
+
+        it('should index the surviving and new children while leaving departed nodes indexed', () => {
+            const { tree, nodes } = makeTree();
+            const { departed } = tree.reconcile(['r1'], [nodes.a, res('e')]);
+            expect(departed).to.deep.equal(['b']);
+            // The new set is indexed...
+            expect(tree.has('a')).to.be.true;
+            expect(tree.pathOf('e')).to.deep.equal(['r1', 'e']);
+            // ...but the departed node (and its subtree) is left for the caller to
+            // evict, so its path / descendants are still resolvable.
+            expect(tree.has('b')).to.be.true;
+            expect(tree.pathOf('a1')).to.deep.equal(['r1', 'a', 'a1']);
+        });
+
+        it('should only consider direct children, not deeper descendants, as departed', () => {
+            const { tree, nodes } = makeTree();
+            // Re-listing r1's children without touching a1 (a grandchild) must not
+            // treat a1 as departed.
+            const { departed } = tree.reconcile(['r1'], [nodes.a, nodes.b]);
+            expect(departed).to.deep.equal([]);
+        });
+
+        it('should treat every root as departed when reconciling an empty root set', () => {
+            const { tree } = makeTree();
+            const { departed } = tree.reconcile([], []);
+            expect(departed).to.have.members(['r1', 'r2']);
+        });
+    });
+
     describe('directChildKeys', () => {
         it('should return the root keys for the empty path', () => {
             const { tree } = makeTree();
