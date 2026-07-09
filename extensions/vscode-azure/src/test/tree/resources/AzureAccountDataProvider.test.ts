@@ -6,7 +6,7 @@
 import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { Everything, Roots, type ChildResult, type DataProviderChangeEvent, type Page } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../tree/resources/AzureAccountDataProvider';
@@ -478,9 +478,19 @@ describe('AzureAccountDataProvider (unit)', () => {
     });
 
     describe('getChildren tenant paging with manually-entered tenants', () => {
-        /** Seed the persisted manual-tenant setting in the mock configuration. */
-        function seedSignedInTenants(mockVsCode: ReturnType<typeof createProvider>['mock'], entries: Array<{ accountId: string; tenantId: string }>) {
-            mockVsCode.settings.set(`${ConfigurationSection}.${SignedInTenantsConfigurationKey}`, entries);
+        const signedInTenantsKey = `${ConfigurationSection}.${SignedInTenantsConfigurationKey}`;
+
+        /**
+         * Run `callback` with the persisted manual-tenant setting seeded in the
+         * mock configuration, restoring the previous value afterward. `entries`
+         * is typed loosely so tests can also feed deliberately malformed data.
+         */
+        function withSignedInTenants<T>(
+            mockVsCode: ReturnType<typeof createProvider>['mock'],
+            entries: readonly unknown[],
+            callback: () => T | Promise<T>,
+        ): T | Promise<T> {
+            return withSettings(mockVsCode, { [signedInTenantsKey]: entries }, callback);
         }
 
         // Signed-in tenant ids must be canonical GUIDs (non-GUID entries are
@@ -492,27 +502,27 @@ describe('AzureAccountDataProvider (unit)', () => {
         it('should append a saved tenant (not in the listing) to the final page', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             const account = makeAccount({ id: 'acct-1' });
-            seedSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: manualTenantId }]);
             mockSubscriptionClient({
                 tenantPages: [{ items: [{ tenantId: 't1', displayName: 'Tenant One' }], hasMore: false }],
             });
 
-            const pages = await collectPages(await provider.getChildren(account));
+            await withSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: manualTenantId }], async () => {
+                const pages = await collectPages(await provider.getChildren(account));
 
-            expect(pages).to.have.length(1);
-            const tenants = pages[0].items as AzureTenant[];
-            // Listed tenant first, saved tenant appended after it.
-            expect(tenants.map(t => t.tenantId)).to.deep.equal(['t1', manualTenantId]);
-            // No display name is available for a saved tenant, so the id stands in.
-            const manual = tenants.find(t => t.tenantId === manualTenantId)!;
-            expect(manual.displayName).to.equal(manualTenantId);
-            expect(manual.accountId).to.equal('acct-1');
+                expect(pages).to.have.length(1);
+                const tenants = pages[0].items as AzureTenant[];
+                // Listed tenant first, saved tenant appended after it.
+                expect(tenants.map(t => t.tenantId)).to.deep.equal(['t1', manualTenantId]);
+                // No display name is available for a saved tenant, so the id stands in.
+                const manual = tenants.find(t => t.tenantId === manualTenantId)!;
+                expect(manual.displayName).to.equal(manualTenantId);
+                expect(manual.accountId).to.equal('acct-1');
+            });
         });
 
         it('should append saved tenants only to the final page when listing spans multiple pages', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             const account = makeAccount({ id: 'acct-1' });
-            seedSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: manualTenantId }]);
             mockSubscriptionClient({
                 tenantPages: [
                     { items: [{ tenantId: 't1', displayName: 'Tenant One' }], hasMore: true },
@@ -520,76 +530,82 @@ describe('AzureAccountDataProvider (unit)', () => {
                 ],
             });
 
-            const pages = await collectPages(await provider.getChildren(account));
+            await withSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: manualTenantId }], async () => {
+                const pages = await collectPages(await provider.getChildren(account));
 
-            expect(pages).to.have.length(2);
-            expect((pages[0].items as AzureTenant[]).map(t => t.tenantId)).to.deep.equal(['t1']);
-            expect(pages[0].hasMore).to.be.true;
-            // The saved tenant rides along on the terminal page, not an earlier one.
-            expect((pages[1].items as AzureTenant[]).map(t => t.tenantId)).to.deep.equal(['t2', manualTenantId]);
-            expect(pages[1].hasMore).to.be.false;
+                expect(pages).to.have.length(2);
+                expect((pages[0].items as AzureTenant[]).map(t => t.tenantId)).to.deep.equal(['t1']);
+                expect(pages[0].hasMore).to.be.true;
+                // The saved tenant rides along on the terminal page, not an earlier one.
+                expect((pages[1].items as AzureTenant[]).map(t => t.tenantId)).to.deep.equal(['t2', manualTenantId]);
+                expect(pages[1].hasMore).to.be.false;
+            });
         });
 
         it('should deduplicate a saved tenant that is also listed, preferring the listed display name', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             const account = makeAccount({ id: 'acct-1' });
-            // Saved id matches a listed tenant (case-insensitively).
-            seedSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: listedTenantId }]);
             mockSubscriptionClient({
                 tenantPages: [{ items: [{ tenantId: listedTenantId.toUpperCase(), displayName: 'Tenant One' }], hasMore: false }],
             });
 
-            const pages = await collectPages(await provider.getChildren(account));
+            // Saved id matches a listed tenant (case-insensitively).
+            await withSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: listedTenantId }], async () => {
+                const pages = await collectPages(await provider.getChildren(account));
 
-            const tenants = pages[0].items as AzureTenant[];
-            expect(tenants.map(t => t.tenantId)).to.deep.equal([listedTenantId]);
-            // The listed tenant wins, keeping its real display name.
-            expect(tenants[0].displayName).to.equal('Tenant One');
+                const tenants = pages[0].items as AzureTenant[];
+                expect(tenants.map(t => t.tenantId)).to.deep.equal([listedTenantId]);
+                // The listed tenant wins, keeping its real display name.
+                expect(tenants[0].displayName).to.equal('Tenant One');
+            });
         });
 
         it('should only include saved tenants belonging to the account being listed', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             const account = makeAccount({ id: 'acct-1' });
-            seedSignedInTenants(vscodeMock, [
-                { accountId: 'other-acct', tenantId: otherTenantId },
-                { accountId: 'acct-1', tenantId: manualTenantId },
-            ]);
             // Listing yields no tenants (default single empty page).
             mockSubscriptionClient({ tenantPages: [{ items: [], hasMore: false }] });
 
-            const pages = await collectPages(await provider.getChildren(account));
+            await withSignedInTenants(vscodeMock, [
+                { accountId: 'other-acct', tenantId: otherTenantId },
+                { accountId: 'acct-1', tenantId: manualTenantId },
+            ], async () => {
+                const pages = await collectPages(await provider.getChildren(account));
 
-            const tenantIds = pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId));
-            expect(tenantIds).to.deep.equal([manualTenantId]);
+                const tenantIds = pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId));
+                expect(tenantIds).to.deep.equal([manualTenantId]);
+            });
         });
 
         it('should match a saved tenant whose account id differs only in casing', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             const account = makeAccount({ id: 'Acct-1' });
-            // Saved under a different casing than the account being listed; the
-            // account id is compared case-insensitively so it still matches.
-            seedSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: manualTenantId }]);
             mockSubscriptionClient({ tenantPages: [{ items: [], hasMore: false }] });
 
-            const pages = await collectPages(await provider.getChildren(account));
+            // Saved under a different casing than the account being listed; the
+            // account id is compared case-insensitively so it still matches.
+            await withSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: manualTenantId }], async () => {
+                const pages = await collectPages(await provider.getChildren(account));
 
-            const tenantIds = pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId));
-            expect(tenantIds).to.deep.equal([manualTenantId]);
+                const tenantIds = pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId));
+                expect(tenantIds).to.deep.equal([manualTenantId]);
+            });
         });
 
         it('should fall back to saved tenants when listing tenants fails outright', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             const account = makeAccount({ id: 'acct-1' });
-            seedSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: manualTenantId }]);
             mockSubscriptionClientFailingTenantList(new Error('conditional access blocked'));
 
-            const pages = await collectPages(await provider.getChildren(account));
+            await withSignedInTenants(vscodeMock, [{ accountId: 'acct-1', tenantId: manualTenantId }], async () => {
+                const pages = await collectPages(await provider.getChildren(account));
 
-            // The thrown listing error is swallowed; the saved tenant is surfaced
-            // as the terminal page so the tree can still reach it.
-            const tenants = pages.flatMap(p => p.items as AzureTenant[]);
-            expect(tenants.map(t => t.tenantId)).to.deep.equal([manualTenantId]);
-            expect(pages[pages.length - 1].hasMore).to.be.false;
+                // The thrown listing error is swallowed; the saved tenant is surfaced
+                // as the terminal page so the tree can still reach it.
+                const tenants = pages.flatMap(p => p.items as AzureTenant[]);
+                expect(tenants.map(t => t.tenantId)).to.deep.equal([manualTenantId]);
+                expect(pages[pages.length - 1].hasMore).to.be.false;
+            });
         });
 
         it('should yield an empty terminal page when listing fails and no tenants are saved', async () => {
@@ -607,40 +623,42 @@ describe('AzureAccountDataProvider (unit)', () => {
         it('should ignore malformed saved entries (user-editable setting)', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             const account = makeAccount({ id: 'acct-1' });
+            mockSubscriptionClientFailingTenantList(new Error('conditional access blocked'));
+
             // The setting is hand-editable, so tolerate junk: missing fields, an
             // empty tenant id, a non-object, and a tenant id that isn't a GUID are
             // all dropped; only the well-formed entry for this account surfaces.
-            vscodeMock.settings.set(`${ConfigurationSection}.${SignedInTenantsConfigurationKey}`, [
+            await withSignedInTenants(vscodeMock, [
                 { accountId: 'acct-1' },
                 { tenantId: otherTenantId },
                 { accountId: 'acct-1', tenantId: '' },
                 { accountId: 'acct-1', tenantId: 'not-a-guid' },
                 'not-an-object',
                 { accountId: 'acct-1', tenantId: manualTenantId },
-            ]);
-            mockSubscriptionClientFailingTenantList(new Error('conditional access blocked'));
+            ], async () => {
+                const pages = await collectPages(await provider.getChildren(account));
 
-            const pages = await collectPages(await provider.getChildren(account));
-
-            const tenantIds = pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId));
-            expect(tenantIds).to.deep.equal([manualTenantId]);
+                const tenantIds = pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId));
+                expect(tenantIds).to.deep.equal([manualTenantId]);
+            });
         });
 
         it('should deduplicate saved tenants that differ only in casing', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             const account = makeAccount({ id: 'acct-1' });
-            // The setting is hand-editable, so the same tenant can be saved more
-            // than once (e.g. differing casing); it must surface only once.
-            seedSignedInTenants(vscodeMock, [
-                { accountId: 'acct-1', tenantId: manualTenantId.toUpperCase() },
-                { accountId: 'acct-1', tenantId: manualTenantId },
-            ]);
             mockSubscriptionClientFailingTenantList(new Error('conditional access blocked'));
 
-            const pages = await collectPages(await provider.getChildren(account));
+            // The setting is hand-editable, so the same tenant can be saved more
+            // than once (e.g. differing casing); it must surface only once.
+            await withSignedInTenants(vscodeMock, [
+                { accountId: 'acct-1', tenantId: manualTenantId.toUpperCase() },
+                { accountId: 'acct-1', tenantId: manualTenantId },
+            ], async () => {
+                const pages = await collectPages(await provider.getChildren(account));
 
-            const tenantIds = pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId));
-            expect(tenantIds).to.deep.equal([manualTenantId]);
+                const tenantIds = pages.flatMap(p => (p.items as AzureTenant[]).map(t => t.tenantId));
+                expect(tenantIds).to.deep.equal([manualTenantId]);
+            });
         });
     });
 
