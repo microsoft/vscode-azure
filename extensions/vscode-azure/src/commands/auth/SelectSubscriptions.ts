@@ -86,6 +86,8 @@ export class SelectSubscriptions implements ManagedCommand {
         // also unhide the subscriptions we could not enumerate, so persist the
         // explicit id list instead.
         const nextValue = failures.length === 0 && selectedIds.length === picks.length ? [] : selectedIds;
+
+        // The config is watched by the Azure view, so it will refresh automatically after this update.
         await config.update(SelectedSubscriptionsConfigurationKey, nextValue, code.ConfigurationTarget.Global);
     }
 
