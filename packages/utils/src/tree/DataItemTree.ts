@@ -112,8 +112,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private readonly enrichmentPromises = new Map<string, Promise<void>>();
 
     /**
-     * Per-resource in-flight page-load promises. Prevents concurrent `next()`
-     * calls on the same async iterator when `loadMore` / `loadAll` overlap.
+     * Per-resource in-flight page-load promises. Prevents concurrent
+     * `next()` calls on the same async iterator when `loadMore` /
+     * `loadAll` overlap (e.g. user click + programmatic load).
      */
     private readonly loadsInFlight = new InflightMap<void>();
 
@@ -145,9 +146,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      *   {@linkcode DataProvider.enrich} call runs inside
      *   {@linkcode IActionExecutor.callWithTelemetryAndErrorHandling}, which
      *   establishes an {@linkcode IActionContext} on the async call stack via
-     *   `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`) pick
-     *   up this context automatically without any changes to provider or client
-     *   signatures.
+     *   `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`)
+     *   pick up this context automatically without any changes to provider
+     *   or client signatures.
      * @param getKey - Extracts a unique string key from a resource.
      * @param ttl - Time-to-live in milliseconds for cached children.
      */
@@ -187,8 +188,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * called with `undefined` -- mirroring VSCode's
      * {@linkcode vscode.TreeDataProvider.getChildren TreeDataProvider.getChildren}.
      *
-     * Results are lazily loaded and cached with TTL, and concurrent calls for
-     * the same node share a single fetch.
+     * Results are lazily loaded and cached with TTL.
      */
     public async getChildren(resource?: T): Promise<T[]> {
         if (resource === undefined) {
@@ -210,22 +210,21 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     /** The children `queryFn` for the root level: fan out to all root providers. */
     private async fetchRoots(rootProviders: DataProvider<T>[]): Promise<T[]> {
         this.executor.output.debug(`[data] ${this.name} root fetch start (providers=${rootProviders.length})`);
-
-        // Each root provider gets its own telemetry scope so that concurrent
-        // calls don't overwrite shared mutable properties.
         const limiter = new Limiter<T[] | null | undefined>(5);
         const results = await Promise.all(
-            rootProviders.map(p => limiter.queue(() => this.executor.callWithTelemetryAndErrorHandling<T[]>('tree.getRootChildren', (context) => {
-                context.telemetry.isUserEvent = false;
-                context.errorHandling.rethrow = true;
-                context.telemetry.properties.tree = this.name;
-                context.telemetry.properties.provider = p.constructor.name;
-                return Promise.resolve(p.getChildren()) as Promise<T[]>;
-            }))),
+            rootProviders
+                .map(p => limiter.queue(() => this.executor.callWithTelemetryAndErrorHandling<T[]>('tree.getRootChildren', (context) => {
+                    context.telemetry.isUserEvent = false;
+                    context.errorHandling.rethrow = true;
+                    context.telemetry.properties.tree = this.name;
+                    context.telemetry.properties.provider = p.constructor.name;
+
+                    return Promise.resolve(p.getChildren()) as Promise<T[]>;
+                }))),
         );
 
-        // Root providers always return plain arrays (pagination at the root level
-        // is not supported).
+        // Root providers always return plain arrays (pagination at root
+        // level is not supported).
         const resources = results.flatMap((result) => {
             if (!result) {
                 return [];
@@ -291,9 +290,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
             // The data layer is a pure cache that rethrows; whoever consumes the
-            // rejection (the view layer, or a programmatic caller like the Select
-            // Subscriptions command) owns error display, so don't show a toast
-            // here as well.
+            // rejection (the view layer, or a programmatic caller like the
+            // Select Subscriptions command) owns error display, so don't show a
+            // toast here as well.
             context.errorHandling.suppress = 'display';
             context.telemetry.properties.tree = this.name;
             context.telemetry.properties.provider = provider.constructor.name;
@@ -353,9 +352,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     /**
      * For each resource, find the provider that handles it and call
      * {@linkcode DataProvider.enrich enrich} if present. Enrichment runs in the
-     * background -- each resolved call fires {@linkcode onDidChange} for that
-     * resource. The per-resource promise is stored so callers can await
-     * completion via {@linkcode whenEnriched}.
+     * background - each resolved call fires {@linkcode onDidChange} for that resource.
+     *
+     * The resulting promise for each resource is stored so that callers
+     * can await enrichment completion via {@linkcode whenEnriched}.
      */
     private enrichAll(resources: T[]): void {
         const limiter = new Limiter<boolean | undefined>(5);
@@ -392,23 +392,26 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         throw error;
                     });
                 this.enrichmentPromises.set(key, promise);
-                // Attach a rejection handler so background rejections are not unhandled.
+                // Attach a rejection handler so background rejections are not unhandled
                 void promise.catch(() => { /* noop */ });
             }
         }
     }
 
     /**
-     * Returns a promise that resolves once enrichment has completed for the given
-     * resource.
+     * Returns a promise that resolves once enrichment has completed for
+     * the given resource.
      *
-     * If no enrichment provider matched the resource (or enrichment has already
-     * finished), the promise resolves immediately. If enrichment fails, the
-     * promise rejects with the error but does not retry automatically.
+     * If no enrichment provider matched the resource (or enrichment has
+     * already finished), the promise resolves immediately.
      *
-     * The optional type parameter `TEnriched` lets callers narrow the return type
-     * to a branded subtype whose once-optional enrichment properties are
-     * guaranteed to be populated:
+     * If enrichment fails, the promise rejects with the error but does not
+     * retry automatically. Callers that await this method should be prepared
+     * to handle rejections.
+     *
+     * The optional type parameter `TEnriched` lets callers narrow the
+     * return type to a branded subtype whose once-optional enrichment
+     * properties are guaranteed to be populated:
      *
      * ```ts
      * const registry = await cache.whenEnriched<EnrichedAcrRegistry>(resource);
@@ -425,9 +428,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Returns `true` when the provider that produced children for the given
-     * resource has more pages available (i.e. the async iterator has not yet been
-     * exhausted).
+     * Returns `true` when the provider that produced children for the
+     * given resource has more pages available (i.e. the async iterator
+     * has not yet been exhausted).
      */
     public hasMore(resource?: T): boolean {
         if (resource === undefined) {
@@ -437,10 +440,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Pull the next page from the stored async iterator for the given resource.
-     * The new children are appended to the cache and enriched. Fires
-     * {@linkcode onDidChange} so the view refreshes automatically; callers should
-     * use {@linkcode getChildren} to read the updated list.
+     * Pull the next page from the stored async iterator for the given
+     * resource. The new children are appended to the cache and enriched.
+     * Fires {@linkcode onDidChange} so the view refreshes automatically;
+     * callers should use {@linkcode getChildren} to read the updated list.
      *
      * @throws if {@linkcode getChildren} has not been called for this resource yet.
      */
@@ -458,8 +461,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * exhausted. Fires {@linkcode onDidChange} after all pages are loaded so the
      * view refreshes only once.
      *
-     * If children have not been loaded yet (i.e. {@linkcode getChildren} was never
-     * called for this resource), the initial load is triggered first.
+     * If children have not been loaded yet (i.e. {@linkcode getChildren} was
+     * never called for this resource), the initial load is triggered first.
      */
     public async loadAll(resource: T): Promise<void> {
         const didLoad = await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
@@ -472,7 +475,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             let loaded = false;
 
             // Ensure children are initialized (first page pulled) before
-            // exhausting the remaining pages.
+            // exhausting remaining pages.
             if (this.client.getQueryData<T[]>(this.childrenKey(this.tree.pathOf(key) ?? [key])) === undefined) {
                 await this.getChildren(resource);
                 loaded = true;
@@ -546,15 +549,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      *   (the node and its descendants are evicted and re-fetched);
      * - {@linkcode selfOnly}(...) -> matched by key, `'self'` (re-render the
      *   node's label only, keep its cached children);
-     * - a {@linkcode Selector} -> a verdict predicate evaluated over every loaded
-     *   node (e.g. `bySubscription(id)`);
+     * - a {@linkcode Selector} -> a verdict predicate evaluated over every
+     *   loaded node (e.g. `bySubscription(id)`);
      * - {@linkcode Roots} -> reconciling root re-list (preserve surviving roots'
      *   subtrees);
      * - {@linkcode Everything} -> wipe the entire cache.
      *
      * The change event fires once per *apex* (a matched node with no matched
-     * ancestor) after the whole traversal completes, so a single call produces the
-     * minimal set of re-renders and is safe against re-entrancy.
+     * ancestor) after the whole traversal completes, so a single call produces
+     * the minimal set of re-renders and is safe against re-entrancy.
      *
      * @param target - What to invalidate.
      */
@@ -573,12 +576,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     /**
      * Remove matched nodes (and their subtrees) from the cache entirely, as
-     * opposed to {@linkcode invalidate} which keeps the node and re-fetches. Each
-     * matched node is evicted and spliced out of its parent's child list; for
-     * non-root removals {@linkcode onDidChange} fires for the parent (so the view
-     * re-renders without re-fetching siblings), and for root removals it fires
-     * with `undefined` (full refresh). Matched apexes absorb their subtrees, and
-     * parent fires are de-duplicated.
+     * opposed to {@linkcode invalidate} which keeps the node and re-fetches.
+     * Each matched node is evicted and spliced out of its parent's child list;
+     * for non-root removals {@linkcode onDidChange} fires for the parent (so the
+     * view re-renders without re-fetching siblings), and for root removals it
+     * fires with `undefined` (full refresh). Matched apexes absorb their
+     * subtrees, and parent fires are de-duplicated.
      *
      * Accepts a {@linkcode Selector}, a bare resource / key / array, or a
      * {@linkcode selfOnly} / {@linkcode subtreeOf} descriptor (both remove the
@@ -611,7 +614,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     /**
      * Normalize a by-key target into a {@linkcode KeyMatch}: a {@linkcode selfOnly}
      * / {@linkcode subtreeOf} descriptor passes through unchanged, while a bare
-     * resource / key / array is wrapped as {@linkcode subtreeOf}.
+     * resource / key / array is wrapped as {@linkcode subtreeOf} (the subtree
+     * default for raw targets).
      */
     private toKeyMatch(target: KeyMatch<T> | T | string | ReadonlyArray<T | string>): KeyMatch<T> {
         return isKeyMatch<T>(target) ? target : subtreeOf(...this.toEntries(target));
@@ -631,9 +635,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * re-fetches on next access. The change event is then fired so the view
      * re-renders. When the entry is a resource object the *passed* resource is
      * fired unconditionally -- even if the data layer has no node for it -- so a
-     * view-layer node that exists independently of the data layer still refreshes.
-     * When the entry is a bare key string and no node is loaded, there is no
-     * resource to fire, so it is skipped.
+     * view-layer node that exists independently of the data layer still
+     * refreshes (the historical positional-`invalidate` behavior). When the
+     * entry is a bare key string and no node is loaded, there is no resource to
+     * fire, so it is skipped.
      */
     private invalidateEntries(entries: ReadonlyArray<T | string>, scope: MatchScope): void {
         const fires: T[] = [];
