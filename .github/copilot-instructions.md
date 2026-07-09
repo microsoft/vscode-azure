@@ -100,7 +100,7 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * Run `pnpm run test` to execute tests
 * Run `pnpm run testcov` to run tests with code coverage (via c8)
 * For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
-* For iterative development, prefer the **watch tasks** over re-running a full `pnpm run build` each time. These live in `.vscode/tasks.json` (they append `-- --watch` to a build script) and are **not** npm scripts, so they are easy to miss. Watch is available for the extension type-check/esbuild builds and the `utils`/`azutils` package builds and Mocha tests; lint and extension tests have no watch. Lint has no watch, but you can iterate faster by scoping it to changed files (`pnpm --filter <pkg> run lint -- <path>`) and `--cache`. See `docs/build-and-dev.md` (Watch Mode / Iterative Development and Linting) for the exact commands.
+* For iterative development, prefer watch mode over re-running a full `pnpm run build` each time. The build watch tasks live in `.vscode/tasks.json` (they append `-- --watch` to a build script) and are **not** npm scripts, so they are easy to miss. Watch is available for the extension type-check/esbuild builds and the `utils`/`azutils` package builds; run the `utils`/`azutils` package Mocha test watch from the command line. Lint and extension tests have no watch, but you can iterate faster on lint by scoping it to changed files (`pnpm --filter <pkg> run lint -- <path>`) and `--cache`. See `docs/build-and-dev.md` (Watch Mode / Iterative Development and Linting) for the exact commands.
 
 
 ## Managing Dependencies

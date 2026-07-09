@@ -88,7 +88,7 @@ await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
 
 For fast, iterative work, prefer the **watch tasks** over re-running a full `pnpm run build` after every edit. Each watch task simply appends `-- --watch` to an existing build script, so the underlying compiler stays resident and only recompiles what changed.
 
-> These watch tasks live in `.vscode/tasks.json` (each is an `isBackground: true` build task) and are **not** exposed as npm scripts, so they are easy to miss. Run them from the command line as shown below, or via VS Code's **Run Build Task** (`Extension: Check+Watch` is the default build task).
+> These *build* watch tasks live in `.vscode/tasks.json` (each is an `isBackground: true` build task) and are **not** exposed as npm scripts, so they are easy to miss. Run them from the command line as shown below, or via VS Code's **Run Build Task** (`Extension: Check+Watch` is the default build task); the package test watch below is command-line only and is not a task in `.vscode/tasks.json`.
 
 ### Build watches
 
@@ -117,7 +117,7 @@ pnpm --filter @microsoft/vscode-azure-utils run test -- --watch
 pnpm --filter @microsoft/vscode-azure-azutils run test -- --watch
 ```
 
-This works because Mocha is configured (under the `"mocha"` key in each package's `package.json`) to run the `.ts` sources directly via `node --experimental-transform-types` (spec `src/test/**/*.test.ts`). There is no separate build step, so Mocha re-runs the suite whenever a source or test file changes.
+This works because Mocha is configured (under the `"mocha"` key in each package's `package.json`) to run the `.ts` sources directly via `node --experimental-transform-types` (spec `src/test/**/*.test.ts`). There is no separate build step; in watch mode, Mocha re-runs the suite when files it watches change. If you need specific non-test source paths to trigger re-runs, set `--watch-files` in the package's `"mocha"` config.
 
 ### No watch available for
 
