@@ -123,7 +123,7 @@ For fast, iterative work, prefer the **watch tasks** over re-running a full `pnp
 ### Build watches
 
 ```bash
-# Extension: type checking in watch mode (tsgo --noEmit --watch)
+# Extension: type checking in watch mode (tsc --noEmit --watch)
 # Most useful for catching type errors while editing. This is the default
 # VS Code build task ("Extension: Check+Watch").
 pnpm --filter vscode-azure run build:check -- --watch
@@ -131,12 +131,12 @@ pnpm --filter vscode-azure run build:check -- --watch
 # Extension: esbuild bundle in watch mode ("Extension: ESBuild+Watch")
 pnpm --filter vscode-azure run build:esbuild -- --watch
 
-# Library packages: tsgo in watch mode ("utils: Build+Watch" / "azutils: Build+Watch")
+# Library packages: tsc in watch mode ("utils: Build+Watch" / "azutils: Build+Watch")
 pnpm --filter @microsoft/vscode-azure-utils run build -- --watch
 pnpm --filter @microsoft/vscode-azure-azutils run build -- --watch
 ```
 
-The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsgo` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
+The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsc` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
 
 ### Test watch (packages only)
 
