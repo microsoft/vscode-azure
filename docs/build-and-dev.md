@@ -106,7 +106,7 @@ pnpm --filter @microsoft/vscode-azure-utils run build -- --watch
 pnpm --filter @microsoft/vscode-azure-azutils run build -- --watch
 ```
 
-The extension consumes the packages' built output, so when you change a package, run **that package's** watcher too (in addition to the extension watches).
+The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsgo` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
 
 ### Test watch (packages only)
 
