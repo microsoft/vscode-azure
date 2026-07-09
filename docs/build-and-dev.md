@@ -145,12 +145,9 @@ ESLint has no watch mode, but you can shorten the feedback loop:
   pnpm --filter vscode-azure run lint -- src/commands
   ```
 
-- **Run in parallel.** The root `pnpm run lint` already fans out across workspaces (`pnpm -r --parallel run lint`). Within a single ESLint invocation you can also enable multithreaded linting with `--concurrency` (default `off` in ESLint 10):
+- **Run workspaces in parallel.** The root `pnpm run lint` already fans out across the three workspaces (`pnpm -r --parallel run lint`), so a full lint runs them concurrently rather than in series.
 
-  ```bash
-  pnpm --filter @microsoft/vscode-azure-utils run lint -- --concurrency auto
-  ```
-
+  ESLint 10 also has an experimental in-process `--concurrency` flag (multithreaded linting), but it did **not** help on this repo when measured — `off` (the default) was as fast or faster than `auto` for every package, because the fixed cost of building ESLint's type-checked TypeScript program dominates and doesn't parallelize, while the per-file work that does is a small fraction that worker-thread overhead cancels out. Higher thread counts were notably slower. Leave `--concurrency` at its default `off`; the cross-workspace `--parallel` above is the parallelism that actually pays off here.
 - **Cache results.** Add `--cache` so ESLint only re-checks files that changed since the last run:
 
   ```bash
