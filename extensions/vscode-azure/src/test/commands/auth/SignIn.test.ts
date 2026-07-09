@@ -166,14 +166,49 @@ describe('SignIn (unit)', () => {
         expect(options.createIfNone).to.be.true;
         expect(options.account).to.be.undefined;
 
-        // A typed tenant carries no account up front, but the sign-in resolves to
-        // a concrete account => invalidate just that account's subtree (a selector
-        // function), not Roots/Everything.
+        // A newly-entered tenant is persisted, and AzureAccountDataProvider's
+        // configuration listener refreshes the tree in response, so SignIn does
+        // not invalidate the cache directly (mirroring SelectSubscriptions).
+        expect(invalidate.mock.callCount()).to.equal(0);
+        expect(readPersistedTenants(mockResult.settings)).to.deep.equal([
+            { accountId: 'resolved-account', tenantId: typedTenantId.toLowerCase() },
+        ]);
+    });
+
+    it('should invalidate the account subtree when re-signing in to an already-saved tenant', async () => {
+        const account = makeAccount({ id: 'acct-1', label: 'Account One' });
+        const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
+        const { cache, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+            [account, [tenant1]],
+        ]));
+
+        const typedTenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
+        const { ctx, mock: mockResult } = createMockCodeContext();
+        // The tenant is already saved under the account the sign-in resolves to,
+        // so persisting is a no-op and no configuration-change event fires.
+        mockResult.settings.set(settingKey, [
+            { accountId: 'resolved-account', tenantId: typedTenantId },
+        ]);
+        mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
+        respondToPrompts(mockResult, [{ value: typedTenantId }]);
+        const credentialFactory = createCredentialFactory(ctx.code);
+
+        const command = new SignIn(ctx, cache, credentialFactory);
+        await command.execute();
+
+        // No setting change => the configuration listener won't refresh, so SignIn
+        // falls back to invalidating the resolved account's subtree directly (the
+        // fresh session may have authorized new subscriptions, and account/tenant
+        // data never goes stale on its own).
         expect(invalidate.mock.callCount()).to.equal(1);
         const target = invalidate.mock.calls[0].arguments[0];
         expect(target).to.be.a('function');
         expect(target).to.not.equal(Roots);
         expect(target).to.not.equal(Everything);
+        // Unchanged: the pre-existing entry is left as-is.
+        expect(readPersistedTenants(mockResult.settings)).to.deep.equal([
+            { accountId: 'resolved-account', tenantId: typedTenantId },
+        ]);
     });
 
     it('should invalidate everything when a typed tenant sign-in resolves to no account', async () => {
@@ -298,13 +333,13 @@ describe('SignIn (unit)', () => {
         expect(scopes).to.include(`VSCODE_TENANT:${manualTenantId}`);
         expect(options.account).to.be.undefined;
 
-        // The tenant-scoped sign-in resolves to a concrete account, so the
-        // refresh is scoped to that account's subtree rather than the whole tree.
-        expect(invalidate.mock.callCount()).to.equal(1);
-        const target = invalidate.mock.calls[0].arguments[0];
-        expect(target).to.be.a('function');
-        expect(target).to.not.equal(Roots);
-        expect(target).to.not.equal(Everything);
+        // The manually-entered tenant is newly persisted, and
+        // AzureAccountDataProvider's configuration listener refreshes the tree in
+        // response, so SignIn does not invalidate the cache directly.
+        expect(invalidate.mock.callCount()).to.equal(0);
+        expect(readPersistedTenants(mockResult.settings)).to.deep.equal([
+            { accountId: 'resolved-account', tenantId: manualTenantId },
+        ]);
     });
 
     it('should do nothing more when the user declines the tenant sign-in fallback', async () => {

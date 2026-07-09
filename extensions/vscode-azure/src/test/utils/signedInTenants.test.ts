@@ -66,8 +66,9 @@ describe('signedInTenants (unit)', () => {
         it('should persist a new tenant with the tenant id lowercased', async () => {
             const { ctx, mock } = createMockCodeContext();
 
-            await addSignedInTenant(ctx.code, { accountId: 'acct-1', tenantId: tenantId.toUpperCase() });
+            const added = await addSignedInTenant(ctx.code, { accountId: 'acct-1', tenantId: tenantId.toUpperCase() });
 
+            expect(added).to.be.true;
             expect(read(mock.settings)).to.deep.equal([{ accountId: 'acct-1', tenantId }]);
         });
 
@@ -87,8 +88,11 @@ describe('signedInTenants (unit)', () => {
             const { ctx, mock } = createMockCodeContext();
 
             await withSettings(mock, { [settingKey]: [{ accountId: 'acct-1', tenantId }] }, async () => {
-                await addSignedInTenant(ctx.code, { accountId: 'acct-1', tenantId: tenantId.toUpperCase() });
+                const added = await addSignedInTenant(ctx.code, { accountId: 'acct-1', tenantId: tenantId.toUpperCase() });
 
+                // Already saved => reports no change (so callers relying on the
+                // configuration listener know it won't fire).
+                expect(added).to.be.false;
                 expect(read(mock.settings)).to.deep.equal([{ accountId: 'acct-1', tenantId }]);
             });
         });

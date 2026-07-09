@@ -363,6 +363,31 @@ describe('AzureAccountDataProvider (unit)', () => {
             // the old endpoint is invalid -- wipe everything.
             expect(event?.target).to.equal(Everything);
         });
+
+        it('should emit a full invalidation when the signed-in tenants configuration changes', () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
+            let fired = 0;
+            provider.onDidChange(e => { event = e; fired++; });
+
+            const key = `${ConfigurationSection}.${SignedInTenantsConfigurationKey}`;
+            vscodeMock.configChangeEmitter.fire({ affectsConfiguration: section => section === key });
+
+            // The manually-entered tenants (folded into each account's tenant
+            // listing) changed, so re-list to surface added/removed tenants.
+            expect(fired).to.equal(1);
+            expect(event?.target).to.equal(Everything);
+        });
+
+        it('should ignore unrelated configuration changes', () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+
+            vscodeMock.configChangeEmitter.fire({ affectsConfiguration: () => false });
+
+            expect(fired).to.equal(0);
+        });
     });
 
     describe('getChildren', () => {

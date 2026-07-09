@@ -17,6 +17,7 @@ import {
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../constants';
 import { readSignedInTenants } from '../../utils/signedInTenants';
 
 /**
@@ -144,6 +145,13 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 this.executor.output.debug('[auth] sovereign cloud configuration changed; invalidating accounts');
                 // The configured environment itself changed, so every cached
                 // listing was fetched against the old endpoint and is invalid.
+                this.changeEmitter.fire({ target: Everything });
+            } else if (e.affectsConfiguration(`${ConfigurationSection}.${SignedInTenantsConfigurationKey}`)) {
+                this.executor.output.debug('[auth] signed-in tenants configuration changed; invalidating accounts');
+                // The user edited the manually-entered tenants directly (e.g. in
+                // settings.json). Those tenants are folded into each account's
+                // tenant listing, so re-list to surface added tenants and drop
+                // removed ones.
                 this.changeEmitter.fire({ target: Everything });
             }
         }));

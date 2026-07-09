@@ -93,19 +93,33 @@ export class SignIn implements ManagedCommand {
         const pick = await pickTenantOrEnterId(this.ctx, tenants);
         const session = await this.signInToTenant(pick);
 
-        // A manually-entered tenant (no known account) won't show up when listing
-        // tenants is blocked (e.g. conditional access), so persist it now that we
-        // know the account it resolved to. The data provider merges these saved
-        // tenants into the account's tenant listing so the tree can reach them.
         const accountId = pick.accountId ?? session?.account.id;
+
+        // A manually-entered tenant (no account context from the pick) won't show
+        // up when listing tenants is blocked (e.g. conditional access), so persist
+        // it now that we know which account it resolved to. The data provider
+        // merges these saved tenants into that account's tenant listing.
         if (!pick.accountId && accountId) {
-            await addSignedInTenant(code, { accountId, tenantId: pick.tenantId });
+            // Persisting updates the signedInTenants setting, which
+            // AzureAccountDataProvider's configuration listener reacts to by
+            // invalidating the tree -- mirroring how SelectSubscriptions relies on
+            // the same setting-change detection, so this path doesn't invalidate
+            // the cache directly. Only when nothing was persisted (the tenant was
+            // already saved, so no configuration-change event fires) do we fall
+            // through to a direct invalidation: the tenant was still just
+            // re-authenticated, and account/tenant/subscription data never goes
+            // stale on its own (its TTL is Infinity), so its subtree still needs
+            // refreshing to surface any newly-authorized subscriptions.
+            if (await addSignedInTenant(code, { accountId, tenantId: pick.tenantId })) {
+                return;
+            }
         }
 
-        // Refresh just the affected account's subtree when we know which account
-        // the tenant resolved to (either a picked tenant or a typed id that
-        // resolved to a concrete account); only fall back to a full-tree
-        // invalidation when no account id is available.
+        // A picked tenant, a typed tenant that resolved to no account, or a
+        // re-sign-in to an already-saved tenant writes no setting, so nothing else
+        // refreshes the tree -- invalidate directly. Prefer the affected account's
+        // subtree; fall back to a full-tree invalidation only when no account id is
+        // available.
         this.cache.invalidate(accountId ? byAccount(accountId) : Everything);
     }
 

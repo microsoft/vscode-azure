@@ -51,8 +51,13 @@ export function readSignedInTenants(code: IVsCode): SignedInTenant[] {
  * untouched, so repeated sign-ins don't accumulate duplicates.
  *
  * The tenant id is stored lowercased to match the data provider's casing.
+ *
+ * @returns `true` if a new entry was written to configuration, or `false` if
+ * the tenant was already saved (no change, so no configuration-change event
+ * fires -- callers that rely on the configuration listener to refresh should
+ * handle this case themselves).
  */
-export async function addSignedInTenant(code: IVsCode, entry: SignedInTenant): Promise<void> {
+export async function addSignedInTenant(code: IVsCode, entry: SignedInTenant): Promise<boolean> {
     const tenantId = entry.tenantId.toLowerCase();
     const accountId = entry.accountId.toLowerCase();
     const existing = readSignedInTenants(code);
@@ -62,10 +67,11 @@ export async function addSignedInTenant(code: IVsCode, entry: SignedInTenant): P
     // difference must not defeat dedupe. The verbatim casing is still persisted
     // below so it can be passed straight to `getSession`.
     if (existing.some(e => e.accountId.toLowerCase() === accountId && e.tenantId.toLowerCase() === tenantId)) {
-        return;
+        return false;
     }
 
     const next: SignedInTenant[] = [...existing, { accountId: entry.accountId, tenantId }];
     const config = code.workspace.getConfiguration(ConfigurationSection);
     await config.update(SignedInTenantsConfigurationKey, next, code.ConfigurationTarget.Global);
+    return true;
 }
