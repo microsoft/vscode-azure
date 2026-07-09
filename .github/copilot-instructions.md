@@ -113,13 +113,20 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 
 ## Writing Tests
 
+* **Prefer existing test helpers over hand-rolling.** Before writing any fixture, mock, or drain/collect loop, look for an existing helper in the two testing barrels (`@microsoft/vscode-azure-utils/testing` and `@microsoft/vscode-azure-azutils/testing`) and use it. Duplicating or re-authoring near-identical fixtures is the single most common test smell in this repo -- search first, then reuse.
+* **Entity fixtures (azutils)** -- build mock Azure resources with the shared `make*` factories instead of object literals: `makeAccount`, `makeTenant`, `makeSubscription`, `makeResourceGroup`, `makeGenericResource`, `makeVirtualGroup`, `makeVirtualResource`, and `makeCredential` (all from `@microsoft/vscode-azure-azutils/testing`, defined in `src/test/mockAzure.ts`). Each takes a `Partial<...>` overrides argument -- pass only the fields your test cares about.
+* **Tree / provider fixtures (azutils)** -- don't hand-roll a `getChildren`/`hasMore`/`loadMore` object. Use `createMockDataItemTree`, `createMockHierarchicalDataItemTree`, `createMockPagedDataItemTree`, or `createMockViewItemTree` (from `src/test/tree/mockTree.ts`), and `createMockAccountDataProvider` / `createMockSubscriptionClient` for provider/client stand-ins.
+* **Paging / async-iterable drains (utils)** -- use `collectPages` (drain a `ChildResult`/`getChildren` result into `Page[]`), `collectPageItems` (drain + flatten pages to items), or `collectAsync` (drain any `AsyncIterable`) from `@microsoft/vscode-azure-utils/testing`. Do not re-write the `for await (const page of ...) { ... }` loop inline.
+* **When a helper doesn't exist yet:** if the same fixture/mock/loop pattern appears more than once, extract a single shared helper into the appropriate testing barrel rather than copying it -- entity/tree fixtures belong in azutils (`mockAzure.ts` / `mockTree.ts`), generic primitives (settings, async-iterable, action-context helpers) belong in utils. Export it from that package's `testing.ts` barrel. Extending an existing helper additively is preferred over adding a parallel near-duplicate.
+* **Prefer Node's `mock` framework over hand-rolled mocking.** Use `mock.fn()` (optionally wrapping a real implementation, e.g. `mock.fn(createDefaultCredentialFactory(code))`) and `mock.method(obj, 'name', impl)` to stub and to record calls. Assert via `.mock.calls` / `.mock.callCount()` rather than manual counter variables, closures over an `inputs` array, or bespoke stub objects. Call `mock.restoreAll()` in `afterEach` when you patch with `mock.method`.
 * Use `createMockCodeContext()` or `createMockVsCode()` from `@microsoft/vscode-azure-utils/testing` instead of hand-rolling `IVsCode`, `IExtensionContext`, or `ICodeContext` mocks. If the mock needs new capabilities, add them to `MockVsCode.ts` in the utils package.
+* Use `withSettings(mockResult, overrides, callback)` from `@microsoft/vscode-azure-utils/testing` to seed configuration for the duration of a test (arrange side), instead of raw `mock.settings.set(...)`.
 * Use real `ActionExecutor` (with `NullTelemetryReporter`) instead of mocking `IActionExecutor`
 * Use real `createActionContext()` instead of mocking `IActionContext`
 * Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` (not from the main entry point)
-* Use `mock.fn()` from `node:test` to track call counts and arguments — prefer over manual counters
 * Use `respondToPrompts()` from the testing package to drive wizard / pick-step UI flows
 * In azutils, use the shared fixtures in `src/test/mockAzure.ts` and `src/test/mockPipeline.ts` instead of creating local mocks
 * For Azure environments, use `Environment.AzureCloud` from `@azure/ms-rest-azure-env` instead of hand-rolled environment objects
 * Don't test that constants equal their literal values — those tests add no value
 * Testing Azure SDK clients: use `MockHttpClient` injected via the `options` parameter on the client's `create()` method
+
