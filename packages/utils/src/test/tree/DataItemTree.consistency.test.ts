@@ -63,6 +63,34 @@ function buildTree(options?: { enrich?: boolean }): DataItemTree<Res> {
     return tree;
 }
 
+/**
+ * Build a two-level tree with a single paged branch (`root` -> `p1`, `p2` across
+ * two pages), so tests can install a live pager and then exercise a teardown
+ * path. Each call re-creates the page iterator so the tree can be re-listed.
+ */
+function buildPagedTree(): DataItemTree<Res> {
+    const { executor } = createTestActionExecutor();
+    const { vscode } = createMockVsCode();
+    const tree = new DataItemTree<Res>(vscode, 'consistency-paged', executor, r => r.id, 60_000);
+    tree.registerProvider({
+        isRoot: true,
+        canHandle: (_r: unknown): _r is Res => false,
+        getChildren: () => [{ id: 'root' }],
+    });
+    tree.registerProvider({
+        isRoot: false,
+        canHandle: (r: unknown): r is Res => (r as Res).id === 'root',
+        getChildren: () => {
+            const iter = [
+                { items: [{ id: 'p1' }], hasMore: true },
+                { items: [{ id: 'p2' }], hasMore: false },
+            ][Symbol.iterator]();
+            return { [Symbol.asyncIterator]: () => ({ next: () => Promise.resolve(iter.next()) }) };
+        },
+    });
+    return tree;
+}
+
 /** Join a path into a comparable scalar (keys never contain NUL). */
 function pathKey(path: readonly string[]): string {
     return path.join('\u0000');
@@ -252,25 +280,7 @@ describe('DataItemTree consistency (unit)', () => {
     });
 
     it('should drop a paginated node pager on removal', async () => {
-        const { executor } = createTestActionExecutor();
-        const { vscode } = createMockVsCode();
-        const tree = new DataItemTree<Res>(vscode, 'consistency-paged', executor, r => r.id, 60_000);
-        tree.registerProvider({
-            isRoot: true,
-            canHandle: (_r: unknown): _r is Res => false,
-            getChildren: () => [{ id: 'root' }],
-        });
-        tree.registerProvider({
-            isRoot: false,
-            canHandle: (r: unknown): r is Res => (r as Res).id === 'root',
-            getChildren: () => {
-                const iter = [
-                    { items: [{ id: 'p1' }], hasMore: true },
-                    { items: [{ id: 'p2' }], hasMore: false },
-                ][Symbol.iterator]();
-                return { [Symbol.asyncIterator]: () => ({ next: () => Promise.resolve(iter.next()) }) };
-            },
-        });
+        const tree = buildPagedTree();
 
         await tree.getChildren();
         await tree.getChildren({ id: 'root' }); // installs a pager
@@ -279,5 +289,40 @@ describe('DataItemTree consistency (unit)', () => {
         tree.remove({ id: 'root' });
         expect(snapshotState(tree).pagerKeys, 'pager survived removal').to.deep.equal([]);
         assertConsistent(tree, 'after remove(paged root)');
+    });
+
+    it('should clear a live pager on invalidate(Everything)', async () => {
+        // The full-teardown choke point (clearNodeState) clears the pager map,
+        // a distinct path from the per-key eviction that remove() drives. Without
+        // a live pager here it would go unexercised.
+        const tree = buildPagedTree();
+
+        await tree.getChildren();
+        await tree.getChildren({ id: 'root' }); // installs a pager
+        expect(snapshotState(tree).pagerKeys).to.deep.equal(['root']);
+
+        tree.invalidate(Everything);
+
+        const state = snapshotState(tree);
+        expect(state.pagerKeys, 'pager survived invalidate(Everything)').to.deep.equal([]);
+        expect(state.indexed.size, 'indexed').to.equal(0);
+        expect(state.cachedPaths, 'cachedPaths').to.deep.equal([]);
+        assertConsistent(tree, 'after invalidate(Everything) with live pager');
+    });
+
+    it('should clear a live pager on dispose', async () => {
+        // dispose() shares the same clearAllState choke point as
+        // invalidate(Everything); a live pager must not survive it.
+        const tree = buildPagedTree();
+
+        await tree.getChildren();
+        await tree.getChildren({ id: 'root' }); // installs a pager
+        expect(snapshotState(tree).pagerKeys).to.deep.equal(['root']);
+
+        tree.dispose();
+
+        const state = snapshotState(tree);
+        expect(state.pagerKeys, 'pager survived dispose').to.deep.equal([]);
+        expect(state.indexed.size, 'indexed').to.equal(0);
     });
 });
