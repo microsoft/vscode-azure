@@ -279,6 +279,68 @@ describe('DataItemTree consistency (unit)', () => {
         assertConsistent(tree, 'after remove(a)');
     });
 
+    it('should tear down every departed subtree in one batched reconcile', async () => {
+        // Exercises the batched mass-departure path (reconcileChildren ->
+        // evictSubtrees): a large root set collapses to a single survivor on
+        // re-list, so many apexes -- each with its own descendants -- depart at
+        // once. This is the 20k-subscription sign-out shape in miniature.
+        const { executor } = createTestActionExecutor();
+        const { vscode } = createMockVsCode();
+        const tree = new DataItemTree<Res>(vscode, 'mass-departure', executor, r => r.id, 60_000);
+
+        const rootCount = 12;
+        let roots: Res[] = Array.from({ length: rootCount }, (_v, i) => ({ id: `r${i}` }));
+        tree.registerProvider({
+            isRoot: true,
+            canHandle: (_r: unknown): _r is Res => false,
+            getChildren: () => roots.map(r => ({ ...r })),
+        });
+        // Every root gets two children and each child a grandchild, so a departing
+        // root drops a three-node subtree from every store.
+        tree.registerProvider({
+            isRoot: false,
+            canHandle: (r: unknown): r is Res => /^r\d+$/.test((r as Res).id) || /^r\d+c\d$/.test((r as Res).id),
+            getChildren: (r?: Res) => {
+                if (r === undefined) { return []; }
+                if (/^r\d+$/.test(r.id)) { return [{ id: `${r.id}c0` }, { id: `${r.id}c1` }]; }
+                if (/^r\d+c\d$/.test(r.id)) { return [{ id: `${r.id}g` }]; }
+                return [];
+            },
+        });
+
+        // Fully materialize every root's subtree.
+        for (const root of await tree.getChildren()) {
+            for (const child of await tree.getChildren(root)) {
+                await tree.getChildren(child);
+            }
+        }
+
+        // Sanity: a representative deep node is present before the collapse.
+        expect(tree.get('r7c1g'), 'deep node present before departure').to.not.be.undefined;
+
+        // Collapse to a single survivor and re-list the roots.
+        roots = [{ id: 'r0' }];
+        tree.invalidate(Roots);
+        await tree.getChildren();
+
+        const state = snapshotState(tree);
+        // The survivor's own subtree is untouched.
+        expect(state.indexed.has('r0'), 'survivor root evicted').to.be.true;
+        // Every departed root and its descendants are gone from all stores.
+        for (let i = 1; i < rootCount; i++) {
+            for (const key of [`r${i}`, `r${i}c0`, `r${i}c1`, `r${i}c0g`, `r${i}c1g`]) {
+                expect(state.indexed.has(key), `indexed still has ${key}`).to.be.false;
+            }
+        }
+        for (const path of state.cachedPaths) {
+            for (const seg of path) {
+                const rootId = /^r\d+/.exec(seg)?.[0];
+                expect(rootId === undefined || rootId === 'r0', `cache still references departed root via ${seg}: ${path.join('/')}`).to.be.true;
+            }
+        }
+        assertConsistent(tree, 'after mass root departure');
+    });
+
     it('should drop a paginated node pager on removal', async () => {
         const tree = buildPagedTree();
 

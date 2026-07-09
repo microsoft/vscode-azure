@@ -179,6 +179,44 @@ describe('TreeIndex (unit)', () => {
         });
     });
 
+    describe('descendantsOf', () => {
+        it('should return the strict descendants of a single key', () => {
+            const { tree } = makeTree();
+            expect(tree.descendantsOf(new Set(['r1']))).to.have.members(['a', 'b', 'a1']);
+        });
+
+        it('should union the descendants of many disjoint keys in one sweep', () => {
+            const { tree } = makeTree();
+            expect(tree.descendantsOf(new Set(['r1', 'r2']))).to.have.members(['a', 'b', 'a1', 'c']);
+        });
+
+        it('should never include the given keys themselves (disjoint keys)', () => {
+            const { tree } = makeTree();
+            const result = tree.descendantsOf(new Set(['a', 'c']));
+            expect(result).to.not.include('a');
+            expect(result).to.not.include('c');
+            expect(result).to.deep.equal(['a1']);
+        });
+
+        it('should still include a nested key that is a descendant of another key in the set', () => {
+            const { tree } = makeTree();
+            // 'a' is a child of 'r1', so it is a descendant of the set even though
+            // it is also a member -- membership does not exclude it.
+            expect(tree.descendantsOf(new Set(['r1', 'a']))).to.have.members(['a', 'b', 'a1']);
+        });
+
+        it('should return an empty array for a leaf or unknown key', () => {
+            const { tree } = makeTree();
+            expect(tree.descendantsOf(new Set(['a1']))).to.deep.equal([]);
+            expect(tree.descendantsOf(new Set(['missing']))).to.deep.equal([]);
+        });
+
+        it('should return an empty array for an empty set', () => {
+            const { tree } = makeTree();
+            expect(tree.descendantsOf(new Set())).to.deep.equal([]);
+        });
+    });
+
     describe('apexes', () => {
         it('should drop a key nested under another matched key', () => {
             const { tree } = makeTree();

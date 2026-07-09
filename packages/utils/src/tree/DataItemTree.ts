@@ -688,8 +688,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             }
         }
 
+        this.wipeSubtrees(subtreeApexes);
         for (const key of subtreeApexes) {
-            this.wipeSubtreeKeepNode(key);
             fires.push(this.tree.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
         }
         fires.push(...selfFires);
@@ -724,16 +724,19 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
         const parentFires = new Set<T>();
         let fireRoot = false;
+        // Read each node's parent and splice it out of that parent's cached list
+        // while the index is still intact, then tear down every matched subtree in
+        // one batched sweep (see evictSubtrees) rather than an O(N) scan per node.
         for (const key of matchedKeys) {
             const parent = this.tree.parentResourceOf(key);
             this.spliceFromParentList(key);
-            this.evictSubtree(key);
             if (parent === undefined) {
                 fireRoot = true;
             } else {
                 parentFires.add(parent);
             }
         }
+        this.evictSubtrees(matchedKeys);
         if (fireRoot) {
             // A full refresh re-renders every parent too, so skip the rest.
             this.changeEmitter.fire(undefined);
@@ -766,18 +769,62 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Remove a node and its whole subtree from the flat maps, pagers, enrichment
-     * promises, and the query cache. Does **not** fire or splice the node out of
-     * its parent's cached list (callers handle those).
+     * Batched {@linkcode wipeSubtreeKeepNode} for a set of apex keys: each apex
+     * node is kept but its subtree is wiped. Every apex's descendants are gathered
+     * in a single {@linkcode TreeIndex.descendantsOf} sweep, so wiping K subtrees
+     * costs one O(N) index pass instead of O(K . N) -- the difference between
+     * linear and quadratic when a selector matches thousands of nodes at once.
+     *
+     * The apex keys **must be mutually disjoint** (none an ancestor of another).
+     * Because apexes are kept but descendants are evicted, a nested apex would be
+     * seen as the outer apex's descendant and wrongly wiped. The only caller feeds
+     * {@linkcode TreeIndex.apexes}, which guarantees this.
      */
-    private evictSubtree(key: string): void {
-        const path = this.tree.pathOf(key);
-        if (path === undefined) {
+    private wipeSubtrees(apexKeys: readonly string[]): void {
+        if (apexKeys.length === 0) {
             return;
         }
-        this.client.removeQueries({ queryKey: this.childrenKey(path) });
-        this.evictEntry(key);
-        for (const descendantKey of this.tree.descendantKeys(path)) {
+        const descendants = this.tree.descendantsOf(new Set(apexKeys));
+        for (const key of apexKeys) {
+            const path = this.tree.pathOf(key);
+            if (path !== undefined) {
+                this.client.removeQueries({ queryKey: this.childrenKey(path) });
+                this.pagers.delete(key);
+            }
+        }
+        for (const descendantKey of descendants) {
+            this.evictEntry(descendantKey);
+        }
+    }
+
+    /**
+     * Remove a set of apex nodes and their whole subtrees from the flat maps,
+     * pagers, enrichment promises, and the query cache. Does **not** fire or
+     * splice the nodes out of their parents' cached lists (callers handle those).
+     *
+     * Like {@linkcode wipeSubtrees}, descendants are gathered in a single
+     * {@linkcode TreeIndex.descendantsOf} sweep, so tearing down K subtrees is one
+     * O(N) index pass, not O(K . N) -- e.g. a 20k-subscription sign-out that
+     * departs every root at once stays linear. Unlike {@linkcode wipeSubtrees},
+     * overlapping keys are harmless here: apexes are evicted too, so a nested key
+     * is simply evicted once as both an apex and a descendant (eviction is
+     * idempotent).
+     */
+    private evictSubtrees(apexKeys: readonly string[]): void {
+        if (apexKeys.length === 0) {
+            return;
+        }
+        const descendants = this.tree.descendantsOf(new Set(apexKeys));
+        for (const key of apexKeys) {
+            const path = this.tree.pathOf(key);
+            if (path !== undefined) {
+                this.client.removeQueries({ queryKey: this.childrenKey(path) });
+            }
+        }
+        for (const key of apexKeys) {
+            this.evictEntry(key);
+        }
+        for (const descendantKey of descendants) {
             this.evictEntry(descendantKey);
         }
     }
@@ -815,16 +862,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     /**
      * Reconcile a node's direct children against a freshly-fetched set. The
      * {@linkcode TreeIndex} (re-)indexes the new set and reports which direct
-     * children departed; this method tears down each departed subtree from the
+     * children departed; this method tears down every departed subtree from the
      * stores the index does not own (the children cache, pagers, enrichment) via
-     * {@linkcode evictSubtree}. Surviving children keep their independently-cached
-     * subtrees.
+     * {@linkcode evictSubtrees}, whose single batched sweep keeps a mass departure
+     * (e.g. thousands of roots at once) linear. Surviving children keep their
+     * independently-cached subtrees.
      */
     private reconcileChildren(parentPath: readonly string[], children: T[]): void {
         const { departed } = this.tree.reconcile(parentPath, children);
-        for (const key of departed) {
-            this.evictSubtree(key);
-        }
+        this.evictSubtrees(departed);
     }
 
     /** Remove `key` from its parent's cached children list, if that list is cached. */

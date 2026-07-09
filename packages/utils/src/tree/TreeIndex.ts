@@ -142,16 +142,40 @@ export class TreeIndex<T> {
     }
 
     /**
+     * Keys of every *strict* descendant of *any* node in `keys`, gathered in a
+     * single pass over the index. A node qualifies iff one of its ancestor keys
+     * is in `keys`; the nodes in `keys` themselves are never included.
+     *
+     * Equivalent to unioning {@linkcode descendantKeys} over each key's subtree,
+     * but O(N . depth) regardless of `|keys|` -- so mass teardown (e.g. thousands
+     * of sibling nodes departing at once) stays linear instead of O(|keys| . N).
+     */
+    public descendantsOf(keys: ReadonlySet<string>): string[] {
+        const result: string[] = [];
+        for (const [key, path] of this.paths) {
+            // Ancestors are the trailing segment of each strict path prefix; a
+            // node is a strict descendant of the set iff any ancestor is in it.
+            for (let i = 1; i < path.length; i++) {
+                if (keys.has(path[i - 1])) {
+                    result.push(key);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * Reduce a set of keys to their apexes: drop any key whose path has an
      * ancestor also present in the set. Unknown keys (not indexed) are dropped.
+     *
+     * O(|keys| . depth): each key is kept unless one of its (few) path-prefix
+     * ancestors is in the set, so this avoids the O(|keys|^2) pairwise compare a
+     * large match set would otherwise incur.
      */
     public apexes(keys: readonly string[]): string[] {
-        const entries = keys
-            .map(key => ({ key, path: this.paths.get(key) }))
-            .filter((e): e is { key: string; path: readonly string[] } => e.path !== undefined);
-        return entries
-            .filter(({ path }) => !entries.some(other => this.isStrictPrefix(other.path, path)))
-            .map(({ key }) => key);
+        const keySet = new Set(keys);
+        return keys.filter(key => this.paths.has(key) && !this.hasAncestorIn(key, keySet));
     }
 
     /** Whether any ancestor of `key` is in `ancestorKeys`. */
