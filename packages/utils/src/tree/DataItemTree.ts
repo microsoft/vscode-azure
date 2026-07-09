@@ -678,17 +678,21 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         const subtreeApexes = this.tree.apexes(subtreeKeys);
         const subtreeApexSet = new Set(subtreeApexes);
         const fires: T[] = [];
+        const selfFires: T[] = [];
+
+        // A 'self' node nested under a wiped subtree apex is subsumed by that apex's fire.
+        // Compute this before wiping because wiping evicts descendants from the index.
+        for (const key of selfKeys) {
+            if (!this.tree.hasAncestorIn(key, subtreeApexSet)) {
+                selfFires.push(this.tree.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
+            }
+        }
 
         for (const key of subtreeApexes) {
             this.wipeSubtreeKeepNode(key);
             fires.push(this.tree.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
         }
-        // A 'self' node nested under a wiped subtree apex is subsumed by that apex's fire.
-        for (const key of selfKeys) {
-            if (!this.tree.hasAncestorIn(key, subtreeApexSet)) {
-                fires.push(this.tree.get(key)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- from index
-            }
-        }
+        fires.push(...selfFires);
         for (const resource of fires) {
             this.changeEmitter.fire(resource);
         }

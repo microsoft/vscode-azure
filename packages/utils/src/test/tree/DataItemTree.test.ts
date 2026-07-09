@@ -568,6 +568,35 @@ describe('DataItemTree (unit)', () => {
             expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('a');
         });
 
+        it('should not fire undefined for a self match subsumed by a subtree match', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+            tree.registerProvider(createBranchProvider(new Map([
+                ['a', [{ id: 'a-child' }]],
+            ])));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'a' });
+
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            tree.invalidate((r: TestResource) => {
+                if (r.id === 'a') {
+                    return 'subtree';
+                }
+                if (r.id === 'a-child') {
+                    return 'self';
+                }
+
+                return undefined;
+            });
+
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onChange.mock.calls.some(c => c.arguments[0] === undefined)).to.be.false;
+            expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('a');
+        });
+
         it('should keep children cached for a self selector', async () => {
             const tree = createTree();
             const fn = mock.fn(() => [{ id: 'child' }]);
