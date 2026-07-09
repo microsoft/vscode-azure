@@ -5,7 +5,7 @@
 
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { GroupBy } from '../../commands/GroupBy';
+import { GroupBy } from '../../../commands/tree/GroupBy';
 
 describe('GroupBy (unit)', () => {
     it('should update groupBy setting to resourceType', async () => {

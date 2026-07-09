@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { inject, injectable } from 'inversify';
-import { IAzdService } from '../azd/AzdService';
-import type { ManagedCommand } from './ManagedCommand';
+import { IAzdService } from '../../azd/AzdService';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Installs the Azure Developer CLI (`azd`) using the platform's

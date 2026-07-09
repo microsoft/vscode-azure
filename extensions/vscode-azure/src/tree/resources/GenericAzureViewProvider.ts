@@ -8,7 +8,7 @@ import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { OpenInPortal } from '../../commands/OpenInPortal';
+import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';

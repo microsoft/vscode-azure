@@ -5,9 +5,9 @@
 
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { ClearActivities } from '../../commands/ClearActivities';
-import { CodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
-import { GenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
+import { ClearActivities } from '../../../commands/deploy/ClearActivities';
+import { CodeDeploymentDataProvider } from '../../../tree/activity/CodeDeploymentDataProvider';
+import { GenericActivityDataProvider } from '../../../tree/activity/GenericActivityDataProvider';
 
 describe('ClearActivities (unit)', () => {
     function createProviders() {

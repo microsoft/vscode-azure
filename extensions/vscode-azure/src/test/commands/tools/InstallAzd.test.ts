@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { InstallAzd } from '../../commands/InstallAzd';
-import { createMockAzdService } from '../azd/MockAzdService';
+import { InstallAzd } from '../../../commands/tools/InstallAzd';
+import { createMockAzdService } from '../../azd/MockAzdService';
 
 describe('InstallAzd (unit)', () => {
     it('should delegate to IAzdService.install', async () => {

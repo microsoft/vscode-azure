@@ -8,7 +8,7 @@ import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, 
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { OpenInPortal } from '../../../commands/OpenInPortal';
+import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../constants';
 import { GenericAzureViewProvider } from '../../../tree/resources/GenericAzureViewProvider';
 

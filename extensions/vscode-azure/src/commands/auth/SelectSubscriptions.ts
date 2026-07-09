@@ -6,12 +6,12 @@
 import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, IActionExecutor, ICodeContext, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
-import { IAzureViewDataTree } from '../services';
-import { ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
-import { subscriptionFilterKey } from '../utils/subscriptionFilter';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
+import { IAzureViewDataTree } from '../../services';
+import { ICredentialOptionsScope } from '../../utils/CredentialOptionsScope';
+import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
+import type { ManagedCommand } from '../ManagedCommand';
 import { listReachableSubscriptions, type UnreachableAuthNode } from './listReachableAuthNodes';
-import type { ManagedCommand } from './ManagedCommand';
 
 /**
  * Prompts the user to select which subscriptions should be visible in the

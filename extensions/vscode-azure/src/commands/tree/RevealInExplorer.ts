@@ -5,9 +5,9 @@
 
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IWorkspaceViewDataTree } from '../services';
-import { isAzdServiceNode, isWorkspaceNode } from '../tree/workspace/WorkspaceNode';
-import type { ManagedCommand } from './ManagedCommand';
+import { IWorkspaceViewDataTree } from '../../services';
+import { isAzdServiceNode, isWorkspaceNode } from '../../tree/workspace/WorkspaceNode';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Reveals the file or folder represented by a workspace tree node in

@@ -6,8 +6,8 @@
 import { getAuthProviderId, getConfiguredAzureEnv } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, Roots } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureViewDataTree } from '../services';
-import type { ManagedCommand } from './ManagedCommand';
+import { IAzureViewDataTree } from '../../services';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Explicitly signs the user in to Azure.
