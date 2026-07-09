@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { collectPages, createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { DeploymentClient } from '../../../rest/clients/DeploymentClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
@@ -56,15 +56,12 @@ describe('DeploymentClient (unit)', () => {
         });
 
         const client = DeploymentClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
-        const pages: unknown[][] = [];
-        for await (const page of client.deploymentOperations.listAtScope(
+        const pages = await collectPages(client.deploymentOperations.listAtScope(
             '/subscriptions/test-sub/resourceGroups/rg1',
             'myDeploy',
-        )) {
-            pages.push(page.items);
-        }
+        ));
 
         expect(pages).to.have.length(1);
-        expect(pages[0]).to.have.length(2);
+        expect(pages[0].items).to.have.length(2);
     });
 });

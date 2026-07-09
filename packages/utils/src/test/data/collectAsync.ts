@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isAsyncIterable, type Page } from '../../data/Page';
+import { flattenPages, isAsyncIterable, type Page } from '../../data/Page';
 import type { ChildResult } from '../../tree/DataProvider';
 
 /**
@@ -48,4 +48,19 @@ export async function collectPages<T>(result: ChildResult<T> | null | undefined)
     }
     // A synchronous array of resources is a single, complete page.
     return [{ items: result, hasMore: false }];
+}
+
+/**
+ * Drains an `AsyncIterable<Page<T>>` and flattens it into a single ordered
+ * array of items, discarding page boundaries.
+ *
+ * The item-level counterpart to {@linkcode collectPages}: use this when a test
+ * only cares about the aggregate items (not how they were paged), replacing the
+ * common `for await (const page of ...) items.push(...page.items)` loop.
+ *
+ * @param pages The paged source to drain fully.
+ * @returns Every item across all pages, in order.
+ */
+export async function collectPageItems<T>(pages: AsyncIterable<Page<T>>): Promise<T[]> {
+    return collectAsync(flattenPages(pages));
 }

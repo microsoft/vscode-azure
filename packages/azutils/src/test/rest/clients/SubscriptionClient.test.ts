@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { collectPageItems, createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { SubscriptionClient, type Subscription, type TenantIdDescription } from '../../../rest/clients/SubscriptionClient';
+import { SubscriptionClient } from '../../../rest/clients/SubscriptionClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
@@ -33,10 +33,7 @@ describe('SubscriptionClient (unit)', () => {
 
         const client = SubscriptionClient.create(ctx, executor, makeCredential(), subscription.environment, { httpClient });
 
-        const tenants: TenantIdDescription[] = [];
-        for await (const page of client.tenants.list()) {
-            tenants.push(...page.items);
-        }
+        const tenants = await collectPageItems(client.tenants.list());
 
         expect(tenants.map(t => t.tenantId)).to.deep.equal(['t1', 't2']);
     });
@@ -59,10 +56,7 @@ describe('SubscriptionClient (unit)', () => {
 
         const client = SubscriptionClient.create(ctx, executor, makeCredential(), subscription.environment, { httpClient });
 
-        const subscriptions: Subscription[] = [];
-        for await (const page of client.subscriptions.list()) {
-            subscriptions.push(...page.items);
-        }
+        const subscriptions = await collectPageItems(client.subscriptions.list());
 
         expect(subscriptions.map(s => s.subscriptionId)).to.deep.equal(['s1', 's2']);
     });
