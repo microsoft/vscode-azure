@@ -2,21 +2,29 @@ packages:
   - packages/utils
   - packages/azutils
   - extensions/vscode-azure
-enableGlobalVirtualStore: true
 allowBuilds:
   "@vscode/vsce-sign": true
   esbuild: true
   keytar: true
 minimumReleaseAgeExclude:
   - "@microsoft/vscode-azext*"
+  # Temporary: TypeScript 7.0 GA'd on 2026-07-08. The stable `typescript` package (aliased here as
+  # `@typescript/native` to provide the native `tsc`) and its platform-specific binary sub-packages
+  # are newer than the 7-day minimum-release-age policy. Remove these entries once they age past it.
+  - "typescript"
+  - "@typescript/typescript-*"
 overrides:
   # Force a non-vulnerable version of these dependencies
   serialize-javascript: ^7.0.0
   diff: ^8.0.3
 publicHoistPattern:
   # All of these are hoisted so they can be used by all packages without explicitly declaring them in each package.json
+  # NOTE: `typescript` is deliberately NOT hoisted here. The build compiler is TypeScript 7 (installed
+  # under the `@typescript/native` alias in package.json), which has no compiler API; hoisting a
+  # `typescript` package would let typescript-eslint resolve its peer to the API-less TS 7 and break
+  # linting. Once TS 7.1 ships its API and typescript-eslint adopts it, `typescript` can be declared/
+  # hoisted normally again. See docs/build-and-dev.md ("TypeScript toolchain").
   - "*eslint*"
-  - "typescript"
   - "mocha"
   - "@types/mocha"
   - "chai"
