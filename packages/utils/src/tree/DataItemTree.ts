@@ -61,8 +61,8 @@ interface NodeSideTable {
  * A lazily-loaded, cached tree of data items built up piecewise by
  * {@linkcode DataProvider}s.
  *
- * Each node's children are loaded on first access and cached until stale. The
- * tree is the single source of truth for the data layer -- the
+ * Each node's children are loaded on first access and cached until stale.
+ * The tree is the single source of truth for the data layer -- the
  * `TreeDataProvider`s are view-only and read from it.
  *
  * ## Backing store
@@ -105,9 +105,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private readonly tree: TreeIndex<T>;
 
     /**
-     * Per-resource enrichment promises, keyed by resource key. Stored when
-     * {@linkcode enrichAll} kicks off background enrichment so that callers (e.g.
-     * commands) can await completion via {@linkcode whenEnriched}.
+     * Per-resource enrichment promises, keyed by resource key.
+     * Stored when {@linkcode enrichAll} kicks off background enrichment so
+     * that callers (e.g. commands) can await completion via
+     * {@linkcode whenEnriched}.
      */
     private readonly enrichmentPromises = new Map<string, Promise<void>>();
 
@@ -194,6 +195,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         if (resource === undefined) {
             return this.getRootChildren();
         }
+
         return this.getBranchChildren(resource);
     }
 
@@ -286,6 +288,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
 
         this.executor.output.debug(`[data] ${this.name} branch fetch start key=${key} provider=${provider.constructor.name}`);
+
         const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
@@ -371,7 +374,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         context.errorHandling.rethrow = true;
                         context.telemetry.properties.tree = this.name;
                         context.telemetry.properties.provider = provider.constructor.name;
-                        return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- asserted non-null above
+                        return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
                     }))
                     .then((includeChildren) => {
                         this.enrichmentPromises.delete(key);
@@ -380,9 +383,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         // enrichment was in flight, skip the invalidation to avoid
                         // spurious change events for items no longer in the tree.
                         if (this.tree.has(key)) {
-                            // `includeChildren` is `undefined` only if enrichment
-                            // was suppressed/errored; default to re-fetching
-                            // children, matching the historical default behavior.
+                            // `includeChildren` is `undefined` only if enrichment was
+                            // suppressed/errored; default to re-fetching children, matching
+                            // the historical default-parameter behavior.
                             this.invalidateEntries([resource], (includeChildren ?? true) ? 'subtree' : 'self');
                         }
                     })
@@ -434,7 +437,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     public hasMore(resource?: T): boolean {
         if (resource === undefined) {
-            return false; // Root-level pagination not supported.
+            return false; // Root-level pagination not supported
         }
         return this.pagers.get(this.getKey(resource))?.hasMore ?? false;
     }
@@ -452,6 +455,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         if (this.client.getQueryData<T[]>(this.childrenKey(this.tree.pathOf(key) ?? [key])) === undefined) {
             throw new Error(`Cannot loadMore before getChildren has been called for: ${key}`);
         }
+
         await this.loadOnePage(resource);
         this.changeEmitter.fire(resource);
     }
@@ -468,6 +472,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         const didLoad = await this.executor.callWithTelemetryAndErrorHandling('tree.loadAll', async (context) => {
             context.telemetry.isUserEvent = false;
             context.errorHandling.rethrow = true;
+            // The data layer is a pure cache that rethrows; the caller owns
+            // error display, so don't show a toast here as well.
             context.errorHandling.suppress = 'display';
             context.telemetry.properties.tree = this.name;
 
@@ -485,6 +491,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                 await this.loadOnePage(resource);
                 loaded = true;
             }
+
             return loaded;
         });
 
