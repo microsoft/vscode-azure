@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Everything } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { Everything } from '@microsoft/vscode-azure-utils';
-import { RefreshWorkspaceView } from '../../commands/RefreshWorkspaceView';
+import { RefreshWorkspaceView } from '../../../commands/tree/RefreshWorkspaceView';
 
 describe('RefreshWorkspaceView (unit)', () => {
     it('invalidates everything on the workspace data tree', () => {

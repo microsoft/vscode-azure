@@ -6,7 +6,7 @@
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
-import { defaultLoadMoreOptions, LoadMore } from '../../commands/LoadMore';
+import { defaultLoadMoreOptions, LoadMore } from '../../../commands/tree/LoadMore';
 
 describe('defaultLoadMoreOptions (unit)', () => {
     const options = defaultLoadMoreOptions(vscode);

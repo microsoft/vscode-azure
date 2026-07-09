@@ -8,7 +8,7 @@ import { Roots } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { SignIn } from '../../commands/SignIn';
+import { SignIn } from '../../../commands/auth/SignIn';
 
 describe('SignIn (unit)', () => {
     it('should trigger an interactive sign-in and invalidate the resources tree', async () => {

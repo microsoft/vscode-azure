@@ -9,10 +9,10 @@ import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vs
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { AzdUp } from '../../commands/AzdUp';
-import { createMockAzdService } from '../azd/MockAzdService';
-import { createMockArmProvider, createMockCodeProvider } from '../tree/activity/MockActivityProviders';
-import { createWizardCommandContainer } from './createWizardCommandContainer';
+import { AzdUp } from '../../../commands/deploy/AzdUp';
+import { createMockAzdService } from '../../azd/MockAzdService';
+import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
+import { createWizardCommandContainer } from '../createWizardCommandContainer';
 
 describe('AzdUp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });

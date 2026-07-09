@@ -4,16 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, IOutputChannel, Wizard, Everything } from '@microsoft/vscode-azure-utils';
+import { Everything, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { AzdDeployStep } from '../azd/wizard/AzdDeployStep';
-import { AzdProvisionStep } from '../azd/wizard/AzdProvisionStep';
-import type { AzdWizardContext } from '../azd/wizard/AzdWizardContext';
-import { SelectIacFolderStep } from '../azd/wizard/SelectIacFolderStep';
-import { ShowEndpointUrlStep } from '../azd/wizard/ShowEndpointUrlStep';
-import { IAzureViewDataTree } from '../services';
-import type { ManagedCommand } from './ManagedCommand';
+import { AzdDeployStep } from '../../azd/wizard/AzdDeployStep';
+import { AzdProvisionStep } from '../../azd/wizard/AzdProvisionStep';
+import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
+import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
+import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
+import { IAzureViewDataTree } from '../../services';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Runs `azd provision` then `azd deploy` sequentially in visible

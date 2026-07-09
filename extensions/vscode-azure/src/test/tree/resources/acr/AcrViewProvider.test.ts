@@ -8,7 +8,7 @@ import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azur
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import * as vscode from 'vscode';
-import { OpenInPortal } from '../../../../commands/OpenInPortal';
+import { OpenInPortal } from '../../../../commands/tree/OpenInPortal';
 import { DisableAcrAdminUser } from '../../../../commands/acr/DisableAcrAdminUser';
 import { AcrResourceType } from '../../../../tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../tree/resources/acr/AcrViewProvider';

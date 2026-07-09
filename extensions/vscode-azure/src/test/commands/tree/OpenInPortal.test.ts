@@ -6,7 +6,7 @@
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import * as vscode from 'vscode';
-import { OpenInPortal } from '../../commands/OpenInPortal';
+import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 
 describe('OpenInPortal (unit)', () => {
     it('should open the portal URL for a subscription node', () => {

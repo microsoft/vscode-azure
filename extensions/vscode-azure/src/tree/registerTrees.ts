@@ -6,7 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, type LoadMoreOptions, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, Newable, ResolutionContext, ServiceIdentifier } from 'inversify';
-import { defaultLoadMoreOptions } from '../commands/LoadMore';
+import { defaultLoadMoreOptions } from '../commands/tree/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId, WorkspaceTreeViewId } from '../constants';
 import {
     IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree,
