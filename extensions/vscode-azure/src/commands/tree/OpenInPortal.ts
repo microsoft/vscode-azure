@@ -6,7 +6,7 @@
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import type { ManagedCommand } from './ManagedCommand';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Opens the selected tree node in the Azure Portal in an external browser.

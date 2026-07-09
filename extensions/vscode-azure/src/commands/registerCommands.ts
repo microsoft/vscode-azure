@@ -7,22 +7,22 @@ import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils'
 import { Container } from 'inversify';
 import { AzdDownCommandId, AzdUpCommandId, LoadMoreCommandId } from '../constants';
 import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
-import { AzdDown } from './AzdDown';
-import { AzdUp } from './AzdUp';
-import { ClearActivities } from './ClearActivities';
+import { SelectSubscriptions } from './auth/SelectSubscriptions';
+import { SignIn } from './auth/SignIn';
+import { AzdDown } from './deploy/AzdDown';
+import { AzdUp } from './deploy/AzdUp';
+import { ClearActivities } from './deploy/ClearActivities';
 import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
 import { DeleteAppSetting } from './functions/DeleteAppSetting';
-import { GroupBy } from './GroupBy';
-import { InstallAzd } from './InstallAzd';
-import { LoadMore } from './LoadMore';
 import type { ManagedCommand } from './ManagedCommand';
-import { OpenInPortal } from './OpenInPortal';
-import { RefreshResourcesView } from './RefreshResourcesView';
-import { RefreshWorkspaceView } from './RefreshWorkspaceView';
-import { RevealInExplorer } from './RevealInExplorer';
-import { SelectSubscriptions } from './SelectSubscriptions';
-import { SignIn } from './SignIn';
+import { InstallAzd } from './tools/InstallAzd';
+import { GroupBy } from './tree/GroupBy';
+import { LoadMore } from './tree/LoadMore';
+import { OpenInPortal } from './tree/OpenInPortal';
+import { RefreshResourcesView } from './tree/RefreshResourcesView';
+import { RefreshWorkspaceView } from './tree/RefreshWorkspaceView';
+import { RevealInExplorer } from './tree/RevealInExplorer';
 
 /**
  * Registers every {@linkcode ManagedCommand} exposed by the extension

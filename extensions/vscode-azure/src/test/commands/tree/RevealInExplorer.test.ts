@@ -5,8 +5,8 @@
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { RevealInExplorer } from '../../commands/RevealInExplorer';
-import { makeAzdProjectNode, makeAzdServiceNode } from '../tree/workspace/mockWorkspaceNode';
+import { RevealInExplorer } from '../../../commands/tree/RevealInExplorer';
+import { makeAzdProjectNode, makeAzdServiceNode } from '../../tree/workspace/mockWorkspaceNode';
 
 describe('RevealInExplorer (unit)', () => {
     function setUp(node?: unknown) {

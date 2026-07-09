@@ -4,11 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { inject, injectable } from 'inversify';
-import { isTerminalActivityStatus, type Activity } from '../tree/activity/Activity';
-import { IArmDeploymentDataProvider } from '../tree/activity/ArmDeploymentDataProvider';
-import { ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
-import { IGenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
-import type { ManagedCommand } from './ManagedCommand';
+import { isTerminalActivityStatus, type Activity } from '../../tree/activity/Activity';
+import { IArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
+import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
+import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
+import type { ManagedCommand } from '../ManagedCommand';
 
 type ClearMode = 'completed' | 'successful' | 'all';
 

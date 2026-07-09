@@ -5,9 +5,9 @@
 
 import { type IVsCode, type LoadMoreOptions, createDefaultLoadMoreOptions } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { LoadMoreCommandId } from '../constants';
-import { IAzureViewViewItemTree } from '../services';
-import type { ManagedCommand } from './ManagedCommand';
+import { LoadMoreCommandId } from '../../constants';
+import { IAzureViewViewItemTree } from '../../services';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Loads the next page of children for a paginated parent node in the

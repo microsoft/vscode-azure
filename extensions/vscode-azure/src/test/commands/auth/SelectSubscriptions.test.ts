@@ -9,10 +9,10 @@ import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, MockQuickPick, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import type * as vscode from 'vscode';
-import { SelectSubscriptions } from '../../commands/SelectSubscriptions';
-import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
-import { CredentialOptionsScope } from '../../utils/CredentialOptionsScope';
-import type { IAzureViewDataTree } from '../../services';
+import { SelectSubscriptions } from '../../../commands/auth/SelectSubscriptions';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../constants';
+import type { IAzureViewDataTree } from '../../../services';
+import { CredentialOptionsScope } from '../../../utils/CredentialOptionsScope';
 
 describe('SelectSubscriptions (unit)', () => {
     function createCommand(cache: IAzureViewDataTree) {

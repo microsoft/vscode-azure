@@ -6,8 +6,8 @@
 import type { GroupingStrategy } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, showSmartInputBox, showSmartQuickPick, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { ConfigurationSection } from '../constants';
-import type { ManagedCommand } from './ManagedCommand';
+import { ConfigurationSection } from '../../constants';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Prompts the user to pick a grouping strategy for the Azure resource tree

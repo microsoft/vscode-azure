@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, IOutputChannel, Wizard, Everything } from '@microsoft/vscode-azure-utils';
+import { Everything, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { AzdDownStep } from '../azd/wizard/AzdDownStep';
-import type { AzdWizardContext } from '../azd/wizard/AzdWizardContext';
-import { SelectIacFolderStep } from '../azd/wizard/SelectIacFolderStep';
-import { IAzureViewDataTree } from '../services';
-import type { ManagedCommand } from './ManagedCommand';
+import { AzdDownStep } from '../../azd/wizard/AzdDownStep';
+import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
+import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
+import { IAzureViewDataTree } from '../../services';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Options accepted by {@linkcode AzdDown.execute} as its second argument.

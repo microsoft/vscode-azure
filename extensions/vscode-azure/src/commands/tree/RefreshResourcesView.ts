@@ -5,8 +5,8 @@
 
 import { Everything } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureViewDataTree } from '../services';
-import type { ManagedCommand } from './ManagedCommand';
+import { IAzureViewDataTree } from '../../services';
+import type { ManagedCommand } from '../ManagedCommand';
 
 /** Invalidates the entire Azure resource data cache, forcing a refresh on next access. */
 @injectable()

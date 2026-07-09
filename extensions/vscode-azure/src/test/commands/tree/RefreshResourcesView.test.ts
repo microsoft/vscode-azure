@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Everything } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { Everything } from '@microsoft/vscode-azure-utils';
-import { RefreshResourcesView } from '../../commands/RefreshResourcesView';
+import { RefreshResourcesView } from '../../../commands/tree/RefreshResourcesView';
 
 describe('RefreshResourcesView (unit)', () => {
     it('should invalidate everything on the data tree', () => {
