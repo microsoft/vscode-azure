@@ -5,9 +5,10 @@
 
 /**
  * Workspace clean script. Recursively removes build output folders (`dist`,
- * `coverage`) and packaging artifacts (`*.vsix`, `*.tgz`, `esbuild.meta.json`)
- * from the current working directory. Intended to be invoked per workspace via
- * `pnpm run clean`. Missing folders/files are ignored.
+ * `coverage`) and packaging/tooling artifacts (`*.vsix`, `*.tgz`,
+ * `esbuild.meta.json`, `.eslintcache`) from the current working directory.
+ * Intended to be invoked per workspace via `pnpm run clean`. Missing
+ * folders/files are ignored.
  */
 
 import * as fs from 'fs/promises';
@@ -15,7 +16,7 @@ import * as path from 'path';
 
 const folders = ['dist', 'coverage'];
 const artifactExtensions = ['.vsix', '.tgz'];
-const artifactFiles = ['esbuild.meta.json'];
+const artifactFiles = ['esbuild.meta.json', '.eslintcache'];
 
 for (const folder of folders) {
     const resolved = path.resolve(folder);
