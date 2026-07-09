@@ -44,11 +44,12 @@ pnpm --filter vscode-azure run test
 
 ### Packages (`utils`, `azutils`)
 
-Packages compile TypeScript to JavaScript using **tsgo** (native TypeScript compiler):
+Packages compile TypeScript to JavaScript using **`tsc`** from TypeScript 7 (the native Go
+compiler):
 
 ```bash
-pnpm --filter @microsoft/vscode-azure-utils run build     # tsgo
-pnpm --filter @microsoft/vscode-azure-azutils run build   # tsgo
+pnpm --filter @microsoft/vscode-azure-utils run build     # tsc
+pnpm --filter @microsoft/vscode-azure-azutils run build   # tsc
 ```
 
 Output goes to `dist/esm/`.
@@ -61,8 +62,37 @@ The extension uses **esbuild** to bundle all source (including packages) into a 
 pnpm --filter vscode-azure run build
 # Runs two commands in series:
 #   build:esbuild — node esbuild.mjs (produces dist/extension.bundle.js)
-#   build:check   — tsgo --noEmit (type checking only)
+#   build:check   — tsc --noEmit (type checking only)
 ```
+
+#### TypeScript toolchain (`tsc` vs. typescript-eslint)
+
+The build compiler is TypeScript 7, pulled in as an npm alias in the root `package.json`:
+
+```jsonc
+"@typescript/native": "npm:typescript@7.0.2"  // provides the native `tsc` used by the build scripts
+```
+
+TypeScript 7.0 ships the fast native compiler but **not** a programmatic compiler API (that arrives
+in 7.1). Type-aware linting via `typescript-eslint` still needs the TypeScript 6.x-compatible API, so
+it keeps using its own `typescript` peer dependency (a 5.x/6.x line, resolved locally by pnpm). pnpm
+resolves that peer by package *name*, so if a package literally named `typescript` were provided at
+the workspace root, the linter would resolve its peer from that and load the API-less TypeScript 7.
+The alias sidesteps this: the 7.0 compiler is installed under a *different* name (`@typescript/native`)
+so it provides `tsc` without occupying the `typescript` name. For the same reason, `typescript` is
+intentionally **not** in `pnpm-workspace.yaml`'s `publicHoistPattern` and is **not** declared as a
+top-level dependency. The result: `tsc` is TypeScript 7, while `typescript-eslint` transparently uses
+its own compatible TypeScript. No action is needed to keep the two in sync.
+
+> **Future cleanup:** this alias-and-no-hoist arrangement is only needed because TypeScript 7.0 has no
+> compiler API. Once TypeScript 7.1 ships its new API *and* `typescript-eslint` releases a version that
+> uses it, this workaround can be removed: drop the `@typescript/native` alias and simply declare
+> `"typescript"` at the appropriate version (re-adding it to `publicHoistPattern` if desired), since the
+> build compiler and the linter's compiler would then be the same package again.
+
+> Because TypeScript 7.0.2 was published very recently, `typescript` (and its platform-specific binary
+> sub-packages) are temporarily listed in `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`. Those
+> entries can be removed once the release ages past the 7-day minimum-release-age policy.
 
 #### esbuild Configuration
 
@@ -93,7 +123,7 @@ For fast, iterative work, prefer the **watch tasks** over re-running a full `pnp
 ### Build watches
 
 ```bash
-# Extension: type checking in watch mode (tsgo --noEmit --watch)
+# Extension: type checking in watch mode (tsc --noEmit --watch)
 # Most useful for catching type errors while editing. This is the default
 # VS Code build task ("Extension: Check+Watch").
 pnpm --filter vscode-azure run build:check -- --watch
@@ -101,12 +131,12 @@ pnpm --filter vscode-azure run build:check -- --watch
 # Extension: esbuild bundle in watch mode ("Extension: ESBuild+Watch")
 pnpm --filter vscode-azure run build:esbuild -- --watch
 
-# Library packages: tsgo in watch mode ("utils: Build+Watch" / "azutils: Build+Watch")
+# Library packages: tsc in watch mode ("utils: Build+Watch" / "azutils: Build+Watch")
 pnpm --filter @microsoft/vscode-azure-utils run build -- --watch
 pnpm --filter @microsoft/vscode-azure-azutils run build -- --watch
 ```
 
-The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsgo` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
+The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsc` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
 
 ### Test watch (packages only)
 
