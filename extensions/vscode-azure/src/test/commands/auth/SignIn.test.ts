@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createDefaultCredentialFactory, type ConcreteAzureNode, type CredentialFactoryInput, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
+import { createDefaultCredentialFactory, type ConcreteAzureNode, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { mock } from 'node:test';
+import { mock, type Mock } from 'node:test';
 import { pickTenantOrEnterId, SignIn } from '../../../commands/auth/SignIn';
 import type { ReachableTenant } from '../../../commands/auth/listReachableAuthNodes';
 import { SignedInTenantsConfigurationKey } from '../../../constants';
@@ -50,17 +50,12 @@ describe('SignIn (unit)', () => {
     /**
      * Build a credential factory bound to the mock code context, so the default
      * sign-in path drives the same mock `authentication.getSession` as the
-     * tenant-scoped path. The inputs the factory is called with are recorded so
-     * tests can assert the options passed (e.g. an explicit `createIfNone`).
+     * tenant-scoped path. Wrapped in `mock.fn` so it delegates to the real
+     * factory while recording the inputs it was called with (assert via
+     * `.mock.calls`, e.g. that an explicit `createIfNone` was passed).
      */
-    function createCredentialFactory(code: IVsCode): { credentialFactory: ICredentialFactory; inputs: (CredentialFactoryInput | undefined)[] } {
-        const real = createDefaultCredentialFactory(code);
-        const inputs: (CredentialFactoryInput | undefined)[] = [];
-        const credentialFactory: ICredentialFactory = (input) => {
-            inputs.push(input);
-            return real(input);
-        };
-        return { credentialFactory, inputs };
+    function createCredentialFactory(code: IVsCode): Mock<ICredentialFactory> {
+        return mock.fn(createDefaultCredentialFactory(code));
     }
 
     /** Make the mock `getSession` resolve a session so a default sign-in succeeds. */
@@ -72,7 +67,7 @@ describe('SignIn (unit)', () => {
         const { cache, invalidate } = createTree([]);
         const { ctx, mock: mockResult } = createMockCodeContext();
         resolveDefaultSession(mockResult);
-        const { credentialFactory, inputs } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -80,7 +75,7 @@ describe('SignIn (unit)', () => {
         // The default sign-in goes through the credential factory, which is
         // asked for an interactive session with `createIfNone` passed explicitly
         // (so it keeps prompting even if the credential's default ever changes).
-        expect(inputs).to.deep.equal([{ sessionOptions: { createIfNone: true } }]);
+        expect(credentialFactory.mock.calls.map((c) => c.arguments[0])).to.deep.equal([{ sessionOptions: { createIfNone: true } }]);
 
         const calls = mockResult.authentication.getSession.mock.calls;
         expect(calls.length).to.equal(1);
@@ -104,7 +99,7 @@ describe('SignIn (unit)', () => {
         } as unknown as IAzureViewDataTree;
         const { ctx, mock: mockResult } = createMockCodeContext();
         resolveDefaultSession(mockResult);
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -128,7 +123,7 @@ describe('SignIn (unit)', () => {
 
         const { ctx, mock: mockResult } = createMockCodeContext();
         respondToPrompts(mockResult, [{ pick: 'Tenant Two (tenant-2)' }]);
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -164,7 +159,7 @@ describe('SignIn (unit)', () => {
         // The tenant-scoped sign-in resolves to a concrete account.
         mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -198,7 +193,7 @@ describe('SignIn (unit)', () => {
         const typedTenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
         const { ctx, mock: mockResult } = createMockCodeContext();
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -221,7 +216,7 @@ describe('SignIn (unit)', () => {
         // account the manual tenant is persisted under.
         mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -248,7 +243,7 @@ describe('SignIn (unit)', () => {
         ]);
         mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -269,7 +264,7 @@ describe('SignIn (unit)', () => {
         const { ctx, mock: mockResult } = createMockCodeContext();
         mockResult.authentication.getSession.mock.mockImplementation((() => Promise.resolve(fakeSession)) as never);
         respondToPrompts(mockResult, [{ pick: 'Tenant One (tenant-1)' }]);
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -295,7 +290,7 @@ describe('SignIn (unit)', () => {
         const manualTenantId = 'bbbbbbbb-1111-2222-3333-444455556666';
         mockResult.messageResponses.push('Enter Tenant ID');
         respondToPrompts(mockResult, [{ value: manualTenantId }]);
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
@@ -323,7 +318,7 @@ describe('SignIn (unit)', () => {
 
         mockResult.authentication.getSession.mock.mockImplementation((): Promise<never> => Promise.reject(new Error('conditional access blocked')));
         // No message response queued => the recovery prompt is dismissed.
-        const { credentialFactory } = createCredentialFactory(ctx.code);
+        const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
         await command.execute();
