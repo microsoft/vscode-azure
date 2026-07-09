@@ -75,12 +75,20 @@ The build compiler is TypeScript 7, pulled in as an npm alias in the root `packa
 
 TypeScript 7.0 ships the fast native compiler but **not** a programmatic compiler API (that arrives
 in 7.1). Type-aware linting via `typescript-eslint` still needs the TypeScript 6.x-compatible API, so
-it keeps using its own `typescript` peer dependency (a 5.x/6.x line, resolved locally by pnpm). To
-avoid the alias's `typescript@7` accidentally being hoisted to the workspace root and picked up by
-the linter, `typescript` is intentionally **not** in `pnpm-workspace.yaml`'s `publicHoistPattern` and
-is **not** declared as a top-level dependency. The result: `tsc` is TypeScript 7, while
-`typescript-eslint` transparently uses its own compatible TypeScript. No action is needed to keep the
-two in sync.
+it keeps using its own `typescript` peer dependency (a 5.x/6.x line, resolved locally by pnpm). pnpm
+resolves that peer by package *name*, so if a package literally named `typescript` were provided at
+the workspace root, the linter would resolve its peer from that and load the API-less TypeScript 7.
+The alias sidesteps this: the 7.0 compiler is installed under a *different* name (`@typescript/native`)
+so it provides `tsc` without occupying the `typescript` name. For the same reason, `typescript` is
+intentionally **not** in `pnpm-workspace.yaml`'s `publicHoistPattern` and is **not** declared as a
+top-level dependency. The result: `tsc` is TypeScript 7, while `typescript-eslint` transparently uses
+its own compatible TypeScript. No action is needed to keep the two in sync.
+
+> **Future cleanup:** this alias-and-no-hoist arrangement is only needed because TypeScript 7.0 has no
+> compiler API. Once TypeScript 7.1 ships its new API *and* `typescript-eslint` releases a version that
+> uses it, this workaround can be removed: drop the `@typescript/native` alias and simply declare
+> `"typescript"` at the appropriate version (re-adding it to `publicHoistPattern` if desired), since the
+> build compiler and the linter's compiler would then be the same package again.
 
 > Because TypeScript 7.0.2 was published very recently, `typescript` (and its platform-specific binary
 > sub-packages) are temporarily listed in `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`. Those
