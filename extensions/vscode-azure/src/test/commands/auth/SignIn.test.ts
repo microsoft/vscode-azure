@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createDefaultCredentialFactory, type ConcreteAzureNode, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
-import { makeAccount, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { makeAccount, makeTenant, createMockHierarchicalDataItemTree } from '@microsoft/vscode-azure-azutils/testing';
 import { Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -16,26 +16,19 @@ import type { IAzureViewDataTree } from '../../../services';
 import type { SignedInTenant } from '../../../utils/signedInTenants';
 
 describe('SignIn (unit)', () => {
+    /**
+     * Wraps the shared {@linkcode createMockHierarchicalDataItemTree} fixture,
+     * casting it to {@linkcode IAzureViewDataTree} and surfacing its `invalidate`
+     * spy so tests can assert how the command invalidated the tree.
+     */
     function createTree(
         rootChildren: ConcreteAzureNode[],
         childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>(),
     ): { cache: IAzureViewDataTree; invalidate: ReturnType<typeof mock.fn> } {
-        const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
-            if (!node) {
-                return Promise.resolve(rootChildren);
-            }
-            return Promise.resolve(childrenMap.get(node) ?? []);
-        });
-
-        const invalidate = mock.fn();
+        const tree = createMockHierarchicalDataItemTree(rootChildren, childrenMap);
         return {
-            cache: {
-                getChildren,
-                hasMore: () => false,
-                loadMore: () => Promise.resolve(),
-                invalidate,
-            } as unknown as IAzureViewDataTree,
-            invalidate,
+            cache: tree,
+            invalidate: (tree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate,
         };
     }
 
