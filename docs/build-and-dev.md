@@ -44,11 +44,12 @@ pnpm --filter vscode-azure run test
 
 ### Packages (`utils`, `azutils`)
 
-Packages compile TypeScript to JavaScript using **tsgo** (native TypeScript compiler):
+Packages compile TypeScript to JavaScript using **`tsc`** from TypeScript 7 (the native Go
+compiler):
 
 ```bash
-pnpm --filter @microsoft/vscode-azure-utils run build     # tsgo
-pnpm --filter @microsoft/vscode-azure-azutils run build   # tsgo
+pnpm --filter @microsoft/vscode-azure-utils run build     # tsc
+pnpm --filter @microsoft/vscode-azure-azutils run build   # tsc
 ```
 
 Output goes to `dist/esm/`.
@@ -61,8 +62,29 @@ The extension uses **esbuild** to bundle all source (including packages) into a 
 pnpm --filter vscode-azure run build
 # Runs two commands in series:
 #   build:esbuild — node esbuild.mjs (produces dist/extension.bundle.js)
-#   build:check   — tsgo --noEmit (type checking only)
+#   build:check   — tsc --noEmit (type checking only)
 ```
+
+#### TypeScript toolchain (`tsc` vs. typescript-eslint)
+
+The build compiler is TypeScript 7, pulled in as an npm alias in the root `package.json`:
+
+```jsonc
+"@typescript/native": "npm:typescript@7.0.2"  // provides the native `tsc` used by the build scripts
+```
+
+TypeScript 7.0 ships the fast native compiler but **not** a programmatic compiler API (that arrives
+in 7.1). Type-aware linting via `typescript-eslint` still needs the TypeScript 6.x-compatible API, so
+it keeps using its own `typescript` peer dependency (a 5.x/6.x line, resolved locally by pnpm). To
+avoid the alias's `typescript@7` accidentally being hoisted to the workspace root and picked up by
+the linter, `typescript` is intentionally **not** in `pnpm-workspace.yaml`'s `publicHoistPattern` and
+is **not** declared as a top-level dependency. The result: `tsc` is TypeScript 7, while
+`typescript-eslint` transparently uses its own compatible TypeScript. No action is needed to keep the
+two in sync.
+
+> Because TypeScript 7.0.2 was published very recently, `typescript` (and its platform-specific binary
+> sub-packages) are temporarily listed in `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`. Those
+> entries can be removed once the release ages past the 7-day minimum-release-age policy.
 
 #### esbuild Configuration
 

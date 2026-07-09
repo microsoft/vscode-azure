@@ -28,7 +28,7 @@
     },
     "scripts": {
         "lint": "eslint --max-warnings 0",
-        "build": "tsgo",
+        "build": "tsc",
         "package": "pnpm pack",
         "test": "mocha",
         "testcov": "pnpx c8 --clean --reporter=html --exclude=\"**/test/**\" mocha",

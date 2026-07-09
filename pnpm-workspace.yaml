@@ -8,6 +8,30 @@ allowBuilds:
   keytar: true
 minimumReleaseAgeExclude:
   - "@microsoft/vscode-azext*"
+  # Temporary: TypeScript 7.0 GA'd on 2026-07-08. The stable `typescript` package (aliased here as
+  # `@typescript/native` to provide the native `tsc`) and its platform-specific binary sub-packages
+  # are newer than the 7-day minimum-release-age policy. Remove these entries once they age past it.
+  - "typescript"
+  - '@typescript/typescript-aix-ppc64@7.0.2'
+  - '@typescript/typescript-darwin-arm64@7.0.2'
+  - '@typescript/typescript-darwin-x64@7.0.2'
+  - '@typescript/typescript-freebsd-arm64@7.0.2'
+  - '@typescript/typescript-freebsd-x64@7.0.2'
+  - '@typescript/typescript-linux-arm64@7.0.2'
+  - '@typescript/typescript-linux-arm@7.0.2'
+  - '@typescript/typescript-linux-loong64@7.0.2'
+  - '@typescript/typescript-linux-mips64el@7.0.2'
+  - '@typescript/typescript-linux-ppc64@7.0.2'
+  - '@typescript/typescript-linux-riscv64@7.0.2'
+  - '@typescript/typescript-linux-s390x@7.0.2'
+  - '@typescript/typescript-linux-x64@7.0.2'
+  - '@typescript/typescript-netbsd-arm64@7.0.2'
+  - '@typescript/typescript-netbsd-x64@7.0.2'
+  - '@typescript/typescript-openbsd-arm64@7.0.2'
+  - '@typescript/typescript-openbsd-x64@7.0.2'
+  - '@typescript/typescript-sunos-x64@7.0.2'
+  - '@typescript/typescript-win32-arm64@7.0.2'
+  - '@typescript/typescript-win32-x64@7.0.2'
 overrides:
   # Force a non-vulnerable version of these dependencies
   serialize-javascript: ^7.0.0
@@ -15,7 +39,6 @@ overrides:
 publicHoistPattern:
   # All of these are hoisted so they can be used by all packages without explicitly declaring them in each package.json
   - "*eslint*"
-  - "typescript"
   - "mocha"
   - "@types/mocha"
   - "chai"

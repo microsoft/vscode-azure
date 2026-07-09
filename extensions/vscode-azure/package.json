@@ -357,7 +357,7 @@
         "lint": "eslint --max-warnings 0",
         "build": "pnpm run --parallel \"/^build:(esbuild|check)$/\"",
         "build:esbuild": "node esbuild.mjs",
-        "build:check": "tsgo --noEmit",
+        "build:check": "tsc --noEmit",
         "package": "vsce package --no-dependencies",
         "test": "vscode-test",
         "testcov": "vscode-test --coverage",
