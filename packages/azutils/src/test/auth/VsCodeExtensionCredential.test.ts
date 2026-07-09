@@ -315,4 +315,33 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(after - before).to.equal(1);
         });
     });
+
+    describe('authenticate', () => {
+        it('should return the raw session when one is available', async () => {
+            const session = { accessToken: 'tok', account: { id: 'acct-1', label: 'Account One' } };
+            const { credential } = createCredential({ session });
+
+            const result = await credential.authenticate('scope1');
+
+            // The session (with its account) is surfaced verbatim, not converted to a token.
+            expect(result).to.equal(session);
+        });
+
+        it('should return null when no session is available', async () => {
+            const { credential } = createCredential({ session: null });
+
+            expect(await credential.authenticate('scope1')).to.be.null;
+        });
+
+        it('should apply provider selection, the tenant scope, and session options', async () => {
+            const { credential, getSession } = createCredential({ tenantId: 'my-tenant' });
+
+            await credential.authenticate();
+
+            // Same provider/scope/session-option construction getToken relies on.
+            expect(getSession.mock.calls[0].arguments[0]).to.equal('microsoft');
+            expect(lastScopes(getSession)).to.include('VSCODE_TENANT:my-tenant');
+            expect(lastSessionOptions(getSession).createIfNone).to.equal(true);
+        });
+    });
 });

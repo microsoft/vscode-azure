@@ -7,9 +7,9 @@ import { AzureNodeId, getNodeType, isGenericResource, type VirtualResource } fro
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../commands/functions/DeleteAppSetting';
+import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { getResourceTypeIconUri } from '../../iconPath';

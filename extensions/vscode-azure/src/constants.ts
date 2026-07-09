@@ -33,5 +33,17 @@ export const ConfigurationSection = 'vscode-azure';
  */
 export const SelectedSubscriptionsConfigurationKey = 'selectedSubscriptions';
 
+/**
+ * Configuration key (within {@linkcode ConfigurationSection}) holding the
+ * tenants the user signed in to by manually entering a tenant id.
+ */
+export const SignedInTenantsConfigurationKey = 'signedInTenants';
+
 /** ARM tag applied by azd to resources it manages, containing the environment name. */
 export const AzdEnvNameTag = 'azd-env-name';
+
+/**
+ * Matches a canonical GUID (e.g. `aaaabbbb-cccc-dddd-eeee-ffff00001111`),
+ * anchored and case-insensitive.
+ */
+export const GuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
