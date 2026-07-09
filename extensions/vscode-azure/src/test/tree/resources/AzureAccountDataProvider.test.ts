@@ -5,8 +5,8 @@
 
 import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
-import { Everything, Roots, type ChildResult, type DataProviderChangeEvent, type Page } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { Everything, Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { collectPages, createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../tree/resources/AzureAccountDataProvider';
@@ -51,14 +51,6 @@ describe('AzureAccountDataProvider (unit)', () => {
             tenants: { list: () => throwingTenants },
             subscriptions: { list: () => emptySubscriptions, listLocations: () => Promise.resolve([]) },
         }) as never);
-    }
-
-    async function collectPages<T>(result: ChildResult<T> | null | undefined): Promise<Array<Page<T>>> {
-        const collected: Array<Page<T>> = [];
-        for await (const page of result as AsyncIterable<Page<T>>) {
-            collected.push(page);
-        }
-        return collected;
     }
 
     /**

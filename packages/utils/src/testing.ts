@@ -5,6 +5,7 @@
 
 export { NullTelemetryReporter } from './base/ITelemetryReporter';
 export * from './test/createTestActionExecutor';
+export * from './test/data/collectAsync';
 export * from './test/vscode/config/MockMemento';
 export * from './test/vscode/config/MockWorkspaceConfiguration';
 export * from './test/vscode/input/MockInputBox';
