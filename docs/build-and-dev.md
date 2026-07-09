@@ -121,7 +121,7 @@ This works because Mocha is configured (under the `"mocha"` key in each package'
 
 ### No watch available for
 
-- **Lint** — the `lint` script is plain `eslint --max-warnings 0`; ESLint has no native `--watch` flag and no watch wrapper is installed. Run `pnpm run lint` manually.
+- **Lint** — the `lint` script is plain `eslint --max-warnings 0`; ESLint has no native `--watch` flag and no watch wrapper is installed. Run `pnpm run lint` manually. To iterate faster, scope it to the files you changed and lint in parallel — see [Linting](#linting) below.
 - **Extension tests** — the extension's `test` script is `vscode-test` (`@vscode/test-cli`), which has no re-running watch mode. Run the full `pnpm --filter vscode-azure run test` instead.
 
 ## Linting
@@ -132,6 +132,32 @@ pnpm --filter @microsoft/vscode-azure-utils run lint  # Single workspace
 ```
 
 Uses ESLint with strict type-checked configuration from `@microsoft/vscode-azext-eng/eslint`.
+
+### Faster lint iteration
+
+ESLint has no watch mode, but you can shorten the feedback loop:
+
+- **Filter to specific files/dirs.** Pass paths through the workspace script (after `--`) so ESLint only lints what you touched instead of the whole package. This is the biggest win while iterating on a few files:
+
+  ```bash
+  # Lint a single file (or a directory) in one package
+  pnpm --filter @microsoft/vscode-azure-utils run lint -- src/tree/DataItemTree.ts
+  pnpm --filter vscode-azure run lint -- src/commands
+  ```
+
+- **Run in parallel.** The root `pnpm run lint` already fans out across workspaces (`pnpm -r --parallel run lint`). Within a single ESLint invocation you can also enable multithreaded linting with `--concurrency` (default `off` in ESLint 10):
+
+  ```bash
+  pnpm --filter @microsoft/vscode-azure-utils run lint -- --concurrency auto
+  ```
+
+- **Cache results.** Add `--cache` so ESLint only re-checks files that changed since the last run:
+
+  ```bash
+  pnpm --filter @microsoft/vscode-azure-utils run lint -- --cache
+  ```
+
+Do a final full `pnpm run lint` before opening a PR, since filtered/cached runs can miss issues in files you didn't touch this pass.
 
 ## Cleaning
 
