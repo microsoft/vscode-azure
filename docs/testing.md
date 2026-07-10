@@ -2,12 +2,12 @@
 
 ## Test Organization
 
-Tests live alongside source code in `src/test/` directories within each workspace:
+Tests live in a `test/` directory that sits as a sibling of `src/` within each workspace:
 
 ```
-packages/utils/src/test/
-packages/azutils/src/test/
-extensions/vscode-azure/src/test/
+packages/utils/test/
+packages/azutils/test/
+extensions/vscode-azure/test/
 ```
 
 ## Test Labels
@@ -146,7 +146,7 @@ Note: intermediate items in the pick step get ` $(chevron-right)` appended to th
 
 ### Shared Test Fixtures (azutils)
 
-`packages/azutils/src/test/` provides shared helpers, exported from the `@microsoft/vscode-azure-azutils/testing` barrel:
+`packages/azutils/test/` provides shared helpers, exported from the `@microsoft/vscode-azure-azutils/testing` barrel:
 - `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()`, `makeCredential()`, `makeResourceGroup()`, `makeGenericResource()`, `makeVirtualGroup()`, `makeVirtualResource()` using the `AzurePublicCloud` preset; plus `createMockAccountDataProvider()`
 - `mockPipeline.ts` — `makeRequest()`, `makeResponse()` (using SDK's `createHttpHeaders`), and `MockHttpClient` for injecting into Azure SDK clients
 - `tree/mockTree.ts` — `createMockViewItemTree()`, `createMockDataItemTree()`, `createMockHierarchicalDataItemTree()` for testing `Choose*Step` classes and pick-based wizards
@@ -210,7 +210,7 @@ When source maps are available, coverage from the bundled extension can be remap
 Extension test configuration lives in `.vscode-test.mjs`:
 
 ```javascript
-export { azExtSrcTestConfig as default } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
+export { azExtTestConfig as default } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
 ```
 
 Package test configuration lives in `package.json`:
@@ -218,6 +218,6 @@ Package test configuration lives in `package.json`:
 ```json
 "mocha": {
     "node-option": ["import=tsx"],
-    "spec": ["src/test/**/*.test.ts"]
+    "spec": ["test/**/*.test.ts"]
 }
 ```

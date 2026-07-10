@@ -23,7 +23,7 @@ extensionConfig.alias = {
     ...extensionConfig.alias,
     '@microsoft/vscode-azure-utils': '../../packages/utils/src/index.ts',
     '@microsoft/vscode-azure-azutils': '../../packages/azutils/src/index.ts',
-    '@microsoft/vscode-azure-azutils/testing': '../../packages/azutils/src/testing.ts',
+    '@microsoft/vscode-azure-azutils/testing': '../../packages/azutils/test/testing.ts',
 };
 
 // Copy Azure resource type icons into dist/azureIcons/ so they are bundled
