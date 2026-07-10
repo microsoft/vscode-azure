@@ -731,6 +731,36 @@ describe('DataItemTree (unit)', () => {
             expect((onChange.mock.calls[0].arguments[0] as TestResource).id).to.equal('parent');
         });
 
+        it('should fire once for the parent when removing an ancestor and its descendant together', async () => {
+            // Regression guard: a key-based remove target that contains both a
+            // node and one of its own descendants must be apex-normalized, so the
+            // change event fires for the surviving parent only -- never for the
+            // ancestor that was just removed (which would make a listener's
+            // getChildren throw 'Resource not found in tree').
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+            tree.registerProvider(createBranchProvider(
+                new Map([
+                    ['parent', [{ id: 'a' }]],
+                    ['a', [{ id: 'x' }]],
+                ]),
+            ));
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+            await tree.getChildren({ id: 'a' });
+
+            const fired: (string | undefined)[] = [];
+            tree.onDidChange(r => fired.push(r?.id));
+
+            tree.remove([{ id: 'a' }, { id: 'x' }]);
+
+            expect(tree.get('a')).to.be.undefined;
+            expect(tree.get('x')).to.be.undefined;
+            // Only the surviving parent fires; the removed ancestor 'a' must not.
+            expect(fired).to.deep.equal(['parent']);
+        });
+
         it('should evict descendants of the removed item', async () => {
             const tree = createTree();
             tree.registerProvider(createRootProvider([{ id: 'root' }]));
@@ -959,55 +989,68 @@ describe('DataItemTree (unit)', () => {
             expect(tree.get('p1')).to.be.undefined;
         });
 
-        it('should discard an in-flight page even when the provider reuses the same iterator instance across fetches', async () => {
-            // Regression guard: the staleness token is the object identity of the
-            // installed pager. If a (pathological) provider returns the SAME
-            // iterator instance on every getChildren call, a re-fetch that races
-            // an in-flight loadMore reuses that mid-stream iterator. Routing the
-            // first-page pull through the same in-flight de-duplication as
-            // loadMore collapses the two to one guarded pull, so the superseded
-            // page is discarded instead of advancing the shared iterator again
-            // and clobbering the freshly re-fetched node.
+        it('should pull the fresh pagers first page when a re-fetch races an in-flight loadMore', async () => {
+            // Regression guard for the pager-generation de-dup bug: page-load
+            // de-duplication is keyed by pager identity, not node key. An
+            // in-flight loadMore on the OLD pager must not swallow the NEW
+            // pager's first-page pull after an invalidate + re-fetch (which
+            // would leave the node rendering empty while its fresh iterator sits
+            // un-advanced). A well-behaved provider returns a FRESH iterator per
+            // getChildren call, which is the case exercised here.
             const tree = createTree();
             tree.registerProvider(createRootProvider([{ id: 'parent' }]));
 
-            const { promise: page2, resolve: resolvePage2 } = Promise.withResolvers<Page<TestResource>>();
-            let callN = 0;
-            // A single, reused, self-referential async iterator instance.
-            const shared: AsyncIterableIterator<Page<TestResource>> = {
-                [Symbol.asyncIterator]() { return this; },
-                next(): Promise<IteratorResult<Page<TestResource>>> {
-                    callN++;
-                    if (callN === 1) {
-                        return Promise.resolve({ done: false, value: { items: [{ id: 'p1' }], hasMore: true } });
-                    }
-                    return page2.then((value) => ({ done: false, value }));
-                },
-            };
-
+            const { promise: gatedPage2, resolve: resolvePage2 } = Promise.withResolvers<Page<TestResource>>();
+            let listing = 0;
             tree.registerProvider({
                 isRoot: false,
                 canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'parent',
-                getChildren: () => shared,
+                getChildren: () => {
+                    listing++;
+                    // The first listing (old pager) has a second page; the
+                    // re-fetch's listing (new pager) is a single page.
+                    const first: Page<TestResource> = listing === 1
+                        ? { items: [{ id: 'p1-old' }], hasMore: true }
+                        : { items: [{ id: 'p1-new' }], hasMore: false };
+                    let call = 0;
+                    const iter: AsyncIterableIterator<Page<TestResource>> = {
+                        [Symbol.asyncIterator]() { return this; },
+                        next(): Promise<IteratorResult<Page<TestResource>>> {
+                            call++;
+                            if (call === 1) {
+                                return Promise.resolve({ done: false, value: first });
+                            }
+                            // Only the old pager ever asks for a second page; gate
+                            // it so it is still in flight during the re-fetch.
+                            return gatedPage2.then((value) => ({ done: false, value }));
+                        },
+                    };
+                    return iter;
+                },
             });
 
             await tree.getChildren();
-            await tree.getChildren({ id: 'parent' });
+            await tree.getChildren({ id: 'parent' }); // old pager, first page [p1-old]
             expect(tree.hasMore({ id: 'parent' })).to.be.true;
 
-            // Start page 2 (pending), wipe the subtree mid-flight, then re-fetch
-            // (which re-installs the SAME underlying iterator instance).
+            // Start the old pager's page 2 (pending), wipe the subtree mid-flight,
+            // then re-fetch -- which installs a fresh pager and iterator.
             const loadPromise = tree.loadMore({ id: 'parent' });
             tree.invalidate(subtreeOf<TestResource>({ id: 'parent' }));
-            const refetch = tree.getChildren({ id: 'parent' });
+            const refetched = await tree.getChildren({ id: 'parent' });
 
+            // The fresh pager's first page must be returned -- not an empty list
+            // left behind by de-duping onto the superseded loadMore.
+            expect(refetched.map(r => r.id)).to.deep.equal(['p1-new']);
+            expect(tree.get('p1-new')).to.not.be.undefined;
+            expect(tree.hasMore({ id: 'parent' })).to.be.false;
+
+            // Release the superseded page; the pager-identity guard must discard
+            // it so it never lands in the freshly re-fetched node.
             resolvePage2({ items: [{ id: 'orphan' }], hasMore: false });
-            const refetched = await refetch;
             await loadPromise;
-
-            // The superseded page must not land in the freshly re-fetched node.
-            expect(refetched.map(r => r.id)).to.not.include('orphan');
             expect(tree.get('orphan')).to.be.undefined;
+            expect((await tree.getChildren({ id: 'parent' })).map(r => r.id)).to.deep.equal(['p1-new']);
         });
     });
 

@@ -33,6 +33,13 @@ const CHILDREN = 'children';
  * @internal
  */
 interface Pager<T> {
+    /**
+     * A process-unique identity for this pager install, used to key page-load
+     * de-duplication. A fresh id per install ensures a superseded pager from a
+     * prior fetch generation never shares an in-flight entry with the pager that
+     * replaced it (see {@linkcode DataItemTree.loadOnePage}).
+     */
+    readonly id: string;
     /** The in-progress async iterator; `undefined` once exhausted. */
     iterator: AsyncIterator<Page<T>> | undefined;
     /** Whether another page is available (mirrors the last page's `hasMore`). */
@@ -121,6 +128,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     /** Per-resource pagination state (present only for paginated nodes). */
     private readonly pagers = new Map<string, Pager<T>>();
+
+    /** Monotonic source of per-install {@linkcode Pager.id} values. */
+    private pagerSeq = 0;
 
     /**
      * The registry of per-node side tables kept consistent with the {@linkcode tree}
@@ -308,7 +318,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             this.reconcileChildren(path, children);
         } else if (isAsyncIterable(result)) {
             // Paged result: install a pager and pull the first page.
-            const pager: Pager<T> = { iterator: result[Symbol.asyncIterator](), hasMore: true, path };
+            const pager: Pager<T> = { id: `${key}#${++this.pagerSeq}`, iterator: result[Symbol.asyncIterator](), hasMore: true, path };
             this.pagers.set(key, pager);
             children = await this.pullFirstPage(resource, pager);
         } else {
@@ -329,23 +339,22 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private async pullFirstPage(resource: T, pager: Pager<T>): Promise<T[]> {
         const key = this.getKey(resource);
 
-        // Pull the first page through the same per-key in-flight de-duplication
-        // as loadOnePage. A well-behaved provider returns a fresh iterator on
-        // every getChildren call, so this is normally an uncontended single pull.
-        // But a (pathological) provider that hands back the SAME iterator
-        // instance across fetches can leave a superseded loadMore's next() in
-        // flight when this node re-fetches. Sharing loadOnePage's in-flight entry
-        // collapses the two to a single guarded pull, so the re-fetch adopts the
-        // superseded (and discarded) load rather than advancing the shared
-        // iterator a second time and clobbering the node with a stale page. The
-        // pager-identity guard below discards anything that raced a concurrent
-        // invalidate. This mirrors loadOnePage; only the reconcile-vs-append of
-        // the children list differs (the first page replaces, later pages append).
+        // Pull the first page through the same per-pager in-flight de-duplication
+        // as loadOnePage, keyed by this pager's unique identity (not the node
+        // key). Keying by identity is what makes the de-dup correct across fetch
+        // generations: a superseded pager's still-in-flight loadMore lives under
+        // a DIFFERENT key, so it can never swallow this fresh pager's first-page
+        // pull (returning an empty list while the new iterator sits un-advanced).
+        // The only thing that shares this key is a concurrent loadMore/loadAll on
+        // THIS same pager -- collapsing those to one guarded next() prevents two
+        // concurrent next() calls on one iterator. The pager-identity guard below
+        // discards anything that raced a concurrent invalidate. This mirrors
+        // loadOnePage; only the reconcile-vs-append of the children list differs
+        // (the first page replaces, later pages append).
         let firstPage: T[] | undefined;
-        await this.loadsInFlight.getOrRun(key, async () => {
-            // A different pager already owns this key -- e.g. this call
-            // de-duplicated onto an in-flight loadMore whose pager was since
-            // superseded -- so there is no first page for our pager to pull.
+        await this.loadsInFlight.getOrRun(pager.id, async () => {
+            // The pager was replaced/removed before our pull began (e.g. a
+            // concurrent invalidate), so there is no first page for it to pull.
             if (this.pagers.get(key) !== pager || !pager.iterator) {
                 return;
             }
@@ -374,9 +383,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             firstPage = items;
         });
 
-        // Our callback ran and produced the first page. If instead we de-duplicated
-        // onto a superseded (and discarded) in-flight load, fall back to whatever
-        // the cache holds for this node -- empty for a node wiped mid-flight.
+        // Our callback ran and produced the first page. If the pager was wiped
+        // mid-flight (a concurrent invalidate/remove tripped the guard above),
+        // fall back to whatever the cache holds for this node -- empty for a node
+        // wiped mid-flight.
         return firstPage ?? [...(this.client.getQueryData<T[]>(this.childrenKey(pager.path)) ?? [])];
     }
 
@@ -530,9 +540,18 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     private async loadOnePage(resource: T): Promise<void> {
         const key = this.getKey(resource);
-        await this.loadsInFlight.getOrRun(key, async () => {
-            const pager = this.pagers.get(key);
-            if (!pager?.iterator) {
+        const pager = this.pagers.get(key);
+        if (!pager?.iterator) {
+            return;
+        }
+
+        // De-duplicate by pager identity, not node key. Overlapping loadMore /
+        // loadAll on THIS pager collapse to a single guarded next() (never two
+        // concurrent next() on one iterator), while a superseded pager from a
+        // prior fetch generation lives under a different key and so can neither
+        // swallow nor be swallowed by the current pager's pull.
+        await this.loadsInFlight.getOrRun(pager.id, async () => {
+            if (!pager.iterator) {
                 return;
             }
 
@@ -634,7 +653,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
         const matchedKeys = typeof target === 'function'
             ? this.collectMatches(target as Selector<T>)
-            : [...this.toKeySet(this.toKeyMatch(target).match)].filter(key => this.tree.has(key));
+            : this.tree.apexes([...this.toKeySet(this.toKeyMatch(target).match)].filter(key => this.tree.has(key)));
 
         this.removeNodes(matchedKeys);
     }
