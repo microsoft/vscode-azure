@@ -22,8 +22,8 @@
             "import": "./dist/esm/src/index.js"
         },
         "./testing": {
-            "types": "./dist/esm/src/testing.d.ts",
-            "import": "./dist/esm/src/testing.js"
+            "types": "./dist/esm/test/testing.d.ts",
+            "import": "./dist/esm/test/testing.js"
         }
     },
     "scripts": {
