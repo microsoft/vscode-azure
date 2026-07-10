@@ -328,28 +328,56 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private async pullFirstPage(resource: T, pager: Pager<T>): Promise<T[]> {
         const key = this.getKey(resource);
-        const next = await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
-            context.telemetry.isUserEvent = false;
-            context.errorHandling.rethrow = true;
-            context.errorHandling.suppress = 'display';
-            context.telemetry.properties.tree = this.name;
-            return pager.iterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- freshly created above
+
+        // Pull the first page through the same per-key in-flight de-duplication
+        // as loadOnePage. A well-behaved provider returns a fresh iterator on
+        // every getChildren call, so this is normally an uncontended single pull.
+        // But a (pathological) provider that hands back the SAME iterator
+        // instance across fetches can leave a superseded loadMore's next() in
+        // flight when this node re-fetches. Sharing loadOnePage's in-flight entry
+        // collapses the two to a single guarded pull, so the re-fetch adopts the
+        // superseded (and discarded) load rather than advancing the shared
+        // iterator a second time and clobbering the node with a stale page. The
+        // pager-identity guard below discards anything that raced a concurrent
+        // invalidate. This mirrors loadOnePage; only the reconcile-vs-append of
+        // the children list differs (the first page replaces, later pages append).
+        let firstPage: T[] | undefined;
+        await this.loadsInFlight.getOrRun(key, async () => {
+            // A different pager already owns this key -- e.g. this call
+            // de-duplicated onto an in-flight loadMore whose pager was since
+            // superseded -- so there is no first page for our pager to pull.
+            if (this.pagers.get(key) !== pager || !pager.iterator) {
+                return;
+            }
+
+            const next = await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                context.errorHandling.suppress = 'display';
+                context.telemetry.properties.tree = this.name;
+                return pager.iterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- guarded above
+            });
+
+            // If the pager was replaced/removed while the first page was in
+            // flight (e.g. a concurrent invalidate), discard the page.
+            if (this.pagers.get(key) !== pager) {
+                return;
+            }
+
+            const items = next!.done ? [] : next!.value.items; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
+            pager.hasMore = next!.done ? false : next!.value.hasMore; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
+            if (!pager.hasMore) {
+                pager.iterator = undefined;
+            }
+            this.reconcileChildren(pager.path, items);
+            this.enrichAll(items);
+            firstPage = items;
         });
 
-        // If the pager was replaced/removed while the first page was in flight
-        // (e.g. a concurrent invalidate), discard the page.
-        if (this.pagers.get(key) !== pager) {
-            return [...(this.client.getQueryData<T[]>(this.childrenKey(pager.path)) ?? [])];
-        }
-
-        const items = next!.done ? [] : next!.value.items; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
-        pager.hasMore = next!.done ? false : next!.value.hasMore; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- rethrows on error
-        if (!pager.hasMore) {
-            pager.iterator = undefined;
-        }
-        this.reconcileChildren(pager.path, items);
-        this.enrichAll(items);
-        return items;
+        // Our callback ran and produced the first page. If instead we de-duplicated
+        // onto a superseded (and discarded) in-flight load, fall back to whatever
+        // the cache holds for this node -- empty for a node wiped mid-flight.
+        return firstPage ?? [...(this.client.getQueryData<T[]>(this.childrenKey(pager.path)) ?? [])];
     }
 
     /**
