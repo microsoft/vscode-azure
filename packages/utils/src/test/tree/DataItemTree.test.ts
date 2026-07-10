@@ -926,6 +926,57 @@ describe('DataItemTree (unit)', () => {
             expect(tree.get('orphan')).to.be.undefined;
             expect(tree.get('p1')).to.be.undefined;
         });
+
+        it('should discard an in-flight page even when the provider reuses the same iterator instance across fetches', async () => {
+            // Regression guard: the staleness token is the object identity of the
+            // stored pageIterator. If a (pathological) provider returns the SAME
+            // iterator instance on every getChildren call, a naive install that
+            // stored that instance directly would reuse the same object after a
+            // wipe + re-fetch, so the mid-flight guard could not tell the fresh
+            // listing apart from the superseded one. getBranchChildren wraps the
+            // provider iterator in a fresh object per install to keep the token
+            // unique, which this test pins down.
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+
+            const { promise: page2, resolve: resolvePage2 } = Promise.withResolvers<Page<TestResource>>();
+            let callN = 0;
+            // A single, reused, self-referential async iterator instance.
+            const shared: AsyncIterableIterator<Page<TestResource>> = {
+                [Symbol.asyncIterator]() { return this; },
+                next(): Promise<IteratorResult<Page<TestResource>>> {
+                    callN++;
+                    if (callN === 1) {
+                        return Promise.resolve({ done: false, value: { items: [{ id: 'p1' }], hasMore: true } });
+                    }
+                    return page2.then((value) => ({ done: false, value }));
+                },
+            };
+
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'parent',
+                getChildren: () => shared,
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+            expect(tree.hasMore({ id: 'parent' })).to.be.true;
+
+            // Start page 2 (pending), wipe the subtree mid-flight, then re-fetch
+            // (which re-installs the SAME underlying iterator instance).
+            const loadPromise = tree.loadMore({ id: 'parent' });
+            tree.invalidate(subtreeOf<TestResource>({ id: 'parent' }));
+            const refetch = tree.getChildren({ id: 'parent' });
+
+            resolvePage2({ items: [{ id: 'orphan' }], hasMore: false });
+            const refetched = await refetch;
+            await loadPromise;
+
+            // The superseded page must not land in the freshly re-fetched node.
+            expect(refetched.map(r => r.id)).to.not.include('orphan');
+            expect(tree.get('orphan')).to.be.undefined;
+        });
     });
 
     describe('root reconciliation', () => {
@@ -1215,16 +1266,19 @@ describe('DataItemTree consistency (unit)', () => {
             expect(int.nodes.map.get(key), `${label}: node identity mismatch for key '${key}'`).to.equal(node);
         }
 
-        // Invariant 3: side tables never outlive their node.
+        // Invariant 3: side tables never outlive their node. Each loop iterates
+        // a store INDEPENDENT of the reachable walk (the side-table keys, or the
+        // index map), so a leaked entry for an evicted node genuinely fails here
+        // rather than passing by construction.
         for (const key of int.enrichmentPromises.keys()) {
             expect(reachableKeys.has(key), `${label}: enrichmentPromises key '${key}' not indexed`).to.equal(true);
         }
         for (const key of int.loadsInFlight.inflight.keys()) {
             expect(reachableKeys.has(key), `${label}: loadsInFlight key '${key}' not indexed`).to.equal(true);
         }
-        for (const [key, node] of reachable) {
+        for (const [key, node] of int.nodes.map) {
             if (node.pageIterator !== undefined) {
-                expect(reachableKeys.has(key), `${label}: pageIterator holder '${key}' not indexed`).to.equal(true);
+                expect(reachableKeys.has(key), `${label}: pageIterator holder '${key}' not reachable`).to.equal(true);
             }
         }
     }
@@ -1272,8 +1326,10 @@ describe('DataItemTree consistency (unit)', () => {
                         const op = OPS[Math.floor(rand() * OPS.length)];
                         await op(tree, rand);
                         assertConsistent(tree, `seed=${seed} enrich=${enrich} step=${step} (sync)`);
-                        // Let any background enrichment settle, then re-check.
-                        await delay(0);
+                        // Let any background enrichment settle (enrich awaits
+                        // delay(1), so delay(5) reliably drains it), then
+                        // re-check that the settled state is still consistent.
+                        await delay(5);
                         assertConsistent(tree, `seed=${seed} enrich=${enrich} step=${step} (settled)`);
                     }
 

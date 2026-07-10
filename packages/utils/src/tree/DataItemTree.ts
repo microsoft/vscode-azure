@@ -31,6 +31,11 @@ interface TreeNode<T> {
      * If the provider returned an `AsyncIterable<Page<T>>`, the in-progress
      * iterator is stored here between page pulls. `undefined` means no
      * more pages are available (or the provider returned a plain array).
+     *
+     * The stored value is a fresh wrapper created at install time (not the
+     * provider's own iterator object), so its identity is guaranteed unique
+     * per install and can serve as a staleness token in
+     * {@linkcode DataItemTree.loadOnePage}.
      */
     pageIterator?: AsyncIterator<Page<T>>;
 }
@@ -273,7 +278,16 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             // onDidChange before staleAt is set -- otherwise listeners
             // could re-enter getChildren, see staleAt=0, and reset the
             // iterator.
-            node.pageIterator = result[Symbol.asyncIterator]();
+            //
+            // Wrap the provider's iterator in a fresh object so the stored
+            // pageIterator has a unique identity per install. loadOnePage uses
+            // that identity as its staleness token; a pathological provider that
+            // returned the SAME iterator instance across fetches would otherwise
+            // let a page from a superseded listing land in a freshly re-fetched
+            // node (the wipe + re-install would reuse the same object, defeating
+            // the guard).
+            const iterator = result[Symbol.asyncIterator]();
+            node.pageIterator = { next: () => iterator.next() };
             await this.loadOnePage(resource);
         } else {
             node.children = this.addChildNodes(result, node);
@@ -572,7 +586,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * pulling a page and discards the page if the node's iterator is no longer
      * that same object -- this prevents a page from a superseded iterator from
      * landing in a node that was invalidated (but whose object identity, and
-     * therefore map entry, survives) mid-flight.
+     * therefore map entry, survives) mid-flight. Because each iterator is wrapped
+     * in a fresh object when installed (see {@linkcode DataItemTree.getBranchChildren}),
+     * this token is also unique across successive listings of the same node.
      *
      * This is the single primitive every subtree-drop site routes through, so
      * enrichment-promise eviction and the iterator reset can never be skipped.
