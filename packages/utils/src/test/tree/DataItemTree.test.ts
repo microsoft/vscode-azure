@@ -1089,51 +1089,37 @@ describe('DataItemTree consistency (unit)', () => {
     const PREFIXES = ['a', 'b', 'c', 'a1', 'a2', 'b1'];
 
     function buildTree(options?: { enrich?: boolean }): DataItemTree<TestResource> {
-        const { executor } = createTestActionExecutor();
-        const { vscode } = createMockVsCode();
-        const tree = new DataItemTree<TestResource>(vscode, 'consistency', executor, r => r.id, 60_000);
-        tree.registerProvider({
-            isRoot: true,
-            canHandle: canHandleNone,
-            getChildren: () => CONSISTENCY_ROOTS.map(r => ({ ...r })),
-        });
-        const branch: DataProvider<TestResource> = {
-            isRoot: false,
-            canHandle: (r: unknown): r is TestResource => CHILD_MAP.has((r as TestResource).id),
-            getChildren: (r?: TestResource) => (r ? (CHILD_MAP.get(r.id) ?? []).map(c => ({ ...c })) : []),
+        const tree = createTree();
+        tree.registerProvider(createRootProvider(CONSISTENCY_ROOTS));
+        tree.registerProvider(createBranchProvider(CHILD_MAP, {
             enrich: options?.enrich
                 ? async (r: TestResource): Promise<boolean> => { await delay(1); r.enriched = true; return false; }
                 : undefined,
-        };
-        tree.registerProvider(branch);
+        }));
         return tree;
     }
 
     // A tree whose root set can shrink between listings, to exercise the
     // reconcileRoots (mass root departure) path. Each root `rN` has one child `rNc`.
+    // The roots array is mutated in place (via splice) so the shared
+    // createRootProvider closure observes the change.
     function buildShrinkableRootTree(): { tree: DataItemTree<TestResource>; setRoots: (roots: TestResource[]) => void } {
-        const roots = Array.from({ length: 10 }, (_, i) => ({ id: `r${i}` }));
-        const childMap = new Map(roots.map(r => [r.id, [{ id: `${r.id}c` }]]));
-        let current = [...roots];
-        const { executor } = createTestActionExecutor();
-        const { vscode } = createMockVsCode();
-        const tree = new DataItemTree<TestResource>(vscode, 'consistency-roots', executor, r => r.id, 60_000);
-        tree.registerProvider({ isRoot: true, canHandle: canHandleNone, getChildren: () => current.map(r => ({ ...r })) });
-        tree.registerProvider({
-            isRoot: false,
-            canHandle: (r: unknown): r is TestResource => childMap.has((r as TestResource).id),
-            getChildren: (r?: TestResource) => (r ? (childMap.get(r.id) ?? []).map(c => ({ ...c })) : []),
-        });
-        return { tree, setRoots: (next: TestResource[]) => { current = next; } };
+        const allRoots = Array.from({ length: 10 }, (_, i) => ({ id: `r${i}` }));
+        const childMap = new Map(allRoots.map(r => [r.id, [{ id: `${r.id}c` }]]));
+        const current = [...allRoots];
+        const tree = createTree();
+        tree.registerProvider(createRootProvider(current));
+        tree.registerProvider(createBranchProvider(childMap));
+        return { tree, setRoots: (next: TestResource[]) => { current.splice(0, current.length, ...next); } };
     }
 
     // A paged branch: root -> p1 (hasMore) -> p2 (done). A fresh iterator is
     // created on every listing so the pager can be re-installed after teardown.
+    // The root reuses createRootProvider; the paged branch stays custom since no
+    // existing helper produces an AsyncIterable of pages.
     function buildPagedTree(): DataItemTree<TestResource> {
-        const { executor } = createTestActionExecutor();
-        const { vscode } = createMockVsCode();
-        const tree = new DataItemTree<TestResource>(vscode, 'consistency-paged', executor, r => r.id, 60_000);
-        tree.registerProvider({ isRoot: true, canHandle: canHandleNone, getChildren: () => [{ id: 'root' }] });
+        const tree = createTree();
+        tree.registerProvider(createRootProvider([{ id: 'root' }]));
         tree.registerProvider({
             isRoot: false,
             canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'root',
