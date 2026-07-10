@@ -43,7 +43,7 @@ extensionConfig.plugins.push(
 // pollute the main extension bundle. Only loaded by `main.js` when
 // `AZURE_MOCK_DATA=1`, and non-production mode.
 extensionConfig.entryPoints.push({
-    in: './src/override/mock.ts',
+    in: './test/override/mock.ts',
     out: 'test/mock.bundle',
 });
 
@@ -51,7 +51,7 @@ extensionConfig.entryPoints.push({
 // `@azure/identity` dependency stays out of the main extension bundle. Only
 // loaded by `main.js` when `ENABLE_LONG_RUNNING_TESTS=1`, and non-production mode.
 extensionConfig.entryPoints.push({
-    in: './src/override/e2e.ts',
+    in: './test/override/e2e.ts',
     out: 'test/e2e.bundle',
 });
 

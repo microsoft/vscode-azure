@@ -20,7 +20,7 @@ import * as vscode from 'vscode';
  *
  * This module resolves the {@linkcode E2EConfig} (subscription/tenant/location)
  * for a run. The real Azure credential injected into the live extension for
- * these tests lives in `src/override/e2e.ts` (the override bundle), also gated
+ * these tests lives in `test/override/e2e.ts` (the override bundle), also gated
  * on `ENABLE_LONG_RUNNING_TESTS=1`.
  */
 

@@ -43,7 +43,7 @@ from `AZURE_E2E_SUBSCRIPTION_ID`, so the CLI is never consulted.
 
 ## Authentication
 
-[`applyOverrides`](../../override/e2e.ts) selects a credential automatically:
+[`applyOverrides`](../override/e2e.ts) selects a credential automatically:
 
 - **CI (Azure Pipelines federated service connection):** when
   `FC_SERVICE_CONNECTION_TENANT_ID`, `FC_SERVICE_CONNECTION_CLIENT_ID`,
