@@ -22,6 +22,12 @@ describe('PickHostingPlanStep (unit)', () => {
             const context: Partial<CreateFunctionAppContext> = { appServicePlanSkuName: 'FC1' };
             expect(step.shouldPrompt(context)).to.be.false;
         });
+
+        it('should return false when infrastructure already exists (hasInfra)', () => {
+            const { ctx } = createMockCodeContext();
+            const step = new PickHostingPlanStep(ctx);
+            expect(step.shouldPrompt({ hasInfra: true })).to.be.false;
+        });
     });
 
     describe('prompt', () => {

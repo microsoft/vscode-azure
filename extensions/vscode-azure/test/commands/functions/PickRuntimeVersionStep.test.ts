@@ -36,6 +36,13 @@ describe('PickRuntimeVersionStep (unit)', () => {
             const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node' };
             expect(step.shouldPrompt(context)).to.be.true;
         });
+
+        it('should return false when infrastructure already exists (hasInfra)', () => {
+            const { ctx } = createMockCodeContext();
+            const step = new PickRuntimeVersionStep(ctx);
+            const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node', hasInfra: true };
+            expect(step.shouldPrompt(context)).to.be.false;
+        });
     });
 
     describe('prompt', () => {

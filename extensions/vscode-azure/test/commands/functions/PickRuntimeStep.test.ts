@@ -7,6 +7,7 @@ import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure
 import { expect } from 'chai';
 import type { CreateFunctionAppContext } from '../../../src/commands/functions/CreateFunctionAppContext';
 import { PickRuntimeStep } from '../../../src/commands/functions/steps/PickRuntimeStep';
+import { PickRuntimeVersionStep } from '../../../src/commands/functions/steps/PickRuntimeVersionStep';
 
 describe('PickRuntimeStep (unit)', () => {
     describe('shouldPrompt', () => {
@@ -21,6 +22,24 @@ describe('PickRuntimeStep (unit)', () => {
             const step = new PickRuntimeStep(ctx);
             const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node' };
             expect(step.shouldPrompt(context)).to.be.false;
+        });
+
+        it('should return false when infrastructure already exists (hasInfra)', () => {
+            const { ctx } = createMockCodeContext();
+            const step = new PickRuntimeStep(ctx);
+            expect(step.shouldPrompt({ hasInfra: true })).to.be.false;
+        });
+    });
+
+    describe('getSubPromptSteps', () => {
+        it('inserts a PickRuntimeVersionStep sub-step to resolve the version', () => {
+            const { ctx } = createMockCodeContext();
+            const step = new PickRuntimeStep(ctx);
+
+            const subSteps = step.getSubPromptSteps();
+
+            expect(subSteps).to.have.lengthOf(1);
+            expect(subSteps[0]).to.be.instanceOf(PickRuntimeVersionStep);
         });
     });
 
