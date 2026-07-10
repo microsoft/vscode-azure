@@ -116,7 +116,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     private async getRootChildren(): Promise<T[]> {
         if (this.isFresh(this.roots, this.rootsStaleAt)) {
-            const roots = this.roots!; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- isFresh guarantees roots is defined
+            const roots = this.roots;
             this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${roots.length})`);
             return roots.map(n => n.resource);
         }
@@ -223,7 +223,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * and the current time must be before its `staleAt` timestamp. A `staleAt`
      * of `0` (the force-stale convention) is always considered stale.
      */
-    private isFresh(loaded: unknown, staleAt: number): boolean {
+    private isFresh<TLoaded>(loaded: TLoaded, staleAt: number): loaded is NonNullable<TLoaded> {
         return loaded !== undefined && Date.now() < staleAt;
     }
 
@@ -236,8 +236,8 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         }
 
         if (this.isFresh(node.children, node.staleAt)) {
-            this.executor.output.trace(`[cache] ${this.name} branch cache hit key=${key} count=${node.children!.length}`); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- isFresh guarantees children is defined
-            return node.children!.map(n => n.resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- isFresh guarantees children is defined
+            this.executor.output.trace(`[cache] ${this.name} branch cache hit key=${key} count=${node.children.length}`);
+            return node.children.map(n => n.resource);
         }
         this.executor.output.trace(`[cache] ${this.name} branch cache miss key=${key}`);
 
