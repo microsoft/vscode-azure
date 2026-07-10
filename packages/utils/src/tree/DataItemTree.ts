@@ -33,16 +33,6 @@ interface TreeNode<T> {
      * more pages are available (or the provider returned a plain array).
      */
     pageIterator?: AsyncIterator<Page<T>>;
-
-    /**
-     * Monotonic counter bumped every time this node's subtree is wiped (see
-     * {@linkcode DataItemTree.wipeSubtree}). An in-flight page load captures the
-     * generation before pulling a page and discards the page if the generation
-     * changed meanwhile -- this prevents a page from a superseded iterator from
-     * landing in a node that was invalidated (but whose object identity, and
-     * therefore map entry, survives) mid-flight.
-     */
-    generation?: number;
 }
 
 /**
@@ -120,9 +110,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     private async getRootChildren(): Promise<T[]> {
-        if (this.roots !== undefined && Date.now() < this.rootsStaleAt) {
-            this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${this.roots.length})`);
-            return this.roots.map(n => n.resource);
+        if (this.isFresh(this.roots, this.rootsStaleAt)) {
+            const roots = this.roots!; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- isFresh guarantees roots is defined
+            this.executor.output.trace(`[cache] ${this.name} root cache hit (count=${roots.length})`);
+            return roots.map(n => n.resource);
         }
         this.executor.output.trace(`[cache] ${this.name} root cache miss`);
 
@@ -160,6 +151,23 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         // while preserving the tenant / subscription subtrees under roots that
         // are still present. After invalidateAll() this.roots is undefined, so
         // this degenerates to a full fresh fetch (the previous behavior).
+        this.roots = this.reconcileRoots(resources);
+        this.rootsStaleAt = this.computeStaleAt(this.rootTtl(rootProviders));
+        this.executor.output.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
+
+        const rootResources = this.roots.map(n => n.resource);
+        this.enrichAll(rootResources);
+
+        return rootResources;
+    }
+
+    /**
+     * Reconcile freshly-listed root resources against the previously cached
+     * root nodes by key: evict roots (and their subtrees) that are no longer
+     * present, and preserve surviving roots' nodes (with their cached subtree,
+     * staleAt, and pageIterator) as-is. Returns the new ordered root node array.
+     */
+    private reconcileRoots(resources: T[]): TreeNode<T>[] {
         const newKeySet = new Set(resources.map(resource => this.getKey(resource)));
 
         // Evict roots (and their subtrees) that are no longer present.
@@ -169,7 +177,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             }
         }
 
-        const rootNodes = resources.map(resource => {
+        return resources.map(resource => {
             const resourceKey = this.getKey(resource);
             const existing = this.nodes.get(resourceKey);
             if (existing) {
@@ -183,14 +191,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             this.executor.output.trace(`[cache] ${this.name} root child key=${resourceKey}`);
             return node;
         });
-        this.roots = rootNodes;
-        this.rootsStaleAt = this.computeStaleAt(this.rootTtl(rootProviders));
-        this.executor.output.debug(`[data] ${this.name} root fetch done (providers=${rootProviders.length} count=${resources.length})`);
-
-        const rootResources = rootNodes.map(n => n.resource);
-        this.enrichAll(rootResources);
-
-        return rootResources;
     }
 
     /**
@@ -213,6 +213,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         return ttl === Infinity ? Infinity : Date.now() + ttl;
     }
 
+    /**
+     * Whether a cached value is still fresh: it must be loaded (not `undefined`)
+     * and the current time must be before its `staleAt` timestamp. A `staleAt`
+     * of `0` (the force-stale convention) is always considered stale.
+     */
+    private isFresh(loaded: unknown, staleAt: number): boolean {
+        return loaded !== undefined && Date.now() < staleAt;
+    }
+
     private async getBranchChildren(resource: T): Promise<T[]> {
         const key = this.getKey(resource);
         const node = this.nodes.get(key);
@@ -221,27 +230,26 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             throw new Error(`Resource not found in tree: ${key}`);
         }
 
-        if (node.children !== undefined && Date.now() < node.staleAt) {
-            this.executor.output.trace(`[cache] ${this.name} branch cache hit key=${key} count=${node.children.length}`);
-            return node.children.map(n => n.resource);
+        if (this.isFresh(node.children, node.staleAt)) {
+            this.executor.output.trace(`[cache] ${this.name} branch cache hit key=${key} count=${node.children!.length}`); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- isFresh guarantees children is defined
+            return node.children!.map(n => n.resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- isFresh guarantees children is defined
         }
         this.executor.output.trace(`[cache] ${this.name} branch cache miss key=${key}`);
+
+        // Remove previously cached descendants that may no longer be present
+        // (also clears their enrichment promises and resets the page iterator so
+        // any in-flight page load is discarded), then start from an empty list.
+        this.wipeSubtree(node);
+        node.children = [];
 
         // Find the provider that handles this resource
         const provider = this.findProvider(resource);
         if (!provider) {
-            this.wipeSubtree(node);
-            node.children = [];
             node.staleAt = this.computeStaleAt(this.ttl);
             this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=0 provider=<none>`);
             return [];
         }
 
-        // Remove previously cached descendants that may no longer be present
-        // (also clears their enrichment promises and bumps this node's
-        // generation so any in-flight page load is discarded).
-        this.wipeSubtree(node);
-        node.children = [];
         this.executor.output.debug(`[data] ${this.name} branch fetch start key=${key} provider=${provider.constructor.name}`);
 
         const result = await this.executor.callWithTelemetryAndErrorHandling('tree.getBranchChildren', (context) => {
@@ -432,10 +440,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         const key = this.getKey(resource);
         await this.loadsInFlight.getOrRun(key, async () => {
             const node = this.nodes.get(key);
-            if (!node?.pageIterator) {
+            const iterator = node?.pageIterator;
+            if (!iterator) {
                 return;
             }
-            const generation = node.generation;
 
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The result will be defined (or an error rethrown)
             const next = (await this.executor.callWithTelemetryAndErrorHandling('tree.loadMore', (context) => {
@@ -445,14 +453,16 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                 // error display, so don't show a toast here as well.
                 context.errorHandling.suppress = 'display';
                 context.telemetry.properties.tree = this.name;
-                return node.pageIterator!.next(); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
+                return iterator.next();
             }))!;
 
-            if (this.nodes.get(key) !== node || node.generation !== generation) {
+            if (this.nodes.get(key) !== node || node.pageIterator !== iterator) {
                 // The node was removed (e.g. via remove()) or its subtree was
-                // wiped (e.g. via invalidate()) while this page was in flight.
-                // Discard the page without touching the node -- a fresh fetch
-                // may have installed a new iterator we must not clobber.
+                // wiped (e.g. via invalidate(), which resets pageIterator) while
+                // this page was in flight. The captured iterator no longer being
+                // the node's current iterator is our staleness token. Discard
+                // the page without touching the node -- a fresh fetch may have
+                // installed a new iterator we must not clobber.
                 return;
             }
 
@@ -557,11 +567,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     /**
      * Wipe a node's subtree: evict every descendant from the {@linkcode NodeMap}
      * (clearing their enrichment promises too), drop this node's cached children
-     * and page iterator, mark it stale, and bump its generation so an in-flight
-     * page load for the previous generation is discarded.
+     * and page iterator, and mark it stale. Clearing `pageIterator` also acts as
+     * a staleness token: an in-flight page load captures the iterator before
+     * pulling a page and discards the page if the node's iterator is no longer
+     * that same object -- this prevents a page from a superseded iterator from
+     * landing in a node that was invalidated (but whose object identity, and
+     * therefore map entry, survives) mid-flight.
      *
      * This is the single primitive every subtree-drop site routes through, so
-     * enrichment-promise eviction and the generation bump can never be skipped.
+     * enrichment-promise eviction and the iterator reset can never be skipped.
      */
     private wipeSubtree(node: TreeNode<T>): void {
         for (const removedKey of this.nodes.removeSubtrees(node.children)) {
@@ -570,7 +584,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         node.children = undefined;
         node.pageIterator = undefined;
         node.staleAt = 0;
-        node.generation = (node.generation ?? 0) + 1;
     }
 
     /** Normalize a resource / key / array input into a flat list of entries. */

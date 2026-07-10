@@ -868,7 +868,7 @@ describe('DataItemTree (unit)', () => {
             expect(tree.get('orphan')).to.be.undefined;
         });
 
-        it('should discard an in-flight page when the subtree is invalidated mid-load (generation guard)', async () => {
+        it('should discard an in-flight page when the subtree is invalidated mid-load (iterator-identity guard)', async () => {
             const tree = createTree();
             tree.registerProvider(createRootProvider([{ id: 'parent' }]));
 
@@ -911,11 +911,12 @@ describe('DataItemTree (unit)', () => {
 
             // Invalidate the parent's subtree while the page load is in flight.
             // Unlike remove(), this keeps the parent node (and its map entry), so
-            // only the generation bump -- not the node-identity check -- can catch
-            // the stale page.
+            // only the iterator reset done by wipeSubtree -- not the node-identity
+            // check -- can catch the stale page.
             tree.invalidate(subtreeOf<TestResource>({ id: 'parent' }));
 
-            // Resolve the page -- should be discarded because the generation changed.
+            // Resolve the page -- should be discarded because the captured
+            // iterator is no longer the node's current iterator.
             resolveNextPage();
             await loadPromise;
 
