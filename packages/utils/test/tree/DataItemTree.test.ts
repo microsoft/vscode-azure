@@ -1124,7 +1124,7 @@ describe('DataItemTree (unit)', () => {
  * {@linkcode DataItemTreeInternals}) and assert a set of invariants after every
  * operation, including a randomized, seeded op-sequence so failures reproduce.
  */
-describe('DataItemTree consistency', () => {
+describe('DataItemTree consistency (unit)', () => {
     // ---- fixtures -----------------------------------------------------------
 
     const CHILD_MAP = new Map<string, TestResource[]>([
