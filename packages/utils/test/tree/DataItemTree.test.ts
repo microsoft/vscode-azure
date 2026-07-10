@@ -1154,13 +1154,17 @@ describe('DataItemTree consistency (unit)', () => {
     // reconcileRoots (mass root departure) path. Each root `rN` has one child `rNc`.
     // The roots array is mutated in place (via splice) so the shared
     // createRootProvider closure observes the change.
-    function buildShrinkableRootTree(): { tree: DataItemTree<TestResource>; setRoots: (roots: TestResource[]) => void } {
+    function buildShrinkableRootTree(options?: { enrich?: boolean }): { tree: DataItemTree<TestResource>; setRoots: (roots: TestResource[]) => void } {
         const allRoots = Array.from({ length: 10 }, (_, i) => ({ id: `r${i}` }));
         const childMap = new Map(allRoots.map(r => [r.id, [{ id: `${r.id}c` }]]));
         const current = [...allRoots];
         const tree = createTree();
         tree.registerProvider(createRootProvider(current));
-        tree.registerProvider(createBranchProvider(childMap));
+        tree.registerProvider(createBranchProvider(childMap, {
+            enrich: options?.enrich
+                ? async (r: TestResource): Promise<boolean> => { await delay(1); r.enriched = true; return false; }
+                : undefined,
+        }));
         return { tree, setRoots: (next: TestResource[]) => { current.splice(0, current.length, ...next); } };
     }
 
@@ -1408,6 +1412,27 @@ describe('DataItemTree consistency (unit)', () => {
         expect(int.nodes.map.has('r7')).to.equal(true);
         expect(int.nodes.map.has('r7c')).to.equal(true);
         assertConsistent(tree, 'after mass departure');
+        tree.dispose();
+    });
+
+    it('reconcileRoots clears enrichmentPromises for departed roots (no side-table leak)', async () => {
+        const { tree, setRoots } = buildShrinkableRootTree({ enrich: true });
+        await tree.getChildren();
+
+        expect(internalsOf(tree).enrichmentPromises.size).to.be.greaterThan(0);
+
+        setRoots([{ id: 'r7' }]);
+        tree.invalidate(Roots);
+        await tree.getChildren();
+
+        const int = internalsOf(tree);
+        for (let i = 0; i < 10; i++) {
+            if (i === 7) {
+                continue;
+            }
+            expect(int.enrichmentPromises.has(`r${i}`), `r${i} enrichment promise should be cleared`).to.equal(false);
+        }
+        assertConsistent(tree, 'after enriched-root departure');
         tree.dispose();
     });
 

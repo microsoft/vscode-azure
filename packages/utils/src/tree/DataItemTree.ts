@@ -175,10 +175,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private reconcileRoots(resources: T[]): TreeNode<T>[] {
         const newKeySet = new Set(resources.map(resource => this.getKey(resource)));
 
-        // Evict roots (and their subtrees) that are no longer present.
+        // Evict roots (and their subtrees) that are no longer present, clearing
+        // their enrichment promises too (matching wipeSubtree) so a departed
+        // root's in-flight enrichment cannot outlive its node in the side table.
         for (const rootNode of this.roots ?? []) {
             if (!newKeySet.has(this.getKey(rootNode.resource))) {
-                this.nodes.removeSubtrees([rootNode]);
+                for (const removedKey of this.nodes.removeSubtrees([rootNode])) {
+                    this.enrichmentPromises.delete(removedKey);
+                }
             }
         }
 
