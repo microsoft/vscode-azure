@@ -5,13 +5,13 @@
 
 // Container overrides for the "azd up" E2E test.
 //
-// This is the credential-injection half of the E2E mechanism. When `RUN_E2E=1`
-// (set by the `Extension: Run E2E Tests` launch config and by CI), `main.js`
-// loads this bundle and calls `applyOverrides` to rebind the credential factory
-// to a real Azure `TokenCredential`, so the live extension authenticates
-// against a real subscription instead of prompting for an interactive VS Code
-// sign-in. The suite-gating half lives in `test/e2e/e2eConfig.ts`
-// (`describeE2E`).
+// This is the credential-injection half of the E2E mechanism. When
+// `ENABLE_LONG_RUNNING_TESTS=1` (set by the `Extension: Run E2E Tests` launch
+// config and by CI), `main.js` loads this bundle and calls `applyOverrides` to
+// rebind the credential factory to a real Azure `TokenCredential`, so the live
+// extension authenticates against a real subscription instead of prompting for
+// an interactive VS Code sign-in. The suite-gating half uses the shared
+// `describeLongRunning` helper from `@microsoft/vscode-azure-utils/testing`.
 //
 // Compiled as a SEPARATE esbuild entry point (e2e.bundle.js) so none of this
 // code -- nor its `@azure/identity` dependency -- ends up in the main extension
@@ -28,7 +28,7 @@ import type { Container } from 'inversify';
  * tokens without an interactive VS Code sign-in.
  *
  * Called from `main.js` after `setUpContainer` but before activation when
- * `RUN_E2E=1`. A single credential instance is shared across all factory calls
+ * `ENABLE_LONG_RUNNING_TESTS=1`. A single credential instance is shared across all factory calls
  * (the input subscription/tenant is ignored) so token caching is preserved.
  *
  * The credential is selected from the environment:

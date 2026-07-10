@@ -2,26 +2,30 @@
 
 These tests make **real network calls** against a live Azure subscription and
 create/destroy real resources (resource groups, storage accounts). They are
-long-running and **disabled by default**: they only run when `RUN_E2E=1` is set
-in the environment. In the normal test suite the
-[`describeE2E`](./e2eConfig.ts) gate registers each suite as skipped, so these
-files are harmless even though their `*.e2e.test.ts` names also match the
-default `*.test.ts` glob. `describeE2E` also applies a long mocha timeout to
-accommodate real provisioning/deployment.
+long-running and **disabled by default**: they only run when
+`ENABLE_LONG_RUNNING_TESTS=1` is set in the environment. In the normal test
+suite the shared
+[`describeLongRunning`](../../../../packages/utils/test/describeLongRunning.ts)
+gate registers each suite as skipped, so these files are harmless even though
+their `*.e2e.test.ts` names also match the default `*.test.ts` glob.
+`describeLongRunning` also applies a long mocha timeout to accommodate real
+provisioning/deployment.
 
 ## Running
 
-Use the **Extension: Run E2E Tests** launch configuration (it sets `RUN_E2E=1`
-and runs the standard [`.vscode-test.mjs`](../../../.vscode-test.mjs) runner).
-To run from the CLI, set `RUN_E2E=1` in your shell first:
+Use the **Extension: Run E2E Tests** launch configuration (it sets
+`ENABLE_LONG_RUNNING_TESTS=1` and runs the standard
+[`.vscode-test.mjs`](../../../.vscode-test.mjs) runner). To run from the CLI, set
+`ENABLE_LONG_RUNNING_TESTS=1` in your shell first:
 
 ```sh
-RUN_E2E=1 pnpm --filter vscode-azure run test
+ENABLE_LONG_RUNNING_TESTS=1 pnpm --filter vscode-azure run test
 ```
 
 This reuses the single test runner; the normal unit/integration tests also run,
-and the E2E suites activate via the `RUN_E2E` gate. CI sets `RUN_E2E=1` (along
-with the `FC_SERVICE_CONNECTION_*` variables) on its dedicated E2E job.
+and the E2E suites activate via the `ENABLE_LONG_RUNNING_TESTS` gate. CI sets
+`ENABLE_LONG_RUNNING_TESTS=1` (along with the `FC_SERVICE_CONNECTION_*`
+variables) on its dedicated E2E job.
 
 ## Required environment variables
 

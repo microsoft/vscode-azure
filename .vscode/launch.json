@@ -76,7 +76,7 @@
             "env": {
                 "DEBUGTELEMETRY": "1",
                 "TSX_TSCONFIG_PATH": "${workspaceFolder}/extensions/vscode-azure/tsconfig.json", // Necessary only for F5 to get tsx to allow decorators
-                "RUN_E2E": "1", // Opt in to the live, long-running E2E suites (see test/e2e/README.md)
+                "ENABLE_LONG_RUNNING_TESTS": "1", // Opt in to the live, long-running E2E suites (see test/e2e/README.md)
             },
             "outFiles": [
                 "${workspaceFolder}/extensions/vscode-azure/dist/**/*.{js,mjs,cjs}",

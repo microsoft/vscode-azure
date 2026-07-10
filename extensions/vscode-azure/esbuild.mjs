@@ -49,7 +49,7 @@ extensionConfig.entryPoints.push({
 
 // Add a separate entry point for the E2E credential override bundle so its
 // `@azure/identity` dependency stays out of the main extension bundle. Only
-// loaded by `main.js` when `RUN_E2E=1`, and non-production mode.
+// loaded by `main.js` when `ENABLE_LONG_RUNNING_TESTS=1`, and non-production mode.
 extensionConfig.entryPoints.push({
     in: './src/override/e2e.ts',
     out: 'test/e2e.bundle',

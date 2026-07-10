@@ -11,6 +11,7 @@ import { DataItemTree } from '../../src/tree/DataItemTree';
 import type { DataProvider, DataProviderChangeEvent } from '../../src/tree/DataProvider';
 import { Everything, Roots, selfOnly, subtreeOf, type Selector } from '../../src/tree/Selector';
 import { createTestActionExecutor } from '../createTestActionExecutor';
+import { describeLongRunning } from '../describeLongRunning';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
 interface TestResource {
@@ -1121,7 +1122,7 @@ describe('DataItemTree (unit)', () => {
  * {@linkcode DataItemTreeInternals}) and assert a set of invariants after every
  * operation, including a randomized, seeded op-sequence so failures reproduce.
  */
-describe('DataItemTree consistency (unit)', () => {
+describeLongRunning('DataItemTree consistency', () => {
     // ---- fixtures -----------------------------------------------------------
 
     const CHILD_MAP = new Map<string, TestResource[]>([
@@ -1474,4 +1475,4 @@ describe('DataItemTree consistency (unit)', () => {
         assertConsistent(tree, 'after Everything with live pager');
         tree.dispose();
     });
-});
+}, { timeoutMs: 60_000 });
