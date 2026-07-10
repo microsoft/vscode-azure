@@ -5,6 +5,7 @@
 
 import { expect } from 'chai';
 import { mock } from 'node:test';
+import { collectAsync } from '../data/collectAsync';
 import type { DataItemTree } from '../../src/tree/DataItemTree';
 import { drillChildren } from '../../src/tree/drillChildren';
 
@@ -41,18 +42,10 @@ describe('drillChildren (unit)', () => {
         return { tree, getChildren, hasMore, loadMore };
     }
 
-    async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
-        const result: T[] = [];
-        for await (const item of iterable) {
-            result.push(item);
-        }
-        return result;
-    }
-
     it('should yield every child across all pages', async () => {
         const { tree } = createPagedTree('parent', [['a', 'b'], ['c'], ['d', 'e']]);
 
-        const result = await collect(drillChildren(tree, 'parent'));
+        const result = await collectAsync(drillChildren(tree, 'parent'));
 
         expect(result).to.deep.equal(['a', 'b', 'c', 'd', 'e']);
     });
@@ -60,7 +53,7 @@ describe('drillChildren (unit)', () => {
     it('should yield each item exactly once even though getChildren returns cumulative pages', async () => {
         const { tree } = createPagedTree('parent', [['a'], ['b'], ['c']]);
 
-        const result = await collect(drillChildren(tree, 'parent'));
+        const result = await collectAsync(drillChildren(tree, 'parent'));
 
         expect(result).to.deep.equal(['a', 'b', 'c']);
     });
@@ -90,7 +83,7 @@ describe('drillChildren (unit)', () => {
         const loadMore = mock.fn((_node: string): Promise<void> => Promise.resolve());
         const tree = { getChildren, hasMore, loadMore } as unknown as DataItemTree<string>;
 
-        const result = await collect(drillChildren(tree));
+        const result = await collectAsync(drillChildren(tree));
 
         expect(result).to.deep.equal(['x', 'y']);
         // Roots are not paged: hasMore/loadMore must never be consulted for them.
@@ -101,7 +94,7 @@ describe('drillChildren (unit)', () => {
     it('should handle an empty first page with no further pages', async () => {
         const { tree } = createPagedTree('parent', [[]]);
 
-        const result = await collect(drillChildren(tree, 'parent'));
+        const result = await collectAsync(drillChildren(tree, 'parent'));
 
         expect(result).to.deep.equal([]);
     });

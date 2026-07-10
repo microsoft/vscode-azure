@@ -8,9 +8,9 @@ import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azur
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import * as vscode from 'vscode';
-import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import { AddOrEditAppSetting } from '../../../../src/commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../src/commands/functions/DeleteAppSetting';
+import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../src/tree/resources/functions/FunctionApp';
 import { FunctionAppViewProvider } from '../../../../src/tree/resources/functions/FunctionAppViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
