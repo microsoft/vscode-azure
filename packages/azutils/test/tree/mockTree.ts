@@ -161,3 +161,18 @@ export function createMockPagedDataItemTree(
     const tree = { getChildren, hasMore, loadMore } as unknown as DataItemTree<ConcreteAzureNode>;
     return { tree, getChildren, hasMore, loadMore };
 }
+
+/**
+ * Builds the `node -> pages-of-children` {@linkcode Map} consumed by
+ * {@linkcode createMockPagedDataItemTree}.
+ *
+ * A thin convenience over `new Map(...)` that pins the key/value types so call
+ * sites don't need to repeat the `new Map<ConcreteAzureNode, ConcreteAzureNode[][]>`
+ * annotation. Each entry is `[parentNode, pages]`, where `pages` is the parent's
+ * children split into successive pages.
+ */
+export function pagedChildren(
+    entries: readonly [ConcreteAzureNode, ConcreteAzureNode[][]][],
+): Map<ConcreteAzureNode, ConcreteAzureNode[][]> {
+    return new Map<ConcreteAzureNode, ConcreteAzureNode[][]>(entries);
+}

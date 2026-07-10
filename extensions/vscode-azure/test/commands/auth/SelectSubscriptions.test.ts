@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { createMockPagedDataItemTree, makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockPagedDataItemTree, makeAccount, makeSubscription, makeTenant, pagedChildren } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, MockQuickPick, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -28,7 +28,7 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { tree: cache, loadMore } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree: cache, loadMore } = createMockPagedDataItemTree([account], pagedChildren([
             [account, [[tenant]]],
             [tenant, [[sub1], [sub2]]],
         ]));
@@ -48,7 +48,7 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { tree: cache } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree: cache } = createMockPagedDataItemTree([account], pagedChildren([
             [account, [[tenant]]],
             [tenant, [[sub1, sub2]]],
         ]));
@@ -95,7 +95,7 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { tree: cache } = createMockPagedDataItemTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+        const { tree: cache } = createMockPagedDataItemTree([account], pagedChildren([
             [account, [[tenant]]],
             [tenant, [[sub1, sub2]]],
         ]));
@@ -117,7 +117,7 @@ describe('SelectSubscriptions (unit)', () => {
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: goodTenant.tenantId, accountId: account.id });
         const { tree: cache } = createMockPagedDataItemTree(
             [account],
-            new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+            pagedChildren([
                 [account, [[goodTenant, badTenant]]],
                 [goodTenant, [[sub1, sub2]]],
             ]),
@@ -142,7 +142,7 @@ describe('SelectSubscriptions (unit)', () => {
         const badTenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Bad Tenant', accountId: account.id });
         const { tree: cache } = createMockPagedDataItemTree(
             [account],
-            new Map<ConcreteAzureNode, ConcreteAzureNode[][]>([
+            pagedChildren([
                 [account, [[badTenant]]],
             ]),
             { failNodes: new Set<ConcreteAzureNode>([badTenant]) },

@@ -4,14 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { createMockPagedDataItemTree, makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockPagedDataItemTree, makeAccount, makeSubscription, makeTenant, pagedChildren } from '@microsoft/vscode-azure-azutils/testing';
 import { expect } from 'chai';
 import { listReachableSubscriptions } from '../../../src/commands/auth/listReachableAuthNodes';
-
-/** Build a `Map` of node -> pages of children with the right key/value types. */
-function pages(entries: [ConcreteAzureNode, ConcreteAzureNode[][]][]): Map<ConcreteAzureNode, ConcreteAzureNode[][]> {
-    return new Map<ConcreteAzureNode, ConcreteAzureNode[][]>(entries);
-}
 
 describe('listReachableAuthNodes (unit)', () => {
     describe('listReachableSubscriptions', () => {
@@ -21,7 +16,7 @@ describe('listReachableAuthNodes (unit)', () => {
             // Provided out of alphabetical order to prove the result is sorted by displayName.
             const subBeta = makeSubscription({ subscriptionId: 'sub-b', displayName: 'Beta', tenantId: tenant.tenantId, accountId: account.id });
             const subAlpha = makeSubscription({ subscriptionId: 'sub-a', displayName: 'Alpha', tenantId: tenant.tenantId, accountId: account.id });
-            const { tree } = createMockPagedDataItemTree([account], pages([
+            const { tree } = createMockPagedDataItemTree([account], pagedChildren([
                 [account, [[tenant]]],
                 [tenant, [[subBeta, subAlpha]]],
             ]));
@@ -36,7 +31,7 @@ describe('listReachableAuthNodes (unit)', () => {
         });
 
         it('returns empty results for a tree with no accounts', async () => {
-            const { tree } = createMockPagedDataItemTree([], pages([]));
+            const { tree } = createMockPagedDataItemTree([], pagedChildren([]));
 
             const { subscriptions, failures } = await listReachableSubscriptions(tree);
 
@@ -49,7 +44,7 @@ describe('listReachableAuthNodes (unit)', () => {
             const tenant = makeTenant({ tenantId: 'tenant-1', accountId: account.id });
             const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Only', tenantId: tenant.tenantId, accountId: account.id });
             // The same subscription is served on two separate pages.
-            const { tree, loadMore } = createMockPagedDataItemTree([account], pages([
+            const { tree, loadMore } = createMockPagedDataItemTree([account], pagedChildren([
                 [account, [[tenant]]],
                 [tenant, [[sub], [sub]]],
             ]));
@@ -68,7 +63,7 @@ describe('listReachableAuthNodes (unit)', () => {
             const tenantUpper = makeTenant({ tenantId: 'TENANT-1', accountId: account.id });
             const subLower = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub', tenantId: 'tenant-1', accountId: account.id });
             const subUpper = makeSubscription({ subscriptionId: 'SUB-1', displayName: 'Sub', tenantId: 'TENANT-1', accountId: account.id });
-            const { tree } = createMockPagedDataItemTree([account], pages([
+            const { tree } = createMockPagedDataItemTree([account], pagedChildren([
                 [account, [[tenantLower, tenantUpper]]],
                 [tenantLower, [[subLower]]],
                 [tenantUpper, [[subUpper]]],
@@ -91,7 +86,7 @@ describe('listReachableAuthNodes (unit)', () => {
             const strayUnderTenant = makeTenant({ tenantId: 'stray-tenant', accountId: account.id });
             const { tree } = createMockPagedDataItemTree(
                 [strayAtRoot, account],
-                pages([
+                pagedChildren([
                     [account, [[strayUnderAccount, tenant]]],
                     [tenant, [[strayUnderTenant, sub]]],
                 ]),
@@ -110,7 +105,7 @@ describe('listReachableAuthNodes (unit)', () => {
             const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Good Sub', tenantId: goodTenant.tenantId, accountId: account.id });
             const { tree } = createMockPagedDataItemTree(
                 [account],
-                pages([
+                pagedChildren([
                     [account, [[goodTenant, badTenant]]],
                     [goodTenant, [[sub]]],
                 ]),
@@ -135,7 +130,7 @@ describe('listReachableAuthNodes (unit)', () => {
             const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub', tenantId: tenant.tenantId, accountId: goodAccount.id });
             const { tree } = createMockPagedDataItemTree(
                 [badAccount, goodAccount],
-                pages([
+                pagedChildren([
                     [goodAccount, [[tenant]]],
                     [tenant, [[sub]]],
                 ]),
