@@ -990,17 +990,19 @@ describe('DataItemTree (unit)', () => {
             const cChildren = mock.fn(() => [{ id: 'c-child' }]);
             const tree = createTree();
             let rootList: TestResource[] = [{ id: 'a' }, { id: 'b' }];
-            tree.registerProvider({ isRoot: true, canHandle: handleIds('a', 'b', 'c'), getChildren: (r?: TestResource) => {
-                if (!r) {
-                    return rootList.map(x => ({ ...x }));
+            tree.registerProvider({
+                isRoot: true, canHandle: handleIds('a', 'b', 'c'), getChildren: (r?: TestResource) => {
+                    if (!r) {
+                        return rootList.map(x => ({ ...x }));
+                    }
+                    switch (r.id) {
+                        case 'a': return aChildren();
+                        case 'b': return bChildren();
+                        case 'c': return cChildren();
+                        default: return [];
+                    }
                 }
-                switch (r.id) {
-                    case 'a': return aChildren();
-                    case 'b': return bChildren();
-                    case 'c': return cChildren();
-                    default: return [];
-                }
-            } });
+            });
 
             await tree.getChildren();
             await tree.getChildren({ id: 'a' });
@@ -1122,7 +1124,7 @@ describe('DataItemTree (unit)', () => {
  * {@linkcode DataItemTreeInternals}) and assert a set of invariants after every
  * operation, including a randomized, seeded op-sequence so failures reproduce.
  */
-describeLongRunning('DataItemTree consistency', () => {
+describe('DataItemTree consistency', () => {
     // ---- fixtures -----------------------------------------------------------
 
     const CHILD_MAP = new Map<string, TestResource[]>([
@@ -1318,7 +1320,7 @@ describeLongRunning('DataItemTree consistency', () => {
 
     // ---- randomized op-sequence --------------------------------------------
 
-    describe('randomized op-sequence keeps every store consistent', () => {
+    describeLongRunning('randomized op-sequence keeps every store consistent', () => {
         for (const enrich of [false, true]) {
             for (const seed of [1, 2, 7, 42, 1337, 99999]) {
                 it(`seed=${seed} enrich=${enrich}`, async () => {
@@ -1342,7 +1344,7 @@ describeLongRunning('DataItemTree consistency', () => {
                 });
             }
         }
-    });
+    }, { timeoutMs: 10_000 });
 
     // ---- targeted teardown scenarios ---------------------------------------
 
@@ -1475,4 +1477,4 @@ describeLongRunning('DataItemTree consistency', () => {
         assertConsistent(tree, 'after Everything with live pager');
         tree.dispose();
     });
-}, { timeoutMs: 60_000 });
+});
