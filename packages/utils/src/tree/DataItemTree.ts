@@ -219,12 +219,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
-     * Whether a cached value is still fresh: it must be loaded (not `undefined`)
-     * and the current time must be before its `staleAt` timestamp. A `staleAt`
-     * of `0` (the force-stale convention) is always considered stale.
+     * Whether a cached value is still fresh: it must be loaded (not `undefined`
+     * or `null`) and the current time must be before its `staleAt` timestamp. A
+     * `staleAt` of `0` (the force-stale convention) is always considered stale.
      */
     private isFresh<TLoaded>(loaded: TLoaded, staleAt: number): loaded is NonNullable<TLoaded> {
-        return loaded !== undefined && Date.now() < staleAt;
+        return loaded !== undefined && loaded !== null && Date.now() < staleAt;
     }
 
     private async getBranchChildren(resource: T): Promise<T[]> {
