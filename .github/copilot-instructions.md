@@ -125,7 +125,7 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * Use real `createActionContext()` instead of mocking `IActionContext`
 * Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` (not from the main entry point)
 * Use `respondToPrompts()` from the testing package to drive wizard / pick-step UI flows
-* In azutils, use the shared fixtures in `src/test/mockAzure.ts` and `src/test/mockPipeline.ts` instead of creating local mocks
+* In azutils, use the shared fixtures in `test/mockAzure.ts` and `test/mockPipeline.ts` instead of creating local mocks
 * For Azure environments, use `Environment.AzureCloud` from `@azure/ms-rest-azure-env` instead of hand-rolled environment objects
 * Don't test that constants equal their literal values — those tests add no value
 * Testing Azure SDK clients: use `MockHttpClient` injected via the `options` parameter on the client's `create()` method
