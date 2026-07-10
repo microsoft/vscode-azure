@@ -7,51 +7,25 @@ import { ProcessExecutor, stringifyError } from '@microsoft/vscode-azure-utils';
 import * as vscode from 'vscode';
 
 /**
- * End-to-end (E2E) test support: configuration and suite gating.
+ * End-to-end (E2E) test configuration.
  *
  * E2E tests make **real network calls** against a live Azure subscription and
  * create/destroy real resources. They are therefore long-running and disabled
- * by default. They run only when `RUN_E2E=1` is set in the environment (the
- * `Extension: Run E2E Tests` launch config sets this, and CI sets it on the
- * E2E job). When the flag is unset, {@linkcode describeE2E} registers the suite
- * as skipped so the files remain harmless in the normal `*.test.ts` collection.
+ * by default, gated behind `ENABLE_LONG_RUNNING_TESTS=1` via the shared
+ * `describeLongRunning` helper from `@microsoft/vscode-azure-utils/testing` (the
+ * `Extension: Run E2E Tests` launch config sets the flag, and CI sets it on the
+ * E2E job). The default test runner glob also matches the `*.e2e.test.ts` files,
+ * so that gate is the safety mechanism that prevents accidental live runs during
+ * the normal test suite.
  *
- * The real Azure credential injected into the live extension for these tests
- * lives in `src/override/e2e.ts` (the override bundle).
- *
- * @remarks
- * The default test runner glob also matches the `*.e2e.test.ts` files, so the
- * {@linkcode describeE2E} gate is the safety mechanism that prevents accidental
- * live runs during the normal test suite.
+ * This module resolves the {@linkcode E2EConfig} (subscription/tenant/location)
+ * for a run. The real Azure credential injected into the live extension for
+ * these tests lives in `test/override/e2e.ts` (the override bundle), also gated
+ * on `ENABLE_LONG_RUNNING_TESTS=1`.
  */
 
 /** Mocha timeout for E2E suites; live provisioning/deploys can take many minutes. */
-const E2ETimeoutMs = 30 * 60 * 1000;
-
-/**
- * Registers an E2E test suite.
- *
- * When E2E is enabled, this is a normal {@linkcode describe} block (with an
- * `(e2e)` label appended, mirroring the repo's `(unit)`/`(integration)` suffix
- * style) and a long mocha timeout to accommodate real Azure
- * provisioning/deployment. When disabled, the suite is registered with
- * {@linkcode describe.skip} so it never executes but still shows up as pending
- * in reporters.
- *
- * @param title - The suite title (the `(e2e)` label is appended automatically).
- * @param fn - The suite body.
- */
-export function describeE2E(title: string, fn: (this: Mocha.Suite) => void) {
-    const label = `${title} (e2e)`;
-    if (process.env.RUN_E2E !== '1') {
-        return describe.skip(label, fn);
-    }
-
-    return describe(label, function (this: Mocha.Suite) {
-        this.timeout(E2ETimeoutMs);
-        fn.call(this);
-    });
-}
+export const E2ETimeoutMs = 30 * 60 * 1000;
 
 /**
  * Resolved configuration for an E2E run.

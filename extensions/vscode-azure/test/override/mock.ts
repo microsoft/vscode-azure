@@ -11,12 +11,12 @@
 import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
-import { createMockAcrClient } from '../../test/tree/resources/acr/mockAcr';
-import { createMockResourceClient } from '../../test/tree/resources/mockResourceClient';
-import type { ActivityStatus } from '../tree/activity/Activity';
-import { type AddChildOptions, ICodeDeploymentDataProvider } from '../tree/activity/CodeDeploymentDataProvider';
-import { IGenericActivityDataProvider } from '../tree/activity/GenericActivityDataProvider';
-import { IAzureAccountDataProvider } from '../tree/resources/AzureAccountDataProvider';
+import { createMockAcrClient } from '../tree/resources/acr/mockAcr';
+import { createMockResourceClient } from '../tree/resources/mockResourceClient';
+import type { ActivityStatus } from '../../src/tree/activity/Activity';
+import { type AddChildOptions, ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
+import { IGenericActivityDataProvider } from '../../src/tree/activity/GenericActivityDataProvider';
+import { IAzureAccountDataProvider } from '../../src/tree/resources/AzureAccountDataProvider';
 
 // -- Mock data ----------------------------------------------------------------
 

@@ -9,8 +9,9 @@ import { delay } from '../../src/base/delay';
 import type { Page } from '../../src/data/Page';
 import { DataItemTree } from '../../src/tree/DataItemTree';
 import type { DataProvider, DataProviderChangeEvent } from '../../src/tree/DataProvider';
-import { Everything, Roots, selfOnly, subtreeOf } from '../../src/tree/Selector';
+import { Everything, Roots, selfOnly, subtreeOf, type Selector } from '../../src/tree/Selector';
 import { createTestActionExecutor } from '../createTestActionExecutor';
+import { describeLongRunning } from '../describeLongRunning';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
 interface TestResource {
@@ -868,7 +869,7 @@ describe('DataItemTree (unit)', () => {
             expect(tree.get('orphan')).to.be.undefined;
         });
 
-        it('should discard an in-flight page when the subtree is invalidated mid-load (generation guard)', async () => {
+        it('should discard an in-flight page when the subtree is invalidated mid-load (iterator-identity guard)', async () => {
             const tree = createTree();
             tree.registerProvider(createRootProvider([{ id: 'parent' }]));
 
@@ -911,11 +912,12 @@ describe('DataItemTree (unit)', () => {
 
             // Invalidate the parent's subtree while the page load is in flight.
             // Unlike remove(), this keeps the parent node (and its map entry), so
-            // only the generation bump -- not the node-identity check -- can catch
-            // the stale page.
+            // only the iterator reset done by wipeSubtree -- not the node-identity
+            // check -- can catch the stale page.
             tree.invalidate(subtreeOf<TestResource>({ id: 'parent' }));
 
-            // Resolve the page -- should be discarded because the generation changed.
+            // Resolve the page -- should be discarded because the captured
+            // iterator is no longer the node's current iterator.
             resolveNextPage();
             await loadPromise;
 
@@ -924,6 +926,57 @@ describe('DataItemTree (unit)', () => {
             expect(tree.get('parent')).to.not.be.undefined;
             expect(tree.get('orphan')).to.be.undefined;
             expect(tree.get('p1')).to.be.undefined;
+        });
+
+        it('should discard an in-flight page even when the provider reuses the same iterator instance across fetches', async () => {
+            // Regression guard: the staleness token is the object identity of the
+            // stored pageIterator. If a (pathological) provider returns the SAME
+            // iterator instance on every getChildren call, a naive install that
+            // stored that instance directly would reuse the same object after a
+            // wipe + re-fetch, so the mid-flight guard could not tell the fresh
+            // listing apart from the superseded one. getBranchChildren wraps the
+            // provider iterator in a fresh object per install to keep the token
+            // unique, which this test pins down.
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'parent' }]));
+
+            const { promise: page2, resolve: resolvePage2 } = Promise.withResolvers<Page<TestResource>>();
+            let callN = 0;
+            // A single, reused, self-referential async iterator instance.
+            const shared: AsyncIterableIterator<Page<TestResource>> = {
+                [Symbol.asyncIterator]() { return this; },
+                next(): Promise<IteratorResult<Page<TestResource>>> {
+                    callN++;
+                    if (callN === 1) {
+                        return Promise.resolve({ done: false, value: { items: [{ id: 'p1' }], hasMore: true } });
+                    }
+                    return page2.then((value) => ({ done: false, value }));
+                },
+            };
+
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'parent',
+                getChildren: () => shared,
+            });
+
+            await tree.getChildren();
+            await tree.getChildren({ id: 'parent' });
+            expect(tree.hasMore({ id: 'parent' })).to.be.true;
+
+            // Start page 2 (pending), wipe the subtree mid-flight, then re-fetch
+            // (which re-installs the SAME underlying iterator instance).
+            const loadPromise = tree.loadMore({ id: 'parent' });
+            tree.invalidate(subtreeOf<TestResource>({ id: 'parent' }));
+            const refetch = tree.getChildren({ id: 'parent' });
+
+            resolvePage2({ items: [{ id: 'orphan' }], hasMore: false });
+            const refetched = await refetch;
+            await loadPromise;
+
+            // The superseded page must not land in the freshly re-fetched node.
+            expect(refetched.map(r => r.id)).to.not.include('orphan');
+            expect(tree.get('orphan')).to.be.undefined;
         });
     });
 
@@ -937,17 +990,19 @@ describe('DataItemTree (unit)', () => {
             const cChildren = mock.fn(() => [{ id: 'c-child' }]);
             const tree = createTree();
             let rootList: TestResource[] = [{ id: 'a' }, { id: 'b' }];
-            tree.registerProvider({ isRoot: true, canHandle: handleIds('a', 'b', 'c'), getChildren: (r?: TestResource) => {
-                if (!r) {
-                    return rootList.map(x => ({ ...x }));
+            tree.registerProvider({
+                isRoot: true, canHandle: handleIds('a', 'b', 'c'), getChildren: (r?: TestResource) => {
+                    if (!r) {
+                        return rootList.map(x => ({ ...x }));
+                    }
+                    switch (r.id) {
+                        case 'a': return aChildren();
+                        case 'b': return bChildren();
+                        case 'c': return cChildren();
+                        default: return [];
+                    }
                 }
-                switch (r.id) {
-                    case 'a': return aChildren();
-                    case 'b': return bChildren();
-                    case 'c': return cChildren();
-                    default: return [];
-                }
-            } });
+            });
 
             await tree.getChildren();
             await tree.getChildren({ id: 'a' });
@@ -1054,5 +1109,372 @@ describe('DataItemTree (unit)', () => {
             expect(tree.get('tenant')).to.not.be.undefined;
             expect(tree.get('subscription')).to.not.be.undefined;
         });
+    });
+});
+
+/**
+ * Cross-store consistency harness. `DataItemTree` keeps several stores that must
+ * stay in agreement as nodes are loaded, invalidated, and removed:
+ *   - `nodes` (a `NodeMap`, key -> node index),
+ *   - the pointer tree (`roots` + each node's `children` / `parent`),
+ *   - `enrichmentPromises` and `loadsInFlight` side tables,
+ *   - per-node `pageIterator` pagers.
+ *
+ * These tests reach past `private` with a single unchecked cast (see
+ * {@linkcode DataItemTreeInternals}) and assert a set of invariants after every
+ * operation, including a randomized, seeded op-sequence so failures reproduce.
+ */
+describe('DataItemTree consistency (unit)', () => {
+    // ---- fixtures -----------------------------------------------------------
+
+    const CHILD_MAP = new Map<string, TestResource[]>([
+        ['a', [{ id: 'a1' }, { id: 'a2' }]],
+        ['a1', [{ id: 'a1x' }, { id: 'a1y' }]],
+        ['a2', [{ id: 'a2x' }]],
+        ['b', [{ id: 'b1' }]],
+        ['b1', [{ id: 'b1x' }]],
+    ]);
+    const CONSISTENCY_ROOTS: TestResource[] = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+    // Every id that can appear anywhere in the CHILD_MAP tree; used as the pool
+    // of key-based targets for the randomized op-sequence (targets that are not
+    // currently loaded are valid no-ops).
+    const ALL_IDS = ['a', 'b', 'c', 'a1', 'a2', 'a1x', 'a1y', 'a2x', 'b1', 'b1x'];
+    const PREFIXES = ['a', 'b', 'c', 'a1', 'a2', 'b1'];
+
+    function buildTree(options?: { enrich?: boolean }): DataItemTree<TestResource> {
+        const tree = createTree();
+        tree.registerProvider(createRootProvider(CONSISTENCY_ROOTS));
+        tree.registerProvider(createBranchProvider(CHILD_MAP, {
+            enrich: options?.enrich
+                ? async (r: TestResource): Promise<boolean> => { await delay(1); r.enriched = true; return false; }
+                : undefined,
+        }));
+        return tree;
+    }
+
+    // A tree whose root set can shrink between listings, to exercise the
+    // reconcileRoots (mass root departure) path. Each root `rN` has one child `rNc`.
+    // The roots array is mutated in place (via splice) so the shared
+    // createRootProvider closure observes the change.
+    function buildShrinkableRootTree(options?: { enrich?: boolean }): { tree: DataItemTree<TestResource>; setRoots: (roots: TestResource[]) => void } {
+        const allRoots = Array.from({ length: 10 }, (_, i) => ({ id: `r${i}` }));
+        const childMap = new Map(allRoots.map(r => [r.id, [{ id: `${r.id}c` }]]));
+        const current = [...allRoots];
+        const tree = createTree();
+        tree.registerProvider(createRootProvider(current));
+        tree.registerProvider(createBranchProvider(childMap, {
+            enrich: options?.enrich
+                ? async (r: TestResource): Promise<boolean> => { await delay(1); r.enriched = true; return false; }
+                : undefined,
+        }));
+        return { tree, setRoots: (next: TestResource[]) => { current.splice(0, current.length, ...next); } };
+    }
+
+    // A paged branch: root -> p1 (hasMore) -> p2 (done). A fresh iterator is
+    // created on every listing so the pager can be re-installed after teardown.
+    // The root reuses createRootProvider; the paged branch stays custom since no
+    // existing helper produces an AsyncIterable of pages.
+    function buildPagedTree(): DataItemTree<TestResource> {
+        const tree = createTree();
+        tree.registerProvider(createRootProvider([{ id: 'root' }]));
+        tree.registerProvider({
+            isRoot: false,
+            canHandle: (r: unknown): r is TestResource => (r as TestResource).id === 'root',
+            getChildren: () => {
+                const pages: Page<TestResource>[] = [
+                    { items: [{ id: 'p1' }], hasMore: true },
+                    { items: [{ id: 'p2' }], hasMore: false },
+                ];
+                const iter = pages[Symbol.iterator]();
+                return { [Symbol.asyncIterator]: () => ({ next: () => Promise.resolve(iter.next()) }) };
+            },
+        });
+        return tree;
+    }
+
+    // Small, fast, seeded PRNG so a failing seed reproduces deterministically.
+    function mulberry32(seed: number): () => number {
+        let a = seed;
+        return () => {
+            a |= 0;
+            a = (a + 0x6d2b79f5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    function makePrefixSelector(prefix: string): Selector<TestResource> {
+        return (r: TestResource) => (r.id.startsWith(prefix) ? 'subtree' : undefined);
+    }
+
+    // ---- internals access ---------------------------------------------------
+
+    interface TreeNodeLike {
+        readonly resource: TestResource;
+        children: TreeNodeLike[] | undefined;
+        parent: TreeNodeLike | undefined;
+        pageIterator?: unknown;
+    }
+
+    interface DataItemTreeInternals {
+        readonly nodes: { map: Map<string, TreeNodeLike> };
+        readonly enrichmentPromises: ReadonlyMap<string, unknown>;
+        readonly loadsInFlight: { inflight: ReadonlyMap<string, unknown> };
+        readonly roots: TreeNodeLike[] | undefined;
+    }
+
+    function internalsOf(tree: DataItemTree<TestResource>): DataItemTreeInternals {
+        return tree as unknown as DataItemTreeInternals;
+    }
+
+    // Fetch a resource that must currently be loaded, narrowing away `undefined`
+    // without a cast or non-null assertion (both of which the linter rejects).
+    function requireLoaded(tree: DataItemTree<TestResource>, key: string): TestResource {
+        const resource = tree.get(key);
+        if (resource === undefined) {
+            throw new Error(`expected resource '${key}' to be loaded`);
+        }
+        return resource;
+    }
+
+    /**
+     * Assert every cross-store invariant. `label` is prefixed to failure
+     * messages so a failing randomized seed/step is identifiable.
+     */
+    function assertConsistent(tree: DataItemTree<TestResource>, label: string): void {
+        const int = internalsOf(tree);
+
+        // Walk the pointer tree from the roots, collecting reachable nodes/keys
+        // and checking parent-pointer integrity + key uniqueness along the way.
+        const reachable = new Map<string, TreeNodeLike>();
+        const walk = (node: TreeNodeLike, expectedParent: TreeNodeLike | undefined): void => {
+            const key = node.resource.id;
+            expect(reachable.has(key), `${label}: duplicate key '${key}' in reachable tree`).to.equal(false);
+            expect(node.parent, `${label}: parent pointer mismatch for key '${key}'`).to.equal(expectedParent);
+            reachable.set(key, node);
+            for (const child of node.children ?? []) {
+                walk(child, node);
+            }
+        };
+        for (const root of int.roots ?? []) {
+            walk(root, undefined);
+        }
+
+        const reachableKeys = new Set(reachable.keys());
+        const indexKeys = new Set(int.nodes.map.keys());
+
+        // Invariant 1: the index and the reachable set are exactly equal, and
+        // for shared keys the node object identity matches (no stale duplicate).
+        expect([...indexKeys].sort(), `${label}: index keys must equal reachable keys`)
+            .to.deep.equal([...reachableKeys].sort());
+        for (const [key, node] of reachable) {
+            expect(int.nodes.map.get(key), `${label}: node identity mismatch for key '${key}'`).to.equal(node);
+        }
+
+        // Invariant 3: side tables never outlive their node. Each loop iterates
+        // a store INDEPENDENT of the reachable walk (the side-table keys, or the
+        // index map), so a leaked entry for an evicted node genuinely fails here
+        // rather than passing by construction.
+        for (const key of int.enrichmentPromises.keys()) {
+            expect(reachableKeys.has(key), `${label}: enrichmentPromises key '${key}' not indexed`).to.equal(true);
+        }
+        for (const key of int.loadsInFlight.inflight.keys()) {
+            expect(reachableKeys.has(key), `${label}: loadsInFlight key '${key}' not indexed`).to.equal(true);
+        }
+        for (const [key, node] of int.nodes.map) {
+            if (node.pageIterator !== undefined) {
+                expect(reachableKeys.has(key), `${label}: pageIterator holder '${key}' not reachable`).to.equal(true);
+            }
+        }
+    }
+
+    const pickKey = (rand: () => number): string => ALL_IDS[Math.floor(rand() * ALL_IDS.length)];
+    const pickPrefix = (rand: () => number): string => PREFIXES[Math.floor(rand() * PREFIXES.length)];
+
+    // Pick a currently-indexed resource so getChildren() never throws
+    // "Resource not found in tree" (branch lookups require an existing node).
+    function pickIndexedResource(tree: DataItemTree<TestResource>, rand: () => number): TestResource | undefined {
+        const nodes = [...internalsOf(tree).nodes.map.values()];
+        if (nodes.length === 0) {
+            return undefined;
+        }
+        return nodes[Math.floor(rand() * nodes.length)].resource;
+    }
+
+    type Op = (tree: DataItemTree<TestResource>, rand: () => number) => Promise<void> | void;
+
+    const OPS: Op[] = [
+        async (tree) => { await tree.getChildren(); },
+        async (tree, rand) => { const r = pickIndexedResource(tree, rand); if (r) { await tree.getChildren(r); } },
+        (tree, rand) => { tree.invalidate(pickKey(rand)); },
+        (tree, rand) => { tree.invalidate(selfOnly<TestResource>(pickKey(rand))); },
+        (tree, rand) => { tree.invalidate(subtreeOf<TestResource>(pickKey(rand))); },
+        (tree, rand) => { tree.remove(pickKey(rand)); },
+        (tree) => { tree.invalidate(Roots); },
+        (tree, rand) => { tree.invalidate(makePrefixSelector(pickPrefix(rand))); },
+        (tree, rand) => { tree.remove(makePrefixSelector(pickPrefix(rand))); },
+        (tree) => { tree.invalidate(Everything); },
+    ];
+
+    // ---- randomized op-sequence --------------------------------------------
+
+    describeLongRunning('randomized op-sequence keeps every store consistent', () => {
+        for (const enrich of [false, true]) {
+            for (const seed of [1, 2, 7, 42, 1337, 99999]) {
+                it(`seed=${seed} enrich=${enrich}`, async () => {
+                    const tree = buildTree({ enrich });
+                    const rand = mulberry32(seed);
+                    // Prime the roots so the first ops have something to act on.
+                    await tree.getChildren();
+
+                    for (let step = 0; step < 80; step++) {
+                        const op = OPS[Math.floor(rand() * OPS.length)];
+                        await op(tree, rand);
+                        assertConsistent(tree, `seed=${seed} enrich=${enrich} step=${step} (sync)`);
+                        // Let any background enrichment settle (enrich awaits
+                        // delay(1), so delay(5) reliably drains it), then
+                        // re-check that the settled state is still consistent.
+                        await delay(5);
+                        assertConsistent(tree, `seed=${seed} enrich=${enrich} step=${step} (settled)`);
+                    }
+
+                    tree.dispose();
+                });
+            }
+        }
+    }, { timeoutMs: 10_000 });
+
+    // ---- targeted teardown scenarios ---------------------------------------
+
+    it('invalidate(Everything) empties every store', async () => {
+        const tree = buildTree({ enrich: true });
+        await tree.getChildren();
+        await tree.getChildren({ id: 'a' });
+        await tree.getChildren({ id: 'a1' });
+        await tree.getChildren({ id: 'b' });
+        assertConsistent(tree, 'primed');
+
+        tree.invalidate(Everything);
+
+        const int = internalsOf(tree);
+        expect(int.nodes.map.size).to.equal(0);
+        expect(int.enrichmentPromises.size).to.equal(0);
+        expect(int.loadsInFlight.inflight.size).to.equal(0);
+        expect(int.roots).to.equal(undefined);
+        assertConsistent(tree, 'after Everything');
+        tree.dispose();
+    });
+
+    it('remove(subtreeOf(node)) drops the whole subtree while a sibling survives', async () => {
+        const tree = buildTree();
+        await tree.getChildren();
+        await tree.getChildren({ id: 'a' });   // a -> a1, a2
+        await tree.getChildren({ id: 'a1' });  // a1 -> a1x, a1y
+        await tree.getChildren({ id: 'b' });   // b -> b1
+        assertConsistent(tree, 'primed');
+
+        tree.remove(subtreeOf<TestResource>({ id: 'a1' }));
+
+        const int = internalsOf(tree);
+        // Removed subtree gone from the index.
+        expect(int.nodes.map.has('a1')).to.equal(false);
+        expect(int.nodes.map.has('a1x')).to.equal(false);
+        expect(int.nodes.map.has('a1y')).to.equal(false);
+        // Sibling and the other loaded subtree are untouched.
+        expect(int.nodes.map.has('a2')).to.equal(true);
+        expect(tree.get('b')).to.not.equal(undefined);
+        expect(tree.get('b1')).to.not.equal(undefined);
+        assertConsistent(tree, 'after remove a1');
+        tree.dispose();
+    });
+
+    it('reconcileRoots drops departed roots and their subtrees while a survivor is intact (mass departure)', async () => {
+        const { tree, setRoots } = buildShrinkableRootTree();
+        await tree.getChildren();
+        for (let i = 0; i < 10; i++) {
+            await tree.getChildren({ id: `r${i}` }); // load each root's subtree
+        }
+        assertConsistent(tree, 'primed 10 roots');
+
+        // Collapse to a single survivor and re-list the roots.
+        setRoots([{ id: 'r7' }]);
+        tree.invalidate(Roots);
+        await tree.getChildren();
+
+        const int = internalsOf(tree);
+        for (let i = 0; i < 10; i++) {
+            if (i === 7) {
+                continue;
+            }
+            expect(int.nodes.map.has(`r${i}`), `r${i} should be evicted`).to.equal(false);
+            expect(int.nodes.map.has(`r${i}c`), `r${i}c should be evicted`).to.equal(false);
+        }
+        // Survivor and its (preserved, not re-fetched) subtree remain indexed.
+        expect(int.nodes.map.has('r7')).to.equal(true);
+        expect(int.nodes.map.has('r7c')).to.equal(true);
+        assertConsistent(tree, 'after mass departure');
+        tree.dispose();
+    });
+
+    it('reconcileRoots clears enrichmentPromises for departed roots (no side-table leak)', async () => {
+        const { tree, setRoots } = buildShrinkableRootTree({ enrich: true });
+        await tree.getChildren();
+
+        expect(internalsOf(tree).enrichmentPromises.size).to.be.greaterThan(0);
+
+        setRoots([{ id: 'r7' }]);
+        tree.invalidate(Roots);
+        await tree.getChildren();
+
+        const int = internalsOf(tree);
+        for (let i = 0; i < 10; i++) {
+            if (i === 7) {
+                continue;
+            }
+            expect(int.enrichmentPromises.has(`r${i}`), `r${i} enrichment promise should be cleared`).to.equal(false);
+        }
+        assertConsistent(tree, 'after enriched-root departure');
+        tree.dispose();
+    });
+
+    it('removing a paged node clears its pager and drops it from every store', async () => {
+        const tree = buildPagedTree();
+        await tree.getChildren();
+        const root = requireLoaded(tree, 'root');
+        await tree.getChildren(root);
+
+        // Pager is live: hasMore is true and a reachable node holds a pageIterator.
+        expect(tree.hasMore(root)).to.equal(true);
+        expect([...internalsOf(tree).nodes.map.values()].some(n => n.pageIterator !== undefined)).to.equal(true);
+        assertConsistent(tree, 'paged primed');
+
+        tree.remove(root);
+
+        expect(tree.hasMore(root)).to.equal(false);
+        expect(tree.get('root')).to.equal(undefined);
+        expect([...internalsOf(tree).nodes.map.values()].some(n => n.pageIterator !== undefined)).to.equal(false);
+        assertConsistent(tree, 'after remove paged node');
+        tree.dispose();
+    });
+
+    it('invalidate(Everything) empties every store even with a live pager', async () => {
+        const tree = buildPagedTree();
+        await tree.getChildren();
+        const root = requireLoaded(tree, 'root');
+        await tree.getChildren(root);
+        expect(tree.hasMore(root)).to.equal(true);
+
+        tree.invalidate(Everything);
+
+        const int = internalsOf(tree);
+        expect(int.nodes.map.size).to.equal(0);
+        expect(int.enrichmentPromises.size).to.equal(0);
+        expect(int.loadsInFlight.inflight.size).to.equal(0);
+        expect(int.roots).to.equal(undefined);
+        expect(tree.hasMore(root)).to.equal(false);
+        assertConsistent(tree, 'after Everything with live pager');
+        tree.dispose();
     });
 });

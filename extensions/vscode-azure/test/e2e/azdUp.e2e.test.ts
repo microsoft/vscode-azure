@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describeLongRunning } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs/promises';
@@ -12,12 +13,12 @@ import * as vscode from 'vscode';
 import { IAzdService } from '../../src/azd/AzdService';
 import { AzdDownCommandId, AzdUpCommandId, ExtensionId } from '../../src/constants';
 import type { E2EExtensionApi } from '../../src/extension';
-import { describeE2E, getE2EConfig, type E2EConfig } from './e2eConfig';
+import { E2ETimeoutMs, getE2EConfig, type E2EConfig } from './e2eConfig';
 
 /**
  * Full end-to-end coverage of the `azd up` path.
  *
- * Activates the extension (with `RUN_E2E=1` rebinding the credential factory to
+ * Activates the extension (with `ENABLE_LONG_RUNNING_TESTS=1` rebinding the credential factory to
  * a real {@linkcode TokenCredential} via `applyOverrides`, and exposing the DI
  * container via {@linkcode E2EExtensionApi}), copies the minimal `azd-sample`
  * fixture to a temp directory, creates an azd environment, then exercises the
@@ -40,7 +41,7 @@ import { describeE2E, getE2EConfig, type E2EConfig } from './e2eConfig';
  * minimum supported version, so a missing dependency is visible until CI
  * installs it.
  */
-describeE2E('azd up', function () {
+describeLongRunning('azd up', function () {
     let config: E2EConfig;
     let azdService: IAzdService;
     let projectDir: vscode.Uri | undefined;
@@ -52,7 +53,7 @@ describeE2E('azd up', function () {
         envName = `e2e-${randomBytes(3).toString('hex')}`;
 
         // Activate the extension so the azd commands are registered and the
-        // RUN_E2E override rebinds ICredentialFactory to a real credential.
+        // ENABLE_LONG_RUNNING_TESTS override rebinds ICredentialFactory to a real credential.
         // Activation also returns the DI container so we can resolve services.
         const ext = vscode.extensions.getExtension<E2EExtensionApi | undefined>(ExtensionId);
         if (!ext) {
@@ -60,7 +61,7 @@ describeE2E('azd up', function () {
         }
         const api = await ext.activate();
         if (!api) {
-            expect.fail('Extension did not expose its container; ensure RUN_E2E=1 is set');
+            expect.fail('Extension did not expose its container; ensure ENABLE_LONG_RUNNING_TESTS=1 is set');
         }
         azdService = api.container.get(IAzdService);
 
@@ -123,7 +124,7 @@ describeE2E('azd up', function () {
         const show = await azdService.show(projectDir);
         expect(show?.name).to.equal('vscode-azure-e2e-sample');
     });
-});
+}, { timeoutMs: E2ETimeoutMs });
 
 /**
  * Copy a fixture project from the extension source tree into a fresh temp
