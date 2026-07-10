@@ -7,7 +7,7 @@
                 "../utils/src/index.ts"
             ],
             "@microsoft/vscode-azure-utils/testing": [
-                "../utils/src/testing.ts"
+                "../utils/test/testing.ts"
             ]
         }
     },

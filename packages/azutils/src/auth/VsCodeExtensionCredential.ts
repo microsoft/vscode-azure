@@ -67,13 +67,25 @@ export class VsCodeExtensionCredential implements TokenCredential {
     public constructor(private readonly options: VsCodeExtensionCredentialOptions) { }
 
     /**
-     * Acquire an access token for the given scopes via the VS Code
-     * authentication API. Prompts interactive sign-in by default (see
-     * {@linkcode resolveSessionOptions}). Returns `null` when no session is
-     * available (e.g. silent acquisition with no existing session, or the user
-     * cancels sign-in).
+     * Acquire the underlying VS Code {@linkcode vscode.AuthenticationSession}
+     * for the given scopes.
+     *
+     * This owns everything token acquisition needs from the VS Code
+     * authentication API -- provider selection, scope normalization, the
+     * `VSCODE_TENANT:` tenant scope, CAE/MFA claim forwarding, session-option
+     * resolution, and lifecycle logging -- and returns the raw session. Prompts
+     * interactive sign-in by default (see {@linkcode resolveSessionOptions}).
+     *
+     * Prefer {@linkcode getToken} when you only need an `AccessToken`. Reach for
+     * this method when you specifically need the session itself -- for example
+     * to read {@linkcode vscode.AuthenticationSession.account account.id} after a
+     * tenant-targeted sign-in -- so that logic doesn't have to duplicate the
+     * provider/scope construction that lives here.
+     *
+     * @returns The established session, or `null` when none is available (e.g.
+     * silent acquisition with no existing session, or the user cancels sign-in).
      */
-    public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
+    public async authenticate(scopes: string | string[] = [], options?: GetTokenOptions): Promise<vscode.AuthenticationSession | null> {
         const { code, output } = this.options;
         this.environment ??= getConfiguredAzureEnv(code);
         const provider = getAuthProviderId(this.environment);
@@ -94,17 +106,33 @@ export class VsCodeExtensionCredential implements TokenCredential {
 
         const sessionOptions = this.resolveSessionOptions();
 
-        output?.debug(`[auth] getToken start provider=${provider} tenant=${tenantId ?? '<default>'} challenge=${claims ? 'true' : 'false'} scopes=${JSON.stringify(scopesArray)}`);
+        output?.debug(`[auth] authenticate start provider=${provider} tenant=${tenantId ?? '<default>'} challenge=${claims ? 'true' : 'false'} scopes=${JSON.stringify(scopesArray)}`);
         const session = await code.authentication.getSession(provider, scopesOrChallenge, sessionOptions);
 
+        if (session) {
+            output?.info(code.l10n.t('[auth] session acquired provider={0} scopes={1}', provider, JSON.stringify(scopesArray)));
+        }
+
+        return session ?? null;
+    }
+
+    /**
+     * Acquire an access token for the given scopes via the VS Code
+     * authentication API. Prompts interactive sign-in by default (see
+     * {@linkcode resolveSessionOptions}). Returns `null` when no session is
+     * available (e.g. silent acquisition with no existing session, or the user
+     * cancels sign-in).
+     *
+     * Thin wrapper over {@linkcode authenticate} that converts the resolved
+     * session into an {@linkcode AccessToken} (deriving the token expiry).
+     */
+    public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
+        const session = await this.authenticate(scopes, options);
         if (!session) {
             return null;
         }
 
         const { expiresOnTimestamp, refreshAfterTimestamp } = getTokenExpiry(session.accessToken, session.idToken);
-
-        const scopesJson = JSON.stringify(scopesArray);
-        output?.info(code.l10n.t('[auth] token acquired provider={0} scopes={1} expiresOn={2}', provider, scopesJson, expiresOnTimestamp));
 
         return {
             token: session.accessToken,

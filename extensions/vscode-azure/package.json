@@ -339,6 +339,29 @@
                     "default": "",
                     "description": "%settings.vscode-azure.groupByTag%"
                 },
+                "vscode-azure.signedInTenants": {
+                    "type": "array",
+                    "default": [],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "accountId": {
+                                "type": "string"
+                            },
+                            "tenantId": {
+                                "type": "string",
+                                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                "patternErrorMessage": "%settings.vscode-azure.signedInTenants.tenantId.patternError%"
+                            }
+                        },
+                        "required": [
+                            "accountId",
+                            "tenantId"
+                        ]
+                    },
+                    "scope": "machine-overridable",
+                    "description": "%settings.vscode-azure.signedInTenants%"
+                },
                 "vscode-azure.selectedSubscriptions": {
                     "type": "array",
                     "items": {
@@ -347,7 +370,6 @@
                         "patternErrorMessage": "%settings.vscode-azure.selectedSubscriptions.patternError%"
                     },
                     "default": [],
-                    "scope": "application",
                     "description": "%settings.vscode-azure.selectedSubscriptions%"
                 }
             }

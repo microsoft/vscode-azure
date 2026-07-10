@@ -9,16 +9,16 @@
  * folder and emitted as HTML.
  */
 
-import { azExtSrcTestConfig } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
+import { azExtTestConfig } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
 import { defineConfig } from '@vscode/test-cli';
 
 // The vscode-test runner defaults mocha to the TDD interface (suite/test), but
 // the rest of the repo (and @types/mocha) uses the BDD interface (describe/it).
 // Force BDD so the global describe/it are available without importing them.
-azExtSrcTestConfig.mocha.ui = 'bdd';
+azExtTestConfig.mocha.ui = 'bdd';
 
 export default defineConfig({
-    tests: [azExtSrcTestConfig],
+    tests: [azExtTestConfig],
     coverage: {
         include: [
             '**/extensions/vscode-azure/src/**',
@@ -30,8 +30,7 @@ export default defineConfig({
             // the esbuild config (see esbuild.mjs)
         ],
         exclude: [
-            '**/extensions/vscode-azure/src/override/**',
-            '**/extensions/vscode-azure/src/test/**',
+            '**/extensions/vscode-azure/test/**',
         ],
         reporter: ['html'],
         output: 'coverage',

@@ -28,7 +28,7 @@ const extension = require('./dist/extension.bundle.js');
  * activation by loading a separate bundle (see {@link activateWithOverrides}):
  * - `AZURE_MOCK_DATA=1` in Development mode rebinds services with mock data so
  *   the tree views render deterministic fake data.
- * - `RUN_E2E=1` injects a real Azure credential factory so the in-process
+ * - `ENABLE_LONG_RUNNING_TESTS=1` injects a real Azure credential factory so the in-process
  *   AzdAuthServer can acquire live tokens without an interactive sign-in.
  *
  * @param {import('vscode').ExtensionContext} ctx
@@ -38,7 +38,7 @@ exports.activate = async function activate(ctx) {
         let overrideBundlePath;
         if (process.env.AZURE_MOCK_DATA === '1') {
             overrideBundlePath = './dist/test/mock.bundle.js';
-        } else if (process.env.RUN_E2E === '1') {
+        } else if (process.env.ENABLE_LONG_RUNNING_TESTS === '1') {
             overrideBundlePath = './dist/test/e2e.bundle.js';
         }
 

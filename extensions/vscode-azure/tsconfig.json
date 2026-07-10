@@ -12,10 +12,10 @@
                 "../../packages/utils/src/index.ts"
             ],
             "@microsoft/vscode-azure-azutils/testing": [
-                "../../packages/azutils/src/testing.ts"
+                "../../packages/azutils/test/testing.ts"
             ],
             "@microsoft/vscode-azure-utils/testing": [
-                "../../packages/utils/src/testing.ts"
+                "../../packages/utils/test/testing.ts"
             ],
         },
         "experimentalDecorators": true,
