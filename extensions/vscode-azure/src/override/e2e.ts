@@ -10,7 +10,7 @@
 // loads this bundle and calls `applyOverrides` to rebind the credential factory
 // to a real Azure `TokenCredential`, so the live extension authenticates
 // against a real subscription instead of prompting for an interactive VS Code
-// sign-in. The suite-gating half lives in `src/test/e2e/e2eConfig.ts`
+// sign-in. The suite-gating half lives in `test/e2e/e2eConfig.ts`
 // (`describeE2E`).
 //
 // Compiled as a SEPARATE esbuild entry point (e2e.bundle.js) so none of this

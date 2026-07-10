@@ -14,16 +14,16 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "type": "module",
-    "module": "dist/esm/index.js",
-    "types": "dist/esm/index.d.ts",
+    "module": "dist/esm/src/index.js",
+    "types": "dist/esm/src/index.d.ts",
     "exports": {
         ".": {
-            "types": "./dist/esm/index.d.ts",
-            "import": "./dist/esm/index.js"
+            "types": "./dist/esm/src/index.d.ts",
+            "import": "./dist/esm/src/index.js"
         },
         "./testing": {
-            "types": "./dist/esm/testing.d.ts",
-            "import": "./dist/esm/testing.js"
+            "types": "./dist/esm/src/testing.d.ts",
+            "import": "./dist/esm/src/testing.js"
         }
     },
     "scripts": {
@@ -56,7 +56,7 @@
             "import=@microsoft/vscode-azext-eng/mocha"
         ],
         "spec": [
-            "src/test/**/*.test.ts"
+            "test/**/*.test.ts"
         ]
     }
 }

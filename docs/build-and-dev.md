@@ -147,7 +147,7 @@ pnpm --filter @microsoft/vscode-azure-utils run test -- --watch
 pnpm --filter @microsoft/vscode-azure-azutils run test -- --watch
 ```
 
-This works because Mocha is configured (under the `"mocha"` key in each package's `package.json`) to run the `.ts` sources directly via `node --experimental-transform-types` (spec `src/test/**/*.test.ts`). There is no separate build step; in watch mode, Mocha re-runs the suite when files it watches change. If you need specific non-test source paths to trigger re-runs, set `--watch-files` in the package's `"mocha"` config.
+This works because Mocha is configured (under the `"mocha"` key in each package's `package.json`) to run the `.ts` sources directly via `node --experimental-transform-types` (spec `test/**/*.test.ts`). There is no separate build step; in watch mode, Mocha re-runs the suite when files it watches change. If you need specific non-test source paths to trigger re-runs, set `--watch-files` in the package's `"mocha"` config.
 
 ### No watch available for
 
