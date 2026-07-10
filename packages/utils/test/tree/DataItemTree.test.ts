@@ -1164,7 +1164,7 @@ describe('DataItemTree (unit)', () => {
  *     `- a2x
  * ```
  */
-const CONSISTENCY_CHILD_MAP = new Map<string, TestResource[]>([
+const CHILD_MAP = new Map<string, TestResource[]>([
     ['a', [{ id: 'a1' }, { id: 'a2' }]],
     ['a1', [{ id: 'a1x' }, { id: 'a1y' }]],
     ['a2', [{ id: 'a2x' }]],
@@ -1172,9 +1172,9 @@ const CONSISTENCY_CHILD_MAP = new Map<string, TestResource[]>([
     ['b1', [{ id: 'b1x' }]],
 ]);
 
-const CONSISTENCY_ROOTS: TestResource[] = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+const ROOTS: TestResource[] = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
 
-function buildConsistencyTree(options?: { enrich?: boolean }): DataItemTree<TestResource> {
+function buildTree(options?: { enrich?: boolean }): DataItemTree<TestResource> {
     const { executor } = createTestActionExecutor();
     const { vscode } = createMockVsCode();
     const tree = new DataItemTree<TestResource>(vscode, 'consistency', executor, r => r.id, 60_000);
@@ -1182,13 +1182,13 @@ function buildConsistencyTree(options?: { enrich?: boolean }): DataItemTree<Test
     tree.registerProvider({
         isRoot: true,
         canHandle: canHandleNone,
-        getChildren: () => CONSISTENCY_ROOTS.map(r => ({ ...r })),
+        getChildren: () => ROOTS.map(r => ({ ...r })),
     });
 
     const branch: DataProvider<TestResource> = {
         isRoot: false,
-        canHandle: (r: unknown): r is TestResource => CONSISTENCY_CHILD_MAP.has((r as TestResource).id),
-        getChildren: (r?: TestResource) => (r ? (CONSISTENCY_CHILD_MAP.get(r.id) ?? []).map(c => ({ ...c })) : []),
+        canHandle: (r: unknown): r is TestResource => CHILD_MAP.has((r as TestResource).id),
+        getChildren: (r?: TestResource) => (r ? (CHILD_MAP.get(r.id) ?? []).map(c => ({ ...c })) : []),
         enrich: options?.enrich
             ? async (r: TestResource) => { await delay(1); r.enriched = true; return false; }
             : undefined,
@@ -1202,7 +1202,7 @@ function buildConsistencyTree(options?: { enrich?: boolean }): DataItemTree<Test
  * two pages), so tests can install a live pager and then exercise a teardown
  * path. Each call re-creates the page iterator so the tree can be re-listed.
  */
-function buildPagedConsistencyTree(): DataItemTree<TestResource> {
+function buildPagedTree(): DataItemTree<TestResource> {
     const { executor } = createTestActionExecutor();
     const { vscode } = createMockVsCode();
     const tree = new DataItemTree<TestResource>(vscode, 'consistency-paged', executor, r => r.id, 60_000);
@@ -1226,12 +1226,12 @@ function buildPagedConsistencyTree(): DataItemTree<TestResource> {
 }
 
 /** Join a path into a comparable scalar (keys never contain NUL). */
-function consistencyPathKey(path: readonly string[]): string {
+function pathKey(path: readonly string[]): string {
     return path.join('\u0000');
 }
 
 /** The query-key namespace {@linkcode DataItemTree} caches children under. */
-const CONSISTENCY_CHILDREN = 'children';
+const CHILDREN = 'children';
 
 /**
  * The shape of {@linkcode DataItemTree}'s internal stores, reached by an
@@ -1253,7 +1253,7 @@ interface DataItemTreeInternals<T> {
  * path (the `['children', ...path]` query keys with the prefix stripped), and
  * the live pager / enrichment side-table keys.
  */
-function snapshotConsistencyState(tree: DataItemTree<TestResource>): {
+function snapshotState(tree: DataItemTree<TestResource>): {
     indexed: Map<string, readonly string[]>;
     cachedPaths: string[][];
     pagerKeys: string[];
@@ -1266,7 +1266,7 @@ function snapshotConsistencyState(tree: DataItemTree<TestResource>): {
     }
     const cachedPaths = internals.client.getQueryCache().getAll()
         .map(query => query.queryKey)
-        .filter((key): key is readonly unknown[] => Array.isArray(key) && key[0] === CONSISTENCY_CHILDREN)
+        .filter((key): key is readonly unknown[] => Array.isArray(key) && key[0] === CHILDREN)
         .map(key => key.slice(1) as string[]);
     return {
         indexed,
@@ -1284,7 +1284,7 @@ function snapshotConsistencyState(tree: DataItemTree<TestResource>): {
  * store.
  */
 function assertConsistent(tree: DataItemTree<TestResource>, label: string): void {
-    const { indexed, cachedPaths, pagerKeys, enrichmentKeys } = snapshotConsistencyState(tree);
+    const { indexed, cachedPaths, pagerKeys, enrichmentKeys } = snapshotState(tree);
 
     // (1) No orphan cached children: every cached non-root children list belongs
     // to a currently-indexed node whose path is exactly that path.
@@ -1295,7 +1295,7 @@ function assertConsistent(tree: DataItemTree<TestResource>, label: string): void
         const leafKey = path[path.length - 1];
         const indexedPath = indexed.get(leafKey);
         expect(indexedPath, `${label}: cached children for un-indexed node [${path.join('/')}]`).to.not.be.undefined;
-        expect(consistencyPathKey(indexedPath!), `${label}: cache/index path mismatch for ${leafKey}`).to.equal(consistencyPathKey(path));
+        expect(pathKey(indexedPath!), `${label}: cache/index path mismatch for ${leafKey}`).to.equal(pathKey(path));
     }
 
     // (2) Ancestry closure: every indexed node's path ends at its own key and
@@ -1307,7 +1307,7 @@ function assertConsistent(tree: DataItemTree<TestResource>, label: string): void
             const ancestorKey = path[i - 1];
             const ancestorPath = indexed.get(ancestorKey);
             expect(ancestorPath, `${label}: ancestor ${ancestorKey} of ${key} not indexed`).to.not.be.undefined;
-            expect(consistencyPathKey(ancestorPath!), `${label}: ancestor ${ancestorKey} path mismatch`).to.equal(consistencyPathKey(path.slice(0, i)));
+            expect(pathKey(ancestorPath!), `${label}: ancestor ${ancestorKey} path mismatch`).to.equal(pathKey(path.slice(0, i)));
         }
     }
 
@@ -1340,7 +1340,7 @@ describeLongRunning('DataItemTree consistency randomized (unit)', function () {
     for (const enrich of [false, true]) {
         it(`should hold cross-store invariants across a randomized op sequence (enrich=${enrich})`, async () => {
             for (const seed of [1, 2, 7, 42, 1337, 99999]) {
-                const tree = buildConsistencyTree({ enrich });
+                const tree = buildTree({ enrich });
                 const rng = mulberry32(seed);
                 const pick = <U>(arr: readonly U[]): U | undefined =>
                     arr.length > 0 ? arr[Math.floor(rng() * arr.length)] : undefined;
@@ -1349,7 +1349,7 @@ describeLongRunning('DataItemTree consistency randomized (unit)', function () {
                 assertConsistent(tree, `enrich=${enrich} seed=${seed} init`);
 
                 for (let step = 0; step < 80; step++) {
-                    const known = [...snapshotConsistencyState(tree).indexed.keys()];
+                    const known = [...snapshotState(tree).indexed.keys()];
                     const node = pick(known);
                     const nodeRes = node !== undefined ? tree.get(node) : undefined;
 
@@ -1381,14 +1381,14 @@ describeLongRunning('DataItemTree consistency randomized (unit)', function () {
 
 describe('DataItemTree consistency (unit)', () => {
     it('should leave every store empty after invalidate(Everything)', async () => {
-        const tree = buildConsistencyTree();
+        const tree = buildTree();
         await tree.getChildren();
         await tree.getChildren({ id: 'a' });
         await tree.getChildren({ id: 'a1' });
 
         tree.invalidate(Everything);
 
-        const state = snapshotConsistencyState(tree);
+        const state = snapshotState(tree);
         expect(state.indexed.size, 'indexed').to.equal(0);
         expect(state.cachedPaths, 'cachedPaths').to.deep.equal([]);
         expect(state.pagerKeys, 'pagerKeys').to.deep.equal([]);
@@ -1396,7 +1396,7 @@ describe('DataItemTree consistency (unit)', () => {
     });
 
     it('should drop a removed subtree from every store', async () => {
-        const tree = buildConsistencyTree();
+        const tree = buildTree();
         await tree.getChildren();
         await tree.getChildren({ id: 'a' });
         await tree.getChildren({ id: 'a1' });
@@ -1407,7 +1407,7 @@ describe('DataItemTree consistency (unit)', () => {
 
         tree.remove({ id: 'a' });
 
-        const state = snapshotConsistencyState(tree);
+        const state = snapshotState(tree);
         for (const key of ['a', 'a1', 'a2', 'a1x', 'a1y', 'a2x']) {
             expect(state.indexed.has(key), `indexed still has ${key}`).to.be.false;
         }
@@ -1462,7 +1462,7 @@ describe('DataItemTree consistency (unit)', () => {
         tree.invalidate(Roots);
         await tree.getChildren();
 
-        const state = snapshotConsistencyState(tree);
+        const state = snapshotState(tree);
         // The survivor's own subtree is untouched.
         expect(state.indexed.has('r0'), 'survivor root evicted').to.be.true;
         // Every departed root and its descendants are gone from all stores.
@@ -1481,14 +1481,14 @@ describe('DataItemTree consistency (unit)', () => {
     });
 
     it('should drop a paginated node pager on removal', async () => {
-        const tree = buildPagedConsistencyTree();
+        const tree = buildPagedTree();
 
         await tree.getChildren();
         await tree.getChildren({ id: 'root' }); // installs a pager
-        expect(snapshotConsistencyState(tree).pagerKeys).to.deep.equal(['root']);
+        expect(snapshotState(tree).pagerKeys).to.deep.equal(['root']);
 
         tree.remove({ id: 'root' });
-        expect(snapshotConsistencyState(tree).pagerKeys, 'pager survived removal').to.deep.equal([]);
+        expect(snapshotState(tree).pagerKeys, 'pager survived removal').to.deep.equal([]);
         assertConsistent(tree, 'after remove(paged root)');
     });
 
@@ -1496,15 +1496,15 @@ describe('DataItemTree consistency (unit)', () => {
         // The full-teardown choke point (clearNodeState) clears the pager map,
         // a distinct path from the per-key eviction that remove() drives. Without
         // a live pager here it would go unexercised.
-        const tree = buildPagedConsistencyTree();
+        const tree = buildPagedTree();
 
         await tree.getChildren();
         await tree.getChildren({ id: 'root' }); // installs a pager
-        expect(snapshotConsistencyState(tree).pagerKeys).to.deep.equal(['root']);
+        expect(snapshotState(tree).pagerKeys).to.deep.equal(['root']);
 
         tree.invalidate(Everything);
 
-        const state = snapshotConsistencyState(tree);
+        const state = snapshotState(tree);
         expect(state.pagerKeys, 'pager survived invalidate(Everything)').to.deep.equal([]);
         expect(state.indexed.size, 'indexed').to.equal(0);
         expect(state.cachedPaths, 'cachedPaths').to.deep.equal([]);
@@ -1514,15 +1514,15 @@ describe('DataItemTree consistency (unit)', () => {
     it('should clear a live pager on dispose', async () => {
         // dispose() shares the same clearAllState choke point as
         // invalidate(Everything); a live pager must not survive it.
-        const tree = buildPagedConsistencyTree();
+        const tree = buildPagedTree();
 
         await tree.getChildren();
         await tree.getChildren({ id: 'root' }); // installs a pager
-        expect(snapshotConsistencyState(tree).pagerKeys).to.deep.equal(['root']);
+        expect(snapshotState(tree).pagerKeys).to.deep.equal(['root']);
 
         tree.dispose();
 
-        const state = snapshotConsistencyState(tree);
+        const state = snapshotState(tree);
         expect(state.pagerKeys, 'pager survived dispose').to.deep.equal([]);
         expect(state.indexed.size, 'indexed').to.equal(0);
     });
