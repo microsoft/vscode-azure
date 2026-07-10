@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { collectPages, createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient } from '../../../src/rest/clients/ResourceClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
@@ -27,10 +27,7 @@ describe('ResourceClient (unit)', () => {
         });
 
         const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
-        const pages = [];
-        for await (const page of client.resourceGroups.list()) {
-            pages.push(page);
-        }
+        const pages = await collectPages(client.resourceGroups.list());
 
         expect(pages).to.have.length(1);
         const rgs = pages[0].items;
@@ -57,10 +54,7 @@ describe('ResourceClient (unit)', () => {
         });
 
         const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
-        const pages = [];
-        for await (const page of client.resources.listByResourceGroup('rg1')) {
-            pages.push(page);
-        }
+        const pages = await collectPages(client.resources.listByResourceGroup('rg1'));
 
         expect(pages).to.have.length(1);
         const resources = pages[0].items;
@@ -88,10 +82,7 @@ describe('ResourceClient (unit)', () => {
         });
 
         const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
-        const pages = [];
-        for await (const page of client.resources.listByResourceGroup('rg1')) {
-            pages.push(page);
-        }
+        const pages = await collectPages(client.resources.listByResourceGroup('rg1'));
 
         const resources = pages[0].items;
         expect(resources[0].logicalType).to.equal(FunctionAppLogicalType);
@@ -121,10 +112,7 @@ describe('ResourceClient (unit)', () => {
         });
 
         const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
-        const pages = [];
-        for await (const page of client.resourceGroups.list()) {
-            pages.push(page);
-        }
+        const pages = await collectPages(client.resourceGroups.list());
 
         expect(pages).to.have.length(2);
         expect(pages[0].hasMore).to.be.true;

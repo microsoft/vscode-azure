@@ -9,6 +9,14 @@ import { drillChildren } from '@microsoft/vscode-azure-utils';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 
 /**
+ * A tenant that is reachable from a signed-in account.
+ */
+export interface ReachableTenant {
+    readonly account: AzureAccount;
+    readonly tenant: AzureTenant;
+}
+
+/**
  * A subscription that is reachable from a signed-in account/tenant pair.
  */
 export interface ReachableSubscription {
@@ -38,6 +46,46 @@ export interface UnreachableAuthNode {
 export interface ReachableSubscriptionsResult {
     readonly subscriptions: ReachableSubscription[];
     readonly failures: UnreachableAuthNode[];
+}
+
+/**
+ * Enumerate the first page of reachable tenants across all signed-in accounts.
+ *
+ * Accounts can belong to a very large number of tenants (hundreds), so this
+ * deliberately reads only the first page of each account's tenants -- it never
+ * calls {@linkcode ConcreteAzureNodeTree.loadMore} to drain later pages. The
+ * result is intended to seed a combobox where the user can either pick a
+ * suggested tenant or type any tenant ID directly, so an exhaustive list is
+ * neither needed nor desirable.
+ */
+export async function listFirstPageReachableTenants(tree: ConcreteAzureNodeTree): Promise<ReachableTenant[]> {
+    const tenants = new Map<string, ReachableTenant>();
+
+    // Root children (accounts) are not paged, so a single getChildren() call
+    // returns them all.
+    for (const accountNode of await tree.getChildren()) {
+        if (!isAccount(accountNode)) {
+            continue;
+        }
+
+        // First page only -- intentionally no loadMore() here.
+        for (const tenantNode of await tree.getChildren(accountNode)) {
+            if (!isTenant(tenantNode)) {
+                continue;
+            }
+
+            const key = `${accountNode.id.toLowerCase()}/${tenantNode.tenantId.toLowerCase()}`;
+            if (!tenants.has(key)) {
+                tenants.set(key, { account: accountNode, tenant: tenantNode });
+            }
+        }
+    }
+
+    return [...tenants.values()].sort((a, b) => {
+        return a.tenant.displayName.localeCompare(b.tenant.displayName)
+            || a.tenant.tenantId.localeCompare(b.tenant.tenantId)
+            || a.account.label.localeCompare(b.account.label);
+    });
 }
 
 /**
