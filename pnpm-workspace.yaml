@@ -6,8 +6,7 @@ allowBuilds:
   "@vscode/vsce-sign": true
   esbuild: true
   keytar: true
-minimumReleaseAgeExclude:
-  - "@microsoft/vscode-azext-eng"
+strictStorePkgContentCheck: false
 overrides:
   # Force a non-vulnerable version of these dependencies
   serialize-javascript: ^7.0.0
