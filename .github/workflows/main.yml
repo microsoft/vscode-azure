@@ -16,9 +16,65 @@ on:
       - main
       - rel/*
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   Build:
-    # Use template from https://github.com/microsoft/vscode-azuretools/tree/main/.github/workflows
-    uses: microsoft/vscode-azuretools/.github/workflows/jobs.yml@main
-    with:
-      package_manager: pnpm
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # Activate pnpm from packageManager before setup-node cache initialization.
+      - name: Using PNPM
+        run: corepack enable && corepack prepare --activate
+
+      - name: Using Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Azure CLI Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Authenticate npm to Azure Artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          registry_url="$(grep -E '^registry=' .npmrc | head -n1 | cut -d= -f2-)"
+          if [ -z "$registry_url" ]; then
+            echo 'Expected a registry entry in .npmrc but none was found.'
+            exit 1
+          fi
+
+          access_token="$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)"
+          token_b64="$(printf '%s' "$access_token" | base64 | tr -d '\n')"
+          echo "::add-mask::$access_token"
+          echo "::add-mask::$token_b64"
+
+          registry_path="${registry_url#https://}"
+          registry_path="${registry_path#http://}"
+          feed_path="${registry_path%/registry/}/"
+
+          npm config set "//$registry_path:username" "azure"
+          npm config set "//$registry_path:_password" "$token_b64"
+          npm config set "//$registry_path:email" "npm@example.invalid"
+
+          npm config set "//$feed_path:username" "azure"
+          npm config set "//$feed_path:_password" "$token_b64"
+          npm config set "//$feed_path:email" "npm@example.invalid"
+
+      - run: pnpm ci
+      - run: pnpm run lint
+      - run: pnpm run build
+      - run: pnpm run package
+      - run: xvfb-run -a pnpm test
