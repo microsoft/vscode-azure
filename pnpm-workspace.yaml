@@ -7,12 +7,7 @@ allowBuilds:
   esbuild: true
   keytar: true
 minimumReleaseAgeExclude:
-  - "@microsoft/vscode-azext*"
-  # Temporary: TypeScript 7.0 GA'd on 2026-07-08. The stable `typescript` package (aliased here as
-  # `@typescript/native` to provide the native `tsc`) and its platform-specific binary sub-packages
-  # are newer than the 7-day minimum-release-age policy. Remove these entries once they age past it.
-  - "typescript"
-  - "@typescript/typescript-*"
+  - "@microsoft/vscode-azext-eng"
 overrides:
   # Force a non-vulnerable version of these dependencies
   serialize-javascript: ^7.0.0
