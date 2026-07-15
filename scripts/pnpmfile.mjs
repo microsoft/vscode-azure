@@ -9,33 +9,36 @@
  * hostnames get embedded in each package's `dist.tarball`, and pnpm records any non-standard
  * tarball URL in the lockfile. Because the shard varies per request, the lockfile would churn
  * on every install and pin URLs to ephemeral shard hosts that can rotate out and break CI.
-
- * This hook rewrites those volatile shard hosts back to the stable, load-balanced entry point
- * (which serves the same tarballs) before the lockfile is written, making the lockfile
- * deterministic without any post-processing step.
+ *
+ * Rewriting the shard host to a stable host does not work: on a frozen install pnpm re-fetches
+ * the registry metadata (which still returns a random shard host) and verifies the lockfile's
+ * tarball URL against it, failing with ERR_PNPM_TARBALL_URL_MISMATCH.
+ *
+ * Instead, this hook DELETES the tarball field for these entries. With no explicit tarball URL,
+ * pnpm derives the standard `<registry>/<name>/-/<name>-<version>.tgz` URL from the configured
+ * registry (which serves the same tarballs) and has nothing to verify against metadata. The
+ * lockfile becomes deterministic with no shard hosts and no post-processing step.
  */
 
 const SHARD_TARBALL = /^https:\/\/ms-feed-\d+\.pkgs\.visualstudio\.com\/1es-public\/_packaging\/npm-public\/npm\/registry\//;
 const STABLE_TARBALL = 'https://packagefeedproxy.microsoft.io/npm/';
 
 /**
- * @param {string | undefined} tarball
- * @returns {string | undefined}
+ * A tarball URL is volatile if it points at a load-balancer shard host, or at the stable
+ * proxy host (a leftover from a previous rewrite). Either way it should be dropped so pnpm
+ * re-derives the standard registry URL.
+ *
+ * @param {string} tarball
+ * @returns {boolean}
  */
-function normalizeTarball(tarball) {
-    if (typeof tarball === 'string' && SHARD_TARBALL.test(tarball)) {
-        return tarball.replace(SHARD_TARBALL, STABLE_TARBALL);
-    }
-    return tarball;
+function isVolatileTarball(tarball) {
+    return SHARD_TARBALL.test(tarball) || tarball.startsWith(STABLE_TARBALL);
 }
 
 function afterAllResolved(lockfile) {
     for (const pkg of Object.values(lockfile.packages ?? {})) {
-        if (pkg && pkg.resolution && typeof pkg.resolution.tarball === 'string') {
-            const normalized = normalizeTarball(pkg.resolution.tarball);
-            if (normalized !== undefined) {
-                pkg.resolution.tarball = normalized;
-            }
+        if (pkg && pkg.resolution && typeof pkg.resolution.tarball === 'string' && isVolatileTarball(pkg.resolution.tarball)) {
+            delete pkg.resolution.tarball;
         }
     }
     return lockfile;
