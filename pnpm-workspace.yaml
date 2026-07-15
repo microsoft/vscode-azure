@@ -24,6 +24,7 @@ publicHoistPattern:
   - "@types/mocha"
   - "chai"
   - "@types/chai"
+pnpmfile: scripts/pnpmfile.mjs
 supportedArchitectures:
   os:
     - current
