@@ -38,7 +38,7 @@ overrides:
   serialize-javascript: ^7.0.0
   diff: ^8.0.3
 
-pnpmfileChecksum: sha256-P3DULUvSjvjla82TDkBuBuaqGLeRkKP8CuBwnPeYzaE=
+pnpmfileChecksum: sha256-62F6JNOgsjOrgmBL/2W8+9Ke3NeBxaPYQHEiXgIKLhE=
 
 importers:
 
