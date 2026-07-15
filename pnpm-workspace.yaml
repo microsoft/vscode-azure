@@ -24,6 +24,13 @@ publicHoistPattern:
   - "@types/mocha"
   - "chai"
   - "@types/chai"
+supportedArchitectures:
+  os:
+    - current
+  cpu:
+    - current
+  libc:
+    - current
 catalog:
   "@microsoft/vscode-processutils": ^0.2.2
   "@vscode/extension-telemetry": ^1.5.2
