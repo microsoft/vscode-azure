@@ -6,6 +6,8 @@ allowBuilds:
   "@vscode/vsce-sign": true
   esbuild: true
   keytar: true
+minimumReleaseAgeExclude:
+  - "@microsoft/vscode-azext-eng"
 overrides:
   # Force a non-vulnerable version of these dependencies
   serialize-javascript: ^7.0.0
@@ -22,22 +24,6 @@ publicHoistPattern:
   - "@types/mocha"
   - "chai"
   - "@types/chai"
-pnpmfile: scripts/pnpmfile.mjs
-# The Azure Artifacts proxy sits behind a load balancer that stamps a random backend shard
-# host (ms-feed-N.pkgs.visualstudio.com) into each package's dist.tarball. pnpm's supply-chain
-# verification pass re-derives the expected tarball URL from the registry and compares it to
-# that shard host, failing with ERR_PNPM_TARBALL_URL_MISMATCH. The shard host is
-# non-deterministic, so no lockfile content can satisfy the check. trustLockfile skips the
-# re-verification pass (minimumReleaseAge / trustPolicy / tarball URL) for the loaded lockfile;
-# those policies are still applied during resolution when the lockfile is (re)generated.
-trustLockfile: true
-supportedArchitectures:
-  os:
-    - current
-  cpu:
-    - current
-  libc:
-    - current
 catalog:
   "@microsoft/vscode-processutils": ^0.2.2
   "@vscode/extension-telemetry": ^1.5.2

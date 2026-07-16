@@ -37,9 +37,9 @@
     "dependencies": {
         "@azure/arm-appservice": "^19.0.0",
         "@azure/arm-containerregistry": "^12.0.0",
-        "@azure/arm-resources": "^8.0.0-beta.1",
-        "@azure/arm-resources-subscriptions": "^3.0.0-beta.1",
-        "@azure/arm-resourcesdeployments": "^1.0.0-beta.2",
+        "@azure/arm-resources": "beta",
+        "@azure/arm-resources-subscriptions": "beta",
+        "@azure/arm-resourcesdeployments": "beta",
         "@azure/logger": "^1.3.0",
         "@microsoft/vscode-azure-utils": "workspace:^"
     },
