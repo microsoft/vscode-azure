@@ -3,17 +3,25 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IProcessExecutor, type SpawnFn, ChildProcessError } from '@microsoft/vscode-azure-utils';
+import { type IProcessExecutor, type CommandLineBuilder, isCommandLineBuilder, ChildProcessError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
 import { AzdCommand, AzdService, MinAzdUpdateVersion, MinAzdVersion } from '../../src/azd/AzdService';
 
+/**
+ * A stand-in for {@linkcode IProcessExecutor.spawn} in tests. Typed permissively
+ * because each test supplies a single-purpose fake rather than the full
+ * overloaded implementation; the value is cast to {@linkcode IProcessExecutor}
+ * when constructing the service.
+ */
+type SpawnMethod = (...args: never[]) => unknown;
+
 interface SpawnOpts {
     execution: string;
-    command: string;
-    args: Array<string | { value: string; quoting: number }>;
+    command: string | CommandLineBuilder;
+    args?: Array<string | { value: string; quoting: number }>;
     cwd: { path: string };
     parseJson?: boolean;
     name?: string;
@@ -21,12 +29,21 @@ interface SpawnOpts {
     env?: Record<string, string>;
 }
 
-/** Extracts plain string values from a command line args array. */
-function argValues(args: SpawnOpts['args']): string[] {
+/** Resolves the executable name from spawn options, honoring a {@linkcode CommandLineBuilder}. */
+function commandString(opts: SpawnOpts): string {
+    return isCommandLineBuilder(opts.command) ? opts.command.command : opts.command;
+}
+
+/**
+ * Extracts plain string arg values from spawn options, resolving a
+ * {@linkcode CommandLineBuilder} command or a raw `args` array.
+ */
+function argValues(opts: SpawnOpts): string[] {
+    const args = isCommandLineBuilder(opts.command) ? opts.command.toArray() : (opts.args ?? []);
     return args.map(a => typeof a === 'string' ? a : a.value);
 }
 
-function createService(spawnFn?: SpawnFn, isOnPathFn?: (cmd: string) => Promise<boolean>) {
+function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => Promise<boolean>) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
     const isOnPathMock = isOnPathFn ?? mock.fn(() => Promise.resolve(false));
@@ -34,7 +51,7 @@ function createService(spawnFn?: SpawnFn, isOnPathFn?: (cmd: string) => Promise<
     const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
     const { executor } = createTestActionExecutor();
     const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer);
-    return { service, spawnMock: spawnMock as ReturnType<typeof mock.fn>, fs: mockResult.fs, executor };
+    return { service, spawnMock: spawnMock as unknown as ReturnType<typeof mock.fn>, fs: mockResult.fs, executor };
 }
 
 describe('AzdService (unit)', () => {
@@ -87,10 +104,10 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal(AzdCommand);
-            expect(argValues(opts.args)).to.include('init');
-            expect(argValues(opts.args)).to.include('--minimal');
-            expect(argValues(opts.args)).to.include('--no-prompt');
+            expect(commandString(opts)).to.equal(AzdCommand);
+            expect(argValues(opts)).to.include('init');
+            expect(argValues(opts)).to.include('--minimal');
+            expect(argValues(opts)).to.include('--no-prompt');
             expect(opts.cwd.path).to.equal('/project');
         });
     });
@@ -104,14 +121,14 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal(AzdCommand);
-            expect(argValues(opts.args)).to.include('env');
-            expect(argValues(opts.args)).to.include('new');
-            expect(argValues(opts.args)).to.include('dev');
-            expect(argValues(opts.args)).to.include('--location');
-            expect(argValues(opts.args)).to.include('eastus');
-            expect(argValues(opts.args)).to.include('--subscription');
-            expect(argValues(opts.args)).to.include('sub-1');
+            expect(commandString(opts)).to.equal(AzdCommand);
+            expect(argValues(opts)).to.include('env');
+            expect(argValues(opts)).to.include('new');
+            expect(argValues(opts)).to.include('dev');
+            expect(argValues(opts)).to.include('--location');
+            expect(argValues(opts)).to.include('eastus');
+            expect(argValues(opts)).to.include('--subscription');
+            expect(argValues(opts)).to.include('sub-1');
             expect(opts.cwd.path).to.equal('/project');
         });
     });
@@ -120,7 +137,7 @@ describe('AzdService (unit)', () => {
         it('should return true when an environment with the given name is in envList', async () => {
             const envs = [{ Name: 'dev', IsDefault: true }, { Name: 'prod', IsDefault: false }];
             const spawnFn = mock.fn(() => Promise.resolve({ json: envs }));
-            const { service } = createService(spawnFn as unknown as SpawnFn);
+            const { service } = createService(spawnFn);
 
             const result = await service.envExists('prod', MockUri.file('/project'));
 
@@ -130,7 +147,7 @@ describe('AzdService (unit)', () => {
         it('should return false when no environment with the given name exists', async () => {
             const envs = [{ Name: 'dev', IsDefault: true }];
             const spawnFn = mock.fn(() => Promise.resolve({ json: envs }));
-            const { service } = createService(spawnFn as unknown as SpawnFn);
+            const { service } = createService(spawnFn);
 
             const result = await service.envExists('missing', MockUri.file('/project'));
 
@@ -152,7 +169,7 @@ describe('AzdService (unit)', () => {
         it('should spawn azd env list with --output json and return parsed result', async () => {
             const envs = [{ Name: 'dev', IsDefault: true }];
             const spawnFn = mock.fn(() => Promise.resolve({ json: envs }));
-            const { service, spawnMock } = createService(spawnFn as unknown as SpawnFn);
+            const { service, spawnMock } = createService(spawnFn);
 
             const result = await service.envList(MockUri.file('/project'));
 
@@ -160,10 +177,10 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(argValues(opts.args)).to.include('env');
-            expect(argValues(opts.args)).to.include('list');
-            expect(argValues(opts.args)).to.include('--output');
-            expect(argValues(opts.args)).to.include('json');
+            expect(argValues(opts)).to.include('env');
+            expect(argValues(opts)).to.include('list');
+            expect(argValues(opts)).to.include('--output');
+            expect(argValues(opts)).to.include('json');
             expect(opts.parseJson).to.be.true;
         });
     });
@@ -178,7 +195,7 @@ describe('AzdService (unit)', () => {
                 /* eslint-enable @typescript-eslint/naming-convention */
             };
             const spawnFn = mock.fn(() => Promise.resolve({ json: values }));
-            const { service, spawnMock } = createService(spawnFn as unknown as SpawnFn);
+            const { service, spawnMock } = createService(spawnFn);
 
             const result = await service.envGetValues('dev', MockUri.file('/project'));
 
@@ -186,13 +203,13 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal(AzdCommand);
-            expect(argValues(opts.args)).to.include('env');
-            expect(argValues(opts.args)).to.include('get-values');
-            expect(argValues(opts.args)).to.include('--environment');
-            expect(argValues(opts.args)).to.include('dev');
-            expect(argValues(opts.args)).to.include('--output');
-            expect(argValues(opts.args)).to.include('json');
+            expect(commandString(opts)).to.equal(AzdCommand);
+            expect(argValues(opts)).to.include('env');
+            expect(argValues(opts)).to.include('get-values');
+            expect(argValues(opts)).to.include('--environment');
+            expect(argValues(opts)).to.include('dev');
+            expect(argValues(opts)).to.include('--output');
+            expect(argValues(opts)).to.include('json');
             expect(opts.parseJson).to.be.true;
             expect(opts.cwd.path).to.equal('/project');
         });
@@ -214,7 +231,7 @@ describe('AzdService (unit)', () => {
                 services: { myfunc: { ingressUrl: 'https://myapp.azurewebsites.net' } },
             };
             const spawnFn = mock.fn(() => Promise.resolve({ json: payload }));
-            const { service, spawnMock } = createService(spawnFn as unknown as SpawnFn);
+            const { service, spawnMock } = createService(spawnFn);
 
             const result = await service.show(MockUri.file('/project'));
 
@@ -222,10 +239,10 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(opts.command).to.equal(AzdCommand);
-            expect(argValues(opts.args)).to.include('show');
-            expect(argValues(opts.args)).to.include('--output');
-            expect(argValues(opts.args)).to.include('json');
+            expect(commandString(opts)).to.equal(AzdCommand);
+            expect(argValues(opts)).to.include('show');
+            expect(argValues(opts)).to.include('--output');
+            expect(argValues(opts)).to.include('json');
             expect(opts.parseJson).to.be.true;
         });
 
@@ -273,7 +290,7 @@ describe('AzdService (unit)', () => {
                 }
                 // Second call: checkVersion
                 return Promise.resolve({ json: { azd: { version: '1.0.0', commit: 'abc' } } });
-            }) as unknown as SpawnFn;
+            });
             const { service, executor } = createService(spawnFn);
 
             let suppress: string | boolean | undefined;
@@ -304,7 +321,7 @@ describe('AzdService (unit)', () => {
                 }
                 // checkVersion call
                 return Promise.resolve({ json: { azd: { version: MinAzdVersion, commit: 'abc' } } });
-            }) as unknown as SpawnFn;
+            });
             const { service } = createService(spawnFn);
 
             try {
@@ -327,8 +344,8 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(opts.command).to.equal(AzdCommand);
-            expect(argValues(opts.args)).to.include('provision');
+            expect(commandString(opts)).to.equal(AzdCommand);
+            expect(argValues(opts)).to.include('provision');
             expect(opts.source).to.equal('azd');
         });
 
@@ -370,8 +387,8 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(opts.command).to.equal(AzdCommand);
-            expect(argValues(opts.args)).to.include('deploy');
+            expect(commandString(opts)).to.equal(AzdCommand);
+            expect(argValues(opts)).to.include('deploy');
             expect(opts.source).to.equal('azd');
         });
 
@@ -399,10 +416,10 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(opts.command).to.equal(AzdCommand);
-            expect(argValues(opts.args)).to.include('down');
-            expect(argValues(opts.args)).to.include('--force');
-            expect(argValues(opts.args)).to.include('--purge');
+            expect(commandString(opts)).to.equal(AzdCommand);
+            expect(argValues(opts)).to.include('down');
+            expect(argValues(opts)).to.include('--force');
+            expect(argValues(opts)).to.include('--purge');
             expect(opts.cwd.path).to.equal('/project');
             expect(opts.source).to.equal('azd');
         });
@@ -438,8 +455,8 @@ describe('AzdService (unit)', () => {
     });
 
     describe('checkVersion', () => {
-        function makeVersionSpawn(version: string): SpawnFn {
-            return mock.fn(() => Promise.resolve({ json: { azd: { version, commit: 'abc' } } })) as unknown as SpawnFn;
+        function makeVersionSpawn(version: string): SpawnMethod {
+            return mock.fn(() => Promise.resolve({ json: { azd: { version, commit: 'abc' } } }));
         }
 
         it('should return true when the installed version meets the minimum', async () => {
@@ -524,7 +541,7 @@ describe('AzdService (unit)', () => {
                     return Promise.resolve({ json: { azd: { version: '1.9.5', commit: 'def' } } });
                 }
                 return Promise.resolve();
-            }) as unknown as SpawnFn;
+            });
             const { service } = createService(spawnFn);
 
             const before = await service.checkVersion('1.9.0');
@@ -554,11 +571,11 @@ describe('AzdService (unit)', () => {
 
         it('should use azd update when version supports it', async () => {
             const spawnFn = mock.fn((opts: SpawnOpts) => {
-                if (opts.command === 'azd' && argValues(opts.args).includes('version')) {
+                if (commandString(opts) === AzdCommand && argValues(opts).includes('version')) {
                     return Promise.resolve({ json: { azd: { version: MinAzdUpdateVersion } } });
                 }
                 return Promise.resolve();
-            }) as unknown as SpawnFn;
+            });
             const { service, spawnMock } = createService(spawnFn);
 
             await service.install();
@@ -567,19 +584,19 @@ describe('AzdService (unit)', () => {
             const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
             expect(opts.command).to.equal('azd');
-            expect(argValues(opts.args)).to.deep.equal(['update']);
+            expect(argValues(opts)).to.deep.equal(['update']);
         });
 
         describe('platform fallback commands', () => {
             // All platform tests use a version too old for `azd update`
             // so the fallback logic is exercised.
-            function makeOldVersionSpawn(): SpawnFn {
+            function makeOldVersionSpawn(): SpawnMethod {
                 return mock.fn((opts: SpawnOpts) => {
-                    if (opts.command === 'azd' && argValues(opts.args).includes('version')) {
+                    if (commandString(opts) === AzdCommand && argValues(opts).includes('version')) {
                         return Promise.resolve({ json: { azd: { version: '1.0.0' } } });
                     }
                     return Promise.resolve();
-                }) as unknown as SpawnFn;
+                });
             }
 
             const originalPlatform = process.platform;
@@ -600,7 +617,7 @@ describe('AzdService (unit)', () => {
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
                 expect(opts.command).to.equal('winget');
-                expect(argValues(opts.args)).to.deep.equal(['install', 'microsoft.azd']);
+                expect(argValues(opts)).to.deep.equal(['install', 'microsoft.azd']);
             });
 
             it('should use choco on Windows when winget is unavailable', async () => {
@@ -612,7 +629,7 @@ describe('AzdService (unit)', () => {
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
                 expect(opts.command).to.equal('choco');
-                expect(argValues(opts.args)).to.deep.equal(['upgrade', 'azd']);
+                expect(argValues(opts)).to.deep.equal(['upgrade', 'azd']);
             });
 
             it('should use powershell script on Windows when no package manager is available', async () => {
@@ -624,8 +641,8 @@ describe('AzdService (unit)', () => {
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
                 expect(opts.command).to.equal('powershell');
-                expect(argValues(opts.args)).to.include('-ExecutionPolicy');
-                expect(argValues(opts.args)).to.include('AllSigned');
+                expect(argValues(opts)).to.include('-ExecutionPolicy');
+                expect(argValues(opts)).to.include('AllSigned');
             });
 
             it('should use brew on macOS when brew is available', async () => {
@@ -637,7 +654,7 @@ describe('AzdService (unit)', () => {
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
                 expect(opts.command).to.equal('brew');
-                expect(argValues(opts.args)).to.deep.equal(['install', 'azure/azd/azd']);
+                expect(argValues(opts)).to.deep.equal(['install', 'azure/azd/azd']);
             });
 
             it('should use bash curl script on macOS when brew is unavailable', async () => {
@@ -649,7 +666,7 @@ describe('AzdService (unit)', () => {
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
                 expect(opts.command).to.equal('bash');
-                expect(argValues(opts.args).join(' ')).to.include('install-azd.sh');
+                expect(argValues(opts).join(' ')).to.include('install-azd.sh');
             });
 
             it('should use bash curl script on Linux', async () => {
@@ -661,7 +678,7 @@ describe('AzdService (unit)', () => {
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
                 expect(opts.command).to.equal('bash');
-                expect(argValues(opts.args).join(' ')).to.include('install-azd.sh');
+                expect(argValues(opts).join(' ')).to.include('install-azd.sh');
             });
         });
     });

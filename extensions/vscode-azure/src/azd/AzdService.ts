@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IProcessExecutor, IVsCode, fileExists } from '@microsoft/vscode-azure-utils';
-import { composeArgs, withArg, withFlagArg, withNamedArg } from '@microsoft/vscode-processutils';
+import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
@@ -193,12 +192,10 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('init'),
-                    withFlagArg('--minimal', true),
-                    withFlagArg('--no-prompt', true),
-                )(),
+                command: command(AzdCommand)
+                    .arg('init')
+                    .flag('--minimal')
+                    .flag('--no-prompt'),
                 cwd,
             });
         } catch (e) {
@@ -211,12 +208,10 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('env', 'new', name),
-                    withNamedArg('--location', location),
-                    withNamedArg('--subscription', subscriptionId),
-                )(),
+                command: command(AzdCommand)
+                    .arg('env', 'new', name)
+                    .named('--location', location)
+                    .named('--subscription', subscriptionId),
                 cwd,
             });
         } catch (e) {
@@ -229,11 +224,9 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<AzdEnvironment[]>({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('env', 'list'),
-                    withJsonOutput(),
-                )(),
+                command: command(AzdCommand)
+                    .arg('env', 'list')
+                    .named('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -258,12 +251,10 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<Record<string, string>>({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('env', 'get-values'),
-                    withNamedArg('--environment', name),
-                    withJsonOutput(),
-                )(),
+                command: command(AzdCommand)
+                    .arg('env', 'get-values')
+                    .named('--environment', name)
+                    .named('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -279,11 +270,9 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<AzdShowResult>({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('show'),
-                    withJsonOutput(),
-                )(),
+                command: command(AzdCommand)
+                    .arg('show')
+                    .named('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -300,10 +289,7 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('provision'),
-                )(),
+                command: command(AzdCommand).arg('provision'),
                 cwd,
                 env: { ...authEnv, ...env },
                 name: 'azd provision',
@@ -321,10 +307,7 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('deploy'),
-                )(),
+                command: command(AzdCommand).arg('deploy'),
                 cwd,
                 env: authEnv,
                 name: 'azd deploy',
@@ -342,12 +325,10 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('down'),
-                    withArg('--force'),
-                    withArg('--purge'),
-                )(),
+                command: command(AzdCommand)
+                    .arg('down')
+                    .flag('--force')
+                    .flag('--purge'),
                 cwd,
                 env: authEnv,
                 name: 'azd down',
@@ -366,11 +347,9 @@ export class AzdService implements IAzdService {
             try {
                 const result = await this.processExecutor.spawn<AzdVersionResult>({
                     execution: 'background',
-                    command: AzdCommand,
-                    args: composeArgs(
-                        withArg('version'),
-                        withJsonOutput(),
-                    )(),
+                    command: command(AzdCommand)
+                        .arg('version')
+                        .named('--output', 'json'),
                     parseJson: true,
                 });
                 const version = semver.valid(result.json.azd.version);
@@ -488,6 +467,3 @@ export class AzdService implements IAzdService {
         });
     }
 }
-
-/** Curry function that appends `--output json` to the argument list. */
-const withJsonOutput = () => withNamedArg('--output', 'json');

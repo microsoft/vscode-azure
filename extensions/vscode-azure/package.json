@@ -401,7 +401,6 @@
     "dependencies": {
         "@microsoft/vscode-azure-azutils": "workspace:*",
         "@microsoft/vscode-azure-utils": "workspace:*",
-        "@microsoft/vscode-processutils": "catalog:",
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:",
         "semver": "^7.8.4"

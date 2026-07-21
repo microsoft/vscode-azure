@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { CancellationTokenLike } from '@microsoft/vscode-processutils';
 import { CancellationError } from '../vscode/CancellationError';
+import type { CancellationTokenLike } from './CancellationTokenLike';
 
 /**
  * Options for {@linkcode delay}.
