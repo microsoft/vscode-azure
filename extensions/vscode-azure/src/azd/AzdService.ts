@@ -194,8 +194,8 @@ export class AzdService implements IAzdService {
                 execution: 'background',
                 command: command(AzdCommand)
                     .arg('init')
-                    .flag('--minimal')
-                    .flag('--no-prompt'),
+                    .flagArg('--minimal')
+                    .flagArg('--no-prompt'),
                 cwd,
             });
         } catch (e) {
@@ -210,8 +210,8 @@ export class AzdService implements IAzdService {
                 execution: 'background',
                 command: command(AzdCommand)
                     .arg('env', 'new', name)
-                    .named('--location', location)
-                    .named('--subscription', subscriptionId),
+                    .namedArg('--location', location)
+                    .namedArg('--subscription', subscriptionId),
                 cwd,
             });
         } catch (e) {
@@ -226,7 +226,7 @@ export class AzdService implements IAzdService {
                 execution: 'background',
                 command: command(AzdCommand)
                     .arg('env', 'list')
-                    .named('--output', 'json'),
+                    .namedArg('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -253,8 +253,8 @@ export class AzdService implements IAzdService {
                 execution: 'background',
                 command: command(AzdCommand)
                     .arg('env', 'get-values')
-                    .named('--environment', name)
-                    .named('--output', 'json'),
+                    .namedArg('--environment', name)
+                    .namedArg('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -272,7 +272,7 @@ export class AzdService implements IAzdService {
                 execution: 'background',
                 command: command(AzdCommand)
                     .arg('show')
-                    .named('--output', 'json'),
+                    .namedArg('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -327,8 +327,8 @@ export class AzdService implements IAzdService {
                 execution: 'foreground',
                 command: command(AzdCommand)
                     .arg('down')
-                    .flag('--force')
-                    .flag('--purge'),
+                    .flagArg('--force')
+                    .flagArg('--purge'),
                 cwd,
                 env: authEnv,
                 name: 'azd down',
@@ -349,7 +349,7 @@ export class AzdService implements IAzdService {
                     execution: 'background',
                     command: command(AzdCommand)
                         .arg('version')
-                        .named('--output', 'json'),
+                        .namedArg('--output', 'json'),
                     parseJson: true,
                 });
                 const version = semver.valid(result.json.azd.version);

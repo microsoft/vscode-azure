@@ -38,7 +38,7 @@ export type CommandLineArg = string | ShellQuotedString;
 /** An ordered list of command-line arguments. */
 export type CommandLineArgs = Array<CommandLineArg>;
 
-/** Options for {@linkcode CommandLineBuilder.named}. */
+/** Options for {@linkcode CommandLineBuilder.namedArg}. */
 export interface NamedArgOptions {
     /**
      * Emit as a single `name=value` token instead of two separate `name` and
@@ -69,15 +69,15 @@ export interface NamedArgOptions {
  * decomposing for `nano-spawn` or a `vscode.ShellExecution`).
  *
  * Argument-adding methods ({@linkcode CommandLineBuilder.arg arg},
- * {@linkcode CommandLineBuilder.flag flag}, and {@linkcode CommandLineBuilder.named named}
+ * {@linkcode CommandLineBuilder.flagArg flagArg}, and {@linkcode CommandLineBuilder.namedArg namedArg}
  * without a `quoting` option) append plain strings so argv-first execution never
- * performs implicit shell parsing. Use {@linkcode CommandLineBuilder.quoted quoted}
- * or the `quoting` option on `named` when the value needs VS Code shell-quoting
+ * performs implicit shell parsing. Use {@linkcode CommandLineBuilder.quotedArg quotedArg}
+ * or the `quoting` option on `namedArg` when the value needs VS Code shell-quoting
  * metadata for a task.
  *
  * @example
  * ```ts
- * command('azd').arg('provision').named('--location', 'westus').flag('--force');
+ * command('azd').arg('provision').namedArg('--location', 'westus').flagArg('--force');
  * // -> ['azd', 'provision', '--location', 'westus', '--force']
  * ```
  */
@@ -97,7 +97,10 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
         super(command);
     }
 
-    /** Creates a builder seeded with the given executable. Prefer the {@linkcode command} factory. */
+    /**
+     * Creates a builder seeded with the given executable.
+     * @internal Prefer the {@linkcode command} factory.
+     */
     public static create(command: string): CommandLineBuilder {
         return new CommandLineBuilder(command);
     }
@@ -120,7 +123,7 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
      * metadata, for values that must survive shell interpretation during
      * foreground task execution.
      */
-    public quoted(...values: Array<string | null | undefined>): this {
+    public quotedArg(...values: Array<string | null | undefined>): this {
         for (const value of values) {
             if (isNonEmptyArg(value)) {
                 this.push({ value, quoting: ShellQuoting.Strong });
@@ -135,7 +138,7 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
      * @param name - The flag token.
      * @param include - When falsy, the flag is omitted. Defaults to `true`.
      */
-    public flag(name: string, include: boolean = true): this {
+    public flagArg(name: string, include: boolean = true): this {
         if (include) {
             this.push(name);
         }
@@ -151,7 +154,7 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
      * @param value - The value(s) for the argument.
      * @param options - Formatting/quoting options; see {@linkcode NamedArgOptions}.
      */
-    public named(
+    public namedArg(
         name: string,
         value: string | ReadonlyArray<string | null | undefined> | null | undefined,
         options?: NamedArgOptions,
@@ -177,19 +180,11 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
 }
 
 /**
- * Type guard that returns `true` when {@linkcode value} is a
- * {@linkcode CommandLineBuilder}.
- */
-export function isCommandLineBuilder(value: unknown): value is CommandLineBuilder {
-    return value instanceof CommandLineBuilder;
-}
-
-/**
  * Creates a {@linkcode CommandLineBuilder} for {@linkcode command}.
  *
  * @example
  * ```ts
- * command('azd').arg('env', 'list').named('--output', 'json');
+ * command('azd').arg('env', 'list').namedArg('--output', 'json');
  * ```
  */
 export function command(command: string): CommandLineBuilder {

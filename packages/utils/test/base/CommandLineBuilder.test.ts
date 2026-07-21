@@ -25,38 +25,38 @@ describe('CommandLineBuilder (unit)', () => {
     });
 
     it('should append named args as two tokens by default', () => {
-        const builder = command('azd').named('--location', 'westus');
+        const builder = command('azd').namedArg('--location', 'westus');
         expect([...builder]).to.deep.equal(['azd', '--location', 'westus']);
     });
 
     it('should skip named args with empty values', () => {
-        const builder = command('azd').named('--location', undefined).named('--sub', '');
+        const builder = command('azd').namedArg('--location', undefined).namedArg('--sub', '');
         expect([...builder]).to.deep.equal(['azd']);
     });
 
     it('should repeat the name for each value in an array', () => {
-        const builder = command('azd').named('--set', ['a', 'b']);
+        const builder = command('azd').namedArg('--set', ['a', 'b']);
         expect([...builder]).to.deep.equal(['azd', '--set', 'a', '--set', 'b']);
     });
 
     it('should emit a single name=value token when assign is set', () => {
-        const builder = command('azd').named('--output', 'json', { assign: true });
+        const builder = command('azd').namedArg('--output', 'json', { assign: true });
         expect([...builder]).to.deep.equal(['azd', '--output=json']);
     });
 
     it('should attach quoting metadata to a named value when quoting is set', () => {
-        const builder = command('azd').named('--path', 'a b', { quoting: ShellQuoting.Strong });
+        const builder = command('azd').namedArg('--path', 'a b', { quoting: ShellQuoting.Strong });
         expect(builder[1]).to.equal('--path');
         expect(builder[2]).to.deep.equal({ value: 'a b', quoting: ShellQuoting.Strong });
     });
 
     it('should conditionally include flags', () => {
-        const builder = command('azd').flag('--force').flag('--purge', false).flag('--no-prompt', true);
+        const builder = command('azd').flagArg('--force').flagArg('--purge', false).flagArg('--no-prompt', true);
         expect([...builder]).to.deep.equal(['azd', '--force', '--no-prompt']);
     });
 
-    it('should attach Strong quoting metadata via quoted()', () => {
-        const builder = command('azd').quoted('needs quoting', '');
+    it('should attach Strong quoting metadata via quotedArg()', () => {
+        const builder = command('azd').quotedArg('needs quoting', '');
         expect(builder).to.have.lengthOf(2);
         expect(builder[1]).to.deep.equal({ value: 'needs quoting', quoting: ShellQuoting.Strong });
     });
@@ -75,8 +75,8 @@ describe('CommandLineBuilder (unit)', () => {
     it('should compose a realistic command', () => {
         const builder = command('azd')
             .arg('provision')
-            .named('--location', 'westus')
-            .flag('--force');
+            .namedArg('--location', 'westus')
+            .flagArg('--force');
         expect([...builder]).to.deep.equal(['azd', 'provision', '--location', 'westus', '--force']);
     });
 });

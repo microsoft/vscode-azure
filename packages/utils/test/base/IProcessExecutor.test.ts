@@ -226,7 +226,7 @@ describe('ProcessExecutor (unit)', () => {
 
             await executor.spawn({
                 execution: 'background',
-                command: command('test-cmd').arg('sub').named('--name', 'value').flag('--force'),
+                command: command('test-cmd').arg('sub').namedArg('--name', 'value').flagArg('--force'),
             });
 
             expect(spawnFn.mock.callCount()).to.equal(1);
