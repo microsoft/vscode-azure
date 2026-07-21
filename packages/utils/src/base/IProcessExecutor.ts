@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ServiceIdentifier } from 'inversify';
-import { default as spawn, type Options as SpawnOptions, type Result as SpawnResult, type Subprocess } from 'nano-spawn';
+import { default as spawn, type Options as SpawnOptions, type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
 import type * as vscode from 'vscode';
 import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
@@ -117,9 +117,21 @@ export interface JsonProcessResult<T> extends ProcessResult {
 }
 
 /**
- * The caller is responsible for awaiting {@linkcode completed} or attaching
- * a `.catch()` handler. If the process fails and `completed` is never
- * awaited, the rejection will be unhandled.
+ * A streaming JSON-lines result: {@linkcode jsonLines} yields each stderr line
+ * parsed as JSON as the process emits it, and {@linkcode completed} resolves with
+ * the buffered stdout parsed as JSON once the process exits.
+ *
+ * @remarks
+ * stderr is streamed live, so it is not buffered: {@linkcode JsonProcessResult}'s
+ * `stderr` on {@linkcode completed} is always an empty string in this mode.
+ *
+ * The caller **must** drain {@linkcode jsonLines} (e.g. via `for await`) --
+ * because stderr buffering is disabled, an undrained stream can backpressure and
+ * stall a chatty child process.
+ *
+ * The caller is also responsible for awaiting {@linkcode completed} or attaching
+ * a `.catch()` handler. If the process fails and `completed` is never awaited,
+ * the rejection will be unhandled.
  */
 export interface JsonLinesProcessResult<TOut = unknown, TLines = unknown> {
     readonly jsonLines: AsyncGenerator<TLines>;
@@ -294,29 +306,30 @@ export class ProcessExecutor implements IProcessExecutor {
             signal: controller.signal,
         });
 
-        // JSON-lines mode streams stderr line-by-line. The stderr must be
-        // iterated eagerly (before nano-spawn starts buffering it), so tee it
-        // now, synchronously, right after the subprocess is created.
+        // JSON-lines mode streams stderr line-by-line. nano-spawn requires the
+        // stderr iteration to begin in the same tick the subprocess was created
+        // (and disables buffering once iterated), so prime the iterator
+        // synchronously here and hand the first pull to the parser.
         if ('jsonLines' in options && options.jsonLines) {
-            const collector = new StderrLineCollector(subprocess.stderr);
+            const stderrIterator = subprocess.stderr[Symbol.asyncIterator]();
+            const firstPull = stderrIterator.next();
 
             const completed = (async (): Promise<JsonProcessResult<unknown>> => {
                 try {
                     const result = await subprocess;
-                    await collector.whenDone;
-                    const stdout = result.stdout;
-                    return { stdout, stderr: collector.lines.join('\n'), json: JSON.parse(stdout) as unknown };
+                    // stderr was streamed (buffering disabled), so it is not
+                    // captured on the completed result -- the caller consumes it
+                    // live via `jsonLines`.
+                    return { stdout: result.stdout, stderr: '', json: JSON.parse(result.stdout) as unknown };
                 } catch (e) {
-                    await collector.whenDone.catch(() => { /* surfaced below */ });
-                    const stderr = collector.lines.join('\n') || subprocessStderr(e);
-                    throw enrichError(e, stderr, canceled);
+                    throw enrichError(e, subprocessStderr(e), canceled);
                 } finally {
                     ctDisposable?.dispose();
                 }
             })();
 
             return {
-                jsonLines: parseJsonLines(collector),
+                jsonLines: parseJsonLines(stderrIterator, firstPull),
                 completed,
             };
         }
@@ -360,24 +373,9 @@ function toStringArgs(args: CommandLineArgs): string[] {
     return args.map((arg) => typeof arg === 'string' ? arg : arg.value);
 }
 
-/**
- * Minimal shape of nano-spawn's `SubprocessError`, recognized structurally so
- * that both the real error and test fakes are handled.
- */
-interface SubprocessErrorLike extends Error {
-    readonly exitCode?: number;
-    readonly signalName?: string;
-    readonly isCanceled?: boolean;
-    readonly stderr?: string;
-}
-
-function isSubprocessError(e: unknown): e is SubprocessErrorLike {
-    return e instanceof Error && e.name === 'SubprocessError';
-}
-
 /** Extracts captured stderr from a spawn failure, if any. */
 function subprocessStderr(e: unknown): string {
-    return isSubprocessError(e) && typeof e.stderr === 'string' ? e.stderr : '';
+    return e instanceof SubprocessError && typeof e.stderr === 'string' ? e.stderr : '';
 }
 
 /**
@@ -395,7 +393,7 @@ function subprocessStderr(e: unknown): string {
  * - The error unchanged for anything else.
  */
 function enrichError(e: unknown, stderr: string, canceled: boolean): unknown {
-    if (canceled || (isSubprocessError(e) && e.isCanceled)) {
+    if (canceled || (e instanceof SubprocessError && e.isCanceled)) {
         return new CancellationError();
     }
 
@@ -403,7 +401,7 @@ function enrichError(e: unknown, stderr: string, canceled: boolean): unknown {
         return e;
     }
 
-    if (isSubprocessError(e)) {
+    if (e instanceof SubprocessError) {
         const hasExitCode = typeof e.exitCode === 'number';
         const hasSignal = typeof e.signalName === 'string';
 
@@ -427,12 +425,35 @@ function enrichError(e: unknown, stderr: string, canceled: boolean): unknown {
 }
 
 /**
- * Parses newline-delimited JSON from a {@linkcode StderrLineCollector}, skipping
- * blank and non-JSON lines.
+ * Parses newline-delimited JSON from a live stderr line iterator, skipping blank
+ * and non-JSON lines.
+ *
+ * @remarks
+ * nano-spawn requires its `stderr` iterable to be consumed in the same tick the
+ * subprocess is created. The caller primes the iterator with a synchronous first
+ * {@linkcode AsyncIterator.next next} call and passes that pending result in as
+ * {@linkcode firstPull} so this generator can be driven lazily afterwards. A pull
+ * that rejects (the subprocess failed) simply ends the stream -- the failure is
+ * surfaced by awaiting the subprocess in `completed`.
  */
-async function* parseJsonLines(collector: StderrLineCollector): AsyncGenerator {
-    for await (const line of collector.stream()) {
-        const trimmed = line.trim();
+async function* parseJsonLines(
+    iterator: AsyncIterator<string>,
+    firstPull: Promise<IteratorResult<string>>,
+): AsyncGenerator {
+    let pull = firstPull;
+    for (; ;) {
+        let result: IteratorResult<string>;
+        try {
+            result = await pull;
+        } catch {
+            // The failure is surfaced by awaiting the subprocess in `completed`.
+            return;
+        }
+        if (result.done) {
+            return;
+        }
+
+        const trimmed = result.value.trim();
         if (trimmed.length > 0) {
             try {
                 yield JSON.parse(trimmed);
@@ -440,69 +461,7 @@ async function* parseJsonLines(collector: StderrLineCollector): AsyncGenerator {
                 // Not valid JSON -- skip the line
             }
         }
-    }
-}
 
-/**
- * Eagerly consumes nano-spawn's `subprocess.stderr` line iterable, accumulating
- * every line while also exposing them as a lazily-drained
- * {@linkcode StderrLineCollector.stream stream}.
- *
- * @remarks
- * nano-spawn requires its `stderr` iterable to be consumed immediately (it
- * throws otherwise) and disables output buffering once it is iterated. Pumping
- * here -- from the constructor, in the same tick the subprocess is created --
- * satisfies both constraints and guarantees {@linkcode StderrLineCollector.lines lines}
- * is fully populated for `completed.stderr` even when the caller never drains
- * the live {@linkcode StderrLineCollector.stream stream}. Because every line is
- * retained, the stream simply walks the growing array by index, woken by a
- * single signal -- no separate buffer or waiter queue is needed.
- */
-class StderrLineCollector {
-    /** Every line emitted by the source, in order. */
-    public readonly lines: string[] = [];
-    /** Resolves when the source has been fully consumed (successfully or not). */
-    public readonly whenDone: Promise<void>;
-
-    private ended = false;
-    private wake: (() => void) | undefined;
-
-    public constructor(source: AsyncIterable<string>) {
-        this.whenDone = this.pump(source);
-    }
-
-    /** Lazily yields each line as it becomes available, then completes. */
-    public async *stream(): AsyncGenerator<string> {
-        for (let i = 0; ;) {
-            if (i < this.lines.length) {
-                yield this.lines[i++];
-                continue;
-            }
-            if (this.ended) {
-                return;
-            }
-            await new Promise<void>((resolve) => { this.wake = resolve; });
-        }
-    }
-
-    private async pump(source: AsyncIterable<string>): Promise<void> {
-        try {
-            for await (const line of source) {
-                this.lines.push(line);
-                this.signal();
-            }
-        } catch {
-            // The failure is surfaced by awaiting the subprocess in `completed`.
-        } finally {
-            this.ended = true;
-            this.signal();
-        }
-    }
-
-    /** Wakes a stream consumer parked on the {@linkcode wake} promise, if any. */
-    private signal(): void {
-        const wake = this.wake;
-        this.wake = undefined;
-        wake?.();
+        pull = iterator.next();
     }
 }

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { default as spawn, type Result as SpawnResult, type Subprocess } from 'nano-spawn';
+import { default as spawn, type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
@@ -41,8 +41,9 @@ function asyncLines(lines: readonly string[]): AsyncIterable<string> {
 }
 
 /**
- * Builds a fake nano-spawn `SubprocessError`: a plain {@linkcode Error} branded
- * with `name === 'SubprocessError'` plus the fields the executor inspects.
+ * Builds a real nano-spawn {@linkcode SubprocessError}, matching how nano-spawn
+ * assembles it at runtime: the class body only sets `name`, and the remaining
+ * fields are assigned onto the instance.
  */
 function makeSubprocessError(opts: {
     message?: string;
@@ -51,9 +52,8 @@ function makeSubprocessError(opts: {
     isCanceled?: boolean;
     stderr?: string;
     cause?: unknown;
-}): Error {
-    const e = new Error(opts.message ?? 'Command failed');
-    e.name = 'SubprocessError';
+}): SubprocessError {
+    const e = new SubprocessError(opts.message ?? 'Command failed');
     Object.assign(e, {
         exitCode: opts.exitCode,
         signalName: opts.signalName,
@@ -274,7 +274,8 @@ describe('ProcessExecutor (unit)', () => {
 
             const completed = await result.completed;
             expect(completed.json).to.deep.equal({ done: true });
-            expect(completed.stderr).to.include('step');
+            // stderr is streamed live in jsonLines mode, so it is not buffered.
+            expect(completed.stderr).to.equal('');
         });
 
         it('should skip non-JSON lines in JSON lines mode', async () => {
@@ -599,7 +600,8 @@ describe('ProcessExecutor (integration)', () => {
 
             const completed = await result.completed;
             expect(completed.json).to.deep.equal({ done: true });
-            expect(completed.stderr).to.include('step');
+            // stderr is streamed live in jsonLines mode, so it is not buffered.
+            expect(completed.stderr).to.equal('');
         });
 
         it('should skip non-JSON lines in JSON lines mode', async () => {
