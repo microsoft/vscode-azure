@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IProcessExecutor, type CommandLineArg } from '@microsoft/vscode-azure-utils';
+import { type IProcessExecutor, type CommandLineArg, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -30,13 +30,12 @@ interface SpawnOpts {
 
 /** Resolves the executable name (element 0 of the argument vector) from spawn options. */
 function commandString(opts: SpawnOpts): string {
-    const executable = opts.command[0];
-    return typeof executable === 'string' ? executable : executable.value;
+    return argToString(opts.command[0]);
 }
 
 /** Extracts plain string arg values (everything after the executable) from spawn options. */
 function argValues(opts: SpawnOpts): string[] {
-    return opts.command.slice(1).map(a => typeof a === 'string' ? a : a.value);
+    return argsToStrings(opts.command.slice(1));
 }
 
 function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => Promise<boolean>) {

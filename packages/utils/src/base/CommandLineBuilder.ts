@@ -199,3 +199,25 @@ export function command(command: string): CommandLineBuilder {
 function isNonEmptyArg(value: CommandLineArg | null | undefined): value is CommandLineArg {
     return value !== null && value !== undefined && value !== '';
 }
+
+/**
+ * Flattens a single {@linkcode CommandLineArg} to its plain string value,
+ * discarding any {@linkcode ShellQuoting} metadata.
+ *
+ * @remarks
+ * This is the canonical way to turn an argument-vector element into a raw
+ * string for argv-first execution (e.g. `nano-spawn`) or for inspecting a
+ * command line in tests. Prefer {@linkcode argsToStrings} for a whole vector.
+ */
+export function argToString(arg: CommandLineArg): string {
+    return typeof arg === 'string' ? arg : arg.value;
+}
+
+/**
+ * Flattens a {@linkcode CommandLineArgs} vector (or any
+ * {@linkcode CommandLineArg} array, including a {@linkcode CommandLineBuilder})
+ * to plain strings, discarding {@linkcode ShellQuoting} metadata.
+ */
+export function argsToStrings(args: readonly CommandLineArg[]): string[] {
+    return args.map(argToString);
+}

@@ -4,13 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ServiceIdentifier } from 'inversify';
-import { default as spawn, type Options as SpawnOptions, type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
+import { SubprocessError, default as spawn, type Options as SpawnOptions, type Result as SpawnResult, type Subprocess } from 'nano-spawn';
 import type * as vscode from 'vscode';
 import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
 import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
-import type { CommandLineArgs } from './CommandLineBuilder';
+import { argToString, argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
 import { getSafeExecPath } from './getSafeExecPath';
 
 export * from './CommandLineBuilder';
@@ -286,7 +286,7 @@ export class ProcessExecutor implements IProcessExecutor {
 
         // nano-spawn inherits `process.env` automatically and layers these
         // overrides on top, so pass only the caller-provided variables.
-        const subprocess = this.spawnFn(command, toStringArgs(args), {
+        const subprocess = this.spawnFn(command, argsToStrings(args), {
             cwd: options.cwd?.fsPath,
             env: options.env,
             shell: options.shell,
@@ -387,12 +387,7 @@ function resolveCommandLine(options: ProcessExecutorOptions): { command: string;
         throw new Error('A command line must include at least the executable as its first element.');
     }
     const [executable, ...args] = options.command;
-    return { command: typeof executable === 'string' ? executable : executable.value, args };
-}
-
-/** Flattens a {@linkcode CommandLineArgs} list to plain strings for argv-first execution. */
-function toStringArgs(args: CommandLineArgs): string[] {
-    return args.map((arg) => typeof arg === 'string' ? arg : arg.value);
+    return { command: argToString(executable), args };
 }
 
 /** Extracts captured stderr from a spawn failure, if any. */
@@ -460,12 +455,14 @@ async function* parseJsonLines(
     let pull = firstPull;
     for (; ;) {
         let result: IteratorResult<string>;
+
         try {
             result = await pull;
         } catch {
             // The failure is surfaced by awaiting the subprocess in `completed`.
             return;
         }
+
         if (result.done) {
             return;
         }

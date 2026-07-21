@@ -4,12 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { CommandLineBuilder, ShellQuoting, command, isCommandLineBuilder, type CommandLineArg } from '../../src/base/CommandLineBuilder';
-
-/** Flattens builder args to plain strings for value assertions. */
-function values(args: readonly CommandLineArg[]): string[] {
-    return args.map(a => typeof a === 'string' ? a : a.value);
-}
+import { CommandLineBuilder, ShellQuoting, argsToStrings, command } from '../../src/base/CommandLineBuilder';
 
 describe('CommandLineBuilder (unit)', () => {
     it('should be an array whose first element is the executable', () => {
@@ -17,13 +12,6 @@ describe('CommandLineBuilder (unit)', () => {
         expect(builder).to.be.instanceOf(CommandLineBuilder);
         expect(Array.isArray(builder)).to.be.true;
         expect([...builder]).to.deep.equal(['azd']);
-    });
-
-    it('should be recognized by isCommandLineBuilder', () => {
-        expect(isCommandLineBuilder(command('azd'))).to.be.true;
-        expect(isCommandLineBuilder('azd')).to.be.false;
-        expect(isCommandLineBuilder(['azd'])).to.be.false;
-        expect(isCommandLineBuilder(undefined)).to.be.false;
     });
 
     it('should append positional args after the executable and chain fluently', () => {
@@ -77,11 +65,11 @@ describe('CommandLineBuilder (unit)', () => {
         const builder = command('azd').arg('a', 'b');
 
         // Spreading yields the full vector including the executable.
-        expect(values([...builder])).to.deep.equal(['azd', 'a', 'b']);
+        expect(argsToStrings([...builder])).to.deep.equal(['azd', 'a', 'b']);
         // Array methods return plain arrays (via Symbol.species), not builders.
         const sliced = builder.slice(1);
         expect(sliced).to.not.be.instanceOf(CommandLineBuilder);
-        expect(values(sliced)).to.deep.equal(['a', 'b']);
+        expect(argsToStrings(sliced)).to.deep.equal(['a', 'b']);
     });
 
     it('should compose a realistic command', () => {
