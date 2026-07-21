@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IProcessExecutor, type CommandLineArg, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
+import { type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -11,22 +11,26 @@ import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
 import { AzdCommand, AzdService, MinAzdUpdateVersion, MinAzdVersion } from '../../src/azd/AzdService';
 
 /**
- * A stand-in for {@linkcode IProcessExecutor.spawn} in tests. Typed permissively
- * because each test supplies a single-purpose fake rather than the full
- * overloaded implementation; the value is cast to {@linkcode IProcessExecutor}
- * when constructing the service.
+ * A stand-in for {@linkcode IProcessExecutor.spawn} in tests. Intentionally
+ * permissive (not the real overloaded `spawn` type) so each test can supply a
+ * single-purpose fake without having to satisfy all four `spawn` overloads;
+ * the value is cast to {@linkcode IProcessExecutor} when constructing the service.
  */
 type SpawnMethod = (...args: never[]) => unknown;
 
-interface SpawnOpts {
-    execution: string;
-    command: readonly CommandLineArg[];
-    cwd: { path: string };
-    parseJson?: boolean;
-    name?: string;
-    source?: string;
-    env?: Record<string, string>;
-}
+/**
+ * A permissive projection of the real {@linkcode ProcessExecutorOptions} used to
+ * read fields off a captured `spawn` call in assertions. The option shape is
+ * inherited from {@linkcode ProcessExecutorOptions}; only the discriminant fields
+ * that live on the option subtypes (`execution`, `parseJson`, `source`) are added
+ * so tests can read them without narrowing the union first.
+ */
+type SpawnOpts = Omit<ProcessExecutorOptions, 'cwd'> & {
+    readonly cwd: { path: string };
+    readonly execution?: string;
+    readonly parseJson?: boolean;
+    readonly source?: string;
+};
 
 function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => Promise<boolean>) {
     const mockResult = createMockVsCode();
