@@ -15,6 +15,7 @@ import { getSafeExecPath } from './getSafeExecPath';
 
 export * from './CommandLineBuilder';
 export * from './getSafeExecPath';
+export { SubprocessError } from 'nano-spawn';
 
 /**
  * Signature matching {@linkcode nano-spawn}'s default export. Exposed so tests
@@ -215,7 +216,7 @@ export class ProcessExecutor implements IProcessExecutor {
         const { command, args } = resolveCommandLine(options);
 
         const shellExecution = new this.code.ShellExecution(
-            getSafeExecPath(command),
+            command,
             args,
             { cwd: options.cwd?.fsPath, env: { ...options.env } },
         );
@@ -378,7 +379,10 @@ function toAbortSignal(cancellation?: vscode.CancellationToken | AbortSignal): {
 
 /**
  * Splits an {@linkcode ProcessExecutorOptions.command argument vector} into the
- * executable and its trailing arguments for execution.
+ * executable and its trailing arguments for execution, resolving the executable
+ * to a safe path via {@linkcode getSafeExecPath} so that neither foreground nor
+ * background execution can be hijacked by a same-named binary in the current
+ * working directory on Windows.
  *
  * @throws {Error} When the vector is empty (no executable to run).
  */
@@ -387,7 +391,7 @@ function resolveCommandLine(options: ProcessExecutorOptions): { command: string;
         throw new Error('A command line must include at least the executable as its first element.');
     }
     const [executable, ...args] = options.command;
-    return { command: argToString(executable), args };
+    return { command: getSafeExecPath(argToString(executable)), args };
 }
 
 /** Extracts captured stderr from a spawn failure, if any. */

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProcessExecutor, stringifyError } from '@microsoft/vscode-azure-utils';
+import { command, ProcessExecutor, stringifyError } from '@microsoft/vscode-azure-utils';
 import * as vscode from 'vscode';
 
 /**
@@ -72,7 +72,7 @@ function getAzAccount(): Promise<AzAccount> {
         try {
             const result = await executor.spawn<AzAccount>({
                 execution: 'background',
-                command: ['az', 'account', 'show', '-o', 'json'],
+                command: command('az').arg('account', 'show').namedArg('-o', 'json'),
                 parseJson: true,
                 // The Azure CLI is an `az.cmd` shim on Windows, which must be
                 // launched through a shell (spawning it directly fails EINVAL).

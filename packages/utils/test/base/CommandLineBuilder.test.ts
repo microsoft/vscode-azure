@@ -39,13 +39,13 @@ describe('CommandLineBuilder (unit)', () => {
         expect([...builder]).to.deep.equal(['azd', '--set', 'a', '--set', 'b']);
     });
 
-    it('should emit a single name=value token when assign is set', () => {
-        const builder = command('azd').namedArg('--output', 'json', { assign: '=' });
+    it('should emit a single name=value token when assignCharacter is set', () => {
+        const builder = command('azd').namedArg('--output', 'json', { assignCharacter: '=' });
         expect([...builder]).to.deep.equal(['azd', '--output=json']);
     });
 
     it('should join name and value with a custom assign separator', () => {
-        const builder = command('azd').namedArg('--output', 'json', { assign: ':' });
+        const builder = command('azd').namedArg('--output', 'json', { assignCharacter: ':' });
         expect([...builder]).to.deep.equal(['azd', '--output:json']);
     });
 

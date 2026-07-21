@@ -44,9 +44,10 @@ export interface NamedArgOptions {
      * Join the name and value into a single token using this separator instead
      * of emitting two separate `name` and `value` tokens. Typically `'='` (for
      * `--name=value`), but some CLIs use other separators (e.g. `':'` for
-     * `--name:value`). When set, {@linkcode NamedArgOptions.quoting} is ignored.
+     * `--name:value`, which `dotnet msbuild` expects). When set,
+     * {@linkcode NamedArgOptions.quoting} is ignored.
      */
-    readonly assign?: string;
+    readonly assignCharacter?: string;
     /**
      * Attach shell-quoting metadata to the value (for foreground task
      * execution). Omit to pass the value verbatim, which is the correct choice
@@ -169,8 +170,8 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
             if (!isNonEmptyArg(v)) {
                 continue;
             }
-            if (options?.assign !== undefined) {
-                this.push(`${name}${options.assign}${v}`);
+            if (options?.assignCharacter !== undefined) {
+                this.push(`${name}${options.assignCharacter}${v}`);
             } else if (options?.quoting !== undefined) {
                 this.push(name, { value: v, quoting: options.quoting });
             } else {

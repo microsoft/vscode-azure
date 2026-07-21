@@ -389,22 +389,24 @@ export class AzdService implements IAzdService {
     private async getInstallCommand(): Promise<CommandLineArgs> {
         const supportsUpdate = await this.checkVersion(MinAzdUpdateVersion);
         if (supportsUpdate) {
-            return [AzdCommand, 'update'];
+            return command(AzdCommand).arg('update');
         } else if (process.platform === 'win32') {
             if (await this.processExecutor.isOnPath('winget')) {
                 // `winget install` upgrades already-installed packages by default
-                return ['winget', 'install', 'microsoft.azd'];
+                return command('winget').arg('install', 'microsoft.azd');
             } else if (await this.processExecutor.isOnPath('choco')) {
                 // `choco upgrade` installs if missing and upgrades if already installed
-                return ['choco', 'upgrade', 'azd'];
+                return command('choco').arg('upgrade', 'azd');
             } else {
-                return ['powershell', '-ExecutionPolicy', 'AllSigned', '-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression'];
+                return command('powershell')
+                    .namedArg('-ExecutionPolicy', 'AllSigned')
+                    .arg('-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression');
             }
         } else if (process.platform === 'darwin' && await this.processExecutor.isOnPath('brew')) {
             // `brew install` upgrades already-installed packages by default
-            return ['brew', 'install', 'azure/azd/azd'];
+            return command('brew').arg('install', 'azure/azd/azd');
         } else {
-            return ['bash', '-c', 'curl -fsSL \'https://aka.ms/install-azd.sh\' | bash'];
+            return command('bash').arg('-c', 'curl -fsSL \'https://aka.ms/install-azd.sh\' | bash');
         }
     }
 
