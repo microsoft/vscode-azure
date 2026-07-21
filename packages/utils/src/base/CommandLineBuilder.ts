@@ -162,10 +162,7 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
         value: string | ReadonlyArray<string | null | undefined> | null | undefined,
         options?: NamedArgOptions,
     ): this {
-        const values: ReadonlyArray<string | null | undefined> =
-            typeof value === 'string' || value === null || value === undefined
-                ? [value]
-                : value;
+        const values: ReadonlyArray<string | null | undefined> = Array.isArray(value) ? value : [value];
         for (const v of values) {
             if (!isNonEmptyArg(v)) {
                 continue;
