@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
-import type { CancellationTokenLike } from './CancellationTokenLike';
 
 /**
  * Options for {@linkcode delay}.
@@ -12,8 +12,8 @@ import type { CancellationTokenLike } from './CancellationTokenLike';
 export interface DelayOptions {
     /** An {@linkcode AbortSignal} that causes the delay to reject with {@linkcode CancellationError}. */
     readonly signal?: AbortSignal;
-    /** A VS Code {@linkcode CancellationTokenLike} that causes the delay to reject with {@linkcode CancellationError}. */
-    readonly cancellationToken?: CancellationTokenLike;
+    /** A {@linkcode vscode.CancellationToken CancellationToken} that causes the delay to reject with {@linkcode CancellationError}. */
+    readonly cancellationToken?: vscode.CancellationToken;
 }
 
 /**

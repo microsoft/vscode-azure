@@ -9,7 +9,7 @@ import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
-import { ChildProcessError, ProcessExecutor, isChildProcessError, type SpawnFn } from '../../src/base/IProcessExecutor';
+import { ProcessExecutor, type SpawnFn } from '../../src/base/IProcessExecutor';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import { createMockVsCode } from '../vscode/MockVsCode';
@@ -125,7 +125,7 @@ describe('ProcessExecutor (unit)', () => {
             expect(result.stdout).to.equal('{"key":"value"}');
         });
 
-        it('should throw ChildProcessError on non-zero exit code', async () => {
+        it('should throw SubprocessError on non-zero exit code', async () => {
             const { vscode: code } = createMockVsCode();
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ exitCode: 1, stderr: 'failure reason' }) });
             const executor = new ProcessExecutor(code, spawnFn);
@@ -137,13 +137,13 @@ describe('ProcessExecutor (unit)', () => {
                 });
                 expect.fail('Expected error');
             } catch (e) {
-                expect(isChildProcessError(e)).to.be.true;
-                expect((e as Error).message).to.equal('failure reason');
-                expect((e as ChildProcessError).code).to.equal(1);
+                expect(e).to.be.instanceOf(SubprocessError);
+                expect((e as Error).message).to.include('failure reason');
+                expect((e as SubprocessError).exitCode).to.equal(1);
             }
         });
 
-        it('should throw ChildProcessError when terminated by a signal', async () => {
+        it('should throw SubprocessError when terminated by a signal', async () => {
             const { vscode: code } = createMockVsCode();
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ signalName: 'SIGTERM', stderr: 'killed' }) });
             const executor = new ProcessExecutor(code, spawnFn);
@@ -155,9 +155,9 @@ describe('ProcessExecutor (unit)', () => {
                 });
                 expect.fail('Expected error');
             } catch (e) {
-                expect(isChildProcessError(e)).to.be.true;
-                expect((e as ChildProcessError).code).to.equal(-1);
-                expect((e as ChildProcessError).signal).to.equal('SIGTERM');
+                expect(e).to.be.instanceOf(SubprocessError);
+                expect((e as Error).message).to.include('killed');
+                expect((e as SubprocessError).signalName).to.equal('SIGTERM');
             }
         });
 
@@ -192,7 +192,7 @@ describe('ProcessExecutor (unit)', () => {
                 });
                 expect.fail('Expected error');
             } catch (e) {
-                expect(isChildProcessError(e)).to.be.false;
+                expect(e).to.not.be.instanceOf(SubprocessError);
                 expect((e as { code?: string }).code).to.equal('ENOENT');
             }
         });
@@ -330,7 +330,7 @@ describe('ProcessExecutor (unit)', () => {
             await promise;
         });
 
-        it('should reject with ChildProcessError on non-zero exit code', async () => {
+        it('should reject with an Error on non-zero exit code', async () => {
             const m = createMockVsCode();
             const executor = new ProcessExecutor(m.vscode);
 
@@ -351,7 +351,7 @@ describe('ProcessExecutor (unit)', () => {
                 await promise;
                 expect.fail('Expected error');
             } catch (e) {
-                expect(isChildProcessError(e)).to.be.true;
+                expect(e).to.be.instanceOf(Error);
                 expect((e as Error).message).to.include('42');
                 expect((e as Error).message).to.include('Failing Task');
             }
@@ -531,7 +531,7 @@ describe('ProcessExecutor (integration)', () => {
             expect(result.stdout).to.equal('{"key":"value"}');
         });
 
-        it('should throw ChildProcessError on non-zero exit code', async () => {
+        it('should throw SubprocessError on non-zero exit code', async () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
@@ -542,8 +542,8 @@ describe('ProcessExecutor (integration)', () => {
                 });
                 expect.fail('Expected error');
             } catch (e) {
-                expect(isChildProcessError(e)).to.be.true;
-                expect((e as Error).message).to.equal('failure reason');
+                expect(e).to.be.instanceOf(SubprocessError);
+                expect((e as Error).message).to.include('failure reason');
             }
         });
 

@@ -10,14 +10,9 @@ import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
 import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
-import type { CancellationTokenLike } from './CancellationTokenLike';
-import { ChildProcessError, isChildProcessError } from './ChildProcessError';
 import type { CommandLineArgs } from './CommandLineBuilder';
 import { getSafeExecPath } from './getSafeExecPath';
-import { stringifyError } from './stringifyError';
 
-export * from './CancellationTokenLike';
-export * from './ChildProcessError';
 export * from './CommandLineBuilder';
 export * from './getSafeExecPath';
 
@@ -153,19 +148,21 @@ export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for(
  *   integrated terminal. Returns `Promise<void>` since task output is not
  *   capturable.
  *
- * On failure, background execution throws {@linkcode ChildProcessError}
- * enriched with captured stderr. Cancellation (via {@linkcode CancellationTokenLike})
- * throws {@linkcode CancellationError} in both modes.
+ * On failure, background execution throws {@linkcode nano-spawn}'s
+ * `SubprocessError` (with captured stderr appended to the message). Foreground
+ * failure throws a plain {@linkcode Error}. Cancellation -- via a
+ * {@linkcode vscode.CancellationToken CancellationToken} or an
+ * {@linkcode AbortSignal} -- throws {@linkcode CancellationError} in both modes.
  */
 export interface IProcessExecutor {
     /** Runs a process as a VS Code task. Resolves when the task exits with code 0. */
-    spawn(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void>;
+    spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
     /** Runs a background process, parses stdout as JSON, and streams stderr as newline-delimited JSON objects. */
-    spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonLinesProcessResult<TOut, TLines>>;
+    spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonLinesProcessResult<TOut, TLines>>;
     /** Runs a background process and parses stdout as JSON. */
-    spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonProcessResult<T>>;
+    spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonProcessResult<T>>;
     /** Runs a background process and captures raw stdout and stderr. */
-    spawn(options: BackgroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<ProcessResult>;
+    spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
 
     /**
      * Tests whether a command is available on the system `PATH`.
@@ -189,18 +186,18 @@ export class ProcessExecutor implements IProcessExecutor {
         private readonly spawnFn: SpawnFn = spawn,
     ) { }
 
-    public async spawn(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void>;
-    public async spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonLinesProcessResult<TOut, TLines>>;
-    public async spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonProcessResult<T>>;
-    public async spawn(options: BackgroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<ProcessResult>;
+    public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
+    public async spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonLinesProcessResult<TOut, TLines>>;
+    public async spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonProcessResult<T>>;
+    public async spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
     public async spawn(
         options: ForegroundProcessOptions | BackgroundJsonLinesProcessOptions | BackgroundJsonProcessOptions | BackgroundProcessOptions,
-        cancellationToken?: CancellationTokenLike,
+        cancellation?: vscode.CancellationToken | AbortSignal,
     ): Promise<void | ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
         if (options.execution === 'foreground') {
-            return this.spawnForeground(options, cancellationToken);
+            return this.spawnForeground(options, cancellation);
         } else {
-            return this.spawnBackground(options, cancellationToken);
+            return this.spawnBackground(options, cancellation);
         }
     }
 
@@ -214,7 +211,7 @@ export class ProcessExecutor implements IProcessExecutor {
         }
     }
 
-    private async spawnForeground(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void> {
+    private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
         const { command, args } = resolveCommandLine(options);
 
         const shellExecution = new this.code.ShellExecution(
@@ -241,61 +238,51 @@ export class ProcessExecutor implements IProcessExecutor {
 
         const taskExecution = await this.code.tasks.executeTask(task);
 
-        return new Promise<void>((resolve, reject) => {
-            let ctDisposable: Disposable | undefined;
+        const { signal, dispose } = toAbortSignal(cancellation);
 
+        return new Promise<void>((resolve, reject) => {
             const endDisposable = this.code.tasks.onDidEndTaskProcess((e) => {
                 if (e.execution === taskExecution) {
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
+                    finish();
                     if (e.exitCode === 0) {
                         resolve();
                     } else {
-                        reject(new ChildProcessError(
-                            this.code.l10n.t(
-                                "'{0}' failed with exit code {1}. See the '{0}' terminal for the full output.",
-                                options.name,
-                                e.exitCode ?? -1,
-                            ),
+                        reject(new Error(this.code.l10n.t(
+                            "'{0}' failed with exit code {1}. See the '{0}' terminal for the full output.",
+                            options.name,
                             e.exitCode ?? -1,
-                            null,
-                        ));
+                        )));
                     }
                 }
             });
 
-            if (cancellationToken) {
-                ctDisposable = cancellationToken.onCancellationRequested(() => {
-                    taskExecution.terminate();
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
-                    reject(new CancellationError());
-                });
+            const onAbort = () => {
+                finish();
+                taskExecution.terminate();
+                reject(new CancellationError());
+            };
+
+            const finish = () => {
+                endDisposable.dispose();
+                signal?.removeEventListener('abort', onAbort);
+                dispose();
+            };
+
+            if (signal?.aborted) {
+                onAbort();
+            } else {
+                signal?.addEventListener('abort', onAbort, { once: true });
             }
         });
     }
 
     private async spawnBackground(
         options: BackgroundProcessOptions | BackgroundJsonProcessOptions | BackgroundJsonLinesProcessOptions,
-        cancellationToken?: CancellationTokenLike,
+        cancellation?: vscode.CancellationToken | AbortSignal,
     ): Promise<ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
         const { command, args } = resolveCommandLine(options);
 
-        const controller = new AbortController();
-        let canceled = false;
-        let ctDisposable: Disposable | undefined;
-
-        if (cancellationToken) {
-            if (cancellationToken.isCancellationRequested) {
-                canceled = true;
-                controller.abort();
-            } else {
-                ctDisposable = cancellationToken.onCancellationRequested(() => {
-                    canceled = true;
-                    controller.abort();
-                });
-            }
-        }
+        const { signal, dispose } = toAbortSignal(cancellation);
 
         // nano-spawn inherits `process.env` automatically and layers these
         // overrides on top, so pass only the caller-provided variables.
@@ -303,7 +290,7 @@ export class ProcessExecutor implements IProcessExecutor {
             cwd: options.cwd?.fsPath,
             env: options.env,
             shell: options.shell,
-            signal: controller.signal,
+            signal,
         });
 
         // JSON-lines mode streams stderr line-by-line. nano-spawn requires the
@@ -322,9 +309,9 @@ export class ProcessExecutor implements IProcessExecutor {
                     // live via `jsonLines`.
                     return { stdout: result.stdout, stderr: '', json: JSON.parse(result.stdout) as unknown };
                 } catch (e) {
-                    throw enrichError(e, subprocessStderr(e), canceled);
+                    throw enrichError(e, subprocessStderr(e));
                 } finally {
-                    ctDisposable?.dispose();
+                    dispose();
                 }
             })();
 
@@ -338,9 +325,9 @@ export class ProcessExecutor implements IProcessExecutor {
         try {
             result = await subprocess;
         } catch (e) {
-            throw enrichError(e, subprocessStderr(e), canceled);
+            throw enrichError(e, subprocessStderr(e));
         } finally {
-            ctDisposable?.dispose();
+            dispose();
         }
 
         const { stdout, stderr } = result;
@@ -352,6 +339,41 @@ export class ProcessExecutor implements IProcessExecutor {
 
         return { stdout, stderr };
     }
+}
+
+/**
+ * Normalizes a cancellation source into an {@linkcode AbortSignal} (which
+ * {@linkcode nano-spawn} consumes directly) plus a `dispose` that detaches any
+ * listener created during conversion.
+ *
+ * @remarks
+ * - `undefined` yields no signal and a no-op `dispose`.
+ * - An {@linkcode AbortSignal} is passed through unchanged; the caller owns its
+ *   lifetime, so `dispose` is a no-op.
+ * - A {@linkcode vscode.CancellationToken CancellationToken} is bridged onto a
+ *   fresh {@linkcode AbortController}. If the token is already cancelled the
+ *   returned signal starts aborted; otherwise `dispose` unsubscribes the
+ *   token listener.
+ */
+function toAbortSignal(cancellation?: vscode.CancellationToken | AbortSignal): { signal: AbortSignal | undefined; dispose: () => void } {
+    const noop = () => { /* nothing to dispose */ };
+
+    if (!cancellation) {
+        return { signal: undefined, dispose: noop };
+    }
+
+    if (cancellation instanceof AbortSignal) {
+        return { signal: cancellation, dispose: noop };
+    }
+
+    const controller = new AbortController();
+    if (cancellation.isCancellationRequested) {
+        controller.abort();
+        return { signal: controller.signal, dispose: noop };
+    }
+
+    const sub: Disposable = cancellation.onCancellationRequested(() => { controller.abort(); });
+    return { signal: controller.signal, dispose: () => { sub.dispose(); } };
 }
 
 /**
@@ -382,23 +404,19 @@ function subprocessStderr(e: unknown): string {
  * Maps a background spawn failure onto the errors callers expect.
  *
  * @param e - The rejection from the subprocess.
- * @param stderr - Captured stderr used to enrich the message.
- * @param canceled - Whether cancellation was requested via the token.
+ * @param stderr - Captured stderr appended to the message when the process ran.
  * @returns
- * - {@linkcode CancellationError} when canceled.
- * - {@linkcode ChildProcessError} (with `.cause` set) when the process ran and
- *   exited non-zero or was terminated by a signal.
+ * - {@linkcode CancellationError} when the subprocess was aborted via its signal.
+ * - The {@linkcode nano-spawn} `SubprocessError` (with captured stderr appended
+ *   to its `message`) when the process ran and exited non-zero or was terminated
+ *   by a signal.
  * - The original spawn-time error (e.g. `ENOENT`) when the process never
  *   started, so callers can still inspect its `code`.
  * - The error unchanged for anything else.
  */
-function enrichError(e: unknown, stderr: string, canceled: boolean): unknown {
-    if (canceled || (e instanceof SubprocessError && e.isCanceled)) {
+function enrichError(e: unknown, stderr: string): unknown {
+    if (e instanceof SubprocessError && e.isCanceled) {
         return new CancellationError();
-    }
-
-    if (isChildProcessError(e)) {
-        return e;
     }
 
     if (e instanceof SubprocessError) {
@@ -411,14 +429,13 @@ function enrichError(e: unknown, stderr: string, canceled: boolean): unknown {
             return (e as { cause?: unknown }).cause ?? e;
         }
 
-        const msg = stderr.trim() || stringifyError(e);
-        const enriched = new ChildProcessError(
-            msg,
-            typeof e.exitCode === 'number' ? e.exitCode : -1,
-            hasSignal ? (e.signalName as NodeJS.Signals) : null,
-        );
-        enriched.cause = e;
-        return enriched;
+        // Append captured stderr (the tool's actual error text) to nano-spawn's
+        // generic "exit code" message.
+        const trimmed = stderr.trim();
+        if (trimmed) {
+            e.message = `${e.message}\n${trimmed}`;
+        }
+        return e;
     }
 
     return e;

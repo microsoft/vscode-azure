@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IProcessExecutor, ChildProcessError, type CommandLineArg } from '@microsoft/vscode-azure-utils';
+import { type IProcessExecutor, type CommandLineArg } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -359,7 +359,7 @@ describe('AzdService (unit)', () => {
         });
 
         it('should reject on non-zero exit code', async () => {
-            const spawnFn = mock.fn(() => Promise.reject(new ChildProcessError('Process exited with code 1', 1, null)));
+            const spawnFn = mock.fn(() => Promise.reject(new Error('Process exited with code 1')));
             const { service, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
@@ -389,7 +389,7 @@ describe('AzdService (unit)', () => {
         });
 
         it('should reject on non-zero exit code', async () => {
-            const spawnFn = mock.fn(() => Promise.reject(new ChildProcessError('Process exited with code 2', 2, null)));
+            const spawnFn = mock.fn(() => Promise.reject(new Error('Process exited with code 2')));
             const { service, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
@@ -438,7 +438,7 @@ describe('AzdService (unit)', () => {
         });
 
         it('should reject on non-zero exit code', async () => {
-            const spawnFn = mock.fn(() => Promise.reject(new ChildProcessError('Process exited with code 3', 3, null)));
+            const spawnFn = mock.fn(() => Promise.reject(new Error('Process exited with code 3')));
             const { service } = createService(spawnFn);
 
             try {
