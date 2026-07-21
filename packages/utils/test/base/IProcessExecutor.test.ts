@@ -7,7 +7,7 @@ import { expect } from 'chai';
 import { default as spawn, type Result as SpawnResult, type Subprocess } from 'nano-spawn';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { command } from '../../src/base/CommandLineBuilder';
+import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
 import { ChildProcessError, ProcessExecutor, isChildProcessError, type SpawnFn } from '../../src/base/IProcessExecutor';
 import { CancellationError } from '../../src/vscode/CancellationError';
@@ -103,8 +103,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const result = await executor.spawn({
                 execution: 'background',
-                command: 'test-cmd',
-                args: ['arg1'],
+                command: ['test-cmd', 'arg1'],
             });
 
             expect(result.stdout).to.equal('out');
@@ -118,7 +117,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const result = await executor.spawn<{ key: string }>({
                 execution: 'background',
-                command: 'test-cmd',
+                command: ['test-cmd'],
                 parseJson: true,
             });
 
@@ -134,7 +133,7 @@ describe('ProcessExecutor (unit)', () => {
             try {
                 await executor.spawn({
                     execution: 'background',
-                    command: 'test-cmd',
+                    command: ['test-cmd'],
                 });
                 expect.fail('Expected error');
             } catch (e) {
@@ -152,7 +151,7 @@ describe('ProcessExecutor (unit)', () => {
             try {
                 await executor.spawn({
                     execution: 'background',
-                    command: 'test-cmd',
+                    command: ['test-cmd'],
                 });
                 expect.fail('Expected error');
             } catch (e) {
@@ -170,7 +169,7 @@ describe('ProcessExecutor (unit)', () => {
             try {
                 await executor.spawn({
                     execution: 'background',
-                    command: 'test-cmd',
+                    command: ['test-cmd'],
                 });
                 expect.fail('Expected error');
             } catch (e) {
@@ -189,7 +188,7 @@ describe('ProcessExecutor (unit)', () => {
             try {
                 await executor.spawn({
                     execution: 'background',
-                    command: 'test-cmd',
+                    command: ['test-cmd'],
                 });
                 expect.fail('Expected error');
             } catch (e) {
@@ -207,7 +206,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const spawnResult = executor.spawn({
                 execution: 'background',
-                command: 'test-cmd',
+                command: ['test-cmd'],
             });
 
             const timedOut = Symbol('timed-out');
@@ -243,8 +242,7 @@ describe('ProcessExecutor (unit)', () => {
 
             await executor.spawn({
                 execution: 'background',
-                command: 'az',
-                args: ['account', 'show'],
+                command: ['az', 'account', 'show'],
                 shell: true,
             });
 
@@ -262,7 +260,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const result = await executor.spawn<{ done: boolean }>({
                 execution: 'background',
-                command: 'test-cmd',
+                command: ['test-cmd'],
                 parseJson: true,
                 jsonLines: true,
             });
@@ -289,7 +287,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const result = await executor.spawn({
                 execution: 'background',
-                command: 'test-cmd',
+                command: ['test-cmd'],
                 parseJson: true,
                 jsonLines: true,
             });
@@ -317,8 +315,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
-                args: ['--version'],
+                command: [process.execPath, '--version'],
                 name: 'Test Task',
             });
 
@@ -338,7 +335,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Failing Task',
             });
 
@@ -371,7 +368,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Cancelable Task',
             }, token);
 
@@ -398,7 +395,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'My Task',
             });
 
@@ -420,7 +417,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Fancy Task',
                 alwaysRunNew: true,
                 focus: true,
@@ -447,7 +444,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Scoped Task',
                 workspaceFolder: folder,
             });
@@ -468,7 +465,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Default Task',
             });
 
@@ -498,10 +495,9 @@ describe('ProcessExecutor (integration)', () => {
     // through an environment variable and evaluated with
     // `eval(process.env.NODE_EVAL_SOURCE)`, keeping the command line free of
     // spaces and double quotes. Spread the result into the `spawn` options object.
-    function evalNode(source: string): { command: string; args: string[]; env: Record<string, string> } {
+    function evalNode(source: string): { command: CommandLineArgs; env: Record<string, string> } {
         return {
-            command: process.execPath,
-            args: ['-e', 'eval(process.env.NODE_EVAL_SOURCE)'],
+            command: [process.execPath, '-e', 'eval(process.env.NODE_EVAL_SOURCE)'],
             env: { ...env, NODE_EVAL_SOURCE: source }, // eslint-disable-line @typescript-eslint/naming-convention
         };
     }

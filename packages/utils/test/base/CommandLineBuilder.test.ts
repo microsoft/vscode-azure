@@ -12,77 +12,76 @@ function values(args: readonly CommandLineArg[]): string[] {
 }
 
 describe('CommandLineBuilder (unit)', () => {
-    it('should carry the executable on .command', () => {
+    it('should be an array whose first element is the executable', () => {
         const builder = command('azd');
-        expect(builder.command).to.equal('azd');
-        expect(builder.toArray()).to.deep.equal([]);
+        expect(builder).to.be.instanceOf(CommandLineBuilder);
+        expect(Array.isArray(builder)).to.be.true;
+        expect([...builder]).to.deep.equal(['azd']);
     });
 
     it('should be recognized by isCommandLineBuilder', () => {
         expect(isCommandLineBuilder(command('azd'))).to.be.true;
         expect(isCommandLineBuilder('azd')).to.be.false;
+        expect(isCommandLineBuilder(['azd'])).to.be.false;
         expect(isCommandLineBuilder(undefined)).to.be.false;
     });
 
-    it('should append positional args in order and chain fluently', () => {
+    it('should append positional args after the executable and chain fluently', () => {
         const builder = command('azd').arg('env', 'new').arg('dev');
-        expect(builder).to.be.instanceOf(CommandLineBuilder);
-        expect(builder.toArray()).to.deep.equal(['env', 'new', 'dev']);
+        expect([...builder]).to.deep.equal(['azd', 'env', 'new', 'dev']);
     });
 
     it('should skip null, undefined, and empty-string positional args', () => {
         const builder = command('azd').arg('a', undefined, '', null, 'b');
-        expect(builder.toArray()).to.deep.equal(['a', 'b']);
+        expect([...builder]).to.deep.equal(['azd', 'a', 'b']);
     });
 
     it('should append named args as two tokens by default', () => {
         const builder = command('azd').named('--location', 'westus');
-        expect(builder.toArray()).to.deep.equal(['--location', 'westus']);
+        expect([...builder]).to.deep.equal(['azd', '--location', 'westus']);
     });
 
     it('should skip named args with empty values', () => {
         const builder = command('azd').named('--location', undefined).named('--sub', '');
-        expect(builder.toArray()).to.deep.equal([]);
+        expect([...builder]).to.deep.equal(['azd']);
     });
 
     it('should repeat the name for each value in an array', () => {
         const builder = command('azd').named('--set', ['a', 'b']);
-        expect(builder.toArray()).to.deep.equal(['--set', 'a', '--set', 'b']);
+        expect([...builder]).to.deep.equal(['azd', '--set', 'a', '--set', 'b']);
     });
 
     it('should emit a single name=value token when assign is set', () => {
         const builder = command('azd').named('--output', 'json', { assign: true });
-        expect(builder.toArray()).to.deep.equal(['--output=json']);
+        expect([...builder]).to.deep.equal(['azd', '--output=json']);
     });
 
     it('should attach quoting metadata to a named value when quoting is set', () => {
         const builder = command('azd').named('--path', 'a b', { quoting: ShellQuoting.Strong });
-        const args = builder.toArray();
-        expect(args[0]).to.equal('--path');
-        expect(args[1]).to.deep.equal({ value: 'a b', quoting: ShellQuoting.Strong });
+        expect(builder[1]).to.equal('--path');
+        expect(builder[2]).to.deep.equal({ value: 'a b', quoting: ShellQuoting.Strong });
     });
 
     it('should conditionally include flags', () => {
         const builder = command('azd').flag('--force').flag('--purge', false).flag('--no-prompt', true);
-        expect(builder.toArray()).to.deep.equal(['--force', '--no-prompt']);
+        expect([...builder]).to.deep.equal(['azd', '--force', '--no-prompt']);
     });
 
     it('should attach Strong quoting metadata via quoted()', () => {
         const builder = command('azd').quoted('needs quoting', '');
-        const args = builder.toArray();
-        expect(args).to.have.lengthOf(1);
-        expect(args[0]).to.deep.equal({ value: 'needs quoting', quoting: ShellQuoting.Strong });
+        expect(builder).to.have.lengthOf(2);
+        expect(builder[1]).to.deep.equal({ value: 'needs quoting', quoting: ShellQuoting.Strong });
     });
 
-    it('should expose args via getter, toArray, and iteration without aliasing internal state', () => {
+    it('should behave as a plain array under spread, slice, and iteration', () => {
         const builder = command('azd').arg('a', 'b');
 
-        expect(values(builder.args)).to.deep.equal(['a', 'b']);
-        expect(values([...builder])).to.deep.equal(['a', 'b']);
-
-        // Mutating a returned array must not affect the builder.
-        builder.toArray().push('c');
-        expect(builder.toArray()).to.deep.equal(['a', 'b']);
+        // Spreading yields the full vector including the executable.
+        expect(values([...builder])).to.deep.equal(['azd', 'a', 'b']);
+        // Array methods return plain arrays (via Symbol.species), not builders.
+        const sliced = builder.slice(1);
+        expect(sliced).to.not.be.instanceOf(CommandLineBuilder);
+        expect(values(sliced)).to.deep.equal(['a', 'b']);
     });
 
     it('should compose a realistic command', () => {
@@ -90,7 +89,6 @@ describe('CommandLineBuilder (unit)', () => {
             .arg('provision')
             .named('--location', 'westus')
             .flag('--force');
-        expect(builder.command).to.equal('azd');
-        expect(builder.toArray()).to.deep.equal(['provision', '--location', 'westus', '--force']);
+        expect([...builder]).to.deep.equal(['azd', 'provision', '--location', 'westus', '--force']);
     });
 });

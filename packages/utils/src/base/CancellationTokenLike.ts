@@ -3,23 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/**
- * An object with a `dispose()` method, structurally compatible with
- * `vscode.Disposable`. Used as the return type of {@linkcode EventLike}
- * subscriptions without requiring a runtime `vscode` import.
- */
-export interface DisposableLike {
-    dispose(): unknown;
-}
+import type { Disposable } from '../vscode/Disposable';
 
 /**
  * A subscribable event, structurally compatible with both `vscode.Event`
  * and `vscode-jsonrpc`'s event shape.
  *
  * @remarks
- * Registering a listener returns a {@linkcode DisposableLike} that removes it.
+ * Registering a listener returns a {@linkcode Disposable} that removes it.
  */
-export type EventLike<T> = (listener: (e: T) => unknown, thisArgs?: unknown, disposables?: DisposableLike[]) => DisposableLike;
+export type EventLike<T> = (listener: (e: T) => unknown, thisArgs?: unknown, disposables?: Disposable[]) => Disposable;
 
 /**
  * A cancellation token, structurally compatible with `vscode.CancellationToken`.

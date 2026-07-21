@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IProcessExecutor, type CommandLineBuilder, isCommandLineBuilder, ChildProcessError } from '@microsoft/vscode-azure-utils';
+import { type IProcessExecutor, ChildProcessError, type CommandLineArg } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -20,8 +20,7 @@ type SpawnMethod = (...args: never[]) => unknown;
 
 interface SpawnOpts {
     execution: string;
-    command: string | CommandLineBuilder;
-    args?: Array<string | { value: string; quoting: number }>;
+    command: readonly CommandLineArg[];
     cwd: { path: string };
     parseJson?: boolean;
     name?: string;
@@ -29,18 +28,15 @@ interface SpawnOpts {
     env?: Record<string, string>;
 }
 
-/** Resolves the executable name from spawn options, honoring a {@linkcode CommandLineBuilder}. */
+/** Resolves the executable name (element 0 of the argument vector) from spawn options. */
 function commandString(opts: SpawnOpts): string {
-    return isCommandLineBuilder(opts.command) ? opts.command.command : opts.command;
+    const executable = opts.command[0];
+    return typeof executable === 'string' ? executable : executable.value;
 }
 
-/**
- * Extracts plain string arg values from spawn options, resolving a
- * {@linkcode CommandLineBuilder} command or a raw `args` array.
- */
+/** Extracts plain string arg values (everything after the executable) from spawn options. */
 function argValues(opts: SpawnOpts): string[] {
-    const args = isCommandLineBuilder(opts.command) ? opts.command.toArray() : (opts.args ?? []);
-    return args.map(a => typeof a === 'string' ? a : a.value);
+    return opts.command.slice(1).map(a => typeof a === 'string' ? a : a.value);
 }
 
 function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => Promise<boolean>) {
@@ -583,7 +579,7 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(2);
             const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(opts.command).to.equal('azd');
+            expect(commandString(opts)).to.equal('azd');
             expect(argValues(opts)).to.deep.equal(['update']);
         });
 
@@ -616,7 +612,7 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(opts.command).to.equal('winget');
+                expect(commandString(opts)).to.equal('winget');
                 expect(argValues(opts)).to.deep.equal(['install', 'microsoft.azd']);
             });
 
@@ -628,7 +624,7 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(opts.command).to.equal('choco');
+                expect(commandString(opts)).to.equal('choco');
                 expect(argValues(opts)).to.deep.equal(['upgrade', 'azd']);
             });
 
@@ -640,7 +636,7 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(opts.command).to.equal('powershell');
+                expect(commandString(opts)).to.equal('powershell');
                 expect(argValues(opts)).to.include('-ExecutionPolicy');
                 expect(argValues(opts)).to.include('AllSigned');
             });
@@ -653,7 +649,7 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(opts.command).to.equal('brew');
+                expect(commandString(opts)).to.equal('brew');
                 expect(argValues(opts)).to.deep.equal(['install', 'azure/azd/azd']);
             });
 
@@ -665,7 +661,7 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(opts.command).to.equal('bash');
+                expect(commandString(opts)).to.equal('bash');
                 expect(argValues(opts).join(' ')).to.include('install-azd.sh');
             });
 
@@ -677,7 +673,7 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(opts.command).to.equal('bash');
+                expect(commandString(opts)).to.equal('bash');
                 expect(argValues(opts).join(' ')).to.include('install-azd.sh');
             });
         });

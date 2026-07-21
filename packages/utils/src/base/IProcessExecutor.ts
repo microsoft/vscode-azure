@@ -12,7 +12,7 @@ import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
 import type { CancellationTokenLike } from './CancellationTokenLike';
 import { ChildProcessError, isChildProcessError } from './ChildProcessError';
-import { isCommandLineBuilder, type CommandLineArgs, type CommandLineBuilder } from './CommandLineBuilder';
+import type { CommandLineArgs } from './CommandLineBuilder';
 import { getSafeExecPath } from './getSafeExecPath';
 import { stringifyError } from './stringifyError';
 
@@ -32,13 +32,15 @@ export type SpawnFn = (command: string, args?: readonly string[], options?: Spaw
  */
 export interface ProcessExecutorOptions {
     /**
-     * The command to run. Either a bare executable name/path, or a
-     * {@linkcode CommandLineBuilder} that carries both the executable and its
-     * arguments. When a builder is supplied, its arguments take precedence over
-     * {@linkcode ProcessExecutorOptions.args args}.
+     * The full command line to run as an argument vector: the executable
+     * followed by its arguments. The first element is the executable.
+     *
+     * @remarks
+     * Build one fluently with {@linkcode command} (a {@linkcode CommandLineBuilder}
+     * is itself a valid value here) or pass a plain {@linkcode CommandLineArgs}
+     * array such as `['winget', 'install', 'microsoft.azd']`.
      */
-    readonly command: string | CommandLineBuilder;
-    readonly args?: CommandLineArgs;
+    readonly command: CommandLineArgs;
     readonly cwd?: vscode.Uri;
     readonly env?: Readonly<Record<string, string>>;
     /**
@@ -296,17 +298,17 @@ export class ProcessExecutor implements IProcessExecutor {
         // iterated eagerly (before nano-spawn starts buffering it), so tee it
         // now, synchronously, right after the subprocess is created.
         if ('jsonLines' in options && options.jsonLines) {
-            const tee = new LineTee(subprocess.stderr);
+            const collector = new StderrLineCollector(subprocess.stderr);
 
             const completed = (async (): Promise<JsonProcessResult<unknown>> => {
                 try {
                     const result = await subprocess;
-                    await tee.whenDone;
+                    await collector.whenDone;
                     const stdout = result.stdout;
-                    return { stdout, stderr: tee.lines.join('\n'), json: JSON.parse(stdout) as unknown };
+                    return { stdout, stderr: collector.lines.join('\n'), json: JSON.parse(stdout) as unknown };
                 } catch (e) {
-                    await tee.whenDone.catch(() => { /* surfaced below */ });
-                    const stderr = tee.lines.join('\n') || subprocessStderr(e);
+                    await collector.whenDone.catch(() => { /* surfaced below */ });
+                    const stderr = collector.lines.join('\n') || subprocessStderr(e);
                     throw enrichError(e, stderr, canceled);
                 } finally {
                     ctDisposable?.dispose();
@@ -314,7 +316,7 @@ export class ProcessExecutor implements IProcessExecutor {
             })();
 
             return {
-                jsonLines: parseJsonLines(tee),
+                jsonLines: parseJsonLines(collector),
                 completed,
             };
         }
@@ -340,14 +342,17 @@ export class ProcessExecutor implements IProcessExecutor {
 }
 
 /**
- * Resolves the executable and argument list from the options, honoring a
- * {@linkcode CommandLineBuilder} when one is supplied as the command.
+ * Splits an {@linkcode ProcessExecutorOptions.command argument vector} into the
+ * executable and its trailing arguments for execution.
+ *
+ * @throws {Error} When the vector is empty (no executable to run).
  */
 function resolveCommandLine(options: ProcessExecutorOptions): { command: string; args: CommandLineArgs } {
-    if (isCommandLineBuilder(options.command)) {
-        return { command: options.command.command, args: options.command.toArray() };
+    if (options.command.length === 0) {
+        throw new Error('A command line must include at least the executable as its first element.');
     }
-    return { command: options.command, args: options.args ? [...options.args] : [] };
+    const [executable, ...args] = options.command;
+    return { command: typeof executable === 'string' ? executable : executable.value, args };
 }
 
 /** Flattens a {@linkcode CommandLineArgs} list to plain strings for argv-first execution. */
@@ -422,11 +427,11 @@ function enrichError(e: unknown, stderr: string, canceled: boolean): unknown {
 }
 
 /**
- * Parses newline-delimited JSON from a {@linkcode LineTee}, skipping blank and
- * non-JSON lines.
+ * Parses newline-delimited JSON from a {@linkcode StderrLineCollector}, skipping
+ * blank and non-JSON lines.
  */
-async function* parseJsonLines(tee: LineTee): AsyncGenerator {
-    for await (const line of tee.lineStream()) {
+async function* parseJsonLines(collector: StderrLineCollector): AsyncGenerator {
+    for await (const line of collector.stream()) {
         const trimmed = line.trim();
         if (trimmed.length > 0) {
             try {
@@ -439,43 +444,44 @@ async function* parseJsonLines(tee: LineTee): AsyncGenerator {
 }
 
 /**
- * Eagerly consumes an async line iterable (nano-spawn's `subprocess.stderr`),
- * both accumulating every line and re-broadcasting them to a lazily-consumed
- * {@linkcode LineTee.lineStream stream}.
+ * Eagerly consumes nano-spawn's `subprocess.stderr` line iterable, accumulating
+ * every line while also exposing them as a lazily-drained
+ * {@linkcode StderrLineCollector.stream stream}.
  *
  * @remarks
- * nano-spawn disables output buffering for a stream as soon as it is iterated,
- * and requires that iteration to begin immediately. Pumping here (from the
- * constructor, in the same tick the subprocess is created) satisfies both
- * constraints while still letting the caller drain the parsed lines at its own
- * pace and read the full accumulated {@linkcode LineTee.lines stderr} afterward.
+ * nano-spawn requires its `stderr` iterable to be consumed immediately (it
+ * throws otherwise) and disables output buffering once it is iterated. Pumping
+ * here -- from the constructor, in the same tick the subprocess is created --
+ * satisfies both constraints and guarantees {@linkcode StderrLineCollector.lines lines}
+ * is fully populated for `completed.stderr` even when the caller never drains
+ * the live {@linkcode StderrLineCollector.stream stream}. Because every line is
+ * retained, the stream simply walks the growing array by index, woken by a
+ * single signal -- no separate buffer or waiter queue is needed.
  */
-class LineTee {
+class StderrLineCollector {
     /** Every line emitted by the source, in order. */
     public readonly lines: string[] = [];
     /** Resolves when the source has been fully consumed (successfully or not). */
     public readonly whenDone: Promise<void>;
 
-    private readonly buffered: string[] = [];
-    private readonly waiters: Array<(result: IteratorResult<string, void>) => void> = [];
     private ended = false;
+    private wake: (() => void) | undefined;
 
     public constructor(source: AsyncIterable<string>) {
         this.whenDone = this.pump(source);
     }
 
     /** Lazily yields each line as it becomes available, then completes. */
-    public async *lineStream(): AsyncGenerator<string> {
-        while (!this.ended || this.buffered.length > 0) {
-            const next = this.buffered.shift();
-            if (next !== undefined) {
-                yield next;
+    public async *stream(): AsyncGenerator<string> {
+        for (let i = 0; ;) {
+            if (i < this.lines.length) {
+                yield this.lines[i++];
                 continue;
             }
-            const result = await new Promise<IteratorResult<string, void>>((resolve) => this.waiters.push(resolve));
-            if (!result.done) {
-                yield result.value;
+            if (this.ended) {
+                return;
             }
+            await new Promise<void>((resolve) => { this.wake = resolve; });
         }
     }
 
@@ -483,28 +489,20 @@ class LineTee {
         try {
             for await (const line of source) {
                 this.lines.push(line);
-                this.emit(line);
+                this.signal();
             }
         } catch {
             // The failure is surfaced by awaiting the subprocess in `completed`.
         } finally {
-            this.finish();
+            this.ended = true;
+            this.signal();
         }
     }
 
-    private emit(line: string): void {
-        const waiter = this.waiters.shift();
-        if (waiter) {
-            waiter({ value: line, done: false });
-        } else {
-            this.buffered.push(line);
-        }
-    }
-
-    private finish(): void {
-        this.ended = true;
-        for (const waiter of this.waiters.splice(0)) {
-            waiter({ value: undefined, done: true });
-        }
+    /** Wakes a stream consumer parked on the {@linkcode wake} promise, if any. */
+    private signal(): void {
+        const wake = this.wake;
+        this.wake = undefined;
+        wake?.();
     }
 }

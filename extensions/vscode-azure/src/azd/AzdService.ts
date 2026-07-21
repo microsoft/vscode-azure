@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, type CommandLineArgs } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
@@ -368,12 +368,9 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async install(): Promise<void> {
-        const { command, args } = await this.getInstallCommand();
-
         await this.processExecutor.spawn({
             execution: 'foreground',
-            command,
-            args,
+            command: await this.getInstallCommand(),
             name: this.code.l10n.t('Install Azure Developer CLI'),
             source: 'azd',
         });
@@ -382,38 +379,32 @@ export class AzdService implements IAzdService {
     }
 
     /**
-     * Returns the preferred install/update command.
+     * Returns the preferred install/update command as an argument vector.
      *
      * When `azd` is already installed and supports `azd update`
      * (>= {@linkcode MinAzdUpdateVersion}), returns `azd update`.
      * Otherwise falls back to a platform-specific install command
      * (winget, choco, brew, or the official install script).
      */
-    private async getInstallCommand(): Promise<{ command: string; args: string[] }> {
+    private async getInstallCommand(): Promise<CommandLineArgs> {
         const supportsUpdate = await this.checkVersion(MinAzdUpdateVersion);
         if (supportsUpdate) {
-            return { command: AzdCommand, args: ['update'] };
+            return [AzdCommand, 'update'];
         } else if (process.platform === 'win32') {
             if (await this.processExecutor.isOnPath('winget')) {
                 // `winget install` upgrades already-installed packages by default
-                return { command: 'winget', args: ['install', 'microsoft.azd'] };
+                return ['winget', 'install', 'microsoft.azd'];
             } else if (await this.processExecutor.isOnPath('choco')) {
                 // `choco upgrade` installs if missing and upgrades if already installed
-                return { command: 'choco', args: ['upgrade', 'azd'] };
+                return ['choco', 'upgrade', 'azd'];
             } else {
-                return {
-                    command: 'powershell',
-                    args: ['-ExecutionPolicy', 'AllSigned', '-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression'],
-                };
+                return ['powershell', '-ExecutionPolicy', 'AllSigned', '-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression'];
             }
         } else if (process.platform === 'darwin' && await this.processExecutor.isOnPath('brew')) {
             // `brew install` upgrades already-installed packages by default
-            return { command: 'brew', args: ['install', 'azure/azd/azd'] };
+            return ['brew', 'install', 'azure/azd/azd'];
         } else {
-            return {
-                command: 'bash',
-                args: ['-c', 'curl -fsSL \'https://aka.ms/install-azd.sh\' | bash'],
-            };
+            return ['bash', '-c', 'curl -fsSL \'https://aka.ms/install-azd.sh\' | bash'];
         }
     }
 

@@ -72,8 +72,7 @@ function getAzAccount(): Promise<AzAccount> {
         try {
             const result = await executor.spawn<AzAccount>({
                 execution: 'background',
-                command: 'az',
-                args: ['account', 'show', '-o', 'json'],
+                command: ['az', 'account', 'show', '-o', 'json'],
                 parseJson: true,
                 // The Azure CLI is an `az.cmd` shim on Windows, which must be
                 // launched through a shell (spawning it directly fails EINVAL).

@@ -54,14 +54,19 @@ export interface NamedArgOptions {
 }
 
 /**
- * A fluent, chainable builder for a command and its arguments.
+ * A fluent, chainable builder for a command line, represented as its own
+ * argument vector.
  *
  * @remarks
- * Create one with {@linkcode command}. The builder carries the executable
- * ({@linkcode CommandLineBuilder.command command}) plus an ordered argument
- * list; there is no terminal `build()` step. Iterate it, spread it, or call
- * {@linkcode CommandLineBuilder.toArray toArray} to get the arguments as a plain
- * array. Empty/`null`/`undefined` argument values are skipped.
+ * Create one with {@linkcode command}. A `CommandLineBuilder` **is** a
+ * {@linkcode CommandLineArgs} array whose first element is the executable and
+ * whose remaining elements are its arguments -- there is no separate `command`
+ * field and no terminal `build()` step. Because it is a real array you can pass
+ * it anywhere a {@linkcode CommandLineArgs} is expected, spread it, index it, or
+ * iterate it directly. Empty/`null`/`undefined` argument values are skipped.
+ *
+ * The executable is only separated from the arguments at execution time (when
+ * decomposing for `nano-spawn` or a `vscode.ShellExecution`).
  *
  * Argument-adding methods ({@linkcode CommandLineBuilder.arg arg},
  * {@linkcode CommandLineBuilder.flag flag}, and {@linkcode CommandLineBuilder.named named}
@@ -73,17 +78,26 @@ export interface NamedArgOptions {
  * @example
  * ```ts
  * command('azd').arg('provision').named('--location', 'westus').flag('--force');
+ * // -> ['azd', 'provision', '--location', 'westus', '--force']
  * ```
  */
-export class CommandLineBuilder implements Iterable<CommandLineArg> {
-    private readonly _args: CommandLineArgs = [];
+export class CommandLineBuilder extends Array<CommandLineArg> {
+    /**
+     * Ensures inherited `Array` methods (`map`, `filter`, `slice`, ...) produce
+     * plain arrays instead of trying to construct a `CommandLineBuilder` (whose
+     * constructor expects an executable, not a length).
+     */
+    public static override get [Symbol.species](): ArrayConstructor {
+        return Array;
+    }
 
-    private constructor(
-        /** The executable to run. */
-        public readonly command: string,
-    ) { }
+    private constructor(command: string) {
+        // `Array`'s single-string overload yields a one-element array, so the
+        // executable becomes element 0 (unlike a single-number length arg).
+        super(command);
+    }
 
-    /** Creates a builder for the given executable. Prefer the {@linkcode command} factory. */
+    /** Creates a builder seeded with the given executable. Prefer the {@linkcode command} factory. */
     public static create(command: string): CommandLineBuilder {
         return new CommandLineBuilder(command);
     }
@@ -95,7 +109,7 @@ export class CommandLineBuilder implements Iterable<CommandLineArg> {
     public arg(...values: Array<CommandLineArg | null | undefined>): this {
         for (const value of values) {
             if (isNonEmptyArg(value)) {
-                this._args.push(value);
+                this.push(value);
             }
         }
         return this;
@@ -109,7 +123,7 @@ export class CommandLineBuilder implements Iterable<CommandLineArg> {
     public quoted(...values: Array<string | null | undefined>): this {
         for (const value of values) {
             if (isNonEmptyArg(value)) {
-                this._args.push({ value, quoting: ShellQuoting.Strong });
+                this.push({ value, quoting: ShellQuoting.Strong });
             }
         }
         return this;
@@ -123,7 +137,7 @@ export class CommandLineBuilder implements Iterable<CommandLineArg> {
      */
     public flag(name: string, include: boolean = true): this {
         if (include) {
-            this._args.push(name);
+            this.push(name);
         }
         return this;
     }
@@ -151,29 +165,14 @@ export class CommandLineBuilder implements Iterable<CommandLineArg> {
                 continue;
             }
             if (options?.assign) {
-                this._args.push(`${name}=${v}`);
+                this.push(`${name}=${v}`);
             } else if (options?.quoting !== undefined) {
-                this._args.push(name, { value: v, quoting: options.quoting });
+                this.push(name, { value: v, quoting: options.quoting });
             } else {
-                this._args.push(name, v);
+                this.push(name, v);
             }
         }
         return this;
-    }
-
-    /** The accumulated arguments as a new plain array (excludes the executable). */
-    public get args(): CommandLineArgs {
-        return [...this._args];
-    }
-
-    /** Returns the accumulated arguments as a new plain array (excludes the executable). */
-    public toArray(): CommandLineArgs {
-        return [...this._args];
-    }
-
-    /** Iterates the accumulated arguments (excludes the executable). */
-    public [Symbol.iterator](): Iterator<CommandLineArg> {
-        return this._args[Symbol.iterator]();
     }
 }
 
