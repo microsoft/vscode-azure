@@ -41,10 +41,12 @@ export type CommandLineArgs = Array<CommandLineArg>;
 /** Options for {@linkcode CommandLineBuilder.namedArg}. */
 export interface NamedArgOptions {
     /**
-     * Emit as a single `name=value` token instead of two separate `name` and
-     * `value` tokens. When set, {@linkcode NamedArgOptions.quoting} is ignored.
+     * Join the name and value into a single token using this separator instead
+     * of emitting two separate `name` and `value` tokens. Typically `'='` (for
+     * `--name=value`), but some CLIs use other separators (e.g. `':'` for
+     * `--name:value`). When set, {@linkcode NamedArgOptions.quoting} is ignored.
      */
-    readonly assign?: boolean;
+    readonly assign?: string;
     /**
      * Attach shell-quoting metadata to the value (for foreground task
      * execution). Omit to pass the value verbatim, which is the correct choice
@@ -164,11 +166,11 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
                 ? [value]
                 : value;
         for (const v of values) {
-            if (v === null || v === undefined || v === '') {
+            if (!isNonEmptyArg(v)) {
                 continue;
             }
-            if (options?.assign) {
-                this.push(`${name}=${v}`);
+            if (options?.assign !== undefined) {
+                this.push(`${name}${options.assign}${v}`);
             } else if (options?.quoting !== undefined) {
                 this.push(name, { value: v, quoting: options.quoting });
             } else {

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { default as which } from 'which';
+import * as path from 'node:path';
 
 /**
  * Caches resolved paths by bare command name to avoid repeated `PATH` scans.
@@ -41,7 +42,9 @@ export function getSafeExecPath(command: string): string {
     }
 
     // An explicit path (absolute or relative) is an intentional choice; leave it alone.
-    if (/[\\/]/.test(command) || command.startsWith('.')) {
+    // A bare command name has no directory component, so it equals its own basename;
+    // anything with a separator, drive, or UNC prefix differs (using Windows semantics).
+    if (command !== path.win32.basename(command)) {
         return command;
     }
 

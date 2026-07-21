@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { default as spawn, type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
+import { type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
@@ -13,9 +13,6 @@ import { ProcessExecutor, type SpawnFn } from '../../src/base/IProcessExecutor';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import { createMockVsCode } from '../vscode/MockVsCode';
-
-// Keep the real default export referenced so its type stays exercised.
-void spawn;
 
 /** Builds a nano-spawn {@linkcode SpawnResult} with the fields the executor reads. */
 function makeResult(command: string, stdout: string, stderr: string): SpawnResult {

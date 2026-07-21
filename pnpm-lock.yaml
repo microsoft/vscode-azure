@@ -146,8 +146,8 @@ importers:
         specifier: ^3.1.0
         version: 3.1.0
       which:
-        specifier: ^5.0.0
-        version: 5.0.0
+        specifier: ^7.0.0
+        version: 7.0.0
     devDependencies:
       '@types/which':
         specifier: ^3.0.4
@@ -1639,9 +1639,9 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha1-6PvzdNxVb/iUehDcsFctYz8s+hA=}
 
-  isexe@3.1.5:
-    resolution: {integrity: sha1-QuNo9o1eENrf7k/ae1ULwtiJLck=}
-    engines: {node: '>=18'}
+  isexe@4.0.0:
+    resolution: {integrity: sha1-SPZXavjoehj+t5a37V4uWQO0Pco=}
+    engines: {node: '>=20'}
 
   istanbul-lib-coverage@3.2.2:
     resolution: {integrity: sha1-LRZsSwZE1Do58Ev2wu3R5YXzF1Y=}
@@ -2371,9 +2371,9 @@ packages:
     engines: {node: '>= 8'}
     hasBin: true
 
-  which@5.0.0:
-    resolution: {integrity: sha1-2T8tk/eYNNQ2PH0MI+ANB8RmyNY=}
-    engines: {node: ^18.17.0 || >=20.5.0}
+  which@7.0.0:
+    resolution: {integrity: sha1-zf3Xv8McWvBQuXvHwCsYRHMfuLI=}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
     hasBin: true
 
   word-wrap@1.2.5:
@@ -4045,7 +4045,7 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  isexe@3.1.5: {}
+  isexe@4.0.0: {}
 
   istanbul-lib-coverage@3.2.2: {}
 
@@ -4847,9 +4847,9 @@ snapshots:
     dependencies:
       isexe: 2.0.0
 
-  which@5.0.0:
+  which@7.0.0:
     dependencies:
-      isexe: 3.1.5
+      isexe: 4.0.0
 
   word-wrap@1.2.5: {}
 
