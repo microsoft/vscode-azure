@@ -5,6 +5,7 @@
 
 import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
+import { toAbortSignal } from './toAbortSignal';
 
 /**
  * Returns a promise that resolves after {@linkcode ms} milliseconds.
@@ -15,10 +16,10 @@ import { CancellationError } from '../vscode/CancellationError';
  * rejects with {@linkcode CancellationError}.
  */
 export function delay(ms: number, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
-    const signal = cancellation instanceof AbortSignal ? cancellation : undefined;
-    const token = cancellation instanceof AbortSignal ? undefined : cancellation;
+    const { signal, disposable } = toAbortSignal(cancellation);
 
-    if (signal?.aborted || token?.isCancellationRequested) {
+    if (signal?.aborted) {
+        disposable.dispose();
         return Promise.reject(new CancellationError());
     }
 
@@ -26,7 +27,7 @@ export function delay(ms: number, cancellation?: vscode.CancellationToken | Abor
         const cleanup = () => {
             clearTimeout(timer);
             signal?.removeEventListener('abort', onCancel);
-            ctDisposable?.dispose();
+            disposable.dispose();
         };
 
         const onCancel = () => {
@@ -40,6 +41,5 @@ export function delay(ms: number, cancellation?: vscode.CancellationToken | Abor
         }, ms);
 
         signal?.addEventListener('abort', onCancel, { once: true });
-        const ctDisposable = token?.onCancellationRequested(onCancel);
     });
 }

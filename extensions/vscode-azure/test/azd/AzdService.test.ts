@@ -28,16 +28,6 @@ interface SpawnOpts {
     env?: Record<string, string>;
 }
 
-/** Resolves the executable name (element 0 of the argument vector) from spawn options. */
-function commandString(opts: SpawnOpts): string {
-    return argToString(opts.command[0]);
-}
-
-/** Extracts plain string arg values (everything after the executable) from spawn options. */
-function argValues(opts: SpawnOpts): string[] {
-    return argsToStrings(opts.command.slice(1));
-}
-
 function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => Promise<boolean>) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
@@ -99,10 +89,10 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(commandString(opts)).to.equal(AzdCommand);
-            expect(argValues(opts)).to.include('init');
-            expect(argValues(opts)).to.include('--minimal');
-            expect(argValues(opts)).to.include('--no-prompt');
+            expect(argToString(opts.command[0])).to.equal(AzdCommand);
+            expect(argsToStrings(opts.command.slice(1))).to.include('init');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--minimal');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--no-prompt');
             expect(opts.cwd.path).to.equal('/project');
         });
     });
@@ -116,14 +106,14 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(commandString(opts)).to.equal(AzdCommand);
-            expect(argValues(opts)).to.include('env');
-            expect(argValues(opts)).to.include('new');
-            expect(argValues(opts)).to.include('dev');
-            expect(argValues(opts)).to.include('--location');
-            expect(argValues(opts)).to.include('eastus');
-            expect(argValues(opts)).to.include('--subscription');
-            expect(argValues(opts)).to.include('sub-1');
+            expect(argToString(opts.command[0])).to.equal(AzdCommand);
+            expect(argsToStrings(opts.command.slice(1))).to.include('env');
+            expect(argsToStrings(opts.command.slice(1))).to.include('new');
+            expect(argsToStrings(opts.command.slice(1))).to.include('dev');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--location');
+            expect(argsToStrings(opts.command.slice(1))).to.include('eastus');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--subscription');
+            expect(argsToStrings(opts.command.slice(1))).to.include('sub-1');
             expect(opts.cwd.path).to.equal('/project');
         });
     });
@@ -172,10 +162,10 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(argValues(opts)).to.include('env');
-            expect(argValues(opts)).to.include('list');
-            expect(argValues(opts)).to.include('--output');
-            expect(argValues(opts)).to.include('json');
+            expect(argsToStrings(opts.command.slice(1))).to.include('env');
+            expect(argsToStrings(opts.command.slice(1))).to.include('list');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--output');
+            expect(argsToStrings(opts.command.slice(1))).to.include('json');
             expect(opts.parseJson).to.be.true;
         });
     });
@@ -198,13 +188,13 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(commandString(opts)).to.equal(AzdCommand);
-            expect(argValues(opts)).to.include('env');
-            expect(argValues(opts)).to.include('get-values');
-            expect(argValues(opts)).to.include('--environment');
-            expect(argValues(opts)).to.include('dev');
-            expect(argValues(opts)).to.include('--output');
-            expect(argValues(opts)).to.include('json');
+            expect(argToString(opts.command[0])).to.equal(AzdCommand);
+            expect(argsToStrings(opts.command.slice(1))).to.include('env');
+            expect(argsToStrings(opts.command.slice(1))).to.include('get-values');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--environment');
+            expect(argsToStrings(opts.command.slice(1))).to.include('dev');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--output');
+            expect(argsToStrings(opts.command.slice(1))).to.include('json');
             expect(opts.parseJson).to.be.true;
             expect(opts.cwd.path).to.equal('/project');
         });
@@ -234,10 +224,10 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('background');
-            expect(commandString(opts)).to.equal(AzdCommand);
-            expect(argValues(opts)).to.include('show');
-            expect(argValues(opts)).to.include('--output');
-            expect(argValues(opts)).to.include('json');
+            expect(argToString(opts.command[0])).to.equal(AzdCommand);
+            expect(argsToStrings(opts.command.slice(1))).to.include('show');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--output');
+            expect(argsToStrings(opts.command.slice(1))).to.include('json');
             expect(opts.parseJson).to.be.true;
         });
 
@@ -339,8 +329,8 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(commandString(opts)).to.equal(AzdCommand);
-            expect(argValues(opts)).to.include('provision');
+            expect(argToString(opts.command[0])).to.equal(AzdCommand);
+            expect(argsToStrings(opts.command.slice(1))).to.include('provision');
             expect(opts.source).to.equal('azd');
         });
 
@@ -382,8 +372,8 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(commandString(opts)).to.equal(AzdCommand);
-            expect(argValues(opts)).to.include('deploy');
+            expect(argToString(opts.command[0])).to.equal(AzdCommand);
+            expect(argsToStrings(opts.command.slice(1))).to.include('deploy');
             expect(opts.source).to.equal('azd');
         });
 
@@ -411,10 +401,10 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(commandString(opts)).to.equal(AzdCommand);
-            expect(argValues(opts)).to.include('down');
-            expect(argValues(opts)).to.include('--force');
-            expect(argValues(opts)).to.include('--purge');
+            expect(argToString(opts.command[0])).to.equal(AzdCommand);
+            expect(argsToStrings(opts.command.slice(1))).to.include('down');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--force');
+            expect(argsToStrings(opts.command.slice(1))).to.include('--purge');
             expect(opts.cwd.path).to.equal('/project');
             expect(opts.source).to.equal('azd');
         });
@@ -566,7 +556,7 @@ describe('AzdService (unit)', () => {
 
         it('should use azd update when version supports it', async () => {
             const spawnFn = mock.fn((opts: SpawnOpts) => {
-                if (commandString(opts) === AzdCommand && argValues(opts).includes('version')) {
+                if (argToString(opts.command[0]) === AzdCommand && argsToStrings(opts.command.slice(1)).includes('version')) {
                     return Promise.resolve({ json: { azd: { version: MinAzdUpdateVersion } } });
                 }
                 return Promise.resolve();
@@ -578,8 +568,8 @@ describe('AzdService (unit)', () => {
             expect(spawnMock.mock.callCount()).to.equal(2);
             const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
             expect(opts.execution).to.equal('foreground');
-            expect(commandString(opts)).to.equal('azd');
-            expect(argValues(opts)).to.deep.equal(['update']);
+            expect(argToString(opts.command[0])).to.equal('azd');
+            expect(argsToStrings(opts.command.slice(1))).to.deep.equal(['update']);
         });
 
         describe('platform fallback commands', () => {
@@ -587,7 +577,7 @@ describe('AzdService (unit)', () => {
             // so the fallback logic is exercised.
             function makeOldVersionSpawn(): SpawnMethod {
                 return mock.fn((opts: SpawnOpts) => {
-                    if (commandString(opts) === AzdCommand && argValues(opts).includes('version')) {
+                    if (argToString(opts.command[0]) === AzdCommand && argsToStrings(opts.command.slice(1)).includes('version')) {
                         return Promise.resolve({ json: { azd: { version: '1.0.0' } } });
                     }
                     return Promise.resolve();
@@ -611,8 +601,8 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(commandString(opts)).to.equal('winget');
-                expect(argValues(opts)).to.deep.equal(['install', 'microsoft.azd']);
+                expect(argToString(opts.command[0])).to.equal('winget');
+                expect(argsToStrings(opts.command.slice(1))).to.deep.equal(['install', 'microsoft.azd']);
             });
 
             it('should use choco on Windows when winget is unavailable', async () => {
@@ -623,8 +613,8 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(commandString(opts)).to.equal('choco');
-                expect(argValues(opts)).to.deep.equal(['upgrade', 'azd']);
+                expect(argToString(opts.command[0])).to.equal('choco');
+                expect(argsToStrings(opts.command.slice(1))).to.deep.equal(['upgrade', 'azd']);
             });
 
             it('should use powershell script on Windows when no package manager is available', async () => {
@@ -635,9 +625,9 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(commandString(opts)).to.equal('powershell');
-                expect(argValues(opts)).to.include('-ExecutionPolicy');
-                expect(argValues(opts)).to.include('AllSigned');
+                expect(argToString(opts.command[0])).to.equal('powershell');
+                expect(argsToStrings(opts.command.slice(1))).to.include('-ExecutionPolicy');
+                expect(argsToStrings(opts.command.slice(1))).to.include('AllSigned');
             });
 
             it('should use brew on macOS when brew is available', async () => {
@@ -648,8 +638,8 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(commandString(opts)).to.equal('brew');
-                expect(argValues(opts)).to.deep.equal(['install', 'azure/azd/azd']);
+                expect(argToString(opts.command[0])).to.equal('brew');
+                expect(argsToStrings(opts.command.slice(1))).to.deep.equal(['install', 'azure/azd/azd']);
             });
 
             it('should use bash curl script on macOS when brew is unavailable', async () => {
@@ -660,8 +650,8 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(commandString(opts)).to.equal('bash');
-                expect(argValues(opts).join(' ')).to.include('install-azd.sh');
+                expect(argToString(opts.command[0])).to.equal('bash');
+                expect(argsToStrings(opts.command.slice(1)).join(' ')).to.include('install-azd.sh');
             });
 
             it('should use bash curl script on Linux', async () => {
@@ -672,8 +662,8 @@ describe('AzdService (unit)', () => {
                 await service.install();
 
                 const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(commandString(opts)).to.equal('bash');
-                expect(argValues(opts).join(' ')).to.include('install-azd.sh');
+                expect(argToString(opts.command[0])).to.equal('bash');
+                expect(argsToStrings(opts.command.slice(1)).join(' ')).to.include('install-azd.sh');
             });
         });
     });

@@ -8,10 +8,10 @@ import { SubprocessError, default as spawn, type Options as SpawnOptions, type R
 import type * as vscode from 'vscode';
 import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
-import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
 import { argToString, argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
 import { getSafeExecPath } from './getSafeExecPath';
+import { toAbortSignal } from './toAbortSignal';
 
 export * from './CommandLineBuilder';
 export * from './getSafeExecPath';
@@ -239,7 +239,7 @@ export class ProcessExecutor implements IProcessExecutor {
 
         const taskExecution = await this.code.tasks.executeTask(task);
 
-        const { signal, dispose } = toAbortSignal(cancellation);
+        const { signal, disposable } = toAbortSignal(cancellation);
 
         return new Promise<void>((resolve, reject) => {
             const endDisposable = this.code.tasks.onDidEndTaskProcess((e) => {
@@ -266,7 +266,7 @@ export class ProcessExecutor implements IProcessExecutor {
             const finish = () => {
                 endDisposable.dispose();
                 signal?.removeEventListener('abort', onAbort);
-                dispose();
+                disposable.dispose();
             };
 
             if (signal?.aborted) {
@@ -283,7 +283,7 @@ export class ProcessExecutor implements IProcessExecutor {
     ): Promise<ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
         const { command, args } = resolveCommandLine(options);
 
-        const { signal, dispose } = toAbortSignal(cancellation);
+        const { signal, disposable } = toAbortSignal(cancellation);
 
         // nano-spawn inherits `process.env` automatically and layers these
         // overrides on top, so pass only the caller-provided variables.
@@ -312,7 +312,7 @@ export class ProcessExecutor implements IProcessExecutor {
                 } catch (e) {
                     throw enrichError(e, subprocessStderr(e));
                 } finally {
-                    dispose();
+                    disposable.dispose();
                 }
             })();
 
@@ -328,7 +328,7 @@ export class ProcessExecutor implements IProcessExecutor {
         } catch (e) {
             throw enrichError(e, subprocessStderr(e));
         } finally {
-            dispose();
+            disposable.dispose();
         }
 
         const { stdout, stderr } = result;
@@ -340,41 +340,6 @@ export class ProcessExecutor implements IProcessExecutor {
 
         return { stdout, stderr };
     }
-}
-
-/**
- * Normalizes a cancellation source into an {@linkcode AbortSignal} (which
- * {@linkcode nano-spawn} consumes directly) plus a `dispose` that detaches any
- * listener created during conversion.
- *
- * @remarks
- * - `undefined` yields no signal and a no-op `dispose`.
- * - An {@linkcode AbortSignal} is passed through unchanged; the caller owns its
- *   lifetime, so `dispose` is a no-op.
- * - A {@linkcode vscode.CancellationToken CancellationToken} is bridged onto a
- *   fresh {@linkcode AbortController}. If the token is already cancelled the
- *   returned signal starts aborted; otherwise `dispose` unsubscribes the
- *   token listener.
- */
-function toAbortSignal(cancellation?: vscode.CancellationToken | AbortSignal): { signal: AbortSignal | undefined; dispose: () => void } {
-    const noop = () => { /* nothing to dispose */ };
-
-    if (!cancellation) {
-        return { signal: undefined, dispose: noop };
-    }
-
-    if (cancellation instanceof AbortSignal) {
-        return { signal: cancellation, dispose: noop };
-    }
-
-    const controller = new AbortController();
-    if (cancellation.isCancellationRequested) {
-        controller.abort();
-        return { signal: controller.signal, dispose: noop };
-    }
-
-    const sub: Disposable = cancellation.onCancellationRequested(() => { controller.abort(); });
-    return { signal: controller.signal, dispose: () => { sub.dispose(); } };
 }
 
 /**
