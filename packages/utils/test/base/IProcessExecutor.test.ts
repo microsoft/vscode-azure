@@ -500,6 +500,17 @@ describe('ProcessExecutor (integration)', () => {
         };
     }
 
+    // Builds spawn options for a child that echoes its own argument vector
+    // (everything after the executable and the `-e` script) back as JSON on
+    // stdout. Used to assert that arguments survive the round-trip to the OS
+    // verbatim, without any shell interpretation or quoting corruption.
+    function argvEcho(args: readonly string[]): { command: CommandLineArgs; env: Record<string, string> } {
+        return {
+            command: [process.execPath, '-e', 'process.stdout.write(JSON.stringify(process.argv.slice(1)))', ...args],
+            env,
+        };
+    }
+
     describe('background execution', () => {
         it('should capture stdout and stderr', async () => {
             const { vscode: code } = createMockVsCode();
@@ -625,6 +636,139 @@ describe('ProcessExecutor (integration)', () => {
             }
 
             expect(lines).to.deep.equal([{ valid: true }]);
+        });
+    });
+
+    describe('hard cases', () => {
+        it('should pass arguments verbatim without shell interpretation or quoting corruption', async () => {
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            // A grab-bag of arguments that shells (or naive quoting) would
+            // mangle: spaces, embedded quotes, backslashes (including a
+            // trailing one -- the classic Windows CommandLineToArgvW pitfall),
+            // shell metacharacters, and variable-expansion syntax that must
+            // NOT be expanded since no shell is involved.
+            const args = [
+                'plain',
+                'with spaces',
+                'embedded"double"quotes',
+                "embedded'single'quotes",
+                'back\\slash',
+                'trailing\\',
+                'meta&|;<>^()chars',
+                '%PATH%', // must stay literal (no cmd.exe expansion)
+                '$HOME', // must stay literal (no POSIX shell expansion)
+                'tab\tinside',
+                'a=b',
+            ];
+
+            const result = await executor.spawn({
+                execution: 'background',
+                ...argvEcho(args),
+            });
+
+            expect(JSON.parse(result.stdout)).to.deep.equal(args);
+        });
+
+        it('should capture large stdout without truncation or deadlock', async function () {
+            this.timeout(20000);
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            // 5 MB is far beyond a typical ~64 KB OS pipe buffer, so the child
+            // will block on write() unless the executor drains stdout
+            // concurrently. A regression here manifests as a hang (timeout).
+            const size = 5 * 1024 * 1024;
+            const result = await executor.spawn({
+                execution: 'background',
+                ...evalNode(`process.stdout.write('x'.repeat(${size}));`),
+            });
+
+            expect(result.stdout.length).to.equal(size);
+        });
+
+        it('should stream a large number of JSON lines from stderr in order', async function () {
+            this.timeout(20000);
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            const count = 2000;
+            const source = [
+                `for (let i = 0; i < ${count}; i++) {`,
+                `    process.stderr.write(JSON.stringify({ i }) + '\\n');`,
+                `}`,
+                `process.stdout.write(JSON.stringify({ done: true }));`,
+            ].join('\n');
+
+            const result = await executor.spawn<{ done: boolean }>({
+                execution: 'background',
+                ...evalNode(source),
+                parseJson: true,
+                jsonLines: true,
+            });
+
+            const seen: number[] = [];
+            for await (const line of result.jsonLines) {
+                seen.push((line as { i: number }).i);
+            }
+
+            expect(seen.length).to.equal(count);
+            // Strict ordering: line N carries { i: N }.
+            expect(seen.every((value, index) => value === index)).to.be.true;
+
+            const completed = await result.completed;
+            expect(completed.json).to.deep.equal({ done: true });
+            expect(completed.stderr).to.equal('');
+        });
+
+        it('should reject completed with CancellationError when cancelled mid-stream', async () => {
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            const emitter = new EventEmitter<void>();
+            const token = {
+                isCancellationRequested: false,
+                onCancellationRequested: emitter.event,
+            };
+
+            // Emit one line, then hang so the process stays alive until the
+            // cancellation tears it down.
+            const source = [
+                `process.stderr.write(JSON.stringify({ step: 1 }) + '\\n');`,
+                `setTimeout(() => {}, 30000);`,
+            ].join('\n');
+
+            const result = await executor.spawn({
+                execution: 'background',
+                ...evalNode(source),
+                parseJson: true,
+                jsonLines: true,
+            }, token);
+
+            // Drain concurrently. The line iterator ends (rather than hanging)
+            // once the process is killed, so this settles after cancellation.
+            const drained = (async () => {
+                const out: unknown[] = [];
+                for await (const line of result.jsonLines) {
+                    out.push(line);
+                }
+                return out;
+            })();
+
+            await delay(100);
+            token.isCancellationRequested = true;
+            emitter.fire();
+
+            try {
+                await result.completed;
+                expect.fail('Expected cancellation');
+            } catch (e) {
+                expect(CancellationError.test(e)).to.be.true;
+            }
+
+            // Must not hang: the live stream terminates when the child dies.
+            await drained;
         });
     });
 
