@@ -1,12 +1,12 @@
 # Code Surfaces (behavioral layer, `B`)
 
 The manifest cannot express behavior. Read the code to capture what the extension actually *does*. For a
-large extension, parallelize the five areas below with independent `explore` subagents, each pointed at
-the cloned temp dir with an explicit file list.
+large extension, parallelize the five areas below into separate investigations (e.g. independent `explore`
+subagents), each pointed at the cloned temp dir with an explicit file list.
 
-> When delegating to `explore`: give the absolute temp path, the exact files to read, and instruct it to
-> report **features + exact `contextValue`/command-id strings**, not code blocks. Subagents are stateless
-> — provide full context in each prompt.
+> When delegating each investigation: give the absolute temp path, the exact files to read, and instruct it
+> to report **features + exact `contextValue`/command-id strings**, not code blocks. Such subagents are
+> stateless — provide full context in each prompt.
 
 ## 1. Activation wiring + exported API (`extension.ts`)
 

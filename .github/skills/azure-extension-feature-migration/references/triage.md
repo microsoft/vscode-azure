@@ -91,7 +91,8 @@ Rules for the table:
 
 ## Running the gate
 
-1. Present the full table (use the `ask_user` tool for the sign-off question, not free text).
+1. Present the full table and **stop for explicit human sign-off** — request the decision through an
+   interactive prompt (e.g. the `ask_user` tool) rather than free-text narration, so the answer is captured.
 2. Record the human's decision + any rationale they give, **verbatim**, in the table's last column.
 3. If they change dispositions, re-render and re-confirm.
 4. Only when the human explicitly signs off ("approved", "go", etc.) do you advance to Phase 3.

@@ -83,7 +83,8 @@ Do not summarize — list each item with its exact id/key.
 
 ## Phase 3: Code surfaces (behavioral)
 
-Read the code that the manifest can't express. Parallelize independent areas with `explore` subagents.
+Read the code that the manifest can't express. Parallelize the independent areas below into separate
+investigations (e.g. with `explore` subagents) so each gets its own context.
 
 | # | Action | Reference |
 |---|--------|-----------|

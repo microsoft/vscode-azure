@@ -12,7 +12,7 @@ Read the precedent file, then mirror its **shape**. All paths are relative to th
 | Command registration | `extensions/vscode-azure/src/commands/registerCommands.ts` | — |
 | Tree data provider | `extensions/vscode-azure/src/tree/resources/<product>/<Product>DataProvider.ts` | `tree/resources/acr/AcrDataProvider.ts`, `tree/resources/functions/FunctionAppDataProvider.ts` |
 | Tree view provider | `extensions/vscode-azure/src/tree/resources/<product>/<Product>ViewProvider.ts` | `tree/resources/acr/AcrViewProvider.ts`, `tree/resources/functions/FunctionAppViewProvider.ts` |
-| Resource type + guards | `extensions/vscode-azure/src/tree/resources/<product>/<Product>.ts` | `tree/resources/acr/AcrRegistry.ts`, `tree/resources/functions/FunctionApp.ts` |
+| Resource type + guards | `extensions/vscode-azure/src/tree/resources/<product>/<ResourceModel>.ts` | `tree/resources/acr/AcrRegistry.ts`, `tree/resources/functions/FunctionApp.ts` |
 | Tree registration | `extensions/vscode-azure/src/tree/registerTrees.ts` | — |
 | Azd wizard steps (shared) | `extensions/vscode-azure/src/azd/wizard/` | `AzdProvisionStep.ts`, `GenerateBicepStep.ts`, `GenerateAzureYamlStep.ts`, `CreateAzdEnvStep.ts`, `AzdDeployStep.ts`, `ShowEndpointUrlStep.ts` |
 | Wizard context + `AzdJob` | `extensions/vscode-azure/src/azd/wizard/AzdWizardContext.ts` | — |
@@ -27,6 +27,10 @@ Read the precedent file, then mirror its **shape**. All paths are relative to th
 
 > New tree **views** are almost never added. Reuse the existing Resources / Workspace / Activity views;
 > register a new **provider** into the relevant tree, not a new container.
+
+> The resource-model file (`<ResourceModel>.ts`) is named after the **resource-model class it defines**, not
+> the product — e.g. ACR's is `AcrRegistry.ts` (the model is a registry) and Functions' is `FunctionApp.ts`.
+> Pick a name that describes the resource, then match the class name to the file.
 
 ## Command (ManagedCommand)
 
