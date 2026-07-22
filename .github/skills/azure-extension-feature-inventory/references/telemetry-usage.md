@@ -59,8 +59,13 @@ Decision-relevant columns (full schema is larger; these are the ones the queries
 
 Notes:
 - `Properties.isactivationevent == 'true'` marks activation, not a deliberate invocation — usually exclude.
-- `Properties.result != 'Succeeded'` catches features that fire but fail/cancel (a broken feature can look
-  "used" by raw count) — worth surfacing separately.
+- `Properties.result` has **three** states — keep them separate:
+  - `Succeeded` — the feature ran to completion.
+  - `Failed` — the feature errored. High failure share can make a broken feature look "used" by raw count.
+  - `Canceled` — the **user** backed out (dismissed the wizard/quick pick). This is *not* a failure. A high
+    cancellation share is its own signal: people open the feature but don't follow through — often "just
+    exploring," which can mean the feature isn't pulling its weight. Surface it in its own column so the human
+    can weigh it; don't fold it into failures and don't make the call for them.
 
 ---
 
@@ -77,11 +82,14 @@ cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt
 | summarize Invocations = count(),
             Users = dcount(VSCodeMachineId),
             ExternalUsers = dcountif(VSCodeMachineId, IsInternal == false),
-            Failures = countif(tostring(Properties.result) !in ('Succeeded', ''))
+            Failures = countif(tostring(Properties.result) == 'Failed'),
+            Canceled = countif(tostring(Properties.result) == 'Canceled')
 ```
 
 - `ExternalUsers` is the headline Migrate/Drop signal.
-- `Failures` flags features that are invoked but broken.
+- `Failures` flags features that are invoked but broken (errored, not user-aborted).
+- `Canceled` is kept separate on purpose: it counts **user cancellations**, which read very differently from
+  failures — a feature that's mostly opened-then-dismissed may be one people explore but don't actually use.
 - Widen the window (`ago(90d)`) for rarely-used features before concluding anything — but that conclusion is
   the human's to make.
 
@@ -93,7 +101,9 @@ cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt
 | where ExtensionName == '<extensionId>'
 | where tostring(Properties.isactivationevent) != 'true'
 | summarize Invocations = count(),
-            ExternalUsers = dcountif(VSCodeMachineId, IsInternal == false) by EventName
+            ExternalUsers = dcountif(VSCodeMachineId, IsInternal == false),
+            Failures = countif(tostring(Properties.result) == 'Failed'),
+            Canceled = countif(tostring(Properties.result) == 'Canceled') by EventName
 | order by ExternalUsers desc
 ```
 
