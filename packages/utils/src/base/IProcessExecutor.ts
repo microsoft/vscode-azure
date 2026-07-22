@@ -340,13 +340,15 @@ export class ProcessExecutor implements IProcessExecutor {
  * Splits an {@linkcode ProcessExecutorOptions.command argument vector} into the
  * executable and its trailing arguments for execution.
  *
- * When {@linkcode ProcessExecutorOptions.shell shell} is not set, the executable
- * is resolved to a safe absolute path via {@linkcode getSafeExecPath} so that
- * neither foreground nor background execution can be hijacked by a same-named
- * binary in the current working directory on Windows. Under a shell, nano-spawn
- * concatenates the command and arguments into a single unquoted string, so an
- * absolute path containing spaces would break; the (caller-trusted) bare command
- * is left untouched and the shell resolves it.
+ * The executable is resolved to a safe absolute path via
+ * {@linkcode getSafeExecPath} so that neither foreground nor background execution
+ * can be hijacked by a same-named binary in the current working directory on
+ * Windows. Under a shell, nano-spawn concatenates the command and arguments into
+ * a single unquoted string, so a resolved path containing a space would be
+ * mis-split; only in that case is the resolution discarded and the
+ * (caller-trusted) bare command left for the shell to resolve. A space-free
+ * resolved path is safe to pass through a shell, so the cwd-hijack mitigation is
+ * preserved for those commands.
  *
  * @throws {Error} When the vector is empty (no executable to run).
  */
@@ -357,13 +359,17 @@ async function resolveCommandLine(options: ProcessExecutorOptions): Promise<{ co
     const [executable, ...args] = options.command;
     const command = argToString(executable);
 
-    // The cwd-hijack mitigation resolves to an absolute path, which a shell would
-    // then mis-split on spaces; skip it and let the shell resolve the command.
-    if (options.shell) {
+    const safePath = await getSafeExecPath(command);
+
+    // A shell space-joins the command and arguments without quoting, so a
+    // resolved path containing a space would be mis-split. Only then fall back to
+    // the bare command and let the shell resolve it; a space-free resolved path
+    // keeps the cwd-hijack mitigation intact.
+    if (options.shell && safePath.includes(' ')) {
         return { command, args };
     }
 
-    return { command: await getSafeExecPath(command), args };
+    return { command: safePath, args };
 }
 
 /** Extracts captured stderr from a spawn failure, if any. */

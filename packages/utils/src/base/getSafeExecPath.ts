@@ -86,7 +86,7 @@ export async function findOnPath(command: string): Promise<string | undefined> {
     const nodePath = isWindows ? path.win32 : path.posix;
 
     const pathEnv = process.env.PATH ?? (isWindows ? process.env.Path : undefined) ?? '';
-    const directories = pathEnv.split(path.delimiter).filter((dir) => dir.length > 0);
+    const directories = pathEnv.split(path.delimiter).filter(Boolean);
 
     const extensions = isWindows ? windowsExtensions(command) : [''];
 
@@ -112,7 +112,7 @@ export async function findOnPath(command: string): Promise<string | undefined> {
  * otherwise each `PATHEXT` entry is tried in order.
  */
 function windowsExtensions(command: string): readonly string[] {
-    const pathExt = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(path.delimiter).filter((ext) => ext.length > 0);
+    const pathExt = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(path.delimiter).filter(Boolean);
     const lowerCommand = command.toLowerCase();
     const hasKnownExtension = pathExt.some((ext) => lowerCommand.endsWith(ext.toLowerCase()));
     return hasKnownExtension ? [''] : pathExt;

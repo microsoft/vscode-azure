@@ -270,9 +270,12 @@ describe('AzdService (unit)', () => {
         });
 
         it('should treat a non-ENOENT failure as not-installed when azd is unrunnable (Windows forced-shell)', async () => {
-            // On Windows, nano-spawn's forced shell turns a missing command into a
-            // generic non-zero exit (no ENOENT). Both the failing command and the
-            // follow-up `checkVersion` probe fail, so azd is effectively absent.
+            // On Windows, nano-spawn falls back to `shell: true` whenever the target
+            // isn't a resolvable *.exe/*.com (see its windows.js `shouldForceShell`).
+            // A missing command like `azd` never resolves, so it's run through cmd.exe,
+            // which reports "not recognized" as a generic non-zero exit instead of an
+            // ENOENT spawn error. Both the failing command and the follow-up
+            // `checkVersion` probe fail, so azd is effectively absent.
             const exitError = new Error("'azd' is not recognized as an internal or external command");
             const spawnFn = mock.fn(() => Promise.reject(exitError));
             const { service, executor } = createService(spawnFn);
