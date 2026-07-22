@@ -4,6 +4,8 @@
 
 This is the repository for the Azure for Visual Studio Code extension.
 
+_Temporary note: dummy edit for agent testing._
+
 ## Extensions
 
 * [Azure for Visual Studio Code](extensions/vscode-azure/README.md) -- the main VS Code extension for working with Azure resources.
