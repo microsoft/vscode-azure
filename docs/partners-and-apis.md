@@ -23,8 +23,8 @@ A few things that should make partner onboarding easier:
 
 We want to keep the public API small. The preference is a command-based model rather than a broad API surface.
 
-Right now the only obvious thing anyone consumes is "reveal", and it's worth asking whether that even needs a dedicated API. Before we commit to anything, we should go through the existing Azure Resources API and decide what is actually worth keeping.
+Right now the only obvious thing anyone consumes is "reveal tree item", and it's worth asking whether that even needs a dedicated API. Before we commit to anything, we should go through the existing Azure Resources API and decide what is actually worth keeping.
 
 Tree data providers are not expected to stick around.
 
-Authentication is still open. We know it's doable, but it needs a real plan before we start.
+Authentication is still open. We know it's doable, but it needs a real plan before we start. `VsCodeExtensionCredential` goes a long way toward resolving the auth problems.
