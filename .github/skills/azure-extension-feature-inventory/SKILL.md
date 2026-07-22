@@ -52,8 +52,9 @@ Treat **code as authoritative for behavior** and use the manifest/NLS/docs to cr
 > 2. **MANIFEST** — Enumerate every `package.json` contribution point + NLS strings.
 > 3. **CODE** — Traverse the source for code-only/behavioral features (providers, wizards, tree, CLI, debug, API, telemetry).
 > 4. **RECONCILE** — Cross-reference the layers; flag code-only features and orphan strings.
-> 5. **EMIT** — Write a normalized, migration-ready `INVENTORY.md`.
-> 6. **VERIFY** — Self-check the inventory for completeness against the checklist.
+> 5. **TELEMETRY** — Derive each feature's telemetry EventName and emit a ready-to-run usage query + one-click link (as a **triage aid** — never run them or infer usage).
+> 6. **EMIT** — Write a normalized, migration-ready `INVENTORY.md`.
+> 7. **VERIFY** — Self-check the inventory for completeness against the checklist.
 
 ---
 
@@ -91,6 +92,7 @@ Read the code that the manifest can't express. Parallelize independent areas wit
 | 3 | Inventory the **tree view**: full node hierarchy, exact `contextValue` strings (incl. status variants + `invalid*`), icons, click commands, pagination, refresh/polling. | [code-surfaces.md](references/code-surfaces.md) |
 | 4 | Inventory **wizards**: ordered Prompt/Execute steps, defaults, validation, basic-vs-advanced deltas, telemetry. | [code-surfaces.md](references/code-surfaces.md) |
 | 5 | Inventory **integrations**: CLI lifecycle, task providers, debug providers, framework detectors, build presets, config-file scaffolding/parsing, external SDK/API clients, git/GitHub/auth. | [code-surfaces.md](references/code-surfaces.md) |
+| 6 | Capture each instrumented callback's **telemetry callback id** (the first arg to `callWithTelemetryAndErrorHandling` / `registerCommand*`) — for commands it's the command id, but task providers/resolvers/wizards may use other ids. Needed for the telemetry EventName in Phase 5. | [telemetry-usage.md](references/telemetry-usage.md) |
 
 ---
 
@@ -105,16 +107,29 @@ Read the code that the manifest can't express. Parallelize independent areas wit
 
 ---
 
-## Phase 5: Emit the inventory
+## Phase 5: Telemetry usage links (triage aid)
+
+Give the human a one-click way to check real usage per feature so **they** can weigh Migrate vs Drop later.
+Generate links; **do not** run the queries and **do not** infer or state usage.
 
 | # | Action | Reference |
 |---|--------|-----------|
-| 1 | Write `INVENTORY.md` following the template's section order and tables. | [inventory-template.md](references/inventory-template.md) |
+| 1 | For each instrumented feature, derive `EventName` = `<extensionId>/<callbackId>` (lowercased). Mark non-instrumented surfaces (settings, menu containers, orphan strings) as "no telemetry event". | [telemetry-usage.md](references/telemetry-usage.md) |
+| 2 | Build the canonical per-feature usage query (28d window; `Invocations`/`Users`/`ExternalUsers` via `IsInternal == false`/`Failures`) and one extension-wide `by EventName` roll-up query. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 3 | Generate the Azure Data Explorer deeplink for each query with the gzip→base64→URL-encode script (one batch pass, not one process per feature). Fall back to a raw fenced query if a link can't be produced. | [telemetry-usage.md](references/telemetry-usage.md) |
+
+---
+
+## Phase 6: Emit the inventory
+
+| # | Action | Reference |
+|---|--------|-----------|
+| 1 | Write `INVENTORY.md` following the template's section order and tables. Include the per-feature `Telemetry` links + the top-of-file usage roll-up link. | [inventory-template.md](references/inventory-template.md) |
 | 2 | Save it where the user asked (default: alongside the migration workspace, or a session artifact). Print the path. | [inventory-template.md](references/inventory-template.md) |
 
 ---
 
-## Phase 6: Verify completeness
+## Phase 7: Verify completeness
 
 Run the self-check in [verification-checklist.md](references/verification-checklist.md). Every command,
 setting, menu, view node, debugger, task, and code-only feature must appear exactly once, with a source
@@ -129,6 +144,7 @@ layer and (where relevant) its exact `contextValue`/`when` clause. Report any ga
 | `INVENTORY.md` | Normalized, migration-ready feature catalog (see template) |
 | Source ref record | Repo + exact commit SHA the inventory was taken from |
 | Orphan/dead list | NLS keys / contributions with no backing behavior |
+| Telemetry usage links | Per-feature ADX query + one-click deeplink, plus an extension-wide usage roll-up (a triage aid; not executed) |
 
 ---
 
@@ -138,5 +154,6 @@ layer and (where relevant) its exact `contextValue`/`when` clause. Report any ga
 - [Manifest Surfaces](references/manifest-surfaces.md)
 - [Code Surfaces](references/code-surfaces.md)
 - [Reconciliation](references/reconciliation.md)
+- [Telemetry Usage](references/telemetry-usage.md)
 - [Inventory Template](references/inventory-template.md)
 - [Verification Checklist](references/verification-checklist.md)

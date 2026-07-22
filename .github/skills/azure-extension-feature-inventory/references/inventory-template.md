@@ -12,6 +12,8 @@ Code is authoritative for behavior; docs are supplementary.
 
 Source layer legend: **A** = declarative (manifest), **B** = code-only/behavioral, **C** = docs/UX.
 
+Usage roll-up (triage aid — run yourself; not executed by the skill): [all events, external usage, last 28d](<adx-deeplink>)
+
 ## 0. Extension-level shape
 - extensionDependencies: <...>
 - activationEvents (A): <list>
@@ -19,12 +21,13 @@ Source layer legend: **A** = declarative (manifest), **B** = code-only/behaviora
 - x-azResources (A): branches <type>; create commands; activation.onResolve <ARM types>
 - Exported extension API (B): <return value of activate(); methods/properties/events>
 - Activation wiring (B): <providers, resolvers, task/debug/language registrations, auth session, telemetry>
-- Telemetry (B): <notable custom telemetry>
+- Telemetry (B): <notable custom telemetry>. EventName convention: `<extensionId>/<callbackId>` (lowercased). Non-command instrumented callbacks (task providers, resolvers, wizard entry) get a `[usage](<deeplink>)` link in their own section below.
 
 ## 1. Commands (A + B)
-| Command id | Title | Layer | Notes / enablement / when |
-|---|---|---|---|
-| ... | ... | A+B | ... |
+| Command id | Title | Layer | Telemetry | Notes / enablement / when |
+|---|---|---|---|---|
+| ... | ... | A+B | [usage](<adx-deeplink>) | ... |
+> Telemetry column = one-click ADX usage query for EventName `<extId>/<commandId>` (lowercased). `-` if no callback.
 > Code-only commands (B, not in manifest): <list with where they're invoked>
 > Orphan strings (flag, DO NOT migrate): <dead NLS keys>
 

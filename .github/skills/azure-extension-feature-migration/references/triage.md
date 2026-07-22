@@ -12,6 +12,13 @@ dropped or replaced (hand-written ARM deploy, bespoke tree-item classes, vendore
 who understands the product direction can decide, per feature, between keep / change / drop. Getting this
 wrong wastes the most effort, so it is gated up front.
 
+## Usage data is a triage input (not the skill's call)
+
+The inventory (from the feature-inventory skill) includes a **telemetry usage link** per instrumented
+feature plus an extension-wide roll-up link. Encourage the human to open the ones they're unsure about —
+**external** adoption (`IsInternal == false`) and failure rate are strong Migrate-vs-Drop signals. The agent
+must **not** run those queries or assert usage; a low count is context for the human, never an automatic Drop.
+
 ## Feature granularity (what counts as one row)
 
 The inventory mixes granular rows (one command) with dense prose (activation wiring, integrations, wizard

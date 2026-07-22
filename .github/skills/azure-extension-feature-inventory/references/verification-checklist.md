@@ -26,6 +26,14 @@ Before declaring the inventory done, confirm each item. Report gaps explicitly r
 - [ ] `enablement` gates (`!isWeb`, `!virtualWorkspace`) recorded per command.
 - [ ] Docs-only claims are marked `C` and flagged unverified; docs never removed a real feature.
 
+## Telemetry usage links (triage aid)
+- [ ] Every instrumented feature has a derived EventName `<extensionId>/<callbackId>` (lowercased) and a
+      `[usage]` ADX deeplink (or a raw fenced fallback query).
+- [ ] Non-instrumented surfaces (settings, menu containers, orphan strings) are marked "no telemetry event"
+      rather than given a fabricated link.
+- [ ] A single extension-wide `by EventName` usage roll-up link appears near the top.
+- [ ] No usage is asserted or inferred anywhere — links only, verdict left to the human.
+
 ## Header hygiene
 - [ ] Repo + exact commit SHA + version recorded at the top.
 
