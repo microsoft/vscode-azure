@@ -27,6 +27,10 @@ Build the coverage report (keyed by the stable ID):
 | SWA-003 | revealResource     | Drop                 | not migrated (dead)| — |
 ```
 
+> Evidence paths are shorthand relative to the extension source root `extensions/vscode-azure/src/` (e.g.
+> `commands/swa/CreateStaticWebApp.ts` -> `extensions/vscode-azure/src/commands/swa/CreateStaticWebApp.ts`).
+> See [target-patterns.md](target-patterns.md) for the full-path convention.
+
 ## Tree contract check
 
 For each migrated node type:
