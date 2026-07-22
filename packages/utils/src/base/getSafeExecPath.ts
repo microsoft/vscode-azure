@@ -19,16 +19,11 @@ const resolvedPathCache = new Map<string, string>();
  * @remarks
  * On Windows, a shell searches the current working directory before `PATH`, so
  * a same-named binary dropped into the cwd can hijack execution. To prevent
- * that, this scans the directories on `PATH` directly (never the cwd) and
- * returns the first matching executable as an absolute path. Commands that
+ * that, this resolves the command against `PATH` via {@linkcode findOnPath}
+ * (which never consults the cwd) and returns the absolute path. Commands that
  * already specify a path (absolute, or relative such as `./cmd` / `../cmd`) are
  * returned unchanged, as are commands that cannot be resolved (the original name
  * is returned so the caller's own error handling can report the failure).
- *
- * A bare command name (no known executable extension) is matched against each
- * `PATHEXT` extension in order; a name that already carries a known extension is
- * matched as-is. This deliberately excludes the cwd, unlike `which` (and the
- * Windows shell), which search the cwd first.
  *
  * On non-Windows platforms the cwd is not part of the implicit search path, so
  * the command is returned unchanged.
@@ -58,39 +53,87 @@ export async function getSafeExecPath(command: string): Promise<string> {
         return cached;
     }
 
-    const pathEnv = process.env.PATH ?? process.env.Path ?? '';
-    const directories = pathEnv.split(path.delimiter).filter((dir) => dir.length > 0);
-
-    const pathExt = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(path.delimiter).filter((ext) => ext.length > 0);
-    const lowerCommand = command.toLowerCase();
-    const hasKnownExtension = pathExt.some((ext) => lowerCommand.endsWith(ext.toLowerCase()));
-    // A command that already carries a known extension is matched verbatim;
-    // otherwise try each PATHEXT extension in order.
-    const extensions = hasKnownExtension ? [''] : pathExt;
-
-    // Scan directories (and extensions) in order so the first PATH match wins,
-    // matching the shell's precedence while never consulting the cwd.
-    for (const directory of directories) {
-        // Windows PATH entries are sometimes wrapped in double quotes; strip them.
-        const cleanDirectory = directory.replace(/^"(.*)"$/, '$1');
-        for (const extension of extensions) {
-            const candidate = path.win32.join(cleanDirectory, command + extension);
-            if (await isExecutableFile(candidate)) {
-                resolvedPathCache.set(command, candidate);
-                return candidate;
-            }
-        }
+    const resolved = await findOnPath(command);
+    if (resolved !== undefined) {
+        resolvedPathCache.set(command, resolved);
+        return resolved;
     }
 
     // Unresolved commands are not cached so a later PATH/install change can succeed.
     return command;
 }
 
-/** Returns `true` when {@linkcode candidate} exists and is a regular file. */
+/**
+ * Finds a bare command on `PATH` and returns its absolute path, if any.
+ *
+ * @remarks
+ * Scans the directories on `PATH` in order and returns the first match. Unlike
+ * `which` (and the Windows shell), this deliberately never consults the current
+ * working directory, so a same-named binary in the cwd cannot hijack the result.
+ *
+ * On Windows, `PATHEXT` extensions are appended in order (a command that already
+ * carries a known extension is matched verbatim) and any file match is treated
+ * as executable. On other platforms the command is matched as-is and must also
+ * carry an executable permission bit.
+ *
+ * @param command - A bare command name (no path separator). Callers with an
+ *   explicit path should check that path directly rather than calling this.
+ * @returns A promise for the absolute path of the first match, or `undefined`
+ *   when the command is not found on `PATH`.
+ */
+export async function findOnPath(command: string): Promise<string | undefined> {
+    const isWindows = process.platform === 'win32';
+    const nodePath = isWindows ? path.win32 : path.posix;
+
+    const pathEnv = process.env.PATH ?? (isWindows ? process.env.Path : undefined) ?? '';
+    const directories = pathEnv.split(path.delimiter).filter((dir) => dir.length > 0);
+
+    const extensions = isWindows ? windowsExtensions(command) : [''];
+
+    // Scan directories (and extensions) in order so the first PATH match wins,
+    // matching the shell's precedence while never consulting the cwd.
+    for (const directory of directories) {
+        // Windows PATH entries are sometimes wrapped in double quotes; strip them.
+        const cleanDirectory = isWindows ? directory.replace(/^"(.*)"$/, '$1') : directory;
+        for (const extension of extensions) {
+            const candidate = nodePath.join(cleanDirectory, command + extension);
+            if (await isExecutableFile(candidate)) {
+                return candidate;
+            }
+        }
+    }
+
+    return undefined;
+}
+
+/**
+ * Returns the `PATHEXT` extensions to try for {@linkcode command} on Windows. A
+ * command that already carries a known extension is matched verbatim (`['']`);
+ * otherwise each `PATHEXT` entry is tried in order.
+ */
+function windowsExtensions(command: string): readonly string[] {
+    const pathExt = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(path.delimiter).filter((ext) => ext.length > 0);
+    const lowerCommand = command.toLowerCase();
+    const hasKnownExtension = pathExt.some((ext) => lowerCommand.endsWith(ext.toLowerCase()));
+    return hasKnownExtension ? [''] : pathExt;
+}
+
+/**
+ * Returns `true` when {@linkcode candidate} is a regular file that can be
+ * executed. On Windows an executable extension (`PATHEXT`) already implies
+ * executability, so only the file check applies; elsewhere an executable
+ * permission bit is also required.
+ */
 async function isExecutableFile(candidate: string): Promise<boolean> {
     try {
         const stats = await fs.stat(candidate);
-        return stats.isFile();
+        if (!stats.isFile()) {
+            return false;
+        }
+        if (process.platform !== 'win32') {
+            await fs.access(candidate, fs.constants.X_OK);
+        }
+        return true;
     } catch {
         return false;
     }

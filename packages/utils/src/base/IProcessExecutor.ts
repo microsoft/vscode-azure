@@ -6,11 +6,10 @@
 import type { ServiceIdentifier } from 'inversify';
 import { SubprocessError, default as spawn, type Options as SpawnOptions, type Result as SpawnResult, type Subprocess } from 'nano-spawn';
 import type * as vscode from 'vscode';
-import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
 import type { IVsCode } from '../vscode/IVsCode';
 import { argToString, argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
-import { getSafeExecPath } from './getSafeExecPath';
+import { findOnPath, getSafeExecPath } from './getSafeExecPath';
 import { toAbortSignal } from './toAbortSignal';
 
 export * from './CommandLineBuilder';
@@ -204,12 +203,7 @@ export class ProcessExecutor implements IProcessExecutor {
 
     /** @inheritdoc */
     public async isOnPath(command: string): Promise<boolean> {
-        try {
-            await which(command);
-            return true;
-        } catch {
-            return false;
-        }
+        return (await findOnPath(command)) !== undefined;
     }
 
     private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {

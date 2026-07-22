@@ -145,13 +145,7 @@ importers:
       vscode-uri:
         specifier: ^3.1.0
         version: 3.1.0
-      which:
-        specifier: ^7.0.0
-        version: 7.0.0
     devDependencies:
-      '@types/which':
-        specifier: ^3.0.4
-        version: 3.0.4
       '@vscode/extension-telemetry':
         specifier: 'catalog:'
         version: 1.5.2(tslib@2.8.1)
@@ -694,9 +688,6 @@ packages:
 
   '@types/vscode@1.120.0':
     resolution: {integrity: sha1-rzbvbplSqmQ+NoJGgZfjGb6AtK4=}
-
-  '@types/which@3.0.4':
-    resolution: {integrity: sha1-LDqJvnDFaoSmlXpyZGOfOa5DQKE=}
 
   '@typescript-eslint/eslint-plugin@8.63.0':
     resolution: {integrity: sha1-DYXQ7BoosONfSEzIIgqL8IQBnnE=}
@@ -1639,10 +1630,6 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha1-6PvzdNxVb/iUehDcsFctYz8s+hA=}
 
-  isexe@4.0.0:
-    resolution: {integrity: sha1-SPZXavjoehj+t5a37V4uWQO0Pco=}
-    engines: {node: '>=20'}
-
   istanbul-lib-coverage@3.2.2:
     resolution: {integrity: sha1-LRZsSwZE1Do58Ev2wu3R5YXzF1Y=}
     engines: {node: '>=8'}
@@ -2371,11 +2358,6 @@ packages:
     engines: {node: '>= 8'}
     hasBin: true
 
-  which@7.0.0:
-    resolution: {integrity: sha1-zf3Xv8McWvBQuXvHwCsYRHMfuLI=}
-    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
-    hasBin: true
-
   word-wrap@1.2.5:
     resolution: {integrity: sha1-0sRcbdT7zmIaZvE2y+Mor9BBCzQ=}
     engines: {node: '>=0.10.0'}
@@ -3048,8 +3030,6 @@ snapshots:
   '@types/semver@7.7.1': {}
 
   '@types/vscode@1.120.0': {}
-
-  '@types/which@3.0.4': {}
 
   '@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@10.6.0)(typescript@5.9.3))(eslint@10.6.0)(typescript@5.9.3)':
     dependencies:
@@ -4045,8 +4025,6 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  isexe@4.0.0: {}
-
   istanbul-lib-coverage@3.2.2: {}
 
   istanbul-lib-report@3.0.1:
@@ -4846,10 +4824,6 @@ snapshots:
   which@2.0.2:
     dependencies:
       isexe: 2.0.0
-
-  which@7.0.0:
-    dependencies:
-      isexe: 4.0.0
 
   word-wrap@1.2.5: {}
 
