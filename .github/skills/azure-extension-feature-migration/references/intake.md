@@ -41,7 +41,7 @@ Read these before mapping anything. They are the contract every migrated feature
 - **Target package:** `extensions/vscode-azure` (feature code) plus `packages/azutils` (Azure SDK client wrappers). New tree views are almost never needed — reuse the existing Resources / Workspace / Activity views.
 - **Precedent product:** pick the already-migrated product whose shape most resembles the source and mirror its file layout. See [target-patterns.md](target-patterns.md) for the map of what each precedent demonstrates:
   - `acr` — resource tree with virtual child categories + resource-scoped commands.
-  - `functions` — full create wizard via azd+Bicep + workspace-view detection + app settings reuse.
+  - `functions` — full create wizard via azd+Bicep + workspace-view detection + the app-settings precedent (rebuild-against-precedent, not wire-only reuse).
   - `deploy` — azd deploy job wiring + deployment tracking in the Activity view.
   - `auth` — account/tenant/subscription and sign-in flows.
 

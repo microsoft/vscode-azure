@@ -96,10 +96,11 @@ a DI factory binding in `extension.ts`. Don't re-vendor the source's client code
 
 ---
 
-## 5. App settings, auth, "open in portal", resource groups -> Reuse
+## 5. Solved generically (auth, "open in portal", resource groups -> Reuse) or via precedent (app settings -> Migrate)
 
 These are solved generically in the monorepo, or have a concrete precedent to mirror. If the source has
-them, **reuse the existing implementation** rather than re-vendoring the source's:
+them, **wire up the existing implementation (Reuse), or rebuild against the precedent (app settings, Migrate)**,
+rather than re-vendoring the source's code:
 
 - **Application settings / connection strings** — there is **no shared/generic app-settings package yet**;
   the reference implementation is the **Functions product's native app-settings surface**
@@ -112,12 +113,13 @@ them, **reuse the existing implementation** rather than re-vendoring the source'
   contextValue contract is useful for the inventory, but you re-implement against the Functions precedent.)
 - **Sign-in, accounts, tenants, subscriptions, subscription filtering** — the account data provider +
   `Azure: Select Subscriptions`.
-- **Open in portal, copy resource id, resource-group grouping** — generic commands + `AzureResourceDataProvider` /
+- **Open in portal, resource-group grouping** — generic commands + `AzureResourceDataProvider` /
   `GenericAzureViewProvider`.
 
-> "Reuse" is a spectrum: some features are wired straight to an existing generic command (open-in-portal),
-> while others are re-implemented against a **precedent product** (app settings). Say which in the mapping
-> record so the implementer knows whether to wire or to rebuild-from-precedent.
+> Distinguish true **Reuse** from **Migrate-against-a-precedent**: open-in-portal / resource-group grouping
+> are Reuse (wire straight to an existing generic command/provider), whereas app settings has **no** shared
+> package yet and must be **rebuilt against the Functions precedent** — disposition **Migrate**, not Reuse.
+> Say which in the mapping record so the implementer knows whether to wire or to rebuild-from-precedent.
 
 ---
 

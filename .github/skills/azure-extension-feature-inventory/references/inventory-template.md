@@ -72,5 +72,7 @@ Usage roll-up (triage aid — run yourself; not executed by the skill): [all eve
 ## Placement
 
 - Default: write to the current session's artifacts dir, or a path the user specifies.
-- If a migration workspace exists, offer to place it there (e.g. `docs/migrations/<service>-inventory.md`).
+- If a migration workspace exists, offer to place it there. Prefer a **tracked** folder in the target repo
+  so it can be committed with the migration — `docs/migrations/<service>/INVENTORY.md`. `TRIAGE.md` and
+  `MIGRATION-PLAN.md` (produced later by the migration skill) live in that same folder.
 - Always print the final path.

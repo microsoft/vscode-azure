@@ -67,6 +67,21 @@ Notes:
     exploring," which can mean the feature isn't pulling its weight. Surface it in its own column so the human
     can weigh it; don't fold it into failures and don't make the call for them.
 
+### Caveats that break a naive usage read
+
+Two source-side behaviors can make a feature look unused when it isn't. Both reinforce the hard rule — **never
+read a low/zero count as "unused."**
+
+- **The emitted EventName is authoritative.** Derive `<extId>/<callbackId>` as above, but a callback can
+  customize its telemetry (a different event name), so the derived name can miss. The **roll-up query lists
+  the literal EventNames as actually emitted** — reconcile each per-feature link against that list before
+  trusting a low or zero count.
+- **Telemetry can be suppressed.** `vscode-azext-utils` callbacks may set `suppressIfSuccessful` (no event on
+  success — only failures/cancellations emit) or `suppressAll` (no event at all). A suppressed feature shows
+  near-zero or zero `ExternalUsers` **even when heavily used**. During Phase 3 (code surfaces), capture any
+  suppression you see, and mark that feature's link as a **non-adoption** signal rather than presenting its
+  count as usage.
+
 ---
 
 ## Canonical per-feature query template

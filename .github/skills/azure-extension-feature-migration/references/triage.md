@@ -51,7 +51,7 @@ These are **not** user features, so they need a deliberate call:
 |-------------|---------|-----------------|
 | **Migrate** | Rebuild the feature with the same UX, using monorepo patterns | Straightforward commands, tree nodes, settings |
 | **Adapt** | Rebuild with **changed** behavior/UX | Deploy/create -> azd+Bicep; anything in [does-not-map.md](does-not-map.md) |
-| **Reuse** | Already provided by a shared monorepo package; wire it up, don't rebuild | App settings, auth/sign-in, generic "open in portal", resource groups |
+| **Reuse** | Already provided by a shared monorepo package/service; wire it up, don't rebuild | Auth/sign-in, generic "open in portal", resource-group grouping |
 | **Drop** | Do not migrate | Dead/orphan NLS keys, deprecated features, source-only plumbing, things superseded by the platform |
 | **Defer** | Keep, but a later migration phase | Depends on infra not yet in the monorepo; tracked in `MIGRATION-PLAN.md` |
 
@@ -60,9 +60,9 @@ These are **not** user features, so they need a deliberate call:
 Use these to pre-fill the **recommended** column. They are defaults, not decisions.
 
 - **Deployment / provisioning / "create resource" commands** -> **Adapt** to azd+Bicep. Never recommend porting ARM-deploy code. See [does-not-map.md](does-not-map.md).
-- **App-settings / connection-strings features** -> **Reuse** by mirroring the Functions app-settings precedent (no shared package yet; the inventory's contextValues like `applicationSettings.*<product>` are the tell). See [does-not-map.md](does-not-map.md) #5.
+- **App-settings / connection-strings features** -> **Migrate** by rebuilding against the Functions app-settings precedent. There is **no** shared package yet, so this is a rebuild-from-precedent, **not** wire-only Reuse (the inventory's contextValues like `applicationSettings.*<product>` are the tell). See [does-not-map.md](does-not-map.md) #5.
 - **Sign-in / account / subscription / tenant filtering** -> **Reuse** the existing auth + account providers.
-- **"Open in portal", "Copy resource ID", resource-group grouping** -> **Reuse** generic commands/providers already in the tree.
+- **"Open in portal", resource-group grouping** -> **Reuse** generic commands/providers already in the tree.
 - **Tree nodes** -> **Migrate** as `DataProvider` + `ViewProvider`, but the *construction* is Adapt-shaped (no per-node classes). Flag in [does-not-map.md](does-not-map.md).
 - **Dead / orphan NLS keys and unused contributions** (inventory marked DEAD) -> **Drop**.
 - **Code-only / exported-API surfaces** (e.g. a `RemoteRepoApi`) -> usually **Drop** or **Defer** unless a monorepo consumer needs them; call out explicitly.
@@ -106,8 +106,10 @@ Rules for the table:
 ## The decision artifact (`TRIAGE.md`) — commit it
 
 The signed-off table is not a scratch note; it is the **committed source of truth** for the whole migration.
-The moment the human signs off, write it to `TRIAGE.md` (alongside `INVENTORY.md` / `MIGRATION-PLAN.md`) and
-**commit it as its own change**, separate from any feature code. Treat it like a decision record (ADR): it is
+The moment the human signs off, write it to `TRIAGE.md` in the migration's **tracked artifacts folder** in the
+target repo — `docs/migrations/<service>/` (the same folder as `INVENTORY.md`; if the inventory is still in a
+session/scratch dir, move it here first so all migration artifacts are committed together). Then **commit it
+as its own change**, separate from any feature code. Treat it like a decision record (ADR): it is
 read-only to every later phase, and the only way to change a disposition is to edit `TRIAGE.md` and re-confirm
 with the human — never silently in-flight while implementing.
 

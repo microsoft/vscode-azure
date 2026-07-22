@@ -1,6 +1,6 @@
 # Pattern Mapping Playbook
 
-For each feature the human dispositioned **Migrate** or **Adapt**, pick its target pattern and exact file
+For each feature the human dispositioned **Migrate**, **Adapt**, or **Reuse**, pick its target pattern and exact file
 location here. This is the translation table from "source feature kind" to "monorepo implementation". Pair
 it with [target-patterns.md](target-patterns.md) (concrete paths + snippets) and
 [does-not-map.md](does-not-map.md) (why the shape changes).
@@ -15,13 +15,13 @@ it with [target-patterns.md](target-patterns.md) (concrete paths + snippets) and
 | Create / deploy / provision command | azd+Bicep wizard | `commands/<product>/Create<Product>.ts` + steps + Bicep template | **Adapt** — see [does-not-map.md](does-not-map.md) #1; register twice (`createNew`/`deploy`) |
 | Tree parent/leaf node type | `DataProvider` branch + `ViewProvider` branch + type guard | `tree/resources/<product>/` (`<Product>DataProvider.ts`, `<Product>ViewProvider.ts`, `<Product>.ts`) | Register in `registerTrees.ts` specific-before-generic |
 | Computed / grouping node (e.g. "App Settings") | **virtual node** in `DataProvider.getChildren` | same `DataProvider` | View provider renders it; give it a stable virtual key + own `contextValue` |
-| Node `contextValue` string(s) | assembled via `combineContextValues(...)` from command `ContextValue`s | `ViewProvider.getTreeItem` | Migrate the *set* of context values from the inventory; gate each in `package.json` with `\b...\b` regex |
-| Status/`invalid*` node variants | conditional `contextValue` + icon in `ViewProvider` | `ViewProvider.getTreeItem` | Inventory lists exact variants; preserve them so `when` clauses match |
+| Node `contextValue` string(s) | assembled via `combineContextValues(...)` from command `ContextValue`s | `ViewProvider.getTreeItem` | Re-derive **fresh** `ContextValue`s from the command set (do **not** reuse source literals — see naming policy below); gate each in `package.json` with `\b...\b` regex |
+| Status/`invalid*` node variants | conditional `contextValue` + icon in `ViewProvider` | `ViewProvider.getTreeItem` | Inventory lists exact variants; preserve the *set of states* (re-derive fresh strings) so every `when` clause still has a match |
 | Node icon | `logicalType`-named SVG | `packages/azutils/resources/azureIcons/<logicalType>.svg` | Filename must be `<logicalType>.toLowerCase()+'.svg'` or it silently vanishes |
 | Direct `@azure/arm-*` client use | azutils client wrapper | `packages/azutils/src/rest/clients/<Product>Client.ts` (+ re-export, + factory in `extension.ts`) | Consumers import from `@microsoft/vscode-azure-azutils`, never `@azure/*` |
-| App settings / connection strings | **Reuse** — mirror the Functions app-settings precedent (no shared package yet) | rebuild against the product's settings client + app-settings virtual node | Don't rebuild from source; see [does-not-map.md](does-not-map.md) #5 |
+| App settings / connection strings | **Migrate** — rebuild against the Functions app-settings precedent (no shared package yet) | product's settings client + app-settings virtual node | Rebuild against the precedent; don't port source, and it's **not** wire-only Reuse. See [does-not-map.md](does-not-map.md) #5 |
 | Sign-in / accounts / subscriptions / filtering | **Reuse** existing account provider + `Select Subscriptions` | `extension.ts` wiring only | Don't rebuild |
-| "Open in portal" / copy id / resource-group grouping | **Reuse** generic commands + `AzureResourceDataProvider`/`GenericAzureViewProvider` | `combineContextValues(OpenInPortal.ContextValue, ...)` | Add the generic `ContextValue`s to your view items |
+| "Open in portal" / resource-group grouping | **Reuse** generic commands + `AzureResourceDataProvider`/`GenericAzureViewProvider` | `combineContextValues(OpenInPortal.ContextValue, ...)` | Add the generic `ContextValue`s to your view items |
 | Setting (`configuration`) | `package.json` `contributes.configuration` + read via config service | `package.json` + consuming code | Migrate only settings whose feature is kept; localize `description`/enum labels |
 | Wizard prompt step (source `AzureWizardPromptStep`) | `PromptStep` subclass | `commands/<product>/steps/PickXStep.ts` | Check hydration flags (`hasInfra`) to skip when IaC exists; `@injectable`, resolved from container |
 | Wizard execute step (ARM work) | azd execute step (Generate*/Azd*) | `azd/wizard/` (reuse) | **Adapt** — no hand-written ARM; see [does-not-map.md](does-not-map.md) #1 |
@@ -38,14 +38,14 @@ For each Migrate/Adapt feature, capture a short record (feeds `MIGRATION-PLAN.md
 
 ```
 Feature:        <inventory id/name>
-Disposition:    Migrate | Adapt   (from signed triage)
+Disposition:    Migrate | Adapt | Reuse   (from signed triage)
 Pattern:        <row from the table above>
 Target file(s): <exact paths>
 Precedent:      <file to copy the shape of>
 Tree contract:  <contextValue(s) + package.json when clause>   (if applicable)
 Wizard:         <ordered prompt/execute steps + AzdJob + Bicep template>  (if applicable)
 Client:         <azutils wrapper + SDK types to re-export>      (if applicable)
-Reuse:          <shared package/service to wire>                (if Reuse-adjacent)
+Reuse:          <existing symbol/command to wire> + <where it's wired> + <how to verify it's wired>   (required for Reuse rows)
 Open questions: <anything to confirm with the human>
 ```
 

@@ -93,7 +93,7 @@ verified against — every feature must end up with an explicit disposition.
 | 1 | Build a triage table: one row per inventory feature, each with a **stable ID** (`<PRODUCT>-NNN`), a **recommended** disposition + one-line rationale (you recommend; the human decides). | [triage.md](references/triage.md) |
 | 2 | Pre-flag features that **do not map 1:1** (deployment -> azd+Bicep, custom trees -> providers, vendored clients -> azutils/shared packages, dead/orphan -> Drop). | [does-not-map.md](references/does-not-map.md) |
 | 3 | Present the table to the human. Capture their decisions + rationale verbatim. Iterate until they explicitly sign off. | [triage.md](references/triage.md) |
-| 4 | On sign-off, write the decisions to **`TRIAGE.md`** and **commit it on its own** (separate from feature code). This committed artifact is the read-only source of truth for Phases 3-6 — dispositions are never changed in-flight, only by editing `TRIAGE.md` and re-confirming. | [triage.md](references/triage.md) |
+| 4 | On sign-off, write the decisions to **`TRIAGE.md`** in the tracked `docs/migrations/<service>/` folder (beside `INVENTORY.md`) and **commit it on its own** (separate from feature code). This committed artifact is the read-only source of truth for Phases 3-6 — dispositions are never changed in-flight, only by editing `TRIAGE.md` and re-confirming. | [triage.md](references/triage.md) |
 
 > Dispositions: **Migrate** (rebuild as-is in new patterns) · **Adapt** (rebuild with changed UX/behavior, e.g. azd) · **Reuse** (satisfied by an existing shared package) · **Drop** (dead/out-of-scope) · **Defer** (later phase).
 
@@ -106,7 +106,7 @@ verified against — every feature must end up with an explicit disposition.
 
 | # | Action | Reference |
 |---|--------|-----------|
-| 1 | For each Migrate/Adapt feature, choose the monorepo pattern and the exact target file path. | [pattern-mapping.md](references/pattern-mapping.md) |
+| 1 | For each Migrate/Adapt feature, choose the monorepo pattern and the exact target file path. For each **Reuse** feature, record the existing symbol/command to wire and where it gets wired (so Phase 6 has evidence to verify). | [pattern-mapping.md](references/pattern-mapping.md) |
 | 2 | Define the tree contract: for each node type, its `DataProvider`/`ViewProvider`, the command's static `ContextValue`, and the `package.json` regex `when` clause. | [pattern-mapping.md](references/pattern-mapping.md), [target-patterns.md](references/target-patterns.md) |
 | 3 | For creation/deploy features, define the wizard as azd `PromptStep`/`ExecuteStep` + `AzdJob`, plus the Bicep template to add. | [pattern-mapping.md](references/pattern-mapping.md) |
 

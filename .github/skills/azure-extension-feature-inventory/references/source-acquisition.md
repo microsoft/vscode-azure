@@ -15,11 +15,11 @@ locally, prefer it (but still record the commit SHA).
 
 ## 2. Clone to a temp dir (outside the monorepo)
 
-Never clone into the monorepo working tree. Use the OS temp dir. On Windows PowerShell:
+Never clone into the monorepo working tree. Use a **fresh, unique** dir under the OS temp dir — don't reuse
+or force-delete a predictable path (it may be another checkout or a concurrent run). On Windows PowerShell:
 
 ```powershell
-$dest = Join-Path $env:TEMP '<repo>-src'
-if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+$dest = Join-Path $env:TEMP ('<repo>-src-' + [Guid]::NewGuid().ToString('N').Substring(0,8))
 git clone --depth 1 https://github.com/microsoft/<repo>.git $dest
 git -C $dest rev-parse HEAD   # RECORD THIS SHA in the inventory
 ```
