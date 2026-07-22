@@ -37,54 +37,55 @@ Then add commands, virtual children, and the create/deploy wizard as subsequent 
 
 ## MIGRATION-PLAN.md
 
-Emit an ordered, checkboxed plan. Every task links back to (a) an inventory feature and (b) a target
-pattern, so parity is auditable. Template:
+Emit an ordered, checkboxed plan. Every task is tagged with its **`TRIAGE.md` ID** (and, through that ID,
+its inventory feature) plus a target pattern, so parity is auditable against the signed decisions. Template:
 
 ```markdown
 # <Product> Migration Plan
 
-Source: <repo> @ <commit-sha>   Inventory: <path>   Triage: <path (signed)>
+Source: <repo> @ <commit-sha>   Inventory: <path>   Triage: <path (signed, committed)>
 Target: extensions/vscode-azure (+ packages/azutils)   Precedent: <product>
 Monorepo phase: <n>
 
 ## Slice 0 — Foundations
-- [ ] Add resource type + guards `tree/resources/<product>/<Product>.ts`  <- inventory: tree nodes
-- [ ] Add `<Product>Client` wrapper + re-export + factory binding        <- inventory: SDK usage
-- [ ] Constants (ARM type, logicalType)                                   <- inventory: resource types
+- [ ] Add resource type + guards `tree/resources/<product>/<ResourceModel>.ts`  <- SWA-0xx (tree nodes)
+- [ ] Add `<Product>Client` wrapper + re-export + factory binding               <- SWA-0xx (SDK usage)
+- [ ] Constants (ARM type, logicalType)                                         <- SWA-0xx (resource types)
 
 ## Slice 1 — Resource node in the tree
-- [ ] `<Product>DataProvider.getChildren` (resource + virtual categories) <- inventory: tree hierarchy
-- [ ] `<Product>ViewProvider.getTreeItem` (icon, contextValue)            <- inventory: node contextValues
+- [ ] `<Product>DataProvider.getChildren` (resource + virtual categories) <- SWA-0xx (tree hierarchy)
+- [ ] `<Product>ViewProvider.getTreeItem` (icon, contextValue)            <- SWA-0xx (node contextValues)
 - [ ] Register both in `registerTrees.ts`                                 <- —
-- [ ] Icon `azureIcons/<logicalType>.svg`                                 <- inventory: node icons
-- [ ] Reuse open-in-portal command on the node                           <- inventory: browse/openInPortal
+- [ ] Icon `azureIcons/<logicalType>.svg`                                 <- SWA-0xx (node icons)
+- [ ] Reuse open-in-portal command on the node                           <- SWA-0xx (browse/openInPortal)
 
 ## Slice 2 — Commands
-- [ ] `<Command>` ManagedCommand + ContextValue + register + manifest when-clause  <- inventory: <cmd id>
+- [ ] `<Command>` ManagedCommand + ContextValue + register + manifest when-clause  <- SWA-0xx (<cmd id>)
 - [ ] ... one row per Migrate/Adapt command ...
 
 ## Slice 3 — Create / Deploy (azd + Bicep)   [Adapt]
-- [ ] Bicep template `resources/templates/<resource>.bicep` + BicepTemplateName union  <- inventory: create wizard
-- [ ] Resource-specific PromptSteps `commands/<product>/steps/`                          <- inventory: wizard steps
-- [ ] Register Create<Product> per AzdJob (createNew / deploy)                           <- inventory: create/deploy cmds
+- [ ] Bicep template `resources/templates/<resource>.bicep` + BicepTemplateName union  <- SWA-0xx (create wizard)
+- [ ] Resource-specific PromptSteps `commands/<product>/steps/`                          <- SWA-0xx (wizard steps)
+- [ ] Register Create<Product> per AzdJob (createNew / deploy)                           <- SWA-0xx (create/deploy cmds)
 
 ## Slice 4 — Reuse wiring
-- [ ] App settings (mirror Functions precedent; product settings client + virtual node)   <- inventory: app settings
-- [ ] Auth / subscription filtering (if product-specific)  <- inventory: sign-in
+- [ ] App settings (mirror Functions precedent; product settings client + virtual node)   <- SWA-0xx (app settings)
+- [ ] Auth / subscription filtering (if product-specific)  <- SWA-0xx (sign-in)
 
 ## Slice N — Settings & manifest cleanup
-- [ ] `contributes.configuration` for kept settings + nls  <- inventory: settings
-- [ ] Debuggers / tasks / problemMatchers (per triage)     <- inventory: debuggers/tasks
+- [ ] `contributes.configuration` for kept settings + nls  <- SWA-0xx (settings)
+- [ ] Debuggers / tasks / problemMatchers (per triage)     <- SWA-0xx (debuggers/tasks)
 
 ## Deferred (tracked, not built now)
-- [ ] <feature> — reason, target phase                     <- signed triage: Defer
+- [ ] <feature> — reason, target phase                     <- SWA-0xx (Defer)
 
 ## Dropped (for the record)
-- <feature> — reason                                        <- signed triage: Drop
+- <feature> — reason                                        <- SWA-0xx (Drop)
 ```
 
 Rules:
 - Every **Migrate/Adapt** feature appears as a checkbox. Every **Defer** appears under Deferred. Every
-  **Drop** is listed for the record. **Reuse** appears as a wiring task. Nothing from the inventory is
-  silently absent — that's what makes verification possible.
+  **Drop** is listed for the record. **Reuse** appears as a wiring task. Nothing from `TRIAGE.md` is
+  silently absent — every ID appears somewhere, which is what makes verification possible.
+- Tag each task with its `TRIAGE.md` ID (`<- SWA-0xx`) so Phase 6 can trace it back to a signed disposition.
 - Save `MIGRATION-PLAN.md` alongside the signed `TRIAGE.md`. Print both paths.

@@ -74,17 +74,23 @@ Use these to pre-fill the **recommended** column. They are defaults, not decisio
 One row per inventory feature. Keep it exhaustive — every inventory line gets a row, so nothing is silently
 lost. Group by inventory section (Commands, Settings, Tree, Wizards, Integrations, Debuggers/Tasks, Dead).
 
+Give every row a **stable feature ID** (`<PRODUCT>-NNN`, e.g. `SWA-001`) in the first column. That ID is
+the join key the rest of the migration uses: `MIGRATION-PLAN.md` tasks, code comments, and the parity report
+all reference decisions by ID, so they never re-litigate a disposition.
+
 ```
-| # | Feature (from inventory) | Kind | Src layer | Recommended | Rationale / 1:1? | Human decision |
-|---|--------------------------|------|-----------|-------------|------------------|----------------|
-| 1 | createStaticWebApp       | cmd+wizard | A+B | Adapt | Deploy -> azd+Bicep; wizard steps change | (await human) |
-| 2 | browse                   | cmd  | A+B | Reuse | Generic open-in-portal already exists    | (await human) |
-| 3 | revealResource (orphan)  | nls  | -   | Drop  | Dead NLS key, no behavior                 | (await human) |
-| ...|                          |      |     |       |                                          |                |
+| ID | Feature (from inventory) | Kind | Src layer | Recommended | Rationale / 1:1? | Decision |
+|--------|--------------------------|------|-----------|-------------|------------------|----------|
+| SWA-001 | createStaticWebApp      | cmd+wizard | A+B | Adapt | Deploy -> azd+Bicep; wizard steps change | (await human) |
+| SWA-002 | browse                  | cmd  | A+B | Reuse | Generic open-in-portal already exists    | (await human) |
+| SWA-003 | revealResource (orphan) | nls  | -   | Drop  | Dead NLS key, no behavior                 | (await human) |
+| ...     |                          |      |     |       |                                          |                |
 ```
 
 Rules for the table:
 - **You fill every column except the last.** The last column is the human's.
+- **IDs are permanent.** Assign them once and never renumber — downstream artifacts point at them. If a
+  feature is split or merged after sign-off, allocate new IDs; don't recycle old ones.
 - Put a clear **"does not map 1:1"** note in the rationale whenever behavior/UX changes, and link the
   reason to [does-not-map.md](does-not-map.md).
 - Do not collapse or omit rows to shorten the table. Completeness is the point.
@@ -95,7 +101,30 @@ Rules for the table:
    interactive prompt (e.g. the `ask_user` tool) rather than free-text narration, so the answer is captured.
 2. Record the human's decision + any rationale they give, **verbatim**, in the table's last column.
 3. If they change dispositions, re-render and re-confirm.
-4. Only when the human explicitly signs off ("approved", "go", etc.) do you advance to Phase 3.
+4. Only when the human explicitly signs off ("approved", "go", etc.) do you write the decision artifact.
 
-> Persist the signed-off table (e.g. `TRIAGE.md` alongside `MIGRATION-PLAN.md`). It is an input to
-> verification: every feature must trace back to a signed disposition.
+## The decision artifact (`TRIAGE.md`) — commit it
+
+The signed-off table is not a scratch note; it is the **committed source of truth** for the whole migration.
+The moment the human signs off, write it to `TRIAGE.md` (alongside `INVENTORY.md` / `MIGRATION-PLAN.md`) and
+**commit it as its own change**, separate from any feature code. Treat it like a decision record (ADR): it is
+read-only to every later phase, and the only way to change a disposition is to edit `TRIAGE.md` and re-confirm
+with the human — never silently in-flight while implementing.
+
+`TRIAGE.md` contract:
+
+- **Header block:** source repo + commit SHA the inventory was taken from, the granularity rule used, who
+  signed off, and the date. This makes the decision reproducible and auditable.
+- **One row per feature**, carrying the **stable ID**, the **final** disposition (Migrate / Adapt / Reuse /
+  Drop / Defer — not "recommended"), the rationale, and whether usage data was consulted.
+- **Every inventory feature appears exactly once.** A row with no disposition is a bug — the gate isn't done.
+- **Defer rows** name the blocking phase/infra so `MIGRATION-PLAN.md` can track them.
+
+Downstream, this artifact is authoritative:
+
+- **Phase 3 (Map)** only maps rows whose disposition is Migrate / Adapt / Reuse; it reads dispositions from
+  `TRIAGE.md`, it does not re-decide them.
+- **Phase 4 (Sequence)** references each task back to a `TRIAGE.md` ID.
+- **Phase 6 (Verify)** traces every landed feature — and every intentional omission — back to a `TRIAGE.md`
+  row by ID. Any feature with no `TRIAGE.md` row, or any Migrate/Adapt row with no landed code (or tracked
+  Defer), is a reported gap.

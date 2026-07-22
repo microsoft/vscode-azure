@@ -65,11 +65,11 @@ verified against — every feature must end up with an explicit disposition.
 ## Overview
 
 > 1. **INTAKE** — Load the source `INVENTORY.md` and the monorepo's pattern docs; confirm the target package + a precedent product.
-> 2. **TRIAGE (human gate)** — With a human, assign every feature a disposition: Migrate / Adapt / Reuse / Drop / Defer. **Hard stop until signed off.**
-> 3. **MAP** — Map each kept feature onto a concrete monorepo pattern + target file location (the playbook).
-> 4. **SEQUENCE** — Order the work by dependency (constants -> clients -> data providers -> view providers -> registerTrees -> commands -> wizards -> package.json -> tests). Emit `MIGRATION-PLAN.md`.
+> 2. **TRIAGE (human gate)** — With a human, assign every feature a disposition: Migrate / Adapt / Reuse / Drop / Defer. **Hard stop until signed off**, then commit the decisions as `TRIAGE.md`.
+> 3. **MAP** — Map each *kept* feature (read from `TRIAGE.md`) onto a concrete monorepo pattern + target file location (the playbook).
+> 4. **SEQUENCE** — Order the work by dependency (constants -> clients -> data providers -> view providers -> registerTrees -> commands -> wizards -> package.json -> tests). Emit `MIGRATION-PLAN.md`, each task tagged with its `TRIAGE.md` ID.
 > 5. **IMPLEMENT** — Build feature-by-feature against a precedent product, conforming to standards; lint/build/test each slice.
-> 6. **VERIFY** — Parity check against the inventory + conformance check against conventions; report gaps honestly.
+> 6. **VERIFY** — Parity check against `TRIAGE.md` (every ID accounted for) + conformance check against conventions; report gaps honestly.
 
 ---
 
@@ -90,15 +90,19 @@ verified against — every feature must end up with an explicit disposition.
 
 | # | Action | Reference |
 |---|--------|-----------|
-| 1 | Build a triage table: one row per inventory feature, with a **recommended** disposition + one-line rationale (you recommend; the human decides). | [triage.md](references/triage.md) |
+| 1 | Build a triage table: one row per inventory feature, each with a **stable ID** (`<PRODUCT>-NNN`), a **recommended** disposition + one-line rationale (you recommend; the human decides). | [triage.md](references/triage.md) |
 | 2 | Pre-flag features that **do not map 1:1** (deployment -> azd+Bicep, custom trees -> providers, vendored clients -> azutils/shared packages, dead/orphan -> Drop). | [does-not-map.md](references/does-not-map.md) |
 | 3 | Present the table to the human. Capture their decisions + rationale verbatim. Iterate until they explicitly sign off. | [triage.md](references/triage.md) |
+| 4 | On sign-off, write the decisions to **`TRIAGE.md`** and **commit it on its own** (separate from feature code). This committed artifact is the read-only source of truth for Phases 3-6 — dispositions are never changed in-flight, only by editing `TRIAGE.md` and re-confirming. | [triage.md](references/triage.md) |
 
 > Dispositions: **Migrate** (rebuild as-is in new patterns) · **Adapt** (rebuild with changed UX/behavior, e.g. azd) · **Reuse** (satisfied by an existing shared package) · **Drop** (dead/out-of-scope) · **Defer** (later phase).
 
 ---
 
 ## Phase 3: Map features to patterns
+
+> Operate only on `TRIAGE.md` rows dispositioned **Migrate / Adapt / Reuse**. Read dispositions from
+> `TRIAGE.md`; do not re-decide them here.
 
 | # | Action | Reference |
 |---|--------|-----------|
@@ -113,7 +117,7 @@ verified against — every feature must end up with an explicit disposition.
 | # | Action | Reference |
 |---|--------|-----------|
 | 1 | Order features by dependency so each slice compiles on top of the last. | [sequencing.md](references/sequencing.md) |
-| 2 | Emit `MIGRATION-PLAN.md`: ordered, checkbox tasks grouped by slice, each linking back to an inventory feature + a target pattern. | [sequencing.md](references/sequencing.md) |
+| 2 | Emit `MIGRATION-PLAN.md`: ordered, checkbox tasks grouped by slice, each tagged with its **`TRIAGE.md` ID** and linked to a target pattern. | [sequencing.md](references/sequencing.md) |
 
 ---
 
@@ -129,9 +133,11 @@ verified against — every feature must end up with an explicit disposition.
 
 ## Phase 6: Verify
 
-Run the checklist in [verification.md](references/verification.md). Every inventory feature must map to a
-disposition and, if kept, to landed code (or an explicit `Defer` tracked in `MIGRATION-PLAN.md`). New code
-must pass lint/build/test and conform to conventions. Report gaps instead of hiding them.
+Run the checklist in [verification.md](references/verification.md). Trace **every `TRIAGE.md` ID** to an
+outcome: kept features (Migrate/Adapt/Reuse) to landed code, Drop rows to a confirmed absence, Defer rows to
+a tracked item in `MIGRATION-PLAN.md`. Any inventory feature missing from `TRIAGE.md`, or any kept row with
+no landed code, is a gap. New code must pass lint/build/test and conform to conventions. Report gaps instead
+of hiding them.
 
 ---
 
@@ -139,10 +145,10 @@ must pass lint/build/test and conform to conventions. Report gaps instead of hid
 
 | Artifact | Contents |
 |----------|----------|
-| Triage table | Every inventory feature with a human-signed disposition + rationale |
-| `MIGRATION-PLAN.md` | Dependency-ordered, checkboxed implementation plan linked to inventory features + patterns |
+| `TRIAGE.md` (committed) | The signed-off decision record: every inventory feature with a stable ID, final disposition, rationale, and sign-off header. Read-only source of truth for Phases 3-6. |
+| `MIGRATION-PLAN.md` | Dependency-ordered, checkboxed implementation plan; each task tagged with its `TRIAGE.md` ID and a target pattern. |
 | Migrated code | New feature code in `extensions/vscode-azure` (+ `packages/azutils`), conforming to monorepo patterns |
-| Parity report | Inventory-feature -> disposition/landed-code coverage, with any gaps called out |
+| Parity report | `TRIAGE.md` ID -> disposition/landed-code coverage, with any gaps called out |
 
 ---
 

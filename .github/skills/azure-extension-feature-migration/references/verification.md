@@ -4,25 +4,27 @@ Two independent checks: **parity** (did every inventoried feature get handled pe
 and **conformance** (does the new code meet the monorepo's standards?). Report gaps honestly — do not hide
 an incomplete slice.
 
-## Parity check (against the inventory + signed triage)
+## Parity check (against `TRIAGE.md`)
 
-Walk the inventory feature-by-feature. Every feature must resolve to exactly one outcome:
+Walk `TRIAGE.md` **by ID**. Every ID must resolve to exactly one outcome:
 
 - [ ] Every **Migrate** feature -> landed code (command/provider/wizard/setting present and wired).
 - [ ] Every **Adapt** feature -> landed code with the intended behavior change (e.g. azd+Bicep, not ARM).
 - [ ] Every **Reuse** feature -> the shared package/service is actually wired (not just assumed).
 - [ ] Every **Defer** feature -> a tracked task under "Deferred" in `MIGRATION-PLAN.md`.
 - [ ] Every **Drop** feature -> listed under "Dropped"; confirm no code was migrated for it.
-- [ ] No inventory feature is unaccounted for. Count features in vs. features resolved; they must match.
+- [ ] No ID is unaccounted for, and no landed feature lacks a `TRIAGE.md` ID. Count IDs in vs. outcomes
+      resolved; they must match. Cross-check `TRIAGE.md` against the original `INVENTORY.md` so no inventory
+      feature was dropped *before* triage either.
 
-Build the coverage report:
+Build the coverage report (keyed by the stable ID):
 
 ```
-| Inventory feature | Disposition (signed) | Outcome            | Evidence (path/symbol) |
-|-------------------|----------------------|--------------------|------------------------|
-| createStaticWebApp| Adapt                | landed (azd)       | commands/swa/CreateStaticWebApp.ts |
-| browse            | Reuse                | wired              | OpenInPortal.ContextValue on view item |
-| revealResource    | Drop                 | not migrated (dead)| — |
+| ID      | Feature            | Disposition (signed) | Outcome            | Evidence (path/symbol) |
+|---------|--------------------|----------------------|--------------------|------------------------|
+| SWA-001 | createStaticWebApp | Adapt                | landed (azd)       | commands/swa/CreateStaticWebApp.ts |
+| SWA-002 | browse             | Reuse                | wired              | OpenInPortal.ContextValue on view item |
+| SWA-003 | revealResource     | Drop                 | not migrated (dead)| — |
 ```
 
 ## Tree contract check
