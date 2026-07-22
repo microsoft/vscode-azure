@@ -269,7 +269,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
                 }
 
                 // Wait for the next poll interval (rejects with CancellationError on abort)
-                await delay(nextPollMs, { signal: abortSignal });
+                await delay(nextPollMs, abortSignal);
             }
         } catch {
             // CancellationError, AbortError, or signal.throwIfAborted -- exit cleanly

@@ -44,12 +44,10 @@
         ]
     },
     "dependencies": {
-        "@microsoft/vscode-processutils": "catalog:",
-        "vscode-uri": "^3.1.0",
-        "which": "^5.0.0"
+        "nano-spawn": "^2.1.0",
+        "vscode-uri": "^3.1.0"
     },
     "devDependencies": {
-        "@types/which": "^3.0.4",
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:"
     }

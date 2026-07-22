@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IProcessExecutor, IVsCode, fileExists } from '@microsoft/vscode-azure-utils';
-import { composeArgs, withArg, withFlagArg, withNamedArg } from '@microsoft/vscode-processutils';
+import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, type CommandLineArgs } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
@@ -193,12 +192,10 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('init'),
-                    withFlagArg('--minimal', true),
-                    withFlagArg('--no-prompt', true),
-                )(),
+                command: command(AzdCommand)
+                    .arg('init')
+                    .flagArg('--minimal')
+                    .flagArg('--no-prompt'),
                 cwd,
             });
         } catch (e) {
@@ -211,12 +208,10 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('env', 'new', name),
-                    withNamedArg('--location', location),
-                    withNamedArg('--subscription', subscriptionId),
-                )(),
+                command: command(AzdCommand)
+                    .arg('env', 'new', name)
+                    .namedArg('--location', location)
+                    .namedArg('--subscription', subscriptionId),
                 cwd,
             });
         } catch (e) {
@@ -229,11 +224,9 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<AzdEnvironment[]>({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('env', 'list'),
-                    withJsonOutput(),
-                )(),
+                command: command(AzdCommand)
+                    .arg('env', 'list')
+                    .namedArg('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -258,12 +251,10 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<Record<string, string>>({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('env', 'get-values'),
-                    withNamedArg('--environment', name),
-                    withJsonOutput(),
-                )(),
+                command: command(AzdCommand)
+                    .arg('env', 'get-values')
+                    .namedArg('--environment', name)
+                    .namedArg('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -279,11 +270,9 @@ export class AzdService implements IAzdService {
         try {
             const result = await this.processExecutor.spawn<AzdShowResult>({
                 execution: 'background',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('show'),
-                    withJsonOutput(),
-                )(),
+                command: command(AzdCommand)
+                    .arg('show')
+                    .namedArg('--output', 'json'),
                 cwd,
                 parseJson: true,
             });
@@ -300,10 +289,7 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('provision'),
-                )(),
+                command: command(AzdCommand).arg('provision'),
                 cwd,
                 env: { ...authEnv, ...env },
                 name: 'azd provision',
@@ -321,10 +307,7 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('deploy'),
-                )(),
+                command: command(AzdCommand).arg('deploy'),
                 cwd,
                 env: authEnv,
                 name: 'azd deploy',
@@ -342,12 +325,10 @@ export class AzdService implements IAzdService {
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
-                command: AzdCommand,
-                args: composeArgs(
-                    withArg('down'),
-                    withArg('--force'),
-                    withArg('--purge'),
-                )(),
+                command: command(AzdCommand)
+                    .arg('down')
+                    .flagArg('--force')
+                    .flagArg('--purge'),
                 cwd,
                 env: authEnv,
                 name: 'azd down',
@@ -366,11 +347,9 @@ export class AzdService implements IAzdService {
             try {
                 const result = await this.processExecutor.spawn<AzdVersionResult>({
                     execution: 'background',
-                    command: AzdCommand,
-                    args: composeArgs(
-                        withArg('version'),
-                        withJsonOutput(),
-                    )(),
+                    command: command(AzdCommand)
+                        .arg('version')
+                        .namedArg('--output', 'json'),
                     parseJson: true,
                 });
                 const version = semver.valid(result.json.azd.version);
@@ -389,12 +368,9 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async install(): Promise<void> {
-        const { command, args } = await this.getInstallCommand();
-
         await this.processExecutor.spawn({
             execution: 'foreground',
-            command,
-            args,
+            command: await this.getInstallCommand(),
             name: this.code.l10n.t('Install Azure Developer CLI'),
             source: 'azd',
         });
@@ -403,52 +379,58 @@ export class AzdService implements IAzdService {
     }
 
     /**
-     * Returns the preferred install/update command.
+     * Returns the preferred install/update command as an argument vector.
      *
      * When `azd` is already installed and supports `azd update`
      * (>= {@linkcode MinAzdUpdateVersion}), returns `azd update`.
      * Otherwise falls back to a platform-specific install command
      * (winget, choco, brew, or the official install script).
      */
-    private async getInstallCommand(): Promise<{ command: string; args: string[] }> {
+    private async getInstallCommand(): Promise<CommandLineArgs> {
         const supportsUpdate = await this.checkVersion(MinAzdUpdateVersion);
         if (supportsUpdate) {
-            return { command: AzdCommand, args: ['update'] };
+            return command(AzdCommand).arg('update');
         } else if (process.platform === 'win32') {
             if (await this.processExecutor.isOnPath('winget')) {
                 // `winget install` upgrades already-installed packages by default
-                return { command: 'winget', args: ['install', 'microsoft.azd'] };
+                return command('winget').arg('install', 'microsoft.azd');
             } else if (await this.processExecutor.isOnPath('choco')) {
                 // `choco upgrade` installs if missing and upgrades if already installed
-                return { command: 'choco', args: ['upgrade', 'azd'] };
+                return command('choco').arg('upgrade', 'azd');
             } else {
-                return {
-                    command: 'powershell',
-                    args: ['-ExecutionPolicy', 'AllSigned', '-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression'],
-                };
+                return command('powershell')
+                    .namedArg('-ExecutionPolicy', 'AllSigned')
+                    .arg('-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression');
             }
         } else if (process.platform === 'darwin' && await this.processExecutor.isOnPath('brew')) {
             // `brew install` upgrades already-installed packages by default
-            return { command: 'brew', args: ['install', 'azure/azd/azd'] };
+            return command('brew').arg('install', 'azure/azd/azd');
         } else {
-            return {
-                command: 'bash',
-                args: ['-c', 'curl -fsSL \'https://aka.ms/install-azd.sh\' | bash'],
-            };
+            return command('bash').arg('-c', 'curl -fsSL \'https://aka.ms/install-azd.sh\' | bash');
         }
     }
 
     /**
      * Wraps errors from `azd` commands with actionable messages.
-     * - ENOENT -> azd not installed
-     * - Other errors -> checks the installed version and reports if
-     *   it is below {@linkcode MinAzdVersion}
+     * - azd not installed (a raw `ENOENT`, or -- on Windows, where nano-spawn's
+     *   forced shell turns a missing command into a generic non-zero exit rather
+     *   than `ENOENT` -- a `checkVersion` probe that cannot produce a version)
+     *   -> "not found"
+     * - Installed but below {@linkcode MinAzdVersion} -> "version required"
      *
      * Shows a toast with an "Install" button and suppresses the
      * default error dialog when the error is actionable.
      */
     private async wrapAzdError(e: unknown): Promise<unknown> {
-        if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+        // A raw ENOENT is already conclusive, so skip the extra version probe.
+        // Otherwise let `checkVersion` decide: it returns `undefined` when it
+        // cannot run azd at all (effectively not installed), `false` when azd is
+        // present but too old, and `true` when azd is usable.
+        const meetsMin = (e as NodeJS.ErrnoException).code === 'ENOENT'
+            ? undefined
+            : await this.checkVersion();
+
+        if (meetsMin === undefined) {
             const message = this.code.l10n.t(
                 'Azure Developer CLI (azd) was not found. Install it and ensure it is available on your PATH.',
             );
@@ -456,8 +438,7 @@ export class AzdService implements IAzdService {
             return new Error(message, { cause: e });
         }
 
-        const meetsMin = await this.checkVersion();
-        if (meetsMin === false) {
+        if (!meetsMin) {
             const message = this.code.l10n.t(
                 'Azure Developer CLI (azd) version {0} or later is required.',
                 MinAzdVersion,
@@ -488,6 +469,3 @@ export class AzdService implements IAzdService {
         });
     }
 }
-
-/** Curry function that appends `--output json` to the argument list. */
-const withJsonOutput = () => withNamedArg('--output', 'json');
