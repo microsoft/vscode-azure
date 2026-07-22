@@ -19,7 +19,7 @@ it with [target-patterns.md](target-patterns.md) (concrete paths + snippets) and
 | Status/`invalid*` node variants | conditional `contextValue` + icon in `ViewProvider` | `ViewProvider.getTreeItem` | Inventory lists exact variants; preserve them so `when` clauses match |
 | Node icon | `logicalType`-named SVG | `packages/azutils/resources/azureIcons/<logicalType>.svg` | Filename must be `<logicalType>.toLowerCase()+'.svg'` or it silently vanishes |
 | Direct `@azure/arm-*` client use | azutils client wrapper | `packages/azutils/src/rest/clients/<Product>Client.ts` (+ re-export, + factory in `extension.ts`) | Consumers import from `@microsoft/vscode-azure-azutils`, never `@azure/*` |
-| App settings / connection strings | **Reuse** shared app-settings package | wire `contextValuesToAdd: ['<product>']` | Don't rebuild; see [does-not-map.md](does-not-map.md) #5 |
+| App settings / connection strings | **Reuse** — mirror the Functions app-settings precedent (no shared package yet) | rebuild against the product's settings client + app-settings virtual node | Don't rebuild from source; see [does-not-map.md](does-not-map.md) #5 |
 | Sign-in / accounts / subscriptions / filtering | **Reuse** existing account provider + `Select Subscriptions` | `extension.ts` wiring only | Don't rebuild |
 | "Open in portal" / copy id / resource-group grouping | **Reuse** generic commands + `AzureResourceDataProvider`/`GenericAzureViewProvider` | `combineContextValues(OpenInPortal.ContextValue, ...)` | Add the generic `ContextValue`s to your view items |
 | Setting (`configuration`) | `package.json` `contributes.configuration` + read via config service | `package.json` + consuming code | Migrate only settings whose feature is kept; localize `description`/enum labels |
@@ -57,3 +57,16 @@ Because `contextValue` -> `when` is the command/node binding, get it exact:
 3. `ViewProvider.getTreeItem` sets `item.contextValue = combineContextValues(...)`.
 4. `package.json` menu entry gates with `viewItem =~ /\b<contextValue>\b/i` (word boundaries — required).
 5. Verify the regex matches the *assembled* value, not the source's literal string.
+
+### contextValue naming policy (do NOT preserve source literals)
+
+The monorepo **assembles** a node's `contextValue` from the static `ContextValue` of each command that acts
+on it (via `combineContextValues`), plus any node-intrinsic values. It does **not** reuse the source
+extension's literal contextValue strings (e.g. `azureStaticWebApp`, `azureStaticWebAppEnvironment`).
+
+- The new extension ships a **new manifest**, so there is **no back-compat requirement** to keep old strings.
+- Name new `ContextValue`s to fit monorepo convention, driven by the *command set*, not the old literal.
+- Use the inventory's source contextValues only to reconstruct the **`when`-clause matrix** (which commands
+  appear on which node, incl. status/`invalid*` variants) — then re-derive fresh values. Preserve the
+  *shape* (the set of behaviors per node state), not the exact strings.
+- The one thing to carry verbatim is the **word-boundary regex discipline** in `package.json`.

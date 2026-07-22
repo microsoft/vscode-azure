@@ -69,7 +69,7 @@ Monorepo phase: <n>
 - [ ] Register Create<Product> per AzdJob (createNew / deploy)                           <- inventory: create/deploy cmds
 
 ## Slice 4 — Reuse wiring
-- [ ] App settings (`contextValuesToAdd: ['<product>']`)   <- inventory: app settings
+- [ ] App settings (mirror Functions precedent; product settings client + virtual node)   <- inventory: app settings
 - [ ] Auth / subscription filtering (if product-specific)  <- inventory: sign-in
 
 ## Slice N — Settings & manifest cleanup

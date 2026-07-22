@@ -44,7 +44,7 @@ classes into the monorepo is wrong and will be rejected. Instead:
 | Delegate deployment/provisioning to **azd + Bicep** (`AzdJob`, `GenerateBicepStep`, `AzdProvisionStep`) | Re-create hand-written ARM deployment wizards from the source |
 | Rebuild the tree as `DataProvider` + `ViewProvider` registered in `registerTrees.ts` | Re-create per-node tree-item classes that fetch their own children |
 | Write commands as `@injectable()` `ManagedCommand` classes with a static `ContextValue` | Register bare `vscode.commands.registerCommand` callbacks |
-| Reuse shared monorepo packages (azutils clients, shared app-settings/auth) | Re-vendor the source's client code |
+| Reuse shared monorepo packages (azutils clients, generic commands) and product precedents (Functions app-settings) | Re-vendor the source's client / app-settings code |
 | Conform **all** new code to `docs/conventions.md` (DI interfaces, `l10n.t`, logging, headers) | Carry over the source's style, `vscode` imports, or string handling |
 
 **Features rarely map 1:1.** The target UX is different by design — most notably, deployment is delegated

@@ -36,6 +36,13 @@ Bootstrapped) governs which prompts and steps run — mirror it, don't reinvent 
 JSONL; polling registers them with the ARM-deployment data provider so progress shows in the **Activity
 view**. Reuse this — do not build a custom progress/notification path.
 
+**GitHub / repo bootstrap is a separate human decision.** Some source create flows bundle non-provisioning
+work into the wizard: creating a GitHub repo, pushing, wiring a deploy workflow, and polling a GitHub Action
+after create. `azd` owns *provisioning*, not this repo/CI bootstrap. Do **not** silently carry the source's
+GitHub bootstrap into the azd wizard, and do **not** silently drop it either. In triage, surface it as an
+explicit decision: keep it (as a separate Git/GitHub service step outside provisioning), defer it, or drop
+it in favor of an azd-first UX. Flag it as an open question in the feature's mapping record.
+
 ---
 
 ## 2. Tree views -> DataProvider / ViewProvider registries
@@ -91,30 +98,44 @@ a DI factory binding in `extension.ts`. Don't re-vendor the source's client code
 
 ## 5. App settings, auth, "open in portal", resource groups -> Reuse
 
-These are already solved generically in the monorepo. If the source has them, **wire up the existing
-implementation** rather than rebuilding:
+These are solved generically in the monorepo, or have a concrete precedent to mirror. If the source has
+them, **reuse the existing implementation** rather than re-vendoring the source's:
 
-- **Application settings / connection strings** — shared app-settings package (base contextValues +
-  `contextValuesToAdd: ['<product>']`).
+- **Application settings / connection strings** — there is **no shared/generic app-settings package yet**;
+  the reference implementation is the **Functions product's native app-settings surface**
+  (`commands/functions/AddOrEditAppSetting.ts`, `DeleteAppSetting.ts`, and the app-settings virtual node in
+  `tree/resources/functions/appSettingsParentKey.ts` + `FunctionAppDataProvider`/`ViewProvider`). Mirror
+  that shape for the new product, backed by the product's own settings client. If the two implementations
+  end up near-identical, **flag extracting a shared abstraction to the human** rather than deciding it
+  yourself. (Note: the source likely uses the shared `@microsoft/vscode-azext-azureappsettings` package with
+  `contextValuesToAdd: ['<product>']`; that azext package is **not** the monorepo pattern — the base
+  contextValue contract is useful for the inventory, but you re-implement against the Functions precedent.)
 - **Sign-in, accounts, tenants, subscriptions, subscription filtering** — the account data provider +
   `Azure: Select Subscriptions`.
 - **Open in portal, copy resource id, resource-group grouping** — generic commands + `AzureResourceDataProvider` /
   `GenericAzureViewProvider`.
 
+> "Reuse" is a spectrum: some features are wired straight to an existing generic command (open-in-portal),
+> while others are re-implemented against a **precedent product** (app settings). Say which in the mapping
+> record so the implementer knows whether to wire or to rebuild-from-precedent.
+
 ---
 
 ## 6. Debuggers, tasks, framework detection, CLI lifecycle -> judgment
 
-These are the least mechanical. For each, decide **with the human** whether the platform/monorepo now owns
-it, whether it should be re-implemented, or dropped:
+These are the least mechanical. Never assume — for each, apply this decision matrix **with the human** and
+record the outcome + rationale in triage:
 
-- **Debug providers / `debuggers` contributions** — often superseded by generic debugging; confirm intent.
-- **Task providers / `taskDefinitions` / `problemMatchers`** — keep only if the workflow still needs them.
-- **Framework detectors / build presets** — may fold into azd's own detection or a create-wizard prompt step.
-- **CLI process lifecycle** (spawn/kill on debug start/stop, emulators) — map to the workspace view's
-  emulator model or drop if the platform provides it.
+| Source surface | Recommend **Drop** when... | Recommend **Adapt** when... | Recommend **Defer** when... |
+|----------------|----------------------------|-----------------------------|-----------------------------|
+| Debug provider / `debuggers` contribution | generic VS Code debugging already covers the scenario | product needs a bespoke launch/resolve flow that still applies | it depends on a workspace/emulator model not yet in the monorepo |
+| Task provider / `taskDefinitions` / `problemMatchers` | the task workflow is obsolete or platform-owned | the workflow is still needed but must use monorepo process/service patterns | it depends on a deferred debug/CLI feature |
+| Framework detectors / build presets | azd's own detection replaces it | it usefully feeds a create-wizard `PromptStep` or task generation | the create wizard it feeds is deferred |
+| CLI process lifecycle (spawn/kill on debug, emulators) | the platform provides the emulator/runtime | it maps onto the workspace view's emulator model | the emulator model isn't ready |
 
-Never assume — surface the tradeoff in triage.
+Default posture: these product-specific dev-loop features are usually **Adapt** (rebuild on monorepo
+patterns) or **Drop** (platform owns it) — rarely a straight **Migrate**. Because they are the highest-risk
+product calls, they **always** need explicit human confirmation, not a silent recommendation.
 
 ---
 

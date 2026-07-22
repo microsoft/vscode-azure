@@ -49,5 +49,13 @@ Read these before mapping anything. They are the contract every migrated feature
 
 Before triage, confirm with the user:
 - Which source extension + inventory snapshot.
-- Which monorepo migration **phase** this targets (see `docs/monorepo-migration.md`) — affects whether a feature is `Migrate` now or `Defer`.
+- Which monorepo migration **phase** this targets (see `docs/monorepo-migration.md`) — affects whether a
+  feature is `Migrate` now or `Defer`:
+  - **Phase 0 (internal):** MVP of the unified "Azure" extension on the internal marketplace.
+  - **Phase 1 (beta):** standalone "Azure" extension; disables itself if Azure Resources is installed.
+  - **Phase 2 (opt-in):** Azure Resources yields to "Azure"; users choose. Target: after feature-complete.
+  - **Phase 3 (GA):** Azure Resources becomes an extension-pack stub; per-service extensions deprecated.
+  - **Phase 4 (cleanup):** Azure Resources deprecated.
+  A pre-GA target means feature-parity gaps are acceptable and non-core features can be `Defer`; a GA/parity
+  target raises the bar for what must be `Migrate` now.
 - Whether any features are explicitly out of scope up front.

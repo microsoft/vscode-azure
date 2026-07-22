@@ -12,6 +12,32 @@ dropped or replaced (hand-written ARM deploy, bespoke tree-item classes, vendore
 who understands the product direction can decide, per feature, between keep / change / drop. Getting this
 wrong wastes the most effort, so it is gated up front.
 
+## Feature granularity (what counts as one row)
+
+The inventory mixes granular rows (one command) with dense prose (activation wiring, integrations, wizard
+substeps). Normalize to **one row per independently-dispositionable feature** using this rule:
+
+- **One row per:** contributed command; setting; tree node **type** (each distinct `contextValue`, including
+  each status / `invalid*` variant, is its own row so its `when`-clause stays auditable); wizard **flow**
+  (a create/delete/config flow is one row; its notable prompt substeps are rows only if they can be
+  independently kept/dropped — e.g. a build-preset step); each distinct integration surface (a client, a
+  provider, a parser, an exported API); each debugger/task/problemMatcher; each orphan/dead key.
+- **Don't** split one command into separate rows for its handler, telemetry, and menu entry — that's one row.
+- **Don't** collapse several commands into one row to shorten the table.
+
+State your granularity choice at the top of the table so the count is reproducible. Two reasonable analysts
+should land within a few rows of each other.
+
+## Exported extension APIs (special case)
+
+Source extensions sometimes export an API object (e.g. a `RemoteRepoApi`) for other extensions to consume.
+These are **not** user features, so they need a deliberate call:
+
+1. Search the monorepo (and known sibling extensions) for a consumer of that API.
+2. **No consumer found ->** recommend **Drop** (note the search was done).
+3. **Consumer found ->** recommend **Defer** (or **Migrate**) and name the consumer + what contract it needs.
+4. Never silently port an exported API "in case someone needs it" — record the decision + evidence.
+
 ## Dispositions
 
 | Disposition | Meaning | Typical trigger |
@@ -27,7 +53,7 @@ wrong wastes the most effort, so it is gated up front.
 Use these to pre-fill the **recommended** column. They are defaults, not decisions.
 
 - **Deployment / provisioning / "create resource" commands** -> **Adapt** to azd+Bicep. Never recommend porting ARM-deploy code. See [does-not-map.md](does-not-map.md).
-- **App-settings / connection-strings features** -> **Reuse** the shared app-settings package (the inventory's contextValues like `applicationSettings.*<product>` are the tell).
+- **App-settings / connection-strings features** -> **Reuse** by mirroring the Functions app-settings precedent (no shared package yet; the inventory's contextValues like `applicationSettings.*<product>` are the tell). See [does-not-map.md](does-not-map.md) #5.
 - **Sign-in / account / subscription / tenant filtering** -> **Reuse** the existing auth + account providers.
 - **"Open in portal", "Copy resource ID", resource-group grouping** -> **Reuse** generic commands/providers already in the tree.
 - **Tree nodes** -> **Migrate** as `DataProvider` + `ViewProvider`, but the *construction* is Adapt-shaped (no per-node classes). Flag in [does-not-map.md](does-not-map.md).
