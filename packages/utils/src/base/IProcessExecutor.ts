@@ -3,40 +3,39 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    AccumulatorStream, ChildProcessError, getSafeExecPath,
-    isChildProcessError,
-    isCancellationError as isProcessUtilsCancellationError,
-    spawnStreamAsync,
-    type CancellationTokenLike, type CommandLineArgs
-} from '@microsoft/vscode-processutils';
 import type { ServiceIdentifier } from 'inversify';
-import { createInterface } from 'node:readline';
-import { PassThrough } from 'node:stream';
+import { SubprocessError, default as spawn, type Options as SpawnOptions, type Result as SpawnResult, type Subprocess } from 'nano-spawn';
 import type * as vscode from 'vscode';
-import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
-import type { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
-import { stringifyError } from './stringifyError';
+import { argToString, argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
+import { findOnPath, getSafeExecPath } from './getSafeExecPath';
+import { toAbortSignal } from './toAbortSignal';
 
-export {
-    ChildProcessError, isChildProcessError,
-    type CancellationTokenLike, type CommandLineArgs
-} from '@microsoft/vscode-processutils';
+export * from './CommandLineBuilder';
+export * from './getSafeExecPath';
+export { SubprocessError } from 'nano-spawn';
 
 /**
- * Signature matching {@linkcode spawnStreamAsync}. Exposed so tests can
- * inject a mock without replacing the module.
+ * Signature matching {@linkcode nano-spawn}'s default export. Exposed so tests
+ * can inject a mock subprocess factory without replacing the module.
  */
-export type SpawnFn = typeof spawnStreamAsync;
+export type SpawnFn = (command: string, args?: readonly string[], options?: SpawnOptions) => Subprocess;
 
 /**
  * Shared options for all process execution modes.
  */
 export interface ProcessExecutorOptions {
-    readonly command: string;
-    readonly args?: CommandLineArgs;
+    /**
+     * The full command line to run as an argument vector: the executable
+     * followed by its arguments. The first element is the executable.
+     *
+     * @remarks
+     * Build one fluently with {@linkcode command} (a {@linkcode CommandLineBuilder}
+     * is itself a valid value here) or pass a plain {@linkcode CommandLineArgs}
+     * array such as `['winget', 'install', 'microsoft.azd']`.
+     */
+    readonly command: CommandLineArgs;
     readonly cwd?: vscode.Uri;
     readonly env?: Readonly<Record<string, string>>;
     /**
@@ -113,9 +112,21 @@ export interface JsonProcessResult<T> extends ProcessResult {
 }
 
 /**
- * The caller is responsible for awaiting {@linkcode completed} or attaching
- * a `.catch()` handler. If the process fails and `completed` is never
- * awaited, the rejection will be unhandled.
+ * A streaming JSON-lines result: {@linkcode jsonLines} yields each stderr line
+ * parsed as JSON as the process emits it, and {@linkcode completed} resolves with
+ * the buffered stdout parsed as JSON once the process exits.
+ *
+ * @remarks
+ * stderr is streamed live, so it is not buffered: {@linkcode JsonProcessResult}'s
+ * `stderr` on {@linkcode completed} is always an empty string in this mode.
+ *
+ * The caller **must** drain {@linkcode jsonLines} (e.g. via `for await`) --
+ * because stderr buffering is disabled, an undrained stream can backpressure and
+ * stall a chatty child process.
+ *
+ * The caller is also responsible for awaiting {@linkcode completed} or attaching
+ * a `.catch()` handler. If the process fails and `completed` is never awaited,
+ * the rejection will be unhandled.
  */
 export interface JsonLinesProcessResult<TOut = unknown, TLines = unknown> {
     readonly jsonLines: AsyncGenerator<TLines>;
@@ -131,25 +142,27 @@ export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for(
  * The `execution` discriminant on the options object determines the execution
  * mode:
  *
- * - `'background'` -- runs via {@linkcode spawnStreamAsync} and captures
+ * - `'background'` -- runs via {@linkcode nano-spawn} and captures
  *   stdout/stderr. Supports optional JSON parsing and JSON-lines streaming.
  * - `'foreground'` -- runs as a {@linkcode vscode.Task Task} visible in the
  *   integrated terminal. Returns `Promise<void>` since task output is not
  *   capturable.
  *
- * On failure, background execution throws {@linkcode ChildProcessError}
- * enriched with captured stderr. Cancellation (via {@linkcode CancellationTokenLike})
- * throws {@linkcode CancellationError} in both modes.
+ * On failure, background execution throws {@linkcode nano-spawn}'s
+ * `SubprocessError` (with captured stderr appended to the message). Foreground
+ * failure throws a plain {@linkcode Error}. Cancellation -- via a
+ * {@linkcode vscode.CancellationToken CancellationToken} or an
+ * {@linkcode AbortSignal} -- throws {@linkcode CancellationError} in both modes.
  */
 export interface IProcessExecutor {
     /** Runs a process as a VS Code task. Resolves when the task exits with code 0. */
-    spawn(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void>;
+    spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
     /** Runs a background process, parses stdout as JSON, and streams stderr as newline-delimited JSON objects. */
-    spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonLinesProcessResult<TOut, TLines>>;
+    spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonLinesProcessResult<TOut, TLines>>;
     /** Runs a background process and parses stdout as JSON. */
-    spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonProcessResult<T>>;
+    spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonProcessResult<T>>;
     /** Runs a background process and captures raw stdout and stderr. */
-    spawn(options: BackgroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<ProcessResult>;
+    spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
 
     /**
      * Tests whether a command is available on the system `PATH`.
@@ -163,44 +176,42 @@ export interface IProcessExecutor {
  * Default implementation of {@linkcode IProcessExecutor}.
  *
  * @param code - The VS Code API surface for task execution.
- * @param spawnFn - Optional override for {@linkcode spawnStreamAsync}, primarily
- *   for injecting a mock in unit tests. Defaults to the real implementation.
+ * @param spawnFn - Optional override for {@linkcode nano-spawn}'s default export,
+ *   primarily for injecting a mock in unit tests. Defaults to the real
+ *   implementation.
  */
 export class ProcessExecutor implements IProcessExecutor {
     public constructor(
         private readonly code: IVsCode,
-        private readonly spawnFn: SpawnFn = spawnStreamAsync,
+        private readonly spawnFn: SpawnFn = spawn,
     ) { }
 
-    public async spawn(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void>;
-    public async spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonLinesProcessResult<TOut, TLines>>;
-    public async spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonProcessResult<T>>;
-    public async spawn(options: BackgroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<ProcessResult>;
+    public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
+    public async spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonLinesProcessResult<TOut, TLines>>;
+    public async spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonProcessResult<T>>;
+    public async spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
     public async spawn(
         options: ForegroundProcessOptions | BackgroundJsonLinesProcessOptions | BackgroundJsonProcessOptions | BackgroundProcessOptions,
-        cancellationToken?: CancellationTokenLike,
+        cancellation?: vscode.CancellationToken | AbortSignal,
     ): Promise<void | ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
         if (options.execution === 'foreground') {
-            return this.spawnForeground(options, cancellationToken);
+            return this.spawnForeground(options, cancellation);
         } else {
-            return this.spawnBackground(options, cancellationToken);
+            return this.spawnBackground(options, cancellation);
         }
     }
 
     /** @inheritdoc */
     public async isOnPath(command: string): Promise<boolean> {
-        try {
-            await which(command);
-            return true;
-        } catch {
-            return false;
-        }
+        return (await findOnPath(command)) !== undefined;
     }
 
-    private async spawnForeground(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void> {
+    private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
+        const { command, args } = await resolveCommandLine(options);
+
         const shellExecution = new this.code.ShellExecution(
-            getSafeExecPath(options.command),
-            options.args ?? [],
+            command,
+            args,
             { cwd: options.cwd?.fsPath, env: { ...options.env } },
         );
 
@@ -222,89 +233,106 @@ export class ProcessExecutor implements IProcessExecutor {
 
         const taskExecution = await this.code.tasks.executeTask(task);
 
-        return new Promise<void>((resolve, reject) => {
-            let ctDisposable: Disposable | undefined;
+        const { signal, disposable } = toAbortSignal(cancellation);
 
+        return new Promise<void>((resolve, reject) => {
             const endDisposable = this.code.tasks.onDidEndTaskProcess((e) => {
                 if (e.execution === taskExecution) {
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
+                    finish();
                     if (e.exitCode === 0) {
                         resolve();
                     } else {
-                        reject(new ChildProcessError(
-                            this.code.l10n.t(
-                                "'{0}' failed with exit code {1}. See the '{0}' terminal for the full output.",
-                                options.name,
-                                e.exitCode ?? -1,
-                            ),
+                        reject(new Error(this.code.l10n.t(
+                            "'{0}' failed with exit code {1}. See the '{0}' terminal for the full output.",
+                            options.name,
                             e.exitCode ?? -1,
-                            null,
-                        ));
+                        )));
                     }
                 }
             });
 
-            if (cancellationToken) {
-                ctDisposable = cancellationToken.onCancellationRequested(() => {
-                    taskExecution.terminate();
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
-                    reject(new CancellationError());
-                });
+            const onAbort = () => {
+                finish();
+                taskExecution.terminate();
+                reject(new CancellationError());
+            };
+
+            const finish = () => {
+                endDisposable.dispose();
+                signal?.removeEventListener('abort', onAbort);
+                disposable.dispose();
+            };
+
+            if (signal?.aborted) {
+                onAbort();
+            } else {
+                signal?.addEventListener('abort', onAbort, { once: true });
             }
         });
     }
 
     private async spawnBackground(
         options: BackgroundProcessOptions | BackgroundJsonProcessOptions | BackgroundJsonLinesProcessOptions,
-        cancellationToken?: CancellationTokenLike,
+        cancellation?: vscode.CancellationToken | AbortSignal,
     ): Promise<ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
-        const stdErrPassThrough = 'jsonLines' in options && options.jsonLines
-            ? new PassThrough()
-            : undefined;
-        const stdErrAccumulator = new AccumulatorStream();
+        const { command, args } = await resolveCommandLine(options);
 
-        stdErrPassThrough?.pipe(stdErrAccumulator);
+        const { signal, disposable } = toAbortSignal(cancellation);
 
-        const stdOutStream = new AccumulatorStream();
-        const stdErrStream = stdErrPassThrough ?? stdErrAccumulator;
-
-        const spawnPromise = this.spawnFn(options.command, options.args ?? [], {
+        // nano-spawn inherits `process.env` automatically and layers these
+        // overrides on top, so pass only the caller-provided variables.
+        const subprocess = this.spawnFn(command, argsToStrings(args), {
             cwd: options.cwd?.fsPath,
-            env: options.env ? { ...process.env, ...options.env } : undefined,
-            cancellationToken,
+            env: options.env,
             shell: options.shell,
-            stdOutPipe: stdOutStream,
-            stdErrPipe: stdErrStream,
+            signal,
         });
 
-        if (stdErrPassThrough) {
-            const completed = spawnPromise.then(async () => {
-                const stdout = await stdOutStream.getString();
-                const stderr = await stdErrAccumulator.getString();
-                const json: unknown = JSON.parse(stdout);
-                return { stdout, stderr, json };
-            }, async (e: unknown) => {
-                const stderr = await readStderrAfterFailure(e, stdErrAccumulator);
-                throw enrichError(e, stderr);
-            });
+        // JSON-lines mode streams stderr line-by-line. nano-spawn requires the
+        // stderr iteration to begin in the same tick the subprocess was created
+        // (and disables buffering once iterated), so prime the iterator
+        // synchronously here and hand the first pull to the parser.
+        if ('jsonLines' in options && options.jsonLines) {
+            const stderrIterator = subprocess.stderr[Symbol.asyncIterator]();
+            const firstPull = stderrIterator.next();
+
+            const completed = (async (): Promise<JsonProcessResult<unknown>> => {
+                try {
+                    const result = await subprocess;
+                    // stderr was streamed (buffering disabled), so it is not
+                    // captured on the completed result -- the caller consumes it
+                    // live via `jsonLines`.
+                    return { stdout: result.stdout, stderr: '', json: JSON.parse(result.stdout) as unknown };
+                } catch (e) {
+                    throw enrichError(e, subprocessStderr(e));
+                } finally {
+                    disposable.dispose();
+                }
+            })();
+
+            // Mark the rejection as handled so a caller that only drains
+            // `jsonLines` (and never awaits `completed`) doesn't trigger an
+            // unhandled-rejection warning when the process fails. The original
+            // `completed` promise is still returned, so awaiting it observes the
+            // rejection normally.
+            void completed.catch(() => undefined);
 
             return {
-                jsonLines: parseJsonLines(stdErrPassThrough),
+                jsonLines: parseJsonLines(stderrIterator, firstPull),
                 completed,
             };
         }
 
+        let result: SpawnResult;
         try {
-            await spawnPromise;
+            result = await subprocess;
         } catch (e) {
-            const stderr = await readStderrAfterFailure(e, stdErrAccumulator);
-            throw enrichError(e, stderr);
+            throw enrichError(e, subprocessStderr(e));
+        } finally {
+            disposable.dispose();
         }
 
-        const stdout = await stdOutStream.getString();
-        const stderr = await stdErrAccumulator.getString();
+        const { stdout, stderr } = result;
 
         if (options.parseJson) {
             const json: unknown = JSON.parse(stdout);
@@ -316,57 +344,129 @@ export class ProcessExecutor implements IProcessExecutor {
 }
 
 /**
- * Reads accumulated stderr after a background spawn has failed, without hanging.
+ * Splits an {@linkcode ProcessExecutorOptions.command argument vector} into the
+ * executable and its trailing arguments for execution.
  *
- * {@linkcode AccumulatorStream.getString} resolves only once the stream emits
- * `close`, which happens when the child process's piped stderr ends. When the
- * process exits (even non-zero), that pipe ends naturally, so the full stderr is
- * available. But when the process never starts (a spawn-time failure such as
- * `EINVAL`/`ENOENT`), nothing is ever piped in and the stream never ends, so a
- * naive `getString()` would wait forever. In that case there is no captured
- * output, so the stream is force-ended to unblock the read.
+ * The executable is resolved to a safe absolute path via
+ * {@linkcode getSafeExecPath} so that neither foreground nor background execution
+ * can be hijacked by a same-named binary in the current working directory on
+ * Windows. Under a shell, nano-spawn concatenates the command and arguments into
+ * a single unquoted string, so a resolved path containing a space would be
+ * mis-split; in that case the resolved path is wrapped in double quotes so the
+ * shell treats it as a single token. Quoting (rather than falling back to the
+ * bare command) keeps the cwd-hijack mitigation intact, since a bare command
+ * would let the shell search the cwd first on Windows. A resolved path never
+ * contains a double quote (Windows paths cannot, and on non-Windows the command
+ * is returned unresolved), so the wrapping is unambiguous.
  *
- * @param error - The rejection from the spawn promise.
- * @param stderr - The accumulator capturing the process's stderr.
- * @returns The captured stderr (empty for spawn-time failures).
+ * @throws {Error} When the vector is empty (no executable to run).
  */
-async function readStderrAfterFailure(error: unknown, stderr: AccumulatorStream): Promise<string> {
-    // A ChildProcessError means the process actually ran and exited, so its
-    // piped stderr stream will end on its own and getString() resolves with the
-    // full output. Any other failure means the process never started.
-    if (!isChildProcessError(error) && !stderr.writableEnded) {
-        stderr.end();
+async function resolveCommandLine(options: ProcessExecutorOptions): Promise<{ command: string; args: CommandLineArgs }> {
+    if (options.command.length === 0) {
+        throw new Error('A command line must include at least the executable as its first element.');
+    }
+    const [executable, ...args] = options.command;
+    const command = argToString(executable);
+
+    const safePath = await getSafeExecPath(command);
+
+    // A shell space-joins the command and arguments without quoting, so a
+    // resolved path containing a space would be mis-split. Quote it so the shell
+    // treats it as a single token, preserving the cwd-hijack mitigation instead
+    // of reverting to a bare command the shell would resolve against the cwd.
+    if (options.shell && safePath.includes(' ')) {
+        return { command: `"${safePath}"`, args };
     }
 
-    return stderr.getString();
+    return { command: safePath, args };
 }
 
+/** Extracts captured stderr from a spawn failure, if any. */
+function subprocessStderr(e: unknown): string {
+    return e instanceof SubprocessError && typeof e.stderr === 'string' ? e.stderr : '';
+}
+
+/**
+ * Maps a background spawn failure onto the errors callers expect.
+ *
+ * @param e - The rejection from the subprocess.
+ * @param stderr - Captured stderr appended to the message when the process ran.
+ * @returns
+ * - {@linkcode CancellationError} when the subprocess was aborted via its signal.
+ * - The {@linkcode nano-spawn} `SubprocessError` (with captured stderr appended
+ *   to its `message`) when the process ran and exited non-zero or was terminated
+ *   by a signal.
+ * - The original spawn-time error (e.g. `ENOENT`) when the process never
+ *   started, so callers can still inspect its `code`.
+ * - The error unchanged for anything else.
+ */
 function enrichError(e: unknown, stderr: string): unknown {
-    if (isProcessUtilsCancellationError(e)) {
+    if (e instanceof SubprocessError && e.isCanceled) {
         return new CancellationError();
-    } else if (isChildProcessError(e)) {
-        const msg = stderr.trim() || stringifyError(e);
-        const enriched = new ChildProcessError(msg, e.code, e.signal);
-        enriched.cause = e;
-        return enriched;
     }
+
+    if (e instanceof SubprocessError) {
+        const hasExitCode = typeof e.exitCode === 'number';
+        const hasSignal = typeof e.signalName === 'string';
+
+        // No exit code and no signal means the process never started (e.g.
+        // ENOENT/EINVAL). Surface the underlying error so its `code` survives.
+        if (!hasExitCode && !hasSignal) {
+            return (e as { cause?: unknown }).cause ?? e;
+        }
+
+        // Append captured stderr (the tool's actual error text) to nano-spawn's
+        // generic "exit code" message.
+        const trimmed = stderr.trim();
+        if (trimmed) {
+            e.message = `${e.message}\n${trimmed}`;
+        }
+        return e;
+    }
+
     return e;
 }
 
-async function* parseJsonLines(input: NodeJS.ReadableStream): AsyncGenerator {
-    const rl = createInterface({ input });
-    try {
-        for await (const line of rl) {
-            const trimmed = line.trim();
-            if (trimmed.length > 0) {
-                try {
-                    yield JSON.parse(trimmed);
-                } catch {
-                    // Not valid JSON -- skip the line
-                }
+/**
+ * Parses newline-delimited JSON from a live stderr line iterator, skipping blank
+ * and non-JSON lines.
+ *
+ * @remarks
+ * nano-spawn requires its `stderr` iterable to be consumed in the same tick the
+ * subprocess is created. The caller primes the iterator with a synchronous first
+ * {@linkcode AsyncIterator.next next} call and passes that pending result in as
+ * {@linkcode firstPull} so this generator can be driven lazily afterwards. A pull
+ * that rejects (the subprocess failed) simply ends the stream -- the failure is
+ * surfaced by awaiting the subprocess in `completed`.
+ */
+async function* parseJsonLines(
+    iterator: AsyncIterator<string>,
+    firstPull: Promise<IteratorResult<string>>,
+): AsyncGenerator {
+    let pull = firstPull;
+    for (; ;) {
+        let result: IteratorResult<string>;
+
+        try {
+            result = await pull;
+        } catch {
+            // The failure is surfaced by awaiting the subprocess in `completed`.
+            return;
+        }
+
+        if (result.done) {
+            return;
+        }
+
+        const trimmed = result.value.trim();
+        if (trimmed.length > 0) {
+            try {
+                yield JSON.parse(trimmed);
+            } catch {
+                // Not valid JSON -- skip the line
             }
         }
-    } finally {
-        rl.close();
+
+        pull = iterator.next();
     }
 }

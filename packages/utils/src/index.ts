@@ -9,8 +9,9 @@ export * from './base/IActionContext';
 export * from './base/IActionExecutor';
 export * from './base/ICommandRegistry';
 export * from './base/IProcessExecutor';
-export { createTelemetryReporter, ITelemetryReporter } from './base/ITelemetryReporter'; // Excluding `NullTelemetryReporter` since it's only intended for testing
+export { ITelemetryReporter, createTelemetryReporter } from './base/ITelemetryReporter'; // Excluding `NullTelemetryReporter` since it's only intended for testing
 export * from './base/stringifyError';
+export * from './base/toAbortSignal';
 export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './data/Page';
@@ -32,7 +33,7 @@ export * from './vscode/CancellationError';
 export * from './vscode/Disposable';
 export * from './vscode/EventEmitter';
 export * from './vscode/fsHelpers';
-export { createOutputChannel, IOutputChannel } from './vscode/IOutputChannel'; // Excluding `DebugOutputChannel` since it's only intended for testing
+export { IOutputChannel, createOutputChannel } from './vscode/IOutputChannel'; // Excluding `DebugOutputChannel` since it's only intended for testing
 export * from './vscode/IVsCode';
 export * from './vscode/ProviderResult';
 export * from './wizard/ExecuteStep';

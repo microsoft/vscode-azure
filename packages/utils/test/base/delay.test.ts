@@ -20,7 +20,7 @@ describe('delay (unit)', () => {
         controller.abort();
 
         try {
-            await delay(5000, { signal: controller.signal });
+            await delay(5000, controller.signal);
             expect.fail('Expected CancellationError');
         } catch (e) {
             expect(CancellationError.test(e)).to.be.true;
@@ -30,7 +30,7 @@ describe('delay (unit)', () => {
     it('should reject with CancellationError when AbortSignal fires during delay', async () => {
         const controller = new AbortController();
 
-        const promise = delay(5000, { signal: controller.signal });
+        const promise = delay(5000, controller.signal);
         setTimeout(() => { controller.abort(); }, 30);
 
         try {
@@ -48,7 +48,7 @@ describe('delay (unit)', () => {
         };
 
         try {
-            await delay(5000, { cancellationToken: token });
+            await delay(5000, token);
             expect.fail('Expected CancellationError');
         } catch (e) {
             expect(CancellationError.test(e)).to.be.true;
@@ -62,7 +62,7 @@ describe('delay (unit)', () => {
             onCancellationRequested: emitter.event,
         };
 
-        const promise = delay(5000, { cancellationToken: token });
+        const promise = delay(5000, token);
         setTimeout(() => { emitter.fire(); }, 30);
 
         try {

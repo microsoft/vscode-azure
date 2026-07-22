@@ -3,32 +3,23 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { CancellationTokenLike } from '@microsoft/vscode-processutils';
+import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
-
-/**
- * Options for {@linkcode delay}.
- */
-export interface DelayOptions {
-    /** An {@linkcode AbortSignal} that causes the delay to reject with {@linkcode CancellationError}. */
-    readonly signal?: AbortSignal;
-    /** A VS Code {@linkcode CancellationTokenLike} that causes the delay to reject with {@linkcode CancellationError}. */
-    readonly cancellationToken?: CancellationTokenLike;
-}
+import { toAbortSignal } from './toAbortSignal';
 
 /**
  * Returns a promise that resolves after {@linkcode ms} milliseconds.
  *
- * If the optional {@linkcode DelayOptions.signal signal} or
- * {@linkcode DelayOptions.cancellationToken cancellationToken} fires
- * (or has already fired), the promise rejects with
- * {@linkcode CancellationError}.
+ * If the optional {@linkcode cancellation} source (either a
+ * {@linkcode vscode.CancellationToken CancellationToken} or an
+ * {@linkcode AbortSignal}) fires -- or has already fired -- the promise
+ * rejects with {@linkcode CancellationError}.
  */
-export function delay(ms: number, options?: DelayOptions): Promise<void> {
-    const signal = options?.signal;
-    const token = options?.cancellationToken;
+export function delay(ms: number, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
+    const { signal, disposable } = toAbortSignal(cancellation);
 
-    if (signal?.aborted || token?.isCancellationRequested) {
+    if (signal?.aborted) {
+        disposable.dispose();
         return Promise.reject(new CancellationError());
     }
 
@@ -36,7 +27,7 @@ export function delay(ms: number, options?: DelayOptions): Promise<void> {
         const cleanup = () => {
             clearTimeout(timer);
             signal?.removeEventListener('abort', onCancel);
-            ctDisposable?.dispose();
+            disposable.dispose();
         };
 
         const onCancel = () => {
@@ -50,6 +41,5 @@ export function delay(ms: number, options?: DelayOptions): Promise<void> {
         }, ms);
 
         signal?.addEventListener('abort', onCancel, { once: true });
-        const ctDisposable = token?.onCancellationRequested(onCancel);
     });
 }

@@ -4,41 +4,91 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
+import { type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
-import { ChildProcessError, ProcessExecutor, isChildProcessError, type SpawnFn } from '../../src/base/IProcessExecutor';
+import { ProcessExecutor, type SpawnFn } from '../../src/base/IProcessExecutor';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
+/** Builds a nano-spawn {@linkcode SpawnResult} with the fields the executor reads. */
+function makeResult(command: string, stdout: string, stderr: string): SpawnResult {
+    return {
+        stdout,
+        stderr,
+        output: [stdout, stderr].filter(Boolean).join('\n'),
+        command,
+        durationMs: 0,
+    };
+}
+
+/** Wraps a list of lines as an async iterable, mimicking nano-spawn's line streams. */
+function asyncLines(lines: readonly string[]): AsyncIterable<string> {
+    return {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async *[Symbol.asyncIterator](): AsyncGenerator<string> {
+            for (const line of lines) {
+                yield line;
+            }
+        },
+    };
+}
+
 /**
- * Creates a mock {@linkcode SpawnFn} that writes preset data to the
- * stdout/stderr pipes and resolves (or rejects) on demand.
+ * Builds a real nano-spawn {@linkcode SubprocessError}, matching how nano-spawn
+ * assembles it at runtime: the class body only sets `name`, and the remaining
+ * fields are assigned onto the instance.
+ */
+function makeSubprocessError(opts: {
+    message?: string;
+    exitCode?: number;
+    signalName?: string;
+    isCanceled?: boolean;
+    stderr?: string;
+    cause?: unknown;
+}): SubprocessError {
+    const e = new SubprocessError(opts.message ?? 'Command failed');
+    Object.assign(e, {
+        exitCode: opts.exitCode,
+        signalName: opts.signalName,
+        isCanceled: opts.isCanceled ?? false,
+        stderr: opts.stderr ?? '',
+    });
+    if (opts.cause !== undefined) {
+        (e as { cause?: unknown }).cause = opts.cause;
+    }
+    return e;
+}
+
+/**
+ * Creates a mock {@linkcode SpawnFn} returning a nano-spawn `Subprocess` fake: a
+ * thenable that resolves to a {@linkcode SpawnResult} (or rejects with the given
+ * error), plus `.stdout`/`.stderr` line iterables for JSON-lines mode.
  */
 function createMockSpawn(options?: {
     stdout?: string;
     stderr?: string;
-    exitCode?: number;
-}): SpawnFn {
-    const { stdout = '', stderr = '', exitCode = 0 } = options ?? {};
-    const fn: SpawnFn = mock.fn(
-        (_cmd: string, _args: unknown[], opts: { stdOutPipe?: NodeJS.WritableStream; stdErrPipe?: NodeJS.WritableStream }) => {
-            return new Promise<void>((resolve, reject) => {
-                opts.stdOutPipe?.write(stdout);
-                opts.stdOutPipe?.end();
-                opts.stdErrPipe?.write(stderr);
-                opts.stdErrPipe?.end(() => {
-                    if (exitCode !== 0) {
-                        reject(new ChildProcessError(`Process exited with code ${exitCode}`, exitCode, null));
-                    } else {
-                        resolve();
-                    }
-                });
-            });
-        },
-    );
-    return fn;
+    stderrLines?: readonly string[];
+    error?: Error;
+}): Mock<SpawnFn> {
+    const { stdout = '', stderr = '', stderrLines, error } = options ?? {};
+    return mock.fn<SpawnFn>((command: string): Subprocess => {
+        const promise = error
+            ? Promise.reject(error)
+            : Promise.resolve(makeResult(command, stdout, stderr));
+        // Prevent an unhandled-rejection warning; the executor still awaits it.
+        void promise.catch(() => { /* handled by the executor */ });
+
+        const subprocess = promise as unknown as Subprocess;
+        void Object.defineProperties(subprocess, {
+            stdout: { value: asyncLines(stdout ? stdout.split('\n') : []) },
+            stderr: { value: asyncLines(stderrLines ?? (stderr ? stderr.split('\n') : [])) },
+        });
+        return subprocess;
+    });
 }
 
 describe('ProcessExecutor (unit)', () => {
@@ -50,8 +100,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const result = await executor.spawn({
                 execution: 'background',
-                command: 'test-cmd',
-                args: ['arg1'],
+                command: ['test-cmd', 'arg1'],
             });
 
             expect(result.stdout).to.equal('out');
@@ -65,7 +114,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const result = await executor.spawn<{ key: string }>({
                 execution: 'background',
-                command: 'test-cmd',
+                command: ['test-cmd'],
                 parseJson: true,
             });
 
@@ -73,39 +122,51 @@ describe('ProcessExecutor (unit)', () => {
             expect(result.stdout).to.equal('{"key":"value"}');
         });
 
-        it('should throw ChildProcessError on non-zero exit code', async () => {
+        it('should throw SubprocessError on non-zero exit code', async () => {
             const { vscode: code } = createMockVsCode();
-            const spawnFn = createMockSpawn({ stderr: 'failure reason', exitCode: 1 });
+            const spawnFn = createMockSpawn({ error: makeSubprocessError({ exitCode: 1, stderr: 'failure reason' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
             try {
                 await executor.spawn({
                     execution: 'background',
-                    command: 'test-cmd',
+                    command: ['test-cmd'],
                 });
                 expect.fail('Expected error');
             } catch (e) {
-                expect(isChildProcessError(e)).to.be.true;
-                expect((e as Error).message).to.equal('failure reason');
+                expect(e).to.be.instanceOf(SubprocessError);
+                expect((e as Error).message).to.include('failure reason');
+                expect((e as SubprocessError).exitCode).to.equal(1);
             }
         });
 
-        it('should convert CancellationError from processutils', async () => {
+        it('should throw SubprocessError when terminated by a signal', async () => {
             const { vscode: code } = createMockVsCode();
-            const { CancellationError: ProcessCancelError } = await import('@microsoft/vscode-processutils');
-            const spawnFn = mock.fn(
-                (_cmd: string, _args: unknown[], opts: { stdOutPipe?: NodeJS.WritableStream; stdErrPipe?: NodeJS.WritableStream }) => {
-                    opts.stdOutPipe?.end();
-                    opts.stdErrPipe?.end();
-                    return Promise.reject(new ProcessCancelError('cancelled'));
-                },
-            ) as unknown as SpawnFn;
+            const spawnFn = createMockSpawn({ error: makeSubprocessError({ signalName: 'SIGTERM', stderr: 'killed' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
             try {
                 await executor.spawn({
                     execution: 'background',
-                    command: 'test-cmd',
+                    command: ['test-cmd'],
+                });
+                expect.fail('Expected error');
+            } catch (e) {
+                expect(e).to.be.instanceOf(SubprocessError);
+                expect((e as Error).message).to.include('killed');
+                expect((e as SubprocessError).signalName).to.equal('SIGTERM');
+            }
+        });
+
+        it('should throw CancellationError when the subprocess reports isCanceled', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ error: makeSubprocessError({ isCanceled: true }) });
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            try {
+                await executor.spawn({
+                    execution: 'background',
+                    command: ['test-cmd'],
                 });
                 expect.fail('Expected error');
             } catch (e) {
@@ -113,27 +174,38 @@ describe('ProcessExecutor (unit)', () => {
             }
         });
 
-        it('should reject promptly when the process fails to spawn (no pipe end)', async () => {
-            // Mirrors a spawn-time failure (e.g. EINVAL/ENOENT on Windows): the
-            // process never starts, so the stdout/stderr pipes are never ended.
-            // Reading captured stderr must not wait forever on a stream that
-            // never emits 'close'.
+        it('should preserve the ENOENT code from a spawn-time failure', async () => {
+            // A start failure (no exitCode, no signal) surfaces the underlying
+            // cause so callers (e.g. AzdService) can still inspect `.code`.
             const { vscode: code } = createMockVsCode();
-            const spawnFn = mock.fn(
-                (_cmd: string, _args: unknown[], _opts: { stdOutPipe?: NodeJS.WritableStream; stdErrPipe?: NodeJS.WritableStream }) => {
-                    // Intentionally do not end the pipes, just like a failed spawn.
-                    return Promise.reject(new Error('spawn test-cmd EINVAL'));
-                },
-            ) as unknown as SpawnFn;
+            const cause = Object.assign(new Error('spawn test-cmd ENOENT'), { code: 'ENOENT' });
+            const spawnFn = createMockSpawn({ error: makeSubprocessError({ message: 'Command failed', cause }) });
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            try {
+                await executor.spawn({
+                    execution: 'background',
+                    command: ['test-cmd'],
+                });
+                expect.fail('Expected error');
+            } catch (e) {
+                expect(e).to.not.be.instanceOf(SubprocessError);
+                expect((e as { code?: string }).code).to.equal('ENOENT');
+            }
+        });
+
+        it('should reject promptly when the process fails to spawn', async () => {
+            // Mirrors a spawn-time failure (e.g. EINVAL/ENOENT): the process
+            // never starts. The rejection must settle promptly, not hang.
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ error: makeSubprocessError({ message: 'spawn test-cmd EINVAL' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
             const spawnResult = executor.spawn({
                 execution: 'background',
-                command: 'test-cmd',
+                command: ['test-cmd'],
             });
 
-            // Without the fix this never settles; race against a short delay so
-            // a regression fails fast instead of hanging the suite.
             const timedOut = Symbol('timed-out');
             const outcome = await Promise.race([
                 spawnResult.then(() => undefined, (e: unknown) => e),
@@ -144,27 +216,48 @@ describe('ProcessExecutor (unit)', () => {
             expect((outcome as Error).message).to.include('EINVAL');
         });
 
+        it('should pass the command and args from a CommandLineBuilder', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ stdout: 'ok' });
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            await executor.spawn({
+                execution: 'background',
+                command: command('test-cmd').arg('sub').namedArg('--name', 'value').flagArg('--force'),
+            });
+
+            expect(spawnFn.mock.callCount()).to.equal(1);
+            const [cmd, args] = spawnFn.mock.calls[0].arguments;
+            expect(cmd).to.equal('test-cmd');
+            expect(args).to.deep.equal(['sub', '--name', 'value', '--force']);
+        });
+
+        it('should forward the shell option to nano-spawn', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ stdout: 'ok' });
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            await executor.spawn({
+                execution: 'background',
+                command: ['az', 'account', 'show'],
+                shell: true,
+            });
+
+            const options = spawnFn.mock.calls[0].arguments[2]!;
+            expect(options.shell).to.equal(true);
+        });
+
         it('should stream JSON lines from stderr', async () => {
             const { vscode: code } = createMockVsCode();
-            const stderrData = '{"step":1}\n{"step":2}\n';
-            // Use a mock that defers stream writes so readline can attach
-            const spawnFn = mock.fn(
-                (_cmd: string, _args: unknown[], opts: { stdOutPipe?: NodeJS.WritableStream; stdErrPipe?: NodeJS.WritableStream }) => {
-                    opts.stdOutPipe?.write('{"done":true}');
-                    opts.stdOutPipe?.end();
-                    return new Promise<void>((resolve) => {
-                        setTimeout(() => {
-                            opts.stdErrPipe?.write(stderrData);
-                            opts.stdErrPipe?.end(resolve);
-                        }, 0);
-                    });
-                },
-            ) as unknown as SpawnFn;
+            const spawnFn = createMockSpawn({
+                stdout: '{"done":true}',
+                stderrLines: ['{"step":1}', '{"step":2}'],
+            });
             const executor = new ProcessExecutor(code, spawnFn);
 
             const result = await executor.spawn<{ done: boolean }>({
                 execution: 'background',
-                command: 'test-cmd',
+                command: ['test-cmd'],
                 parseJson: true,
                 jsonLines: true,
             });
@@ -178,29 +271,21 @@ describe('ProcessExecutor (unit)', () => {
 
             const completed = await result.completed;
             expect(completed.json).to.deep.equal({ done: true });
-            expect(completed.stderr).to.include('step');
+            // stderr is streamed live in jsonLines mode, so it is not buffered.
+            expect(completed.stderr).to.equal('');
         });
 
         it('should skip non-JSON lines in JSON lines mode', async () => {
             const { vscode: code } = createMockVsCode();
-            const stderrData = 'not json\n{"valid":true}\nalso not json\n';
-            const spawnFn = mock.fn(
-                (_cmd: string, _args: unknown[], opts: { stdOutPipe?: NodeJS.WritableStream; stdErrPipe?: NodeJS.WritableStream }) => {
-                    opts.stdOutPipe?.write('{}');
-                    opts.stdOutPipe?.end();
-                    return new Promise<void>((resolve) => {
-                        setTimeout(() => {
-                            opts.stdErrPipe?.write(stderrData);
-                            opts.stdErrPipe?.end(resolve);
-                        }, 0);
-                    });
-                },
-            ) as unknown as SpawnFn;
+            const spawnFn = createMockSpawn({
+                stdout: '{}',
+                stderrLines: ['not json', '{"valid":true}', 'also not json'],
+            });
             const executor = new ProcessExecutor(code, spawnFn);
 
             const result = await executor.spawn({
                 execution: 'background',
-                command: 'test-cmd',
+                command: ['test-cmd'],
                 parseJson: true,
                 jsonLines: true,
             });
@@ -228,8 +313,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
-                args: ['--version'],
+                command: [process.execPath, '--version'],
                 name: 'Test Task',
             });
 
@@ -243,13 +327,13 @@ describe('ProcessExecutor (unit)', () => {
             await promise;
         });
 
-        it('should reject with ChildProcessError on non-zero exit code', async () => {
+        it('should reject with an Error on non-zero exit code', async () => {
             const m = createMockVsCode();
             const executor = new ProcessExecutor(m.vscode);
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Failing Task',
             });
 
@@ -264,7 +348,7 @@ describe('ProcessExecutor (unit)', () => {
                 await promise;
                 expect.fail('Expected error');
             } catch (e) {
-                expect(isChildProcessError(e)).to.be.true;
+                expect(e).to.be.instanceOf(Error);
                 expect((e as Error).message).to.include('42');
                 expect((e as Error).message).to.include('Failing Task');
             }
@@ -282,7 +366,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Cancelable Task',
             }, token);
 
@@ -309,7 +393,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'My Task',
             });
 
@@ -331,7 +415,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Fancy Task',
                 alwaysRunNew: true,
                 focus: true,
@@ -358,7 +442,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Scoped Task',
                 workspaceFolder: folder,
             });
@@ -379,7 +463,7 @@ describe('ProcessExecutor (unit)', () => {
 
             const promise = executor.spawn({
                 execution: 'foreground',
-                command: process.execPath,
+                command: [process.execPath],
                 name: 'Default Task',
             });
 
@@ -408,14 +492,22 @@ describe('ProcessExecutor (integration)', () => {
     // Node process without depending on shell quoting. The snippet is passed
     // through an environment variable and evaluated with
     // `eval(process.env.NODE_EVAL_SOURCE)`, keeping the command line free of
-    // the spaces and double quotes that Windows mangles under
-    // `windowsVerbatimArguments` (which spawnStreamAsync enables when no shell
-    // is used). Spread the result into the `spawn` options object.
-    function evalNode(source: string): { command: string; args: string[]; env: Record<string, string> } {
+    // spaces and double quotes. Spread the result into the `spawn` options object.
+    function evalNode(source: string): { command: CommandLineArgs; env: Record<string, string> } {
         return {
-            command: process.execPath,
-            args: ['-e', 'eval(process.env.NODE_EVAL_SOURCE)'],
+            command: [process.execPath, '-e', 'eval(process.env.NODE_EVAL_SOURCE)'],
             env: { ...env, NODE_EVAL_SOURCE: source }, // eslint-disable-line @typescript-eslint/naming-convention
+        };
+    }
+
+    // Builds spawn options for a child that echoes its own argument vector
+    // (everything after the executable and the `-e` script) back as JSON on
+    // stdout. Used to assert that arguments survive the round-trip to the OS
+    // verbatim, without any shell interpretation or quoting corruption.
+    function argvEcho(args: readonly string[]): { command: CommandLineArgs; env: Record<string, string> } {
+        return {
+            command: [process.execPath, '-e', 'process.stdout.write(JSON.stringify(process.argv.slice(1)))', ...args],
+            env,
         };
     }
 
@@ -447,7 +539,7 @@ describe('ProcessExecutor (integration)', () => {
             expect(result.stdout).to.equal('{"key":"value"}');
         });
 
-        it('should throw ChildProcessError on non-zero exit code', async () => {
+        it('should throw SubprocessError on non-zero exit code', async () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
@@ -458,8 +550,8 @@ describe('ProcessExecutor (integration)', () => {
                 });
                 expect.fail('Expected error');
             } catch (e) {
-                expect(isChildProcessError(e)).to.be.true;
-                expect((e as Error).message).to.equal('failure reason');
+                expect(e).to.be.instanceOf(SubprocessError);
+                expect((e as Error).message).to.include('failure reason');
             }
         });
 
@@ -516,7 +608,8 @@ describe('ProcessExecutor (integration)', () => {
 
             const completed = await result.completed;
             expect(completed.json).to.deep.equal({ done: true });
-            expect(completed.stderr).to.include('step');
+            // stderr is streamed live in jsonLines mode, so it is not buffered.
+            expect(completed.stderr).to.equal('');
         });
 
         it('should skip non-JSON lines in JSON lines mode', async () => {
@@ -543,6 +636,139 @@ describe('ProcessExecutor (integration)', () => {
             }
 
             expect(lines).to.deep.equal([{ valid: true }]);
+        });
+    });
+
+    describe('hard cases', () => {
+        it('should pass arguments verbatim without shell interpretation or quoting corruption', async () => {
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            // A grab-bag of arguments that shells (or naive quoting) would
+            // mangle: spaces, embedded quotes, backslashes (including a
+            // trailing one -- the classic Windows CommandLineToArgvW pitfall),
+            // shell metacharacters, and variable-expansion syntax that must
+            // NOT be expanded since no shell is involved.
+            const args = [
+                'plain',
+                'with spaces',
+                'embedded"double"quotes',
+                "embedded'single'quotes",
+                'back\\slash',
+                'trailing\\',
+                'meta&|;<>^()chars',
+                '%PATH%', // must stay literal (no cmd.exe expansion)
+                '$HOME', // must stay literal (no POSIX shell expansion)
+                'tab\tinside',
+                'a=b',
+            ];
+
+            const result = await executor.spawn({
+                execution: 'background',
+                ...argvEcho(args),
+            });
+
+            expect(JSON.parse(result.stdout)).to.deep.equal(args);
+        });
+
+        it('should capture large stdout without truncation or deadlock', async function () {
+            this.timeout(20000);
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            // 5 MB is far beyond a typical ~64 KB OS pipe buffer, so the child
+            // will block on write() unless the executor drains stdout
+            // concurrently. A regression here manifests as a hang (timeout).
+            const size = 5 * 1024 * 1024;
+            const result = await executor.spawn({
+                execution: 'background',
+                ...evalNode(`process.stdout.write('x'.repeat(${size}));`),
+            });
+
+            expect(result.stdout.length).to.equal(size);
+        });
+
+        it('should stream a large number of JSON lines from stderr in order', async function () {
+            this.timeout(20000);
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            const count = 2000;
+            const source = [
+                `for (let i = 0; i < ${count}; i++) {`,
+                `    process.stderr.write(JSON.stringify({ i }) + '\\n');`,
+                `}`,
+                `process.stdout.write(JSON.stringify({ done: true }));`,
+            ].join('\n');
+
+            const result = await executor.spawn<{ done: boolean }>({
+                execution: 'background',
+                ...evalNode(source),
+                parseJson: true,
+                jsonLines: true,
+            });
+
+            const seen: number[] = [];
+            for await (const line of result.jsonLines) {
+                seen.push((line as { i: number }).i);
+            }
+
+            expect(seen.length).to.equal(count);
+            // Strict ordering: line N carries { i: N }.
+            expect(seen.every((value, index) => value === index)).to.be.true;
+
+            const completed = await result.completed;
+            expect(completed.json).to.deep.equal({ done: true });
+            expect(completed.stderr).to.equal('');
+        });
+
+        it('should reject completed with CancellationError when cancelled mid-stream', async () => {
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            const emitter = new EventEmitter<void>();
+            const token = {
+                isCancellationRequested: false,
+                onCancellationRequested: emitter.event,
+            };
+
+            // Emit one line, then hang so the process stays alive until the
+            // cancellation tears it down.
+            const source = [
+                `process.stderr.write(JSON.stringify({ step: 1 }) + '\\n');`,
+                `setTimeout(() => {}, 30000);`,
+            ].join('\n');
+
+            const result = await executor.spawn({
+                execution: 'background',
+                ...evalNode(source),
+                parseJson: true,
+                jsonLines: true,
+            }, token);
+
+            // Drain concurrently. The line iterator ends (rather than hanging)
+            // once the process is killed, so this settles after cancellation.
+            const drained = (async () => {
+                const out: unknown[] = [];
+                for await (const line of result.jsonLines) {
+                    out.push(line);
+                }
+                return out;
+            })();
+
+            await delay(100);
+            token.isCancellationRequested = true;
+            emitter.fire();
+
+            try {
+                await result.completed;
+                expect.fail('Expected cancellation');
+            } catch (e) {
+                expect(CancellationError.test(e)).to.be.true;
+            }
+
+            // Must not hang: the live stream terminates when the child dies.
+            await drained;
         });
     });
 

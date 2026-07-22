@@ -86,7 +86,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         try {
             while (!signal.aborted) {
                 await this.readAndTrack(fileUri, trackedIds, tenantId, accountId);
-                await delay(pollIntervalMs, { signal });
+                await delay(pollIntervalMs, signal);
             }
         } catch (e) {
             if (!CancellationError.test(e)) {
