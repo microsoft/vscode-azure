@@ -412,15 +412,25 @@ export class AzdService implements IAzdService {
 
     /**
      * Wraps errors from `azd` commands with actionable messages.
-     * - ENOENT -> azd not installed
-     * - Other errors -> checks the installed version and reports if
-     *   it is below {@linkcode MinAzdVersion}
+     * - azd not installed (a raw `ENOENT`, or -- on Windows, where nano-spawn's
+     *   forced shell turns a missing command into a generic non-zero exit rather
+     *   than `ENOENT` -- a `checkVersion` probe that cannot produce a version)
+     *   -> "not found"
+     * - Installed but below {@linkcode MinAzdVersion} -> "version required"
      *
      * Shows a toast with an "Install" button and suppresses the
      * default error dialog when the error is actionable.
      */
     private async wrapAzdError(e: unknown): Promise<unknown> {
-        if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+        // A raw ENOENT is already conclusive, so skip the extra version probe.
+        // Otherwise let `checkVersion` decide: it returns `undefined` when it
+        // cannot run azd at all (effectively not installed), `false` when azd is
+        // present but too old, and `true` when azd is usable.
+        const meetsMin = (e as NodeJS.ErrnoException).code === 'ENOENT'
+            ? undefined
+            : await this.checkVersion();
+
+        if (meetsMin === undefined) {
             const message = this.code.l10n.t(
                 'Azure Developer CLI (azd) was not found. Install it and ensure it is available on your PATH.',
             );
@@ -428,8 +438,7 @@ export class AzdService implements IAzdService {
             return new Error(message, { cause: e });
         }
 
-        const meetsMin = await this.checkVersion();
-        if (meetsMin === false) {
+        if (!meetsMin) {
             const message = this.code.l10n.t(
                 'Azure Developer CLI (azd) version {0} or later is required.',
                 MinAzdVersion,

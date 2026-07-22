@@ -213,7 +213,7 @@ export class ProcessExecutor implements IProcessExecutor {
     }
 
     private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
-        const { command, args } = resolveCommandLine(options);
+        const { command, args } = await resolveCommandLine(options);
 
         const shellExecution = new this.code.ShellExecution(
             command,
@@ -281,7 +281,7 @@ export class ProcessExecutor implements IProcessExecutor {
         options: BackgroundProcessOptions | BackgroundJsonProcessOptions | BackgroundJsonLinesProcessOptions,
         cancellation?: vscode.CancellationToken | AbortSignal,
     ): Promise<ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
-        const { command, args } = resolveCommandLine(options);
+        const { command, args } = await resolveCommandLine(options);
 
         const { signal, disposable } = toAbortSignal(cancellation);
 
@@ -344,19 +344,32 @@ export class ProcessExecutor implements IProcessExecutor {
 
 /**
  * Splits an {@linkcode ProcessExecutorOptions.command argument vector} into the
- * executable and its trailing arguments for execution, resolving the executable
- * to a safe path via {@linkcode getSafeExecPath} so that neither foreground nor
- * background execution can be hijacked by a same-named binary in the current
- * working directory on Windows.
+ * executable and its trailing arguments for execution.
+ *
+ * When {@linkcode ProcessExecutorOptions.shell shell} is not set, the executable
+ * is resolved to a safe absolute path via {@linkcode getSafeExecPath} so that
+ * neither foreground nor background execution can be hijacked by a same-named
+ * binary in the current working directory on Windows. Under a shell, nano-spawn
+ * concatenates the command and arguments into a single unquoted string, so an
+ * absolute path containing spaces would break; the (caller-trusted) bare command
+ * is left untouched and the shell resolves it.
  *
  * @throws {Error} When the vector is empty (no executable to run).
  */
-function resolveCommandLine(options: ProcessExecutorOptions): { command: string; args: CommandLineArgs } {
+async function resolveCommandLine(options: ProcessExecutorOptions): Promise<{ command: string; args: CommandLineArgs }> {
     if (options.command.length === 0) {
         throw new Error('A command line must include at least the executable as its first element.');
     }
     const [executable, ...args] = options.command;
-    return { command: getSafeExecPath(argToString(executable)), args };
+    const command = argToString(executable);
+
+    // The cwd-hijack mitigation resolves to an absolute path, which a shell would
+    // then mis-split on spaces; skip it and let the shell resolve the command.
+    if (options.shell) {
+        return { command, args };
+    }
+
+    return { command: await getSafeExecPath(command), args };
 }
 
 /** Extracts captured stderr from a spawn failure, if any. */

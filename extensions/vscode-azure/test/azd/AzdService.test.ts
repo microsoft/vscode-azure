@@ -269,6 +269,32 @@ describe('AzdService (unit)', () => {
             }
         });
 
+        it('should treat a non-ENOENT failure as not-installed when azd is unrunnable (Windows forced-shell)', async () => {
+            // On Windows, nano-spawn's forced shell turns a missing command into a
+            // generic non-zero exit (no ENOENT). Both the failing command and the
+            // follow-up `checkVersion` probe fail, so azd is effectively absent.
+            const exitError = new Error("'azd' is not recognized as an internal or external command");
+            const spawnFn = mock.fn(() => Promise.reject(exitError));
+            const { service, executor } = createService(spawnFn);
+
+            let suppress: string | boolean | undefined;
+            try {
+                await executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
+                    ctx.errorHandling.rethrow = true;
+                    try {
+                        await service.init(MockUri.file('/project'));
+                    } finally {
+                        suppress = ctx.errorHandling.suppress;
+                    }
+                });
+                expect.fail('Expected error');
+            } catch (e) {
+                expect((e as Error).message).to.include('Azure Developer CLI (azd) was not found');
+                expect((e as Error).cause).to.equal(exitError);
+                expect(suppress).to.equal('display');
+            }
+        });
+
         it('should report outdated version and suppress display when azd is too old', async () => {
             let callCount = 0;
             const spawnFn = mock.fn(() => {
