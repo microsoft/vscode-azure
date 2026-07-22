@@ -310,6 +310,13 @@ export class ProcessExecutor implements IProcessExecutor {
                 }
             })();
 
+            // Mark the rejection as handled so a caller that only drains
+            // `jsonLines` (and never awaits `completed`) doesn't trigger an
+            // unhandled-rejection warning when the process fails. The original
+            // `completed` promise is still returned, so awaiting it observes the
+            // rejection normally.
+            void completed.catch(() => undefined);
+
             return {
                 jsonLines: parseJsonLines(stderrIterator, firstPull),
                 completed,
@@ -345,10 +352,12 @@ export class ProcessExecutor implements IProcessExecutor {
  * can be hijacked by a same-named binary in the current working directory on
  * Windows. Under a shell, nano-spawn concatenates the command and arguments into
  * a single unquoted string, so a resolved path containing a space would be
- * mis-split; only in that case is the resolution discarded and the
- * (caller-trusted) bare command left for the shell to resolve. A space-free
- * resolved path is safe to pass through a shell, so the cwd-hijack mitigation is
- * preserved for those commands.
+ * mis-split; in that case the resolved path is wrapped in double quotes so the
+ * shell treats it as a single token. Quoting (rather than falling back to the
+ * bare command) keeps the cwd-hijack mitigation intact, since a bare command
+ * would let the shell search the cwd first on Windows. A resolved path never
+ * contains a double quote (Windows paths cannot, and on non-Windows the command
+ * is returned unresolved), so the wrapping is unambiguous.
  *
  * @throws {Error} When the vector is empty (no executable to run).
  */
@@ -362,11 +371,11 @@ async function resolveCommandLine(options: ProcessExecutorOptions): Promise<{ co
     const safePath = await getSafeExecPath(command);
 
     // A shell space-joins the command and arguments without quoting, so a
-    // resolved path containing a space would be mis-split. Only then fall back to
-    // the bare command and let the shell resolve it; a space-free resolved path
-    // keeps the cwd-hijack mitigation intact.
+    // resolved path containing a space would be mis-split. Quote it so the shell
+    // treats it as a single token, preserving the cwd-hijack mitigation instead
+    // of reverting to a bare command the shell would resolve against the cwd.
     if (options.shell && safePath.includes(' ')) {
-        return { command, args };
+        return { command: `"${safePath}"`, args };
     }
 
     return { command: safePath, args };
