@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
+import { makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import * as vscode from 'vscode';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
@@ -31,5 +33,22 @@ describe('OpenInPortal (unit)', () => {
         );
 
         expect(mockResult.env.openExternal.mock.callCount()).to.equal(1);
+    });
+
+    it('should honor a virtual node portal subresource path', () => {
+        const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const resource = makeVirtualResource({
+            virtualType: 'staticWebApp.functions',
+            virtualPath: 'environments/default/functions',
+        }) as ReturnType<typeof makeVirtualResource> & { portalResourceId: string };
+        resource.portalResourceId = `${resource.azureResource.id}/builds/default/functions`;
+        const key = AzureNodeId.from(resource).toString();
+        const cache = { get: (candidate: string) => candidate === key ? resource : undefined };
+
+        new OpenInPortal(mockResult.vscode, cache as never).execute(key);
+
+        expect(decodeURIComponent(mockResult.env.openExternal.mock.calls[0].arguments[0].toString())).to.include(
+            `${resource.azureResource.id}/builds/default/functions`,
+        );
     });
 });

@@ -22,12 +22,16 @@ export interface ManagedCommandRegistration {
 /** Callback that adds product-owned bindings to the root container. */
 export type ProductBinding = (container: Container) => void;
 
+/** Callback run during activation, after all container overrides are applied. */
+export type ProductActivation = (container: Container) => void;
+
 /**
  * Collects all wiring contributed by a product before the root container is
  * built, allowing test overrides to run before commands or trees are activated.
  */
 export class ProductRegistrar {
     private readonly bindings: ProductBinding[] = [];
+    private readonly activations: ProductActivation[] = [];
     private readonly managedCommands: ManagedCommandRegistration[] = [];
     private readonly resourceDataProviders: ProviderEntry<DataProvider<ConcreteAzureNode>>[] = [];
     private readonly resourceViewProviders: ProviderEntry<ViewProvider<string>>[] = [];
@@ -35,6 +39,14 @@ export class ProductRegistrar {
     /** Add arbitrary product-owned DI bindings. */
     public registerBinding(binding: ProductBinding): void {
         this.bindings.push(binding);
+    }
+
+    /**
+     * Add work that must run during activation rather than container setup,
+     * such as registering task, debug, or content providers with VS Code.
+     */
+    public registerActivation(activation: ProductActivation): void {
+        this.activations.push(activation);
     }
 
     /** Add a managed command without resolving its class during registration. */
@@ -75,6 +87,13 @@ export class ProductRegistrar {
     public applyBindings(container: Container): void {
         for (const binding of this.bindings) {
             binding(container);
+        }
+    }
+
+    /** Run each product's activation work once the container is ready. */
+    public applyActivations(container: Container): void {
+        for (const activation of this.activations) {
+            activation(container);
         }
     }
 

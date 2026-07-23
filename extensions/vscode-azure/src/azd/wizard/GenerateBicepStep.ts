@@ -12,22 +12,25 @@ export const MainBicepFileName = 'main.bicep';
 const MainParametersFileName = 'main.parameters.json';
 
 /** Name of a bundled bicep template under `resources/templates/`. */
-export type BicepTemplateName = 'functionApp.bicep'; // | 'staticWebApp.bicep' | ...
+export type BicepTemplateName = 'functionApp.bicep' | 'staticWebApp.bicep';
+/** Additional bundled Bicep assets referenced by a primary template. */
+export type BicepSupportingTemplateName = 'staticWebApp.module.bicep';
 
 /**
- * Generates infra files: copies the chosen bicep template from the
- * extension's bundled templates and writes a `main.parameters.json` with
- * the user's chosen values.
+ * Generates infra files: copies the chosen Bicep template and declared
+ * supporting assets from the extension bundle, then writes a
+ * `main.parameters.json` with the user's chosen values.
  *
- * Constructed via {@linkcode IGenerateBicepStepFactory} -- the template name
- * and emitted parameter keys are per-command config supplied by the caller,
- * while {@linkcode ICodeContext} is injected.
+ * Constructed via {@linkcode IGenerateBicepStepFactory} -- template names and
+ * emitted parameter keys are per-command config supplied by the caller, while
+ * {@linkcode ICodeContext} is injected.
  */
 export class GenerateBicepStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
         private readonly ctx: ICodeContext,
         private readonly templateName: BicepTemplateName,
         private readonly parameterKeys: readonly (keyof TContext & string)[],
+        private readonly supportingTemplateNames: readonly BicepSupportingTemplateName[] = [],
     ) {
         super();
     }
@@ -81,6 +84,14 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
                 this.ctx.code.Uri.joinPath(bicepFolder, MainBicepFileName),
                 { overwrite: true }, // We shouldn't actually be overwriting, due to `shouldExecute()`'s guard, but just in case...
             ),
+            ...this.supportingTemplateNames.map(async templateName => {
+                const source = this.ctx.code.Uri.joinPath(this.ctx.extensionContext.extensionUri, 'resources', 'templates', templateName);
+                await this.ctx.code.workspace.fs.copy(
+                    source,
+                    this.ctx.code.Uri.joinPath(bicepFolder, templateName),
+                    { overwrite: true },
+                );
+            }),
         ]);
     }
 
@@ -109,6 +120,7 @@ export const IGenerateBicepStepFactory: ServiceIdentifier<IGenerateBicepStepFact
 export type IGenerateBicepStepFactory = <TContext extends AzdWizardContext>(
     templateName: BicepTemplateName,
     parameterKeys: readonly (keyof TContext & string)[],
+    supportingTemplateNames?: readonly BicepSupportingTemplateName[],
 ) => GenerateBicepStep<TContext>;
 
 /**
@@ -121,5 +133,6 @@ export function createGenerateBicepStepFactory(ctx: ICodeContext): IGenerateBice
     return <TContext extends AzdWizardContext>(
         templateName: BicepTemplateName,
         parameterKeys: readonly (keyof TContext & string)[],
-    ): GenerateBicepStep<TContext> => new GenerateBicepStep<TContext>(ctx, templateName, parameterKeys);
+        supportingTemplateNames: readonly BicepSupportingTemplateName[] = [],
+    ): GenerateBicepStep<TContext> => new GenerateBicepStep<TContext>(ctx, templateName, parameterKeys, supportingTemplateNames);
 }

@@ -15,6 +15,9 @@ import type { ResourceGroup } from '../../models/Grouping';
 import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
+/** ARM and logical resource type for Azure Static Web Apps (`Microsoft.Web/staticSites`). */
+export const StaticWebAppResourceType = 'Microsoft.Web/staticSites';
+
 /** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
 export const SiteType = 'Microsoft.Web/sites';
 /** Logical type assigned to function apps (`Microsoft.Web/sites` with `kind` containing `functionapp`). */

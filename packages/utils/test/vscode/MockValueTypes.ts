@@ -63,6 +63,15 @@ export class MockTask implements vscode.Task {
     }
 }
 
+/** Test stand-in for {@linkcode vscode.FoldingRange}. */
+export class MockFoldingRange implements vscode.FoldingRange {
+    constructor(
+        public start: number,
+        public end: number,
+        public kind?: vscode.FoldingRangeKind,
+    ) { }
+}
+
 /** Test stand-in for {@linkcode vscode.RelativePattern}. */
 export class MockRelativePattern implements vscode.RelativePattern {
     public readonly baseUri: vscode.Uri;
@@ -118,6 +127,8 @@ type ForwardCheckShellExecution = Satisfies<MockShellExecution, vscode.ShellExec
 type ReverseCheckShellExecution = Satisfies<vscode.ShellExecution, MockShellExecution>;
 type ForwardCheckTask = Satisfies<MockTask, vscode.Task>;
 type ReverseCheckTask = Satisfies<vscode.Task, MockTask>;
+type ForwardCheckFoldingRange = Satisfies<MockFoldingRange, vscode.FoldingRange>;
+type ReverseCheckFoldingRange = Satisfies<vscode.FoldingRange, MockFoldingRange>;
 type ForwardCheckRelativePattern = Satisfies<MockRelativePattern, vscode.RelativePattern>;
 type ReverseCheckRelativePattern = Satisfies<vscode.RelativePattern, MockRelativePattern>;
 /* eslint-enable @typescript-eslint/no-unused-vars */

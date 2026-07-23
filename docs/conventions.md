@@ -43,6 +43,9 @@ Use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` 
 - Use `extensionContext.extensionUri` with `Uri.joinPath()` instead of `extensionContext.asAbsolutePath()`
 - Pass `vscode.Uri` through interfaces instead of `string` file paths
 - `Uri.fsPath` is acceptable when an API requires a string path (e.g. `child_process` `cwd`)
+- Workspace detectors (including SWA CLI/database config detection) should use
+  `workspace.fs.readDirectory()` when depth and exclusions are part of the contract;
+  do not emulate those rules with Node path traversal
 
 ## Localization
 
@@ -76,6 +79,8 @@ Use `IOutputChannel` directly via DI for extension logging. Do not add a wrapper
   - `trace`: per-item / per-request detail
 - `info`/`warn`/`error` messages must use `IVsCode.l10n.t(...)`; `debug`/`trace` are English-only developer logs
 - Never log PII/secrets (tokens, auth secrets, request/response bodies, user emails/display names, file contents). Resource IDs/names are allowed.
+- Version checks may log the operation and status, but never npm/GitHub response
+  bodies. Fire-and-forget activation checks must attach an explicit rejection handler.
 
 ```typescript
 output.debug(`[cmd] ${callbackId} start`);

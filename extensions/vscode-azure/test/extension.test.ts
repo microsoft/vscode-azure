@@ -8,6 +8,77 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { ExtensionId } from '../src/constants';
 
+const swaCommandPrefix = 'vscode-azure/staticWebApps/';
+const retainedSwaCommands = [
+    `${swaCommandPrefix}browse`,
+    `${swaCommandPrefix}createNew`,
+    `${swaCommandPrefix}createAdvanced`,
+    `${swaCommandPrefix}cloneRepo`,
+    `${swaCommandPrefix}openGitHubRepo`,
+    `${swaCommandPrefix}openGitHubLog`,
+    `${swaCommandPrefix}showActions`,
+    `${swaCommandPrefix}action/cancel`,
+    `${swaCommandPrefix}action/rerun`,
+    `${swaCommandPrefix}deleteEnvironment`,
+    `${swaCommandPrefix}deleteStaticWebApp`,
+    `${swaCommandPrefix}createSwaConfigFile`,
+    `${swaCommandPrefix}openWorkflowConfigFile`,
+    `${swaCommandPrefix}showDocumentation`,
+    `${swaCommandPrefix}showFunctionsDocumentation`,
+    `${swaCommandPrefix}viewProperties`,
+    `${swaCommandPrefix}appSettings/add`,
+    `${swaCommandPrefix}appSettings/edit`,
+    `${swaCommandPrefix}appSettings/rename`,
+    `${swaCommandPrefix}appSettings/delete`,
+    `${swaCommandPrefix}appSettings/download`,
+    `${swaCommandPrefix}appSettings/upload`,
+    `${swaCommandPrefix}toggleAppSettingVisibility`,
+    `${swaCommandPrefix}installOrUpdateCli`,
+    `${swaCommandPrefix}uninstallCli`,
+] as const;
+
+interface CommandContribution {
+    readonly command: string;
+    readonly title: string;
+    readonly category?: string;
+    readonly icon?: unknown;
+}
+
+interface MenuContribution {
+    readonly command?: string;
+    readonly submenu?: string;
+    readonly when?: string;
+    readonly group?: string;
+}
+
+interface ExtensionManifest {
+    readonly activationEvents?: readonly string[];
+    readonly capabilities?: {
+        readonly virtualWorkspaces?: {
+            readonly supported?: string;
+            readonly description?: string;
+        };
+    };
+    readonly extensionDependencies?: readonly string[];
+    readonly contributes: {
+        readonly commands: readonly CommandContribution[];
+        readonly menus: Readonly<Record<string, readonly MenuContribution[]>>;
+        readonly submenus?: readonly {
+            readonly id: string;
+            readonly label: string;
+            readonly icon?: { readonly light: string; readonly dark: string };
+        }[];
+        readonly configuration?: {
+            readonly properties?: Readonly<Record<string, unknown>>;
+        };
+        readonly debuggers?: readonly unknown[];
+        readonly problemMatchers?: readonly unknown[];
+        readonly jsonValidation?: readonly unknown[];
+        readonly taskDefinitions?: readonly unknown[];
+        readonly [key: string]: unknown;
+    };
+}
+
 describe('extension', () => {
     it('should activate', async () => {
         const extension = vscode.extensions.getExtension(ExtensionId);
@@ -17,7 +88,248 @@ describe('extension', () => {
 
         await extension.activate();
     });
+
+    it('should contribute and register every retained Static Web Apps command', async () => {
+        const extension = vscode.extensions.getExtension(ExtensionId);
+        await extension?.activate();
+        if (!extension) {
+            expect.fail('Extension not found');
+        }
+
+        const manifest = readManifest(extension);
+        const contributions = manifest.contributes.commands.filter(command => command.command.startsWith(swaCommandPrefix));
+        const registered = (await vscode.commands.getCommands(true)).filter(command => command.startsWith(swaCommandPrefix));
+
+        expect(contributions.map(command => command.command)).to.have.members(retainedSwaCommands);
+        expect(contributions).to.have.length(retainedSwaCommands.length);
+        expect(registered).to.have.members(retainedSwaCommands);
+        expect(registered).to.have.length(retainedSwaCommands.length);
+        for (const command of contributions) {
+            expect(command.category).to.equal('%commands.category.azureStaticWebApps%');
+            expect(command.title).to.match(/^%commands\.vscode-azure\/staticWebApps\/.+%$/);
+            expect(command.icon).not.to.be.undefined;
+        }
+    });
 });
+
+describe('Static Web Apps manifest (integration)', () => {
+    let extension: vscode.Extension<unknown>;
+    let manifest: ExtensionManifest;
+    let nls: Readonly<Record<string, string>>;
+
+    before(() => {
+        const found = vscode.extensions.getExtension(ExtensionId);
+        if (!found) {
+            expect.fail('Extension not found');
+        }
+        extension = found;
+        manifest = readManifest(extension);
+        nls = JSON.parse(fs.readFileSync(path.join(extension.extensionPath, 'package.nls.json'), 'utf8')) as Record<string, string>;
+    });
+
+    it('should wire complete SWA menus with bounded context checks', () => {
+        const contributedCommandIds = new Set(manifest.contributes.commands.map(command => command.command));
+        const menuEntries = Object.values(manifest.contributes.menus).flat();
+        for (const entry of menuEntries) {
+            if (entry.command) {
+                expect(contributedCommandIds.has(entry.command), `Missing contribution for menu command ${entry.command}`).to.be.true;
+            }
+        }
+
+        const viewContext = manifest.contributes.menus['view/item/context'];
+        const swaEntries = viewContext.filter(entry => entry.command?.startsWith(swaCommandPrefix));
+        expect(swaEntries).to.have.length(20);
+        expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/openInPortal')).to.be.true;
+        expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/refresh' && entry.when?.includes('azureStatic'))).to.be.true;
+
+        for (const entry of viewContext) {
+            const contextRegexes = [...(entry.when ?? '').matchAll(/viewItem =~ \/(.*?)\/i/g)];
+            for (const [, pattern] of contextRegexes) {
+                expect(pattern.startsWith('\\b'), entry.when).to.be.true;
+                expect(pattern.endsWith('\\b'), entry.when).to.be.true;
+            }
+        }
+
+        const swaWhenClauses = swaEntries.map(entry => entry.when).join(' ');
+        for (const context of [
+            'StaticWebApps',
+            'azureResourceTypeGroup',
+            'azureStaticWebApp',
+            'azureStaticEnvironment',
+            'azureStaticActions',
+            'azureStaticActionCompleted',
+            'azureStaticActionInProgress',
+            'azureStaticJob',
+            'azureStaticStep',
+            'applicationSettings',
+            'applicationSettingItem',
+            'staticWebApps',
+        ]) {
+            expect(swaWhenClauses, `Missing legacy context ${context}`).to.include(context);
+        }
+
+        for (const command of [
+            `${swaCommandPrefix}openGitHubLog`,
+            `${swaCommandPrefix}openWorkflowConfigFile`,
+            `${swaCommandPrefix}showFunctionsDocumentation`,
+        ]) {
+            expect(contributedCommandIds.has(command), `Missing tree command ${command}`).to.be.true;
+        }
+    });
+
+    it('should expose the workspace submenu and hide only node-dependent palette commands', () => {
+        const submenu = manifest.contributes.submenus?.find(entry => entry.id === `${swaCommandPrefix}workspaceActions`);
+        expect(submenu).to.deep.equal({
+            id: `${swaCommandPrefix}workspaceActions`,
+            label: '%submenus.vscode-azure/staticWebApps/workspaceActions%',
+            icon: {
+                light: 'resources/staticWebApps/azure-staticwebapps.svg',
+                dark: 'resources/staticWebApps/azure-staticwebapps.svg',
+            },
+        });
+        expect(fs.existsSync(path.join(extension.extensionPath, submenu?.icon?.light ?? 'missing'))).to.be.true;
+
+        expect(manifest.contributes.menus[`${swaCommandPrefix}workspaceActions`]).to.deep.equal([
+            { command: `${swaCommandPrefix}createSwaConfigFile`, group: '1_project@1' },
+            { command: `${swaCommandPrefix}createNew`, group: '2_create@1' },
+            { command: `${swaCommandPrefix}createAdvanced`, group: '2_create@2' },
+        ]);
+        expect(manifest.contributes.menus['view/title']).to.deep.include({
+            submenu: `${swaCommandPrefix}workspaceActions`,
+            when: 'view == vscode-azure/workspace',
+            group: 'navigation@3',
+        });
+
+        const hidden = manifest.contributes.menus.commandPalette
+            .filter(entry => entry.command?.startsWith(swaCommandPrefix) && entry.when === 'false')
+            .map(entry => entry.command);
+        expect(hidden).to.have.members([
+            `${swaCommandPrefix}action/cancel`,
+            `${swaCommandPrefix}action/rerun`,
+            `${swaCommandPrefix}appSettings/add`,
+            `${swaCommandPrefix}appSettings/edit`,
+            `${swaCommandPrefix}appSettings/rename`,
+            `${swaCommandPrefix}appSettings/delete`,
+            `${swaCommandPrefix}appSettings/download`,
+            `${swaCommandPrefix}appSettings/upload`,
+            `${swaCommandPrefix}toggleAppSettingVisibility`,
+            `${swaCommandPrefix}deleteEnvironment`,
+            `${swaCommandPrefix}deleteStaticWebApp`,
+            `${swaCommandPrefix}openGitHubLog`,
+            `${swaCommandPrefix}showFunctionsDocumentation`,
+            `${swaCommandPrefix}viewProperties`,
+        ]);
+        for (const publicCommand of [
+            `${swaCommandPrefix}createNew`,
+            `${swaCommandPrefix}createAdvanced`,
+            `${swaCommandPrefix}createSwaConfigFile`,
+            `${swaCommandPrefix}showDocumentation`,
+            `${swaCommandPrefix}installOrUpdateCli`,
+            `${swaCommandPrefix}uninstallCli`,
+        ]) {
+            expect(hidden).not.to.include(publicCommand);
+        }
+    });
+
+    it('should resolve every manifest localization placeholder without source orphans', () => {
+        const placeholders = collectLocalizationPlaceholders(manifest);
+        for (const key of placeholders) {
+            expect(nls, `Missing package.nls.json key ${key}`).to.have.property(key);
+        }
+
+        for (const orphan of [
+            'staticWebApps.deleteConfirmation',
+            'staticWebApps.deleteConfirmation.ClickButton',
+            'staticWebApps.deleteConfirmation.EnterName',
+            'staticWebApps.revealResource',
+            'commands.vscode-azure/staticWebApps/reportIssue',
+            'settings.vscode-azure.staticWebApps.appArtifactSubpath',
+            'settings.vscode-azure.staticWebApps.enableOutputTimestamps',
+        ]) {
+            expect(nls).not.to.have.property(orphan);
+        }
+    });
+
+    it('should contribute retained activation, capability, debug, schema, and settings surfaces', () => {
+        expect(manifest.activationEvents).to.have.members([
+            'onDebugDynamicConfigurations',
+            'onDebugInitialConfigurations',
+            'onDebugResolve:pwa-chrome',
+            'workspaceContains:**/staticwebapp.config.json',
+            'workspaceContains:**/swa-cli.config.json',
+        ]);
+        expect(manifest.capabilities?.virtualWorkspaces).to.deep.equal({
+            supported: 'limited',
+            description: '%capabilities.virtualWorkspaces.description%',
+        });
+        expect(manifest.contributes.debuggers).to.deep.equal([
+            { type: 'swa', label: 'Azure Static Web Apps' },
+        ]);
+        expect(manifest.contributes.problemMatchers).to.deep.equal([
+            {
+                name: 'swa-watch',
+                label: '%problemMatchers.vscode-azure/staticWebApps/swaWatch%',
+                owner: 'Azure Static Web Apps',
+                source: 'swa',
+                pattern: { regexp: '.', file: 1, location: 2, message: 3 },
+                background: {
+                    activeOnStart: true,
+                    beginsPattern: '.',
+                    endsPattern: 'Azure Static Web Apps emulator started',
+                },
+            },
+        ]);
+        expect(manifest.contributes.jsonValidation).to.have.deep.members([
+            {
+                fileMatch: 'staticwebapp.config.json',
+                url: 'https://json.schemastore.org/staticwebapp.config.json',
+            },
+            {
+                fileMatch: 'swa-cli.config.json',
+                url: 'https://raw.githubusercontent.com/Azure/static-web-apps-cli/main/schema/swa-cli.config.schema.json',
+            },
+        ]);
+
+        const settings = manifest.contributes.configuration?.properties ?? {};
+        expect(Object.keys(settings).filter(key => key.includes('staticWebApps'))).to.have.members([
+            'vscode-azure.staticWebApps.appSubpath',
+            'vscode-azure.staticWebApps.apiSubpath',
+            'vscode-azure.staticWebApps.outputSubpath',
+            'vscode-azure.staticWebApps.showStaticWebAppsCliWarning',
+        ]);
+        for (const key of [
+            'vscode-azure.staticWebApps.appSubpath',
+            'vscode-azure.staticWebApps.apiSubpath',
+            'vscode-azure.staticWebApps.outputSubpath',
+        ]) {
+            expect(settings[key]).to.deep.include({ type: 'string', scope: 'resource' });
+        }
+        expect(settings['vscode-azure.staticWebApps.showStaticWebAppsCliWarning']).to.deep.include({
+            type: 'boolean',
+            default: true,
+        });
+
+        expect(manifest.extensionDependencies).to.be.undefined;
+        expect(manifest.contributes['x-azResources']).to.be.undefined;
+        expect(manifest.contributes.taskDefinitions).to.be.undefined;
+    });
+});
+
+function collectLocalizationPlaceholders(value: unknown): string[] {
+    if (typeof value === 'string') {
+        const match = /^%(.+)%$/.exec(value);
+        return match ? [match[1]] : [];
+    } else if (Array.isArray(value)) {
+        return value.flatMap(collectLocalizationPlaceholders);
+    } else if (value && typeof value === 'object') {
+        return Object.values(value).flatMap(collectLocalizationPlaceholders);
+    }
+    return [];
+}
+
+function readManifest(extension: vscode.Extension<unknown>): ExtensionManifest {
+    return JSON.parse(fs.readFileSync(path.join(extension.extensionPath, 'package.json'), 'utf8')) as ExtensionManifest;
+}
 
 describe('bundle size guardrail (integration)', () => {
     // Baseline size (in bytes) of the packaged VSIX.

@@ -16,7 +16,26 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "main": "main.js",
+    "activationEvents": [
+        "onDebugDynamicConfigurations",
+        "onDebugInitialConfigurations",
+        "onDebugResolve:pwa-chrome",
+        "workspaceContains:**/staticwebapp.config.json",
+        "workspaceContains:**/swa-cli.config.json"
+    ],
+    "capabilities": {
+        "virtualWorkspaces": {
+            "supported": "limited",
+            "description": "%capabilities.virtualWorkspaces.description%"
+        }
+    },
     "contributes": {
+        "debuggers": [
+            {
+                "type": "swa",
+                "label": "Azure Static Web Apps"
+            }
+        ],
         "commands": [
             {
                 "command": "vscode-azure/resources/refresh",
@@ -102,6 +121,162 @@
                 "title": "%commands.vscode-azure/functions/deploy%"
             },
             {
+                "command": "vscode-azure/staticWebApps/createNew",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(add)",
+                "title": "%commands.vscode-azure/staticWebApps/createNew%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/createAdvanced",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(settings-gear)",
+                "title": "%commands.vscode-azure/staticWebApps/createAdvanced%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/browse",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(globe)",
+                "title": "%commands.vscode-azure/staticWebApps/browse%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/cloneRepo",
+                "category": "%commands.category.azureStaticWebApps%",
+                "enablement": "!isWeb",
+                "icon": "$(repo-clone)",
+                "title": "%commands.vscode-azure/staticWebApps/cloneRepo%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/openGitHubRepo",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(github)",
+                "title": "%commands.vscode-azure/staticWebApps/openGitHubRepo%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/openGitHubLog",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(output)",
+                "title": "%commands.vscode-azure/staticWebApps/openGitHubLog%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/showActions",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(github-action)",
+                "title": "%commands.vscode-azure/staticWebApps/showActions%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/action/cancel",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(circle-slash)",
+                "title": "%commands.vscode-azure/staticWebApps/action/cancel%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/action/rerun",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(debug-rerun)",
+                "title": "%commands.vscode-azure/staticWebApps/action/rerun%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/deleteEnvironment",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/staticWebApps/deleteEnvironment%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/deleteStaticWebApp",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/staticWebApps/deleteStaticWebApp%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/createSwaConfigFile",
+                "category": "%commands.category.azureStaticWebApps%",
+                "enablement": "!isWeb",
+                "icon": "$(new-file)",
+                "title": "%commands.vscode-azure/staticWebApps/createSwaConfigFile%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/openWorkflowConfigFile",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(edit)",
+                "title": "%commands.vscode-azure/staticWebApps/openWorkflowConfigFile%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/showDocumentation",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(book)",
+                "title": "%commands.vscode-azure/staticWebApps/showDocumentation%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/showFunctionsDocumentation",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(book)",
+                "title": "%commands.vscode-azure/staticWebApps/showFunctionsDocumentation%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/viewProperties",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(list-tree)",
+                "title": "%commands.vscode-azure/staticWebApps/viewProperties%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/appSettings/add",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(add)",
+                "title": "%commands.vscode-azure/staticWebApps/appSettings/add%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/appSettings/edit",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(edit)",
+                "title": "%commands.vscode-azure/staticWebApps/appSettings/edit%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/appSettings/rename",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(edit)",
+                "title": "%commands.vscode-azure/staticWebApps/appSettings/rename%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/appSettings/delete",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/staticWebApps/appSettings/delete%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/appSettings/download",
+                "category": "%commands.category.azureStaticWebApps%",
+                "enablement": "!isWeb",
+                "icon": "$(cloud-download)",
+                "title": "%commands.vscode-azure/staticWebApps/appSettings/download%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/appSettings/upload",
+                "category": "%commands.category.azureStaticWebApps%",
+                "enablement": "!isWeb",
+                "icon": "$(cloud-upload)",
+                "title": "%commands.vscode-azure/staticWebApps/appSettings/upload%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/toggleAppSettingVisibility",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(eye)",
+                "title": "%commands.vscode-azure/staticWebApps/toggleAppSettingVisibility%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/installOrUpdateCli",
+                "category": "%commands.category.azureStaticWebApps%",
+                "enablement": "!virtualWorkspace",
+                "icon": "$(terminal)",
+                "title": "%commands.vscode-azure/staticWebApps/installOrUpdateCli%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/uninstallCli",
+                "category": "%commands.category.azureStaticWebApps%",
+                "enablement": "!virtualWorkspace",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/staticWebApps/uninstallCli%"
+            },
+            {
                 "command": "vscode-azure/azdUp",
                 "category": "%commands.category.azure%",
                 "icon": "$(rocket)",
@@ -126,7 +301,31 @@
                 "title": "%commands.vscode-azure/selectSubscriptions%"
             }
         ],
+        "submenus": [
+            {
+                "id": "vscode-azure/staticWebApps/workspaceActions",
+                "label": "%submenus.vscode-azure/staticWebApps/workspaceActions%",
+                "icon": {
+                    "light": "resources/staticWebApps/azure-staticwebapps.svg",
+                    "dark": "resources/staticWebApps/azure-staticwebapps.svg"
+                }
+            }
+        ],
         "menus": {
+            "vscode-azure/staticWebApps/workspaceActions": [
+                {
+                    "command": "vscode-azure/staticWebApps/createSwaConfigFile",
+                    "group": "1_project@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/createNew",
+                    "group": "2_create@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/createAdvanced",
+                    "group": "2_create@2"
+                }
+            ],
             "commandPalette": [
                 {
                     "command": "vscode-azure/resources/refresh",
@@ -183,6 +382,62 @@
                 {
                     "command": "vscode-azure/functionApp/appSettings/delete",
                     "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/action/cancel",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/action/rerun",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/add",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/edit",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/rename",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/delete",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/download",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/upload",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/toggleAppSettingVisibility",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/deleteEnvironment",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/deleteStaticWebApp",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/openGitHubLog",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/showFunctionsDocumentation",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/viewProperties",
+                    "when": "false"
                 }
             ],
             "view/title": [
@@ -205,6 +460,11 @@
                     "command": "vscode-azure/workspace/refresh",
                     "when": "view == vscode-azure/workspace",
                     "group": "navigation@1"
+                },
+                {
+                    "submenu": "vscode-azure/staticWebApps/workspaceActions",
+                    "when": "view == vscode-azure/workspace",
+                    "group": "navigation@3"
                 },
                 {
                     "command": "vscode-azure/activity/clearSuccessful",
@@ -246,6 +506,111 @@
                 {
                     "command": "vscode-azure/functionApp/appSettings/delete",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteFunctionAppSetting\\b/i"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/createNew",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bStaticWebApps\\b/i && viewItem =~ /\\bazureResourceTypeGroup\\b/i",
+                    "group": "1@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/createAdvanced",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bStaticWebApps\\b/i && viewItem =~ /\\bazureResourceTypeGroup\\b/i",
+                    "group": "1@2"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/browse",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:browseStaticWebApp|azureStaticWebApp|azureStaticEnvironment)\\b/i",
+                    "group": "1@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/openGitHubRepo",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:openStaticWebAppGitHubRepository|azureStaticEnvironment)\\b/i",
+                    "group": "1@2"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/showActions",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:showStaticWebAppGitHubActions|azureStaticActions)\\b/i",
+                    "group": "1@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/cloneRepo",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:cloneStaticWebAppRepository|azureStaticWebApp)\\b/i",
+                    "group": "1@2"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/openWorkflowConfigFile",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:openStaticWebAppWorkflowConfig|azureStaticWebApp|azureStaticEnvironment|azureStaticWorkflowGroup|azureStaticWorkflow|parseYamlErrorTreeItem)\\b/i",
+                    "group": "3@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/deleteStaticWebApp",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:deleteStaticWebApp|azureStaticWebApp)\\b/i",
+                    "group": "3@2"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/deleteEnvironment",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:deleteStaticWebAppEnvironment|azureStaticEnvironment)\\b/i",
+                    "group": "3@2"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/openGitHubLog",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:openStaticWebAppGitHubLog|azureStaticJob|azureStaticStep)\\b/i",
+                    "group": "1@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/viewProperties",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:viewStaticWebAppProperties|azureStaticEnvironment|azureStaticActionCompleted|azureStaticActionInProgress|azureStaticJob|azureStaticStep)\\b/i",
+                    "group": "9@1"
+                },
+                {
+                    "command": "vscode-azure/resources/refresh",
+                    "when": "view == vscode-azure/resources && (viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions|azureStaticActions|azureStaticActionCompleted|azureStaticActionInProgress|azureStaticJob|azureStaticStep|azureStaticWorkflowGroup)\\b/i || (viewItem =~ /\\b(?:applicationSettings|applicationSettingItem)\\b/i && viewItem =~ /\\bstaticWebApps\\b/i))",
+                    "group": "9@3"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/add",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:addStaticWebAppSetting|applicationSettings)\\b/i && viewItem =~ /\\bstaticWebApps\\b/i",
+                    "group": "1@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/download",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:downloadStaticWebAppSettings|applicationSettings)\\b/i && viewItem =~ /\\bstaticWebApps\\b/i",
+                    "group": "1@2"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/upload",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:uploadStaticWebAppSettings|applicationSettings)\\b/i && viewItem =~ /\\bstaticWebApps\\b/i",
+                    "group": "1@3"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/edit",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:editStaticWebAppSetting|applicationSettingItem)\\b/i && viewItem =~ /\\bstaticWebApps\\b/i",
+                    "group": "1@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/rename",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:renameStaticWebAppSetting|applicationSettingItem)\\b/i && viewItem =~ /\\bstaticWebApps\\b/i",
+                    "group": "1@2"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/appSettings/delete",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:deleteStaticWebAppSetting|applicationSettingItem)\\b/i && viewItem =~ /\\bstaticWebApps\\b/i",
+                    "group": "1@3"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/toggleAppSettingVisibility",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:toggleStaticWebAppSettingVisibility|applicationSettingItem)\\b/i && viewItem =~ /\\bstaticWebApps\\b/i",
+                    "group": "inline"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/action/rerun",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:rerunStaticWebAppAction|azureStaticActionCompleted)\\b/i",
+                    "group": "1@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/action/cancel",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:cancelStaticWebAppAction|azureStaticActionInProgress)\\b/i",
+                    "group": "1@2"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",
@@ -384,9 +749,58 @@
                     },
                     "default": [],
                     "description": "%settings.vscode-azure.selectedSubscriptions%"
+                },
+                "vscode-azure.staticWebApps.appSubpath": {
+                    "type": "string",
+                    "scope": "resource",
+                    "description": "%settings.vscode-azure.staticWebApps.appSubpath%"
+                },
+                "vscode-azure.staticWebApps.apiSubpath": {
+                    "type": "string",
+                    "scope": "resource",
+                    "description": "%settings.vscode-azure.staticWebApps.apiSubpath%"
+                },
+                "vscode-azure.staticWebApps.outputSubpath": {
+                    "type": "string",
+                    "scope": "resource",
+                    "description": "%settings.vscode-azure.staticWebApps.outputSubpath%"
+                },
+                "vscode-azure.staticWebApps.showStaticWebAppsCliWarning": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "%settings.vscode-azure.staticWebApps.showStaticWebAppsCliWarning%"
                 }
             }
-        }
+        },
+        "jsonValidation": [
+            {
+                "fileMatch": "staticwebapp.config.json",
+                "url": "https://json.schemastore.org/staticwebapp.config.json"
+            },
+            {
+                "fileMatch": "swa-cli.config.json",
+                "url": "https://raw.githubusercontent.com/Azure/static-web-apps-cli/main/schema/swa-cli.config.schema.json"
+            }
+        ],
+        "problemMatchers": [
+            {
+                "name": "swa-watch",
+                "label": "%problemMatchers.vscode-azure/staticWebApps/swaWatch%",
+                "owner": "Azure Static Web Apps",
+                "source": "swa",
+                "pattern": {
+                    "regexp": ".",
+                    "file": 1,
+                    "location": 2,
+                    "message": 3
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "Azure Static Web Apps emulator started"
+                }
+            }
+        ]
     },
     "scripts": {
         "lint": "eslint --max-warnings 0 --cache",
@@ -415,8 +829,10 @@
     "dependencies": {
         "@microsoft/vscode-azure-azutils": "workspace:*",
         "@microsoft/vscode-azure-utils": "workspace:*",
+        "@octokit/rest": "^22.0.1",
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:",
-        "semver": "^7.8.4"
+        "semver": "^7.8.4",
+        "yaml": "^2.8.1"
     }
 }
