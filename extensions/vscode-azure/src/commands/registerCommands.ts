@@ -16,6 +16,27 @@ import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
 import { DeleteAppSetting } from './functions/DeleteAppSetting';
 import type { ManagedCommand } from './ManagedCommand';
+import { CancelAction, RerunAction } from './staticWebApps/ActionCommands';
+import { BrowseStaticWebApp } from './staticWebApps/BrowseStaticWebApp';
+import { CloneRepository } from './staticWebApps/CloneRepository';
+import { CreateSwaConfigFile } from './staticWebApps/CreateSwaConfigFile';
+import { CreateStaticWebApp } from './staticWebApps/CreateStaticWebApp';
+import { DeleteStaticWebApp } from './staticWebApps/DeleteStaticWebApp';
+import { DeleteStaticWebAppEnvironment } from './staticWebApps/DeleteStaticWebAppEnvironment';
+import { InstallOrUpdateSwaCli } from './staticWebApps/InstallOrUpdateSwaCli';
+import { OpenGitHubLog } from './staticWebApps/OpenGitHubLog';
+import { OpenGitHubRepository } from './staticWebApps/OpenGitHubRepository';
+import { OpenWorkflowConfigFile } from './staticWebApps/OpenWorkflowConfigFile';
+import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from './staticWebApps/ShowDocumentation';
+import { ShowGitHubActions } from './staticWebApps/ShowGitHubActions';
+import {
+    ManageStaticWebAppAppSetting,
+    ToggleStaticWebAppAppSettingVisibility,
+    TransferStaticWebAppAppSettings,
+} from './staticWebApps/StaticWebAppAppSettingsCommands';
+import { StaticWebAppCommandResolver } from './staticWebApps/StaticWebAppCommandResolver';
+import { UninstallSwaCli } from './staticWebApps/UninstallSwaCli';
+import { ViewStaticWebAppProperties } from './staticWebApps/ViewStaticWebAppProperties';
 import { InstallAzd } from './tools/InstallAzd';
 import { GroupBy } from './tree/GroupBy';
 import { LoadMore } from './tree/LoadMore';
@@ -30,6 +51,10 @@ import { RevealInExplorer } from './tree/RevealInExplorer';
  * once from `activateInternal()` during activation.
  */
 export function registerCommands(container: Container): void {
+    if (!container.isBound(StaticWebAppCommandResolver)) {
+        container.bind(StaticWebAppCommandResolver).toSelf();
+    }
+
     registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
     registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
     registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
@@ -52,6 +77,32 @@ export function registerCommands(container: Container): void {
 
     registerManagedCommand(container, 'vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registerManagedCommand(container, 'vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
+
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/browse', BrowseStaticWebApp);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/createNew', CreateStaticWebApp, 'basic');
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/createAdvanced', CreateStaticWebApp, 'advanced');
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/cloneRepo', CloneRepository);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/openGitHubRepo', OpenGitHubRepository);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/openGitHubLog', OpenGitHubLog);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/showActions', ShowGitHubActions);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/action/cancel', CancelAction);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/action/rerun', RerunAction);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/deleteEnvironment', DeleteStaticWebAppEnvironment);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/deleteStaticWebApp', DeleteStaticWebApp);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/createSwaConfigFile', CreateSwaConfigFile);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/openWorkflowConfigFile', OpenWorkflowConfigFile);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/showDocumentation', ShowStaticWebAppsDocumentation);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/showFunctionsDocumentation', ShowFunctionsDocumentation);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/viewProperties', ViewStaticWebAppProperties);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/appSettings/add', ManageStaticWebAppAppSetting, 'add');
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/appSettings/edit', ManageStaticWebAppAppSetting, 'edit');
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/appSettings/rename', ManageStaticWebAppAppSetting, 'rename');
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/appSettings/delete', ManageStaticWebAppAppSetting, 'delete');
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/appSettings/download', TransferStaticWebAppAppSettings, 'download');
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/appSettings/upload', TransferStaticWebAppAppSettings, 'upload');
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/toggleAppSettingVisibility', ToggleStaticWebAppAppSettingVisibility);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/installOrUpdateCli', InstallOrUpdateSwaCli);
+    registerManagedCommand(container, 'vscode-azure/staticWebApps/uninstallCli', UninstallSwaCli);
 
     registerManagedCommand(container, AzdUpCommandId, AzdUp);
     registerManagedCommand(container, AzdDownCommandId, AzdDown);

@@ -15,7 +15,7 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileSystem } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockFoldingRange, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -156,6 +156,15 @@ export interface MockVsCodeResult {
     /** The mock `tasks` namespace. */
     readonly tasks: MockedNamespace<typeof vscode.tasks>;
 
+    /** The mock `debug` namespace. */
+    readonly debug: MockedNamespace<typeof vscode.debug>;
+
+    /** The mock `languages` namespace. */
+    readonly languages: MockedNamespace<typeof vscode.languages>;
+
+    /** Fire this emitter to simulate a task process starting. */
+    readonly taskProcessStartEmitter: EventEmitter<vscode.TaskProcessStartEvent>;
+
     /**
      * Fire this emitter to simulate a task process ending.
      *
@@ -167,6 +176,12 @@ export interface MockVsCodeResult {
      * ```
      */
     readonly taskProcessEndEmitter: EventEmitter<vscode.TaskProcessEndEvent>;
+
+    /** Fire this emitter to simulate a debug session ending. */
+    readonly debugSessionTerminateEmitter: EventEmitter<vscode.DebugSession>;
+
+    /** Fire this emitter to simulate a virtual text document closing. */
+    readonly closedTextDocumentEmitter: EventEmitter<vscode.TextDocument>;
 }
 
 /**
@@ -222,6 +237,17 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 
     const showOpenDialog = mock.fn(
         () => Promise.resolve(undefined),
+    );
+
+    const showSaveDialog = mock.fn(
+        () => Promise.resolve(undefined),
+    );
+
+    const showTextDocument = mock.fn(
+        () => Promise.resolve({
+            revealRange: mock.fn(),
+            selection: undefined,
+        } as unknown as vscode.TextEditor),
     );
 
     const showWorkspaceFolderPick = mock.fn(
@@ -330,11 +356,16 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showWarningMessage,
         showErrorMessage,
         showOpenDialog,
+        showSaveDialog,
+        showTextDocument,
         showWorkspaceFolderPick,
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
+    const closedTextDocumentEmitter = new EventEmitter<vscode.TextDocument>();
+    const taskProcessStartEmitter = new EventEmitter<vscode.TaskProcessStartEvent>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
+    const debugSessionTerminateEmitter = new EventEmitter<vscode.DebugSession>();
 
     const createFileSystemWatcher = mock.fn(
         (): vscode.FileSystemWatcher => {
@@ -358,10 +389,25 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         findFiles,
         getConfiguration,
         getWorkspaceFolder,
+        onDidCloseTextDocument: closedTextDocumentEmitter.event,
         onDidChangeConfiguration: configChangeEmitter.event,
         onDidChangeWorkspaceFolders: workspaceFoldersChangeEmitter.event,
+        registerTextDocumentContentProvider: mock.fn(() => ({ dispose: () => { /* noop */ } })),
+        textDocuments: [] as vscode.TextDocument[],
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
+        openTextDocument: mock.fn((uriOrOptions: vscode.Uri | { content?: string; language?: string }) => {
+            const uri = 'scheme' in uriOrOptions ? uriOrOptions : MockUri.from({ scheme: 'untitled', path: '/Untitled-1' });
+            const content = 'scheme' in uriOrOptions
+                ? Buffer.from(fs.files.get(uri.path) ?? new Uint8Array()).toString()
+                : uriOrOptions.content ?? '';
+            return Promise.resolve({
+                uri,
+                getText: () => content,
+                lineAt: (line: number) => ({ text: content.split(/\r?\n/)[line] ?? '' }),
+                validateRange: (range: vscode.Range) => range,
+            } as unknown as vscode.TextDocument);
+        }),
     };
 
     const executeTask = mock.fn(
@@ -373,27 +419,49 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 
     const tasks = {
         executeTask,
+        onDidStartTaskProcess: taskProcessStartEmitter.event,
         onDidEndTaskProcess: taskProcessEndEmitter.event,
+        registerTaskProvider: mock.fn(() => ({ dispose: () => { /* noop */ } })),
+    };
+    const debug = {
+        onDidTerminateDebugSession: debugSessionTerminateEmitter.event,
+        registerDebugConfigurationProvider: mock.fn(() => ({ dispose: () => { /* noop */ } })),
+        startDebugging: mock.fn(() => Promise.resolve(true)),
+    };
+    const languages = {
+        registerFoldingRangeProvider: mock.fn(() => ({ dispose: () => { /* noop */ } })),
+    };
+    const extensions = {
+        all: [],
+        getExtension: mock.fn(() => undefined),
     };
 
     const mockVsCode = {
         authentication,
         commands,
         env,
+        extensions,
+        debug,
+        languages,
         tasks,
         window,
         workspace,
         l10n: { t },
         QuickInputButtons,
+        QuickPickItemKind: { Separator: -1, Default: 0 },
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState: MockTreeItemCollapsibleState,
         ConfigurationTarget: MockConfigurationTarget,
+        DebugConfigurationProviderTriggerKind: { Initial: 1, Dynamic: 2 },
+        FoldingRange: MockFoldingRange,
+        FoldingRangeKind: { Comment: { value: 'comment' }, Imports: { value: 'imports' }, Region: { value: 'region' } },
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
         ShellExecution: MockShellExecution,
         RelativePattern: MockRelativePattern,
         Task: MockTask,
         TaskScope: MockTaskScope,
+        FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
         Uri: MockUri,
         ...overrides,
     } as unknown as IVsCode;
@@ -408,7 +476,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspaceFolders,
         authentication,
         commands,
+        debug,
         env,
+        languages,
         window,
         workspace,
         messageResponses,
@@ -416,7 +486,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         sessionsChangeEmitter,
         workspaceFoldersChangeEmitter,
         tasks,
+        taskProcessStartEmitter,
         taskProcessEndEmitter,
+        debugSessionTerminateEmitter,
+        closedTextDocumentEmitter,
     } as unknown as MockVsCodeResult;
 }
 

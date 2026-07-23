@@ -53,21 +53,22 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
         }
 
         if (context.job === 'deploy') {
-            return this.promptDeployFolder();
+            return this.promptDeployFolder(context);
         }
 
         // No job -- scan workspace folders for azure.yaml
         return this.promptAzureYamlFolder();
     }
 
-    private async promptDeployFolder(): Promise<Partial<TContext>> {
+    private async promptDeployFolder(context: Readonly<TContext>): Promise<Partial<TContext>> {
+        const resourceDisplayName = context.resourceDisplayName ?? this.ctx.code.l10n.t('Function App');
         const folder = await getWorkspaceFolder(
             this.ctx.code,
-            this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
+            this.ctx.code.l10n.t('Select a workspace folder to deploy as a {0}', resourceDisplayName),
         );
         if (!folder) {
             this.actionContext.errorHandling.suppress = 'reportIssue';
-            throw new Error(this.ctx.code.l10n.t('Open a folder in VS Code to deploy a project as a Function App.'));
+            throw new Error(this.ctx.code.l10n.t('Open a folder in VS Code to deploy a project as a {0}.', resourceDisplayName));
         }
         return { iacFolder: folder.uri } as Partial<TContext>;
     }
@@ -102,4 +103,3 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
         return { iacFolder: picked.uri } as Partial<TContext>;
     }
 }
-

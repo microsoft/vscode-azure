@@ -33,7 +33,7 @@ export class MockFileSystem {
         } else if (this.directories.has(uri.path)) {
             return Promise.resolve({ type: 2, ctime: 0, mtime: 0, size: 0 });
         }
-        return Promise.reject(new Error(`File not found: ${uri.path}`));
+        return Promise.reject(Object.assign(new Error(`File not found: ${uri.path}`), { code: 'FileNotFound' }));
     });
 
     readonly readFile = mock.fn((uri: vscode.Uri) => {
@@ -41,7 +41,41 @@ export class MockFileSystem {
         if (data) {
             return Promise.resolve(data);
         }
-        return Promise.reject(new Error(`File not found: ${uri.path}`));
+        return Promise.reject(Object.assign(new Error(`File not found: ${uri.path}`), { code: 'FileNotFound' }));
+    });
+
+    /** Lists immediate file and directory children of a directory. */
+    readonly readDirectory = mock.fn((uri: vscode.Uri): Promise<[string, vscode.FileType][]> => {
+        const prefix = uri.path.endsWith('/') ? uri.path : `${uri.path}/`;
+        const children = new Map<string, vscode.FileType>();
+
+        for (const filePath of this.files.keys()) {
+            if (!filePath.startsWith(prefix)) {
+                continue;
+            }
+            const remainder = filePath.slice(prefix.length);
+            const [name, nested] = remainder.split('/', 2);
+            if (name) {
+                children.set(name, nested ? 2 : 1);
+            }
+        }
+
+        for (const directoryPath of this.directories) {
+            if (!directoryPath.startsWith(prefix)) {
+                continue;
+            }
+            const remainder = directoryPath.slice(prefix.length);
+            const [name] = remainder.split('/', 1);
+            if (name) {
+                children.set(name, 2);
+            }
+        }
+
+        if (children.size === 0 && !this.directories.has(uri.path)) {
+            return Promise.reject(Object.assign(new Error(`File not found: ${uri.path}`), { code: 'FileNotFound' }));
+        }
+
+        return Promise.resolve([...children.entries()].sort(([left], [right]) => left.localeCompare(right)));
     });
 
     readonly writeFile = mock.fn((uri: vscode.Uri, content: Uint8Array) => {

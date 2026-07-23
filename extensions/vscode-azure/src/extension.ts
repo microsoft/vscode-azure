@@ -12,10 +12,12 @@ import {
     ICredentialFactory,
     IDeploymentClientProvider,
     IResourceClientProvider,
+    IStaticWebAppClientProvider,
     ISubscriptionClientProvider,
     IWebAppClientProvider,
     ResourceClient,
     setUpAzureSdkLogging,
+    StaticWebAppClient,
     SubscriptionClient,
     WebAppClient,
 } from '@microsoft/vscode-azure-azutils';
@@ -42,7 +44,14 @@ import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
+import { IStaticWebAppsGitHubService, StaticWebAppsGitHubService } from './services/StaticWebAppsGitHubService';
 import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
+import { SwaDebugConfigurationProvider } from './debug/staticWebApps/SwaDebugConfigurationProvider';
+import { GitHubActionLogContentProvider } from './staticWebApps/GitHubActionLogContentProvider';
+import { registerStaticWebAppLocalTools } from './staticWebApps/registerStaticWebAppLocalTools';
+import { ISwaCliService, SwaCliService } from './staticWebApps/SwaCliService';
+import { IProcessTerminator, ProcessTerminator, SwaTaskLifecycle } from './tasks/staticWebApps/SwaTaskLifecycle';
+import { SwaTaskProvider } from './tasks/staticWebApps/SwaTaskProvider';
 import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
 import { CredentialOptionsScope, ICredentialOptionsScope } from './utils/CredentialOptionsScope';
@@ -90,6 +99,7 @@ export async function activateInternal(
 
         registerCommands(container);
         registerTrees(container);
+        registerStaticWebAppLocalTools(container);
     });
 
     // Expose the DI container to E2E tests so they can resolve services (e.g.
@@ -166,6 +176,17 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
 
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
     container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
+    container.bind(IStaticWebAppsGitHubService).to(StaticWebAppsGitHubService).inSingletonScope();
+    container.bind(ISwaCliService).toDynamicValue(context => new SwaCliService(
+        context.get(IVsCode),
+        context.get(IProcessExecutor),
+        context.get(IOutputChannel),
+    )).inSingletonScope();
+    container.bind(SwaTaskProvider).toSelf().inSingletonScope();
+    container.bind(SwaDebugConfigurationProvider).toSelf().inSingletonScope();
+    container.bind(GitHubActionLogContentProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
+    container.bind(IProcessTerminator).to(ProcessTerminator).inSingletonScope();
+    container.bind(SwaTaskLifecycle).toSelf().inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IResourceClientProvider).toFactory(context => {
         const ctx = context.get(ICodeContext);
@@ -205,6 +226,13 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
         return (subscription) => WebAppClient.create(ctx, executor, credentialFactory(subscription), subscription);
+    });
+
+    container.bind(IStaticWebAppClientProvider).toFactory(context => {
+        const ctx = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        const credentialFactory = context.get(ICredentialFactory);
+        return (subscription) => StaticWebAppClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
 
     container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();

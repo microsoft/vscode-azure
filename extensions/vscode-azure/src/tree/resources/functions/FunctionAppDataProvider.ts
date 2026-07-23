@@ -12,6 +12,7 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import { AppSettingsModel, type IAppSettingsClient } from '../appSettings/AppSettingsModel';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes, isFunctionApp } from './FunctionApp';
 
 export const IFunctionAppDataProvider: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IFunctionAppDataProvider');
@@ -32,17 +33,17 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
 
     private readonly clientCache = new Map<string, IWebAppClient>();
 
-    /**
-     * In-memory cache of app settings keyed by ARM resource ID.
-     * Populated when listing children, used by CRUD commands to
-     * avoid redundant API calls.
-     */
-    private readonly settingsCache = new Map<string, Record<string, string>>();
+    private readonly appSettings: AppSettingsModel<GenericResource>;
 
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IWebAppClientProvider) private readonly createClient: IWebAppClientProvider,
-    ) { }
+    ) {
+        this.appSettings = new AppSettingsModel(
+            resource => resource.id,
+            resource => this.createAppSettingsClient(resource),
+        );
+    }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
@@ -77,7 +78,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
      * Returns `undefined` if the setting or cache is missing.
      */
     public getSettingValue(resourceId: string, settingKey: string): string | undefined {
-        return this.settingsCache.get(resourceId)?.[settingKey];
+        return this.appSettings.getValueByParentKey(resourceId, settingKey);
     }
 
     /**
@@ -87,14 +88,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
      * @throws if the resource's ARM ID does not contain a resource group segment.
      */
     public async addOrUpdateSetting(resource: GenericResource, key: string, value: string): Promise<void> {
-        const { client, resourceGroupName } = this.resolveClient(resource);
-
-        const current = await client.webApps.listApplicationSettings(resourceGroupName, resource.name);
-        const properties = { ...current.properties, [key]: value };
-        await client.webApps.updateApplicationSettings(resourceGroupName, resource.name, { ...current, properties });
-
-        // Update local cache
-        this.settingsCache.set(resource.id, properties);
+        await this.appSettings.addOrUpdate(resource, key, value);
     }
 
     /**
@@ -103,32 +97,30 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
      * @throws if the resource's ARM ID does not contain a resource group segment.
      */
     public async deleteSetting(resource: GenericResource, key: string): Promise<void> {
-        const { client, resourceGroupName } = this.resolveClient(resource);
-
-        const current = await client.webApps.listApplicationSettings(resourceGroupName, resource.name);
-        const remaining = Object.fromEntries(
-            Object.entries({ ...current.properties }).filter(([k]) => k !== key)
-        );
-        await client.webApps.updateApplicationSettings(resourceGroupName, resource.name, { ...current, properties: remaining });
-
-        // Update local cache
-        this.settingsCache.set(resource.id, remaining);
+        await this.appSettings.delete(resource, key);
     }
 
     private async listAppSettings(resource: VirtualResource): Promise<ConcreteAzureNode[]> {
-        const { client, resourceGroupName } = this.resolveClient(resource.azureResource);
-
-        const settings = await client.webApps.listApplicationSettings(resourceGroupName, resource.azureResource.name);
-        const properties = settings.properties ?? {};
-
-        // Cache the full settings map
-        this.settingsCache.set(resource.azureResource.id, { ...properties });
-
-        return Object.keys(properties).sort().map(key => ({
+        const keys = await this.appSettings.list(resource.azureResource);
+        return keys.map(key => ({
             virtualType: FunctionAppVirtualTypes.AppSetting,
             virtualPath: key,
             azureResource: resource.azureResource,
         }));
+    }
+
+    private createAppSettingsClient(resource: GenericResource): IAppSettingsClient {
+        const { client, resourceGroupName } = this.resolveClient(resource);
+        return {
+            list: async () => {
+                const result = await client.webApps.listApplicationSettings(resourceGroupName, resource.name);
+                return { ...result.properties };
+            },
+            update: async settings => {
+                const result = await client.webApps.updateApplicationSettings(resourceGroupName, resource.name, { properties: settings });
+                return { ...result.properties };
+            },
+        };
     }
 
     private resolveClient(resource: GenericResource): { client: IWebAppClient; resourceGroupName: string } {

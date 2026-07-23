@@ -12,6 +12,7 @@ import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from '../..
 import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../src/services';
 import { IArmDeploymentDataProvider } from '../../src/tree/activity/ArmDeploymentDataProvider';
 import { ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
+import { IStaticWebAppsGitHubService } from '../../src/services/StaticWebAppsGitHubService';
 
 /** Mocked services a wizard command (and its steps) may resolve in unit tests. */
 export interface WizardCommandMocks {
@@ -25,6 +26,7 @@ export interface WizardCommandMocks {
     readonly subscriptionClientProvider?: ISubscriptionClientProvider;
     readonly armProvider?: IArmDeploymentDataProvider;
     readonly codeProvider?: ICodeDeploymentDataProvider;
+    readonly staticWebAppsGitHubService?: IStaticWebAppsGitHubService;
 }
 
 /**
@@ -61,6 +63,9 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     }
     if (mocks.codeProvider !== undefined) {
         container.bind(ICodeDeploymentDataProvider).toConstantValue(mocks.codeProvider);
+    }
+    if (mocks.staticWebAppsGitHubService !== undefined) {
+        container.bind(IStaticWebAppsGitHubService).toConstantValue(mocks.staticWebAppsGitHubService);
     }
 
     container.bind(Container).toConstantValue(container);

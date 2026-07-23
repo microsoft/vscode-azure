@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, isVirtualResource } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
+import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -18,12 +19,21 @@ export class OpenInPortal implements ManagedCommand {
     public static ContextValue = 'openInPortal';
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IAzureViewDataTree) @optional() private readonly cache?: IAzureViewDataTree,
     ) { }
 
     /** @inheritdoc */
     public execute(key: string): void {
-        const portalUrl = AzureNodeId.parse(key).toPortalUrl();
+        let portalUrl = AzureNodeId.parse(key).toPortalUrl();
+        const resource = this.cache?.get(key);
+        if (resource && isVirtualResource(resource) && 'portalResourceId' in resource
+            && typeof resource.portalResourceId === 'string') {
+            const rootId = resource.azureResource.id;
+            if (portalUrl.endsWith(rootId)) {
+                portalUrl = `${portalUrl.slice(0, -rootId.length)}${resource.portalResourceId}`;
+            }
+        }
 
         if (portalUrl) {
             void this.code.env.openExternal(this.code.Uri.parse(portalUrl));

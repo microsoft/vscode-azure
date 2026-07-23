@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, StaticWebAppResourceType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -336,6 +336,16 @@ describe('GenericAzureViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
 
             expect(item.label).to.equal('Microsoft.Web/sites');
+        });
+
+        it('should add stable Static Web Apps contexts to its resource-type group case-insensitively', () => {
+            const provider = createProvider();
+            const resourceType = encodeURIComponent(StaticWebAppResourceType.toLowerCase());
+            const key = `azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/~resourceType/${resourceType}`;
+
+            const item = provider.getTreeItem(key);
+
+            expect(item.contextValue?.split(';')).to.have.members(['StaticWebApps', 'azureResourceTypeGroup']);
         });
 
         it('should throw for an unknown key not in cache', () => {

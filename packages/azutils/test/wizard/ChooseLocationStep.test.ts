@@ -21,6 +21,7 @@ const northeurope: Location = { name: 'northeurope', displayName: 'North Europe'
 interface TestContext extends PickContext<string> {
     readonly subscription: AzureSubscription;
     readonly location?: Location;
+    readonly allowedLocationNames?: ReadonlySet<string>;
 }
 
 describe('ChooseLocationStep (unit)', () => {
@@ -83,6 +84,23 @@ describe('ChooseLocationStep (unit)', () => {
         const result = await wizard.run();
 
         expect(result.location?.name).to.equal('eastus');
+        tracker.assertAllConsumed();
+    });
+
+    it('should honor a resource-specific location allow-list', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const provider = createMockSubscriptionClientProvider([westus, eastus]);
+        const tracker = respondToPrompts(mock, [{ pick: 'East US' }]);
+
+        const wizard = new Wizard<TestContext>(
+            output,
+            { picks: [], subscription, allowedLocationNames: new Set(['eastus']) },
+            [new ChooseLocationStep(ctx, provider, output)],
+        );
+        const result = await wizard.run();
+
+        expect(result.location?.name).to.equal('eastus');
+        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['East US']);
         tracker.assertAllConsumed();
     });
 

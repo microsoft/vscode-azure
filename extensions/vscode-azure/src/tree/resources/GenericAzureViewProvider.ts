@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, StaticWebAppResourceType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -102,6 +102,10 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
             item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
+            if (grouping?.groupingStrategy === 'resourceType'
+                && grouping.groupingValue.toLowerCase() === StaticWebAppResourceType.toLowerCase()) {
+                item.contextValue = combineContextValues(staticWebAppsGroupContextValue, resourceTypeGroupContextValue);
+            }
             return item;
         }
 
@@ -428,3 +432,5 @@ function toKey(node: AzureNode): string {
 
 const virtualGroupNodeType = 'virtualGroup';
 const untaggedSentinel = '__untagged__';
+const staticWebAppsGroupContextValue = 'StaticWebApps';
+const resourceTypeGroupContextValue = 'azureResourceTypeGroup';

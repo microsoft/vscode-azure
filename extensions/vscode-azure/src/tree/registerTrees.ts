@@ -26,6 +26,8 @@ import { AzureResourceDataProvider } from './resources/AzureResourceDataProvider
 import { FunctionAppDataProvider, IFunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
+import { IStaticWebAppDataProvider, StaticWebAppDataProvider } from './resources/staticWebApps/StaticWebAppDataProvider';
+import { StaticWebAppViewProvider } from './resources/staticWebApps/StaticWebAppViewProvider';
 import { AzdWorkspaceDataProvider } from './workspace/azd/AzdWorkspaceDataProvider';
 import { AzdWorkspaceViewProvider } from './workspace/azd/AzdWorkspaceViewProvider';
 import { EmulatorsWorkspaceDataProvider } from './workspace/emulators/EmulatorsWorkspaceDataProvider';
@@ -59,12 +61,14 @@ export function registerTrees(container: Container): void {
         loadMoreOptions: context => defaultLoadMoreOptions(context.get(IVsCode)),
         // Registration order matters: specific providers first, generic fallback last.
         dataProviders: [
+            [IStaticWebAppDataProvider, StaticWebAppDataProvider],
             AcrDataProvider,
             [IFunctionAppDataProvider, FunctionAppDataProvider], // singleton so commands can @inject it directly
             [IAzureAccountDataProvider, AzureAccountDataProvider], // singleton so mock-data mode can rebind it
             AzureResourceDataProvider,
         ],
         viewProviders: [
+            StaticWebAppViewProvider,
             AcrViewProvider,
             FunctionAppViewProvider,
             GenericAzureViewProvider,
