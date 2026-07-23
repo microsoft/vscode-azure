@@ -38,6 +38,9 @@ Before declaring the inventory done, confirm each item. Report gaps explicitly r
 - [ ] Non-instrumented surfaces (settings, menu containers, orphan strings) are marked "no telemetry event"
       rather than given fabricated numbers.
 - [ ] A top-of-file Usage Summary (ranked table + roll-up deeplink) is present, stating cluster/window/date.
+- [ ] Corporate VPN was confirmed before collecting (or the unreachable fallback path was taken).
+- [ ] If the inventory is going to a **tracked/committed** folder, raw telemetry numbers are **redacted** —
+      qualitative signal + suggestion + query link only; full counts kept in the session copy.
 
 ## Header hygiene
 - [ ] Repo + exact commit SHA + version recorded at the top.

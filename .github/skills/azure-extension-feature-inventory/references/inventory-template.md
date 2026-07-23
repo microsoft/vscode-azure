@@ -64,10 +64,12 @@ Telemetry usage: collected from `cluster('ddtelvscode')` (window: <e.g. 90d>; co
 ## 8. Docs layer (C) — supplementary only
 - Doc URLs consulted; features described only in docs (unverified); noted gaps (404s, omissions).
 
-## 9. Usage Summary (telemetry)
+## 9. Usage Summary (telemetry) — WORKING COPY ONLY, do not commit raw numbers
 - Cluster / window / collected-on: `ddtelvscode` · <window, e.g. 90d> · <date>. (If telemetry was
-  unreachable, say so here and provide the roll-up + per-feature deeplinks instead of numbers.)
-- Ranked usage table (from the one generic query):
+  unreachable — e.g. not on VPN — say so here and provide the roll-up + per-feature deeplinks instead of numbers.)
+- Ranked usage table (from the one generic query). **This table with raw counts stays in the session/working
+  copy only.** Before committing `INVENTORY.md` to a tracked folder, replace the counts with a qualitative
+  band + suggestion + link (see Placement):
 
 | EventName | Feature | ExternalUsers | Succeeded | Failed | Canceled | LastSeen | Suggestion |
 |---|---|---|---|---|---|---|---|
@@ -88,4 +90,8 @@ Telemetry usage: collected from `cluster('ddtelvscode')` (window: <e.g. 90d>; co
 - If a migration workspace exists, offer to place it there. Prefer a **tracked** folder in the target repo
   so it can be committed with the migration — `docs/migrations/<service>/INVENTORY.md`. `TRIAGE.md` and
   `MIGRATION-PLAN.md` (produced later by the migration skill) live in that same folder.
+- **Before committing to a tracked folder, redact raw telemetry** (per `.github/copilot-instructions.md`):
+  keep the advisory suggestion, a qualitative rationale ("low external usage per telemetry"), and the ADX
+  deeplink; strip the ExternalUsers/Succeeded/Failed/Canceled counts and the Usage Summary numbers. Keep the
+  full-number copy in the session dir if the human wants it retained.
 - Always print the final path.

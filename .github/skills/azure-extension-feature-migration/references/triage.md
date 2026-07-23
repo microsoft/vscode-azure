@@ -20,8 +20,10 @@ The inventory (from the feature-inventory skill) carries **collected** per-featu
 suggestion as **input to the human's decision**, not a verdict: a low count is context, never an automatic
 Drop, and the guardrails still apply — a suppressed or renamed event reads as near-zero without being unused,
 high `Failed` is a fix signal, high `Canceled` is a friction signal. If the human wants fresh or deeper
-numbers (a different window, a version/platform breakdown), the inventory skill can run the targeted query;
-the triage decision remains the human's.
+numbers (a different window, a version/platform breakdown), the inventory skill can run the targeted query
+(**requires corporate VPN** — the telemetry cluster is unreachable otherwise); the triage decision remains
+the human's. **Raw counts stay in the session/working copy** — a committed `TRIAGE.md` cites telemetry only
+qualitatively (see the decision-artifact section below).
 
 ## Feature granularity (what counts as one row)
 
@@ -123,6 +125,10 @@ with the human — never silently in-flight while implementing.
   signed off, and the date. This makes the decision reproducible and auditable.
 - **One row per feature**, carrying the **stable ID**, the **final** disposition (Migrate / Adapt / Reuse /
   Drop / Defer — not "recommended"), the rationale, and whether usage data was consulted.
+- **Rationale may cite telemetry qualitatively** ("dropped: low external adoption per telemetry", "high cancel
+  rate suggests exploration, not use") but **must never paste raw counts, result tables, or exported rows** —
+  those stay in the session/working copy only (see `.github/copilot-instructions.md`). A committable ADX
+  **deeplink** (a query, not data) is fine so a reviewer can re-run it.
 - **Every inventory feature appears exactly once.** A row with no disposition is a bug — the gate isn't done.
 - **Defer rows** name the blocking phase/infra so `MIGRATION-PLAN.md` can track them.
 

@@ -14,6 +14,10 @@ follow-up questions by running scoped queries (or handing back a one-click link)
 > - **Respect the guardrails.** Suppression, cancellation, internal-only usage, small samples, and
 >   renamed/derived event names all distort a naive read. The guardrails below are mandatory before any
 >   suggestion.
+> - **Never commit raw telemetry results.** The counts, result-state tables, and exported rows are
+>   session/scratch only. A committed artifact (`INVENTORY.md`, `TRIAGE.md`) may record the **decision and a
+>   qualitative rationale** ("dropped: low external usage per telemetry") but **not** the raw numbers or result
+>   tables. KQL text and ADX deeplinks are queries, not data, and may be committed. See "Committing" below.
 
 ---
 
@@ -124,6 +128,12 @@ cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt
 ## Auth + execute (how to actually run it)
 
 The `ddtelvscode` cluster trusts the **Microsoft corporate tenant**. Getting this wrong is the #1 failure.
+
+**0. Precheck: corporate VPN.** The cluster is only reachable on the corporate network/VPN. **Confirm the
+user is connected to the VPN before doing anything else in this phase** — without it, token acquisition or the
+query call fails (timeout / connection refused), wasting a round of tokens and time on a doomed attempt. Ask
+explicitly if unsure. If they aren't (or can't) connect, skip straight to the deeplink fallback rather than
+retrying the query.
 
 **1. Get a token for the cluster, from the corp tenant explicitly:**
 
@@ -266,7 +276,10 @@ drop the usage aid silently.
 
 ---
 
-## How it appears in the inventory
+## How it appears in the inventory (working copy)
+
+While you and the human are working the inventory in-session, attach the real numbers — that's the point of
+collecting them:
 
 - **Usage summary (top of file):** the generic-query result as a ranked table (EventName, ExternalUsers,
   Succeeded/Failed/Canceled, LastSeen) + the roll-up deeplink. State the **cluster, window, and collection
@@ -277,3 +290,19 @@ drop the usage aid silently.
   suggestion inline in that feature's notes.
 - **Non-instrumented surfaces** (settings, menu containers, orphan strings): explicitly `no telemetry event`.
 - Every suggestion carries its **window + counts + confidence**; the Migrate/Drop verdict is left to the human.
+
+## Committing (raw telemetry must not land in the repo)
+
+Raw telemetry output — the counts, the result-state tables, exported rows — is **session/scratch only and
+must never be committed**. When the inventory (or the migration's `TRIAGE.md`) is placed in a tracked folder
+(`docs/migrations/<service>/`), **redact the raw numbers first**:
+
+- **Keep in the committed file:** the disposition, the advisory **suggestion**, a **qualitative** rationale
+  ("low external adoption per telemetry", "high cancel rate", "no data — likely suppressed"), and the KQL /
+  ADX **deeplink** (a query, not data — fine to commit so anyone can re-run it).
+- **Strip from the committed file:** the ExternalUsers / Succeeded / Failed / Canceled counts, the ranked
+  Usage Summary numbers, last-seen dates tied to counts, and any pasted result rows/CSV/JSON.
+- If the human wants the numbers preserved, keep them in an **uncommitted** session artifact (the session
+  files dir), not in the tracked `docs/migrations/<service>/` copy.
+
+This mirrors the repo-wide rule in `.github/copilot-instructions.md`.

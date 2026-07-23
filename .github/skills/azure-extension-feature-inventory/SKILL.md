@@ -117,11 +117,12 @@ window + confidence). The final verdict stays with the human and the migration s
 | # | Action | Reference |
 |---|--------|-----------|
 | 1 | For each instrumented feature, derive `EventName` = `<extensionId>/<callbackId>` (lowercased). Mark non-instrumented surfaces (settings, menu containers, orphan strings) as "no telemetry event". | [telemetry-usage.md](references/telemetry-usage.md) |
-| 2 | Authenticate to the `ddtelvscode` cluster with a **corp-tenant** token (`--tenant 72f988bf-...`; a default-tenant token 401s), then run the **one generic query** (`by EventName`, external users + Succeeded/Failed/Canceled + LastSeen) once for the whole extension. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 2 | **Confirm the user is on the corporate VPN first** — the `ddtelvscode` cluster is unreachable without it and the query will fail, wasting time/tokens; ask explicitly if unsure. Then authenticate with a **corp-tenant** token (`--tenant 72f988bf-...`; a default-tenant token 401s), and run the **one generic query** (`by EventName`, external users + Succeeded/Failed/Canceled + LastSeen) once for the whole extension. | [telemetry-usage.md](references/telemetry-usage.md) |
 | 3 | Map each result row back to its feature. Reconcile misses (renamed/suppressed != unused); flag framework-only rows. Attach the numbers to each feature. | [telemetry-usage.md](references/telemetry-usage.md) |
 | 4 | Produce an advisory suggestion per feature using the numbers + guardrails (suppression, Canceled != Failed, internal-only, small-N). Never present a bare verdict; always show window + counts. | [telemetry-usage.md](references/telemetry-usage.md) |
-| 5 | If telemetry is unreachable (no `az` / no corp access), **fall back** to emitting the per-feature + roll-up ADX deeplinks so the human can run them. Also keep the roll-up deeplink for handoff either way. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 5 | If telemetry is unreachable (**not on VPN** / no `az` / no corp access), **fall back** to emitting the per-feature + roll-up ADX deeplinks so the human can run them. Also keep the roll-up deeplink for handoff either way. | [telemetry-usage.md](references/telemetry-usage.md) |
 | 6 | Support the user's **targeted questions** (e.g. "usage in the last 7d", "failure rate", "by version/platform") by scoping the query, running it, and reporting the numbers — or emitting a matching link. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 7 | **Raw telemetry must not be committed.** Keep counts/result tables in the working (session) copy only. If `INVENTORY.md` will be committed to a tracked folder, redact raw numbers to a qualitative signal + suggestion + query link (per `.github/copilot-instructions.md`). | [telemetry-usage.md](references/telemetry-usage.md) |
 
 ---
 
@@ -130,7 +131,7 @@ window + confidence). The final verdict stays with the human and the migration s
 | # | Action | Reference |
 |---|--------|-----------|
 | 1 | Write `INVENTORY.md` following the template's section order and tables. Include the per-feature usage numbers + advisory suggestion and the top-of-file usage summary (real data + roll-up link, or links-only if telemetry was unreachable). | [inventory-template.md](references/inventory-template.md) |
-| 2 | Save it where the user asked (default: alongside the migration workspace, or a session artifact). Print the path. | [inventory-template.md](references/inventory-template.md) |
+| 2 | Save it where the user asked (default: alongside the migration workspace, or a session artifact). **If the destination is tracked/committed (`docs/migrations/<service>/`), redact raw telemetry numbers first** (keep suggestion + qualitative rationale + query link); keep the raw-number copy in the session dir only. Print the path. | [inventory-template.md](references/inventory-template.md) |
 
 ---
 
