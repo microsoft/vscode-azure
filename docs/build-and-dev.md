@@ -199,6 +199,11 @@ pnpm --filter vscode-azure run testcov                   # With coverage (vscode
 
 See [Testing](testing.md) for details on test runners and coverage.
 
+Static Web Apps performs a best-effort npm latest-version check during normal
+activation. Activation skips that check when `VSCODE_RUNNING_TESTS` is set, so
+extension tests remain deterministic and offline; unit tests inject HTTP responses
+when exercising the registry parser.
+
 ## Packaging
 
 ```bash

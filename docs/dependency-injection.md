@@ -159,3 +159,18 @@ Some providers need to be injected directly by commands *and* retrieved collecti
 2. `container.bind(IActivityViewDataProviders).toService(IArmDeploymentDataProvider)`
 
 So `ClearActivities` can inject `IArmDeploymentDataProvider` directly and get the *same instance* the tree sees through `container.getAll(IActivityViewDataProviders)`. Without the singleton scope the two would be different objects, and the command's mutations would never reach the tree.
+
+## Activation-Owned Local Tooling
+
+Static Web Apps local tooling follows the same ownership model as tree providers:
+
+- `ISwaCliService` wraps `IProcessExecutor`, `IOutputChannel`, and `IVsCode`.
+- Task/debug/content providers are singleton bindings so commands and VS Code
+  registrations share state.
+- `SwaTaskLifecycle` and `GitHubActionLogContentProvider` are activated through
+  `pushDisposable`; their event subscriptions and caches are disposed with the extension.
+- `registerStaticWebAppLocalTools()` pushes every VS Code task, debug, text-content,
+  and folding registration into `IExtensionContext.subscriptions`.
+
+Raw process signaling is isolated behind `IProcessTerminator`; tests replace that
+service and never signal a real process.

@@ -22,6 +22,8 @@ export type AzdJob = 'createNew' | 'deploy';
 export interface AzdWizardContext {
     readonly subscription?: AzureSubscription;
     readonly location?: Location;
+    /** Optional allow-list for resource types available in only a subset of regions. */
+    readonly allowedLocationNames?: ReadonlySet<string>;
     /** Name of the azd environment used to isolate state and resources. */
     readonly environmentName?: string;
     /** Value written as the `azd-service-name` tag on the resource so `azd deploy` can target it. */
@@ -34,6 +36,11 @@ export interface AzdWizardContext {
     readonly deploy?: boolean;
     /** Selected job-to-be-done; set by the command entry point before the wizard runs. */
     readonly job?: AzdJob;
+    /**
+     * Localized resource name used by shared prompts. Commands may omit this
+     * to retain the Function App wording used by the original wizard.
+     */
+    readonly resourceDisplayName?: string;
 
     // ---- Hydration flags (set by HydrateAzdInfoStep, deploy job only) ----
     /** `true` when `azure.yaml` (or `azure.yml`) is present in {@linkcode iacFolder}. */

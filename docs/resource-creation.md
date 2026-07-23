@@ -124,6 +124,49 @@ When the default env is partially configured (Post-clone), the wizard never muta
 
 `provision` is seeded to `true` by the command entry point. Only the Bootstrapped state shows a confirmation prompt — this is the one case where re-provisioning could affect an existing live deployment. Fresh and Post-clone paths provision unconditionally (the environment is new, so there's nothing to overwrite).
 
+## Static Web Apps Creation
+
+`CreateStaticWebApp` registers `vscode-azure/staticWebApps/createNew` (basic)
+and `vscode-azure/staticWebApps/createAdvanced` (advanced). An open workspace
+selects the `deploy` job; without one, creation uses temporary IaC and
+provisions only. Basic mode defaults to the Free SKU. Advanced mode adds the
+Free/Standard SKU prompt.
+The shared location step is constrained to Central US, East US 2, East Asia,
+West Europe, and West US 2 for this resource type.
+
+After the shared folder, hydration, subscription, location, and project-name
+steps, the wizard selects a grouped build preset and prompts for application,
+Functions API, and output locations. Detection reads workspace files through
+`vscode.workspace.fs`, preselects retained frameworks, resolves Angular
+`dist/<project-name>`, and prefers Functions APIs in root, one-level, then
+deeper order. The three location prompts honor:
+
+- `vscode-azure.staticWebApps.appSubpath`
+- `vscode-azure.staticWebApps.apiSubpath`
+- `vscode-azure.staticWebApps.outputSubpath`
+
+Execution generates `staticWebApp.bicep` plus its resource-group module,
+initializes `azure.yaml`, adds a `host: staticwebapp` service when the selected
+artifact shape is supported, creates the azd environment, provisions, and
+deploys when applicable. The Bicep resource uses
+`Microsoft.Web/staticSites@2023-12-01`, emits its HTTPS endpoint, and tags the
+site with `azd-env-name` and `azd-service-name`.
+
+Existing GitHub remote and branch metadata is retained only when the remote is
+on github.com. No token is written, workflow generation is disabled, and the
+wizard never creates a repository or pushes code. Repository bootstrap is
+intentionally deferred until it can be an explicit, independently confirmed
+flow.
+
+Current azd Static Web Apps deployment requires an artifact directory distinct
+from the source directory. Empty, `/`, and `.` output locations therefore
+provision the resource but skip service generation and `azd deploy`; the
+resource remains available in the refreshed Azure tree. A selected Functions
+path is retained as Bicep build metadata, but direct azd deployment does not
+create a managed Functions workflow. Direct azd deployments also do not poll
+GitHub Actions; the existing 15-second/20-minute poller is reserved for actual
+linked workflow runs.
+
 ## Adding a New Resource Type
 
 To add a new creation wizard (e.g. Static Web App):

@@ -15,6 +15,8 @@ import type { ISubscriptionClientProvider, Location } from '../rest/clients/Subs
 export interface ChooseLocationContext {
     readonly subscription?: AzureSubscription;
     readonly location?: Location;
+    /** Optional allow-list for resources available in only a subset of Azure regions. */
+    readonly allowedLocationNames?: ReadonlySet<string>;
 }
 
 /**
@@ -46,6 +48,8 @@ export class ChooseLocationStep<TContext extends ChooseLocationContext> extends 
         this.output.debug(`[wizard] fetch locations done subscription=${context.subscription.subscriptionId} count=${locations.length}`);
 
         const picks: QuickPickItemWithData<Location>[] = locations
+            .filter(location => !context.allowedLocationNames
+                || (!!location.name && context.allowedLocationNames.has(location.name.toLowerCase())))
             .filter(l => l.name && l.displayName)
             .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''))
             .map(l => ({
