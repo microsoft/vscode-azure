@@ -71,4 +71,12 @@ For each wizard (create, create-advanced, delete, and any sub-wizards like creat
 - **Git / GitHub / auth**: auth provider id + scopes, Octokit usage (Actions monitor/rerun/cancel, repo
   create/fork), custom log viewers/content providers, git abstraction (VS Code Git API vs Remote Repos).
 
+## 6. Telemetry callbacks (for Phase 5)
+
+For every instrumented path, capture the **telemetry callback id** — the first arg to
+`callWithTelemetryAndErrorHandling` / `registerCommand*` (for commands it's the command id; task
+providers/resolvers/wizards may pass other ids). Also note any **suppression**: a callback that sets
+`suppressIfSuccessful` (emits only on failure/cancel) or `suppressAll` (never emits) will read as near-zero
+usage even when heavily used — Phase 5 relies on this flag to avoid misreading a suppressed feature as unused.
+
 Mark everything found here source layer `B`. Phase 4 merges with `A` items.

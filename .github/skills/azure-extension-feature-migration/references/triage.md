@@ -14,10 +14,14 @@ wrong wastes the most effort, so it is gated up front.
 
 ## Usage data is a triage input (not the skill's call)
 
-The inventory (from the feature-inventory skill) includes a **telemetry usage link** per instrumented
-feature plus an extension-wide roll-up link. Encourage the human to open the ones they're unsure about —
-**external** adoption (`IsInternal == false`) and failure rate are strong Migrate-vs-Drop signals. The agent
-must **not** run those queries or assert usage; a low count is context for the human, never an automatic Drop.
+The inventory (from the feature-inventory skill) carries **collected** per-feature usage — external adoption
+(`IsInternal == false`), the Succeeded/Failed/Canceled split, last-seen, and an **advisory** suggestion
+(`lean Migrate` / `candidate Drop` / `needs a human` / `no data — verify`). Treat those numbers and the
+suggestion as **input to the human's decision**, not a verdict: a low count is context, never an automatic
+Drop, and the guardrails still apply — a suppressed or renamed event reads as near-zero without being unused,
+high `Failed` is a fix signal, high `Canceled` is a friction signal. If the human wants fresh or deeper
+numbers (a different window, a version/platform breakdown), the inventory skill can run the targeted query;
+the triage decision remains the human's.
 
 ## Feature granularity (what counts as one row)
 

@@ -1,24 +1,27 @@
-# Telemetry usage links (triage aid)
+# Telemetry usage (collect + analyze)
 
-Usage data is one of the strongest signals a human uses to decide **Migrate vs Drop** during the later
-feature migration. This skill's job is to **hand the human a ready-to-run query and a one-click link for
-each feature** — not to run the queries and not to make the call.
+Real usage is one of the strongest signals a human uses to decide **Migrate vs Drop** during the later
+feature migration. This skill's job is to **collect actual usage for every feature in a single query, attach
+it to the inventory, and offer an advisory suggestion** per feature — and to answer the user's targeted
+follow-up questions by running scoped queries (or handing back a one-click link).
 
-> **Hard rules for this phase**
-> - **Emit links; do not execute.** You have no telemetry tool, and running a query per feature would be
->   expensive and slow. Generate the query + deeplink and put them in the inventory. The human runs the ones
->   they care about.
-> - **Do not infer or assert usage.** Never write "this looks unused / low-usage / safe to drop." You have
->   no data. Triage decisions belong to the human (and to the migration skill's triage phase).
-> - **Links are an aid, not a verdict.** The inventory stays a factual catalog.
+> **Posture**
+> - **Collect, don't guess.** When telemetry is reachable (see auth below), run the one generic query and use
+>   the numbers. Only when telemetry is *not* reachable do you fall back to emitting links for the human.
+> - **Suggest, don't decree.** A usage-based suggestion (`lean Migrate` / `candidate Drop` / `needs a human`)
+>   is a recommendation with its numbers, window, and confidence attached. The **final Migrate/Drop call stays
+>   with the human** (and the migration skill's triage gate). Never silently turn a low count into a verdict.
+> - **Respect the guardrails.** Suppression, cancellation, internal-only usage, small samples, and
+>   renamed/derived event names all distort a naive read. The guardrails below are mandatory before any
+>   suggestion.
 
 ---
 
 ## Where telemetry events come from
 
 Azure VS Code extensions emit one telemetry event per instrumented callback via
-`callWithTelemetryAndErrorHandling('<callbackId>', ...)` (and the `registerCommand*` wrappers, which call
-it internally). The event lands in the shared **`RawEventsVSCodeExt`** table.
+`callWithTelemetryAndErrorHandling('<callbackId>', ...)` (and the `registerCommand*` wrappers, which call it
+internally). Every event lands in the shared **`RawEventsVSCodeExt`** table.
 
 **EventName convention (verified):**
 
@@ -30,111 +33,212 @@ it internally). The event lands in the shared **`RawEventsVSCodeExt`** table.
   (e.g. `staticwebapps.clonerepo` -> `ms-azuretools.vscode-azurestaticwebapps/staticwebapps.clonerepo`).
 - For **non-command instrumented callbacks** (task providers, resolvers, wizard bookkeeping, activation),
   `callbackId` is whatever string the code passes — it may not be a command id
-  (e.g. `staticwebapps.providetasksforworkspacefolder`, which is a task-provider callback).
+  (e.g. `staticwebapps.providetasksforworkspacefolder`, a task-provider callback).
 
-So during Phase 3 (code surfaces), capture the **telemetry callback id** for every instrumented path, not
-just command ids. Any feature with a callback id can get a usage link.
-
-**What does NOT have its own event:** pure declarative surfaces with no callback (a setting, a menu
-container, a `problemMatcher`), and dead/orphan strings. Give those **no** telemetry link — note "no direct
-telemetry event" instead of fabricating one.
+**What does NOT have its own event:** pure declarative surfaces with no callback (a setting, a menu container,
+a `problemMatcher`), and dead/orphan strings. These get **no** usage row — record "no direct telemetry event"
+rather than fabricating one.
 
 ---
 
-## The table (`cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt`)
+## The table: `cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt`
 
-Decision-relevant columns (full schema is larger; these are the ones the queries use):
+`RawEventsVSCodeExt` is a **shared, multi-extension table** — every VS Code extension (and Copilot itself)
+writes to it, so it has many columns irrelevant to a single extension. **Always** filter by `ExtensionName`.
+
+Decision-relevant columns (the ones the queries below use):
 
 | Column | Type | Use in usage analysis |
 |--------|------|-----------------------|
-| `EventName` | string | The `<extId>/<callbackId>` event id (lowercased). Primary filter. |
-| `ExtensionName` | string | `ms-azuretools.vscode-<service>`. Always filter on it. |
-| `ServerTimestamp` | datetime | Time window (`ago(28d)` etc.). Prefer over `ClientTimestamp`. |
-| `VSCodeMachineId` | string | `dcount()` for unique users. |
+| `EventName` | string | The `<extId>/<callbackId>` event id (lowercased). Primary per-feature key. |
+| `ExtensionName` | string | `ms-azuretools.vscode-<service>`. **Always filter on it first.** |
+| `ServerTimestamp` | datetime | Time window (`ago(90d)` etc.). Prefer over `ClientTimestamp`. |
+| `VSCodeMachineId` | string | `dcount()` for unique users (machines). |
 | `IsInternal` | bool | **Key signal.** `IsInternal == false` isolates *external* (non-Microsoft) usage. |
-| `Properties` | dynamic | `Properties.result` (`Succeeded`/`Failed`/`Canceled`), `Properties.error`, `Properties.isactivationevent`, plus per-feature custom props. |
-| `Measures` | dynamic | Numeric per-feature dims (`duration`, and command-specific ones). |
-| `ExtensionVersion` | string | Scope to recent versions if needed. |
-| `Platform`, `GeoCountryRegionIso` | string | Optional breakdowns. |
+| `Properties` | dynamic | `Properties['result']` (`Succeeded`/`Failed`/`Canceled`), `Properties['error']`, `Properties['isactivationevent']`, plus per-feature custom props. |
+| `Measures` | dynamic | Numeric per-feature dims (`duration`, command-specific ones). |
+| `ExtensionVersion` | string | Break down adoption by version, or scope to recent versions. |
+| `Platform`, `GeoCountryRegionIso`, `GeoCity` | string | Optional breakdowns for targeted questions. |
+| `VSCodeVersion` | string | Break down by VS Code version if needed. |
 
-Notes:
-- `Properties.isactivationevent == 'true'` marks activation, not a deliberate invocation — usually exclude.
-- `Properties.result` has **three** states — keep them separate:
-  - `Succeeded` — the feature ran to completion.
-  - `Failed` — the feature errored. High failure share can make a broken feature look "used" by raw count.
-  - `Canceled` — the **user** backed out (dismissed the wizard/quick pick). This is *not* a failure. A high
-    cancellation share is its own signal: people open the feature but don't follow through — often "just
-    exploring," which can mean the feature isn't pulling its weight. Surface it in its own column so the human
-    can weigh it; don't fold it into failures and don't make the call for them.
+`Properties` and `Measures` are `dynamic` — index into them with bracket notation and coerce
+(`tostring(Properties['result'])`, `toreal(Measures['duration'])`).
 
-### Caveats that break a naive usage read
+Full column list (from `RawEventsVSCodeExt | getschema`, for reference when answering ad-hoc questions —
+most are Copilot/LSP fields, not used here):
 
-Two source-side behaviors can make a feature look unused when it isn't. Both reinforce the hard rule — **never
-read a low/zero count as "unused."**
+```
+ABExpAssignmentContext, Attributes, AvgChunkSize, ClientTimestamp, Command, ConversationId,
+CopilotTrackingId, DataHandlingTags, DevDeviceId, Duration, DurationMS, EventName, ExtensionName,
+ExtensionVersion, GeoCity, GeoCountryRegionIso, IntentId, IsEntireFile, IsInternal, Isbyok,
+LanguageServerVersion, Measures, Method, Model, NovaProperties, NumRequests, Outcome, Participant,
+Platform, PlatformVersion, PromptTokenCount, Properties, RequestId, ResponseTokenCount, ResponseType,
+Rounds, SKU, SQMMachineId, SchemaVersion, ServerTimestamp, Source, SurvivalRateFourgram, Tags,
+TimeDelayms, TimeToComplete, TimeToFirstToken, TokenCount, ToolCounts, ToolGroupState, ToolName,
+TotalNewDiagnostics, Turn, VSCodeMachineId, VSCodeSessionId, VSCodeVersion, WorkloadTags
+```
 
-- **The emitted EventName is authoritative.** Derive `<extId>/<callbackId>` as above, but a callback can
-  customize its telemetry (a different event name), so the derived name can miss. The **roll-up query lists
-  the literal EventNames as actually emitted** — reconcile each per-feature link against that list before
-  trusting a low or zero count.
-- **Telemetry can be suppressed.** `vscode-azext-utils` callbacks may set `suppressIfSuccessful` (no event on
-  success — only failures/cancellations emit) or `suppressAll` (no event at all). A suppressed feature shows
-  near-zero or zero `ExternalUsers` **even when heavily used**. During Phase 3 (code surfaces), capture any
-  suppression you see, and mark that feature's link as a **non-adoption** signal rather than presenting its
-  count as usage.
+**Result tri-state — keep the three separate.** `Properties['result']` is `Succeeded` | `Failed` |
+`Canceled`:
+- `Succeeded` — ran to completion.
+- `Failed` — errored. A feature that is invoked but mostly *fails* is a **fix** signal, not a Drop signal —
+  people wanted it.
+- `Canceled` — the **user** backed out (dismissed the wizard/quick pick). This is *not* a failure. A high
+  cancellation share means people open the feature but don't follow through — often "just exploring." Surface
+  it on its own; never fold it into failures.
 
 ---
 
-## Canonical per-feature query template
+## The one generic query (run once, covers every feature)
 
-Substitute `<extensionId>` and the lowercased `<callbackId>`:
-
-```kusto
-cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt
-| where ServerTimestamp > ago(28d)
-| where ExtensionName == '<extensionId>'
-| where EventName == '<extensionId>/<callbackId>'
-| where tostring(Properties.isactivationevent) != 'true'
-| summarize Invocations = count(),
-            Users = dcount(VSCodeMachineId),
-            ExternalUsers = dcountif(VSCodeMachineId, IsInternal == false),
-            Failures = countif(tostring(Properties.result) == 'Failed'),
-            Canceled = countif(tostring(Properties.result) == 'Canceled')
-```
-
-- `ExternalUsers` is the headline Migrate/Drop signal.
-- `Failures` flags features that are invoked but broken (errored, not user-aborted).
-- `Canceled` is kept separate on purpose: it counts **user cancellations**, which read very differently from
-  failures — a feature that's mostly opened-then-dismissed may be one people explore but don't actually use.
-- Widen the window (`ago(90d)`) for rarely-used features before concluding anything — but that conclusion is
-  the human's to make.
-
-Optional roll-up the human can run once to rank the whole extension (cheaper than per-feature):
+Instead of a query per feature, run **this single query once** to get a per-`EventName` usage table for the
+whole extension. Substitute `<extensionId>`; widen `window` for rarely-used features.
 
 ```kusto
+let ext = '<extensionId>';
+let window = 90d;
 cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt
-| where ServerTimestamp > ago(28d)
-| where ExtensionName == '<extensionId>'
-| where tostring(Properties.isactivationevent) != 'true'
-| summarize Invocations = count(),
-            ExternalUsers = dcountif(VSCodeMachineId, IsInternal == false),
-            Failures = countif(tostring(Properties.result) == 'Failed'),
-            Canceled = countif(tostring(Properties.result) == 'Canceled') by EventName
+| where ServerTimestamp > ago(window)
+| where ExtensionName == ext
+| where tostring(Properties['isactivationevent']) != 'true'
+| summarize
+    Invocations   = count(),
+    ExternalUsers = dcountif(VSCodeMachineId, IsInternal == false),
+    InternalUsers = dcountif(VSCodeMachineId, IsInternal == true),
+    Succeeded     = countif(tostring(Properties['result']) == 'Succeeded'),
+    Failed        = countif(tostring(Properties['result']) == 'Failed'),
+    Canceled      = countif(tostring(Properties['result']) == 'Canceled'),
+    LastSeen      = format_datetime(max(ServerTimestamp), 'yyyy-MM-dd')
+    by EventName
 | order by ExternalUsers desc
 ```
 
-Offer both in the inventory: a per-feature link **and** this single roll-up link near the top.
+- One row per **emitted** EventName — this result set is the **authoritative list of what the extension
+  actually emits** (see the derived-name guardrail below).
+- `ExternalUsers` is the headline Migrate/Drop signal.
+- `InternalUsers` isolates dev/test-only surfaces (external ~0, internal > 0 -> likely Drop for the product).
+- Excludes activation pings so counts reflect deliberate invocations.
 
 ---
 
-## Generating the one-click Azure Data Explorer deeplink
+## Auth + execute (how to actually run it)
 
-ADX web accepts a deeplink whose `query` param is the KQL **gzip -> base64 -> URL-encoded**:
+The `ddtelvscode` cluster trusts the **Microsoft corporate tenant**. Getting this wrong is the #1 failure.
+
+**1. Get a token for the cluster, from the corp tenant explicitly:**
+
+```powershell
+$tenant = '72f988bf-86f1-41af-91ab-2d7cd011db47'   # microsoft.com
+$token = az account get-access-token `
+  --resource 'https://ddtelvscode.kusto.windows.net' `
+  --tenant $tenant --query accessToken -o tsv
+```
+
+> **Gotcha (verified):** a *default* `az` token — issued from a personal/MSDN or other home tenant — has the
+> right audience (`https://ddtelvscode.kusto.windows.net`) and `scp=user_impersonation` but still returns
+> **HTTP 401**, with `WWW-Authenticate` pointing at `login.microsoftonline.com/common`. **Always pass
+> `--tenant 72f988bf-...`.** Decode the token and confirm `tid` is the corp tenant and `upn` is your
+> `@microsoft.com` before blaming the query.
+
+**2. POST the KQL to the REST endpoint** (v1 is the simplest to parse; `db` names the database):
+
+```powershell
+$body = @{ db = 'VSCodeExt'; csl = $query } | ConvertTo-Json
+$r = Invoke-RestMethod -Uri 'https://ddtelvscode.kusto.windows.net/v1/rest/query' `
+  -Method Post -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType 'application/json' -Body $body
+$t = $r.Tables[0]          # v1: Tables[0] = PrimaryResult (Columns + Rows)
+$cols = $t.Columns.ColumnName
+$t.Rows | ForEach-Object { $row = $_; ($cols | ForEach-Object { "$_=$($row[[array]::IndexOf($cols,$_)])" }) -join '  ' }
+```
+
+Execution notes:
+- **Token acquisition and the query must run in the same shell invocation** — env vars don't persist between
+  this runtime's separate command calls. Acquire `$token` and POST in one call (or re-acquire each call).
+- The KQL body may keep the fully-qualified `cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt`
+  prefix (matches the deeplinks) or, since `db` is set, use the bare `RawEventsVSCodeExt` — both work.
+- The `v2/rest/query` endpoint returns a multi-frame response; prefer `v1` unless you need v2 features.
+- `az` CLI must be present and logged in. If it isn't, or the corp-tenant token can't be obtained (no access),
+  **do not block** — fall back to emitting deeplinks (below) so the human can run them.
+
+---
+
+## Map results back to features
+
+The query is keyed by **emitted** `EventName`. Join it to the inventory:
+
+1. For each instrumented feature, you already captured its `<callbackId>` in Phase 3; derive
+   `EventName = '<extensionId>/<callbackId>'` (lowercased).
+2. Look that EventName up in the result set and attach `ExternalUsers / Succeeded / Failed / Canceled /
+   LastSeen`.
+3. **Reconcile misses (guardrail — do not skip):** if a feature's derived EventName is **absent** from the
+   results, that is **not** proof of "unused." It usually means one of:
+   - the callback emits under a **customized event name** (scan the results for a near-match and re-map), or
+   - telemetry is **suppressed** for that callback (see below), or
+   - it genuinely has no usage in the window.
+   Record it as **"no data (verify: renamed? suppressed?)"**, never as "unused."
+4. Leftover result rows with **no** matching inventory feature (e.g. `call-tas-error`, `info`,
+   `resolveresource`) are framework/plumbing events — note them, don't attribute them to a user feature.
+
+---
+
+## Turn data into a suggestion (advisory)
+
+Rank features by `ExternalUsers` within *this* extension (absolute counts vary wildly by product, so compare
+relative to the extension's own distribution). Then apply these defaults — each is a **recommendation with the
+numbers attached**, not a decision:
+
+| Observation | Advisory suggestion | Why |
+|-------------|--------------------|-----|
+| High `ExternalUsers` (top of the distribution), recent `LastSeen` | **lean Migrate** | Clearly in real-world use |
+| Near-zero `ExternalUsers` over a wide window, **not suppressed**, name confirmed in results | **candidate Drop / Defer** — flag for human | No evidence of external adoption |
+| External ~0 but `InternalUsers` > 0 | **candidate Drop** (dev/test surface) | Used only inside Microsoft |
+| High `Failed` share | **Migrate + fix** (not Drop) | People invoke it; it's broken, not unwanted |
+| High `Canceled` share | **needs a human** — friction/exploration | Opened-then-dismissed; low follow-through |
+| Derived name absent from results | **no data — verify renamed/suppressed** | Absence != unused (guardrail) |
+
+Guardrails that must gate every suggestion:
+- **Suppression.** `vscode-azext-utils` callbacks may set `suppressIfSuccessful` (no event on success — only
+  failures/cancellations emit) or `suppressAll` (no event at all). A suppressed feature reads as near-zero
+  even when heavily used. If Phase 3 flagged suppression for a feature, mark it **non-adoption signal** and do
+  **not** suggest Drop on the count.
+- **Emitted-name authority.** The generic query's result set is the source of truth for what's emitted;
+  reconcile every derived name against it (step 3 above) before trusting a zero.
+- **Small samples / short windows.** Widen to `180d`/`365d` before suggesting Drop on a rarely-used feature.
+- **Canceled != Failed != unused.** Keep the three distinct in the suggestion rationale.
+- Always show the **window** and the **counts** next to the suggestion; a bare verdict is not allowed.
+
+---
+
+## Targeted / ad-hoc questions
+
+When the user asks a specific usage question, translate it to scoped KQL, **run it** (same auth as above), and
+report the numbers — or hand back a deeplink if telemetry isn't reachable. Common shapes:
+
+| The user asks... | Scope the generic query with... |
+|------------------|--------------------------------|
+| "How many people used **X** in the last 7 days?" | `where EventName == '<extId>/<x>'`, `window = 7d`, `dcountif(VSCodeMachineId, IsInternal == false)` |
+| "What's the **failure/cancel rate** of the create wizard?" | filter to that EventName; `Succeeded/Failed/Canceled` + ratios |
+| "Is usage **trending down**? which version?" | `summarize ExternalUsers = dcountif(...) by bin(ServerTimestamp, 7d)` or `by ExtensionVersion` |
+| "Break down by **platform / region**?" | `by Platform` / `by GeoCountryRegionIso` |
+| "Which features are **most used** overall?" | the generic query as-is (already ranked) |
+| "Show the raw **error messages**?" | `where EventName == ... and Properties['result'] == 'Failed' | summarize count() by tostring(Properties['error'])` |
+
+Report the concrete numbers, the window, and any guardrail caveat (suppression, small N). Offer the matching
+one-click deeplink alongside so the user can re-run or share it.
+
+---
+
+## One-click Azure Data Explorer deeplink (handoff + no-access fallback)
+
+Still emit deeplinks: for the roll-up (top of the inventory), for handoff to people without CLI access, and as
+the fallback when telemetry can't be reached. The `query` param is the KQL **gzip -> base64 -> URL-encoded**:
 
 ```
 https://dataexplorer.azure.com/clusters/ddtelvscode/databases/VSCodeExt?query=<encoded>
 ```
 
-Generate it deterministically (do **not** hand-encode). Node (portable, matches the repo toolchain):
+Generate it deterministically (do **not** hand-encode). Node (matches the repo toolchain):
 
 ```js
 const zlib = require('zlib');
@@ -157,22 +261,19 @@ function New-AdxLink([string]$q) {
 }
 ```
 
-Batch it: build the `{ callbackId -> query }` map from the inventory's captured callback ids, run one script
-pass to produce all links, then splice them into the tables. Don't spawn a process per feature.
-
-If a deeplink can't be produced for some reason, fall back to emitting the **raw query in a fenced block** so
-the human can paste it — never omit the usage aid silently.
+If a deeplink can't be produced, emit the **raw query in a fenced block** so the human can paste it — never
+drop the usage aid silently.
 
 ---
 
 ## How it appears in the inventory
 
-- **Commands table:** add a `Telemetry` column whose cell links the derived EventName's query
-  (`[usage](<deeplink>)`), or `-` when the command has no callback.
-- **Other instrumented features** (task/debug providers, wizard entry points, resolvers): add the EventName +
-  `[usage](<deeplink>)` inline in that feature's notes.
-- **Top of the file:** one "usage roll-up" link (the `by EventName` query) so the human can rank everything
-  in a single query before drilling in.
+- **Usage summary (top of file):** the generic-query result as a ranked table (EventName, ExternalUsers,
+  Succeeded/Failed/Canceled, LastSeen) + the roll-up deeplink. State the **cluster, window, and collection
+  date**; if telemetry was unreachable, say so and show links instead of numbers.
+- **Commands table `Telemetry` cell:** the feature's numbers + advisory suggestion (e.g.
+  `E:375 · ok724/fail1/cancel89 · lean Migrate`) and a drill-in `[usage](<deeplink>)` link; `-` if no callback.
+- **Other instrumented features** (task/debug providers, wizard entry points, resolvers): same numbers +
+  suggestion inline in that feature's notes.
 - **Non-instrumented surfaces** (settings, menu containers, orphan strings): explicitly `no telemetry event`.
-
-Keep the wording neutral — a link and an EventName, never a usage claim.
+- Every suggestion carries its **window + counts + confidence**; the Migrate/Drop verdict is left to the human.

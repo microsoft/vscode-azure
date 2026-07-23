@@ -12,7 +12,7 @@ Code is authoritative for behavior; docs are supplementary.
 
 Source layer legend: **A** = declarative (manifest), **B** = code-only/behavioral, **C** = docs/UX.
 
-Usage roll-up (triage aid — run yourself; not executed by the skill): [all events, external usage, last 28d](<adx-deeplink>)
+Telemetry usage: collected from `cluster('ddtelvscode')` (window: <e.g. 90d>; collected <date>). See the Usage Summary section below. Roll-up deeplink: [all events, external usage](<adx-deeplink>)
 
 ## 0. Extension-level shape
 - extensionDependencies: <...>
@@ -21,13 +21,13 @@ Usage roll-up (triage aid — run yourself; not executed by the skill): [all eve
 - x-azResources (A): branches <type>; create commands; activation.onResolve <ARM types>
 - Exported extension API (B): <return value of activate(); methods/properties/events>
 - Activation wiring (B): <providers, resolvers, task/debug/language registrations, auth session, telemetry>
-- Telemetry (B): <notable custom telemetry>. EventName convention: `<extensionId>/<callbackId>` (lowercased). Non-command instrumented callbacks (task providers, resolvers, wizard entry) get a `[usage](<deeplink>)` link in their own section below.
+- Telemetry (B): <notable custom telemetry>. EventName convention: `<extensionId>/<callbackId>` (lowercased). Per-feature usage is collected once via the generic query and shown in the Usage Summary + each feature's Telemetry cell.
 
 ## 1. Commands (A + B)
 | Command id | Title | Layer | Telemetry | Notes / enablement / when |
 |---|---|---|---|---|
-| ... | ... | A+B | [usage](<adx-deeplink>) | ... |
-> Telemetry column = one-click ADX usage query for EventName `<extId>/<commandId>` (lowercased). `-` if no callback.
+| ... | ... | A+B | E:<extUsers> · ok<n>/fail<n>/cancel<n> · <suggestion> [usage](<deeplink>) | ... |
+> Telemetry cell = collected usage for EventName `<extId>/<commandId>` (lowercased): external users, result split, and an **advisory** suggestion (`lean Migrate` / `candidate Drop` / `needs a human` / `no data — verify`). `-` if no callback. `[usage]` drills into ADX. Numbers only — the Migrate/Drop call is the human's.
 > Code-only commands (B, not in manifest): <list with where they're invoked>
 > Orphan strings (flag, DO NOT migrate): <dead NLS keys>
 
@@ -63,6 +63,19 @@ Usage roll-up (triage aid — run yourself; not executed by the skill): [all eve
 
 ## 8. Docs layer (C) — supplementary only
 - Doc URLs consulted; features described only in docs (unverified); noted gaps (404s, omissions).
+
+## 9. Usage Summary (telemetry)
+- Cluster / window / collected-on: `ddtelvscode` · <window, e.g. 90d> · <date>. (If telemetry was
+  unreachable, say so here and provide the roll-up + per-feature deeplinks instead of numbers.)
+- Ranked usage table (from the one generic query):
+
+| EventName | Feature | ExternalUsers | Succeeded | Failed | Canceled | LastSeen | Suggestion |
+|---|---|---|---|---|---|---|---|
+| `<extId>/<callbackId>` | <feature> | <n> | <n> | <n> | <n> | <date> | lean Migrate |
+
+- Notes: features whose derived EventName had **no** result row (verify renamed/suppressed, not "unused");
+  framework/plumbing rows with no user feature (e.g. `call-tas-error`, `resolveresource`); any suppressed
+  callbacks flagged in Phase 3.
 
 ## Migration-relevant cross-cutting notes
 - Host-API dependence, shared-lib coupling, and anything that maps onto the monorepo's DI /

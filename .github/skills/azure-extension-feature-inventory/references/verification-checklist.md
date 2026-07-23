@@ -26,13 +26,18 @@ Before declaring the inventory done, confirm each item. Report gaps explicitly r
 - [ ] `enablement` gates (`!isWeb`, `!virtualWorkspace`) recorded per command.
 - [ ] Docs-only claims are marked `C` and flagged unverified; docs never removed a real feature.
 
-## Telemetry usage links (triage aid)
-- [ ] Every instrumented feature has a derived EventName `<extensionId>/<callbackId>` (lowercased) and a
-      `[usage]` ADX deeplink (or a raw fenced fallback query).
+## Telemetry usage (collect + analyze)
+- [ ] Every instrumented feature has a derived EventName `<extensionId>/<callbackId>` (lowercased).
+- [ ] The one generic query was run against `ddtelvscode` (corp-tenant auth) and its result attached
+      per-feature — OR, if telemetry was unreachable, that's stated and per-feature + roll-up deeplinks are
+      emitted instead.
+- [ ] Each feature's usage shows the counts (external users, Succeeded/Failed/Canceled, last-seen), the
+      window, and an **advisory** suggestion — never a bare Migrate/Drop verdict.
+- [ ] Guardrails applied: derived-name misses reconciled (renamed/suppressed != unused); suppressed callbacks
+      flagged as non-adoption signals; Canceled kept distinct from Failed; small-N/window noted.
 - [ ] Non-instrumented surfaces (settings, menu containers, orphan strings) are marked "no telemetry event"
-      rather than given a fabricated link.
-- [ ] A single extension-wide `by EventName` usage roll-up link appears near the top.
-- [ ] No usage is asserted or inferred anywhere — links only, verdict left to the human.
+      rather than given fabricated numbers.
+- [ ] A top-of-file Usage Summary (ranked table + roll-up deeplink) is present, stating cluster/window/date.
 
 ## Header hygiene
 - [ ] Repo + exact commit SHA + version recorded at the top.

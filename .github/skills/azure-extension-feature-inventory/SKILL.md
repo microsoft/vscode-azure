@@ -52,7 +52,7 @@ Treat **code as authoritative for behavior** and use the manifest/NLS/docs to cr
 > 2. **MANIFEST** — Enumerate every `package.json` contribution point + NLS strings.
 > 3. **CODE** — Traverse the source for code-only/behavioral features (providers, wizards, tree, CLI, debug, API, telemetry).
 > 4. **RECONCILE** — Cross-reference the layers; flag code-only features and orphan strings.
-> 5. **TELEMETRY** — Derive each feature's telemetry EventName and emit a ready-to-run usage query + one-click link (as a **triage aid** — never run them or infer usage).
+> 5. **TELEMETRY** — Run one generic query to collect real per-feature usage for the whole extension, attach it to each feature, and offer an **advisory** Migrate/Drop suggestion (numbers + window + confidence; verdict stays with the human). Fall back to emitting links only when telemetry is unreachable.
 > 6. **EMIT** — Write a normalized, migration-ready `INVENTORY.md`.
 > 7. **VERIFY** — Self-check the inventory for completeness against the checklist.
 
@@ -108,16 +108,20 @@ investigations (e.g. with `explore` subagents) so each gets its own context.
 
 ---
 
-## Phase 5: Telemetry usage links (triage aid)
+## Phase 5: Telemetry usage (collect + analyze)
 
-Give the human a one-click way to check real usage per feature so **they** can weigh Migrate vs Drop later.
-Generate links; **do not** run the queries and **do not** infer or state usage.
+Collect **real** per-feature usage in a single query and attach it to the inventory so the human has data —
+not guesses — when weighing Migrate vs Drop later. Produce an **advisory** suggestion per feature (numbers +
+window + confidence). The final verdict stays with the human and the migration skill's triage gate.
 
 | # | Action | Reference |
 |---|--------|-----------|
 | 1 | For each instrumented feature, derive `EventName` = `<extensionId>/<callbackId>` (lowercased). Mark non-instrumented surfaces (settings, menu containers, orphan strings) as "no telemetry event". | [telemetry-usage.md](references/telemetry-usage.md) |
-| 2 | Build the canonical per-feature usage query (28d window; `Invocations`/`Users`/`ExternalUsers` via `IsInternal == false`/`Failures`) and one extension-wide `by EventName` roll-up query. | [telemetry-usage.md](references/telemetry-usage.md) |
-| 3 | Generate the Azure Data Explorer deeplink for each query with the gzip→base64→URL-encode script (one batch pass, not one process per feature). Fall back to a raw fenced query if a link can't be produced. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 2 | Authenticate to the `ddtelvscode` cluster with a **corp-tenant** token (`--tenant 72f988bf-...`; a default-tenant token 401s), then run the **one generic query** (`by EventName`, external users + Succeeded/Failed/Canceled + LastSeen) once for the whole extension. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 3 | Map each result row back to its feature. Reconcile misses (renamed/suppressed != unused); flag framework-only rows. Attach the numbers to each feature. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 4 | Produce an advisory suggestion per feature using the numbers + guardrails (suppression, Canceled != Failed, internal-only, small-N). Never present a bare verdict; always show window + counts. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 5 | If telemetry is unreachable (no `az` / no corp access), **fall back** to emitting the per-feature + roll-up ADX deeplinks so the human can run them. Also keep the roll-up deeplink for handoff either way. | [telemetry-usage.md](references/telemetry-usage.md) |
+| 6 | Support the user's **targeted questions** (e.g. "usage in the last 7d", "failure rate", "by version/platform") by scoping the query, running it, and reporting the numbers — or emitting a matching link. | [telemetry-usage.md](references/telemetry-usage.md) |
 
 ---
 
@@ -125,7 +129,7 @@ Generate links; **do not** run the queries and **do not** infer or state usage.
 
 | # | Action | Reference |
 |---|--------|-----------|
-| 1 | Write `INVENTORY.md` following the template's section order and tables. Include the per-feature `Telemetry` links + the top-of-file usage roll-up link. | [inventory-template.md](references/inventory-template.md) |
+| 1 | Write `INVENTORY.md` following the template's section order and tables. Include the per-feature usage numbers + advisory suggestion and the top-of-file usage summary (real data + roll-up link, or links-only if telemetry was unreachable). | [inventory-template.md](references/inventory-template.md) |
 | 2 | Save it where the user asked (default: alongside the migration workspace, or a session artifact). Print the path. | [inventory-template.md](references/inventory-template.md) |
 
 ---
@@ -145,7 +149,7 @@ layer and (where relevant) its exact `contextValue`/`when` clause. Report any ga
 | `INVENTORY.md` | Normalized, migration-ready feature catalog (see template) |
 | Source ref record | Repo + exact commit SHA the inventory was taken from |
 | Orphan/dead list | NLS keys / contributions with no backing behavior |
-| Telemetry usage links | Per-feature ADX query + one-click deeplink, plus an extension-wide usage roll-up (a triage aid; not executed) |
+| Telemetry usage | Per-feature real usage (external users, Succeeded/Failed/Canceled, last-seen) from one generic query, each with an advisory Migrate/Drop suggestion; an extension-wide usage summary + roll-up deeplink. Falls back to links-only when telemetry is unreachable. Verdict left to the human. |
 
 ---
 
