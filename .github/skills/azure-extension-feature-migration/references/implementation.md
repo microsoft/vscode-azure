@@ -20,11 +20,13 @@ product (never the source extension's code), conform to conventions, then valida
    - Providers -> add to the correct `dataProviders`/`viewProviders` array in `registerTrees.ts`, **before**
      the generic fallback.
    - Client wrappers -> re-export from `packages/azutils/src/index.ts`; bind the factory in `extension.ts`.
-   - Wizard steps -> resolved from the container in the command; add the Bicep template name to the
-     `BicepTemplateName` union.
+   - Wizard steps -> resolved from the container in the command; add the single-file Bicep template's name
+     to the `BicepTemplateName` union (one self-contained `.bicep` file, like `functionApp.bicep`).
 4. **Contribute to the manifest:** add commands/menus/settings/debuggers to `package.json`, strings to
-   `package.nls.json` (`%key%`), and the icon SVG named `<logicalType>.toLowerCase()+'.svg'`. Confirm each
-   menu `when` uses `viewItem =~ /\b<contextValue>\b/i` and matches the **assembled** `contextValue`.
+   `package.nls.json` (`%key%`). For the node icon, **reuse the matching SVG already in
+   `packages/azutils/resources/azureIcons/`**; only when none matches, add a new SVG **to the azutils
+   package** named `<logicalType>.toLowerCase()+'.svg'`. Confirm each menu `when` uses
+   `viewItem =~ /\b<contextValue>\b/i` and matches the **assembled** `contextValue`.
 5. **Validate** (smallest scope that covers the slice):
    - `pnpm --filter <package> run lint -- <changed paths>` (add `--cache` to iterate faster).
    - `pnpm --filter <package> run build` (or use the watch task while iterating).

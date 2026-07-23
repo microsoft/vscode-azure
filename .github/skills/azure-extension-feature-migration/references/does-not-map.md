@@ -25,7 +25,11 @@ What changes:
   `GenerateAzureYamlStep`, `CreateAzdEnvStep`, `AzdProvisionStep`, and (for the deploy job) `AzdDeployStep`
   + `ShowEndpointUrlStep`. You do **not** write ARM-deploy execute steps.
 - You **add a Bicep template** to `extensions/vscode-azure/resources/templates/<resource>.bicep` and add
-  its name to the `BicepTemplateName` union in `GenerateBicepStep.ts` (resolved via a factory binding).
+  its name to the `BicepTemplateName` union in `GenerateBicepStep.ts` (resolved via a factory binding). The
+  template must be a **single self-contained `.bicep` file** — mirror the `functionApp.bicep` precedent,
+  which references a remote AVM registry module (`br:...`) rather than local module files. Do **not** add a
+  multi-file bicep project (no local `modules/` folder); `GenerateBicepStep` copies exactly one file to
+  `infra/main.bicep`.
 
 **Outputs change too.** The source wizard's output (a live ARM resource + maybe a `.vscode` config) becomes
 IaC files in the workspace (`azure.yaml`, `infra/main.bicep`, `main.parameters.json`) plus an azd
@@ -68,7 +72,12 @@ So a source node type does not become "a node class". It becomes: a resource typ
 `DataProvider`, a branch in a `ViewProvider`, and (per action) a `ManagedCommand` with a `ContextValue`.
 
 **Icons** resolve by convention from the resource's `logicalType` — a filename mismatch silently shows no
-icon (`docs/tree-views.md`, Resource Icons). Don't port the source's icon-path wiring.
+icon (`docs/tree-views.md`, Resource Icons). Don't port the source's icon-path wiring. **First check whether
+the correct icon already ships in `packages/azutils/resources/azureIcons/`** (a shared library keyed by ARM
+namespace, e.g. `microsoft.web`, `microsoft.storage`) and reuse it — most resource types are already
+covered. **Only add a new SVG when no correct icon exists**, and add it to the **azutils** package (not the
+extension), named `<logicalType>.toLowerCase()+'.svg'`. Do not add an icon just because the source shipped
+one.
 
 ---
 
