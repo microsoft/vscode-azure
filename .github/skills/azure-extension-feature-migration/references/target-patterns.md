@@ -18,12 +18,12 @@ Read the precedent file, then mirror its **shape**. All paths are relative to th
 | Wizard context + `AzdJob` | `extensions/vscode-azure/src/azd/wizard/AzdWizardContext.ts` | — |
 | Resource-specific prompt steps | `extensions/vscode-azure/src/commands/<product>/steps/` | `commands/functions/steps/PickRuntimeStep.ts`, `PickHostingPlanStep.ts` |
 | Wizard context type | `extensions/vscode-azure/src/commands/<product>/<Product>Context.ts` | `commands/functions/CreateFunctionAppContext.ts` |
-| Bicep templates | `extensions/vscode-azure/resources/templates/<resource>.bicep` | existing function-app template |
+| Bicep templates | `extensions/vscode-azure/resources/templates/<resource>.bicep` | existing function-app template (a **single** self-contained `.bicep` file) |
 | Azure SDK client wrapper | `packages/azutils/src/rest/clients/<Product>Client.ts` | `AcrClient.ts`, `WebAppClient.ts`, `DeploymentClient.ts` |
 | DI composition + factory bindings | `extensions/vscode-azure/src/extension.ts` | — |
 | Manifest | `extensions/vscode-azure/package.json` | — |
 | NLS strings | `extensions/vscode-azure/package.nls.json` | — |
-| Resource icons | `packages/azutils/resources/azureIcons/<logicalType>.svg` | — |
+| Resource icons (reuse first) | `packages/azutils/resources/azureIcons/<logicalType>.svg` | existing shared icons in that folder — **only add a new one if none matches** |
 
 > New tree **views** are almost never added. Reuse the existing Resources / Workspace / Activity views;
 > register a new **provider** into the relevant tree, not a new container.
@@ -86,8 +86,11 @@ public async execute(job: AzdJob): Promise<void> {
     await new Wizard(get(IOutputChannel), { job, provision: true }, promptSteps, executeSteps).run();
 }
 ```
-Add the Bicep template + its name to the `BicepTemplateName` union in `GenerateBicepStep.ts`. Follow the
-Fresh / Post-clone / Bootstrapped scenario matrix in `docs/resource-creation.md`.
+Add the Bicep template + its name to the `BicepTemplateName` union in `GenerateBicepStep.ts`. The template
+is a **single self-contained `.bicep` file** (like `functionApp.bicep`, which pulls in a remote AVM registry
+module `br:...` instead of local module files) — `GenerateBicepStep` copies exactly one file to
+`infra/main.bicep`, so don't author a multi-file bicep project. Follow the Fresh / Post-clone / Bootstrapped
+scenario matrix in `docs/resource-creation.md`.
 
 ## Azure SDK client wrapper
 
@@ -113,4 +116,4 @@ Consumers import types from `@microsoft/vscode-azure-azutils`, never `@azure/*`.
 - `vscode.workspace.fs` + `vscode.Uri`, not Node `fs`/string paths.
 - `stringifyError()` for caught `unknown` errors.
 - `void`-prefix intentionally un-awaited promises.
-- Icon filename must equal `<logicalType>.toLowerCase() + '.svg'` or the icon silently disappears.
+- Reuse an existing `azureIcons/` icon when one matches; only add a new SVG (to the **azutils** package) when none does. Its filename must equal `<logicalType>.toLowerCase() + '.svg'` or the icon silently disappears.

@@ -37,14 +37,14 @@ For each migrated node type:
 - [ ] The node's assembled `contextValue` (from `combineContextValues`) matches every `package.json` menu
       `when` regex that targets it (`viewItem =~ /\b<ctx>\b/i`, word boundaries present).
 - [ ] Status / `invalid*` variants from the inventory are preserved and their `when` clauses still match.
-- [ ] The icon file `azureIcons/<logicalType>.svg` exists and the name equals `<logicalType>.toLowerCase()+'.svg'`.
+- [ ] The node's icon resolves — either an existing `azureIcons/<logicalType>.svg` was reused, or (only when none matched) a new SVG was added to the **azutils** package. Its name equals `<logicalType>.toLowerCase()+'.svg'`.
 - [ ] `DataProvider`/`ViewProvider` are registered **before** the generic fallback in `registerTrees.ts`.
 
 ## Wizard check (create/deploy)
 
 - [ ] Registered per `AzdJob` (`createNew` and/or `deploy`) via `prefixArgs`.
 - [ ] Uses shared azd steps + resource-specific `PromptStep`s; **no** hand-written ARM execute steps.
-- [ ] Bicep template exists in `resources/templates/` and is in the `BicepTemplateName` union.
+- [ ] Bicep template exists in `resources/templates/` (a **single** `.bicep` file, no local `modules/` project) and is in the `BicepTemplateName` union.
 - [ ] Resource-specific steps skip correctly when `hasInfra` (Post-clone / Bootstrapped scenarios).
 
 ## Conformance check (conventions)

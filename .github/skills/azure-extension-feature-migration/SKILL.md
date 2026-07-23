@@ -108,7 +108,7 @@ verified against — every feature must end up with an explicit disposition.
 |---|--------|-----------|
 | 1 | For each Migrate/Adapt feature, choose the monorepo pattern and the exact target file path. For each **Reuse** feature, record the existing symbol/command to wire and where it gets wired (so Phase 6 has evidence to verify). | [pattern-mapping.md](references/pattern-mapping.md) |
 | 2 | Define the tree contract: for each node type, its `DataProvider`/`ViewProvider`, the command's static `ContextValue`, and the `package.json` regex `when` clause. | [pattern-mapping.md](references/pattern-mapping.md), [target-patterns.md](references/target-patterns.md) |
-| 3 | For creation/deploy features, define the wizard as azd `PromptStep`/`ExecuteStep` + `AzdJob`, plus the Bicep template to add. | [pattern-mapping.md](references/pattern-mapping.md) |
+| 3 | For creation/deploy features, define the wizard as azd `PromptStep`/`ExecuteStep` + `AzdJob`, plus the single-file Bicep template to add. | [pattern-mapping.md](references/pattern-mapping.md) |
 
 ---
 

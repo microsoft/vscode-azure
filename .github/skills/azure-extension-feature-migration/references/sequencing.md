@@ -13,8 +13,8 @@ Build bottom-up. A feature can't be wired before the things it depends on exist:
 4. View providers         <Product>ViewProvider (getTreeItem, icons, contextValue)
 5. Tree registration      registerTrees.ts (specific before generic)
 6. Commands               ManagedCommand classes + static ContextValue + registerCommands.ts
-7. Wizards                azd prompt/execute steps + Bicep template + register per AzdJob
-8. Manifest               package.json contributions + package.nls.json strings + icons
+7. Wizards                azd prompt/execute steps + single-file Bicep template + register per AzdJob
+8. Manifest               package.json contributions + package.nls.json strings (+ new icon in azutils only if none matches)
 9. Reuse wiring           app-settings / auth / generic commands hooked up in extension.ts
 10. Tests                 unit (+ integration where the precedent has them)
 ```
@@ -27,8 +27,8 @@ view layer exists.
 ## Slice the work vertically where you can
 
 Prefer a **thin vertical slice per resource type** over doing all data providers, then all view providers,
-then all commands. One shippable slice = "the resource node shows up in the tree with its icon and one
-working command". That keeps each step buildable and reviewable. A good first slice:
+then all commands. One shippable slice = "the resource node shows up in the tree with its icon (reused from
+azutils) and one working command". That keeps each step buildable and reviewable. A good first slice:
 
 > resource type + guard -> client wrapper -> data provider -> view provider -> register -> one read-only
 > command (e.g. open-in-portal reuse) -> manifest -> build/lint/test.
@@ -56,7 +56,7 @@ Monorepo phase: <n>
 - [ ] `<Product>DataProvider.getChildren` (resource + virtual categories) <- SWA-0xx (tree hierarchy)
 - [ ] `<Product>ViewProvider.getTreeItem` (icon, contextValue)            <- SWA-0xx (node contextValues)
 - [ ] Register both in `registerTrees.ts`                                 <- —
-- [ ] Icon `azureIcons/<logicalType>.svg`                                 <- SWA-0xx (node icons)
+- [ ] Icon: reuse existing `azureIcons/<logicalType>.svg`; add to azutils only if missing  <- SWA-0xx (node icons)
 - [ ] Reuse open-in-portal command on the node                           <- SWA-0xx (browse/openInPortal)
 
 ## Slice 2 — Commands
@@ -64,7 +64,7 @@ Monorepo phase: <n>
 - [ ] ... one row per Migrate/Adapt command ...
 
 ## Slice 3 — Create / Deploy (azd + Bicep)   [Adapt]
-- [ ] Bicep template `resources/templates/<resource>.bicep` + BicepTemplateName union  <- SWA-0xx (create wizard)
+- [ ] Single-file Bicep template `resources/templates/<resource>.bicep` + BicepTemplateName union  <- SWA-0xx (create wizard)
 - [ ] Resource-specific PromptSteps `commands/<product>/steps/`                          <- SWA-0xx (wizard steps)
 - [ ] Register Create<Product> per AzdJob (createNew / deploy)                           <- SWA-0xx (create/deploy cmds)
 
