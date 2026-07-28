@@ -54,13 +54,26 @@ describe('AzureAccountDataProvider (unit)', () => {
     }
 
     /**
-     * Drain pending microtasks (e.g. the async session-change reconcile) while
-     * fake timers are enabled. `setImmediate` is not faked, so awaiting it lets
-     * queued promise continuations -- the `await listAccounts()` chain in the
-     * debounced session handler -- run to completion.
+     * Yield several event-loop turns (e.g. to let the async session-change
+     * reconcile complete) while fake timers are enabled. `setImmediate` is not
+     * faked, so awaiting it advances past one event-loop turn, allowing queued
+     * promise continuations -- the `await listAccounts()` chain in the
+     * debounced session handler -- to run to completion.
+     *
+     * The reconcile is dispatched fire-and-forget (`void reconcile()`) from the
+     * debounce timer callback, and `reconcile -> listAccounts -> await
+     * getAccounts` spans several async hops. A single `setImmediate` is not
+     * guaranteed to let that whole chain settle before the caller asserts on it:
+     * depending on how the host event loop interleaves the (faked) timer
+     * callback with real microtasks and immediates, the reconcile can still be
+     * in flight after one turn, which made the assertions flaky. Awaiting a few
+     * turns settles the chain deterministically -- once it has finished, the
+     * extra turns are harmless no-ops.
      */
-    async function flushMicrotasks(): Promise<void> {
-        await new Promise(resolve => setImmediate(resolve));
+    async function flushMicrotasks(turns = 5): Promise<void> {
+        for (let i = 0; i < turns; i++) {
+            await new Promise(resolve => setImmediate(resolve));
+        }
     }
 
     describe('canHandle', () => {
