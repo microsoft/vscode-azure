@@ -173,3 +173,21 @@ product value and making the remaining toil predictable and centrally owned.
 2026-07-27, retrieved via the GitHub API. Category counts are keyword-classified from PR titles and
 are intended to convey relative magnitude. Structural claims (single lockfile, shared catalog,
 workspace-based development) are verified against the `vscode-azure` repository.*
+
+### Reproducibility
+
+The merged-PR totals come from one query per repository against the GitHub CLI:
+
+```
+gh search prs --repo microsoft/<repo> --merged-at '2025-07-28..2026-07-27' --limit 1000 \
+  --json number,title,author
+```
+
+PRs authored by `dependabot[bot]` are counted as automated dependency updates; the remainder are
+classified into the seven toil categories by case-insensitive keyword matching on the PR title
+(first matching category wins), with the residue counted as product/feature work. The lockfile
+count comes from a recursive tree scan of each repository's default branch
+(`gh api repos/microsoft/<repo>/git/trees/<sha> -f recursive=true`) filtered to
+`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, and `npm-shrinkwrap.json`. Because
+classification is keyword-based, exact per-category counts may shift slightly under a different
+rubric; the category totals and headline maintenance share are stable.
