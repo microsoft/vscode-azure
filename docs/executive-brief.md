@@ -79,7 +79,7 @@ development.*
 | Metric | Value |
 | --- | --- |
 | Repositories involved in a recent infrastructure migration (private-feed / 1ES rollout) | 14 repos, 31 coordinated PRs |
-| Historical lockfiles identified during consolidation analysis | 8 lockfiles |
+| Package lockfiles across the 14-repo fleet (pre-consolidation) | 26 lockfiles (8 in `vscode-azuretools` alone) |
 | Workspace lockfiles after consolidation | 1 lockfile (`pnpm-lock.yaml`) |
 | Dependency version management | Shared `catalog:` in `pnpm-workspace.yaml` |
 
@@ -151,9 +151,9 @@ Every metric above describes work whose cost scaled with the *number of reposito
 consolidated platform, the same obligations are met once against a single delivery boundary:
 
 - **Compliance and policy:** a privacy-link or license-header update is one edit, not one per repo.
-- **Dependency management:** a single `pnpm-lock.yaml` and shared `catalog:` replaces 8 historical
-  lockfiles, so a dependency bump is one change and Dependabot noise collapses from up to 14 PRs
-  per advisory to one.
+- **Dependency management:** a single `pnpm-lock.yaml` and shared `catalog:` replaces the 26
+  package lockfiles that existed across the 14-repo fleet, so a dependency bump is one change and
+  Dependabot noise collapses from up to 14 PRs per advisory to one.
 - **SDK and runtime upgrades:** an `@azure/*` SDK or Node/TypeScript upgrade lands in one workspace
   and is validated against every package together, instead of being published and re-consumed
   repo by repo.
