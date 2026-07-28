@@ -1,6 +1,6 @@
 # Azure for VS Code: Engineering Pains and How the Consolidated Architecture Addresses Them
 
-*For the management-facing summary with quantitative maintenance-toil metrics, see
+*For a concise executive summary with quantitative maintenance-toil metrics, see
 [executive-brief.md](./executive-brief.md). This document is the detailed report behind it.*
 
 ## Executive summary

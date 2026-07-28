@@ -1,7 +1,7 @@
 # Executive Brief: The vscode-azure Platform Consolidation
 
 *Companion to [engineering-pains-and-solutions.md](./engineering-pains-and-solutions.md), which
-documents the underlying pain points and solutions in detail. This brief is the management-facing
+documents the underlying pain points and solutions in detail. This brief is the condensed
 summary, with quantitative evidence of the maintenance burden the consolidation is designed to
 retire.*
 
