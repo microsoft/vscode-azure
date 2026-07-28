@@ -156,10 +156,10 @@ Centralization is applied selectively rather than treated as an all-or-nothing g
 ### 4. The common resource tree carried data, presentation, compatibility, and service integration concerns
 
 **Pain.** The predecessor extension's activation path assembled provider managers,
-  branch-provider managers, caches, multiple trees, compatibility adapters, and
-  versioned APIs for dependent extensions. Temporary APIs also had to remain while
-  service extensions migrated. See the
-  [`vscode-azureresourcegroups` activation code](https://github.com/microsoft/vscode-azureresourcegroups/blob/main/src/extension.ts).
+branch-provider managers, caches, multiple trees, compatibility adapters, and
+versioned APIs for dependent extensions. Temporary APIs also had to remain while
+service extensions migrated. See the
+[`vscode-azureresourcegroups` activation code](https://github.com/microsoft/vscode-azureresourcegroups/blob/main/src/extension.ts).
 
 Adding a service experience could therefore cross several concerns:
 
