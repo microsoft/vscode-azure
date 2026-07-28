@@ -1,5 +1,8 @@
 # Azure for VS Code: Engineering Pains and How the Consolidated Architecture Addresses Them
 
+*For a concise executive summary with quantitative maintenance-toil metrics, see
+[executive-brief.md](./executive-brief.md). This document is the detailed report behind it.*
+
 ## Executive summary
 
 `microsoft/vscode-azure` was created on February 17, 2026 to build a consolidated
