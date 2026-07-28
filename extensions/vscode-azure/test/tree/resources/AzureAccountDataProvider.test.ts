@@ -54,10 +54,11 @@ describe('AzureAccountDataProvider (unit)', () => {
     }
 
     /**
-     * Drain pending microtasks (e.g. the async session-change reconcile) while
-     * fake timers are enabled. `setImmediate` is not faked, so awaiting it lets
-     * queued promise continuations -- the `await listAccounts()` chain in the
-     * debounced session handler -- run to completion.
+     * Yield several event-loop turns (e.g. to let the async session-change
+     * reconcile complete) while fake timers are enabled. `setImmediate` is not
+     * faked, so awaiting it advances past one event-loop turn, allowing queued
+     * promise continuations -- the `await listAccounts()` chain in the
+     * debounced session handler -- to run to completion.
      *
      * The reconcile is dispatched fire-and-forget (`void reconcile()`) from the
      * debounce timer callback, and `reconcile -> listAccounts -> await
