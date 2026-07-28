@@ -76,12 +76,11 @@ development.*
 
 ### Operational Efficiency Metrics
 
-| Metric | Value |
-| --- | --- |
-| Repositories involved in a recent infrastructure migration (private-feed / 1ES rollout) | 14 repos, 31 coordinated PRs |
-| Package lockfiles across the 14-repo fleet (pre-consolidation) | 26 lockfiles (8 in `vscode-azuretools` alone) |
-| Workspace lockfiles after consolidation | 1 lockfile (`pnpm-lock.yaml`) |
-| Dependency version management | Shared `catalog:` in `pnpm-workspace.yaml` |
+| Metric | Before | After |
+| --- | --- | --- |
+| Package lockfiles across the fleet | 26 (8 in `vscode-azuretools` alone) | 1 (`pnpm-lock.yaml`) |
+| Dependency version management | Independent per repo and package | Shared `catalog:` in `pnpm-workspace.yaml` |
+| Reach of a shared infrastructure migration (e.g. private-feed / 1ES rollout) | 14 repos, 31 coordinated PRs | 1 repo, 1 PR |
 
 ## Maintenance Toil: 12-Month Baseline (Quantitative)
 
