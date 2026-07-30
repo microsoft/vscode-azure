@@ -34,30 +34,36 @@ param repositoryUrl string = ''
 @description('Existing Git branch retained with repositoryUrl.')
 param branch string = ''
 
+var tags = { 'azd-env-name': environmentName }
+
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'rg-${environmentName}'
   location: location
-  tags: {
-    'azd-env-name': environmentName
-  }
+  tags: tags
 }
 
-module staticWebApp './staticWebApp.module.bicep' = {
+module staticWebApp 'br/public:avm/res/web/static-site:0.9.5' = {
   scope: rg
   name: 'staticWebApp'
   params: {
     name: take('${environmentName}-${uniqueString(subscription().id, environmentName)}', 40)
     location: location
-    skuName: staticWebAppSkuName
-    azdServiceName: azdServiceName
-    environmentName: environmentName
-    appLocation: appLocation
-    apiLocation: apiLocation
-    outputLocation: outputLocation
-    repositoryUrl: repositoryUrl
-    branch: branch
+    sku: staticWebAppSkuName
+    // Tag the Static Web App (only) with `azd-service-name` so `azd deploy` can target it.
+    tags: union(tags, { 'azd-service-name': azdServiceName })
+    buildProperties: {
+      appLocation: appLocation
+      apiLocation: apiLocation
+      outputLocation: outputLocation
+      // Keep the create API from committing a workflow file to the user's repository.
+      skipGithubActionWorkflowGeneration: true
+    }
+    provider: empty(repositoryUrl) ? 'None' : 'GitHub'
+    repositoryUrl: empty(repositoryUrl) ? null : repositoryUrl
+    branch: empty(repositoryUrl) ? null : branch
+    enableTelemetry: false
   }
 }
 
 output staticWebAppName string = staticWebApp.outputs.name
-output staticWebAppEndpoint string = staticWebApp.outputs.endpoint
+output staticWebAppEndpoint string = 'https://${staticWebApp.outputs.defaultHostname}'
