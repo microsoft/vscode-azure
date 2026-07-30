@@ -275,9 +275,14 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             const groups = await this.groupResources(subscription);
             this.executor.output.debug(`[view] grouped subscription=${subscription.subscriptionId} strategy=${this.groupingStrategy} groups=${groups.size}`);
             const groupKeys = [...groups.keys()];
-            return this.groupingStrategy === 'resourceType'
-                ? groupKeys.sort((a, b) => this.getVirtualGroupPresentation(a).label.localeCompare(this.getVirtualGroupPresentation(b).label))
-                : groupKeys.sort();
+            if (this.groupingStrategy === 'resourceType') {
+                return groupKeys
+                    .map(groupKey => ({ groupKey, label: this.getVirtualGroupPresentation(groupKey).label }))
+                    .sort((a, b) => a.label.localeCompare(b.label))
+                    .map(({ groupKey }) => groupKey);
+            } else {
+                return groupKeys.sort();
+            }
         }
 
         // Virtual group: find the matching bucket from the parent subscription

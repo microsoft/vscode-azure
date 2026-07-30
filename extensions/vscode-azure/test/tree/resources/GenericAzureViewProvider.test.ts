@@ -493,10 +493,11 @@ describe('GenericAzureViewProvider (unit)', () => {
                     [rg1, [webApp]],
                     [rg2, [storageAccount]],
                 ]);
+                const getDisplayName = mock.fn((code: typeof mockCodeContext.ctx.code) => code.l10n.t('Zulu Apps'));
                 const resourceTypePresentations = new ResourceTypePresentationRegistry([
                     {
                         logicalType: webApp.logicalType,
-                        getDisplayName: code => code.l10n.t('Zulu Apps'),
+                        getDisplayName,
                     },
                 ]);
                 const provider = createProvider(
@@ -507,6 +508,7 @@ describe('GenericAzureViewProvider (unit)', () => {
                 );
 
                 const groups = await provider.getChildren(AzureNodeId.from(sub).toString());
+                expect(getDisplayName.mock.callCount()).to.equal(1);
                 const labels = groups.map(key => provider.getTreeItem(key).label);
 
                 expect(labels).to.deep.equal(['Microsoft.Storage/storageAccounts', 'Zulu Apps']);
