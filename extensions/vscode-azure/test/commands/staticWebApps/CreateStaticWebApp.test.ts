@@ -76,7 +76,7 @@ describe('CreateStaticWebApp (unit)', () => {
         expect(azd.deploy.mock.callCount()).to.equal(0);
         expect(azd.init.mock.callCount()).to.equal(1);
         expect(mock.fs.files.has([...mock.fs.files.keys()].find(path => path.endsWith('/infra/main.parameters.json')) ?? '')).to.be.true;
-        expect(mock.fs.copy.mock.calls.some(call => call.arguments[1].path.endsWith('/infra/staticWebApp.module.bicep'))).to.be.true;
+        expect(mock.fs.copy.mock.calls.some(call => call.arguments[1].path.endsWith('/infra/main.bicep'))).to.be.true;
     });
 
     it('should prompt for Standard and deploy supported output in advanced mode', async () => {
