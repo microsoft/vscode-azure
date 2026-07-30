@@ -409,6 +409,77 @@ describe('DataItemTree (unit)', () => {
             await tree.getChildren();
             await tree.whenQuiescent();
         });
+
+        it('should drain enrichment that cascades into a further fetch', async () => {
+            // The multi-pass loop only earns its keep if enrichment can register
+            // *more* enrichment while it is itself in flight. A provider that
+            // enriches a parent by loading its children does exactly that: `b1`
+            // is registered during `a`'s enrichment, so a single pass would
+            // settle `a` and return with `b1` still running.
+            const tree = createTree();
+            const order: string[] = [];
+
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: (r): r is TestResource => (r as TestResource).id === 'a',
+                getChildren: (r?: TestResource) => (r === undefined ? [{ id: 'a' }] : [{ id: 'b1' }]),
+                enrich: async (r: TestResource) => {
+                    order.push('a:start');
+                    await tree.getChildren(r);
+                    r.enriched = true;
+                    order.push('a:done');
+                    return false;
+                },
+            });
+            tree.registerProvider({
+                isRoot: false,
+                canHandle: (r): r is TestResource => (r as TestResource).id.startsWith('b'),
+                getChildren: () => [],
+                enrich: async (r: TestResource) => {
+                    await delay(5);
+                    r.enriched = true;
+                    order.push('b:done');
+                    return false;
+                },
+            });
+
+            await tree.getChildren();
+            await tree.whenQuiescent();
+
+            expect(tree.get('b1')?.enriched, 'cascaded enrichment was not drained').to.equal(true);
+            // `b1` finishing after `a` is what proves a second pass ran.
+            expect(order).to.deep.equal(['a:start', 'a:done', 'b:done']);
+        });
+
+        it('should NOT wait for enrichment queued by a fetch that is still in flight', async () => {
+            // Documents the precondition rather than a wish: quiescence covers
+            // enrichment that has been *registered*, and a fetch registers its
+            // enrichment only once it completes. Callers must await their
+            // fetches first. If this ever starts failing because whenQuiescent
+            // grew into a full idle barrier, delete the test -- don't "fix" the
+            // harness around it.
+            const tree = createTree();
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: async () => {
+                    await delay(10);
+                    return [{ id: 'a' }];
+                },
+                enrich: (r: TestResource) => {
+                    r.enriched = true;
+                    return Promise.resolve(false);
+                },
+            });
+
+            const pending = tree.getChildren();
+            await tree.whenQuiescent();
+            expect(tree.get('a'), 'fetch had not completed, so nothing is registered yet').to.equal(undefined);
+
+            await pending;
+            await tree.whenQuiescent();
+            expect(tree.get('a')?.enriched, 'awaiting the fetch first makes the drain effective').to.equal(true);
+        });
     });
 
     describe('invalidation', () => {

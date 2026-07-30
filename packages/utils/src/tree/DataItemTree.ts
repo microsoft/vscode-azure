@@ -400,6 +400,18 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * about *activity*, not success. Use {@linkcode whenEnriched} when the
      * outcome of one resource's enrichment matters.
      *
+     * **Precondition -- this is not a general "tree is idle" barrier.** Only
+     * enrichment that has already been *registered* is awaited, and enrichment
+     * is registered by {@linkcode enrichAll}, which runs at the end of a fetch.
+     * A fetch that is still in flight has therefore registered nothing yet, and
+     * this resolves immediately without waiting for the enrichment that fetch
+     * will go on to queue. Callers must `await` the {@linkcode getChildren}
+     * calls whose enrichment they care about *before* calling this.
+     *
+     * That precondition is cheap to meet (a render awaits its own fetches
+     * anyway) and the alternative -- tracking every in-flight fetch -- would add
+     * production bookkeeping that exists only to serve tests.
+     *
      * @param maxPasses - Safety valve for a pathological provider that enriches
      *   in an endless cycle. Exceeding it resolves rather than hanging.
      */
