@@ -52,6 +52,11 @@ Telemetry usage: collected from `cluster('ddtelvscode')` (window: <e.g. 90d>; co
 ## 5. Wizards (B)
 - For each wizard: ordered Prompt steps (prompt/default/validation), ordered Execute steps (priority),
   basic-vs-advanced deltas, post-execution, telemetry.
+- For each create/provision wizard, include a provisioning record:
+  - primary ARM resource type, supporting ARM resource types, deployment scope, and dependencies;
+  - source step responsible for each resource;
+  - required provisioning inputs/defaults, tags/configuration, outputs, and post-create consumers.
+  Keep this factual; AVM resource-vs-pattern selection is performed by the migration skill.
 - Build presets table (framework → app/api/output/port/startCommand).
 - Framework detection (what it inspects, what it emits).
 

@@ -20,8 +20,10 @@ product (never the source extension's code), conform to conventions, then valida
    - Providers -> add to the correct `dataProviders`/`viewProviders` array in `registerTrees.ts`, **before**
      the generic fallback.
    - Client wrappers -> re-export from `packages/azutils/src/index.ts`; bind the factory in `extension.ts`.
-   - Wizard steps -> resolved from the container in the command; add the single-file Bicep template's name
-     to the `BicepTemplateName` union (one self-contained `.bicep` file, like `functionApp.bicep`).
+   - Wizard steps -> resolved from the container in the command; implement the provisioning choice recorded
+     during mapping. For an AVM module, add the consumer template descriptor and pinned registry reference.
+     For the two-file fallback, extend the generation abstraction to copy both the consumer and AVM-shaped
+     local module with their relative paths intact. See [avm-provisioning.md](avm-provisioning.md).
 4. **Contribute to the manifest:** add commands/menus/settings/debuggers to `package.json`, strings to
    `package.nls.json` (`%key%`). For the node icon, **reuse the matching SVG already in
    `packages/azutils/resources/azureIcons/`**; only when none matches, add a new SVG **to the azutils

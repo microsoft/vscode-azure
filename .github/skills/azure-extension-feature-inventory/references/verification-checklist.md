@@ -18,6 +18,8 @@ Before declaring the inventory done, confirm each item. Report gaps explicitly r
 - [ ] Every tree node type has an exact `contextValue` (incl. status + `invalid*` variants), icon,
       children source, and pagination/refresh behavior.
 - [ ] Every wizard has ordered Prompt + Execute steps with priorities and validation.
+- [ ] Every create/provision wizard records the complete primary/supporting resource topology, deployment
+      scope, dependencies, required inputs/defaults, and outputs used after creation.
 
 ## Reconciliation quality
 - [ ] Each feature has a source layer (`A`, `B`, `A+B`, or `C`).
