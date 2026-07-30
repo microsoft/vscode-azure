@@ -50,6 +50,9 @@ For each migrated node type:
       uses a pattern module.
 - [ ] If no suitable AVM module exists, the generated infrastructure contains exactly one AVM-shaped local
       module plus one consumer, with the module boundary preserved by the generation step.
+- [ ] The `GenerateBicepStep` template selection mechanism declares everything it must copy: an AVM-backed
+      consumer template containing a pinned `br/public:avm/...:<version>` reference, or both fallback files
+      with source/destination mappings that preserve the local module's relative path.
 - [ ] The Bicep consumer builds successfully and resolves its pinned remote module or bundled local module.
 - [ ] Resource-specific steps skip correctly when `hasInfra` (Post-clone / Bootstrapped scenarios).
 

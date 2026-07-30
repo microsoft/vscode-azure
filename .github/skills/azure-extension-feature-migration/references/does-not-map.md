@@ -30,7 +30,8 @@ What changes:
 - When no suitable AVM module exists, bundle exactly two Bicep entry points: one AVM-shaped local module
   that owns the topology and one thin consumer that invokes it. Extend `GenerateBicepStep` (and its
   template descriptor/factory contract) to copy both files with their relative paths intact. Do not
-  collapse the fallback into one monolithic file to preserve the current generator's limitation.
+  collapse the fallback into one monolithic file merely to work around the current generator's
+  single-file limitation; extend the generator instead.
 
 **Outputs change too.** The source wizard's output (a live ARM resource + maybe a `.vscode` config) becomes
 IaC files in the workspace (`azure.yaml`, `infra/main.bicep`, `main.parameters.json`) plus an azd

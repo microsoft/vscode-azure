@@ -93,6 +93,16 @@ bundle one AVM-shaped local module plus one consumer and extend the generation a
 while preserving relative paths. Follow the Fresh / Post-clone / Bootstrapped scenario matrix in
 `docs/resource-creation.md`.
 
+Bundle a fallback under one template directory so the source-to-generated layout is explicit:
+
+```text
+resources/templates/<resource>/
+  main.bicep                         -> infra/main.bicep
+  modules/<module-name>/main.bicep  -> infra/modules/<module-name>/main.bicep
+```
+
+Register both source/destination mappings in the template descriptor used by `GenerateBicepStep`.
+
 ## Azure SDK client wrapper
 
 `packages/azutils/src/rest/clients/<Product>Client.ts`: `I<Product>Client` interface,
