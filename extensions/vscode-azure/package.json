@@ -376,10 +376,12 @@
         }
     },
     "scripts": {
-        "lint": "eslint --max-warnings 0",
+        "lint": "eslint --max-warnings 0 --cache",
         "build": "pnpm run --parallel \"/^build:(esbuild|check)$/\"",
         "build:esbuild": "node esbuild.mjs",
+        "build:esbuild:watch": "pnpm run build:esbuild --watch",
         "build:check": "tsc --noEmit",
+        "build:check:watch": "pnpm run build:check --watch",
         "package": "vsce package --no-dependencies",
         "test": "vscode-test",
         "testcov": "vscode-test --coverage",
