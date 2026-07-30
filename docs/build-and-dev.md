@@ -130,6 +130,16 @@ pnpm --filter <package> run <script>:watch
 
 The build watches are also available as VS Code build tasks in `.vscode/tasks.json` (`Extension: Check+Watch` is the default build task); each task just runs the corresponding `*:watch` script. The lint and test watches are command-line only.
 
+Run the watches that match what you are changing — they catch different classes of problem and are not redundant:
+
+| Watch | Catches | Misses |
+| --- | --- | --- |
+| Build (`tsc`) | Type errors, in ~1s | Anything that type-checks but behaves wrong |
+| Lint | Style and type-aware rules (e.g. unsafe `any` fallout) | Runtime/logic bugs |
+| Test | Logic and runtime bugs | Nothing type- or style-specific |
+
+A pure logic bug (say, dropping an `&& value !== ''` guard) type-checks and lints cleanly — only the test watch turns red. Conversely, `node --experimental-transform-types` strips types *without* checking them, so a type error still runs and usually surfaces as a pile of confusing runtime test failures; when the test watch goes red, check the build watch first, since a single type error is often the real cause.
+
 ### Build watches
 
 ```bash
@@ -168,6 +178,8 @@ pnpm --filter @microsoft/vscode-azure-azutils run test:watch
 ```
 
 These use the same `node --watch` wrapper around Mocha's binary. Because the wrapper invokes `mocha` itself (not `_mocha`), Mocha still reads its configuration from the `"mocha"` key in the package's `package.json`, so the specs and `node-option` settings stay in one place. There is no build step: Mocha runs the `.ts` sources directly via `node --experimental-transform-types`.
+
+The watch scripts override the reporter with `--reporter dot`, which keeps a passing run to a few lines instead of the ~26 KB the default `spec` reporter emits for the full suite, while still printing complete assertion diffs and stack traces for failures. The one-shot `test` and `testcov` scripts keep the default reporter.
 
 > **Do not use Mocha's own `--watch` flag here.** Mocha's watch mode cannot invalidate the ESM module graph, so the re-runs silently collect no tests and report `0 passing` — which looks like a green run. Restarting the process with `node --watch` avoids this entirely.
 

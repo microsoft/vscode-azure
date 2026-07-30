@@ -107,6 +107,8 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
   - `test:watch` (`utils`, `azutils` only)
 * Notes and caveats for watches:
   - The `lint:watch` and `test:watch` scripts wrap the ESLint/Mocha binaries in `node --watch`; each change re-runs the full lint/suite in a fresh process. Do **not** switch them to Mocha's own `--watch` flag — it silently reports `0 passing` under this repo's ESM setup.
+  - The watches are complementary, not redundant: a pure logic bug type-checks and lints clean and only fails tests, while a *type* error still runs (types are stripped, not checked) and usually shows up as a pile of confusing runtime test failures. When `test:watch` goes red, check `build:watch` first — one type error is often the real cause.
+  - Reading a watch shell returns its whole accumulated output, so re-reading a long-lived watch replays every earlier run. Read it right after an edit, and restart the watch if its buffer has grown unwieldy.
   - `azutils` `test:watch` needs the `utils` package built at least once (`pnpm --filter @microsoft/vscode-azure-utils run build`), since it imports `utils`' `dist/`.
   - The extension has **no** test watch (`vscode-test` launches VS Code); run `pnpm --filter vscode-azure run test`.
   - Still do a final full `pnpm run lint`, `pnpm run build`, and `pnpm run test` before submitting a PR.
