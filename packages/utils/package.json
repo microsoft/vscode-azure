@@ -27,13 +27,11 @@
         }
     },
     "scripts": {
-        "lint": "eslint --max-warnings 0",
-        "lint:watch": "node --watch --watch-path=./src --watch-path=./test ../../node_modules/eslint/bin/eslint.js --max-warnings 0",
+        "lint": "eslint --max-warnings 0 --cache",
         "build": "tsc",
         "build:watch": "tsc --watch",
         "package": "pnpm pack",
         "test": "mocha",
-        "test:watch": "node --watch --watch-path=./src --watch-path=./test ../../node_modules/mocha/bin/mocha.js --reporter dot",
         "testcov": "pnpx c8 --clean --reporter=html --exclude=\"**/test/**\" mocha",
         "clean": "node ../../scripts/clean.mjs"
     },

@@ -116,36 +116,11 @@ await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
 
 ## Watch Mode / Iterative Development
 
-For fast, iterative work, prefer the **watch scripts** over re-running a full `pnpm run build` / `pnpm run lint` / `pnpm run test` after every edit. Every watch is exposed as a `*:watch` npm script, so they are all reachable the same way:
-
-```bash
-pnpm --filter <package> run <script>:watch
-```
-
-| Workspace | Build | Lint | Test |
-| --- | --- | --- | --- |
-| `@microsoft/vscode-azure-utils` | `build:watch` | `lint:watch` | `test:watch` |
-| `@microsoft/vscode-azure-azutils` | `build:watch` | `lint:watch` | `test:watch` |
-| `vscode-azure` (extension) | `build:check:watch`, `build:esbuild:watch` | `lint:watch` | *(none — see below)* |
-
-The build watches are also available as VS Code build tasks in `.vscode/tasks.json` (`Extension: Check+Watch` is the default build task); each task just runs the corresponding `*:watch` script. The lint and test watches are command-line only.
-
-Run the watches that match what you are changing — they catch different classes of problem and are not redundant:
-
-| Watch | Catches | Misses |
-| --- | --- | --- |
-| Build (`tsc`) | Type errors, in ~1s | Anything that type-checks but behaves wrong |
-| Lint | Style and type-aware rules (e.g. unsafe `any` fallout) | Runtime/logic bugs |
-| Test | Logic and runtime bugs | Nothing type- or style-specific |
-
-A pure logic bug (say, dropping an `&& value !== ''` guard) type-checks and lints cleanly — only the test watch turns red. Conversely, `node --experimental-transform-types` strips types *without* checking them, so a type error still runs and usually surfaces as a pile of confusing runtime test failures; when the test watch goes red, check the build watch first, since a single type error is often the real cause.
-
-### Build watches
+Watch mode exists only for the **builds**, and mostly for the VS Code UI rather than for speed. Each build watch is an npm script named `<script>:watch`:
 
 ```bash
 # Extension: type checking in watch mode (tsc --noEmit --watch)
-# Most useful for catching type errors while editing. This is the default
-# VS Code build task ("Extension: Check+Watch").
+# This is the default VS Code build task ("Extension: Check+Watch").
 pnpm --filter vscode-azure run build:check:watch
 
 # Extension: esbuild bundle in watch mode ("Extension: ESBuild+Watch")
@@ -156,38 +131,23 @@ pnpm --filter @microsoft/vscode-azure-utils run build:watch
 pnpm --filter @microsoft/vscode-azure-azutils run build:watch
 ```
 
+These are also the VS Code build tasks in `.vscode/tasks.json`; each task just runs the corresponding script. They are most useful for the live problem-matcher integration (errors appear in the Problems panel as you type).
+
 The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsc` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
 
-### Lint watch
+### Why there is no lint or test watch
 
-```bash
-pnpm --filter @microsoft/vscode-azure-utils run lint:watch
-pnpm --filter @microsoft/vscode-azure-azutils run lint:watch
-pnpm --filter vscode-azure run lint:watch
-```
+Both are technically possible (wrapping the binary in `node --watch`, since ESLint has no watch flag and Mocha's own `--watch` silently reports `0 passing` under this repo's ESM setup), but measurement showed they are not worth the complexity:
 
-ESLint has no native watch mode, so these scripts wrap the ESLint binary in `node --watch`, which re-runs the whole lint in a fresh process whenever a file under `src/` or `test/` changes. Each run is a full lint of the package (a few seconds), and the output is the normal ESLint report, so a clean run prints nothing.
+- **`node --watch` restarts a fresh process on every change**, so it re-runs the *entire* lint or suite. It saves only the pnpm/shell startup — for the extension, a watch re-run measured ~7.2s against ~8.5s for a one-shot run.
+- **`--cache` beats it outright.** The ESLint cache is a file on disk, so it works for ordinary one-shot runs and *is* genuinely incremental: the same extension lint drops to ~2.3s when nothing changed and ~4-5s when one file changed. A watch, by restarting, can never benefit from it.
+- **The builds are already fast enough** that watching them is a convenience, not a speed-up: a cold `pnpm run build` for the whole monorepo is ~3.5s, and individual package builds are sub-second.
 
-> The scripts reference the binary as `../../node_modules/eslint/bin/eslint.js` because `node --watch` needs a real JS entry point rather than a `.bin` shim. That path is stable because `*eslint*` (and `mocha`, used below) are listed in `publicHoistPattern` in `pnpm-workspace.yaml`, so they always resolve to the repo-root `node_modules`.
-
-### Test watch (packages only)
-
-```bash
-pnpm --filter @microsoft/vscode-azure-utils run test:watch
-pnpm --filter @microsoft/vscode-azure-azutils run test:watch
-```
-
-These use the same `node --watch` wrapper around Mocha's binary. Because the wrapper invokes `mocha` itself (not `_mocha`), Mocha still reads its configuration from the `"mocha"` key in the package's `package.json`, so the specs and `node-option` settings stay in one place. There is no build step: Mocha runs the `.ts` sources directly via `node --experimental-transform-types`.
-
-The watch scripts override the reporter with `--reporter dot`, which keeps a passing run to a few lines instead of the ~26 KB the default `spec` reporter emits for the full suite, while still printing complete assertion diffs and stack traces for failures. The one-shot `test` and `testcov` scripts keep the default reporter.
-
-> **Do not use Mocha's own `--watch` flag here.** Mocha's watch mode cannot invalidate the ESM module graph, so the re-runs silently collect no tests and report `0 passing` — which looks like a green run. Restarting the process with `node --watch` avoids this entirely.
-
-`azutils` tests import `@microsoft/vscode-azure-utils/testing` from the `utils` package's `dist/`, so build `utils` at least once (or run its `build:watch`) before starting the `azutils` test watch.
+So for lint, just run the (cached) `lint` script; see [Linting](#linting). For tests, run the package's `test` script directly — the packages' suites are 2-4s.
 
 ### No watch available for
 
-- **Extension tests** — the extension's `test` script is `vscode-test` (`@vscode/test-cli`), which launches a full VS Code instance and has no re-running watch mode. Run `pnpm --filter vscode-azure run test` instead.
+- **Extension tests** — the extension's `test` script is `vscode-test` (`@vscode/test-cli`), which launches a full VS Code instance and has no re-running watch mode. Run `pnpm --filter vscode-azure run test` instead. Note that most of the ~7s runtime is the VS Code launch, not the tests (682 tests run in about a second), so `--grep` saves very little.
 
 
 ## Linting
@@ -199,11 +159,15 @@ pnpm --filter @microsoft/vscode-azure-utils run lint  # Single workspace
 
 Uses ESLint with strict type-checked configuration from `@microsoft/vscode-azext-eng/eslint`.
 
+The `lint` script passes `--cache`, so ESLint re-checks only files that changed since the last run. This is the main lever on lint time: a full extension lint is ~8s cold, ~2.3s when nothing changed, and ~4-5s when a single file changed. The cache lives in a gitignored `.eslintcache` per workspace and is removed by `pnpm run clean`.
+
+Caching is safe to leave on by default — ESLint keys the cache on the resolved config as well as file contents, so editing `eslint.config.mjs` (or enabling a rule) correctly invalidates every entry rather than reporting a stale pass. There is no need to drop `--cache` for a pre-PR run.
+
 ### Faster lint iteration
 
-Prefer `lint:watch` (see [Lint watch](#lint-watch)) while iterating. For one-off runs, you can also shorten the feedback loop:
+Beyond the cache:
 
-- **Filter to specific files/dirs.** Pass paths through the workspace script (after `--`) so ESLint only lints what you touched instead of the whole package. This is the biggest win while iterating on a few files:
+- **Filter to specific files/dirs.** Pass paths through the workspace script (after `--`) so ESLint only lints what you touched instead of the whole package:
 
   ```bash
   # Lint a single file (or a directory) in one package
@@ -211,14 +175,11 @@ Prefer `lint:watch` (see [Lint watch](#lint-watch)) while iterating. For one-off
   pnpm --filter vscode-azure run lint -- src/commands
   ```
 
+  Note there is a floor of roughly 2-4s per invocation: ESLint startup plus building the TypeScript program for type-aware rules. Linting one file is not much cheaper than linting a cached package, so prefer scoping to the *workspace* you actually changed over micro-filtering to single files.
+
 - **Run workspaces in parallel.** The root `pnpm run lint` already fans out across the three workspaces (`pnpm -r --parallel run lint`), so a full lint runs them concurrently rather than in series.
-- **Cache results.** Add `--cache` so ESLint only re-checks files that changed since the last run:
 
-  ```bash
-  pnpm --filter @microsoft/vscode-azure-utils run lint -- --cache
-  ```
-
-Do a final full `pnpm run lint` before opening a PR, since filtered/cached runs can miss issues in files you didn't touch this pass.
+Do a final full `pnpm run lint` before opening a PR, since path-filtered runs can miss issues in files you didn't touch this pass.
 
 ## Cleaning
 

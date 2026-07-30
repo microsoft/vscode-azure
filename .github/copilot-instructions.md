@@ -101,18 +101,10 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * Run `pnpm run test` to execute tests
 * Run `pnpm run testcov` to run tests with code coverage (via c8)
 * For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
-* **Prefer watch scripts while iterating.** Every watch is an npm script named `<script>:watch`, run as `pnpm --filter <pkg> run <script>:watch`. Start the ones relevant to the files you are changing as long-running background shells and read their output after each edit, instead of re-running full one-shot `lint`/`build`/`test` commands:
-  - `build:watch` (`utils`, `azutils`), `build:check:watch` and `build:esbuild:watch` (extension)
-  - `lint:watch` (all three workspaces)
-  - `test:watch` (`utils`, `azutils` only)
-* Notes and caveats for watches:
-  - The `lint:watch` and `test:watch` scripts wrap the ESLint/Mocha binaries in `node --watch`; each change re-runs the full lint/suite in a fresh process. Do **not** switch them to Mocha's own `--watch` flag — it silently reports `0 passing` under this repo's ESM setup.
-  - The watches are complementary, not redundant: a pure logic bug type-checks and lints clean and only fails tests, while a *type* error still runs (types are stripped, not checked) and usually shows up as a pile of confusing runtime test failures. When `test:watch` goes red, check `build:watch` first — one type error is often the real cause.
-  - Reading a watch shell returns its whole accumulated output, so re-reading a long-lived watch replays every earlier run. Read it right after an edit, and restart the watch if its buffer has grown unwieldy.
-  - `azutils` `test:watch` needs the `utils` package built at least once (`pnpm --filter @microsoft/vscode-azure-utils run build`), since it imports `utils`' `dist/`.
-  - The extension has **no** test watch (`vscode-test` launches VS Code); run `pnpm --filter vscode-azure run test`.
-  - Still do a final full `pnpm run lint`, `pnpm run build`, and `pnpm run test` before submitting a PR.
-* See `docs/build-and-dev.md` (Watch Mode / Iterative Development) for the full table of watch scripts and details.
+* **Scope validation to the workspace you changed.** This is the single biggest lever on iteration time — a change confined to `packages/utils` does not need the extension's test suite (which launches VS Code, ~7s) or the other packages' lints. Run the full `pnpm run lint`/`build`/`test` sweep once before submitting, not after every edit.
+* `lint` passes `--cache`, so repeat runs are much cheaper (a full extension lint is ~8s cold, ~2.3s cached, ~4-5s with one file changed). There is a floor of roughly 2-4s per invocation regardless, so prefer one lint of the changed workspace over several single-file lints.
+* Watch mode exists **only for the builds** (`build:watch` for `utils`/`azutils`, `build:check:watch` and `build:esbuild:watch` for the extension). There is deliberately no lint or test watch: `node --watch` restarts a fresh process and re-runs everything, which is slower than a cached one-shot lint and prevents the cache from helping at all. Do not add one back without measuring it first. See `docs/build-and-dev.md` (Watch Mode / Iterative Development).
+* The extension has no test watch and no useful test filtering — most of its ~7s runtime is the VS Code launch, not the tests, so `--grep` saves very little.
 
 
 ## Managing Dependencies
