@@ -101,7 +101,16 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * Run `pnpm run test` to execute tests
 * Run `pnpm run testcov` to run tests with code coverage (via c8)
 * For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
-* For iterative development, prefer watch mode over re-running a full `pnpm run build` each time. The build watch tasks live in `.vscode/tasks.json` (they append `-- --watch` to a build script) and are **not** npm scripts, so they are easy to miss. Watch is available for the extension type-check/esbuild builds and the `utils`/`azutils` package builds; run the `utils`/`azutils` package Mocha test watch from the command line. Lint and extension tests have no watch, but you can iterate faster on lint by scoping it to changed files (`pnpm --filter <pkg> run lint -- <path>`) and `--cache`. See `docs/build-and-dev.md` (Watch Mode / Iterative Development and Linting) for the exact commands.
+* **Prefer watch scripts while iterating.** Every watch is an npm script named `<script>:watch`, run as `pnpm --filter <pkg> run <script>:watch`. Start the ones relevant to the files you are changing as long-running background shells and read their output after each edit, instead of re-running full one-shot `lint`/`build`/`test` commands:
+  - `build:watch` (`utils`, `azutils`), `build:check:watch` and `build:esbuild:watch` (extension)
+  - `lint:watch` (all three workspaces)
+  - `test:watch` (`utils`, `azutils` only)
+* Notes and caveats for watches:
+  - The `lint:watch` and `test:watch` scripts wrap the ESLint/Mocha binaries in `node --watch`; each change re-runs the full lint/suite in a fresh process. Do **not** switch them to Mocha's own `--watch` flag — it silently reports `0 passing` under this repo's ESM setup.
+  - `azutils` `test:watch` needs the `utils` package built at least once (`pnpm --filter @microsoft/vscode-azure-utils run build`), since it imports `utils`' `dist/`.
+  - The extension has **no** test watch (`vscode-test` launches VS Code); run `pnpm --filter vscode-azure run test`.
+  - Still do a final full `pnpm run lint`, `pnpm run build`, and `pnpm run test` before submitting a PR.
+* See `docs/build-and-dev.md` (Watch Mode / Iterative Development) for the full table of watch scripts and details.
 
 
 ## Managing Dependencies

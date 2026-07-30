@@ -377,9 +377,12 @@
     },
     "scripts": {
         "lint": "eslint --max-warnings 0",
+        "lint:watch": "node --watch --watch-path=./src --watch-path=./test ../../node_modules/eslint/bin/eslint.js --max-warnings 0",
         "build": "pnpm run --parallel \"/^build:(esbuild|check)$/\"",
         "build:esbuild": "node esbuild.mjs",
+        "build:esbuild:watch": "node esbuild.mjs --watch",
         "build:check": "tsc --noEmit",
+        "build:check:watch": "tsc --noEmit --watch",
         "package": "vsce package --no-dependencies",
         "test": "vscode-test",
         "testcov": "vscode-test --coverage",
