@@ -105,6 +105,7 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * `lint` passes `--cache`, so repeat runs are much cheaper (a full extension lint is ~8s cold, ~2.3s cached, ~4-5s with one file changed). There is a floor of roughly 2-4s per invocation regardless, so prefer one lint of the changed workspace over several single-file lints.
 * Watch mode exists **only for the builds** (`build:watch` for `utils`/`azutils`, `build:check:watch` and `build:esbuild:watch` for the extension). There is deliberately no lint or test watch: `node --watch` restarts a fresh process and re-runs everything, which is slower than a cached one-shot lint and prevents the cache from helping at all. Do not add one back without measuring it first. See `docs/build-and-dev.md` (Watch Mode / Iterative Development).
 * The extension has no test watch and no useful test filtering — most of its ~7s runtime is the VS Code launch, not the tests, so `--grep` saves very little.
+* In a fresh clone or worktree, the extension's first test run downloads ~1 GB of VS Code into `extensions/vscode-azure/.vscode-test`. Run `pnpm run link-test-cache` once beforehand to share that download across worktrees. See `docs/build-and-dev.md` (Sharing the VS Code test download across worktrees).
 
 
 ## Managing Dependencies

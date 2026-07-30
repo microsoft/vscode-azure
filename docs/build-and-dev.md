@@ -149,6 +149,20 @@ So for lint, just run the (cached) `lint` script; see [Linting](#linting). For t
 
 - **Extension tests** — the extension's `test` script is `vscode-test` (`@vscode/test-cli`), which launches a full VS Code instance and has no re-running watch mode. Run `pnpm --filter vscode-azure run test` instead. Note that most of the ~7s runtime is the VS Code launch, not the tests (682 tests run in about a second), so `--grep` saves very little.
 
+## Sharing the VS Code test download across worktrees
+
+The extension's test runner downloads a full VS Code build (~1 GB) into `extensions/vscode-azure/.vscode-test`. That path is gitignored and **not** removed by `pnpm run clean`, so it is a once-per-worktree cost — but every new clone or `git worktree` re-downloads it.
+
+There is no configuration knob for this: `@vscode/test-electron` resolves its cache as `<cwd>/.vscode-test`, and `@vscode/test-cli` calls `downloadAndUnzipVSCode()` without passing a `cachePath`. The only lever is to make that path a link to somewhere shared, which is what the opt-in helper does:
+
+```bash
+pnpm run link-test-cache
+```
+
+Run it once per worktree, *before* the first test run. It creates a junction (Windows) or symlink (elsewhere) from `extensions/vscode-azure/.vscode-test` to a machine-wide cache, defaulting to `<homedir>/.vscode-test-cache`; set `VSCODE_TEST_CACHE_DIR` to choose a different location. The script is idempotent, and refuses to run if a real `.vscode-test` directory already exists — move or delete that directory first (moving it to the shared location preserves the existing download).
+
+This is deliberately *not* part of `postinstall`: it writes outside the repository, and on CI — where every job starts from a clean machine — a shared cache would be pointless.
+
 
 ## Linting
 
