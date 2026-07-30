@@ -185,22 +185,36 @@ success.
 
 ## Running it
 
-As part of the extension suite:
+**For local iteration, use the dedicated script:**
+
+```sh
+pnpm --filter vscode-azure run test:perf
+```
+
+About 1 second, and no window appears. This is the one you want while you are
+changing tree code, because that is the only point at which the number can
+still change a decision.
+
+The suite is part of the extension test suite, so it also runs under the
+VS Code runner in CI:
 
 ```sh
 cd extensions/vscode-azure && vscode-test --code-version 1.130.0
 ```
 
-The suite does not use the `vscode` API, so for local iteration it can be run
-headless -- much faster, and it does not steal window focus:
+That takes ~15s and launches Electron, which steals focus. It is worth
+understanding *why* both work. Nothing in the perf suite's import graph
+references the `vscode` API at runtime -- the only mention is an
+`import type * as vscode` in `ViewItemTree.ts`, which TypeScript erases at
+compile time. The suite launches Electron in CI purely because it lives under
+`test/` and inherits the extension's `vscode-test` runner, not because it needs
+a host.
 
-```sh
-cd extensions/vscode-azure
-node --import ./node_modules/tsx/dist/loader.mjs ../../node_modules/mocha/bin/mocha.js \
-  --ui bdd "test/tree/resources/perf/TreePerformance.test.ts"
-```
-
-The whole matrix takes about 0.6s.
+The counters are **identical under both runners**, which is worth stating as
+evidence rather than as trivia: it means the harness is not accidentally
+depending on extension-host behaviour, timing, or scheduling. If the two
+runners ever disagree, that is a real finding about the harness and not a
+reason to prefer whichever number is nicer.
 
 ## Reporting tiers
 
@@ -225,9 +239,9 @@ Set `TREE_PERF_ENFORCE=1` in CI, or change the default in
 `TreePerformance.test.ts`.
 
 Do not do this yet. The baselines have been verified identical across 10
-consecutive runs on one machine, which is evidence but not proof: it says
-nothing about a different Node version, a loaded CI runner, or a different
-platform. A gate is only worth having if people trust it, and trust is earned by
+consecutive headless runs plus runs under the VS Code runner, on one machine.
+That is evidence but not proof: it says nothing about a different Node version,
+a loaded CI runner, or a different platform. A gate is only worth having if people trust it, and trust is earned by
 a stretch of runs where it never fires spuriously -- not by a design argument.
 Let it annotate real PRs for a few weeks first. If it produces a false positive
 in that window, fix the source of non-determinism or drop that metric; do not

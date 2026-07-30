@@ -67,7 +67,12 @@ describe('Tree load performance (integration)', () => {
 
             if (enforce) {
                 const regressions = comparisons.filter(c => c.verdict === 'regressed');
-                expect(regressions.length, formatFailure(scenario, regressions)).to.equal(0);
+                if (regressions.length > 0) {
+                    // `expect(n).to.equal(0)` would append a meaningless
+                    // "expected 2 to equal +0" to an otherwise readable message.
+                    // The regression report is the whole point of the failure.
+                    expect.fail(formatFailure(scenario, regressions));
+                }
             }
         });
     }
