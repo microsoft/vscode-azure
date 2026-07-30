@@ -9,9 +9,7 @@
                 "--filter",
                 "vscode-azure",
                 "run",
-                "build:esbuild",
-                "--",
-                "--watch"
+                "build:esbuild:watch"
             ],
             "problemMatcher": "$esbuild-watch",
             "presentation": {
@@ -30,9 +28,7 @@
                 "--filter",
                 "vscode-azure",
                 "run",
-                "build:check",
-                "--",
-                "--watch"
+                "build:check:watch"
             ],
             "problemMatcher": {
                 "base": "$tsc-watch",
@@ -58,9 +54,7 @@
                 "--filter",
                 "@microsoft/vscode-azure-azutils",
                 "run",
-                "build",
-                "--",
-                "--watch",
+                "build:watch",
             ],
             "group": {
                 "kind": "build"
@@ -85,9 +79,7 @@
                 "--filter",
                 "@microsoft/vscode-azure-utils",
                 "run",
-                "build",
-                "--",
-                "--watch",
+                "build:watch",
             ],
             "group": {
                 "kind": "build"

@@ -116,43 +116,44 @@ await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
 
 ## Watch Mode / Iterative Development
 
-For fast, iterative work, prefer the **watch tasks** over re-running a full `pnpm run build` after every edit. Each watch task simply appends `-- --watch` to an existing build script, so the underlying compiler stays resident and only recompiles what changed.
-
-> These *build* watch tasks live in `.vscode/tasks.json` (each is an `isBackground: true` build task) and are **not** exposed as npm scripts, so they are easy to miss. Run them from the command line as shown below, or via VS Code's **Run Build Task** (`Extension: Check+Watch` is the default build task); the package test watch below is command-line only and is not a task in `.vscode/tasks.json`.
-
-### Build watches
+Only the **builds** have dedicated watch scripts, each named `<script>:watch`:
 
 ```bash
 # Extension: type checking in watch mode (tsc --noEmit --watch)
-# Most useful for catching type errors while editing. This is the default
-# VS Code build task ("Extension: Check+Watch").
-pnpm --filter vscode-azure run build:check -- --watch
+# This is the default VS Code build task ("Extension: Check+Watch").
+pnpm --filter vscode-azure run build:check:watch
 
 # Extension: esbuild bundle in watch mode ("Extension: ESBuild+Watch")
-pnpm --filter vscode-azure run build:esbuild -- --watch
+pnpm --filter vscode-azure run build:esbuild:watch
 
 # Library packages: tsc in watch mode ("utils: Build+Watch" / "azutils: Build+Watch")
-pnpm --filter @microsoft/vscode-azure-utils run build -- --watch
-pnpm --filter @microsoft/vscode-azure-azutils run build -- --watch
+pnpm --filter @microsoft/vscode-azure-utils run build:watch
+pnpm --filter @microsoft/vscode-azure-azutils run build:watch
 ```
+
+These are also the VS Code build tasks in `.vscode/tasks.json`; each task just runs the corresponding script, so errors appear live in the Problems panel.
 
 The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsc` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
 
-### Test watch (packages only)
-
-The `utils` and `azutils` packages support a Mocha watch mode:
+There is no lint watch. The package `test` scripts are plain `mocha`, so `--watch` is accepted — but it silently does nothing useful here: Mocha's `--extension` defaults to `["js","cjs","mjs"]` while these specs are `.ts`, so no source edit ever triggers a re-run. If you want a test watch, `--extension ts` is required:
 
 ```bash
-pnpm --filter @microsoft/vscode-azure-utils run test -- --watch
-pnpm --filter @microsoft/vscode-azure-azutils run test -- --watch
+pnpm --filter @microsoft/vscode-azure-utils run test -- --watch --extension ts
 ```
 
-This works because Mocha is configured (under the `"mocha"` key in each package's `package.json`) to run the `.ts` sources directly via `node --experimental-transform-types` (spec `test/**/*.test.ts`). There is no separate build step; in watch mode, Mocha re-runs the suite when files it watches change. If you need specific non-test source paths to trigger re-runs, set `--watch-files` in the package's `"mocha"` config.
+The extension's `vscode-test` runner has no watch mode at all.
 
-### No watch available for
+## Sharing the VS Code test download across worktrees
 
-- **Lint** — the `lint` script is plain `eslint --max-warnings 0`; ESLint has no native `--watch` flag and no watch wrapper is installed. Run `pnpm run lint` manually. To iterate faster, scope it to the files you changed and lint in parallel — see [Linting](#linting) below.
-- **Extension tests** — the extension's `test` script is `vscode-test` (`@vscode/test-cli`), which has no re-running watch mode. Run the full `pnpm --filter vscode-azure run test` instead.
+The extension's test runner downloads a full VS Code build (~1 GB) into `extensions/vscode-azure/.vscode-test`, and every new clone or `git worktree` re-downloads it. There is no config knob — `@vscode/test-electron` resolves its cache as `<cwd>/.vscode-test` and `@vscode/test-cli` never passes a `cachePath` — so the only lever is to link that path somewhere shared:
+
+```bash
+pnpm run link-test-cache
+```
+
+Run it once per worktree, *before* the first test run. It links `.vscode-test` to a machine-wide cache (default `<homedir>/.vscode-test-cache`, override with `VSCODE_TEST_CACHE_DIR`). It is idempotent and refuses to clobber a real `.vscode-test` directory — move that to the shared location first to keep the existing download.
+
+Two caveats: `.vscode-test` also holds the `--user-data-dir` and `--extensions-dir`, so linked worktrees share one VS Code profile and shouldn't run tests concurrently. And this is deliberately not in `postinstall`, since it writes outside the repo and is pointless on CI.
 
 ## Linting
 
@@ -163,11 +164,13 @@ pnpm --filter @microsoft/vscode-azure-utils run lint  # Single workspace
 
 Uses ESLint with strict type-checked configuration from `@microsoft/vscode-azext-eng/eslint`.
 
+The `lint` script passes `--cache`, so ESLint re-checks only files that changed since the last run. The cache lives in a gitignored `.eslintcache` per workspace and is removed by `pnpm run clean`. Editing `eslint.config.mjs` correctly invalidates it, but the cache is per file with no cross-file dependency tracking — under the type-checked rules, a diagnostic in `B.ts` that depends on types from `A.ts` can be missed when only `A.ts` changed. Treat the pre-PR full run as the authority.
+
 ### Faster lint iteration
 
-ESLint has no watch mode, but you can shorten the feedback loop:
+Beyond the cache:
 
-- **Filter to specific files/dirs.** Pass paths through the workspace script (after `--`) so ESLint only lints what you touched instead of the whole package. This is the biggest win while iterating on a few files:
+- **Filter to specific files/dirs.** Pass paths through the workspace script (after `--`) so ESLint only lints what you touched instead of the whole package:
 
   ```bash
   # Lint a single file (or a directory) in one package
@@ -175,14 +178,11 @@ ESLint has no watch mode, but you can shorten the feedback loop:
   pnpm --filter vscode-azure run lint -- src/commands
   ```
 
+  There is a fixed per-invocation floor (ESLint startup plus building the TypeScript program for type-aware rules), so linting one file is not much cheaper than linting a cached package. Prefer scoping to the *workspace* you changed over micro-filtering to single files.
+
 - **Run workspaces in parallel.** The root `pnpm run lint` already fans out across the three workspaces (`pnpm -r --parallel run lint`), so a full lint runs them concurrently rather than in series.
-- **Cache results.** Add `--cache` so ESLint only re-checks files that changed since the last run:
 
-  ```bash
-  pnpm --filter @microsoft/vscode-azure-utils run lint -- --cache
-  ```
-
-Do a final full `pnpm run lint` before opening a PR, since filtered/cached runs can miss issues in files you didn't touch this pass.
+Do a final full `pnpm run lint` before opening a PR, since path-filtered and cached runs can miss issues in files you didn't touch this pass.
 
 ## Cleaning
 

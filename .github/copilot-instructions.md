@@ -9,6 +9,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
 * `docs/resource-creation.md` -- AzdJob, wizard step sequence, scenario matrix, hydration, adding new resource types
 * `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, coverage
+* `docs/tree-perf-gates.md` -- Tree performance regression gates: counters, scenario matrix, baselines
 * `docs/resource-models.md` -- AzureNode union, GenericResource, AzureNodeId URI scheme
 * `docs/telemetry.md` -- IActionContext, ActionExecutor, telemetry suppression
 * `docs/build-and-dev.md` -- Build commands, esbuild, watch mode, linting, cleaning
@@ -101,7 +102,11 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * Run `pnpm run test` to execute tests
 * Run `pnpm run testcov` to run tests with code coverage (via c8)
 * For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
-* For iterative development, prefer watch mode over re-running a full `pnpm run build` each time. The build watch tasks live in `.vscode/tasks.json` (they append `-- --watch` to a build script) and are **not** npm scripts, so they are easy to miss. Watch is available for the extension type-check/esbuild builds and the `utils`/`azutils` package builds; run the `utils`/`azutils` package Mocha test watch from the command line. Lint and extension tests have no watch, but you can iterate faster on lint by scoping it to changed files (`pnpm --filter <pkg> run lint -- <path>`) and `--cache`. See `docs/build-and-dev.md` (Watch Mode / Iterative Development and Linting) for the exact commands.
+* **Scope validation to the workspace you changed.** A change confined to `packages/utils` does not need the extension's test suite (which launches VS Code) or the other packages' lints. Run the full `pnpm run lint`/`build`/`test` sweep once before submitting, not after every edit.
+* `lint` passes `--cache`, so repeat runs are much cheaper. There is a fixed per-invocation floor regardless, so prefer one lint of the changed workspace over several single-file lints.
+* Only the **builds** have dedicated watch scripts (`build:watch` for `utils`/`azutils`, `build:check:watch` and `build:esbuild:watch` for the extension). There is no lint watch, and bare `mocha --watch` does nothing useful in this repo because Mocha only watches `.js`/`.cjs`/`.mjs` by default while the specs are `.ts` — pass `--extension ts` if you want a test watch.
+* The extension has no test watch and no useful test filtering — most of its runtime is the VS Code launch, not the tests, so `--grep` saves very little.
+* In a fresh clone or worktree, the extension's first test run downloads ~1 GB of VS Code into `extensions/vscode-azure/.vscode-test`. Run `pnpm run link-test-cache` once beforehand to share that download across worktrees; linked worktrees share one VS Code profile, so don't run their tests concurrently.
 
 
 ## Managing Dependencies

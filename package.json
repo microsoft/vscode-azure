@@ -20,6 +20,7 @@
         "package": "pnpm -r --parallel run package",
         "test": "pnpm -r run test",
         "clean": "pnpm -r --parallel run clean",
+        "link-test-cache": "node ./scripts/linkTestCache.mjs",
         "all": "pnpm clean && pnpm lint && pnpm build && pnpm package && pnpm test"
     },
     "packageManager": "pnpm@11.8.0",

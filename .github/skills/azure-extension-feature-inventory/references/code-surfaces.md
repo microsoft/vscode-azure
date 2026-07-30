@@ -50,11 +50,21 @@ For each wizard (create, create-advanced, delete, and any sub-wizards like creat
 - The **ordered** `AzureWizardPromptStep`s: what each prompts, default source (workspace setting → preset
   → hardcoded), validation rules, and conditional `shouldPrompt`.
 - The **ordered** `AzureWizardExecuteStep`s with their `priority` numbers and what each does.
+- For create/provision flows, the complete **provisioning topology**: primary ARM resource type, every
+  supporting resource type, deployment scope, parent/child and dependency relationships, and which step
+  creates each resource.
+- The required infrastructure interface: wizard values/defaults passed into provisioning, tags and
+  configuration applied, resource properties that must remain configurable, and outputs consumed by
+  post-create behavior.
 - Basic-vs-advanced deltas (which prompts are auto-filled vs shown).
 - Post-execution behavior (polling, success prompts with action buttons).
 - Telemetry properties/measurements captured.
 - Supporting data: build presets (framework → app/api/output/port/startCommand), framework detectors
   (which files/deps they inspect, what they emit), and any scaffolding templates.
+
+Record source facts, not a target Bicep design. Do not choose an AVM resource module, AVM pattern module,
+or local fallback during inventory; the migration skill uses this topology and interface to make that
+decision against the current AVM repository.
 
 ## 5. Integrations
 

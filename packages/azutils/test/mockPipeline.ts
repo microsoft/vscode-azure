@@ -6,6 +6,11 @@
 import type { HttpClient, PipelineRequest, PipelineResponse } from '@azure/core-rest-pipeline';
 import { createHttpHeaders } from '@azure/core-rest-pipeline';
 
+// Re-exported so that consumers can type a request handler without taking a
+// direct dependency on `@azure/core-rest-pipeline`, matching how the client
+// wrappers re-export the SDK types they expose.
+export type { HttpClient, PipelineRequest, PipelineResponse };
+
 /**
  * Creates a mock {@linkcode PipelineRequest} with sensible defaults.
  * Headers are backed by SDK's real {@linkcode createHttpHeaders}.

@@ -12,7 +12,7 @@ it with [target-patterns.md](target-patterns.md) (concrete paths + snippets) and
 | `registerCommand` callback acting on a node | `ManagedCommand` class with static `ContextValue` | `commands/<product>/<Name>.ts` + `registerCommands.ts` + `package.json` menu with regex `when` | Use `IResourceSelector` for "node-or-pick"; telemetry/errors are automatic |
 | Palette-only command | `ManagedCommand` (no `ContextValue`) | `commands/<product>/<Name>.ts` + `registerCommands.ts` + `package.json` command | Add `category` for palette grouping |
 | One command, several fixed variants | one `ManagedCommand` + `prefixArgs` | multiple `registerManagedCommand(..., arg)` calls | e.g. per `AzdJob`, per mode |
-| Create / deploy / provision command | azd+Bicep wizard | `commands/<product>/Create<Product>.ts` + steps + single-file Bicep template | **Adapt** — see [does-not-map.md](does-not-map.md) #1; register twice (`createNew`/`deploy`); Bicep template is one self-contained `.bicep` file |
+| Create / deploy / provision command | azd+Bicep wizard + AVM-first module selection | `commands/<product>/Create<Product>.ts` + steps + Bicep consumer (and local module only as fallback) | **Adapt** — see [does-not-map.md](does-not-map.md) #1 and [avm-provisioning.md](avm-provisioning.md); register twice (`createNew`/`deploy`) |
 | Tree parent/leaf node type | `DataProvider` branch + `ViewProvider` branch + type guard | `tree/resources/<product>/` (`<Product>DataProvider.ts`, `<Product>ViewProvider.ts`, `<Product>.ts`) | Register in `registerTrees.ts` specific-before-generic |
 | Computed / grouping node (e.g. "App Settings") | **virtual node** in `DataProvider.getChildren` | same `DataProvider` | View provider renders it; give it a stable virtual key + own `contextValue` |
 | Node `contextValue` string(s) | assembled via `combineContextValues(...)` from command `ContextValue`s | `ViewProvider.getTreeItem` | Re-derive **fresh** `ContextValue`s from the command set (do **not** reuse source literals — see naming policy below); gate each in `package.json` with `\b...\b` regex |
@@ -43,7 +43,8 @@ Pattern:        <row from the table above>
 Target file(s): <exact paths>
 Precedent:      <file to copy the shape of>
 Tree contract:  <contextValue(s) + package.json when clause>   (if applicable)
-Wizard:         <ordered prompt/execute steps + AzdJob + Bicep template>  (if applicable)
+Wizard:         <ordered prompt/execute steps + AzdJob>                  (if applicable)
+Provisioning:   <topology; AVM search evidence; selected pinned module, or two-file fallback; parameter/output map>
 Client:         <azutils wrapper + SDK types to re-export>      (if applicable)
 Reuse:          <existing symbol/command to wire> + <where it's wired> + <how to verify it's wired>   (required for Reuse rows)
 Open questions: <anything to confirm with the human>
