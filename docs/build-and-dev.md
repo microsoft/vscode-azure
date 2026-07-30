@@ -137,17 +137,7 @@ The extension builds (both esbuild and the type-check) resolve the packages to t
 
 ### Why there is no lint or test watch
 
-Both are technically possible (wrapping the binary in `node --watch`, since ESLint has no watch flag and Mocha's own `--watch` silently reports `0 passing` under this repo's ESM setup), but measurement showed they are not worth the complexity:
-
-- **`node --watch` restarts a fresh process on every change**, so it re-runs the *entire* lint or suite. It saves only the pnpm/shell startup — for the extension, a watch re-run measured ~7.2s against ~8.5s for a one-shot run.
-- **`--cache` beats it outright.** The ESLint cache is a file on disk, so it works for ordinary one-shot runs and *is* genuinely incremental: the same extension lint drops to ~2.3s when nothing changed and ~4-5s when one file changed. A watch, by restarting, can never benefit from it.
-- **The builds are already fast enough** that watching them is a convenience, not a speed-up: a cold `pnpm run build` for the whole monorepo is ~3.5s, and individual package builds are sub-second.
-
-So for lint, just run the (cached) `lint` script; see [Linting](#linting). For tests, run the package's `test` script directly — the packages' suites are 2-4s.
-
-### No watch available for
-
-- **Extension tests** — the extension's `test` script is `vscode-test` (`@vscode/test-cli`), which launches a full VS Code instance and has no re-running watch mode. Run `pnpm --filter vscode-azure run test` instead. Note that most of the ~7s runtime is the VS Code launch, not the tests (682 tests run in about a second), so `--grep` saves very little.
+Both are possible (by wrapping the binary in `node --watch`), but measurement showed they aren't worth it: `node --watch` restarts a fresh process on every change, so it re-runs the entire lint or suite and only saves the pnpm startup. ESLint `--cache` — which the `lint` script already passes — is on disk and therefore genuinely incremental, which a restarting watch can never benefit from. Run the ordinary `lint` and `test` scripts instead.
 
 ## Sharing the VS Code test download across worktrees
 
