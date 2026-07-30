@@ -14,6 +14,7 @@ import { IAzureViewDataTree } from '../../services';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
+import { IResourceTypePresentationRegistry, ResourceTypeGroupContextValue, type ResourceTypePresentation } from './ResourceTypePresentation';
 
 /**
  * Root view-layer provider for the Azure resources tree.
@@ -52,6 +53,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(IResourceTypePresentationRegistry) private readonly resourceTypePresentations: IResourceTypePresentationRegistry,
     ) {
         this.disposables.push(ctx.code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)
@@ -95,13 +97,15 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (nodeId.isVirtualGroupNodeId()) {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
-            const grouping = nodeId.getGrouping();
-            const label = grouping?.groupingValue === untaggedSentinel
-                ? this.ctx.code.l10n.t('(No Tag)')
-                : grouping?.groupingValue ?? key;
+            const { label, presentation } = this.getVirtualGroupPresentation(key);
             const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
-            item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
+            if (presentation) {
+                item.iconPath = getResourceTypeIconUri(this.ctx, presentation.logicalType);
+                item.contextValue = combineContextValues(ResourceTypeGroupContextValue, ...(presentation.groupContextValues ?? []));
+            } else {
+                item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
+            }
             return item;
         }
 
@@ -270,7 +274,10 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
             const groups = await this.groupResources(subscription);
             this.executor.output.debug(`[view] grouped subscription=${subscription.subscriptionId} strategy=${this.groupingStrategy} groups=${groups.size}`);
-            return [...groups.keys()].sort();
+            const groupKeys = [...groups.keys()];
+            return this.groupingStrategy === 'resourceType'
+                ? groupKeys.sort((a, b) => this.getVirtualGroupPresentation(a).label.localeCompare(this.getVirtualGroupPresentation(b).label))
+                : groupKeys.sort();
         }
 
         // Virtual group: find the matching bucket from the parent subscription
@@ -403,6 +410,27 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
     private get groupByTag(): string {
         return this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<string>('groupByTag', '');
+    }
+
+    /**
+     * Resolves the rendered label and optional resource-type metadata together
+     * so callers do not independently parse and look up the same virtual group.
+     */
+    private getVirtualGroupPresentation(key: string): { readonly label: string; readonly presentation?: ResourceTypePresentation } {
+        const grouping = AzureNodeId.parse(key).getGrouping();
+        if (!grouping) {
+            return { label: key };
+        } else if (grouping.groupingValue === untaggedSentinel) {
+            return { label: this.ctx.code.l10n.t('(No Tag)') };
+        } else if (grouping.groupingStrategy === 'resourceType') {
+            const presentation = this.resourceTypePresentations.getPresentation(grouping.groupingValue);
+            return {
+                label: presentation?.getDisplayName(this.ctx.code) ?? grouping.groupingValue,
+                presentation,
+            };
+        } else {
+            return { label: grouping.groupingValue };
+        }
     }
 
     /**

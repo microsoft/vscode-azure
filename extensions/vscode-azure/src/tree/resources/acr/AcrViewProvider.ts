@@ -12,7 +12,8 @@ import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { getResourceTypeIconUri } from '../../iconPath';
-import { isAcrRegistry } from './AcrRegistry';
+import type { ResourceTypePresentation } from '../ResourceTypePresentation';
+import { AcrResourceType, isAcrRegistry } from './AcrRegistry';
 
 /**
  * View-layer provider for Azure Container Registries.
@@ -27,6 +28,11 @@ import { isAcrRegistry } from './AcrRegistry';
  */
 @injectable()
 export class AcrViewProvider implements ViewProvider<string> {
+    /** Presentation metadata for Azure Container Registry resource-type groups. */
+    public static readonly resourceTypePresentation: ResourceTypePresentation = {
+        logicalType: AcrResourceType,
+        getDisplayName: code => code.l10n.t('Container Registries'),
+    };
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,

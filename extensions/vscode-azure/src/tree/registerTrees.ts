@@ -26,6 +26,7 @@ import { AzureResourceDataProvider } from './resources/AzureResourceDataProvider
 import { FunctionAppDataProvider, IFunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
+import { IResourceTypePresentationRegistry, ResourceTypePresentationRegistry, type ResourceTypePresentation } from './resources/ResourceTypePresentation';
 import { AzdWorkspaceDataProvider } from './workspace/azd/AzdWorkspaceDataProvider';
 import { AzdWorkspaceViewProvider } from './workspace/azd/AzdWorkspaceViewProvider';
 import { EmulatorsWorkspaceDataProvider } from './workspace/emulators/EmulatorsWorkspaceDataProvider';
@@ -33,6 +34,16 @@ import { EmulatorsWorkspaceViewProvider } from './workspace/emulators/EmulatorsW
 import { FunctionsWorkspaceDataProvider } from './workspace/functions/FunctionsWorkspaceDataProvider';
 import { FunctionsWorkspaceViewProvider } from './workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from './workspace/WorkspaceNode';
+
+type AzureViewProviderClass = Newable<ViewProvider<string>> & {
+    readonly resourceTypePresentation?: ResourceTypePresentation;
+};
+
+const azureViewProviders: readonly AzureViewProviderClass[] = [
+    AcrViewProvider,
+    FunctionAppViewProvider,
+    GenericAzureViewProvider,
+];
 
 /**
  * Bind the Azure resources tree, workspace tree, and activity tree into the
@@ -46,6 +57,11 @@ import type { WorkspaceNode } from './workspace/WorkspaceNode';
  * the full subscription/resource load.
  */
 export function registerTrees(container: Container): void {
+    const resourceTypePresentations = azureViewProviders.flatMap(
+        provider => provider.resourceTypePresentation ? [provider.resourceTypePresentation] : [],
+    );
+    container.bind(IResourceTypePresentationRegistry).toConstantValue(new ResourceTypePresentationRegistry(resourceTypePresentations));
+
     // Resources tree
     registerTree<ConcreteAzureNode>(container, {
         treeViewId: AzureResourceTreeViewId,
@@ -64,11 +80,7 @@ export function registerTrees(container: Container): void {
             [IAzureAccountDataProvider, AzureAccountDataProvider], // singleton so mock-data mode can rebind it
             AzureResourceDataProvider,
         ],
-        viewProviders: [
-            AcrViewProvider,
-            FunctionAppViewProvider,
-            GenericAzureViewProvider,
-        ],
+        viewProviders: azureViewProviders,
     });
 
     // Workspace tree

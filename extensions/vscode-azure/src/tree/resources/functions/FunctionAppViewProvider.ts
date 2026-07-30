@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, getNodeType, isGenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, FunctionAppLogicalType, getNodeType, isGenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -13,6 +13,7 @@ import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { getResourceTypeIconUri } from '../../iconPath';
+import type { ResourceTypePresentation } from '../ResourceTypePresentation';
 import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './FunctionApp';
 
 /**
@@ -23,6 +24,11 @@ import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './
  */
 @injectable()
 export class FunctionAppViewProvider implements ViewProvider<string> {
+    /** Presentation metadata for Function App resource-type groups. */
+    public static readonly resourceTypePresentation: ResourceTypePresentation = {
+        logicalType: FunctionAppLogicalType,
+        getDisplayName: code => code.l10n.t('Function Apps'),
+    };
 
     /** Context value applied to Function App tree items. */
     public static readonly ContextValue = 'functionApp';

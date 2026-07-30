@@ -3,14 +3,18 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
+import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
+import { AcrViewProvider } from '../../../src/tree/resources/acr/AcrViewProvider';
+import { FunctionAppViewProvider } from '../../../src/tree/resources/functions/FunctionAppViewProvider';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
+import { ResourceTypePresentationRegistry } from '../../../src/tree/resources/ResourceTypePresentation';
 
 describe('GenericAzureViewProvider (unit)', () => {
     const mockCodeContext = createMockCodeContext();
@@ -19,6 +23,10 @@ describe('GenericAzureViewProvider (unit)', () => {
         nodes?: ConcreteAzureNode[],
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
         onGetChildren?: (node: ConcreteAzureNode) => void,
+        resourceTypePresentations = new ResourceTypePresentationRegistry([
+            AcrViewProvider.resourceTypePresentation,
+            FunctionAppViewProvider.resourceTypePresentation,
+        ]),
     ) {
         const { executor } = createTestActionExecutor();
         const allNodes = nodes ?? [];
@@ -40,7 +48,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never, resourceTypePresentations);
     }
 
     describe('canHandle', () => {
@@ -336,7 +344,24 @@ describe('GenericAzureViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
 
             expect(item.label).to.equal('Microsoft.Web/sites');
+            expect((item.iconPath as { id: string }).id).to.equal('symbol-namespace');
         });
+
+        for (const [logicalType, displayName, iconPath] of [
+            [FunctionAppLogicalType, 'Function Apps', 'microsoft.web/sites~functionapp.svg'],
+            [AcrResourceType, 'Container Registries', 'microsoft.containerregistry/registries.svg'],
+        ]) {
+            it(`should render the ${displayName} resource-type group`, () => {
+                const provider = createProvider();
+                const key = `azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/~resourceType/${encodeURIComponent(logicalType)}`;
+
+                const item = provider.getTreeItem(key);
+
+                expect(item.label).to.equal(displayName);
+                expect((item.iconPath as { path: string }).path).to.include(iconPath);
+                expect(item.contextValue).to.equal('azureResourceTypeGroup');
+            });
+        }
 
         it('should throw for an unknown key not in cache', () => {
             const provider = createProvider();
@@ -458,6 +483,33 @@ describe('GenericAzureViewProvider (unit)', () => {
                 // Check that expanding a group returns resources
                 const groupChildren = await provider.getChildren(groups[0]);
                 expect(groupChildren.length).to.be.greaterThan(0);
+            }),
+        );
+
+        it('should sort registered and unregistered resource types by their rendered labels', () =>
+            withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+                const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                    [sub, [rg1, rg2]],
+                    [rg1, [webApp]],
+                    [rg2, [storageAccount]],
+                ]);
+                const resourceTypePresentations = new ResourceTypePresentationRegistry([
+                    {
+                        logicalType: webApp.logicalType,
+                        getDisplayName: code => code.l10n.t('Zulu Apps'),
+                    },
+                ]);
+                const provider = createProvider(
+                    [sub, rg1, rg2, webApp, storageAccount],
+                    childrenMap,
+                    undefined,
+                    resourceTypePresentations,
+                );
+
+                const groups = await provider.getChildren(AzureNodeId.from(sub).toString());
+                const labels = groups.map(key => provider.getTreeItem(key).label);
+
+                expect(labels).to.deep.equal(['Microsoft.Storage/storageAccounts', 'Zulu Apps']);
             }),
         );
 
