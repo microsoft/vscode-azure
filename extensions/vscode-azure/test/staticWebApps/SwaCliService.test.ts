@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IProcessExecutor } from '@microsoft/vscode-azure-utils';
+import { CancellationError, type IActionExecutor, type IProcessExecutor } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -104,11 +104,38 @@ describe('SwaCliService (unit)', () => {
     });
 
     it('should validate an installed minimum version without prompting', async () => {
-        const { mockResult, service } = createServiceResult(mock.fn(() =>
+        const { mockResult, service, telemetryProperties } = createServiceResult(mock.fn(() =>
             Promise.resolve({ stdout: '0.8.1', stderr: '' })));
 
         expect(await service.validateInstalled('CLI required')).to.equal(true);
         expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(0);
+        expect(Object.fromEntries(telemetryProperties)).to.include({
+            swaCliInstalled: 'true',
+            swaCliInstalledVersion: '0.8.1',
+            swaCliValidationAction: 'none',
+            swaCliValidationOutcome: 'valid',
+        });
+    });
+
+    it('should report npm-unavailable install attempts as cancellation', async () => {
+        const { service, telemetryProperties } = createServiceResult(
+            mock.fn(() => Promise.reject(new Error('not found'))),
+        );
+
+        let error: unknown;
+        try {
+            await service.installOrUpdate();
+        } catch (caught) {
+            error = caught;
+        }
+
+        expect(CancellationError.test(error)).to.equal(true);
+        expect(Object.fromEntries(telemetryProperties)).to.include({
+            swaCliOperation: 'installOrUpdate',
+            swaCliNpmAvailable: 'false',
+            swaCliNpmPromptAction: 'dismissed',
+            swaCliOperationOutcome: 'npmUnavailable',
+        });
     });
 });
 
@@ -122,19 +149,31 @@ function createService(
 function createServiceResult(
     spawn: ReturnType<typeof mock.fn>,
     fetcher?: SwaCliFetch,
-): { readonly mockResult: ReturnType<typeof createMockVsCode>; readonly service: SwaCliService } {
+): {
+    readonly mockResult: ReturnType<typeof createMockVsCode>;
+    readonly service: SwaCliService;
+    readonly telemetryProperties: ReadonlyMap<string, string>;
+} {
     const mockResult = createMockVsCode();
     const processExecutor = {
         spawn,
         isOnPath: mock.fn(() => Promise.resolve(true)),
     } as unknown as IProcessExecutor;
+    const telemetryProperties = new Map<string, string>();
+    const executor = {
+        setTelProp: mock.fn((name: string, value: string) => {
+            telemetryProperties.set(name, value);
+        }),
+    } as unknown as IActionExecutor;
     return {
         mockResult,
         service: new SwaCliService(
             mockResult.vscode,
             processExecutor,
             new MockOutputChannel('test'),
+            executor,
             fetcher,
         ),
+        telemetryProperties,
     };
 }

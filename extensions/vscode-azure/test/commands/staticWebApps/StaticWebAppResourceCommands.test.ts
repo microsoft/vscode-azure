@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createActionContext } from '@microsoft/vscode-azure-utils';
+import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -149,7 +149,13 @@ describe('Static Web Apps resource commands (unit)', () => {
             resolver,
         );
 
-        await command.execute('key');
+        let error: unknown;
+        try {
+            await command.execute('key');
+        } catch (caught) {
+            error = caught;
+        }
+        expect(CancellationError.test(error)).to.equal(true);
         expect(deleteSite.mock.callCount()).to.equal(0);
         expect(remove.mock.callCount()).to.equal(0);
     });
@@ -179,7 +185,13 @@ describe('Static Web Apps resource commands (unit)', () => {
         mockResult.fs.addFile(configUri, 'existing');
         const command = new CreateSwaConfigFile(mockResult.vscode);
 
-        await command.execute();
+        let error: unknown;
+        try {
+            await command.execute();
+        } catch (caught) {
+            error = caught;
+        }
+        expect(CancellationError.test(error)).to.equal(true);
         expect(new TextDecoder().decode(mockResult.fs.files.get(configUri.path))).to.equal('existing');
 
         mockResult.messageResponses.push('Overwrite');

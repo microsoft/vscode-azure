@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, StaticWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { CancelAction, RerunAction } from '../commands/staticWebApps/ActionCommands';
 import { BrowseStaticWebApp } from '../commands/staticWebApps/BrowseStaticWebApp';
 import { CloneRepository } from '../commands/staticWebApps/CloneRepository';
@@ -51,6 +51,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
             context.get(IVsCode),
             context.get(IProcessExecutor),
             context.get(IOutputChannel),
+            context.get(IActionExecutor),
         )).inSingletonScope();
         container.bind(SwaTaskProvider).toSelf().inSingletonScope();
         container.bind(SwaDebugConfigurationProvider).toSelf().inSingletonScope();

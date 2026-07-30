@@ -4,9 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    CancellationError,
+    IActionExecutor,
     IOutputChannel,
     IProcessExecutor,
     IVsCode,
+    type IActionExecutor as ActionExecutor,
     type IOutputChannel as OutputChannel,
     type IProcessExecutor as ProcessExecutor,
     type IVsCode as VsCode,
@@ -61,6 +64,7 @@ export class SwaCliService {
         @inject(IVsCode) private readonly code: VsCode,
         @inject(IProcessExecutor) private readonly processExecutor: ProcessExecutor,
         @inject(IOutputChannel) private readonly output: OutputChannel,
+        @inject(IActionExecutor) private readonly executor: ActionExecutor,
         private readonly fetcher: SwaCliFetch = (url, init) => globalThis.fetch(url, init),
     ) { }
 
@@ -119,10 +123,12 @@ export class SwaCliService {
 
     /** Installs or updates the CLI globally after verifying npm is available. */
     public async installOrUpdate(): Promise<void> {
+        this.executor.setTelProp('swaCliOperation', 'installOrUpdate');
         if (!await this.verifyNpm(this.code.l10n.t(
             'Node.js and npm are required to install the Azure Static Web Apps CLI.',
         ))) {
-            return;
+            this.executor.setTelProp('swaCliOperationOutcome', 'npmUnavailable');
+            throw new CancellationError(undefined, 'Verify npm availability');
         }
 
         this.output.show();
@@ -133,16 +139,22 @@ export class SwaCliService {
             source: SwaCliCommand,
             focus: true,
         });
+        this.executor.setTelProp('swaCliOperationOutcome', 'completed');
     }
 
     /** Uninstalls the globally installed CLI after verifying npm and installation state. */
     public async uninstall(): Promise<void> {
+        this.executor.setTelProp('swaCliOperation', 'uninstall');
         if (!await this.verifyNpm(this.code.l10n.t(
             'Node.js and npm are required to uninstall the Azure Static Web Apps CLI.',
         ))) {
-            return;
+            this.executor.setTelProp('swaCliOperationOutcome', 'npmUnavailable');
+            throw new CancellationError(undefined, 'Verify npm availability');
         }
-        if (!await this.getInstalledVersion()) {
+        const installedVersion = await this.getInstalledVersion();
+        this.executor.setTelProp('swaCliInstalled', String(!!installedVersion));
+        if (!installedVersion) {
+            this.executor.setTelProp('swaCliOperationOutcome', 'notInstalled');
             throw new Error(this.code.l10n.t(
                 'Cannot uninstall the Azure Static Web Apps CLI because it is not installed with npm.',
             ));
@@ -156,6 +168,7 @@ export class SwaCliService {
             source: SwaCliCommand,
             focus: true,
         });
+        this.executor.setTelProp('swaCliOperationOutcome', 'completed');
     }
 
     /**
@@ -168,11 +181,18 @@ export class SwaCliService {
         minimumVersion: string = MinimumSwaCliVersion,
     ): Promise<boolean> {
         const installedVersion = await this.getInstalledVersion();
+        this.executor.setTelProp('swaCliInstalled', String(!!installedVersion));
+        if (installedVersion) {
+            this.executor.setTelProp('swaCliInstalledVersion', installedVersion);
+        }
         if (installedVersion && semver.gte(installedVersion, minimumVersion)) {
+            this.executor.setTelProp('swaCliValidationAction', 'none');
+            this.executor.setTelProp('swaCliValidationOutcome', 'valid');
             return true;
         }
 
         const npmAvailable = await this.hasNpm();
+        this.executor.setTelProp('swaCliNpmAvailable', String(npmAvailable));
         const installLabel = installedVersion
             ? this.code.l10n.t('Update')
             : this.code.l10n.t('Install');
@@ -181,16 +201,22 @@ export class SwaCliService {
         const result = await this.code.window.showWarningMessage(message, { modal: true }, ...choices);
 
         if (result === learnMoreLabel) {
+            this.executor.setTelProp('swaCliValidationAction', 'learnMore');
+            this.executor.setTelProp('swaCliValidationOutcome', 'invalid');
             await this.code.env.openExternal(this.code.Uri.parse(InstallSwaCliUrl));
             return false;
         }
         if (result !== installLabel) {
+            this.executor.setTelProp('swaCliValidationAction', 'dismissed');
+            this.executor.setTelProp('swaCliValidationOutcome', 'invalid');
             return false;
         }
 
+        this.executor.setTelProp('swaCliValidationAction', installedVersion ? 'update' : 'install');
         await this.installOrUpdate();
         const updatedVersion = await this.getInstalledVersion();
         const valid = !!updatedVersion && semver.gte(updatedVersion, minimumVersion);
+        this.executor.setTelProp('swaCliValidationOutcome', valid ? 'valid' : 'verificationFailed');
         if (!valid) {
             const learnMoreLabel = this.code.l10n.t('Learn More');
             const failedResult = await this.code.window.showWarningMessage(
@@ -213,19 +239,32 @@ export class SwaCliService {
      */
     public async warnIfOutdated(): Promise<void> {
         const configuration = this.code.workspace.getConfiguration(ConfigurationSection);
-        if (!configuration.get<boolean>(ShowSwaCliWarningSetting, true)
-            || !await this.hasNpm()) {
+        if (!configuration.get<boolean>(ShowSwaCliWarningSetting, true)) {
+            this.executor.setTelProp('swaCliUpdateCheckOutcome', 'disabled');
+            return;
+        }
+        const npmAvailable = await this.hasNpm();
+        this.executor.setTelProp('swaCliNpmAvailable', String(npmAvailable));
+        if (!npmAvailable) {
+            this.executor.setTelProp('swaCliUpdateCheckOutcome', 'npmUnavailable');
             return;
         }
 
         const installedVersion = await this.getInstalledVersion();
         if (!installedVersion) {
+            this.executor.setTelProp('swaCliInstalled', 'false');
+            this.executor.setTelProp('swaCliUpdateCheckOutcome', 'notInstalled');
             return;
         }
+        this.executor.setTelProp('swaCliInstalled', 'true');
+        this.executor.setTelProp('swaCliInstalledVersion', installedVersion);
         const newestVersion = await this.getNewestVersion();
+        this.executor.setTelProp('swaCliNewestVersion', newestVersion);
         if (!semver.gt(newestVersion, installedVersion)) {
+            this.executor.setTelProp('swaCliUpdateCheckOutcome', 'current');
             return;
         }
+        this.executor.setTelProp('swaCliUpdateCheckOutcome', 'outdated');
 
         const message = this.code.l10n.t(
             'Update the Azure Static Web Apps CLI ({0}) to the latest ({1}) for the best experience.',
@@ -245,21 +284,28 @@ export class SwaCliService {
                 dontWarnLabel,
             );
             if (result === learnMoreLabel) {
+                this.executor.setTelProp('swaCliUpdateAction', 'learnMore');
                 await this.code.env.openExternal(this.code.Uri.parse(InstallSwaCliUrl));
             } else if (result === updateLabel) {
+                this.executor.setTelProp('swaCliUpdateAction', 'update');
                 await this.installOrUpdate();
             } else if (result === dontWarnLabel) {
+                this.executor.setTelProp('swaCliUpdateAction', 'disableWarning');
                 await configuration.update(
                     ShowSwaCliWarningSetting,
                     false,
                     this.code.ConfigurationTarget.Global,
                 );
+            } else {
+                this.executor.setTelProp('swaCliUpdateAction', 'dismissed');
             }
         } while (result === learnMoreLabel);
     }
 
     private async verifyNpm(message: string): Promise<boolean> {
-        if (await this.hasNpm()) {
+        const npmAvailable = await this.hasNpm();
+        this.executor.setTelProp('swaCliNpmAvailable', String(npmAvailable));
+        if (npmAvailable) {
             return true;
         }
 
@@ -270,7 +316,10 @@ export class SwaCliService {
             learnMoreLabel,
         );
         if (result === learnMoreLabel) {
+            this.executor.setTelProp('swaCliNpmPromptAction', 'learnMore');
             await this.code.env.openExternal(this.code.Uri.parse(InstallSwaCliUrl));
+        } else {
+            this.executor.setTelProp('swaCliNpmPromptAction', 'dismissed');
         }
         return false;
     }

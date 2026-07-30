@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { SwaTaskProvider } from '../../src/tasks/staticWebApps/SwaTaskProvider';
 
@@ -27,8 +28,15 @@ describe('SwaTaskProvider (unit)', () => {
             mockResult.vscode.Uri.joinPath(root, 'data', 'staticwebapp.database.config.json'),
             '{}',
         );
+        const sendTelemetryErrorEvent = mock.fn();
+        const { executor } = createTestActionExecutor({
+            reporter: {
+                sendTelemetryErrorEvent,
+                dispose: () => Promise.resolve(),
+            },
+        });
 
-        const tasks = await new SwaTaskProvider(mockResult.vscode)
+        const tasks = await new SwaTaskProvider(mockResult.vscode, executor)
             .provideTasksForWorkspaceFolder(folder);
 
         expect(tasks.map(task => `${task.source}: ${task.name}`)).to.deep.equal([
@@ -57,6 +65,18 @@ describe('SwaTaskProvider (unit)', () => {
         expect(detected.problemMatchers).to.deep.equal(['$swa-watch']);
         expect(detected.isBackground).to.equal(true);
         expect(detected.scope).to.equal(folder);
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[0])
+            .to.equal('staticWebApps.provideTasksForWorkspaceFolder');
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[1]).to.include({
+            hasSwaCliConfig: 'true',
+            isActivationEvent: 'true',
+            result: 'Succeeded',
+        });
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[2]).to.include({
+            configCount: 2,
+            detectedCount: 1,
+            taskCount: 3,
+        });
     });
 
     it('should avoid duplicate task labels within a workspace', async () => {
@@ -71,10 +91,41 @@ describe('SwaTaskProvider (unit)', () => {
             mockResult.vscode.Uri.joinPath(root, 'package.json'),
             JSON.stringify({ dependencies: { react: '19.0.0' } }),
         );
+        const { executor } = createTestActionExecutor();
 
-        const tasks = await new SwaTaskProvider(mockResult.vscode)
+        const tasks = await new SwaTaskProvider(mockResult.vscode, executor)
             .provideTasksForWorkspaceFolder(folder);
 
         expect(tasks.filter(task => task.name === 'start app')).to.have.lengthOf(1);
+    });
+
+    it('should report aggregate task discovery without nested folder events', async () => {
+        const mockResult = createMockVsCode();
+        const root = mockResult.vscode.Uri.file('/workspace');
+        const folder = { uri: root, name: 'workspace', index: 0 } as vscode.WorkspaceFolder;
+        mockResult.workspaceFolders.push(folder);
+        mockResult.fs.addFile(
+            mockResult.vscode.Uri.joinPath(root, 'swa-cli.config.json'),
+            JSON.stringify({ configurations: { app: {} } }),
+        );
+        const sendTelemetryErrorEvent = mock.fn();
+        const { executor } = createTestActionExecutor({
+            reporter: {
+                sendTelemetryErrorEvent,
+                dispose: () => Promise.resolve(),
+            },
+        });
+
+        const tasks = await new SwaTaskProvider(mockResult.vscode, executor).provideTasks();
+
+        expect(tasks).to.have.lengthOf(2);
+        expect(sendTelemetryErrorEvent.mock.callCount()).to.equal(1);
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[0]).to.equal('staticWebApps.provideTasks');
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[2]).to.include({
+            workspaceFolderCount: 1,
+            detectedCount: 2,
+            configTaskCount: 2,
+            detectedTaskCount: 0,
+        });
     });
 });

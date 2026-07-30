@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionContext, ICodeContext, IOutputChannel, selfOnly, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import { CancellationError, IActionContext, ICodeContext, IOutputChannel, selfOnly, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import {
@@ -149,7 +149,7 @@ export class ManageStaticWebAppAppSetting implements ManagedCommand {
             deleteLabel,
         );
         if (confirmation !== deleteLabel) {
-            return;
+            throw new CancellationError(undefined, 'Confirm Static Web Apps app setting deletion');
         }
 
         await this.provider.deleteAppSetting(setting.appSettingsGroup, setting.settingName);
@@ -192,7 +192,7 @@ export class TransferStaticWebAppAppSettings implements ManagedCommand {
             title: this.ctx.code.l10n.t('Select the destination file for downloaded settings.'),
         });
         if (!destination) {
-            return;
+            throw new CancellationError(undefined, 'Select app settings download destination');
         }
 
         const local = await this.readLocalSettingsIfPresent(destination) ?? { IsEncrypted: false, Values: {} };
@@ -205,7 +205,7 @@ export class TransferStaticWebAppAppSettings implements ManagedCommand {
                 overwriteLabel,
             );
             if (response !== overwriteLabel) {
-                return;
+                throw new CancellationError(undefined, 'Confirm local app settings overwrite');
             }
         }
 
@@ -227,7 +227,7 @@ export class TransferStaticWebAppAppSettings implements ManagedCommand {
         });
         const source = selected?.[0];
         if (!source) {
-            return;
+            throw new CancellationError(undefined, 'Select app settings upload source');
         }
 
         const local = parseLocalSettings(
@@ -250,7 +250,7 @@ export class TransferStaticWebAppAppSettings implements ManagedCommand {
                 uploadLabel,
             );
             if (response !== uploadLabel) {
-                return;
+                throw new CancellationError(undefined, 'Confirm remote app settings overwrite');
             }
         }
 

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IExtensionContext, IOutputChannel, IVsCode, stringifyError } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IExtensionContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import type { Container } from 'inversify';
 import { SwaDebugConfigurationProvider, PwaChromeDebugType, SwaDebugType } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
 import { IStaticWebAppsGitHubService } from '../services/StaticWebAppsGitHubService';
@@ -54,12 +54,14 @@ export function registerStaticWebAppLocalTools(container: Container): void {
     container.get(SwaTaskLifecycle);
 
     if (!process.env.VSCODE_RUNNING_TESTS) {
-        void container.get(ISwaCliService).warnIfOutdated().catch((error: unknown) => {
-            output.warn(code.l10n.t(
-                '[swa] CLI update check failed: {0}',
-                stringifyError(error),
-            ));
-        });
+        void container.get(IActionExecutor).callWithTelemetryAndErrorHandling(
+            'staticWebApps.validateStaticWebAppsCliIsLatest',
+            async context => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.suppress = 'display';
+                await container.get(ISwaCliService).warnIfOutdated();
+            },
+        );
 
         void container.get(IStaticWebAppsGitHubService).prepareAuthentication().catch(() => {
             output.warn(code.l10n.t('[swa] GitHub authentication prewarm failed.'));

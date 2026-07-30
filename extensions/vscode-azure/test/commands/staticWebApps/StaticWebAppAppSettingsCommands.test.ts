@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createActionContext } from '@microsoft/vscode-azure-utils';
+import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -133,6 +133,28 @@ describe('Static Web Apps app-settings commands (unit)', () => {
         });
         expect(context.telemetry.measurements.excludedSettingCount).to.equal(1);
         expect(harness.invalidate.mock.calls[0].arguments[0]).to.equal(group);
+    });
+
+    it('should report a dismissed app-settings file picker as cancellation', async () => {
+        const group = makeGroup();
+        const harness = createHarness(group);
+        const command = new TransferStaticWebAppAppSettings(
+            createActionContext('test'),
+            harness.ctx,
+            new MockOutputChannel('test'),
+            harness.resolver,
+            harness.provider as never,
+        );
+
+        let error: unknown;
+        try {
+            await command.execute('upload', 'key');
+        } catch (caught) {
+            error = caught;
+        }
+
+        expect(CancellationError.test(error)).to.equal(true);
+        expect(harness.provider.replaceAppSettings.mock.callCount()).to.equal(0);
     });
 
     it('should toggle visibility synchronously and invalidate only the item', () => {

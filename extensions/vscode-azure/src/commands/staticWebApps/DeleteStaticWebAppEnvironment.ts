@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, IActionContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { StaticWebAppVirtualTypes, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -44,7 +44,7 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
             deleteLabel,
         );
         if (confirmation !== deleteLabel) {
-            return;
+            throw new CancellationError(undefined, 'Confirm Static Web Apps environment deletion');
         }
 
         const { resourceGroup } = parseAzureResourceId(environment.azureResource.id);
