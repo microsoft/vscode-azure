@@ -76,7 +76,6 @@ export class CreateStaticWebApp implements ManagedCommand {
                     'repositoryUrl',
                     'branch',
                 ],
-                ['staticWebApp.module.bicep'],
             ),
             get(GenerateAzureYamlStep),
             get(ConfigureStaticWebAppAzureYamlStep),
