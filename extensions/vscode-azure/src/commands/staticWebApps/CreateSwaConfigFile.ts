@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -33,7 +33,7 @@ export class CreateSwaConfigFile implements ManagedCommand {
     public async execute(): Promise<void> {
         const folder = await this.selectWorkspaceFolder();
         if (!folder) {
-            return;
+            throw new CancellationError(undefined, 'Select workspace folder');
         }
 
         const configUri = this.code.Uri.joinPath(folder.uri, staticWebAppConfigFileName);
@@ -45,7 +45,7 @@ export class CreateSwaConfigFile implements ManagedCommand {
                 overwriteLabel,
             );
             if (response !== overwriteLabel) {
-                return;
+                throw new CancellationError(undefined, 'Confirm Static Web Apps config overwrite');
             }
         }
 

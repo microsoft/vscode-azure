@@ -3,7 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode, type IVsCode as VsCode } from '@microsoft/vscode-azure-utils';
+import {
+    IActionExecutor,
+    IVsCode,
+    type IActionExecutor as ActionExecutor,
+    type IActionContext,
+    type IVsCode as VsCode,
+} from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { detectStaticWebAppProject } from '../../commands/staticWebApps/steps/frameworkDetection';
@@ -26,6 +32,7 @@ export const PwaChromeDebugType = 'pwa-chrome';
 
 const debugConfigurationPrefix = 'SWA: Run ';
 const configPostfix = ` (${SwaCliConfigFileName})`;
+type FunctionsProxyFixOutcome = 'notApplicable' | 'alreadyConfigured' | 'fixed' | 'learnMore' | 'dismissed';
 
 /**
  * Supplies browser launch configurations for named SWA CLI configs and detected projects.
@@ -39,25 +46,44 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
     public constructor(
         @inject(IVsCode) private readonly code: VsCode,
         @inject(ISwaCliService) private readonly swaCli: SwaCli,
+        @inject(IActionExecutor) private readonly executor: ActionExecutor,
     ) { }
 
     /** @inheritdoc */
     public async provideDebugConfigurations(
         folder: vscode.WorkspaceFolder,
     ): Promise<vscode.DebugConfiguration[]> {
-        const configurations: vscode.DebugConfiguration[] = [];
-        const swaConfig = await tryGetStaticWebAppsCliConfig(this.code, folder.uri);
-        for (const [name, options] of Object.entries(swaConfig?.configurations ?? {})) {
-            configurations.push(this.createDebugConfiguration(name, options.appLocation, true));
-        }
+        const result = await this.executor.callWithTelemetryAndErrorHandling(
+            'staticWebApps.provideDebugConfigurations',
+            async context => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                const configurations: vscode.DebugConfiguration[] = [];
+                const swaConfig = await tryGetStaticWebAppsCliConfig(this.code, folder.uri);
+                const configEntries = Object.entries(swaConfig?.configurations ?? {});
+                for (const [name, options] of configEntries) {
+                    configurations.push(this.createDebugConfiguration(name, options.appLocation, true));
+                }
 
-        const detection = await detectStaticWebAppProject(this.code, folder.uri);
-        if (detection.primaryPresetId && detection.appLocation) {
-            const appName = getDetectedAppName(folder, detection.appLocation);
-            configurations.push(this.createDebugConfiguration(appName, detection.appLocation, false));
-        }
+                const detection = await detectStaticWebAppProject(this.code, folder.uri);
+                const hasDetectedApp = !!detection.primaryPresetId && !!detection.appLocation;
+                if (detection.primaryPresetId && detection.appLocation) {
+                    const appName = getDetectedAppName(folder, detection.appLocation);
+                    configurations.push(this.createDebugConfiguration(appName, detection.appLocation, false));
+                }
 
-        return deduplicateConfigurations(configurations);
+                const deduplicated = deduplicateConfigurations(configurations);
+                context.telemetry.measurements.configsCount = configEntries.length;
+                context.telemetry.measurements.appCount = hasDetectedApp ? 1 : 0;
+                context.telemetry.measurements.generatedCount = deduplicated.length;
+                context.telemetry.properties.buildPresets = detection.primaryPresetId ?? '';
+                return deduplicated;
+            },
+        );
+        if (!result) {
+            throw new Error('Static Web Apps debug configuration discovery completed without a result.');
+        }
+        return result;
     }
 
     /** @inheritdoc */
@@ -66,29 +92,61 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         debugConfiguration: vscode.DebugConfiguration,
         cancellationToken: vscode.CancellationToken,
     ): Promise<vscode.DebugConfiguration | undefined> {
+        return this.executor.callWithTelemetryAndErrorHandling(
+            'staticWebApps.resolveDebugConfiguration',
+            async context => {
+                context.telemetry.isUserEvent = false;
+                context.telemetry.suppress = 'onSuccess';
+                context.errorHandling.rethrow = true;
+                return this.resolveSwaDebugConfiguration(folder, debugConfiguration, cancellationToken, context);
+            },
+        );
+    }
+
+    private async resolveSwaDebugConfiguration(
+        folder: vscode.WorkspaceFolder | undefined,
+        debugConfiguration: vscode.DebugConfiguration,
+        cancellationToken: vscode.CancellationToken,
+        context: IActionContext,
+    ): Promise<vscode.DebugConfiguration | undefined> {
         if (!isSwaDebugConfiguration(debugConfiguration)) {
             return debugConfiguration;
         }
+        context.telemetry.isUserEvent = true;
+        context.telemetry.suppress = undefined;
+        context.telemetry.properties.hasWorkspaceFolder = String(!!folder);
         if (!folder) {
+            context.telemetry.properties.outcome = 'missingWorkspaceFolder';
             return undefined;
         }
 
         const installed = await this.swaCli.validateInstalled(this.code.l10n.t(
             'Install the Azure Static Web Apps CLI to debug this static web app.',
         ));
+        context.telemetry.properties.cliAvailable = String(installed);
         if (!installed) {
+            context.telemetry.properties.outcome = 'cliUnavailable';
             return undefined;
         }
 
         const detection = await detectStaticWebAppProject(this.code, folder.uri);
+        context.telemetry.properties.hasApi = String(detection.apiLocations.length > 0);
         if (detection.apiLocations.length > 0) {
             const swaConfig = await tryGetStaticWebAppsCliConfig(this.code, folder.uri);
-            await this.offerFunctionsProxyFix(folder, debugConfiguration, swaConfig);
+            context.telemetry.properties.hasSwaCliConfigFile = String(!!swaConfig);
+            context.telemetry.properties.functionsProxyFix = await this.offerFunctionsProxyFix(
+                folder,
+                debugConfiguration,
+                swaConfig,
+            );
             if (!cancellationToken.isCancellationRequested) {
-                await this.startFunctionsDebugging(folder);
+                const started = await this.startFunctionsDebugging(folder);
+                context.telemetry.properties.debugApi = String(started);
             }
         }
 
+        context.telemetry.properties.cancellationRequested = String(cancellationToken.isCancellationRequested);
+        context.telemetry.properties.outcome = 'resolved';
         return debugConfiguration;
     }
 
@@ -113,14 +171,16 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         folder: vscode.WorkspaceFolder,
         debugConfiguration: vscode.DebugConfiguration,
         swaConfig: StaticWebAppsCliConfigFile | undefined,
-    ): Promise<void> {
+    ): Promise<FunctionsProxyFixOutcome> {
         const configurationName = parseSwaConfigurationName(debugConfiguration.name);
         if (!configurationName) {
-            return;
+            return 'notApplicable';
         }
         const selected = swaConfig?.configurations?.[configurationName];
-        if (!selected || selected.apiLocation === FunctionsEmulatorAddress) {
-            return;
+        if (!selected) {
+            return 'notApplicable';
+        } else if (selected.apiLocation === FunctionsEmulatorAddress) {
+            return 'alreadyConfigured';
         }
 
         const fixLabel = this.code.l10n.t('Fix');
@@ -134,6 +194,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         );
         if (result === learnMoreLabel) {
             await this.code.env.openExternal(this.code.Uri.parse('https://aka.ms/setupSwaCliCode'));
+            return 'learnMore';
         } else if (result === fixLabel) {
             const updated: StaticWebAppsCliConfigFile = {
                 ...swaConfig,
@@ -149,10 +210,12 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
                 this.code.Uri.joinPath(folder.uri, SwaCliConfigFileName),
                 new TextEncoder().encode(`${JSON.stringify(updated, undefined, 2)}\n`),
             );
+            return 'fixed';
         }
+        return 'dismissed';
     }
 
-    private async startFunctionsDebugging(folder: vscode.WorkspaceFolder): Promise<void> {
+    private async startFunctionsDebugging(folder: vscode.WorkspaceFolder): Promise<boolean> {
         let configuration = getFunctionsDebugConfiguration(this.code, folder);
         if (!configuration) {
             await this.code.commands.executeCommand(
@@ -162,8 +225,9 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
             configuration = getFunctionsDebugConfiguration(this.code, folder);
         }
         if (configuration) {
-            await this.code.debug.startDebugging(folder, configuration);
+            return this.code.debug.startDebugging(folder, configuration);
         }
+        return false;
     }
 }
 

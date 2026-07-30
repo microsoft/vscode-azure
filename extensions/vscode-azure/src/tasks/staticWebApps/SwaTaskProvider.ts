@@ -3,7 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode, type IVsCode as VsCode } from '@microsoft/vscode-azure-utils';
+import {
+    IActionExecutor,
+    IVsCode,
+    type IActionExecutor as ActionExecutor,
+    type IVsCode as VsCode,
+} from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { getStaticWebAppBuildPreset } from '../../commands/staticWebApps/buildPresets';
@@ -20,6 +25,12 @@ export const SwaTaskSource = 'swa';
 /** Problem matcher supplied by the following manifest slice. */
 export const SwaWatchProblemMatcher = '$swa-watch';
 
+interface WorkspaceTaskDiscovery {
+    readonly tasks: vscode.Task[];
+    readonly configCount: number;
+    readonly detectedCount: number;
+}
+
 /**
  * Generates SWA CLI tasks from `swa-cli.config.json` and retained framework detection.
  *
@@ -30,6 +41,7 @@ export const SwaWatchProblemMatcher = '$swa-watch';
 export class SwaTaskProvider implements vscode.TaskProvider {
     public constructor(
         @inject(IVsCode) private readonly code: VsCode,
+        @inject(IActionExecutor) private readonly executor: ActionExecutor,
     ) { }
 
     /** Generated tasks are authoritative and are not resolved from persisted definitions. */
@@ -39,29 +51,74 @@ export class SwaTaskProvider implements vscode.TaskProvider {
 
     /** @inheritdoc */
     public async provideTasks(): Promise<vscode.Task[]> {
-        const tasks: vscode.Task[] = [];
-        for (const workspaceFolder of this.code.workspace.workspaceFolders ?? []) {
-            tasks.push(...await this.provideTasksForWorkspaceFolder(workspaceFolder));
+        const result = await this.executor.callWithTelemetryAndErrorHandling(
+            'staticWebApps.provideTasks',
+            async context => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                const workspaceFolders = this.code.workspace.workspaceFolders ?? [];
+                const tasks: vscode.Task[] = [];
+                let configCount = 0;
+                let detectedCount = 0;
+                for (const workspaceFolder of workspaceFolders) {
+                    const discovery = await this.discoverTasksForWorkspaceFolder(workspaceFolder);
+                    tasks.push(...discovery.tasks);
+                    configCount += discovery.configCount;
+                    detectedCount += discovery.detectedCount;
+                }
+                context.telemetry.measurements.workspaceFolderCount = workspaceFolders.length;
+                context.telemetry.measurements.detectedCount = tasks.length;
+                context.telemetry.measurements.configTaskCount = configCount;
+                context.telemetry.measurements.detectedTaskCount = detectedCount;
+                return tasks;
+            },
+        );
+        if (!result) {
+            throw new Error('Static Web Apps task discovery completed without a result.');
         }
-        return tasks;
+        return result;
     }
 
     /** Generates tasks for one workspace folder, primarily for focused tests. */
     public async provideTasksForWorkspaceFolder(
         workspaceFolder: vscode.WorkspaceFolder,
     ): Promise<vscode.Task[]> {
-        const tasks = [
-            ...await this.getConfigTasks(workspaceFolder),
-            ...await this.getDetectedTasks(workspaceFolder),
-        ];
+        const result = await this.executor.callWithTelemetryAndErrorHandling(
+            'staticWebApps.provideTasksForWorkspaceFolder',
+            async context => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                const discovery = await this.discoverTasksForWorkspaceFolder(workspaceFolder);
+                context.telemetry.measurements.configCount = discovery.configCount;
+                context.telemetry.measurements.detectedCount = discovery.detectedCount;
+                context.telemetry.properties.hasSwaCliConfig = String(discovery.configCount > 0);
+                context.telemetry.measurements.taskCount = discovery.tasks.length;
+                return discovery.tasks;
+            },
+        );
+        if (!result) {
+            throw new Error('Static Web Apps workspace task discovery completed without a result.');
+        }
+        return result;
+    }
+
+    private async discoverTasksForWorkspaceFolder(
+        workspaceFolder: vscode.WorkspaceFolder,
+    ): Promise<WorkspaceTaskDiscovery> {
+        const configTasks = await this.getConfigTasks(workspaceFolder);
+        const detectedTasks = await this.getDetectedTasks(workspaceFolder);
         const uniqueTasks = new Map<string, vscode.Task>();
-        for (const task of tasks) {
+        for (const task of [...configTasks, ...detectedTasks]) {
             const label = `${task.source}: ${task.name}`;
             if (!uniqueTasks.has(label)) {
                 uniqueTasks.set(label, task);
             }
         }
-        return [...uniqueTasks.values()];
+        return {
+            tasks: [...uniqueTasks.values()],
+            configCount: configTasks.length,
+            detectedCount: detectedTasks.length,
+        };
     }
 
     private async getConfigTasks(workspaceFolder: vscode.WorkspaceFolder): Promise<vscode.Task[]> {

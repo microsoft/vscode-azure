@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
@@ -22,9 +22,17 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
             mockResult.vscode.Uri.joinPath(root, 'client', 'package.json'),
             JSON.stringify({ dependencies: { react: '19.0.0' } }),
         );
+        const sendTelemetryErrorEvent = mock.fn();
+        const { executor } = createTestActionExecutor({
+            reporter: {
+                sendTelemetryErrorEvent,
+                dispose: () => Promise.resolve(),
+            },
+        });
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
             { validateInstalled: mock.fn(() => Promise.resolve(true)) } as never,
+            executor,
         );
 
         const configurations = await provider.provideDebugConfigurations(folder);
@@ -51,14 +59,34 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
                 timeout: 30000,
             },
         ]);
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[0])
+            .to.equal('staticWebApps.provideDebugConfigurations');
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[1]).to.include({
+            buildPresets: 'react',
+            isActivationEvent: 'true',
+            result: 'Succeeded',
+        });
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[2]).to.include({
+            configsCount: 1,
+            appCount: 1,
+            generatedCount: 2,
+        });
     });
 
     it('should ignore unrelated browser configurations without validating the CLI', async () => {
         const mockResult = createMockVsCode();
+        const sendTelemetryErrorEvent = mock.fn();
+        const { executor } = createTestActionExecutor({
+            reporter: {
+                sendTelemetryErrorEvent,
+                dispose: () => Promise.resolve(),
+            },
+        });
         const validateInstalled = mock.fn(() => Promise.resolve(true));
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
             { validateInstalled } as never,
+            executor,
         );
         const configuration = { name: 'Launch Chrome', request: 'launch', type: 'pwa-chrome' };
 
@@ -68,6 +96,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
             { isCancellationRequested: false } as vscode.CancellationToken,
         )).to.equal(configuration);
         expect(validateInstalled.mock.callCount()).to.equal(0);
+        expect(sendTelemetryErrorEvent.mock.callCount()).to.equal(0);
     });
 
     it('should fix a named Functions proxy config and start an attach configuration', async () => {
@@ -84,9 +113,17 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
             { name: 'Attach to Node Functions', request: 'attach', type: 'node' },
         ]);
         mockResult.messageResponses.push('Fix');
+        const sendTelemetryErrorEvent = mock.fn();
+        const { executor } = createTestActionExecutor({
+            reporter: {
+                sendTelemetryErrorEvent,
+                dispose: () => Promise.resolve(),
+            },
+        });
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
             { validateInstalled: mock.fn(() => Promise.resolve(true)) } as never,
+            executor,
         );
 
         await provider.resolveDebugConfiguration(
@@ -105,5 +142,16 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         expect(saved.configurations.named.apiLocation).to.equal('http://localhost:7071');
         expect(mockResult.debug.startDebugging.mock.callCount()).to.equal(1);
         expect(mockResult.commands.executeCommand.mock.callCount()).to.equal(0);
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[0])
+            .to.equal('staticWebApps.resolveDebugConfiguration');
+        expect(sendTelemetryErrorEvent.mock.calls[0].arguments[1]).to.include({
+            cliAvailable: 'true',
+            hasApi: 'true',
+            hasSwaCliConfigFile: 'true',
+            functionsProxyFix: 'fixed',
+            debugApi: 'true',
+            outcome: 'resolved',
+            result: 'Succeeded',
+        });
     });
 });
