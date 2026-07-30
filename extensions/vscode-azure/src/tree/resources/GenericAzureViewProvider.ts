@@ -14,6 +14,7 @@ import { IAzureViewDataTree } from '../../services';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
+import { IAzureResourceDataProvider, type AzureResourceDataProvider } from './AzureResourceDataProvider';
 
 /**
  * Root view-layer provider for the Azure resources tree.
@@ -52,6 +53,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(IAzureResourceDataProvider) private readonly resources: AzureResourceDataProvider,
     ) {
         this.disposables.push(ctx.code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)
@@ -362,8 +364,17 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         const resourceGroups = await this.cache.getChildren(sub);
         this.executor.output.debug(`[view] flattened resource groups subscription=${subscription.subscriptionId} count=${resourceGroups.length}`);
 
-        const limiter = new Limiter<void>(5);
-        await Promise.all(resourceGroups.map(rg => limiter.queue(() => this.cache.loadAll(rg))));
+        // Walking every resource group is a decision only this layer can make,
+        // so state it explicitly: for the duration of the walk the data layer
+        // serves all of these groups from one subscription-wide ARM listing
+        // instead of one call per group.
+        const bulkLoad = this.resources.beginBulkLoad(subscription);
+        try {
+            const limiter = new Limiter<void>(5);
+            await Promise.all(resourceGroups.map(rg => limiter.queue(() => this.cache.loadAll(rg))));
+        } finally {
+            bulkLoad.dispose();
+        }
 
         const allResources = (
             await Promise.all(resourceGroups.map(rg => this.cache.getChildren(rg)))

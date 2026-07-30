@@ -67,7 +67,8 @@ describe('Bulk resource load (integration)', () => {
             5 * 60 * 1000,
         );
 
-        dataTree.registerProvider(new AzureResourceDataProvider(code, executor, resourceClientProvider));
+        const resourceProvider = new AzureResourceDataProvider(code, executor, resourceClientProvider);
+        dataTree.registerProvider(resourceProvider);
         dataTree.registerProvider(createMockAccountDataProvider({
             accounts: [account],
             tenants: [tenant],
@@ -81,9 +82,9 @@ describe('Bulk resource load (integration)', () => {
             getResourceKey: key => key,
         };
         const viewTree = new ViewItemTree<string, ConcreteAzureNode>('test-bulk-tree', executor, viewOptions, undefined);
-        viewTree.registerProvider(new GenericAzureViewProvider(mockCtx.ctx, executor, dataTree));
+        viewTree.registerProvider(new GenericAzureViewProvider(mockCtx.ctx, executor, dataTree, resourceProvider));
 
-        return { dataTree, viewTree, mock: mockCtx.mock, listAll, listByResourceGroup };
+        return { dataTree, viewTree, mock: mockCtx.mock, listAll, listByResourceGroup, resourceProvider };
     }
 
     /** Render the subscription's children, which is where grouping happens. */

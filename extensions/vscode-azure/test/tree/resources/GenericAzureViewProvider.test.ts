@@ -11,6 +11,7 @@ import { mock } from 'node:test';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
+import { createMockBulkLoader } from './mockResourceClient';
 
 describe('GenericAzureViewProvider (unit)', () => {
     const mockCodeContext = createMockCodeContext();
@@ -40,7 +41,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never, createMockBulkLoader() as never);
     }
 
     describe('canHandle', () => {

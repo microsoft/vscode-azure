@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription, GenericResource, GroupingStrategy } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscription, GenericResource } from '@microsoft/vscode-azure-azutils';
 import {
     getNodeType, IResourceClientProvider, isResourceGroup, isSubscription, parseAzureResourceId,
     type ConcreteAzureNode, type IResourceClient
@@ -12,7 +12,7 @@ import {
     EventEmitter, Everything, IActionExecutor, IVsCode,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult
 } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { ConfigurationSection } from '../../constants';
 
 /**
@@ -21,27 +21,29 @@ import { ConfigurationSection } from '../../constants';
 const DEFAULT_PAGE_SIZE = 50;
 
 /**
- * How long a coalesced subscription-wide resource load may be reused, in
- * milliseconds.
- *
- * The load only has to outlive the burst of resource-group requests that one
- * tree render produces, which is bounded by in-memory work rather than I/O. The
- * generous window here is a safety margin, not a cache lifetime: it is
- * deliberately far shorter than the tree's own TTL so that a coalesced result
- * can never outlive the tree data it feeds.
+ * Service identifier for {@linkcode AzureResourceDataProvider}, so the view
+ * layer can open a bulk-load window via
+ * {@linkcode AzureResourceDataProvider.beginBulkLoad}.
  */
-const BULK_LOAD_TTL = 30 * 1000;
+export const IAzureResourceDataProvider: ServiceIdentifier<AzureResourceDataProvider> = Symbol.for('IAzureResourceDataProvider');
 
 /**
- * A coalesced subscription-wide resource load, bucketed by lower-cased
- * resource group name.
+ * An open bulk-load window for one subscription.
+ *
+ * The window exists only while a caller has declared that it is about to walk
+ * every resource group in the subscription. `resources` is started lazily by
+ * the first resource group that actually asks, so opening a window that turns
+ * out to be unnecessary costs nothing.
  */
-interface BulkResourceLoad {
-    readonly resources: Promise<Map<string, GenericResource[]>>;
-    /** Wall-clock time after which this load must not be served. */
-    readonly expiresAt: number;
-    /** Evicts the entry so a load is never retained past its usefulness. */
-    readonly evictionTimer: ReturnType<typeof setTimeout>;
+interface BulkLoadWindow {
+    /**
+     * Number of open {@linkcode AzureResourceDataProvider.beginBulkLoad}
+     * handles. Overlapping renders share one window -- and therefore one ARM
+     * listing -- and the window closes when the last handle is disposed.
+     */
+    refCount: number;
+    /** The shared listing, started by the first resource group to ask. */
+    resources?: Promise<Map<string, GenericResource[]>>;
 }
 
 /**
@@ -54,13 +56,11 @@ interface BulkResourceLoad {
  * {@linkcode AzureAccountDataProvider}; service-specific providers (e.g.
  * {@linkcode AcrDataProvider}) handle children below the resource group level.
  *
- * When the view groups by anything other than resource group, the caller is
- * guaranteed to walk every resource group, so this provider switches to a
- * single subscription-wide resource listing and serves each resource group's
- * children out of it -- see {@linkcode loadAllResources}. The load is triggered
- * by the first resource group to ask, not by the subscription listing, so
- * callers that only want resource groups never pay for it. Under resource-group
- * grouping the per-group listing is kept, so expanding one group stays cheap.
+ * By default each resource group lists its own resources, so expanding one
+ * group stays cheap. A caller that knows it is about to walk *every* resource
+ * group can say so with {@linkcode beginBulkLoad}; for the lifetime of that
+ * window this provider serves every resource group out of a single
+ * subscription-wide listing instead of one call per group.
  *
  * Fires {@linkcode onDidChange} when configuration affecting pagination changes.
  */
@@ -73,25 +73,14 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
     private readonly clientCache = new Map<string, IResourceClient>();
 
     /**
-     * Coalesced subscription-wide resource loads, keyed by subscription ID.
-     * The resolved value buckets every resource in the subscription by
-     * lower-cased resource group name.
+     * Open bulk-load windows, keyed by subscription ID.
      *
      * This is a request coalescer, not a cache: {@linkcode DataItemTree} already
-     * owns cached children and their TTL. An entry only has to outlive the burst
-     * of resource-group requests that a single tree render produces, so it is
-     * discarded as soon as any of the following happens, whichever comes first:
-     * the subscription's resource groups are listed again (which any refresh or
-     * invalidation of the subscription must do first), {@linkcode BULK_LOAD_TTL}
-     * elapses, or a settings change invalidates the whole tree.
-     *
-     * The TTL matters even though the resource-group listing normally resets the
-     * entry: it bounds how stale a served result can be even if some future
-     * caller invalidates a resource group without re-listing its subscription,
-     * and it stops a subscription snapshot being retained after the user stops
-     * looking at the tree.
+     * owns cached children and their TTL. An entry lives exactly as long as the
+     * {@linkcode beginBulkLoad} handles that opened it, so a listing can never
+     * outlive the walk that asked for it and there is no expiry to tune.
      */
-    private readonly bulkLoads = new Map<string, BulkResourceLoad>();
+    private readonly bulkLoads = new Map<string, BulkLoadWindow>();
 
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
@@ -106,10 +95,47 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
         this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.pageSize`)) {
                 this.executor.output.debug('[data] resources config changed: pageSize');
-                this.clearBulkLoads();
                 this.changeEmitter.fire({ target: Everything });
             }
         }));
+    }
+
+    /**
+     * Declare that the caller is about to load every resource group in
+     * `subscription`, and should be served from one subscription-wide listing
+     * rather than one ARM call per resource group.
+     *
+     * Whether a full walk is happening is a *view*-layer decision (it depends on
+     * the grouping strategy), so the view layer states it explicitly here rather
+     * than this provider inferring it from presentation settings.
+     *
+     * The listing is started lazily by the first resource group that asks, so a
+     * window that turns out not to need one is free. Overlapping windows for the
+     * same subscription share a single listing; the window -- and the snapshot
+     * it holds -- is discarded once every handle is disposed.
+     *
+     * @returns a handle that must be disposed once the walk is complete.
+     *          Disposing more than once is a no-op.
+     */
+    public beginBulkLoad(subscription: AzureSubscription): Disposable {
+        const key = subscription.subscriptionId;
+        const window = this.bulkLoads.get(key) ?? { refCount: 0 };
+        window.refCount++;
+        this.bulkLoads.set(key, window);
+
+        let disposed = false;
+        return {
+            dispose: () => {
+                if (disposed) {
+                    return;
+                }
+
+                disposed = true;
+                if (--window.refCount <= 0 && this.bulkLoads.get(key) === window) {
+                    this.bulkLoads.delete(key);
+                }
+            },
+        };
     }
 
     /** @inheritdoc */
@@ -136,26 +162,17 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
         switch (true) {
             case isSubscription(resource): {
                 const client = this.getOrCreateClient(resource);
-
-                // Listing the resource groups again starts a new generation, so
-                // drop any previous bulk load: a refresh must never be served
-                // from resources gathered before it.
-                //
-                // Deliberately no prefetch here. Not every caller that lists a
-                // subscription's resource groups goes on to expand them --
-                // `ChooseResourceGroupStep` treats resource groups as terminal
-                // picks -- and eagerly pulling every resource in the
-                // subscription for those callers would be pure waste.
-                this.clearBulkLoad(resource.subscriptionId);
-
                 this.executor.output.debug(`[data] discover resource groups subscription=${resource.subscriptionId} pageSize=${this.pageSize}`);
                 return client.resourceGroups.list({ top: this.pageSize });
             }
 
             case isResourceGroup(resource): {
-                if (this.shouldBulkLoad) {
+                // An open window means the caller is walking every resource
+                // group, so serve this one from the shared listing.
+                const window = this.bulkLoads.get(resource.subscription.subscriptionId);
+                if (window) {
                     this.executor.output.debug(`[data] discover resources resourceGroup=${resource.subscription.subscriptionId}/${resource.name} source=bulk`);
-                    return this.resourcesFromBulkLoad(resource.subscription, resource.name);
+                    return this.resourcesFromBulkLoad(window, resource.subscription, resource.name);
                 }
 
                 const client = this.getOrCreateClient(resource.subscription);
@@ -170,70 +187,48 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
 
     /**
      * A one-page {@linkcode AsyncIterable} that resolves a single resource
-     * group's children out of the shared subscription-wide load.
+     * group's children out of the shared subscription-wide listing.
      *
-     * The bulk load exhausts every ARM page before bucketing, so the result is
+     * The listing exhausts every ARM page before bucketing, so the result is
      * always complete and `hasMore` is always `false`.
+     *
+     * The window is captured by reference rather than looked up again at
+     * iteration time, so a listing already in flight is always awaited by the
+     * groups that asked for it -- even if the window closes meanwhile.
      */
-    private resourcesFromBulkLoad(subscription: AzureSubscription, resourceGroupName: string): AsyncIterable<Page<GenericResource>> {
-        const load = () => this.loadAllResources(subscription);
+    private resourcesFromBulkLoad(window: BulkLoadWindow, subscription: AzureSubscription, resourceGroupName: string): AsyncIterable<Page<GenericResource>> {
+        const load = () => this.loadAllResources(window, subscription);
         return {
             [Symbol.asyncIterator]: async function* () {
                 const byResourceGroup = await load();
+
+                // A resource group missing from the listing is empty, not
+                // unknown: the subscription-wide listing omits empty groups,
+                // which is why the resource group list is still fetched
+                // separately.
                 yield { items: byResourceGroup.get(resourceGroupName.toLowerCase()) ?? [], hasMore: false };
             },
         };
     }
 
     /**
-     * Get the shared subscription-wide resource load, starting one if none is
-     * available for the current generation.
+     * Get the window's shared subscription-wide listing, starting it if the
+     * window has not needed one yet.
      *
-     * The first resource group to ask triggers the load; every other resource
-     * group in the same render joins it. An expired or rejected load is evicted
-     * so the next caller starts a fresh one rather than being served a stale
-     * snapshot or replaying the same error.
+     * The first resource group to ask triggers the listing; every other
+     * resource group in the same window joins it, whether it asks while the
+     * listing is in flight or long after it settled.
      */
-    private loadAllResources(subscription: AzureSubscription): Promise<Map<string, GenericResource[]>> {
-        const key = subscription.subscriptionId;
-        const existing = this.bulkLoads.get(key);
-        if (existing) {
-            if (Date.now() < existing.expiresAt) {
-                return existing.resources;
-            }
-            this.clearBulkLoad(key);
-        }
-
-        const entry: BulkResourceLoad = {
-            resources: this.fetchAllResources(subscription),
-            expiresAt: Date.now() + BULK_LOAD_TTL,
-            evictionTimer: setTimeout(() => { this.clearBulkLoad(key); }, BULK_LOAD_TTL),
-        };
-        this.bulkLoads.set(key, entry);
-
-        entry.resources.catch(() => {
-            if (this.bulkLoads.get(key) === entry) {
-                this.clearBulkLoad(key);
-            }
-        });
-
-        return entry.resources;
+    private loadAllResources(window: BulkLoadWindow, subscription: AzureSubscription): Promise<Map<string, GenericResource[]>> {
+        // Assigned before the first `await`, so concurrent callers cannot race
+        // into starting a second listing.
+        window.resources ??= this.fetchAllResources(subscription);
+        return window.resources;
     }
 
-    /** Evict a subscription's coalesced load, if any, cancelling its eviction timer. */
-    private clearBulkLoad(subscriptionId: string): void {
-        const entry = this.bulkLoads.get(subscriptionId);
-        if (entry) {
-            clearTimeout(entry.evictionTimer);
-            this.bulkLoads.delete(subscriptionId);
-        }
-    }
-
-    /** Evict every coalesced load. */
+    /** Discard every open window, abandoning any listing they hold. */
     private clearBulkLoads(): void {
-        for (const key of [...this.bulkLoads.keys()]) {
-            this.clearBulkLoad(key);
-        }
+        this.bulkLoads.clear();
     }
 
     /**
@@ -288,7 +283,9 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
         try {
             return parseAzureResourceId(resource.id).resourceGroup?.toLowerCase();
         } catch {
-            this.executor.output.debug(`[data] bulk discover skipped resource with unparsable id type=${resource.type}`);
+            // Identify the resource by name and type rather than by its ARM ID:
+            // the ID is what failed to parse, and it embeds the subscription ID.
+            this.executor.output.debug(`[data] bulk discover skipped resource with unparsable id name=${resource.name} type=${resource.type}`);
             return undefined;
         }
     }
@@ -309,22 +306,6 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
 
     private get pageSize(): number {
         return this.code.workspace.getConfiguration(ConfigurationSection).get('pageSize', DEFAULT_PAGE_SIZE);
-    }
-
-    /**
-     * Whether a resource group's children should be served from a single
-     * subscription-wide listing rather than its own ARM call.
-     *
-     * True for every grouping strategy except `'resourceGroup'`, because those
-     * strategies bucket resources across group boundaries and so force the view
-     * to load every resource group before it can render anything. Under
-     * `'resourceGroup'` grouping the tree expands one group at a time, and
-     * scanning the whole subscription to satisfy that would be a regression.
-     */
-    private get shouldBulkLoad(): boolean {
-        return this.code.workspace
-            .getConfiguration(ConfigurationSection)
-            .get<GroupingStrategy>('groupBy', 'resourceGroup') !== 'resourceGroup';
     }
 
     /** @inheritdoc */

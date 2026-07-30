@@ -39,6 +39,36 @@ export function multiPage<T>(pages: T[][]): AsyncIterable<Page<T>> {
 }
 
 /**
+ * Creates a stand-in for {@linkcode AzureResourceDataProvider} that satisfies
+ * {@linkcode GenericAzureViewProvider}'s bulk-load dependency without engaging
+ * bulk loading.
+ *
+ * For suites that exercise grouping or rendering rather than ARM call
+ * collapsing: `beginBulkLoad` hands back an inert handle, so the resource
+ * groups keep listing their own resources. `windowCount` exposes how many
+ * windows are currently open, which is how a test asserts that the view closed
+ * the window it opened.
+ */
+export function createMockBulkLoader() {
+    let open = 0;
+    return {
+        get windowCount() { return open; },
+        beginBulkLoad: () => {
+            open++;
+            let disposed = false;
+            return {
+                dispose: () => {
+                    if (!disposed) {
+                        disposed = true;
+                        open--;
+                    }
+                },
+            };
+        },
+    };
+}
+
+/**
  * Creates an {@linkcode IResourceClient} that returns fixed resource groups and
  * resources. Results are emitted as a single page so the mock conforms to the
  * `AsyncIterable<Page<T>>` shape returned by the real client.

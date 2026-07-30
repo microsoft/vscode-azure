@@ -115,7 +115,10 @@ describe('ResourceClient (unit)', () => {
 
         expect(requestedUrls).to.have.length(1);
         expect(requestedUrls[0]).to.include('/subscriptions/test-sub/resources');
-        expect(requestedUrls[0]).to.not.include('resourcegroups/');
+        // Case-insensitive: ARM spells the segment `resourceGroups`, so a
+        // lower-cased check against the raw URL would pass even if the
+        // subscription-wide call had been routed per resource group.
+        expect(requestedUrls[0].toLowerCase()).to.not.include('/resourcegroups/');
 
         const resources = pages[0].items;
         expect(resources).to.have.length(2);

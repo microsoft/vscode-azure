@@ -19,7 +19,27 @@ import { multiPage, singlePage } from './mockResourceClient';
  */
 function failingPage<T>(error: Error): AsyncIterable<Page<T>> {
     return {
-        [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
+        [Symbol.asyncIterator]: (): AsyncIterator<Page<T>> => ({
+            next: (): Promise<IteratorResult<Page<T>>> => Promise.reject(error),
+        }),
+    };
+}
+
+/**
+ * A listing that stays in flight until released, so tests can observe a bulk
+ * load that has been started but has not settled.
+ */
+function gatedPage<T>(items: T[]): { pages: AsyncIterable<Page<T>>; release: () => void } {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    return {
+        pages: {
+            [Symbol.asyncIterator]: async function* () {
+                await gate;
+                yield { items, hasMore: false };
+            },
+        },
+        release: () => { release(); },
     };
 }
 
@@ -154,12 +174,24 @@ describe('AzureResourceDataProvider (unit)', () => {
             return pages.flatMap(page => page.items) as GenericResource[];
         }
 
+        /**
+         * Run `body` inside a bulk-load window, standing in for the view layer
+         * declaring that it is about to walk every resource group.
+         */
+        async function withBulkLoad<T>(provider: AzureResourceDataProvider, body: () => Promise<T>): Promise<T> {
+            const handle = provider.beginBulkLoad(subscription);
+            try {
+                return await body();
+            } finally {
+                handle.dispose();
+            }
+        }
+
         it('should serve every resource group from a single subscription-wide call', async () => {
             const { client, list, listByResourceGroup } = createCountingClient();
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
-                await provider.getChildren(subscription);
+            await withBulkLoad(provider, async () => {
                 await Promise.all([childrenOf(provider, rg1), childrenOf(provider, rg2)]);
             });
 
@@ -171,8 +203,7 @@ describe('AzureResourceDataProvider (unit)', () => {
             const { client } = createCountingClient();
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'location' }, async () => {
-                await provider.getChildren(subscription);
+            await withBulkLoad(provider, async () => {
                 expect(await childrenOf(provider, rg1)).to.deep.equal([site]);
                 expect(await childrenOf(provider, rg2)).to.deep.equal([storage]);
             });
@@ -183,8 +214,7 @@ describe('AzureResourceDataProvider (unit)', () => {
             const { client } = createCountingClient([mixedCase]);
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
-                await provider.getChildren(subscription);
+            await withBulkLoad(provider, async () => {
                 expect(await childrenOf(provider, rg1)).to.deep.equal([mixedCase]);
             });
         });
@@ -194,73 +224,70 @@ describe('AzureResourceDataProvider (unit)', () => {
             const { client } = createCountingClient([subScoped, site]);
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
-                await provider.getChildren(subscription);
+            await withBulkLoad(provider, async () => {
                 expect(await childrenOf(provider, rg1)).to.deep.equal([site]);
             });
         });
 
-        it('should list per resource group when grouping by resource group', async () => {
+        it('should return nothing for a resource group the listing never mentions', async () => {
+            // The subscription-wide listing omits empty resource groups, so a
+            // missing bucket means "empty", never "not loaded yet".
+            const { client, listByResourceGroup } = createCountingClient([site]);
+            const provider = createProvider(() => client);
+
+            await withBulkLoad(provider, async () => {
+                expect(await childrenOf(provider, rg2)).to.deep.equal([]);
+            });
+
+            expect(listByResourceGroup.mock.callCount()).to.equal(0);
+        });
+
+        it('should list per resource group when no bulk load has been declared', async () => {
             const { client, list, listByResourceGroup } = createCountingClient();
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceGroup' }, async () => {
-                await provider.getChildren(subscription);
-                await childrenOf(provider, rg1);
-            });
+            await childrenOf(provider, rg1);
 
             expect(list.mock.callCount()).to.equal(0);
             expect(listByResourceGroup.mock.callCount()).to.equal(1);
         });
 
-        it('should start a new bulk load when the resource groups are listed again', async () => {
+        it('should go back to per-resource-group listing once the window closes', async () => {
+            const { client, list, listByResourceGroup } = createCountingClient();
+            const provider = createProvider(() => client);
+
+            await withBulkLoad(provider, () => childrenOf(provider, rg1));
+            await childrenOf(provider, rg2);
+
+            expect(list.mock.callCount()).to.equal(1);
+            expect(listByResourceGroup.mock.callCount()).to.equal(1);
+        });
+
+        it('should start a fresh subscription-wide call for each new window', async () => {
             const { client, list } = createCountingClient();
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
-                await provider.getChildren(subscription);
-                await childrenOf(provider, rg1);
-                expect(list.mock.callCount()).to.equal(1);
+            await withBulkLoad(provider, () => childrenOf(provider, rg1));
+            expect(list.mock.callCount()).to.equal(1);
 
-                // Simulates a refresh: the tree always re-lists a subscription's
-                // resource groups before asking for any group's children.
-                await provider.getChildren(subscription);
-                await childrenOf(provider, rg1);
-            });
+            // A later render opens its own window and must not be served a
+            // snapshot gathered for the previous one.
+            await withBulkLoad(provider, () => childrenOf(provider, rg1));
 
             expect(list.mock.callCount()).to.equal(2);
         });
 
-        it('should not load any resources when only the resource groups are listed', async () => {
+        it('should not load anything when a window opens but no resource group asks', async () => {
             const { client, list } = createCountingClient();
             const provider = createProvider(() => client);
 
             // Mirrors ChooseResourceGroupStep, which treats resource groups as
             // terminal picks and never asks for their children.
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+            await withBulkLoad(provider, async () => {
                 await provider.getChildren(subscription);
             });
 
             expect(list.mock.callCount()).to.equal(0);
-        });
-
-        it('should start a new bulk load once the previous one has expired', async () => {
-            const { client, list } = createCountingClient();
-            const provider = createProvider(() => client);
-            const realNow = Date.now();
-
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
-                await childrenOf(provider, rg1);
-                expect(list.mock.callCount()).to.equal(1);
-
-                // Expire the coalesced load without re-listing the resource
-                // groups, standing in for an invalidation that targets a
-                // resource group directly.
-                mock.method(Date, 'now', () => realNow + 60 * 1000);
-                await childrenOf(provider, rg1);
-            });
-
-            expect(list.mock.callCount()).to.equal(2);
         });
 
         it('should exhaust every page of the subscription-wide listing', async () => {
@@ -274,9 +301,7 @@ describe('AzureResourceDataProvider (unit)', () => {
             };
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
-                await provider.getChildren(subscription);
-
+            await withBulkLoad(provider, async () => {
                 // Resources from the first and third pages both land in rg1, so
                 // this only passes if every page was drained before bucketing.
                 expect(await childrenOf(provider, rg1)).to.deep.equal([site, site2]);
@@ -290,13 +315,11 @@ describe('AzureResourceDataProvider (unit)', () => {
             const { client, list } = createCountingClient();
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
-                await provider.getChildren(subscription);
-
+            await withBulkLoad(provider, async () => {
                 // The view limits itself to 5 concurrent resource groups, so
                 // every group past the first wave asks only after an earlier
-                // group's promise has already resolved. The coalesced load has
-                // to outlive settlement to serve them.
+                // group's promise has already resolved. The shared load has to
+                // outlive settlement to serve them.
                 expect(await childrenOf(provider, rg1)).to.deep.equal([site]);
                 await new Promise(resolve => setTimeout(resolve, 0));
                 expect(await childrenOf(provider, rg2)).to.deep.equal([storage]);
@@ -305,7 +328,58 @@ describe('AzureResourceDataProvider (unit)', () => {
             expect(list.mock.callCount()).to.equal(1);
         });
 
-        it('should retry the bulk load after a failure', async () => {
+        it('should never duplicate a load that is still in flight', async () => {
+            const realNow = Date.now();
+            const gated = gatedPage([site, storage]);
+            const list = mock.fn(() => gated.pages);
+            const client = {
+                resourceGroups: { list: () => singlePage([rg1, rg2]) },
+                resources: { list, listByResourceGroup: () => singlePage([]) },
+            };
+            const provider = createProvider(() => client);
+
+            const handle = provider.beginBulkLoad(subscription);
+            try {
+                // First wave starts the load. It is now in flight.
+                const first = childrenOf(provider, rg1);
+                await new Promise(resolve => setTimeout(resolve, 0));
+                expect(list.mock.callCount()).to.equal(1);
+
+                // A very large subscription can take a long time to drain. No
+                // amount of elapsed time may cause a load that is still running
+                // to be abandoned and restarted -- a later wave joining it must
+                // never trigger a second subscription-wide call.
+                mock.method(Date, 'now', () => realNow + 60 * 60 * 1000);
+                const second = childrenOf(provider, rg2);
+                await new Promise(resolve => setTimeout(resolve, 0));
+
+                gated.release();
+                expect(await first).to.deep.equal([site]);
+                expect(await second).to.deep.equal([storage]);
+            } finally {
+                handle.dispose();
+            }
+
+            expect(list.mock.callCount()).to.equal(1);
+        });
+
+        it('should keep the shared load alive until the last window closes', async () => {
+            const { client, list } = createCountingClient();
+            const provider = createProvider(() => client);
+
+            // Two renders overlap on the same subscription. The inner one
+            // finishing must not cut the outer one's load out from under it.
+            const outer = provider.beginBulkLoad(subscription);
+            const inner = provider.beginBulkLoad(subscription);
+            await childrenOf(provider, rg1);
+            inner.dispose();
+            expect(await childrenOf(provider, rg2)).to.deep.equal([storage]);
+            outer.dispose();
+
+            expect(list.mock.callCount()).to.equal(1);
+        });
+
+        it('should latch a failure for the window and retry in the next one', async () => {
             let attempts = 0;
             const list = mock.fn(() => {
                 attempts++;
@@ -320,7 +394,7 @@ describe('AzureResourceDataProvider (unit)', () => {
             };
             const provider = createProvider(() => client);
 
-            await withSettings(code, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+            await withBulkLoad(provider, async () => {
                 let error: unknown;
                 try {
                     await childrenOf(provider, rg1);
@@ -329,8 +403,20 @@ describe('AzureResourceDataProvider (unit)', () => {
                 }
                 expect((error as Error).message).to.equal('ARM exploded');
 
-                // Without re-listing the resource groups -- a failed load must not
-                // be latched for the rest of the generation.
+                // Every group in this walk shares the one failed listing rather
+                // than each retrying it, which would be 26 doomed calls.
+                let repeated: unknown;
+                try {
+                    await childrenOf(provider, rg1);
+                } catch (e) {
+                    repeated = e;
+                }
+                expect((repeated as Error).message).to.equal('ARM exploded');
+                expect(list.mock.callCount()).to.equal(1);
+            });
+
+            // The next render opens a new window, which retries.
+            await withBulkLoad(provider, async () => {
                 expect(await childrenOf(provider, rg1)).to.deep.equal([site]);
             });
 
