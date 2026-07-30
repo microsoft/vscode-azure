@@ -29,7 +29,7 @@
     "scripts": {
         "lint": "eslint --max-warnings 0 --cache",
         "build": "tsc",
-        "build:watch": "tsc --watch",
+        "build:watch": "pnpm run build --watch",
         "package": "pnpm pack",
         "test": "mocha",
         "testcov": "pnpx c8 --clean --reporter=html --exclude=\"**/test/**\" mocha",
