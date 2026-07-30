@@ -354,6 +354,61 @@ describe('DataItemTree (unit)', () => {
             const result = await tree.whenEnriched(tree.get('a')!);
             expect(result.id).to.equal('a');
         });
+
+        it('should settle every in-flight enrichment via whenQuiescent', async () => {
+            const tree = createTree();
+            let inFlight = 0;
+            let peakInFlight = 0;
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => Array.from({ length: 12 }, (_, i) => ({ id: `r${i}` })),
+                enrich: async (r: TestResource) => {
+                    inFlight++;
+                    peakInFlight = Math.max(peakInFlight, inFlight);
+                    await new Promise(resolve => setTimeout(resolve, 1));
+                    r.enriched = true;
+                    inFlight--;
+                    return false;
+                },
+            });
+
+            await tree.getChildren();
+            // Enrichment is queued behind a limiter, so at this point some
+            // resources have not even started -- the point of the drain is that
+            // callers do not have to know that.
+            await tree.whenQuiescent();
+
+            expect(inFlight, 'enrichment still running after whenQuiescent').to.equal(0);
+            expect(peakInFlight, 'enrichment should have actually been in flight').to.be.greaterThan(0);
+            for (let i = 0; i < 12; i++) {
+                expect(tree.get(`r${i}`)?.enriched, `r${i} was not enriched`).to.be.true;
+            }
+        });
+
+        it('should resolve whenQuiescent even when enrichment rejects', async () => {
+            const tree = createTree();
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => [{ id: 'a' }],
+                enrich: () => Promise.reject(new Error('enrich blew up')),
+            });
+
+            await tree.getChildren();
+
+            // Quiescence is about activity, not success: a failed enrichment is
+            // settled, so this must resolve rather than reject.
+            await tree.whenQuiescent();
+        });
+
+        it('should resolve whenQuiescent immediately when nothing enriches', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'a' }]));
+
+            await tree.getChildren();
+            await tree.whenQuiescent();
+        });
     });
 
     describe('invalidation', () => {

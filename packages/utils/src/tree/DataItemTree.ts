@@ -382,6 +382,34 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     }
 
     /**
+     * Returns a promise that resolves once **no** enrichment is in flight
+     * anywhere in the tree -- the global counterpart to the per-resource
+     * {@linkcode whenEnriched}.
+     *
+     * Background enrichment is fire-and-forget: {@linkcode enrichAll} queues one
+     * call per resource behind a `Limiter` and each completion fires
+     * {@linkcode onDidChange}. A caller that needs the tree to be *settled* --
+     * chiefly tests that count change events or ARM calls -- otherwise has to
+     * guess at a timeout, which is exactly the kind of race that makes such a
+     * test flaky.
+     *
+     * Enrichment can cascade (a completed enrichment invalidates a subtree,
+     * which a listener may re-read, which enriches again), so this drains
+     * repeatedly until a pass finds nothing pending. Rejected enrichments count
+     * as settled: this resolves rather than rejecting, because quiescence is
+     * about *activity*, not success. Use {@linkcode whenEnriched} when the
+     * outcome of one resource's enrichment matters.
+     *
+     * @param maxPasses - Safety valve for a pathological provider that enriches
+     *   in an endless cycle. Exceeding it resolves rather than hanging.
+     */
+    public async whenQuiescent(maxPasses = 20): Promise<void> {
+        for (let pass = 0; pass < maxPasses && this.enrichmentPromises.size > 0; pass++) {
+            await Promise.allSettled([...this.enrichmentPromises.values()]);
+        }
+    }
+
+    /**
      * Returns `true` when the provider that produced children for the
      * given resource has more pages available (i.e. the async iterator
      * has not yet been exhausted).

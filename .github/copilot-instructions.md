@@ -9,6 +9,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
 * `docs/resource-creation.md` -- AzdJob, wizard step sequence, scenario matrix, hydration, adding new resource types
 * `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, coverage
+* `docs/tree-perf-gates.md` -- Tree performance regression gates: counters, scenario matrix, baselines
 * `docs/resource-models.md` -- AzureNode union, GenericResource, AzureNodeId URI scheme
 * `docs/telemetry.md` -- IActionContext, ActionExecutor, telemetry suppression
 * `docs/build-and-dev.md` -- Build commands, esbuild, watch mode, linting, cleaning

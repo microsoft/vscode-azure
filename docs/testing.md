@@ -205,6 +205,18 @@ When source maps are available, coverage from the bundled extension can be remap
 - **Unit tests** that import source files directly (via tsx)
 - **Integration tests** that exercise the extension bundle (via source map remapping)
 
+## Performance Guardrails
+
+The Azure resources tree has a counter-based performance guardrail suite in
+`extensions/vscode-azure/test/tree/resources/perf/`. It drives the real
+data/view tree stack over a synthetic ARM endpoint and compares three
+deterministic counters -- total ARM round trips, the depth of the
+dependent-request chain, and whole-tree refresh events -- against committed
+baselines. It gates on counts rather than wall-clock time, and is report-only
+until the baselines have proven stable on real PR traffic.
+
+See [tree-perf-gates.md](./tree-perf-gates.md).
+
 ## Test Configuration
 
 Extension test configuration lives in `.vscode-test.mjs`:
