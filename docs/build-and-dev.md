@@ -116,7 +116,7 @@ await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
 
 ## Watch Mode / Iterative Development
 
-Watch mode exists only for the **builds**. Each build watch is an npm script named `<script>:watch`:
+Only the **builds** have dedicated watch scripts, each named `<script>:watch`:
 
 ```bash
 # Extension: type checking in watch mode (tsc --noEmit --watch)
@@ -134,6 +134,14 @@ pnpm --filter @microsoft/vscode-azure-azutils run build:watch
 These are also the VS Code build tasks in `.vscode/tasks.json`; each task just runs the corresponding script, so errors appear live in the Problems panel.
 
 The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsc` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
+
+There is no lint watch. The package `test` scripts are plain `mocha`, so `--watch` is accepted — but it silently does nothing useful here: Mocha's `--extension` defaults to `["js","cjs","mjs"]` while these specs are `.ts`, so no source edit ever triggers a re-run. If you want a test watch, `--extension ts` is required:
+
+```bash
+pnpm --filter @microsoft/vscode-azure-utils run test -- --watch --extension ts
+```
+
+The extension's `vscode-test` runner has no watch mode at all.
 
 ## Sharing the VS Code test download across worktrees
 

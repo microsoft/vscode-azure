@@ -57,7 +57,7 @@ if (existing?.isSymbolicLink()) {
     console.log(`Replacing existing link to ${current}`);
     await fs.unlink(linkPath);
 } else if (existing) {
-    console.error(`Refusing to replace the existing directory at ${linkPath}.`);
+    console.error(`Refusing to replace the existing entry at ${linkPath}.`);
     console.error('Delete it first if you want to link it to the shared cache.');
     process.exit(1);
 }
