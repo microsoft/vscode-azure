@@ -18,7 +18,7 @@ Read the precedent file, then mirror its **shape**. All paths are relative to th
 | Wizard context + `AzdJob` | `extensions/vscode-azure/src/azd/wizard/AzdWizardContext.ts` | — |
 | Resource-specific prompt steps | `extensions/vscode-azure/src/commands/<product>/steps/` | `commands/functions/steps/PickRuntimeStep.ts`, `PickHostingPlanStep.ts` |
 | Wizard context type | `extensions/vscode-azure/src/commands/<product>/<Product>Context.ts` | `commands/functions/CreateFunctionAppContext.ts` |
-| Bicep templates | `extensions/vscode-azure/resources/templates/<resource>.bicep` | existing function-app template (a **single** self-contained `.bicep` file) |
+| Bicep templates | `extensions/vscode-azure/resources/templates/` | AVM-backed consumer; when AVM has no suitable module, an AVM-shaped local module plus consumer |
 | Azure SDK client wrapper | `packages/azutils/src/rest/clients/<Product>Client.ts` | `AcrClient.ts`, `WebAppClient.ts`, `DeploymentClient.ts` |
 | DI composition + factory bindings | `extensions/vscode-azure/src/extension.ts` | — |
 | Manifest | `extensions/vscode-azure/package.json` | — |
@@ -86,11 +86,12 @@ public async execute(job: AzdJob): Promise<void> {
     await new Wizard(get(IOutputChannel), { job, provision: true }, promptSteps, executeSteps).run();
 }
 ```
-Add the Bicep template + its name to the `BicepTemplateName` union in `GenerateBicepStep.ts`. The template
-is a **single self-contained `.bicep` file** (like `functionApp.bicep`, which pulls in a remote AVM registry
-module `br:...` instead of local module files) — `GenerateBicepStep` copies exactly one file to
-`infra/main.bicep`, so don't author a multi-file bicep project. Follow the Fresh / Post-clone / Bootstrapped
-scenario matrix in `docs/resource-creation.md`.
+Apply [AVM-first Bicep provisioning](avm-provisioning.md) before adding templates. Prefer a thin consumer
+that references a pinned public AVM module. A single-resource topology may use a suitable resource module;
+a topology with supporting resources requires a suitable pattern module. If no suitable module exists,
+bundle one AVM-shaped local module plus one consumer and extend the generation abstraction to copy both
+while preserving relative paths. Follow the Fresh / Post-clone / Bootstrapped scenario matrix in
+`docs/resource-creation.md`.
 
 ## Azure SDK client wrapper
 

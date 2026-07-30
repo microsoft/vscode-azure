@@ -24,12 +24,13 @@ What changes:
 - Execute steps become `GenerateBicepStep` (copies a bundled template + writes `main.parameters.json`),
   `GenerateAzureYamlStep`, `CreateAzdEnvStep`, `AzdProvisionStep`, and (for the deploy job) `AzdDeployStep`
   + `ShowEndpointUrlStep`. You do **not** write ARM-deploy execute steps.
-- You **add a Bicep template** to `extensions/vscode-azure/resources/templates/<resource>.bicep` and add
-  its name to the `BicepTemplateName` union in `GenerateBicepStep.ts` (resolved via a factory binding). The
-  template must be a **single self-contained `.bicep` file** — mirror the `functionApp.bicep` precedent,
-  which references a remote AVM registry module (`br:...`) rather than local module files. Do **not** add a
-  multi-file bicep project (no local `modules/` folder); `GenerateBicepStep` copies exactly one file to
-  `infra/main.bicep`.
+- Infrastructure follows the mandatory [AVM-first decision process](avm-provisioning.md): search the
+  current AVM repository before authoring Bicep. A single-resource topology may use a suitable AVM
+  resource module; a topology with supporting resources requires a suitable AVM pattern module.
+- When no suitable AVM module exists, bundle exactly two Bicep entry points: one AVM-shaped local module
+  that owns the topology and one thin consumer that invokes it. Extend `GenerateBicepStep` (and its
+  template descriptor/factory contract) to copy both files with their relative paths intact. Do not
+  collapse the fallback into one monolithic file to preserve the current generator's limitation.
 
 **Outputs change too.** The source wizard's output (a live ARM resource + maybe a `.vscode` config) becomes
 IaC files in the workspace (`azure.yaml`, `infra/main.bicep`, `main.parameters.json`) plus an azd

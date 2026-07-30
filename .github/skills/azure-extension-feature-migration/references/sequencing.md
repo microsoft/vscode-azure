@@ -13,7 +13,7 @@ Build bottom-up. A feature can't be wired before the things it depends on exist:
 4. View providers         <Product>ViewProvider (getTreeItem, icons, contextValue)
 5. Tree registration      registerTrees.ts (specific before generic)
 6. Commands               ManagedCommand classes + static ContextValue + registerCommands.ts
-7. Wizards                azd prompt/execute steps + single-file Bicep template + register per AzdJob
+7. Wizards                AVM search/selection + Bicep consumer (or two-file fallback) + azd steps per AzdJob
 8. Manifest               package.json contributions + package.nls.json strings (+ new icon in azutils only if none matches)
 9. Reuse wiring           app-settings / auth / generic commands hooked up in extension.ts
 10. Tests                 unit (+ integration where the precedent has them)
@@ -64,7 +64,8 @@ Monorepo phase: <n>
 - [ ] ... one row per Migrate/Adapt command ...
 
 ## Slice 3 — Create / Deploy (azd + Bicep)   [Adapt]
-- [ ] Single-file Bicep template `resources/templates/<resource>.bicep` + BicepTemplateName union  <- SWA-0xx (create wizard)
+- [ ] Record provisioning topology and AVM search evidence; select a pinned resource/pattern module, or justify fallback  <- SWA-0xx (create wizard)
+- [ ] Add the AVM-backed consumer, or the AVM-shaped local module + consumer fallback; update the generation abstraction as needed  <- SWA-0xx (create wizard)
 - [ ] Resource-specific PromptSteps `commands/<product>/steps/`                          <- SWA-0xx (wizard steps)
 - [ ] Register Create<Product> per AzdJob (createNew / deploy)                           <- SWA-0xx (create/deploy cmds)
 

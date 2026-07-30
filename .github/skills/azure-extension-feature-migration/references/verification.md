@@ -44,7 +44,13 @@ For each migrated node type:
 
 - [ ] Registered per `AzdJob` (`createNew` and/or `deploy`) via `prefixArgs`.
 - [ ] Uses shared azd steps + resource-specific `PromptStep`s; **no** hand-written ARM execute steps.
-- [ ] Bicep template exists in `resources/templates/` (a **single** `.bicep` file, no local `modules/` project) and is in the `BicepTemplateName` union.
+- [ ] Mapping records the AVM repository path searched, candidate suitability, pinned registry version,
+      and parameter/output mapping.
+- [ ] A resource module is used only for a single-resource topology; any topology with supporting resources
+      uses a pattern module.
+- [ ] If no suitable AVM module exists, the generated infrastructure contains exactly one AVM-shaped local
+      module plus one consumer, with the module boundary preserved by the generation step.
+- [ ] The Bicep consumer builds successfully and resolves its pinned remote module or bundled local module.
 - [ ] Resource-specific steps skip correctly when `hasInfra` (Post-clone / Bootstrapped scenarios).
 
 ## Conformance check (conventions)

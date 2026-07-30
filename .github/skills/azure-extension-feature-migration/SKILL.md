@@ -42,6 +42,8 @@ classes into the monorepo is wrong and will be rejected. Instead:
 |----|-------|
 | Take each *feature* from the inventory and re-implement it with the monorepo's patterns | Copy `AzExtTreeItem` subclasses, `registerCommand` callbacks, or ARM-deploy code |
 | Delegate deployment/provisioning to **azd + Bicep** (`AzdJob`, `GenerateBicepStep`, `AzdProvisionStep`) | Re-create hand-written ARM deployment wizards from the source |
+| Search **Azure Verified Modules (AVM)** first: use a resource module only for a single-resource topology, and require a pattern module when supporting resources are needed | Author bespoke Bicep before checking AVM, or compose resource modules when the feature requires a pattern |
+| When AVM has no suitable module, generate one AVM-shaped local module plus a thin consumer | Inline a fallback module into one monolithic template |
 | Rebuild the tree as `DataProvider` + `ViewProvider` registered in `registerTrees.ts` | Re-create per-node tree-item classes that fetch their own children |
 | Write commands as `@injectable()` `ManagedCommand` classes with a static `ContextValue` | Register bare `vscode.commands.registerCommand` callbacks |
 | Reuse shared monorepo packages (azutils clients, generic commands) and product precedents (Functions app-settings) | Re-vendor the source's client / app-settings code |
@@ -66,7 +68,7 @@ verified against — every feature must end up with an explicit disposition.
 
 > 1. **INTAKE** — Load the source `INVENTORY.md` and the monorepo's pattern docs; confirm the target package + a precedent product.
 > 2. **TRIAGE (human gate)** — With a human, assign every feature a disposition: Migrate / Adapt / Reuse / Drop / Defer. **Hard stop until signed off**, then commit the decisions as `TRIAGE.md`.
-> 3. **MAP** — Map each *kept* feature (read from `TRIAGE.md`) onto a concrete monorepo pattern + target file location (the playbook).
+> 3. **MAP** — Map each *kept* feature (read from `TRIAGE.md`) onto a concrete monorepo pattern + target file location; for provisioning, record the AVM search and module decision.
 > 4. **SEQUENCE** — Order the work by dependency (constants -> clients -> data providers -> view providers -> registerTrees -> commands -> wizards -> package.json -> tests). Emit `MIGRATION-PLAN.md`, each task tagged with its `TRIAGE.md` ID.
 > 5. **IMPLEMENT** — Build feature-by-feature against a precedent product, conforming to standards; lint/build/test each slice.
 > 6. **VERIFY** — Parity check against `TRIAGE.md` (every ID accounted for) + conformance check against conventions; report gaps honestly.
@@ -108,7 +110,7 @@ verified against — every feature must end up with an explicit disposition.
 |---|--------|-----------|
 | 1 | For each Migrate/Adapt feature, choose the monorepo pattern and the exact target file path. For each **Reuse** feature, record the existing symbol/command to wire and where it gets wired (so Phase 6 has evidence to verify). | [pattern-mapping.md](references/pattern-mapping.md) |
 | 2 | Define the tree contract: for each node type, its `DataProvider`/`ViewProvider`, the command's static `ContextValue`, and the `package.json` regex `when` clause. | [pattern-mapping.md](references/pattern-mapping.md), [target-patterns.md](references/target-patterns.md) |
-| 3 | For creation/deploy features, define the wizard as azd `PromptStep`/`ExecuteStep` + `AzdJob`, plus the single-file Bicep template to add. | [pattern-mapping.md](references/pattern-mapping.md) |
+| 3 | For creation/deploy features, define the wizard as azd `PromptStep`/`ExecuteStep` + `AzdJob`, then apply the AVM-first decision process. Record the selected versioned AVM resource/pattern module, or the two-file local-module fallback and required generator changes. | [avm-provisioning.md](references/avm-provisioning.md), [pattern-mapping.md](references/pattern-mapping.md) |
 
 ---
 
@@ -157,6 +159,7 @@ of hiding them.
 - [Intake](references/intake.md)
 - [Triage (human gate)](references/triage.md)
 - [Features That Don't Map 1:1](references/does-not-map.md)
+- [AVM-First Bicep Provisioning](references/avm-provisioning.md)
 - [Pattern Mapping Playbook](references/pattern-mapping.md)
 - [Target Patterns Cheat-Sheet](references/target-patterns.md)
 - [Sequencing & Plan](references/sequencing.md)
