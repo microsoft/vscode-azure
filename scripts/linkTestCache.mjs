@@ -17,14 +17,21 @@
  * Set `VSCODE_TEST_CACHE_DIR` to choose the shared location; it defaults to
  * `<homedir>/.vscode-test-cache`. This is deliberately not part of
  * `postinstall`: it writes outside the repo and is useless on CI.
+ *
+ * Note that `.vscode-test` holds more than the download: `@vscode/test-electron`
+ * also points `--user-data-dir` and `--extensions-dir` inside it. Sharing it
+ * therefore means concurrent test runs in two worktrees share one VS Code
+ * profile, so don't run them at the same time.
  */
 
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
-const linkPath = path.resolve('./extensions/vscode-azure/.vscode-test');
-const targetPath = path.resolve(process.env.VSCODE_TEST_CACHE_DIR ?? path.join(os.homedir(), '.vscode-test-cache'));
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const linkPath = path.join(repoRoot, 'extensions', 'vscode-azure', '.vscode-test');
+const targetPath = path.resolve(process.env.VSCODE_TEST_CACHE_DIR?.trim() || path.join(os.homedir(), '.vscode-test-cache'));
 
 /** Returns the `fs.Stats`-like entry for a path without following symlinks, or `undefined` if it doesn't exist. */
 async function lstatOrUndefined(target) {

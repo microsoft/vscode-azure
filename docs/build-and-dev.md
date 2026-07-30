@@ -116,7 +116,7 @@ await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
 
 ## Watch Mode / Iterative Development
 
-Watch mode exists only for the **builds**, and mostly for the VS Code UI rather than for speed. Each build watch is an npm script named `<script>:watch`:
+Watch mode exists only for the **builds**. Each build watch is an npm script named `<script>:watch`:
 
 ```bash
 # Extension: type checking in watch mode (tsc --noEmit --watch)
@@ -131,28 +131,21 @@ pnpm --filter @microsoft/vscode-azure-utils run build:watch
 pnpm --filter @microsoft/vscode-azure-azutils run build:watch
 ```
 
-These are also the VS Code build tasks in `.vscode/tasks.json`; each task just runs the corresponding script. They are most useful for the live problem-matcher integration (errors appear in the Problems panel as you type).
+These are also the VS Code build tasks in `.vscode/tasks.json`; each task just runs the corresponding script, so errors appear live in the Problems panel.
 
 The extension builds (both esbuild and the type-check) resolve the packages to their `src/*.ts` source directly — esbuild via its `alias` config and `tsc` via the `paths` mapping in `extensions/vscode-azure/tsconfig.json` — so the extension watches already pick up package source edits without a rebuild of `dist/`. Run a package's own build watcher when you want to type-check that package in isolation — it covers the whole package (including files not reachable from the extension, such as its tests), which the extension's check watch does not.
 
-### Why there is no lint or test watch
-
-Both are possible (by wrapping the binary in `node --watch`), but measurement showed they aren't worth it: `node --watch` restarts a fresh process on every change, so it re-runs the entire lint or suite and only saves the pnpm startup. ESLint `--cache` — which the `lint` script already passes — is on disk and therefore genuinely incremental, which a restarting watch can never benefit from. Run the ordinary `lint` and `test` scripts instead.
-
 ## Sharing the VS Code test download across worktrees
 
-The extension's test runner downloads a full VS Code build (~1 GB) into `extensions/vscode-azure/.vscode-test`. That path is gitignored and **not** removed by `pnpm run clean`, so it is a once-per-worktree cost — but every new clone or `git worktree` re-downloads it.
-
-There is no configuration knob for this: `@vscode/test-electron` resolves its cache as `<cwd>/.vscode-test`, and `@vscode/test-cli` calls `downloadAndUnzipVSCode()` without passing a `cachePath`. The only lever is to make that path a link to somewhere shared, which is what the opt-in helper does:
+The extension's test runner downloads a full VS Code build (~1 GB) into `extensions/vscode-azure/.vscode-test`, and every new clone or `git worktree` re-downloads it. There is no config knob — `@vscode/test-electron` resolves its cache as `<cwd>/.vscode-test` and `@vscode/test-cli` never passes a `cachePath` — so the only lever is to link that path somewhere shared:
 
 ```bash
 pnpm run link-test-cache
 ```
 
-Run it once per worktree, *before* the first test run. It creates a junction (Windows) or symlink (elsewhere) from `extensions/vscode-azure/.vscode-test` to a machine-wide cache, defaulting to `<homedir>/.vscode-test-cache`; set `VSCODE_TEST_CACHE_DIR` to choose a different location. The script is idempotent, and refuses to run if a real `.vscode-test` directory already exists — move or delete that directory first (moving it to the shared location preserves the existing download).
+Run it once per worktree, *before* the first test run. It links `.vscode-test` to a machine-wide cache (default `<homedir>/.vscode-test-cache`, override with `VSCODE_TEST_CACHE_DIR`). It is idempotent and refuses to clobber a real `.vscode-test` directory — move that to the shared location first to keep the existing download.
 
-This is deliberately *not* part of `postinstall`: it writes outside the repository, and on CI — where every job starts from a clean machine — a shared cache would be pointless.
-
+Two caveats: `.vscode-test` also holds the `--user-data-dir` and `--extensions-dir`, so linked worktrees share one VS Code profile and shouldn't run tests concurrently. And this is deliberately not in `postinstall`, since it writes outside the repo and is pointless on CI.
 
 ## Linting
 
@@ -163,9 +156,7 @@ pnpm --filter @microsoft/vscode-azure-utils run lint  # Single workspace
 
 Uses ESLint with strict type-checked configuration from `@microsoft/vscode-azext-eng/eslint`.
 
-The `lint` script passes `--cache`, so ESLint re-checks only files that changed since the last run. This is the main lever on lint time: a full extension lint is ~8s cold, ~2.3s when nothing changed, and ~4-5s when a single file changed. The cache lives in a gitignored `.eslintcache` per workspace and is removed by `pnpm run clean`.
-
-Caching is safe to leave on by default — ESLint keys the cache on the resolved config as well as file contents, so editing `eslint.config.mjs` (or enabling a rule) correctly invalidates every entry rather than reporting a stale pass. There is no need to drop `--cache` for a pre-PR run.
+The `lint` script passes `--cache`, so ESLint re-checks only files that changed since the last run. The cache lives in a gitignored `.eslintcache` per workspace and is removed by `pnpm run clean`. Editing `eslint.config.mjs` correctly invalidates it, but the cache is per file with no cross-file dependency tracking — under the type-checked rules, a diagnostic in `B.ts` that depends on types from `A.ts` can be missed when only `A.ts` changed. Treat the pre-PR full run as the authority.
 
 ### Faster lint iteration
 
@@ -179,11 +170,11 @@ Beyond the cache:
   pnpm --filter vscode-azure run lint -- src/commands
   ```
 
-  Note there is a floor of roughly 2-4s per invocation: ESLint startup plus building the TypeScript program for type-aware rules. Linting one file is not much cheaper than linting a cached package, so prefer scoping to the *workspace* you actually changed over micro-filtering to single files.
+  There is a fixed per-invocation floor (ESLint startup plus building the TypeScript program for type-aware rules), so linting one file is not much cheaper than linting a cached package. Prefer scoping to the *workspace* you changed over micro-filtering to single files.
 
 - **Run workspaces in parallel.** The root `pnpm run lint` already fans out across the three workspaces (`pnpm -r --parallel run lint`), so a full lint runs them concurrently rather than in series.
 
-Do a final full `pnpm run lint` before opening a PR, since path-filtered runs can miss issues in files you didn't touch this pass.
+Do a final full `pnpm run lint` before opening a PR, since path-filtered and cached runs can miss issues in files you didn't touch this pass.
 
 ## Cleaning
 
