@@ -20,4 +20,12 @@
         },
         "experimentalDecorators": true,
     },
+    "exclude": [
+        "**/node_modules",
+        "**/dist",
+        "**/testProjects",
+        // Type-checked separately by `test/ui/tsconfig.json`, which adds the DOM lib Playwright needs.
+        "test/ui",
+        "playwright.config.ts",
+    ],
 }

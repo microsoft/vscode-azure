@@ -21,6 +21,24 @@
             "isBackground": true,
         },
         {
+            "label": "Extension: ESBuild",
+            "type": "shell",
+            "command": "pnpm",
+            "args": [
+                "--filter",
+                "vscode-azure",
+                "run",
+                "build:esbuild"
+            ],
+            "problemMatcher": "$esbuild",
+            "presentation": {
+                "reveal": "silent",
+            },
+            "group": {
+                "kind": "build",
+            },
+        },
+        {
             "label": "Extension: Check+Watch",
             "type": "shell",
             "command": "pnpm",

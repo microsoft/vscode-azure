@@ -1,0 +1,26 @@
+{
+    // The Playwright UI tests need DOM lib types (Playwright's `types.d.ts`
+    // references `HTMLElement`/`SVGElement`), which the extension's own
+    // tsconfig deliberately omits so product code cannot reach for DOM globals.
+    // They are therefore type-checked as a separate project.
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "lib": [
+            "ESNext",
+            "DOM"
+        ],
+        "types": [
+            "node"
+        ],
+        "noEmit": true
+    },
+    "include": [
+        "./**/*.ts",
+        "../../playwright.config.ts"
+    ],
+    // `exclude` is inherited from the extension tsconfig, which excludes exactly
+    // these files; reset it so this project has inputs.
+    "exclude": [
+        "**/node_modules"
+    ]
+}

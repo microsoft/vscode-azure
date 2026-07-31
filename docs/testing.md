@@ -31,8 +31,9 @@ describe('RefreshResourcesView (integration)', () => {
 | `packages/utils` | Mocha (via tsx) | Node.js |
 | `packages/azutils` | Mocha (via tsx) | Node.js |
 | `extensions/vscode-azure` | `@vscode/test-cli` | VS Code extension host |
+| `extensions/vscode-azure` (UI) | Playwright | Real VS Code workbench (desktop or browser) |
 
-Package tests run directly in Node.js with tsx for TypeScript support. Extension tests run inside a VS Code instance via `@vscode/test-electron`.
+Package tests run directly in Node.js with tsx for TypeScript support. Extension tests run inside a VS Code instance via `@vscode/test-electron`. UI tests drive the rendered workbench -- see [UI Tests (Playwright)](#ui-tests-playwright).
 
 ## Mocking Strategy
 
@@ -181,6 +182,27 @@ pnpm --filter @microsoft/vscode-azure-utils run testcov
 # With coverage (extension)
 pnpm --filter vscode-azure run testcov
 ```
+
+## UI Tests (Playwright)
+
+The extension has a fourth test layer that drives the **rendered VS Code workbench** with the Azure services rebound to mock data (`AZURE_MOCK_DATA=1`, see `extensions/vscode-azure/test/override/mock.ts`). No Azure auth, no network.
+
+Specs live in `extensions/vscode-azure/test/ui/` and are named `*.spec.ts` so the `@vscode/test-cli` mocha glob (`test/**/*.test.ts`) never picks them up. Label the root `test.describe` with `(ui)`.
+
+```bash
+pnpm --filter vscode-azure run build          # UI tests run the built extension
+pnpm --filter vscode-azure run test:ui        # desktop VS Code via Playwright + Electron
+pnpm --filter vscode-azure run test:ui:web    # the same specs in a browser-hosted workbench
+pnpm --filter vscode-azure run test:ui:report # open the HTML report (traces, screenshots)
+```
+
+The same specs run against two hosts: `--extensionDevelopmentPath` into desktop VS Code, and a packaged VSIX installed into the VS Code *server* build served over http. The second host doubles as an interactive harness:
+
+```bash
+pnpm --filter vscode-azure run ui:serve   # prints VSCODE_AZURE_UI_URL=<url>
+```
+
+Open that URL with browser tooling to click through the Azure views live. See [`extensions/vscode-azure/test/ui/README.md`](../extensions/vscode-azure/test/ui/README.md) for the fixtures, the helper API, and the caveats (Electron has no headless mode; the served window is deliberately folder-less to avoid Restricted Mode).
 
 ## Coverage
 

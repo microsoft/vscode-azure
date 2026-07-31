@@ -380,11 +380,15 @@
         "build": "pnpm run --parallel \"/^build:(esbuild|check)$/\"",
         "build:esbuild": "node esbuild.mjs",
         "build:esbuild:watch": "pnpm run build:esbuild --watch",
-        "build:check": "tsc --noEmit",
+        "build:check": "tsc --noEmit && tsc --noEmit -p test/ui/tsconfig.json",
         "build:check:watch": "pnpm run build:check --watch",
         "package": "vsce package --no-dependencies",
         "test": "vscode-test",
         "testcov": "vscode-test --coverage",
+        "test:ui": "playwright test --project=electron",
+        "test:ui:web": "playwright test --project=web",
+        "test:ui:report": "playwright show-report test-results/html",
+        "ui:serve": "tsx test/ui/serveWeb.ts",
         "clean": "node ../../scripts/clean.mjs"
     },
     "engines": {
@@ -392,6 +396,7 @@
     },
     "devDependencies": {
         "@azure/identity": "^4.13.1",
+        "@playwright/test": "^1.61.1",
         "@types/semver": "^7.7.1",
         "@vscode/test-cli": "catalog:",
         "@vscode/test-electron": "catalog:",

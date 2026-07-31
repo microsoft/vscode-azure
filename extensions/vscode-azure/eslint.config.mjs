@@ -18,6 +18,18 @@ import { defineConfig } from 'eslint/config';
 export default defineConfig([
     azExtEslintStrictTypeChecked,
     {
+        // `playwright.config.ts` and the UI tests under `test/ui/` are type-checked
+        // by `test/ui/tsconfig.json` (they need DOM lib types); point the linter's
+        // project service at that config so it can parse them.
+        files: ['playwright.config.ts', 'test/ui/**/*.ts'],
+        languageOptions: {
+            parserOptions: {
+                project: './test/ui/tsconfig.json',
+                projectService: false,
+            },
+        },
+    },
+    {
         ignores: ['test/**'],
         rules: {
             '@typescript-eslint/no-restricted-imports': ['error', {

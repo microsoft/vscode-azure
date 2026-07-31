@@ -85,6 +85,38 @@
             "preLaunchTask": "Extension: ESBuild+Watch",
         },
         {
+            "name": "Extension: Run UI Tests (Playwright)",
+            "request": "launch",
+            "runtimeArgs": [
+                "--filter",
+                "vscode-azure",
+                "run",
+                "test:ui"
+            ],
+            "runtimeExecutable": "pnpm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node",
+            "preLaunchTask": "Extension: ESBuild", // The UI tests drive the built extension, so they need a completed build, not a watcher
+        },
+        {
+            "name": "Extension: Serve UI Harness (web)",
+            "request": "launch",
+            "runtimeArgs": [
+                "--filter",
+                "vscode-azure",
+                "run",
+                "ui:serve"
+            ],
+            "runtimeExecutable": "pnpm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node",
+            "preLaunchTask": "Extension: ESBuild",
+        },
+        {
             "name": "azutils: Run Tests",
             "request": "launch",
             "runtimeArgs": [

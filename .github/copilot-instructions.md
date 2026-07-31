@@ -8,7 +8,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers
 * `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
 * `docs/resource-creation.md` -- AzdJob, wizard step sequence, scenario matrix, hydration, adding new resource types
-* `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, coverage
+* `docs/testing.md` -- Unit vs integration tests, UI tests (Playwright), mocking with `createMockVsCode()`, coverage
 * `docs/resource-models.md` -- AzureNode union, GenericResource, AzureNodeId URI scheme
 * `docs/telemetry.md` -- IActionContext, ActionExecutor, telemetry suppression
 * `docs/build-and-dev.md` -- Build commands, esbuild, watch mode, linting, cleaning
@@ -106,6 +106,7 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * Only the **builds** have dedicated watch scripts (`build:watch` for `utils`/`azutils`, `build:check:watch` and `build:esbuild:watch` for the extension). There is no lint watch, and bare `mocha --watch` does nothing useful in this repo because Mocha only watches `.js`/`.cjs`/`.mjs` by default while the specs are `.ts` — pass `--extension ts` if you want a test watch.
 * The extension has no test watch and no useful test filtering — most of its runtime is the VS Code launch, not the tests, so `--grep` saves very little.
 * In a fresh clone or worktree, the extension's first test run downloads ~1 GB of VS Code into `extensions/vscode-azure/.vscode-test`. Run `pnpm run link-test-cache` once beforehand to share that download across worktrees; linked worktrees share one VS Code profile, so don't run their tests concurrently.
+* **UI tests (Playwright)** live in `extensions/vscode-azure/test/ui/` and drive the real workbench with mock Azure data. Run them with `pnpm --filter vscode-azure run test:ui` (desktop VS Code) or `test:ui:web` (browser-hosted); both need `pnpm --filter vscode-azure run build` first, and both share the `.vscode-test` cache, so don't run them alongside `pnpm --filter vscode-azure run test`. To *interact* with the extension yourself, run `pnpm --filter vscode-azure run ui:serve` in the background and open the `VSCODE_AZURE_UI_URL=<url>` line it prints with the browser tools. See `extensions/vscode-azure/test/ui/README.md`.
 
 
 ## Managing Dependencies

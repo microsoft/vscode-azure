@@ -3,6 +3,7 @@
 .github/**
 .gitattributes
 .gitignore
+.vscode-test
 .vscode-test/**
 .vscode/**
 *.tgz
@@ -19,6 +20,8 @@ resources/readme/**
 resources/walkthroughs/*.gif
 src/**
 stats.json
+test-results/**
+playwright-report/**
 test-results.xml
 test/**
 testOutput/**
