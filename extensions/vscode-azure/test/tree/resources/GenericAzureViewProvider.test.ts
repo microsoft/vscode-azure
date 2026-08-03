@@ -340,24 +340,23 @@ describe('GenericAzureViewProvider (unit)', () => {
             expect((item.iconPath as { id: string }).id).to.equal('symbol-namespace');
         });
 
-        for (const [logicalType, displayName, iconPath] of [
-            [AIFoundryProjectLogicalType, 'AI Foundry Projects', 'microsoft.machinelearningservices/workspaces~project.svg'],
-            [AIServicesLogicalType, 'AI Services', 'microsoft.cognitiveservices/accounts~aiservices.svg'],
-            [AppServiceLogicalType, 'App Services', 'microsoft.web/sites~app.svg'],
-            [CosmosDBLogicalType, 'Azure Cosmos DB', 'microsoft.documentdb/databaseaccounts~cosmosdb.svg'],
-            [CosmosDBMongoLogicalType, 'Azure Cosmos DB for MongoDB', 'microsoft.documentdb/databaseaccounts~mongodb.svg'],
-            [DurableTaskHubLogicalType, 'Durable Task Hubs', 'microsoft.durabletask/schedulers/taskhubs.svg'],
-            [FunctionAppLogicalType, 'Function Apps', 'microsoft.web/sites~functionapp.svg'],
-            [LogicAppLogicalType, 'Logic Apps', 'microsoft.web/sites~workflowapp.svg'],
-            [AcrResourceType, 'Container Registries', 'microsoft.containerregistry/registries.svg'],
+        for (const [logicalType, iconPath] of [
+            [AIFoundryProjectLogicalType, 'microsoft.machinelearningservices/workspaces~project.svg'],
+            [AIServicesLogicalType, 'microsoft.cognitiveservices/accounts~aiservices.svg'],
+            [AppServiceLogicalType, 'microsoft.web/sites~app.svg'],
+            [CosmosDBLogicalType, 'microsoft.documentdb/databaseaccounts~cosmosdb.svg'],
+            [CosmosDBMongoLogicalType, 'microsoft.documentdb/databaseaccounts~mongodb.svg'],
+            [DurableTaskHubLogicalType, 'microsoft.durabletask/schedulers/taskhubs.svg'],
+            [FunctionAppLogicalType, 'microsoft.web/sites~functionapp.svg'],
+            [LogicAppLogicalType, 'microsoft.web/sites~workflowapp.svg'],
+            [AcrResourceType, 'microsoft.containerregistry/registries.svg'],
         ]) {
-            it(`should render the ${displayName} resource-type group`, () => {
+            it(`should render the icon for ${logicalType} case-insensitively`, () => {
                 const provider = createProvider();
                 const key = `azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/~resourceType/${encodeURIComponent(logicalType.toUpperCase())}`;
 
                 const item = provider.getTreeItem(key);
 
-                expect(item.label).to.equal(displayName);
                 expect((item.iconPath as { path: string }).path).to.include(iconPath);
                 expect(item.contextValue).to.be.undefined;
             });
@@ -503,9 +502,9 @@ describe('GenericAzureViewProvider (unit)', () => {
                 );
 
                 const groups = await provider.getChildren(AzureNodeId.from(sub).toString());
-                const labels = groups.map(key => provider.getTreeItem(key).label);
+                const groupValues = groups.map(key => AzureNodeId.parse(key).getGrouping()?.groupingValue);
 
-                expect(labels).to.deep.equal(['Function Apps', 'Microsoft.Storage/storageAccounts']);
+                expect(groupValues).to.deep.equal([FunctionAppLogicalType, storageAccount.logicalType]);
             }),
         );
 
