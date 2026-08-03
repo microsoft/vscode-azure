@@ -23,6 +23,7 @@ import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './
  */
 @injectable()
 export class FunctionAppViewProvider implements ViewProvider<string> {
+
     /** Context value applied to Function App tree items. */
     public static readonly ContextValue = 'functionApp';
 

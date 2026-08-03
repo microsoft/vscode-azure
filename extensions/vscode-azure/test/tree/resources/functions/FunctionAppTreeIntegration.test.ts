@@ -142,11 +142,7 @@ describe('Function App Tree Integration (integration)', () => {
         );
 
         const funcViewProvider = new FunctionAppViewProvider(ctx, executor, dataTree);
-        const genericViewProvider = new GenericAzureViewProvider(
-            ctx,
-            executor,
-            dataTree,
-        );
+        const genericViewProvider = new GenericAzureViewProvider(ctx, executor, dataTree);
 
         viewTree.registerProvider(funcViewProvider);
         viewTree.registerProvider(genericViewProvider);

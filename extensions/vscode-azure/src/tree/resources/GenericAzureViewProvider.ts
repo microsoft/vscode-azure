@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId, FunctionAppLogicalType, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, LogicAppLogicalType, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -101,7 +101,6 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             item.id = key;
             if (resourceType) {
                 item.iconPath = getResourceTypeIconUri(this.ctx, resourceType);
-                item.contextValue = resourceTypeGroupContextValue;
             } else {
                 item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
             }
@@ -437,8 +436,22 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         switch (logicalType.toLowerCase()) {
             case AcrResourceType.toLowerCase():
                 return this.ctx.code.l10n.t('Container Registries');
+            case AIFoundryProjectLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('AI Foundry Projects');
+            case AIServicesLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('AI Services');
+            case AppServiceLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('App Services');
+            case CosmosDBLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Azure Cosmos DB');
+            case CosmosDBMongoLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Azure Cosmos DB for MongoDB');
+            case DurableTaskHubLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Durable Task Hubs');
             case FunctionAppLogicalType.toLowerCase():
                 return this.ctx.code.l10n.t('Function Apps');
+            case LogicAppLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Logic Apps');
             default:
                 return undefined;
         }
@@ -467,4 +480,3 @@ function toKey(node: AzureNode): string {
 
 const virtualGroupNodeType = 'virtualGroup';
 const untaggedSentinel = '__untagged__';
-const resourceTypeGroupContextValue = 'azureResourceTypeGroup';

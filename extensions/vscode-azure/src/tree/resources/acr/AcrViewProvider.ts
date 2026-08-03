@@ -27,6 +27,7 @@ import { isAcrRegistry } from './AcrRegistry';
  */
 @injectable()
 export class AcrViewProvider implements ViewProvider<string> {
+
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,

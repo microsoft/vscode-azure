@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, LogicAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -341,7 +341,14 @@ describe('GenericAzureViewProvider (unit)', () => {
         });
 
         for (const [logicalType, displayName, iconPath] of [
+            [AIFoundryProjectLogicalType, 'AI Foundry Projects', 'microsoft.machinelearningservices/workspaces~project.svg'],
+            [AIServicesLogicalType, 'AI Services', 'microsoft.cognitiveservices/accounts~aiservices.svg'],
+            [AppServiceLogicalType, 'App Services', 'microsoft.web/sites~app.svg'],
+            [CosmosDBLogicalType, 'Azure Cosmos DB', 'microsoft.documentdb/databaseaccounts~cosmosdb.svg'],
+            [CosmosDBMongoLogicalType, 'Azure Cosmos DB for MongoDB', 'microsoft.documentdb/databaseaccounts~mongodb.svg'],
+            [DurableTaskHubLogicalType, 'Durable Task Hubs', 'microsoft.durabletask/schedulers/taskhubs.svg'],
             [FunctionAppLogicalType, 'Function Apps', 'microsoft.web/sites~functionapp.svg'],
+            [LogicAppLogicalType, 'Logic Apps', 'microsoft.web/sites~workflowapp.svg'],
             [AcrResourceType, 'Container Registries', 'microsoft.containerregistry/registries.svg'],
         ]) {
             it(`should render the ${displayName} resource-type group`, () => {
@@ -352,7 +359,7 @@ describe('GenericAzureViewProvider (unit)', () => {
 
                 expect(item.label).to.equal(displayName);
                 expect((item.iconPath as { path: string }).path).to.include(iconPath);
-                expect(item.contextValue).to.equal('azureResourceTypeGroup');
+                expect(item.contextValue).to.be.undefined;
             });
         }
 

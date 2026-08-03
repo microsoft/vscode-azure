@@ -34,12 +34,6 @@ import { FunctionsWorkspaceDataProvider } from './workspace/functions/FunctionsW
 import { FunctionsWorkspaceViewProvider } from './workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from './workspace/WorkspaceNode';
 
-const azureViewProviders: readonly Newable<ViewProvider<string>>[] = [
-    AcrViewProvider,
-    FunctionAppViewProvider,
-    GenericAzureViewProvider,
-];
-
 /**
  * Bind the Azure resources tree, workspace tree, and activity tree into the
  * DI container.
@@ -70,7 +64,11 @@ export function registerTrees(container: Container): void {
             [IAzureAccountDataProvider, AzureAccountDataProvider], // singleton so mock-data mode can rebind it
             AzureResourceDataProvider,
         ],
-        viewProviders: azureViewProviders,
+        viewProviders: [
+            AcrViewProvider,
+            FunctionAppViewProvider,
+            GenericAzureViewProvider,
+        ],
     });
 
     // Workspace tree
