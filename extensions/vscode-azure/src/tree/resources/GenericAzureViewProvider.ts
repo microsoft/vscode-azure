@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, FunctionAppLogicalType, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -14,7 +14,7 @@ import { IAzureViewDataTree } from '../../services';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
-import { IResourceTypePresentationRegistry, ResourceTypeGroupContextValue, type ResourceTypePresentation } from './ResourceTypePresentation';
+import { AcrResourceType } from './acr/AcrRegistry';
 
 /**
  * Root view-layer provider for the Azure resources tree.
@@ -53,7 +53,6 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(IResourceTypePresentationRegistry) private readonly resourceTypePresentations: IResourceTypePresentationRegistry,
     ) {
         this.disposables.push(ctx.code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)
@@ -97,12 +96,12 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (nodeId.isVirtualGroupNodeId()) {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
-            const { label, presentation } = this.getVirtualGroupPresentation(key);
+            const { label, resourceType } = this.getVirtualGroupPresentation(key);
             const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
-            if (presentation) {
-                item.iconPath = getResourceTypeIconUri(this.ctx, presentation.logicalType);
-                item.contextValue = combineContextValues(ResourceTypeGroupContextValue, ...(presentation.groupContextValues ?? []));
+            if (resourceType) {
+                item.iconPath = getResourceTypeIconUri(this.ctx, resourceType);
+                item.contextValue = resourceTypeGroupContextValue;
             } else {
                 item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
             }
@@ -417,24 +416,31 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         return this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<string>('groupByTag', '');
     }
 
-    /**
-     * Resolves the rendered label and optional resource-type metadata together
-     * so callers do not independently parse and look up the same virtual group.
-     */
-    private getVirtualGroupPresentation(key: string): { readonly label: string; readonly presentation?: ResourceTypePresentation } {
+    private getVirtualGroupPresentation(key: string): { readonly label: string; readonly resourceType?: string } {
         const grouping = AzureNodeId.parse(key).getGrouping();
         if (!grouping) {
             return { label: key };
         } else if (grouping.groupingValue === untaggedSentinel) {
             return { label: this.ctx.code.l10n.t('(No Tag)') };
         } else if (grouping.groupingStrategy === 'resourceType') {
-            const presentation = this.resourceTypePresentations.getPresentation(grouping.groupingValue);
+            const label = this.getResourceTypeGroupLabel(grouping.groupingValue);
             return {
-                label: presentation?.getDisplayName(this.ctx.code) ?? grouping.groupingValue,
-                presentation,
+                label: label ?? grouping.groupingValue,
+                resourceType: label ? grouping.groupingValue : undefined,
             };
         } else {
             return { label: grouping.groupingValue };
+        }
+    }
+
+    private getResourceTypeGroupLabel(logicalType: string): string | undefined {
+        switch (logicalType.toLowerCase()) {
+            case AcrResourceType.toLowerCase():
+                return this.ctx.code.l10n.t('Container Registries');
+            case FunctionAppLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Function Apps');
+            default:
+                return undefined;
         }
     }
 
@@ -461,3 +467,4 @@ function toKey(node: AzureNode): string {
 
 const virtualGroupNodeType = 'virtualGroup';
 const untaggedSentinel = '__untagged__';
+const resourceTypeGroupContextValue = 'azureResourceTypeGroup';

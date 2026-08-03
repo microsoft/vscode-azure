@@ -26,7 +26,6 @@ import { AzureResourceDataProvider } from './resources/AzureResourceDataProvider
 import { FunctionAppDataProvider, IFunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
-import { IResourceTypePresentationRegistry, ResourceTypePresentationRegistry, type ResourceTypePresentation } from './resources/ResourceTypePresentation';
 import { AzdWorkspaceDataProvider } from './workspace/azd/AzdWorkspaceDataProvider';
 import { AzdWorkspaceViewProvider } from './workspace/azd/AzdWorkspaceViewProvider';
 import { EmulatorsWorkspaceDataProvider } from './workspace/emulators/EmulatorsWorkspaceDataProvider';
@@ -35,11 +34,7 @@ import { FunctionsWorkspaceDataProvider } from './workspace/functions/FunctionsW
 import { FunctionsWorkspaceViewProvider } from './workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from './workspace/WorkspaceNode';
 
-type AzureViewProviderClass = Newable<ViewProvider<string>> & {
-    readonly resourceTypePresentation?: ResourceTypePresentation;
-};
-
-const azureViewProviders: readonly AzureViewProviderClass[] = [
+const azureViewProviders: readonly Newable<ViewProvider<string>>[] = [
     AcrViewProvider,
     FunctionAppViewProvider,
     GenericAzureViewProvider,
@@ -57,11 +52,6 @@ const azureViewProviders: readonly AzureViewProviderClass[] = [
  * the full subscription/resource load.
  */
 export function registerTrees(container: Container): void {
-    const resourceTypePresentations = azureViewProviders.flatMap(
-        provider => provider.resourceTypePresentation ? [provider.resourceTypePresentation] : [],
-    );
-    container.bind(IResourceTypePresentationRegistry).toConstantValue(new ResourceTypePresentationRegistry(resourceTypePresentations));
-
     // Resources tree
     registerTree<ConcreteAzureNode>(container, {
         treeViewId: AzureResourceTreeViewId,

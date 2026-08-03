@@ -14,7 +14,6 @@ import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry'
 import { AcrViewProvider } from '../../../../src/tree/resources/acr/AcrViewProvider';
 import { AzureResourceDataProvider } from '../../../../src/tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../../../../src/tree/resources/GenericAzureViewProvider';
-import { ResourceTypePresentationRegistry } from '../../../../src/tree/resources/ResourceTypePresentation';
 import { createMockResourceClient } from '../mockResourceClient';
 import { createMockAcrClient } from './mockAcr';
 
@@ -134,7 +133,6 @@ describe('ACR Tree Integration (integration)', () => {
             mockCtx.ctx,
             executor,
             dataTree,
-            new ResourceTypePresentationRegistry([AcrViewProvider.resourceTypePresentation]),
         );
 
         // Register in correct order: ACR first, generic fallback second

@@ -11,10 +11,7 @@ import { mock } from 'node:test';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
-import { AcrViewProvider } from '../../../src/tree/resources/acr/AcrViewProvider';
-import { FunctionAppViewProvider } from '../../../src/tree/resources/functions/FunctionAppViewProvider';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
-import { ResourceTypePresentationRegistry } from '../../../src/tree/resources/ResourceTypePresentation';
 
 describe('GenericAzureViewProvider (unit)', () => {
     const mockCodeContext = createMockCodeContext();
@@ -23,10 +20,6 @@ describe('GenericAzureViewProvider (unit)', () => {
         nodes?: ConcreteAzureNode[],
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
         onGetChildren?: (node: ConcreteAzureNode) => void,
-        resourceTypePresentations = new ResourceTypePresentationRegistry([
-            AcrViewProvider.resourceTypePresentation,
-            FunctionAppViewProvider.resourceTypePresentation,
-        ]),
     ) {
         const { executor } = createTestActionExecutor();
         const allNodes = nodes ?? [];
@@ -48,7 +41,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never, resourceTypePresentations);
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
@@ -353,7 +346,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         ]) {
             it(`should render the ${displayName} resource-type group`, () => {
                 const provider = createProvider();
-                const key = `azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/~resourceType/${encodeURIComponent(logicalType)}`;
+                const key = `azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/~resourceType/${encodeURIComponent(logicalType.toUpperCase())}`;
 
                 const item = provider.getTreeItem(key);
 
@@ -486,32 +479,26 @@ describe('GenericAzureViewProvider (unit)', () => {
             }),
         );
 
-        it('should sort registered and unregistered resource types by their rendered labels', () =>
+        it('should sort known and unknown resource types by their rendered labels', () =>
             withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+                const functionApp = makeGenericResource({
+                    ...webApp,
+                    logicalType: FunctionAppLogicalType,
+                });
                 const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
                     [sub, [rg1, rg2]],
-                    [rg1, [webApp]],
+                    [rg1, [functionApp]],
                     [rg2, [storageAccount]],
                 ]);
-                const getDisplayName = mock.fn((code: typeof mockCodeContext.ctx.code) => code.l10n.t('Zulu Apps'));
-                const resourceTypePresentations = new ResourceTypePresentationRegistry([
-                    {
-                        logicalType: webApp.logicalType,
-                        getDisplayName,
-                    },
-                ]);
                 const provider = createProvider(
-                    [sub, rg1, rg2, webApp, storageAccount],
+                    [sub, rg1, rg2, functionApp, storageAccount],
                     childrenMap,
-                    undefined,
-                    resourceTypePresentations,
                 );
 
                 const groups = await provider.getChildren(AzureNodeId.from(sub).toString());
-                expect(getDisplayName.mock.callCount()).to.equal(1);
                 const labels = groups.map(key => provider.getTreeItem(key).label);
 
-                expect(labels).to.deep.equal(['Microsoft.Storage/storageAccounts', 'Zulu Apps']);
+                expect(labels).to.deep.equal(['Function Apps', 'Microsoft.Storage/storageAccounts']);
             }),
         );
 
