@@ -3,13 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, LogicAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
+import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
 
 describe('GenericAzureViewProvider (unit)', () => {
@@ -336,7 +337,30 @@ describe('GenericAzureViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
 
             expect(item.label).to.equal('Microsoft.Web/sites');
+            expect((item.iconPath as { id: string }).id).to.equal('symbol-namespace');
         });
+
+        for (const [logicalType, iconPath] of [
+            [AIFoundryProjectLogicalType, 'microsoft.machinelearningservices/workspaces~project.svg'],
+            [AIServicesLogicalType, 'microsoft.cognitiveservices/accounts~aiservices.svg'],
+            [AppServiceLogicalType, 'microsoft.web/sites~app.svg'],
+            [CosmosDBLogicalType, 'microsoft.documentdb/databaseaccounts~cosmosdb.svg'],
+            [CosmosDBMongoLogicalType, 'microsoft.documentdb/databaseaccounts~mongodb.svg'],
+            [DurableTaskHubLogicalType, 'microsoft.durabletask/schedulers/taskhubs.svg'],
+            [FunctionAppLogicalType, 'microsoft.web/sites~functionapp.svg'],
+            [LogicAppLogicalType, 'microsoft.web/sites~workflowapp.svg'],
+            [AcrResourceType, 'microsoft.containerregistry/registries.svg'],
+        ]) {
+            it(`should render the icon for ${logicalType} case-insensitively`, () => {
+                const provider = createProvider();
+                const key = `azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/~resourceType/${encodeURIComponent(logicalType.toUpperCase())}`;
+
+                const item = provider.getTreeItem(key);
+
+                expect((item.iconPath as { path: string }).path).to.include(iconPath);
+                expect(item.contextValue).to.be.undefined;
+            });
+        }
 
         it('should throw for an unknown key not in cache', () => {
             const provider = createProvider();
@@ -458,6 +482,29 @@ describe('GenericAzureViewProvider (unit)', () => {
                 // Check that expanding a group returns resources
                 const groupChildren = await provider.getChildren(groups[0]);
                 expect(groupChildren.length).to.be.greaterThan(0);
+            }),
+        );
+
+        it('should sort known and unknown resource types by their rendered labels', () =>
+            withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
+                const functionApp = makeGenericResource({
+                    ...webApp,
+                    logicalType: FunctionAppLogicalType,
+                });
+                const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                    [sub, [rg1, rg2]],
+                    [rg1, [functionApp]],
+                    [rg2, [storageAccount]],
+                ]);
+                const provider = createProvider(
+                    [sub, rg1, rg2, functionApp, storageAccount],
+                    childrenMap,
+                );
+
+                const groups = await provider.getChildren(AzureNodeId.from(sub).toString());
+                const groupValues = groups.map(key => AzureNodeId.parse(key).getGrouping()?.groupingValue);
+
+                expect(groupValues).to.deep.equal([FunctionAppLogicalType, storageAccount.logicalType]);
             }),
         );
 

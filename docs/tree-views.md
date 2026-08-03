@@ -342,6 +342,21 @@ Most resources use their raw ARM `type` as the icon key. However, some ARM types
 2. If the ARM type needs kind-based disambiguation, add a logical type constant and a branch to `logicalType()` in `ResourceClient.ts`.
 3. No view provider changes are needed — `GenericAzureViewProvider` already passes `resource.logicalType` to `getResourceTypeIconUri()`.
 
+### Resource-type group presentation
+
+Resource-type grouping keeps `GenericResource.logicalType` as the stable group
+identity and node key. `GenericAzureViewProvider` owns the mapping from logical
+types to localized group labels. It resolves group icons directly from the
+logical type using the convention above. Unknown logical types retain their raw
+type label and generic `symbol-namespace` icon.
+
+To add group presentation for a supported service:
+
+1. Ensure the resource has a stable logical type and matching icon file.
+2. Add a case-insensitive branch to the resource-type label mapping in
+   `GenericAzureViewProvider`. Localize the display name with `IVsCode.l10n.t()`.
+3. Test the localized label, convention-based icon path, and generic fallback.
+
 ## Putting It Together
 
 ```

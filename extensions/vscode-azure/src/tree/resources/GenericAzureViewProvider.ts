@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, LogicAppLogicalType, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -14,6 +14,7 @@ import { IAzureViewDataTree } from '../../services';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
+import { AcrResourceType } from './acr/AcrRegistry';
 
 /**
  * Root view-layer provider for the Azure resources tree.
@@ -95,13 +96,14 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (nodeId.isVirtualGroupNodeId()) {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
-            const grouping = nodeId.getGrouping();
-            const label = grouping?.groupingValue === untaggedSentinel
-                ? this.ctx.code.l10n.t('(No Tag)')
-                : grouping?.groupingValue ?? key;
+            const { label, resourceType } = this.getVirtualGroupPresentation(key);
             const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
-            item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
+            if (resourceType) {
+                item.iconPath = getResourceTypeIconUri(this.ctx, resourceType);
+            } else {
+                item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
+            }
             return item;
         }
 
@@ -270,7 +272,15 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
             const groups = await this.groupResources(subscription);
             this.executor.output.debug(`[view] grouped subscription=${subscription.subscriptionId} strategy=${this.groupingStrategy} groups=${groups.size}`);
-            return [...groups.keys()].sort();
+            const groupKeys = [...groups.keys()];
+            if (this.groupingStrategy === 'resourceType') {
+                return groupKeys
+                    .map(groupKey => ({ groupKey, label: this.getVirtualGroupPresentation(groupKey).label }))
+                    .sort((a, b) => a.label.localeCompare(b.label))
+                    .map(({ groupKey }) => groupKey);
+            } else {
+                return groupKeys.sort();
+            }
         }
 
         // Virtual group: find the matching bucket from the parent subscription
@@ -403,6 +413,48 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
     private get groupByTag(): string {
         return this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<string>('groupByTag', '');
+    }
+
+    private getVirtualGroupPresentation(key: string): { readonly label: string; readonly resourceType?: string } {
+        const grouping = AzureNodeId.parse(key).getGrouping();
+        if (!grouping) {
+            return { label: key };
+        } else if (grouping.groupingValue === untaggedSentinel) {
+            return { label: this.ctx.code.l10n.t('(No Tag)') };
+        } else if (grouping.groupingStrategy === 'resourceType') {
+            const label = this.getResourceTypeGroupLabel(grouping.groupingValue);
+            return {
+                label: label ?? grouping.groupingValue,
+                resourceType: label ? grouping.groupingValue : undefined,
+            };
+        } else {
+            return { label: grouping.groupingValue };
+        }
+    }
+
+    private getResourceTypeGroupLabel(logicalType: string): string | undefined {
+        switch (logicalType.toLowerCase()) {
+            case AcrResourceType.toLowerCase():
+                return this.ctx.code.l10n.t('Container Registries');
+            case AIFoundryProjectLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('AI Foundry Projects');
+            case AIServicesLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('AI Services');
+            case AppServiceLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('App Services');
+            case CosmosDBLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Azure Cosmos DB');
+            case CosmosDBMongoLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Azure Cosmos DB for MongoDB');
+            case DurableTaskHubLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Durable Task Hubs');
+            case FunctionAppLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Function Apps');
+            case LogicAppLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Logic Apps');
+            default:
+                return undefined;
+        }
     }
 
     /**
