@@ -90,6 +90,43 @@ describe('ResourceClient (unit)', () => {
         expect(resources[2].logicalType).to.equal(AppServiceLogicalType);
     });
 
+    it('should list all resources in the subscription with logicalType attached', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+
+        const resourcesBody = JSON.stringify({
+            value: [
+                { id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Storage/storageAccounts/sa1', name: 'sa1', type: 'Microsoft.Storage/storageAccounts', location: 'eastus' },
+                { id: '/subscriptions/test-sub/resourceGroups/rg2/providers/Microsoft.Web/sites/fn1', name: 'fn1', type: 'Microsoft.Web/sites', kind: 'functionapp', location: 'westus' },
+            ],
+        });
+
+        const requestedUrls: string[] = [];
+        const httpClient = new MockHttpClient({
+            handler: (req) => {
+                requestedUrls.push(req.url);
+                return makeResponse(req, 200, resourcesBody);
+            },
+        });
+
+        const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        const pages = await collectPages(client.resources.list());
+
+        expect(requestedUrls).to.have.length(1);
+        expect(requestedUrls[0]).to.include('/subscriptions/test-sub/resources');
+        // Case-insensitive: ARM spells the segment `resourceGroups`, so a
+        // lower-cased check against the raw URL would pass even if the
+        // subscription-wide call had been routed per resource group.
+        expect(requestedUrls[0].toLowerCase()).to.not.include('/resourcegroups/');
+
+        const resources = pages[0].items;
+        expect(resources).to.have.length(2);
+        expect(resources[0].logicalType).to.equal('Microsoft.Storage/storageAccounts');
+        expect(resources[1].logicalType).to.equal(FunctionAppLogicalType);
+        expect(resources[0].subscription).to.equal(subscription);
+    });
+
     it('should set hasMore based on nextLink presence', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();

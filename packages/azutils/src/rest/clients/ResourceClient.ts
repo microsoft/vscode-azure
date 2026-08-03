@@ -5,7 +5,7 @@
 
 import { createResourceManagement, type ResourceManagementClientOptionalParams, type ResourceManagementContext } from '@azure/arm-resources/api';
 import { list as sdkListResourceGroups, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
-import { listByResourceGroup as sdkListByResourceGroup, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
+import { list as sdkListResources, listByResourceGroup as sdkListByResourceGroup, type ResourcesListByResourceGroupOptionalParams, type ResourcesListOptionalParams } from '@azure/arm-resources/api/resources';
 import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
@@ -14,6 +14,8 @@ import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
 import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
+
+export type { ResourceGroupsListOptionalParams, ResourcesListByResourceGroupOptionalParams, ResourcesListOptionalParams };
 
 /** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
 export const SiteType = 'Microsoft.Web/sites';
@@ -62,6 +64,20 @@ export interface IResourceClient {
         list(options?: ResourceGroupsListOptionalParams): AsyncIterable<Page<ResourceGroup>>;
     };
     readonly resources: {
+        /**
+         * List every resource in the subscription in one ARM operation,
+         * regardless of resource group.
+         *
+         * Prefer this over calling {@linkcode listByResourceGroup} once per
+         * resource group when the complete resource set is needed (e.g. to
+         * group by resource type, location, or tag): it replaces N round trips
+         * with one.
+         *
+         * **Note:** unlike {@linkcode resourceGroups.list}, this does not
+         * surface resource groups that contain no resources. Callers that need
+         * the full set of resource groups must still list them separately.
+         */
+        list(options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>>;
         listByResourceGroup(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>>;
     };
 }
@@ -105,7 +121,10 @@ export class ResourceClient implements IResourceClient {
     }
 
     public get resources(): IResourceClient['resources'] {
-        return { listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options) };
+        return {
+            list: (options) => this.listAllResources(options),
+            listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options),
+        };
     }
 
     private listResourceGroups(options?: ResourceGroupsListOptionalParams): AsyncIterable<Page<ResourceGroup>> {
@@ -124,6 +143,13 @@ export class ResourceClient implements IResourceClient {
     private listResources(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>> {
         return toPages(
             sdkListByResourceGroup(this.inner, resourceGroupName, options),
+            r => attachMetadata(r, this.subscription)
+        );
+    }
+
+    private listAllResources(options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>> {
+        return toPages(
+            sdkListResources(this.inner, options),
             r => attachMetadata(r, this.subscription)
         );
     }

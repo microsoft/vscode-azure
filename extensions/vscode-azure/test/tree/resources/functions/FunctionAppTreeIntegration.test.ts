@@ -17,7 +17,7 @@ import { FunctionAppVirtualPaths } from '../../../../src/tree/resources/function
 import { FunctionAppDataProvider } from '../../../../src/tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../../../../src/tree/resources/functions/FunctionAppViewProvider';
 import { GenericAzureViewProvider } from '../../../../src/tree/resources/GenericAzureViewProvider';
-import { createMockResourceClient } from '../mockResourceClient';
+import { createMockBulkLoader, createMockResourceClient } from '../mockResourceClient';
 import { makeFunctionApp } from './mockFunctionApp';
 
 /**
@@ -142,7 +142,7 @@ describe('Function App Tree Integration (integration)', () => {
         );
 
         const funcViewProvider = new FunctionAppViewProvider(ctx, executor, dataTree);
-        const genericViewProvider = new GenericAzureViewProvider(ctx, executor, dataTree);
+        const genericViewProvider = new GenericAzureViewProvider(ctx, executor, dataTree, createMockBulkLoader() as never);
 
         viewTree.registerProvider(funcViewProvider);
         viewTree.registerProvider(genericViewProvider);
