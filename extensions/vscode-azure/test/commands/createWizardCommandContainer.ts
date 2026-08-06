@@ -13,6 +13,7 @@ import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../src/services';
 import { IArmDeploymentDataProvider } from '../../src/tree/activity/ArmDeploymentDataProvider';
 import { ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
 import { IStaticWebAppsGitHubService } from '../../src/services/StaticWebAppsGitHubService';
+import { IGitRemoteService } from '../../src/staticWebApps/GitRemoteService';
 
 /** Mocked services a wizard command (and its steps) may resolve in unit tests. */
 export interface WizardCommandMocks {
@@ -27,6 +28,8 @@ export interface WizardCommandMocks {
     readonly armProvider?: IArmDeploymentDataProvider;
     readonly codeProvider?: ICodeDeploymentDataProvider;
     readonly staticWebAppsGitHubService?: IStaticWebAppsGitHubService;
+    /** Defaults to a mock reporting "no remote" for every folder. */
+    readonly gitRemote?: IGitRemoteService;
 }
 
 /**
@@ -67,6 +70,7 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     if (mocks.staticWebAppsGitHubService !== undefined) {
         container.bind(IStaticWebAppsGitHubService).toConstantValue(mocks.staticWebAppsGitHubService);
     }
+    container.bind(IGitRemoteService).toConstantValue(mocks.gitRemote ?? ({ getRemoteInfo: () => Promise.resolve(undefined) } as unknown as IGitRemoteService));
 
     container.bind(Container).toConstantValue(container);
     return container;

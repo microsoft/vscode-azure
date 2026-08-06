@@ -8,10 +8,12 @@ import { createMockDataItemTree, createMockSubscriptionClientProvider, createMoc
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import { mock as nodeMock } from 'node:test';
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import { CreateStaticWebApp } from '../../../src/commands/staticWebApps/CreateStaticWebApp';
 import { StaticWebAppsGitHubService } from '../../../src/services/StaticWebAppsGitHubService';
+import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
 import { createWizardCommandContainer } from '../createWizardCommandContainer';
@@ -19,7 +21,7 @@ import { createWizardCommandContainer } from '../createWizardCommandContainer';
 describe('CreateStaticWebApp (unit)', () => {
     const subscription = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
 
-    function createCommand(workspace: boolean) {
+    function createCommand(workspace: boolean, options: { readonly remote?: GitRemoteInfo; readonly azdVersionOk?: boolean } = {}) {
         const { ctx, mock } = createMockCodeContext();
         if (workspace) {
             mock.workspaceFolders.push({ uri: MockUri.file('/workspace'), name: 'workspace', index: 0 });
@@ -27,6 +29,9 @@ describe('CreateStaticWebApp (unit)', () => {
         const dataTree = createMockDataItemTree([subscription]);
         const viewItemTree = createMockViewItemTree({ '': [AzureNodeId.from(subscription).toString()] });
         const azd = createMockAzdService();
+        if (options.azdVersionOk !== undefined) {
+            azd.checkVersion.mock.mockImplementation(() => Promise.resolve(options.azdVersionOk));
+        }
         let yamlUri: vscode.Uri | undefined;
         azd.findAzureYaml.mock.mockImplementation((folder: vscode.Uri) => {
             const candidate = MockUri.file(`${folder.fsPath}/azure.yaml`);
@@ -38,6 +43,7 @@ describe('CreateStaticWebApp (unit)', () => {
             return Promise.resolve();
         });
         const actionContext = createActionContext('test');
+        const gitRemote = { getRemoteInfo: nodeMock.fn(() => Promise.resolve(options.remote)) } as unknown as IGitRemoteService;
         const container = createWizardCommandContainer({
             ctx,
             output: new MockOutputChannel('test'),
@@ -53,8 +59,9 @@ describe('CreateStaticWebApp (unit)', () => {
             armProvider: createMockArmProvider(),
             codeProvider: createMockCodeProvider(),
             staticWebAppsGitHubService: new StaticWebAppsGitHubService(ctx.code, ctx.extensionContext),
+            gitRemote,
         });
-        return { command: container.get(CreateStaticWebApp), mock, azd, actionContext };
+        return { command: container.get(CreateStaticWebApp), mock, azd, actionContext, gitRemote };
     }
 
     it('should run basic mode as provision-only without a workspace', async () => {
@@ -103,5 +110,93 @@ describe('CreateStaticWebApp (unit)', () => {
         expect(parameters.parameters.appLocation.value).to.equal('/');
         expect(parameters.parameters.apiLocation.value).to.equal('api');
         expect(parameters.parameters.outputLocation.value).to.equal('build');
+    });
+
+    describe('deployment routing', () => {
+        const githubPushed: GitRemoteInfo = { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true, branch: 'main' };
+
+        it('should launch CI/CD setup and skip direct deploy for a supported, pushed remote', async () => {
+            const { command, mock, azd } = createCommand(true, { remote: githubPushed });
+            respondToPrompts(mock, [
+                { pick: 'sub-1' },
+                { pick: 'East US 2' },
+                { input: 'my-swa' },
+                { pick: 'React' },
+                { input: '/' },
+                { input: 'build' },
+            ]);
+
+            await command.execute('basic');
+            // Let the fire-and-forget executeCommand().then(...) settle.
+            await Promise.resolve();
+
+            expect(azd.provision.mock.callCount()).to.equal(1);
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0); // launched command is separate/mocked, not this azd instance's method directly
+            expect(mock.commands.executeCommand.mock.callCount()).to.equal(1);
+            const [commandId, args] = mock.commands.executeCommand.mock.calls[0].arguments as [string, { readonly provider: string }];
+            expect(commandId).to.equal('vscode-azure/staticWebApps/deploy');
+            expect(args.provider).to.equal('github');
+        });
+
+        it('should log and not throw when the CI/CD launch command rejects', async () => {
+            const { command, mock, azd } = createCommand(true, { remote: githubPushed });
+            mock.commands.executeCommand.mock.mockImplementation(() => Promise.reject(new Error('boom')));
+            respondToPrompts(mock, [
+                { pick: 'sub-1' },
+                { pick: 'East US 2' },
+                { input: 'my-swa' },
+                { pick: 'React' },
+                { input: '/' },
+                { input: 'build' },
+            ]);
+
+            await command.execute('basic');
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(azd.provision.mock.callCount()).to.equal(1);
+        });
+
+        it('should retain direct deploy when no remote is known', async () => {
+            const { command, mock, azd } = createCommand(true);
+            respondToPrompts(mock, [
+                { pick: 'sub-1' },
+                { pick: 'East US 2' },
+                { input: 'my-swa' },
+                { pick: 'React' },
+                { input: '/' },
+                { input: 'build' },
+            ]);
+
+            await command.execute('basic');
+
+            expect(azd.deploy.mock.callCount()).to.equal(1);
+            expect(mock.commands.executeCommand.mock.callCount()).to.equal(0);
+        });
+
+        it('should show blocked guidance (never claiming success) for hybrid/SSR output with no remote', async () => {
+            const { command, mock, azd } = createCommand(true);
+            respondToPrompts(mock, [
+                { pick: 'sub-1' },
+                { pick: 'East US 2' },
+                { input: 'my-swa' },
+                { pick: 'Next.js (SSR)' },
+                { input: '/' },
+                { input: '' },
+            ]);
+
+            await command.execute('basic');
+
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(mock.commands.executeCommand.mock.callCount()).to.equal(0);
+            // OutputLocationStep already warns during prompting for unsupported direct-deploy
+            // shapes; our post-wizard guidance is an additional, final call.
+            expect(mock.window.showWarningMessage.mock.callCount()).to.be.greaterThanOrEqual(2);
+            const lastCall = mock.window.showWarningMessage.mock.calls.at(-1);
+            const [message] = lastCall!.arguments as unknown as [string];
+            expect(message).to.include('GitHub Actions or Azure Pipelines');
+            expect(message).to.not.include('deployed:');
+        });
     });
 });

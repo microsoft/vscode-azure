@@ -5,6 +5,7 @@
 
 import { IStaticWebAppClientProvider, StaticWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { DeployStaticWebAppCommandId } from '../constants';
 import { CancelAction, RerunAction } from '../commands/staticWebApps/ActionCommands';
 import { BrowseStaticWebApp } from '../commands/staticWebApps/BrowseStaticWebApp';
 import { CloneRepository } from '../commands/staticWebApps/CloneRepository';
@@ -12,6 +13,7 @@ import { CreateStaticWebApp } from '../commands/staticWebApps/CreateStaticWebApp
 import { CreateSwaConfigFile } from '../commands/staticWebApps/CreateSwaConfigFile';
 import { DeleteStaticWebApp } from '../commands/staticWebApps/DeleteStaticWebApp';
 import { DeleteStaticWebAppEnvironment } from '../commands/staticWebApps/DeleteStaticWebAppEnvironment';
+import { DeployStaticWebApp } from '../commands/staticWebApps/DeployStaticWebApp';
 import { InstallOrUpdateSwaCli } from '../commands/staticWebApps/InstallOrUpdateSwaCli';
 import { OpenGitHubLog } from '../commands/staticWebApps/OpenGitHubLog';
 import { OpenGitHubRepository } from '../commands/staticWebApps/OpenGitHubRepository';
@@ -31,6 +33,7 @@ import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
 import { IStaticWebAppsGitHubService, StaticWebAppsGitHubService } from '../services/StaticWebAppsGitHubService';
 import { GitHubActionLogContentProvider } from '../staticWebApps/GitHubActionLogContentProvider';
+import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
 import { registerStaticWebAppLocalTools } from '../staticWebApps/registerStaticWebAppLocalTools';
 import { ISwaCliService, SwaCliService } from '../staticWebApps/SwaCliService';
 import { IProcessTerminator, ProcessTerminator, SwaTaskLifecycle } from '../tasks/staticWebApps/SwaTaskLifecycle';
@@ -47,6 +50,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
         container.bind(StaticWebAppCommandResolver).toSelf();
         container.bind(IStaticWebAppsGitHubService).to(StaticWebAppsGitHubService).inSingletonScope();
+        container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
         container.bind(ISwaCliService).toDynamicValue(context => new SwaCliService(
             context.get(IVsCode),
             context.get(IProcessExecutor),
@@ -71,6 +75,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/staticWebApps/action/rerun', RerunAction);
     registrar.registerCommand('vscode-azure/staticWebApps/deleteEnvironment', DeleteStaticWebAppEnvironment);
     registrar.registerCommand('vscode-azure/staticWebApps/deleteStaticWebApp', DeleteStaticWebApp);
+    registrar.registerCommand(DeployStaticWebAppCommandId, DeployStaticWebApp);
     registrar.registerCommand('vscode-azure/staticWebApps/createSwaConfigFile', CreateSwaConfigFile);
     registrar.registerCommand('vscode-azure/staticWebApps/openWorkflowConfigFile', OpenWorkflowConfigFile);
     registrar.registerCommand('vscode-azure/staticWebApps/showDocumentation', ShowStaticWebAppsDocumentation);

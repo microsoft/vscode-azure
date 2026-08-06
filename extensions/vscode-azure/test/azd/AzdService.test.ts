@@ -401,6 +401,53 @@ describe('AzdService (unit)', () => {
         });
     });
 
+    describe('pipelineConfig', () => {
+        it('should spawn a foreground task with the provider and no --no-prompt', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve());
+            const { service, spawnMock } = createService(spawnFn);
+
+            await service.pipelineConfig(MockUri.file('/project'), 'github');
+
+            expect(spawnMock.mock.callCount()).to.equal(1);
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(opts.execution).to.equal('foreground');
+            expect(argToString(opts.command[0])).to.equal(AzdCommand);
+            const args = argsToStrings(opts.command.slice(1));
+            expect(args).to.include.members(['pipeline', 'config', '--provider', 'github']);
+            expect(args).to.not.include('--no-prompt');
+            expect(args).to.not.include('--environment');
+            expect(opts.source).to.equal('azd');
+        });
+
+        it('should pass --environment when an environment name is given', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve());
+            const { service, spawnMock } = createService(spawnFn);
+
+            await service.pipelineConfig(MockUri.file('/project'), 'azdo', 'dev');
+
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            const args = argsToStrings(opts.command.slice(1));
+            expect(args).to.include.members(['--provider', 'azdo', '--environment', 'dev']);
+        });
+
+        it('should reject on non-zero exit code', async () => {
+            const spawnFn = mock.fn((opts: SpawnOpts) =>
+                argsToStrings(opts.command).includes('version')
+                    ? Promise.resolve({ json: { azd: { version: '1.30.0', commit: 'abc' } } })
+                    : Promise.reject(new Error('Process exited with code 3')),
+            );
+            const { service, fs } = createService(spawnFn);
+            fs.addFile(MockUri.file('/project/azure.yaml'));
+
+            try {
+                await service.pipelineConfig(MockUri.file('/project'), 'github');
+                expect.fail('Expected error');
+            } catch (e) {
+                expect((e as Error).message).to.include('Process exited with code 3');
+            }
+        });
+    });
+
     describe('down', () => {
         it('should spawn foreground execution with down --force --purge', async () => {
             const spawnFn = mock.fn(() => Promise.resolve());

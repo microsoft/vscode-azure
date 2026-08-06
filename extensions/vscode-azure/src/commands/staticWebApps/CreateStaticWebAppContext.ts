@@ -16,6 +16,14 @@ export type StaticWebAppSkuName = 'Free' | 'Standard';
 /** Languages emitted into an azd Static Web Apps service definition. */
 export type StaticWebAppAzdLanguage = 'dotnet' | 'js' | 'ts';
 
+/**
+ * Reason CI/CD setup could not be routed to after creation, when the
+ * artifact shape also cannot be deployed directly (Next.js hybrid/SSR).
+ * Drives the reason-specific post-wizard guidance message in
+ * `CreateStaticWebApp`.
+ */
+export type StaticWebAppDeploymentBlockedReason = 'noRemote' | 'unsupportedRemote' | 'notPushed' | 'azdVersionTooLow';
+
 /** Regions supported by the Static Web Apps creation API. */
 export const staticWebAppLocationNames: ReadonlySet<string> = new Set([
     'centralus',
@@ -43,4 +51,25 @@ export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext
     readonly repositoryUrl?: string;
     /** Existing local branch retained with {@linkcode repositoryUrl}. */
     readonly branch?: string;
+    /**
+     * Set by `DetermineStaticWebAppDeploymentRouteStep` when a supported,
+     * pushed Git remote and a sufficient `azd` version make CI/CD setup
+     * possible. When set, direct deploy (`AzdDeployStep`) is suppressed
+     * (`deploy: false`) and `CreateStaticWebApp` launches the standalone
+     * `DeployStaticWebApp` command with this info once the wizard succeeds.
+     */
+    readonly deploymentRoute?: {
+        readonly provider: 'github' | 'azdo';
+        readonly repositoryUrl?: string;
+        readonly branch?: string;
+    };
+    /**
+     * Set by `DetermineStaticWebAppDeploymentRouteStep` when the artifact
+     * shape cannot be deployed directly (Next.js hybrid/SSR) *and* CI/CD is
+     * not currently possible for the reason given. `deploy` is also forced
+     * to `false` in this case -- no deployment happens by any path, and
+     * `CreateStaticWebApp` shows reason-specific guidance instead of
+     * claiming success.
+     */
+    readonly deploymentBlockedReason?: StaticWebAppDeploymentBlockedReason;
 }

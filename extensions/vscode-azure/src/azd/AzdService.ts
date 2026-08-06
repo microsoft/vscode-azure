@@ -17,6 +17,13 @@ export const AzdCommand = 'azd';
 export const MinAzdVersion = '1.25.0-0';
 /** Minimum `azd` version that supports the `azd update` command (public preview). */
 export const MinAzdUpdateVersion = '1.23.14';
+/**
+ * Minimum `azd` version that supports `azd pipeline config` scaffolding a
+ * missing workflow definition (`.github/workflows/azure-dev.yml` /
+ * `.azdo/pipelines/azure-dev.yml`) automatically. Feature-specific gate,
+ * independent of the repo-wide {@linkcode MinAzdVersion}.
+ */
+export const MinAzdPipelineVersion = '1.30.0';
 
 const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
@@ -82,6 +89,22 @@ export interface IAzdService {
      * Rejects on non-zero exit.
      */
     deploy(cwd: vscode.Uri): Promise<void>;
+
+    /**
+     * Runs `azd pipeline config --provider <provider>` as a visible VS Code
+     * task, interactively configuring CI/CD (GitHub Actions or Azure
+     * Pipelines) for the project in {@linkcode cwd}.
+     *
+     * Never passes `--no-prompt` -- `azd` may need to interactively
+     * authenticate against the provider and/or the Git remote. Output is
+     * never captured, so no secrets/PATs can leak into telemetry, logs, or
+     * the output channel.
+     *
+     * @param provider - `'github'` or `'azdo'` (Azure DevOps).
+     * @param environmentName - Optional azd environment to target; passed as
+     *   `--environment` when provided.
+     */
+    pipelineConfig(cwd: vscode.Uri, provider: 'github' | 'azdo', environmentName?: string): Promise<void>;
 
     /**
      * Runs `azd down --force --purge` as a visible VS Code task, deleting
@@ -311,6 +334,27 @@ export class AzdService implements IAzdService {
                 cwd,
                 env: authEnv,
                 name: 'azd deploy',
+                source: 'azd',
+            });
+        } catch (e) {
+            throw await this.wrapAzdError(e);
+        }
+    }
+
+    /** @inheritdoc */
+    public async pipelineConfig(cwd: vscode.Uri, provider: 'github' | 'azdo', environmentName?: string): Promise<void> {
+        const authEnv = await this.authServer.getEnv();
+
+        try {
+            await this.processExecutor.spawn({
+                execution: 'foreground',
+                command: command(AzdCommand)
+                    .arg('pipeline', 'config')
+                    .namedArg('--provider', provider)
+                    .namedArg('--environment', environmentName),
+                cwd,
+                env: authEnv,
+                name: 'azd pipeline config',
                 source: 'azd',
             });
         } catch (e) {

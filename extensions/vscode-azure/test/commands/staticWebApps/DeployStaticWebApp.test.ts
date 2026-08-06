@@ -1,0 +1,232 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { createActionContext } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { expect } from 'chai';
+import { mock } from 'node:test';
+import type * as vscode from 'vscode';
+import { DeployStaticWebApp, type DeployStaticWebAppArgs } from '../../../src/commands/staticWebApps/DeployStaticWebApp';
+import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
+import { createMockAzdService } from '../../azd/MockAzdService';
+import { createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
+
+const azureYaml = 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: build\n';
+
+function createMockGitRemoteService(info: GitRemoteInfo | undefined): IGitRemoteService & { getRemoteInfo: ReturnType<typeof mock.fn> } {
+    return { getRemoteInfo: mock.fn(() => Promise.resolve(info)) } as never;
+}
+
+function createCommand(options: { readonly remote?: GitRemoteInfo; readonly azdVersionOk?: boolean } = {}) {
+    const { ctx, mock: mockResult } = createMockCodeContext();
+    const actionContext = createActionContext('test');
+    const azd = createMockAzdService();
+    azd.checkVersion.mock.mockImplementation(() => Promise.resolve(options.azdVersionOk ?? true));
+    azd.findAzureYaml.mock.mockImplementation(async (dir: vscode.Uri) => {
+        const candidate = ctx.code.Uri.joinPath(dir, 'azure.yaml');
+        try {
+            await ctx.code.workspace.fs.stat(candidate);
+            return [candidate];
+        } catch {
+            return [];
+        }
+    });
+    const gitRemote = createMockGitRemoteService(options.remote);
+    const codeProvider = createMockCodeProvider();
+
+    const command = new DeployStaticWebApp(actionContext, ctx, azd, gitRemote, codeProvider);
+    return { command, ctx, mockResult, actionContext, azd, gitRemote, codeProvider };
+}
+
+function setupWorkspaceProject(mockResult: ReturnType<typeof createMockCodeContext>['mock'], folderPath: string, folderName: string, hasStaticWebApp = true) {
+    mockResult.workspaceFolders.push({ uri: MockUri.file(folderPath), name: folderName, index: mockResult.workspaceFolders.length });
+    mockResult.fs.addFile(MockUri.file(`${folderPath}/azure.yaml`), hasStaticWebApp ? azureYaml : 'services:\n  api:\n    host: function\n');
+}
+
+function mockShowQuickPick(ctx: ReturnType<typeof createMockCodeContext>['ctx'], returnLabel: string | undefined) {
+    const showQuickPick = mock.fn((items: readonly { readonly label: string }[]) =>
+        Promise.resolve(items.find(item => item.label === returnLabel)));
+    (ctx.code.window as unknown as { showQuickPick: unknown }).showQuickPick = showQuickPick;
+    return showQuickPick;
+}
+
+describe('DeployStaticWebApp (unit)', () => {
+    const args: DeployStaticWebAppArgs = { iacFolder: MockUri.file('/workspace') };
+
+    describe('with pre-filled args (launched from creation)', () => {
+        it('should deploy directly when no remote is known', async () => {
+            const { command, azd } = createCommand();
+
+            await command.execute(args);
+
+            expect(azd.deploy.mock.callCount()).to.equal(1);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+        });
+
+        it('should configure CI/CD when a github provider is pre-filled', async () => {
+            const { command, azd } = createCommand();
+
+            await command.execute({ ...args, provider: 'github', environmentName: 'dev' });
+
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
+            expect(azd.pipelineConfig.mock.calls[0].arguments).to.deep.equal([args.iacFolder, 'github', 'dev']);
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+        });
+
+        it('should configure CI/CD when an azdo provider is pre-filled', async () => {
+            const { command, azd } = createCommand();
+
+            await command.execute({ ...args, provider: 'azdo' });
+
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
+            expect(azd.pipelineConfig.mock.calls[0].arguments[1]).to.equal('azdo');
+        });
+
+        it('should never call azd.deploy for a Next.js hybrid/SSR project with no remote', async () => {
+            const { command, azd, mockResult } = createCommand();
+            mockResult.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
+
+            await command.execute(args);
+
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+            expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
+        });
+    });
+
+    describe('resolved routing (remote known via getRemoteInfo)', () => {
+        it('should deploy directly for an unsupported remote', async () => {
+            const { command, azd } = createCommand({ remote: { provider: 'unsupported', url: 'https://gitlab.com/x/y.git', hasUpstream: true } });
+
+            await command.execute(args);
+
+            expect(azd.deploy.mock.callCount()).to.equal(1);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+        });
+
+        it('should explain and offer a direct-deploy fallback when the branch is not pushed', async () => {
+            const { command, azd, mockResult } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: false } });
+            mockResult.messageResponses.push('Deploy Directly Instead');
+
+            await command.execute(args);
+
+            expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
+            expect(azd.deploy.mock.callCount()).to.equal(1);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+        });
+
+        it('should not deploy at all when the not-pushed fallback is declined', async () => {
+            const { command, azd, mockResult } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: false } });
+            mockResult.messageResponses.push(undefined);
+
+            await command.execute(args);
+
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+        });
+
+        it('should offer a direct-deploy fallback when azd is below the pipeline version gate', async () => {
+            const { command, azd, mockResult } = createCommand({
+                remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true },
+                azdVersionOk: false,
+            });
+            mockResult.messageResponses.push('Deploy Directly Instead');
+
+            await command.execute(args);
+
+            expect(azd.deploy.mock.callCount()).to.equal(1);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+        });
+
+        it('should configure CI/CD for a supported, pushed, version-gated-ok remote', async () => {
+            const { command, azd } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
+
+            await command.execute(args);
+
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+        });
+    });
+
+    describe('provider-switch guard', () => {
+        it('should require confirmation when the other provider workflow already exists, and abort on cancel', async () => {
+            const { command, azd, mockResult } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
+            mockResult.fs.addFile(MockUri.file('/workspace/.azdo/pipelines/azure-dev.yml'), 'trigger: none');
+            mockResult.messageResponses.push(undefined);
+
+            await command.execute(args);
+
+            expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+        });
+
+        it('should proceed when the user confirms the provider switch', async () => {
+            const { command, azd, mockResult } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
+            mockResult.fs.addFile(MockUri.file('/workspace/.azuredevops/pipelines/azure-dev.yaml'), 'trigger: none');
+            mockResult.messageResponses.push('Continue');
+
+            await command.execute(args);
+
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
+        });
+    });
+
+    describe('without args (command palette)', () => {
+        it('should explain when no Static Web Apps project is open', async () => {
+            const { command, azd, mockResult } = createCommand();
+
+            await command.execute();
+
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(1);
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+        });
+
+        it('should explain when azure.yaml exists but declares no staticwebapp service', async () => {
+            const { command, azd, mockResult } = createCommand();
+            setupWorkspaceProject(mockResult, '/workspace', 'workspace', false);
+
+            await command.execute();
+
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(1);
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+        });
+
+        it('should proceed directly with the single matching project', async () => {
+            const { command, azd, mockResult } = createCommand();
+            setupWorkspaceProject(mockResult, '/workspace', 'workspace');
+
+            await command.execute();
+
+            expect(azd.deploy.mock.callCount()).to.equal(1);
+        });
+
+        it('should prompt with a QuickPick when multiple projects match, and use the selection', async () => {
+            const { command, azd, ctx, mockResult } = createCommand();
+            setupWorkspaceProject(mockResult, '/workspace-a', 'a');
+            setupWorkspaceProject(mockResult, '/workspace-b', 'b');
+            const showQuickPick = mockShowQuickPick(ctx, 'b');
+
+            await command.execute();
+
+            expect(showQuickPick.mock.callCount()).to.equal(1);
+            expect(azd.deploy.mock.callCount()).to.equal(1);
+            const deployedFolder = (azd.deploy.mock.calls[0].arguments[0] as vscode.Uri).path;
+            expect(deployedFolder).to.equal('/workspace-b');
+        });
+
+        it('should do nothing when the QuickPick is dismissed', async () => {
+            const { command, azd, ctx, mockResult } = createCommand();
+            setupWorkspaceProject(mockResult, '/workspace-a', 'a');
+            setupWorkspaceProject(mockResult, '/workspace-b', 'b');
+            mockShowQuickPick(ctx, undefined);
+
+            await command.execute();
+
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+        });
+    });
+});
