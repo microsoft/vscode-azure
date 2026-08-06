@@ -154,11 +154,13 @@ machinery exists for products that do not.
 azure-settings:/<identity>/<armResourceId>/<resourceName>.<collectionId>.jsonc
 ```
 
-`<identity>` is a hex encoding of `accountId|portalHost|tenantId`.
+`<identity>` is a hex-encoded JSON payload containing account identity and the minimal resource
+context needed by a settings adapter.
 
 The URI is **self-describing** rather than a handle into a session map, because the editor restores
 open tabs on window reload and calls `readFile` before the extension has any tree state — a handle
-would dangle. `AzureSettingsDocumentSource` rebuilds the owning resource with `findResourceByArmId`.
+would dangle. `AzureSettingsDocumentSource` reconstructs a minimal `GenericResource` directly from
+the URI instead of loading or searching the resource tree.
 
 Two details are load-bearing:
 
@@ -227,7 +229,5 @@ adapter reports.
 that retains writes for assertion), `createSettingsRegistry`, `createSettingsDataProvider`, and
 `permissiveCapabilities`. Prefer these over hand-rolled fixtures.
 
-`expectRejection` (from `@microsoft/vscode-azure-utils/testing`) replaces the
-`try { await ...; expect.fail(); } catch { ... }` shape, which is easy to get subtly wrong by
-asserting inside the `try` — where a failed assertion is caught by the very `catch` meant to inspect
-the rejection, and the test silently passes.
+Use Node's `assert.rejects` when testing rejected promises rather than a hand-written
+`try { await ...; expect.fail(); } catch { ... }` shape.

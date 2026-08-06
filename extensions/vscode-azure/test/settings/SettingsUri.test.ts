@@ -31,7 +31,12 @@ describe('SettingsUri (unit)', () => {
             const parts = SettingsUri.parse(uri);
             expect(parts.accountId).to.equal(resource.subscription.accountId);
             expect(parts.tenantId).to.equal(resource.subscription.tenantId);
+            expect(parts.subscriptionDisplayName).to.equal(resource.subscription.displayName);
             expect(parts.armResourceId).to.equal(resource.id);
+            expect(parts.resourceName).to.equal(resource.name);
+            expect(parts.resourceType).to.equal(resource.type);
+            expect(parts.logicalType).to.equal(resource.logicalType);
+            expect(parts.location).to.equal(resource.location);
             expect(parts.collectionId).to.equal('appSettings');
         });
 
@@ -118,14 +123,25 @@ describe('SettingsUri (unit)', () => {
             expect(() => SettingsUri.parse(uri)).to.throw(/identity/);
         });
 
+        it('rejects non-hex and odd-length identity segments before decoding', () => {
+            const nonHex = code.Uri.from({ scheme: SettingsScheme, path: '/zz/subscriptions/s/app.appSettings.jsonc' });
+            const oddLength = code.Uri.from({ scheme: SettingsScheme, path: '/abc/subscriptions/s/app.appSettings.jsonc' });
+
+            expect(() => SettingsUri.parse(nonHex)).to.throw(/hexadecimal/);
+            expect(() => SettingsUri.parse(oddLength)).to.throw(/hexadecimal/);
+        });
+
         it('rejects a file name with no collection id', () => {
-            // '617c627c63' is hex for 'a|b|c', a well-formed identity segment.
-            const uri = code.Uri.from({ scheme: SettingsScheme, path: '/617c627c63/subscriptions/s/rg/appSettings.jsonc' });
+            const valid = SettingsUri.from(code, createCollectionNode(makeApp(), 'appSettings'));
+            const segments = valid.path.split('/');
+            segments[segments.length - 1] = 'appSettings.jsonc';
+            const uri = code.Uri.from({ scheme: SettingsScheme, path: segments.join('/') });
             expect(() => SettingsUri.parse(uri)).to.throw(/collection/);
         });
 
         it('rejects a non-jsonc file name', () => {
-            const uri = code.Uri.from({ scheme: SettingsScheme, path: '/617c627c63/subscriptions/s/rg/app.appSettings.txt' });
+            const valid = SettingsUri.from(code, createCollectionNode(makeApp(), 'appSettings'));
+            const uri = code.Uri.from({ scheme: SettingsScheme, path: valid.path.replace(/\.jsonc$/, '.txt') });
             expect(() => SettingsUri.parse(uri)).to.throw(/jsonc/);
         });
     });

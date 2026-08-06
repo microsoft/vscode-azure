@@ -19,7 +19,7 @@ import { CopySettingValue } from './settings/CopySettingValue';
 import { DeleteSetting } from './settings/DeleteSetting';
 import { EditSettings } from './settings/EditSettings';
 import { RenameSetting } from './settings/RenameSetting';
-import { ToggleSettingValues } from './settings/ToggleSettingValues';
+import { ToggleSettingValueVisibility } from './settings/ToggleSettingValueVisibility';
 import { InstallAzd } from './tools/InstallAzd';
 import { GroupBy } from './tree/GroupBy';
 import { LoadMore } from './tree/LoadMore';
@@ -52,7 +52,7 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/settings/rename', RenameSetting);
     registerManagedCommand(container, 'vscode-azure/settings/delete', DeleteSetting);
     registerManagedCommand(container, 'vscode-azure/settings/copyValue', CopySettingValue);
-    registerManagedCommand(container, 'vscode-azure/settings/toggleValues', ToggleSettingValues);
+    registerManagedCommand(container, 'vscode-azure/settings/toggleValues', ToggleSettingValueVisibility);
 
     registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
     registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');

@@ -17,7 +17,7 @@ import type { ManagedCommand } from '../ManagedCommand';
  * nodes stay expanded and no other part of the tree is disturbed.
  */
 @injectable()
-export class ToggleSettingValues implements ManagedCommand {
+export class ToggleSettingValueVisibility implements ManagedCommand {
     public static readonly ContextValue = 'toggleSettingValues';
 
     public constructor(

@@ -21,7 +21,6 @@ export * from './rest/clients/WebAppClient';
 export * from './rest/createAzureClient';
 export * from './settings/SettingsAdapter';
 export * from './tree/azureSelectors';
-export * from './tree/findResourceByArmId';
 export * from './tree/findSubscriptionById';
 export * from './tree/pick/resourceExperience';
 export * from './tree/pick/resourceGroupExperience';

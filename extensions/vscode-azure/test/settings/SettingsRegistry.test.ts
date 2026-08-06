@@ -5,7 +5,7 @@
 
 import { AppServiceLogicalType, FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { expectRejection } from '@microsoft/vscode-azure-utils/testing';
+import * as assert from 'node:assert';
 import { expect } from 'chai';
 import { createSettingsRegistry, createStubAdapter, entry, permissiveCapabilities } from './mockSettings';
 
@@ -86,13 +86,13 @@ describe('SettingsRegistry (unit)', () => {
         it('throws when reading a resource with no adapter', async () => {
             const registry = createSettingsRegistry();
 
-            await expectRejection(registry.read(makeApp('Microsoft.Storage/storageAccounts'), 'appSettings'), /No settings adapter/);
+            await assert.rejects(registry.read(makeApp('Microsoft.Storage/storageAccounts'), 'appSettings'), /No settings adapter/);
         });
 
         it('throws when reading an unknown collection', async () => {
             const registry = createSettingsRegistry(createStubAdapter({ logicalTypes: [FunctionAppLogicalType] }));
 
-            await expectRejection(registry.read(makeApp(FunctionAppLogicalType), 'nope'), /does not expose a settings collection/);
+            await assert.rejects(registry.read(makeApp(FunctionAppLogicalType), 'nope'), /does not expose a settings collection/);
         });
     });
 
@@ -149,14 +149,14 @@ describe('SettingsRegistry (unit)', () => {
         it('refuses to rename onto an existing key, which would destroy it', async () => {
             const { adapter, registry, resource } = setup();
 
-            await expectRejection(registry.rename(resource, 'appSettings', 'A', 'B'), /already exists/);
+            await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'B'), /already exists/);
             expect(adapter.writes).to.be.empty;
         });
 
         it('refuses to rename a key that does not exist', async () => {
             const { registry, resource } = setup();
 
-            await expectRejection(registry.rename(resource, 'appSettings', 'MISSING', 'X'), /no setting named/i);
+            await assert.rejects(registry.rename(resource, 'appSettings', 'MISSING', 'X'), /no setting named/i);
         });
 
         it('preserves structured metadata through a rename', async () => {
@@ -176,13 +176,13 @@ describe('SettingsRegistry (unit)', () => {
             it('refuses to write a read-only collection', async () => {
                 const { registry, resource } = setup({ ...permissiveCapabilities, canWrite: false });
 
-                await expectRejection(registry.upsert(resource, 'appSettings', entry('C', '3')), /read-only/);
+                await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /read-only/);
             });
 
             it('refuses to add when adding is not permitted, but still allows editing', async () => {
                 const { adapter, registry, resource } = setup({ ...permissiveCapabilities, canAdd: false });
 
-                await expectRejection(registry.upsert(resource, 'appSettings', entry('NEW', 'x')), /cannot be added/);
+                await assert.rejects(registry.upsert(resource, 'appSettings', entry('NEW', 'x')), /cannot be added/);
 
                 await registry.upsert(resource, 'appSettings', entry('A', 'edited'));
                 expect(adapter.contents('appSettings')[0]).to.deep.equal(entry('A', 'edited'));
@@ -191,13 +191,13 @@ describe('SettingsRegistry (unit)', () => {
             it('refuses to delete when deletion is not permitted', async () => {
                 const { registry, resource } = setup({ ...permissiveCapabilities, canDelete: false });
 
-                await expectRejection(registry.remove(resource, 'appSettings', 'A'), /cannot be deleted/);
+                await assert.rejects(registry.remove(resource, 'appSettings', 'A'), /cannot be deleted/);
             });
 
             it('refuses to rename when renaming is not permitted', async () => {
                 const { registry, resource } = setup({ ...permissiveCapabilities, canRename: false });
 
-                await expectRejection(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be renamed/);
+                await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be renamed/);
             });
 
             it('refuses every single-key edit when values cannot be read back', async () => {
@@ -205,9 +205,9 @@ describe('SettingsRegistry (unit)', () => {
                 // unreadable-value placeholder, since that is all a read returns.
                 const { adapter, registry, resource } = setup({ ...permissiveCapabilities, valuesReadable: false });
 
-                await expectRejection(registry.upsert(resource, 'appSettings', entry('C', '3')), /cannot be changed one at a time/);
-                await expectRejection(registry.remove(resource, 'appSettings', 'A'), /cannot be changed one at a time/);
-                await expectRejection(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be changed one at a time/);
+                await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /cannot be changed one at a time/);
+                await assert.rejects(registry.remove(resource, 'appSettings', 'A'), /cannot be changed one at a time/);
+                await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be changed one at a time/);
 
                 expect(adapter.writes).to.be.empty;
             });

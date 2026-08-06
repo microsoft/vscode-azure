@@ -8,7 +8,6 @@ export { DebugOutputChannel } from '../src/vscode/IOutputChannel';
 export * from './createTestActionExecutor';
 export * from './data/collectAsync';
 export * from './describeLongRunning';
-export * from './expectRejection';
 export * from './vscode/config/MockMemento';
 export * from './vscode/config/MockWorkspaceConfiguration';
 export * from './vscode/input/MockInputBox';

@@ -168,14 +168,14 @@ export class AzureNodeId {
                 result = new AzureNodeId({
                     kind: 'account',
                     accountId: node.id,
-                    portalHost: portalHost(node),
+                    portalHost: getPortalHost(node),
                 });
                 break;
             case isTenant(node):
                 result = new AzureNodeId({
                     kind: 'tenant',
                     accountId: node.accountId,
-                    portalHost: portalHost(node),
+                    portalHost: getPortalHost(node),
                     tenantId: node.tenantId,
                 });
                 break;
@@ -183,7 +183,7 @@ export class AzureNodeId {
                 result = new AzureNodeId({
                     kind: 'subscription',
                     accountId: node.accountId,
-                    portalHost: portalHost(node),
+                    portalHost: getPortalHost(node),
                     tenantId: node.tenantId,
                     armResourceId: `/subscriptions/${node.subscriptionId}`,
                 });
@@ -192,7 +192,7 @@ export class AzureNodeId {
                 result = new AzureNodeId({
                     kind: 'grouping',
                     accountId: node.subscription.accountId,
-                    portalHost: portalHost(node.subscription),
+                    portalHost: getPortalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                     grouping: {
@@ -205,7 +205,7 @@ export class AzureNodeId {
                 result = new AzureNodeId({
                     kind: 'grouping',
                     accountId: node.subscription.accountId,
-                    portalHost: portalHost(node.subscription),
+                    portalHost: getPortalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: `/subscriptions/${node.subscription.subscriptionId}/${virtualGroupingPrefix}${node.groupingStrategy}/${encodeURIComponent(node.groupingValue)}`,
                     grouping: node,
@@ -215,7 +215,7 @@ export class AzureNodeId {
                 result = new AzureNodeId({
                     kind: 'resource',
                     accountId: node.subscription.accountId,
-                    portalHost: portalHost(node.subscription),
+                    portalHost: getPortalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                 });
@@ -224,7 +224,7 @@ export class AzureNodeId {
                 result = new AzureNodeId({
                     kind: 'virtual',
                     accountId: node.azureResource.subscription.accountId,
-                    portalHost: portalHost(node.azureResource.subscription),
+                    portalHost: getPortalHost(node.azureResource.subscription),
                     tenantId: node.azureResource.subscription.tenantId,
                     armResourceId: node.azureResource.id,
                     virtual: node,
@@ -429,8 +429,6 @@ export class AzureNodeId {
 export function getPortalHost(entity: { readonly environment: EnvironmentLike }): string {
     return new URL(entity.environment.portalUrl).hostname;
 }
-
-const portalHost = getPortalHost;
 
 //#region Internal interfaces for narrowing AzureNodeId.data based on kind
 interface AccountFields {

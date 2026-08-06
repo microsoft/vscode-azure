@@ -8,8 +8,9 @@ import {
     type ConnStringValueTypePair, type IWebAppClient,
 } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode, expectRejection } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import * as assert from 'node:assert';
 import { mock } from 'node:test';
 import {
     AppSettingsCollectionId, ConnectionStringsCollectionId, WebAppSettingsAdapter,
@@ -175,7 +176,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
                 logicalType: FunctionAppLogicalType,
             });
 
-            await expectRejection(adapter.read(resource, AppSettingsCollectionId), /resource group/);
+            await assert.rejects(adapter.read(resource, AppSettingsCollectionId), /resource group/);
         });
     });
 
@@ -228,7 +229,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('rejects an invalid connection string type before calling ARM', async () => {
             const { adapter, updateConnectionStrings } = createAdapter();
 
-            await expectRejection(
+            await assert.rejects(
                 adapter.write(makeSite(FunctionAppLogicalType), ConnectionStringsCollectionId, [
                     { key: 'MyDb', value: 'conn', metadata: { type: 'Bogus' } },
                 ]),
@@ -241,7 +242,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('throws for a collection it does not expose', async () => {
             const { adapter } = createAdapter();
 
-            await expectRejection(adapter.write(makeSite(FunctionAppLogicalType), 'nope', []), /nope/);
+            await assert.rejects(adapter.write(makeSite(FunctionAppLogicalType), 'nope', []), /nope/);
         });
     });
 });

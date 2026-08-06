@@ -11,7 +11,7 @@ import { CopySettingValue } from '../../../commands/settings/CopySettingValue';
 import { DeleteSetting } from '../../../commands/settings/DeleteSetting';
 import { EditSettings } from '../../../commands/settings/EditSettings';
 import { RenameSetting } from '../../../commands/settings/RenameSetting';
-import { ToggleSettingValues } from '../../../commands/settings/ToggleSettingValues';
+import { ToggleSettingValueVisibility } from '../../../commands/settings/ToggleSettingValueVisibility';
 import { IAzureViewDataTree } from '../../../services';
 import { ISettingsRegistry } from '../../../settings/SettingsRegistry';
 import { ISettingsValueVisibility } from '../../../settings/SettingsValueVisibility';
@@ -140,7 +140,7 @@ export class SettingsViewProvider implements ViewProvider<string> {
     }
 
     private collectionContextValues(node: SettingsCollectionNode): string[] {
-        const values = [EditSettings.ContextValue, ToggleSettingValues.ContextValue];
+        const values = [EditSettings.ContextValue, ToggleSettingValueVisibility.ContextValue];
 
         const capabilities = this.tryGetCapabilities(node);
         if (capabilities?.canAdd && capabilities.canWrite) {
@@ -151,7 +151,7 @@ export class SettingsViewProvider implements ViewProvider<string> {
     }
 
     private entryContextValues(node: SettingsEntryNode): string[] {
-        const values = [EditSettings.ContextValue, CopySettingValue.ContextValue, ToggleSettingValues.ContextValue];
+        const values = [EditSettings.ContextValue, CopySettingValue.ContextValue, ToggleSettingValueVisibility.ContextValue];
 
         const capabilities = this.tryGetCapabilities(node);
         if (capabilities?.canWrite) {
