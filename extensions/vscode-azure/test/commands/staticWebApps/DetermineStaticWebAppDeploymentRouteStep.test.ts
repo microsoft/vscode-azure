@@ -5,6 +5,7 @@
 
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import * as path from 'node:path';
 import { mock as nodeMock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
@@ -230,11 +231,12 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                 expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             });
 
-            it('should resolve a Windows-style nested project path (backslash separators) to the same directory as forward slashes', async () => {
+            it('should split a project path on the host-native separator, whatever character that is on this platform', async () => {
+                // Host-adaptive: builds the fixture with path.sep (the actual separator this
+                // platform's `path` module recognizes) rather than hardcoding a POSIX or
+                // Windows-specific character.
                 const { step, fs } = createStep(githubPushed, {
-                    // A literal, unquoted YAML plain scalar backslash -- azd itself accepts Windows-style
-                    // paths in azure.yaml on any OS, so this must normalize the same as `./frontend/app`.
-                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: frontend\\app\n    dist: build\n',
+                    azureYaml: `services:\n  web:\n    host: staticwebapp\n    project: frontend${path.sep}app\n    dist: build\n`,
                 });
                 fs.directories.add('/workspace/frontend/app');
                 fs.addFile(MockUri.file('/workspace/frontend/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
@@ -246,6 +248,39 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                     deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
                 });
             });
+
+            if (process.platform === 'win32') {
+                it('should treat a backslash in project as a path separator on Windows', async () => {
+                    const { step, fs } = createStep(githubPushed, {
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: frontend\\app\n    dist: build\n',
+                    });
+                    fs.directories.add('/workspace/frontend/app');
+                    fs.addFile(MockUri.file('/workspace/frontend/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                    const result = await step.prompt(hydratedContext());
+
+                    expect(result).to.deep.equal({
+                        deploy: false,
+                        deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                    });
+                });
+            } else {
+                it('should treat a backslash in project as a literal character, not a separator, on POSIX', async () => {
+                    const { step, fs } = createStep(githubPushed, {
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: literal\\name\n    dist: build\n',
+                    });
+                    // Only the (incorrectly) split two-segment form exists -- the literal,
+                    // unsplit "literal\name" single segment azd/Node would actually look for on
+                    // POSIX was never registered, so this must be invalid, proving backslash was
+                    // not treated as a separator.
+                    fs.directories.add('/workspace/literal/name');
+                    fs.addFile(MockUri.file('/workspace/literal/name/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                    const result = await step.prompt(hydratedContext());
+
+                    expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+                });
+            }
 
             it('should block (invalidServiceConfig) when the existing service project path does not exist', async () => {
                 const { step } = createStep(githubPushed, {
@@ -296,8 +331,11 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                 expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             });
 
-            it('should accept an absolute POSIX project path used unchanged, not anchored under iacFolder', async () => {
-                // azd's ServiceConfig.Path() accepts an absolute project path unchanged.
+            it('should accept an absolute POSIX-style project path used unchanged, not anchored under iacFolder', async () => {
+                // azd's ServiceConfig.Path() accepts an absolute project path unchanged. A
+                // leading-slash path is recognized as absolute by Node's path module on any host
+                // (POSIX natively; Windows treats it as rooted on the current drive without
+                // requiring/injecting a drive letter here), so this is safe to always run.
                 const { step, fs } = createStep(githubPushed, {
                     azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
                 });
@@ -312,7 +350,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                 });
             });
 
-            it('should block (invalidServiceConfig) when an absolute POSIX project path does not exist', async () => {
+            it('should block (invalidServiceConfig) when an absolute POSIX-style project path does not exist', async () => {
                 const { step } = createStep(githubPushed, {
                     azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/doesnotexist\n    dist: build\n',
                 });
@@ -322,23 +360,44 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                 expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             });
 
-            it('should accept an absolute Windows project path used unchanged, not anchored under iacFolder', async () => {
-                const { step, fs, code } = createStep(githubPushed, {
-                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
-                });
-                // Derive the resolved path the same way the production code does (via Uri.file),
-                // rather than hand-guessing the URI's case-normalized representation.
-                const projectUri = code.Uri.file('C:/opt/app');
-                fs.directories.add(projectUri.path);
-                fs.addFile(code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+            if (process.platform === 'win32') {
+                it('should accept a Windows drive-absolute project path (e.g. C:\\...) used unchanged, not anchored under iacFolder', async () => {
+                    const { step, fs, code } = createStep(githubPushed, {
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
+                    });
+                    // Derive the resolved path the same way the production code does (via
+                    // path.resolve + Uri.file), rather than hand-guessing the URI's
+                    // case-normalized representation.
+                    const projectUri = code.Uri.file(path.resolve('C:\\opt\\app'));
+                    fs.directories.add(projectUri.path);
+                    fs.addFile(code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
-                const result = await step.prompt(hydratedContext());
+                    const result = await step.prompt(hydratedContext());
 
-                expect(result).to.deep.equal({
-                    deploy: false,
-                    deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                    expect(result).to.deep.equal({
+                        deploy: false,
+                        deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                    });
                 });
-            });
+            } else {
+                it('should treat a Windows drive-letter form (e.g. C:\\...) as a plain relative path segment under iacFolder on POSIX, not a drive-absolute path', async () => {
+                    // On POSIX, "C:\opt\app" has no leading "/" so path.isAbsolute is false, and
+                    // backslash is a literal character -- it resolves as ONE relative path
+                    // segment under iacFolder, not an absolute Windows path.
+                    const { step, fs } = createStep(githubPushed, {
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
+                    });
+                    fs.directories.add('/workspace/C:\\opt\\app');
+                    fs.addFile(MockUri.file('/workspace/C:\\opt\\app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                    const result = await step.prompt(hydratedContext());
+
+                    expect(result).to.deep.equal({
+                        deploy: false,
+                        deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                    });
+                });
+            }
         });
 
         it('should block (hybridSsr) a hydrated project with a valid dist whose framework is detected as Next.js at the service project path, before any remote lookup', async () => {

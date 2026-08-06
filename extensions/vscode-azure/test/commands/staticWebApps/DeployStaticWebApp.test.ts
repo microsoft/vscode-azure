@@ -6,6 +6,7 @@
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import * as path from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { DeployStaticWebApp, type DeployStaticWebAppArgs } from '../../../src/commands/staticWebApps/DeployStaticWebApp';
@@ -234,9 +235,12 @@ describe('DeployStaticWebApp (unit)', () => {
                     expect(azd.deploy.mock.callCount()).to.equal(0);
                 });
 
-                it('should resolve a Windows-style nested project path (backslash separators) the same as forward slashes', async () => {
+                it('should split a project path on the host-native separator, whatever character that is on this platform', async () => {
+                    // Host-adaptive: builds the fixture with path.sep (the actual separator this
+                    // platform's `path` module recognizes) rather than hardcoding a POSIX or
+                    // Windows-specific character.
                     const { command, azd, mockResult } = createCommand({
-                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: frontend\\app\n    dist: build\n',
+                        azureYaml: `services:\n  web:\n    host: staticwebapp\n    project: frontend${path.sep}app\n    dist: build\n`,
                     });
                     mockResult.fs.directories.add('/workspace/frontend/app');
                     mockResult.fs.addFile(MockUri.file('/workspace/frontend/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
@@ -245,6 +249,36 @@ describe('DeployStaticWebApp (unit)', () => {
 
                     expect(azd.deploy.mock.callCount()).to.equal(1);
                 });
+
+                if (process.platform === 'win32') {
+                    it('should treat a backslash in project as a path separator on Windows', async () => {
+                        const { command, azd, mockResult } = createCommand({
+                            azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: frontend\\app\n    dist: build\n',
+                        });
+                        mockResult.fs.directories.add('/workspace/frontend/app');
+                        mockResult.fs.addFile(MockUri.file('/workspace/frontend/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                        await command.execute(args);
+
+                        expect(azd.deploy.mock.callCount()).to.equal(1);
+                    });
+                } else {
+                    it('should treat a backslash in project as a literal character, not a separator, on POSIX', async () => {
+                        const { command, azd, mockResult } = createCommand({
+                            azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: literal\\name\n    dist: build\n',
+                        });
+                        // Only the (incorrectly) split two-segment form exists -- the literal,
+                        // unsplit "literal\name" single segment azd/Node would actually look for
+                        // on POSIX was never registered, so this must be invalid, proving
+                        // backslash was not treated as a separator.
+                        mockResult.fs.directories.add('/workspace/literal/name');
+                        mockResult.fs.addFile(MockUri.file('/workspace/literal/name/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                        await command.execute(args);
+
+                        expect(azd.deploy.mock.callCount()).to.equal(0);
+                    });
+                }
 
                 it('should block when the service project path does not exist', async () => {
                     const { command, azd } = createCommand({
@@ -290,7 +324,11 @@ describe('DeployStaticWebApp (unit)', () => {
                     expect(azd.deploy.mock.callCount()).to.equal(0);
                 });
 
-                it('should accept an absolute POSIX project path used unchanged, not anchored under iacFolder', async () => {
+                it('should accept an absolute POSIX-style project path used unchanged, not anchored under iacFolder', async () => {
+                    // A leading-slash path is recognized as absolute by Node's path module on
+                    // any host (POSIX natively; Windows treats it as rooted on the current drive
+                    // without requiring/injecting a drive letter here), so this is safe to
+                    // always run.
                     const { command, azd, mockResult } = createCommand({
                         azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
                     });
@@ -302,7 +340,7 @@ describe('DeployStaticWebApp (unit)', () => {
                     expect(azd.deploy.mock.callCount()).to.equal(1);
                 });
 
-                it('should block when an absolute POSIX project path does not exist', async () => {
+                it('should block when an absolute POSIX-style project path does not exist', async () => {
                     const { command, azd } = createCommand({
                         azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/doesnotexist\n    dist: build\n',
                     });
@@ -312,20 +350,38 @@ describe('DeployStaticWebApp (unit)', () => {
                     expect(azd.deploy.mock.callCount()).to.equal(0);
                 });
 
-                it('should accept an absolute Windows project path used unchanged, not anchored under iacFolder', async () => {
-                    const { command, azd, ctx, mockResult } = createCommand({
-                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
+                if (process.platform === 'win32') {
+                    it('should accept a Windows drive-absolute project path (e.g. C:\\...) used unchanged, not anchored under iacFolder', async () => {
+                        const { command, azd, ctx, mockResult } = createCommand({
+                            azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
+                        });
+                        // Derive the resolved path the same way the production code does (via
+                        // path.resolve + Uri.file), rather than hand-guessing the URI's
+                        // case-normalized representation.
+                        const projectUri = ctx.code.Uri.file(path.resolve('C:\\opt\\app'));
+                        mockResult.fs.directories.add(projectUri.path);
+                        mockResult.fs.addFile(ctx.code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                        await command.execute(args);
+
+                        expect(azd.deploy.mock.callCount()).to.equal(1);
                     });
-                    // Derive the resolved path the same way the production code does (via Uri.file),
-                    // rather than hand-guessing the URI's case-normalized representation.
-                    const projectUri = ctx.code.Uri.file('C:/opt/app');
-                    mockResult.fs.directories.add(projectUri.path);
-                    mockResult.fs.addFile(ctx.code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+                } else {
+                    it('should treat a Windows drive-letter form (e.g. C:\\...) as a plain relative path segment under iacFolder on POSIX, not a drive-absolute path', async () => {
+                        // On POSIX, "C:\opt\app" has no leading "/" so path.isAbsolute is false,
+                        // and backslash is a literal character -- it resolves as ONE relative
+                        // path segment under iacFolder, not an absolute Windows path.
+                        const { command, azd, mockResult } = createCommand({
+                            azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
+                        });
+                        mockResult.fs.directories.add('/workspace/C:\\opt\\app');
+                        mockResult.fs.addFile(MockUri.file('/workspace/C:\\opt\\app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
-                    await command.execute(args);
+                        await command.execute(args);
 
-                    expect(azd.deploy.mock.callCount()).to.equal(1);
-                });
+                        expect(azd.deploy.mock.callCount()).to.equal(1);
+                    });
+                }
             });
 
             it('should proceed when the service has a valid dist and the framework is not hybrid/SSR', async () => {
