@@ -6,13 +6,12 @@
 import { IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { parse } from 'yaml';
 import { IAzdService, MinAzdPipelineVersion } from '../../azd/AzdService';
 import { ActivityTreeViewId } from '../../constants';
 import { IGitRemoteService, type GitRemoteProvider } from '../../staticWebApps/GitRemoteService';
 import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
-import { hasConflictingProviderWorkflow } from './deploymentRouting';
+import { getStaticWebAppServiceDist, hasConflictingProviderWorkflow } from './deploymentRouting';
 import { detectStaticWebAppProject } from './steps/frameworkDetection';
 
 /**
@@ -30,6 +29,20 @@ export interface DeployStaticWebAppArgs {
     readonly provider?: 'github' | 'azdo';
     readonly repositoryUrl?: string;
     readonly branch?: string;
+    /**
+     * Whether the caller already determined this project's artifact shape
+     * supports automatic deployment (direct or CI/CD) -- i.e. the same
+     * decision `CreateStaticWebApp` made via
+     * `DetermineStaticWebAppDeploymentRouteStep`. When supplied, trusted as-is
+     * and fresh framework detection is skipped entirely, so creation and this
+     * follow-up command always agree even for a monorepo or a user-overridden
+     * output location that a heuristic re-scan might classify differently.
+     * Always `true` when `CreateStaticWebApp` launches this command (it only
+     * does so when its own routing step determined the artifact was
+     * supported). Omit to force fresh `detectStaticWebAppProject` detection
+     * (standalone/command-palette invocation).
+     */
+    readonly artifactSupportsAutoDeploy?: boolean;
 }
 
 /**
@@ -74,11 +87,15 @@ export class DeployStaticWebApp implements ManagedCommand {
         const { iacFolder, environmentName } = resolved;
 
         // Determine whether direct deployment (and therefore CI/CD, which only
-        // runs `azd deploy` too) is supported *before* any routing decision --
-        // never call either for a Next.js hybrid/SSR project, regardless of
-        // remote state.
-        const detection = await detectStaticWebAppProject(this.ctx.code, iacFolder);
-        if (detection.primaryPresetId === 'nextjs') {
+        // runs `azd deploy` too) is supported *before* any routing decision.
+        // Trust the caller's decision when supplied (creation already made this
+        // call via DetermineStaticWebAppDeploymentRouteStep) rather than
+        // re-detecting -- a fresh heuristic scan could disagree with the
+        // wizard's explicit preset/output choices in a monorepo or override
+        // scenario. Only run fresh detection for standalone invocation.
+        const supportsAutoDeploy = args?.artifactSupportsAutoDeploy
+            ?? (await detectStaticWebAppProject(this.ctx.code, iacFolder)).primaryPresetId !== 'nextjs';
+        if (!supportsAutoDeploy) {
             this.actionContext.telemetry.properties.deploymentRoute = 'unsupportedArtifact';
             this.showUnsupportedArtifactGuidance();
             return;
@@ -86,11 +103,13 @@ export class DeployStaticWebApp implements ManagedCommand {
 
         let provider: GitRemoteProvider | undefined = args?.provider;
         let hasUpstream = !!args?.provider;
+        let branch = args?.branch;
 
         if (!args?.provider) {
             const remote = await this.gitRemote.getRemoteInfo(iacFolder);
             provider = remote?.provider;
             hasUpstream = !!remote?.hasUpstream;
+            branch = remote?.branch;
         }
 
         this.actionContext.telemetry.properties.remoteProvider = provider ?? 'none';
@@ -141,7 +160,7 @@ export class DeployStaticWebApp implements ManagedCommand {
         }
 
         this.actionContext.telemetry.properties.deploymentRoute = 'cicd';
-        await this.configureCicd(iacFolder, provider, environmentName);
+        await this.configureCicd(iacFolder, provider, environmentName, branch);
     }
 
     /**
@@ -184,30 +203,9 @@ export class DeployStaticWebApp implements ManagedCommand {
         return selected ? { iacFolder: selected.iacFolder } : undefined;
     }
 
-    /** Reads `azure.yaml` directly and checks for a `host: staticwebapp` service. */
+    /** Checks for an existing `host: staticwebapp` service in `azure.yaml`. */
     private async hasStaticWebAppService(iacFolder: vscode.Uri): Promise<boolean> {
-        const yamlFiles = await this.azd.findAzureYaml(iacFolder);
-        if (yamlFiles.length === 0) {
-            return false;
-        }
-        let source: string;
-        try {
-            source = new TextDecoder().decode(await this.ctx.code.workspace.fs.readFile(yamlFiles[0]));
-        } catch {
-            return false;
-        }
-        let parsed: unknown;
-        try {
-            parsed = parse(source);
-        } catch {
-            return false;
-        }
-        if (!isRecord(parsed) || !isRecord(parsed.services)) {
-            return false;
-        }
-        return Object.values(parsed.services).some(
-            service => isRecord(service) && typeof service.host === 'string' && service.host.toLowerCase() === 'staticwebapp',
-        );
+        return await getStaticWebAppServiceDist(this.azd, this.ctx.code, iacFolder) !== undefined;
     }
 
     /**
@@ -239,17 +237,21 @@ export class DeployStaticWebApp implements ManagedCommand {
      * Configures CI/CD via `azd pipeline config`. Owns its own outcome
      * messaging -- a successful run here means the pipeline is configured,
      * not that code has been deployed yet (that happens on the next push).
+     * `azd` configures whichever branch is currently checked out/tracked, not
+     * necessarily the repository's default branch, so the message names the
+     * known branch when available rather than assuming "default".
      */
-    private async configureCicd(iacFolder: vscode.Uri, provider: 'github' | 'azdo', environmentName?: string): Promise<void> {
+    private async configureCicd(iacFolder: vscode.Uri, provider: 'github' | 'azdo', environmentName?: string, branch?: string): Promise<void> {
         const handle = this.codeProvider.trackDeployment({ title: 'azd pipeline config' });
         void this.ctx.code.commands.executeCommand(`${ActivityTreeViewId}.focus`);
         try {
             await this.azd.pipelineConfig(iacFolder, provider, environmentName);
             handle.complete('Completed');
             const providerLabel = provider === 'github' ? this.ctx.code.l10n.t('GitHub Actions') : this.ctx.code.l10n.t('Azure Pipelines');
-            void this.ctx.code.window.showInformationMessage(this.ctx.code.l10n.t(
-                '{0} CI/CD configured. Push to your default branch to trigger a deployment.', providerLabel,
-            ));
+            const message = branch
+                ? this.ctx.code.l10n.t('{0} CI/CD configured for the "{1}" branch. Push to it to trigger a deployment.', providerLabel, branch)
+                : this.ctx.code.l10n.t('{0} CI/CD configured for the configured branch. Push to it to trigger a deployment.', providerLabel);
+            void this.ctx.code.window.showInformationMessage(message);
         } catch (e) {
             handle.complete('Failed', e);
             this.actionContext.errorHandling.suppress = 'display';
@@ -291,8 +293,4 @@ export class DeployStaticWebApp implements ManagedCommand {
             + 'server). Deploy it manually, or adjust the build to produce a supported static output.',
         ));
     }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return !!value && typeof value === 'object' && !Array.isArray(value);
 }

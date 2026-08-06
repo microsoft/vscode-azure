@@ -19,6 +19,12 @@ export type GitRemoteProvider = 'github' | 'azdo' | 'unsupported';
 /** Read-only classification of the Git remote for a local repository. */
 export interface GitRemoteInfo {
     readonly provider: GitRemoteProvider;
+    /**
+     * The classified remote's `pushUrl`, falling back to `fetchUrl` only when
+     * no `pushUrl` is set -- deployment routing follows where pushes go, and
+     * the two can differ (e.g. a read-only fetch mirror with a distinct push
+     * target).
+     */
     readonly url: string;
     /** Current branch name, if resolvable. */
     readonly branch?: string;
@@ -98,7 +104,7 @@ export class GitRemoteService implements IGitRemoteService {
         // (stable) array order.
         const remote = trackedRemote ?? remotes.find(candidate => candidate.name === 'origin') ?? remotes[0];
 
-        const url = remote.fetchUrl ?? remote.pushUrl;
+        const url = remote.pushUrl ?? remote.fetchUrl;
         if (!url) {
             return undefined;
         }

@@ -6,20 +6,33 @@
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock as nodeMock } from 'node:test';
+import type * as vscode from 'vscode';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
 import { DetermineStaticWebAppDeploymentRouteStep } from '../../../src/commands/staticWebApps/steps/DetermineStaticWebAppDeploymentRouteStep';
 import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
 import { createMockAzdService } from '../../azd/MockAzdService';
 
-function createStep(remote: GitRemoteInfo | undefined, options: { readonly azdVersionOk?: boolean; readonly conflictingWorkflowPath?: string } = {}) {
+function createStep(remote: GitRemoteInfo | undefined, options: { readonly azdVersionOk?: boolean; readonly conflictingWorkflowPath?: string; readonly azureYaml?: string } = {}) {
     const { vscode: code, fs } = createMockVsCode();
     if (options.conflictingWorkflowPath) {
         fs.addFile(MockUri.file(options.conflictingWorkflowPath), 'trigger: none');
+    }
+    if (options.azureYaml !== undefined) {
+        fs.addFile(MockUri.file('/workspace/azure.yaml'), options.azureYaml);
     }
     const getRemoteInfo = nodeMock.fn(() => Promise.resolve(remote));
     const gitRemote = { getRemoteInfo } as unknown as IGitRemoteService;
     const azd = createMockAzdService();
     azd.checkVersion.mock.mockImplementation(() => Promise.resolve(options.azdVersionOk ?? true));
+    azd.findAzureYaml.mock.mockImplementation(async (dir: vscode.Uri) => {
+        const candidate = code.Uri.joinPath(dir, 'azure.yaml');
+        try {
+            await code.workspace.fs.stat(candidate);
+            return [candidate];
+        } catch {
+            return [];
+        }
+    });
     const step = new DetermineStaticWebAppDeploymentRouteStep(code, gitRemote, azd);
     return { step, azd, getRemoteInfo };
 }
@@ -123,6 +136,62 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                 deploy: false,
                 deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
             });
+        });
+    });
+
+    describe('hydrated/existing projects (outputLocation not captured this run)', () => {
+        function hydratedContext(overrides: Partial<CreateStaticWebAppContext> = {}): CreateStaticWebAppContext {
+            return baseContext({ outputLocation: undefined, ...overrides });
+        }
+
+        it('should not classify a hydrated project as unsupported when its existing SWA service has a valid dist', async () => {
+            const { step, getRemoteInfo } = createStep(undefined, {
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n',
+            });
+
+            const result = await step.prompt(hydratedContext());
+
+            // Falls through to the normal (no remote) direct-deploy-fallback path -- proves it
+            // was NOT classified as an unsupported artifact.
+            expect(result).to.deep.equal({});
+            expect(getRemoteInfo.mock.callCount()).to.equal(1);
+        });
+
+        it('should block a hydrated project whose existing SWA service has an invalid dist', async () => {
+            const { step, getRemoteInfo } = createStep(githubPushed, {
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n',
+            });
+
+            const result = await step.prompt(hydratedContext());
+
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(getRemoteInfo.mock.callCount()).to.equal(0);
+        });
+
+        it('should preserve deploy eligibility when no existing SWA service can be found at all', async () => {
+            // No azure.yaml (or no host: staticwebapp service in it) -- there is no positive
+            // evidence the artifact is unsupported, so a hydrated project must not be newly
+            // blocked just because this run never captured an outputLocation.
+            const { step } = createStep(githubPushed);
+
+            const result = await step.prompt(hydratedContext());
+
+            expect(result).to.deep.equal({
+                deploy: false,
+                deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+            });
+        });
+
+        it('should still block Next.js hybrid/SSR without even reading azure.yaml', async () => {
+            const { step, azd, getRemoteInfo } = createStep(githubPushed, {
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n',
+            });
+
+            const result = await step.prompt(hydratedContext({ buildPresetSelection: 'nextjs' }));
+
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
+            expect(getRemoteInfo.mock.callCount()).to.equal(0);
         });
     });
 });

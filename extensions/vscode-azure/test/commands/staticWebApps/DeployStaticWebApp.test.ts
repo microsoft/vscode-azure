@@ -122,6 +122,52 @@ describe('DeployStaticWebApp (unit)', () => {
             const [message] = mockResult.window.showErrorMessage.mock.calls[0].arguments as unknown as [string];
             expect(message).to.not.include('deployed');
         });
+
+        it('should trust artifactSupportsAutoDeploy=true from creation and skip re-detection (avoids monorepo/override contradictions)', async () => {
+            const { command, azd, mockResult } = createCommand();
+            // Present a Next.js package.json that a fresh heuristic scan would classify as
+            // hybrid/SSR -- creation already confirmed this project supports auto-deploy (e.g. a
+            // monorepo where the actual deployed folder differs, or output was overridden), so
+            // this command must trust that decision rather than re-detecting and contradicting it.
+            mockResult.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
+
+            await command.execute({ ...args, provider: 'github', artifactSupportsAutoDeploy: true });
+
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
+            expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(0);
+        });
+
+        it('should trust artifactSupportsAutoDeploy=false from creation and skip re-detection', async () => {
+            const { command, azd, mockResult } = createCommand();
+            // No Next.js markers present -- a fresh scan would NOT block this, proving the
+            // explicit false is what caused the block (detection was skipped, not re-run).
+
+            await command.execute({ ...args, provider: 'github', artifactSupportsAutoDeploy: false });
+
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+            expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
+        });
+
+        it('should use the pre-filled branch (not "default branch") in the CI/CD success message', async () => {
+            const { command, mockResult } = createCommand();
+
+            await command.execute({ ...args, provider: 'github', branch: 'release' });
+
+            const [message] = mockResult.window.showInformationMessage.mock.calls[0].arguments as unknown as [string];
+            expect(message).to.include('"release"');
+            expect(message).to.not.include('default branch');
+        });
+
+        it('should say "configured branch" (not "default branch") when no branch is known', async () => {
+            const { command, mockResult } = createCommand();
+
+            await command.execute({ ...args, provider: 'github' });
+
+            const [message] = mockResult.window.showInformationMessage.mock.calls[0].arguments as unknown as [string];
+            expect(message).to.include('configured branch');
+            expect(message).to.not.include('default branch');
+        });
     });
 
     describe('routing via real no-args resolution (command palette)', () => {
@@ -182,6 +228,18 @@ describe('DeployStaticWebApp (unit)', () => {
             expect(gitRemote.getRemoteInfo.mock.callCount()).to.equal(1);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
             expect(azd.deploy.mock.callCount()).to.equal(0);
+        });
+
+        it('should use the tracked remote\'s branch (not "default branch") in the success message when resolved fresh', async () => {
+            const { command, mockResult } = createResolvedCommand({
+                remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true, branch: 'feature/x' },
+            });
+
+            await command.execute();
+
+            const [message] = mockResult.window.showInformationMessage.mock.calls[0].arguments as unknown as [string];
+            expect(message).to.include('"feature/x"');
+            expect(message).to.not.include('default branch');
         });
 
         it('should never route Next.js hybrid/SSR to CI/CD or direct deploy, even with a supported, pushed remote', async () => {
