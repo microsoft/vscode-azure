@@ -16,7 +16,6 @@ export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './data/Page';
 export * from './settings/JsoncSettingsFormat';
-export * from './settings/LocalSettingsFile';
 export * from './settings/openSettingsDocument';
 export * from './settings/SettingsFileSystemProvider';
 export * from './settings/SettingsFormat';

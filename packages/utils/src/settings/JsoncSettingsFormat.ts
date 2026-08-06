@@ -167,6 +167,7 @@ export class JsoncSettingsFormat implements SettingsFormat {
         if (snapshot.writable) {
             lines.push(this.code.l10n.t('Saving this file writes these settings to Azure. Removing a setting deletes it.'));
             lines.push(this.code.l10n.t('The file is saved to Azure as-is: it overwrites any changes made elsewhere since it was opened.'));
+            lines.push(this.code.l10n.t('Deployments and infrastructure-as-code tools may overwrite edits made here.'));
         } else {
             lines.push(this.code.l10n.t('These settings are read-only and cannot be edited here.'));
         }

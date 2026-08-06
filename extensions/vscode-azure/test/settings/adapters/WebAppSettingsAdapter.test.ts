@@ -97,29 +97,6 @@ describe('WebAppSettingsAdapter (unit)', () => {
             expect(capabilities.valuesReadable).to.be.true;
         });
 
-        it('points Function Apps and Logic Apps at local.settings.json', () => {
-            const { adapter } = createAdapter();
-
-            expect(adapter.getCapabilities(makeSite(FunctionAppLogicalType), AppSettingsCollectionId).localFile?.fileName)
-                .to.equal('local.settings.json');
-            expect(adapter.getCapabilities(makeSite(LogicAppLogicalType), AppSettingsCollectionId).localFile?.fileName)
-                .to.equal('local.settings.json');
-        });
-
-        it('points plain App Service at .env, which has no Functions host file', () => {
-            const { adapter } = createAdapter();
-
-            expect(adapter.getCapabilities(makeSite(AppServiceLogicalType), AppSettingsCollectionId).localFile?.fileName)
-                .to.equal('.env');
-        });
-
-        it('offers no local file for connection strings, so local-sync commands stay hidden', () => {
-            const { adapter } = createAdapter();
-
-            expect(adapter.getCapabilities(makeSite(FunctionAppLogicalType), ConnectionStringsCollectionId).localFile)
-                .to.be.undefined;
-        });
-
         it('rejects an empty setting name', () => {
             const { adapter } = createAdapter();
             const { validateKey } = adapter.getCapabilities(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);

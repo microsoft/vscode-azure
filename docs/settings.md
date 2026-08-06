@@ -17,8 +17,7 @@ extensions/vscode-azure/src/commands/settings/         Commands
 
 The file system provider in `utils` knows nothing about Azure. It is generic over a
 `SettingsDocumentSource` (resolve a URI, read a snapshot, write a map), which keeps it unit-testable
-against `createMockVsCode()` with no ARM mocking, and lets the same provider class serve both the
-remote and local sides of a comparison.
+against `createMockVsCode()` with no ARM mocking.
 
 ## The editor is the primary surface
 
@@ -28,6 +27,7 @@ Opening **Edit Settings** on a collection produces a JSONC document that *is* th
 // Application settings for 'myFunctionApp'.
 // Saving this file writes these settings to Azure. Removing a setting deletes it.
 // The file is saved to Azure as-is: it overwrites any changes made elsewhere since it was opened.
+// Deployments and infrastructure-as-code tools may overwrite edits made here.
 // This file lives only in the editor. Saving a copy to disk would store its values in plain text.
 {
     "AzureWebJobsStorage": "...",
@@ -102,7 +102,6 @@ never contributed, its `when` clause never matches, and the menu item never appe
 | `canDelete` | "Delete Setting" is withheld |
 | `canRename` | "Rename Setting" is withheld |
 | `valuesReadable` | Values render as the `UnreadableValue` sentinel and are preserved on save |
-| `localFile` (absent) | Compare / download / upload are withheld |
 
 Adding a product that forbids renaming means returning `canRename: false` — not adding a branch.
 
@@ -201,41 +200,16 @@ edit / copy commands. They are not part of the node key, so changing a value nev
 `AzureNodeId.parentNodeId` models the ARM hierarchy, in which a virtual node's parent is the
 resource, and would skip a level.
 
-## Local file sync
+## Ownership boundary
 
-Adapters declare the file they sync with via `SettingsCapabilities.localFile` — `local.settings.json`
-for Function Apps and Logic Apps, `.env` for plain App Service, nothing for connection strings.
+This framework edits the settings currently stored on the live Azure resource. It does not compare,
+upload, download, or synchronize local configuration files such as `local.settings.json` or `.env`.
+Those files belong to product development and deployment workflows, particularly azd and
+infrastructure-as-code.
 
-**Compare with Local Settings** is the headline: it opens a side-by-side diff via `vscode.diff`.
-Both sides are projected through the same JSONC format by the same file system provider class, under
-two schemes:
-
-| Scheme | Source |
-|---|---|
-| `azure-settings:` | `AzureSettingsDocumentSource` — the collection in Azure |
-| `azure-settings-local:` | `LocalSettingsDocumentSource` — the matching local file |
-
-Projecting both sides is what makes the diff readable: comparing raw `local.settings.json` against
-the remote document would show the `Values` wrapper and unrelated keys such as `IsEncrypted` as
-differences. Either side can be edited and saved in place, so reconciling is a normal merge rather
-than an all-or-nothing copy.
-
-**Download** and **Upload** do wholesale what the diff does selectively. Both summarize the change
-(counts of added / changed / deleted — never the keys) and require modal confirmation, because a
-wholesale copy silently destroys settings that exist only on the destination.
-
-`LocalSettingsFile` writes **surgically**: for JSON, only the `Values` object is rewritten, so
-sibling properties and formatting survive; for `.env`, comments, ordering, and untouched lines are
-preserved. These files are checked into source control, and a settings sync must not reformat them.
-
-Two data-preservation details:
-
-- **Non-string members of `Values` are preserved.** They were never surfaced as settings, so they are
-  not the user's to have deleted by saving.
-- **`.env` values are JSON-quoted when they contain whitespace, quotes, backslashes, or `#`, and
-  JSON-unescaped on read.** Quoting and unquoting must stay exact inverses, or a value such as
-  `{"a":"b"}` — common on App Service — gains a layer of backslashes on every download/upload cycle
-  and is eventually written back to Azure corrupted.
+A successful edit here is therefore not a change to the application's declarative source of truth.
+The next deployment may overwrite it. The virtual document warns about this directly without adding
+a confirmation prompt to every save.
 
 ## Adding a product
 
@@ -244,8 +218,8 @@ Two data-preservation details:
 2. Implement `SettingsAdapter` in `extensions/vscode-azure/src/settings/adapters/`.
 3. Bind it in `bindSettingsServices` in `registerSettings.ts`.
 
-That is all. The tree nodes, the editor, all ten commands, masking, and local sync follow from the
-capabilities the adapter reports.
+That is all. The tree nodes, editor, shared command set, and masking follow from the capabilities the
+adapter reports.
 
 ## Testing
 

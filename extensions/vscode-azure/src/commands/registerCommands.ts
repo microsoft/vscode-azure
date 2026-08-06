@@ -15,12 +15,10 @@ import { ClearActivities } from './deploy/ClearActivities';
 import { CreateFunctionApp } from './functions/CreateFunctionApp';
 import type { ManagedCommand } from './ManagedCommand';
 import { AddOrEditSetting } from './settings/AddOrEditSetting';
-import { CompareSettingsWithLocal } from './settings/CompareSettingsWithLocal';
 import { CopySettingValue } from './settings/CopySettingValue';
 import { DeleteSetting } from './settings/DeleteSetting';
 import { EditSettings } from './settings/EditSettings';
 import { RenameSetting } from './settings/RenameSetting';
-import { SyncSettingsWithLocal } from './settings/SyncSettingsWithLocal';
 import { ToggleSettingValues } from './settings/ToggleSettingValues';
 import { InstallAzd } from './tools/InstallAzd';
 import { GroupBy } from './tree/GroupBy';
@@ -55,9 +53,6 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/settings/delete', DeleteSetting);
     registerManagedCommand(container, 'vscode-azure/settings/copyValue', CopySettingValue);
     registerManagedCommand(container, 'vscode-azure/settings/toggleValues', ToggleSettingValues);
-    registerManagedCommand(container, 'vscode-azure/settings/compareWithLocal', CompareSettingsWithLocal);
-    registerManagedCommand(container, 'vscode-azure/settings/download', SyncSettingsWithLocal, 'download');
-    registerManagedCommand(container, 'vscode-azure/settings/upload', SyncSettingsWithLocal, 'upload');
 
     registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
     registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');

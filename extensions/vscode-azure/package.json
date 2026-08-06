@@ -104,21 +104,6 @@
                 "title": "%commands.vscode-azure/settings/toggleValues%"
             },
             {
-                "command": "vscode-azure/settings/compareWithLocal",
-                "icon": "$(diff)",
-                "title": "%commands.vscode-azure/settings/compareWithLocal%"
-            },
-            {
-                "command": "vscode-azure/settings/download",
-                "icon": "$(cloud-download)",
-                "title": "%commands.vscode-azure/settings/download%"
-            },
-            {
-                "command": "vscode-azure/settings/upload",
-                "icon": "$(cloud-upload)",
-                "title": "%commands.vscode-azure/settings/upload%"
-            },
-            {
                 "command": "vscode-azure/functions/createNew",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/functions/createNew%"
@@ -222,18 +207,6 @@
                 {
                     "command": "vscode-azure/settings/toggleValues",
                     "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/compareWithLocal",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/download",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/upload",
-                    "when": "false"
                 }
             ],            "view/title": [
                 {
@@ -315,21 +288,6 @@
                     "command": "vscode-azure/settings/delete",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteSetting\\b/i",
                     "group": "settings@4"
-                },
-                {
-                    "command": "vscode-azure/settings/compareWithLocal",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bcompareSettingsWithLocal\\b/i",
-                    "group": "settingsSync@1"
-                },
-                {
-                    "command": "vscode-azure/settings/download",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdownloadSettings\\b/i",
-                    "group": "settingsSync@2"
-                },
-                {
-                    "command": "vscode-azure/settings/upload",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\buploadSettings\\b/i",
-                    "group": "settingsSync@3"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",

@@ -117,12 +117,13 @@ implementation** rather than re-vendoring the source's code:
   Implement a single `SettingsAdapter` (`canHandle` / `getCollections` / `getCapabilities` / `read` /
   `write`) in `extensions/vscode-azure/src/settings/adapters/`, bind it to `ISettingsAdapter` in
   `registerSettings.ts`, and stop. The collection tree node, the per-setting nodes, the JSONC editor,
-  all ten commands, value masking, and local-file sync all follow automatically from the
-  `SettingsCapabilities` the adapter reports.
+  shared commands, and value masking all follow automatically from the `SettingsCapabilities` the
+  adapter reports. Local configuration synchronization belongs to azd or the product's deployment
+  workflow, not this framework.
   - Product differences are expressed as **capability flags** (`canAdd`, `canDelete`, `canRename`,
-    `canWrite`, `valuesReadable`, `localFile`), never as branches on product identity. A product that
-    forbids renaming returns `canRename: false`; a product whose service will not return values
-    returns `valuesReadable: false` and gets sentinel preservation for free.
+    `canWrite`, `valuesReadable`), never as branches on product identity. A product that forbids
+    renaming returns `canRename: false`; a product whose service will not return values returns
+    `valuesReadable: false` and gets sentinel preservation for free.
   - A collection whose entries carry side-channel data (e.g. a connection string's `type`) sets
     `structured: true` and puts that data in each entry's `metadata`.
   - (Note: the source likely uses the shared `@microsoft/vscode-azext-azureappsettings` package with

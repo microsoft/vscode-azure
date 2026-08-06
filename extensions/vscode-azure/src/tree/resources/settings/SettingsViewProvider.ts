@@ -7,12 +7,10 @@ import { AzureNodeId, getNodeType, type SettingsCapabilities } from '@microsoft/
 import { IActionExecutor, ICodeContext, UnreadableValue, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { AddOrEditSetting } from '../../../commands/settings/AddOrEditSetting';
-import { CompareSettingsWithLocal } from '../../../commands/settings/CompareSettingsWithLocal';
 import { CopySettingValue } from '../../../commands/settings/CopySettingValue';
 import { DeleteSetting } from '../../../commands/settings/DeleteSetting';
 import { EditSettings } from '../../../commands/settings/EditSettings';
 import { RenameSetting } from '../../../commands/settings/RenameSetting';
-import { SyncSettingsWithLocal } from '../../../commands/settings/SyncSettingsWithLocal';
 import { ToggleSettingValues } from '../../../commands/settings/ToggleSettingValues';
 import { IAzureViewDataTree } from '../../../services';
 import { ISettingsRegistry } from '../../../settings/SettingsRegistry';
@@ -147,16 +145,6 @@ export class SettingsViewProvider implements ViewProvider<string> {
         const capabilities = this.tryGetCapabilities(node);
         if (capabilities?.canAdd && capabilities.canWrite) {
             values.push(AddOrEditSetting.AddContextValue);
-        }
-
-        // Local-sync commands appear only where the product declares a local file convention, so
-        // they stay hidden for collections such as connection strings that have none.
-        if (capabilities?.localFile) {
-            values.push(CompareSettingsWithLocal.ContextValue, SyncSettingsWithLocal.DownloadContextValue);
-
-            if (capabilities.canWrite) {
-                values.push(SyncSettingsWithLocal.UploadContextValue);
-            }
         }
 
         return values;

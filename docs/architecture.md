@@ -50,7 +50,7 @@ Azure-specific models and helpers that build on `utils`:
 The VS Code extension that wires everything together:
 
 - **Activation**: Container setup, command and tree registration
-- **Commands**: `RefreshResourcesView`, `GroupBy`, `OpenInPortal`, `LoadMore`, `RefreshWorkspaceView`, `RevealInExplorer`, `DisableAcrAdminUser`, the settings command set (`EditSettings`, `AddOrEditSetting`, `RenameSetting`, `DeleteSetting`, `CopySettingValue`, `ToggleSettingValues`, `CompareSettingsWithLocal`, `SyncSettingsWithLocal`), `ClearActivities`, `AzdUp`, `InstallAzd`
+- **Commands**: `RefreshResourcesView`, `GroupBy`, `OpenInPortal`, `LoadMore`, `RefreshWorkspaceView`, `RevealInExplorer`, `DisableAcrAdminUser`, the settings command set (`EditSettings`, `AddOrEditSetting`, `RenameSetting`, `DeleteSetting`, `CopySettingValue`, `ToggleSettingValues`), `ClearActivities`, `AzdUp`, `InstallAzd`
 - **Resource creation wizards**: `CreateFunctionApp` — azd-backed wizard for creating and deploying Azure resources. See [Resource Creation](resource-creation.md).
 - **Tree providers**:
   - Resources: `AzureAccountDataProvider` (account/tenant/subscription), `AzureResourceDataProvider`/`GenericAzureViewProvider` (resource groups + resources), `AcrDataProvider`/`ViewProvider`, `SettingsDataProvider`/`ViewProvider` (settings for any product with a registered adapter -- see [Settings](settings.md))

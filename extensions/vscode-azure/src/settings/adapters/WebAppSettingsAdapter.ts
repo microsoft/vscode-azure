@@ -31,25 +31,12 @@ const supportedLogicalTypes = new Set<string>([
 ]);
 
 /**
- * Local file each product conventionally syncs application settings with.
- *
- * Function Apps and Logic Apps use the Functions host's `local.settings.json`; plain App Service
- * sites have no host file, so a `.env` is the closest convention.
- */
-const localAppSettingsFile = new Map<string, string>([
-    [FunctionAppLogicalType.toLowerCase(), 'local.settings.json'],
-    [LogicAppLogicalType.toLowerCase(), 'local.settings.json'],
-    [AppServiceLogicalType.toLowerCase(), '.env'],
-]);
-
-/**
  * {@linkcode SettingsAdapter} for every `Microsoft.Web/sites` flavour -- Function App, App Service,
  * and Logic App -- exposing both application settings and connection strings.
  *
- * The three products share one ARM surface and differ only in the local file they sync with, so
- * they are one adapter rather than three. The two collections differ more interestingly:
- * connection strings are **structured** (each value carries a database `type`), which is what
- * exercises the framework's non-plain-string path.
+ * The three products share one ARM surface, so they are one adapter rather than three. Connection
+ * strings are **structured** (each value carries a database `type`), which exercises the
+ * framework's non-plain-string path.
  *
  * @remarks
  * ARM has no per-key patch for either collection: `update*` replaces the whole dictionary. That is
@@ -106,17 +93,11 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
         if (collectionId === ConnectionStringsCollectionId) {
             return {
                 ...base,
-                // No local-file convention carries connection strings, so the compare / download /
-                // upload commands are not offered for them.
                 validateMetadata: (field, value) => this.validateConnectionStringMetadata(field, value),
             };
         }
 
-        const fileName = localAppSettingsFile.get(resource.logicalType.toLowerCase());
-        return {
-            ...base,
-            localFile: fileName ? { fileName } : undefined,
-        };
+        return base;
     }
 
     /** @inheritdoc */

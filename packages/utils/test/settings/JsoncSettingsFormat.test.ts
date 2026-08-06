@@ -50,6 +50,13 @@ describe('JsoncSettingsFormat (unit)', () => {
             expect(text).to.contain('overwrites any changes made elsewhere');
         });
 
+        it('warns that deployments may overwrite live edits', () => {
+            const format = createFormat();
+            const text = format.serialize(createSnapshot());
+
+            expect(text).to.contain('Deployments and infrastructure-as-code tools may overwrite edits made here.');
+        });
+
         it('says the document is read-only instead when it is not writable', () => {
             const format = createFormat();
             const text = format.serialize(createSnapshot({ writable: false }));

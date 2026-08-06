@@ -50,14 +50,6 @@ export interface SettingsCapabilities {
      */
     readonly valuesReadable: boolean;
     /**
-     * The conventional local file this collection syncs with, if any. Drives the
-     * compare/download/upload commands. Omit when the product has no local-file convention.
-     */
-    readonly localFile?: {
-        /** e.g. `local.settings.json` or `.env`. */
-        readonly fileName: string;
-    };
-    /**
      * Validate a proposed setting name.
      *
      * @returns a localized error message, or `undefined` if the name is acceptable.
