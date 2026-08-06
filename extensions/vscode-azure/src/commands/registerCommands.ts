@@ -6,15 +6,12 @@
 import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import { AzdDownCommandId, AzdUpCommandId, LoadMoreCommandId } from '../constants';
-import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
+import type { ManagedCommandRegistration } from '../registration/ProductRegistrar';
 import { SelectSubscriptions } from './auth/SelectSubscriptions';
 import { SignIn } from './auth/SignIn';
 import { AzdDown } from './deploy/AzdDown';
 import { AzdUp } from './deploy/AzdUp';
 import { ClearActivities } from './deploy/ClearActivities';
-import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
-import { CreateFunctionApp } from './functions/CreateFunctionApp';
-import { DeleteAppSetting } from './functions/DeleteAppSetting';
 import type { ManagedCommand } from './ManagedCommand';
 import { InstallAzd } from './tools/InstallAzd';
 import { GroupBy } from './tree/GroupBy';
@@ -29,7 +26,10 @@ import { RevealInExplorer } from './tree/RevealInExplorer';
  * against the {@linkcode ICommandRegistry} bound on the container. Called
  * once from `activateInternal()` during activation.
  */
-export function registerCommands(container: Container): void {
+export function registerCommands(
+    container: Container,
+    productCommands: readonly ManagedCommandRegistration[] = [],
+): void {
     registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
     registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
     registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
@@ -40,22 +40,17 @@ export function registerCommands(container: Container): void {
     registerManagedCommand(container, 'vscode-azure/workspace/refresh', RefreshWorkspaceView);
     registerManagedCommand(container, 'vscode-azure/workspace/revealInExplorer', RevealInExplorer);
 
-    registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
-
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting, 'add');
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
-
     registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
     registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
     registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
 
-    registerManagedCommand(container, 'vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
-    registerManagedCommand(container, 'vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
-
     registerManagedCommand(container, AzdUpCommandId, AzdUp);
     registerManagedCommand(container, AzdDownCommandId, AzdDown);
     registerManagedCommand(container, 'vscode-azure/installAzd', InstallAzd);
+
+    for (const command of productCommands) {
+        registerManagedCommand(container, command.commandId, command.commandClass, ...command.prefixArgs);
+    }
 }
 
 /**
