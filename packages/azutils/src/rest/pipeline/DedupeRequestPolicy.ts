@@ -5,6 +5,7 @@
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
 import { InflightMap } from '@microsoft/vscode-azure-utils';
+import { createHash } from 'node:crypto';
 
 const inflight = new InflightMap<PipelineResponse>();
 
@@ -15,6 +16,12 @@ const ignoredHeaderNames = new Set([
     'x-ms-client-request-id',
     'x-ms-correlation-request-id',
     'x-ms-request-id',
+]);
+
+const sensitiveHeaderNames = new Set([
+    'authorization',
+    'proxy-authorization',
+    'x-ms-authorization-auxiliary',
 ]);
 
 /**
@@ -58,10 +65,20 @@ export class DedupeRequestPolicy implements PipelinePolicy {
 function createRequestKey(request: PipelineRequest): string {
     const headers = [...request.headers]
         .filter(([name]) => !ignoredHeaderNames.has(name.toLowerCase()))
-        .map(([name, value]) => [name.toLowerCase(), value] as const)
+        .map(([name, value]) => {
+            const normalizedName = name.toLowerCase();
+            return [
+                normalizedName,
+                sensitiveHeaderNames.has(normalizedName) ? hashHeaderValue(value) : value,
+            ] as const;
+        })
         .sort(([left], [right]) => left.localeCompare(right));
 
     return JSON.stringify([request.url, headers]);
+}
+
+function hashHeaderValue(value: string): string {
+    return createHash('sha256').update(value).digest('base64url');
 }
 
 function cloneResponse(request: PipelineRequest, response: PipelineResponse): PipelineResponse {
