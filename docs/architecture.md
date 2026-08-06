@@ -61,13 +61,12 @@ The VS Code extension that wires everything together:
 ## Activation Flow
 
 1. VS Code loads `main.js`, which imports the esbuild bundle
-2. Product entry points contribute bindings, commands, resource providers, and activation hooks to `ProductRegistrar`
+2. Product entry points contribute bindings, commands, and resource providers to `ProductRegistrar`
 3. `activateInternal()` creates the DI container via `setUpContainer()` and applies product bindings
 4. Test or mock overrides are applied before any contributed feature is activated
 5. `registerCommands()` binds command classes and registers core and product commands with VS Code
 6. `registerTrees()` sets up core and product data/view providers and the tree views
-7. Product activation hooks run inside the same telemetry/error-handling boundary
-8. The tree view is eagerly resolved, kicking off the provider chain
+7. The tree view is eagerly resolved, kicking off the provider chain
 
 ## Key Design Principles
 

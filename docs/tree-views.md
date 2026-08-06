@@ -148,13 +148,10 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 **Registration order matters** — specific providers must be registered before broader fallback providers. All resource providers, including the generic Azure root and fallback providers, are collected by `ProductRegistrar` in registration order:
 
 ```typescript
-// In registerTrees.ts — resources tree dataProviders, most specific first
-dataProviders: [
-    AcrDataProvider,
-    [IFunctionAppDataProvider, FunctionAppDataProvider],
-    [IAzureAccountDataProvider, AzureAccountDataProvider], // accounts/tenants/subscriptions (root)
-    AzureResourceDataProvider,                             // resource groups + resources (fallback)
-],
+// Product registrations run in this order.
+registerAcr(registrar);
+registerFunctions(registrar);
+registerGenericAzure(registrar); // root and fallback providers last
 ```
 
 Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly. See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.

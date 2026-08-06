@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IWebAppClientProvider, WebAppClient } from '@microsoft/vscode-azure-azutils';
-import { AddOrEditAppSetting } from '../../commands/functions/AddOrEditAppSetting';
-import { CreateFunctionApp } from '../../commands/functions/CreateFunctionApp';
-import { DeleteAppSetting } from '../../commands/functions/DeleteAppSetting';
-import type { ProductRegistrar } from '../../registration/ProductRegistrar';
-import { FunctionAppDataProvider, IFunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
-import { FunctionAppViewProvider } from '../../tree/resources/functions/FunctionAppViewProvider';
+import { AddOrEditAppSetting } from '../commands/functions/AddOrEditAppSetting';
+import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
+import { DeleteAppSetting } from '../commands/functions/DeleteAppSetting';
+import type { ProductRegistrar } from '../registration/ProductRegistrar';
+import { FunctionAppDataProvider, IFunctionAppDataProvider } from '../tree/resources/functions/FunctionAppDataProvider';
+import { FunctionAppViewProvider } from '../tree/resources/functions/FunctionAppViewProvider';
 
 /** Contribute all Azure Functions services and UI integrations. */
 export function registerFunctions(registrar: ProductRegistrar): void {

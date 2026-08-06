@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AcrClient, IAcrClientProvider } from '@microsoft/vscode-azure-azutils';
-import { DisableAcrAdminUser } from '../../commands/acr/DisableAcrAdminUser';
-import type { ProductRegistrar } from '../../registration/ProductRegistrar';
-import { AcrDataProvider } from '../../tree/resources/acr/AcrDataProvider';
-import { AcrViewProvider } from '../../tree/resources/acr/AcrViewProvider';
+import { DisableAcrAdminUser } from '../commands/acr/DisableAcrAdminUser';
+import type { ProductRegistrar } from '../registration/ProductRegistrar';
+import { AcrDataProvider } from '../tree/resources/acr/AcrDataProvider';
+import { AcrViewProvider } from '../tree/resources/acr/AcrViewProvider';
 
 /** Contribute all Azure Container Registry services and UI integrations. */
 export function registerAcr(registrar: ProductRegistrar): void {

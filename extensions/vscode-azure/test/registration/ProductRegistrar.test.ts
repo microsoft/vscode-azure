@@ -23,11 +23,8 @@ import { mock } from 'node:test';
 import { registerCommands } from '../../src/commands/registerCommands';
 import type { ManagedCommand } from '../../src/commands/ManagedCommand';
 import { registerProducts } from '../../src/products/registerProducts';
-import {
-    bindAzureClientProvider,
-    bindProviders,
-    ProductRegistrar,
-} from '../../src/registration/ProductRegistrar';
+import { ProductRegistrar } from '../../src/registration/ProductRegistrar';
+import { bindAzureClientProvider, bindProviders } from '../../src/services';
 import { AcrDataProvider } from '../../src/tree/resources/acr/AcrDataProvider';
 import { AcrViewProvider } from '../../src/tree/resources/acr/AcrViewProvider';
 import {
@@ -159,23 +156,31 @@ describe('ProductRegistrar (unit)', () => {
         expect(create.mock.callCount()).to.equal(1);
     });
 
-    it('runs activation hooks after bindings can be overridden', async () => {
+    it('does not replace a shared Azure client provider binding', () => {
+        interface ClientResult {
+            readonly source: string;
+        }
+
         const registrar = new ProductRegistrar();
         const container = new Container();
-        const serviceId: ServiceIdentifier<string> = Symbol('ITestService');
-        const activatedValues: string[] = [];
-        registrar.registerBinding(current => current.bind(serviceId).toConstantValue('original'));
-        registrar.registerActivationHook(current => {
-            activatedValues.push(current.get(serviceId));
+        const providerId: ServiceIdentifier<(subscription: AzureSubscription) => ClientResult> =
+            Symbol('ISharedClientProvider');
+        const codeContext = {} as ICodeContext;
+        const executor = {} as IActionExecutor;
+        const credential: TokenCredential = { getToken: mock.fn(() => Promise.resolve(null)) };
+        container.bind(ICodeContext).toConstantValue(codeContext);
+        container.bind(IActionExecutor).toConstantValue(executor);
+        container.bind(ICredentialFactory).toConstantValue(() => credential);
+        registrar.registerAzureClientProvider(providerId, () => {
+            return { source: 'first' };
+        });
+        registrar.registerAzureClientProvider(providerId, () => {
+            return { source: 'second' };
         });
 
         registrar.applyBindings(container);
-        container.unbind(serviceId);
-        container.bind(serviceId).toConstantValue('override');
-        expect(activatedValues).to.be.empty;
+        const provider = container.get<(subscription: AzureSubscription) => ClientResult>(providerId);
 
-        await registrar.activate(container);
-
-        expect(activatedValues).to.deep.equal(['override']);
+        expect(provider(makeSubscription()).source).to.equal('first');
     });
 });

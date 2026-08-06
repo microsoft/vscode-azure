@@ -71,8 +71,7 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
 
 Each Azure product exposes one registration function under
 `extensions/vscode-azure/src/products`. It contributes its DI bindings, managed
-commands, resource data/view providers, and optional activation hooks through
-`ProductRegistrar`:
+commands, and resource data/view providers through `ProductRegistrar`:
 
 ```typescript
 export function registerAcr(registrar: ProductRegistrar): void {
@@ -91,8 +90,8 @@ export function registerAcr(registrar: ProductRegistrar): void {
 are followed by a first-class generic Azure product. It owns shared credential,
 subscription, resource, and deployment services; generic resource/auth
 commands; and the root/fallback resource providers. The registrar applies DI
-bindings while the root container is built, but defers commands, trees, and
-activation hooks until after test/mock overrides. This keeps
+bindings while the root container is built, but defers commands and trees until
+after test/mock overrides. This keeps
 `activateInternal()` product-agnostic and preserves the existing activation
 timing.
 

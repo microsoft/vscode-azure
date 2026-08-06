@@ -73,13 +73,12 @@ export async function activateInternal(
 
     applyOverrides?.(container);
 
-    await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', async activateContext => {
+    await container.get(IActionExecutor).callWithTelemetryAndErrorHandling('activate', activateContext => {
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
         activateContext.telemetry.isUserEvent = false;
 
         registerCommands(container, products.getCommands());
         registerTrees(container, products);
-        await products.activate(container);
     });
 
     // Expose the DI container to E2E tests so they can resolve services (e.g.

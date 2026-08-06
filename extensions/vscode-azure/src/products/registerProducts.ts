@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { registerAcr } from './acr/registerAcr';
-import { registerFunctions } from './functions/registerFunctions';
-import { registerGenericAzure } from './generic/registerGenericAzure';
+import { registerAcr } from './registerAcr';
+import { registerFunctions } from './registerFunctions';
+import { registerGenericAzure } from './registerGenericAzure';
 
 /** Apply each product's single registration entry point in dispatch order. */
 export function registerProducts(registrar: ProductRegistrar): void {

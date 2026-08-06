@@ -15,21 +15,21 @@ import {
     SubscriptionClient,
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
-import { GroupBy } from '../../commands/tree/GroupBy';
-import { OpenInPortal } from '../../commands/tree/OpenInPortal';
-import { RefreshResourcesView } from '../../commands/tree/RefreshResourcesView';
-import { SelectSubscriptions } from '../../commands/auth/SelectSubscriptions';
-import { SignIn } from '../../commands/auth/SignIn';
-import type { ProductRegistrar } from '../../registration/ProductRegistrar';
-import { IAzureViewDataTree, ISubscriptionResolver } from '../../services';
+import { SelectSubscriptions } from '../commands/auth/SelectSubscriptions';
+import { SignIn } from '../commands/auth/SignIn';
+import { GroupBy } from '../commands/tree/GroupBy';
+import { OpenInPortal } from '../commands/tree/OpenInPortal';
+import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
+import type { ProductRegistrar } from '../registration/ProductRegistrar';
+import { IAzureViewDataTree, ISubscriptionResolver } from '../services';
 import {
     AzureAccountDataProvider,
     IAzureAccountDataProvider,
-} from '../../tree/resources/AzureAccountDataProvider';
-import { AzureResourceDataProvider } from '../../tree/resources/AzureResourceDataProvider';
-import { GenericAzureViewProvider } from '../../tree/resources/GenericAzureViewProvider';
-import { IResourceSelector, ResourceSelector } from '../../tree/resources/ResourceSelector';
-import { CredentialOptionsScope, ICredentialOptionsScope } from '../../utils/CredentialOptionsScope';
+} from '../tree/resources/AzureAccountDataProvider';
+import { AzureResourceDataProvider } from '../tree/resources/AzureResourceDataProvider';
+import { GenericAzureViewProvider } from '../tree/resources/GenericAzureViewProvider';
+import { IResourceSelector, ResourceSelector } from '../tree/resources/ResourceSelector';
+import { CredentialOptionsScope, ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
 
 /**
  * Contribute the generic Azure clients and fallback resource presentation

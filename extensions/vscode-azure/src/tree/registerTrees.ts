@@ -8,11 +8,12 @@ import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, type LoadMor
 import type { Container, ResolutionContext, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/tree/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId, WorkspaceTreeViewId } from '../constants';
-import { bindProviders, type ProductRegistrar, type ProviderEntry } from '../registration/ProductRegistrar';
+import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import {
+    bindProviders,
     IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree,
     IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree,
-    IWorkspaceTreeView, IWorkspaceViewDataTree, IWorkspaceViewViewItemTree, pushDisposable,
+    IWorkspaceTreeView, IWorkspaceViewDataTree, IWorkspaceViewViewItemTree, pushDisposable, type ProviderEntry,
 } from '../services';
 import type { Activity } from './activity/Activity';
 import { ActivityViewProvider } from './activity/ActivityViewProvider';
@@ -39,7 +40,7 @@ import type { WorkspaceNode } from './workspace/WorkspaceNode';
  * All tree views are eagerly resolved so their construction kicks off
  * the full subscription/resource load.
  */
-export function registerTrees(container: Container, products?: ProductRegistrar): void {
+export function registerTrees(container: Container, products: ProductRegistrar): void {
     // Resources tree
     registerTree<ConcreteAzureNode>(container, {
         treeViewId: AzureResourceTreeViewId,
@@ -52,8 +53,8 @@ export function registerTrees(container: Container, products?: ProductRegistrar)
         ttl: 5 * 60 * 1000, // 5 minute TTL
         loadMoreOptions: context => defaultLoadMoreOptions(context.get(IVsCode)),
         // Registration order matters: specific providers first, generic fallback last.
-        dataProviders: products?.getResourceDataProviders() ?? [],
-        viewProviders: products?.getResourceViewProviders() ?? [],
+        dataProviders: products.getResourceDataProviders(),
+        viewProviders: products.getResourceViewProviders(),
     });
 
     // Workspace tree
