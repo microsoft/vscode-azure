@@ -9,6 +9,7 @@ import { expect } from 'chai';
 import * as path from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { resolveWindowsProjectPath } from '../../../src/commands/staticWebApps/deploymentRouting';
 import { DeployStaticWebApp, type DeployStaticWebAppArgs } from '../../../src/commands/staticWebApps/DeployStaticWebApp';
 import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
 import { createMockAzdService } from '../../azd/MockAzdService';
@@ -324,31 +325,44 @@ describe('DeployStaticWebApp (unit)', () => {
                     expect(azd.deploy.mock.callCount()).to.equal(0);
                 });
 
-                it('should accept an absolute POSIX-style project path used unchanged, not anchored under iacFolder', async () => {
-                    // A leading-slash path is recognized as absolute by Node's path module on
-                    // any host (POSIX natively; Windows treats it as rooted on the current drive
-                    // without requiring/injecting a drive letter here), so this is safe to
-                    // always run.
-                    const { command, azd, mockResult } = createCommand({
-                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
+                if (process.platform === 'win32') {
+                    it('should treat a rooted-without-volume path ("/opt/app") as relative on Windows, joining it under iacFolder rather than treating it as OS-root-absolute (Go: filepath.IsAbs("/opt/app") is false on Windows)', async () => {
+                        const { command, azd, ctx, mockResult } = createCommand({
+                            azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
+                        });
+                        const projectUri = ctx.code.Uri.file(resolveWindowsProjectPath(ctx.code.Uri.file('/workspace').fsPath, '/opt/app'));
+                        mockResult.fs.directories.add(projectUri.path);
+                        mockResult.fs.addFile(ctx.code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                        await command.execute(args);
+
+                        expect(azd.deploy.mock.callCount()).to.equal(1);
                     });
-                    mockResult.fs.directories.add('/opt/app');
-                    mockResult.fs.addFile(MockUri.file('/opt/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+                } else {
+                    it('should accept an absolute POSIX-style project path ("/opt/app") used unchanged, not anchored under iacFolder', async () => {
+                        // On POSIX, a leading-slash path is absolute per both Node's path.posix
+                        // and Go's filepath.IsAbs -- no divergence to correct, unlike on Windows.
+                        const { command, azd, mockResult } = createCommand({
+                            azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
+                        });
+                        mockResult.fs.directories.add('/opt/app');
+                        mockResult.fs.addFile(MockUri.file('/opt/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
-                    await command.execute(args);
+                        await command.execute(args);
 
-                    expect(azd.deploy.mock.callCount()).to.equal(1);
-                });
-
-                it('should block when an absolute POSIX-style project path does not exist', async () => {
-                    const { command, azd } = createCommand({
-                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/doesnotexist\n    dist: build\n',
+                        expect(azd.deploy.mock.callCount()).to.equal(1);
                     });
 
-                    await command.execute(args);
+                    it('should block when an absolute POSIX-style project path does not exist', async () => {
+                        const { command, azd } = createCommand({
+                            azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/doesnotexist\n    dist: build\n',
+                        });
 
-                    expect(azd.deploy.mock.callCount()).to.equal(0);
-                });
+                        await command.execute(args);
+
+                        expect(azd.deploy.mock.callCount()).to.equal(0);
+                    });
+                }
 
                 if (process.platform === 'win32') {
                     it('should accept a Windows drive-absolute project path (e.g. C:\\...) used unchanged, not anchored under iacFolder', async () => {
@@ -356,9 +370,9 @@ describe('DeployStaticWebApp (unit)', () => {
                             azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
                         });
                         // Derive the resolved path the same way the production code does (via
-                        // path.resolve + Uri.file), rather than hand-guessing the URI's
-                        // case-normalized representation.
-                        const projectUri = ctx.code.Uri.file(path.resolve('C:\\opt\\app'));
+                        // resolveWindowsProjectPath + Uri.file), rather than hand-guessing the
+                        // URI's case-normalized representation.
+                        const projectUri = ctx.code.Uri.file(resolveWindowsProjectPath(ctx.code.Uri.file('/workspace').fsPath, 'C:\\opt\\app'));
                         mockResult.fs.directories.add(projectUri.path);
                         mockResult.fs.addFile(ctx.code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
