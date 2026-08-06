@@ -37,7 +37,7 @@ function createStep(remote: GitRemoteInfo | undefined, options: { readonly azdVe
         }
     });
     const step = new DetermineStaticWebAppDeploymentRouteStep(code, gitRemote, azd);
-    return { step, azd, getRemoteInfo, fs };
+    return { step, azd, getRemoteInfo, fs, code };
 }
 
 function baseContext(overrides: Partial<CreateStaticWebAppContext> = {}): CreateStaticWebAppContext {
@@ -268,41 +268,76 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                 expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             });
 
-            it('should block (invalidServiceConfig) and never stat the filesystem when the project path traverses above iacFolder', async () => {
+            it('should accept a project path that traverses above iacFolder via ".." when it resolves to an existing directory, mirroring azd\'s filepath.Join', async () => {
+                // azd's ServiceConfig.Path() resolves relative paths via filepath.Join, which
+                // (like Uri.joinPath) permits ".." to traverse above the project root rather than
+                // rejecting it -- /workspace/../outside resolves to the sibling folder /outside.
                 const { step, fs } = createStep(githubPushed, {
                     azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ../outside\n    dist: build\n',
                 });
-                const statCallsBefore = fs.stat.mock.callCount();
+                fs.directories.add('/outside');
+                fs.addFile(MockUri.file('/outside/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
                 const result = await step.prompt(hydratedContext());
 
-                expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
-                // Rejected purely from the string shape -- no filesystem access is ever attempted for it.
-                expect(fs.stat.mock.callCount()).to.equal(statCallsBefore);
+                expect(result).to.deep.equal({
+                    deploy: false,
+                    deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                });
             });
 
-            it('should block (invalidServiceConfig) and never stat the filesystem for an absolute POSIX project path', async () => {
-                const { step, fs } = createStep(githubPushed, {
-                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /etc\n    dist: build\n',
+            it('should block (invalidServiceConfig) when a ".." project path resolves outside iacFolder but the target does not exist', async () => {
+                const { step } = createStep(githubPushed, {
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ../doesnotexist\n    dist: build\n',
                 });
-                const statCallsBefore = fs.stat.mock.callCount();
 
                 const result = await step.prompt(hydratedContext());
 
                 expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
-                expect(fs.stat.mock.callCount()).to.equal(statCallsBefore);
             });
 
-            it('should block (invalidServiceConfig) and never stat the filesystem for an absolute Windows project path', async () => {
+            it('should accept an absolute POSIX project path used unchanged, not anchored under iacFolder', async () => {
+                // azd's ServiceConfig.Path() accepts an absolute project path unchanged.
                 const { step, fs } = createStep(githubPushed, {
-                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\Windows\n    dist: build\n',
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
                 });
-                const statCallsBefore = fs.stat.mock.callCount();
+                fs.directories.add('/opt/app');
+                fs.addFile(MockUri.file('/opt/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                const result = await step.prompt(hydratedContext());
+
+                expect(result).to.deep.equal({
+                    deploy: false,
+                    deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                });
+            });
+
+            it('should block (invalidServiceConfig) when an absolute POSIX project path does not exist', async () => {
+                const { step } = createStep(githubPushed, {
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/doesnotexist\n    dist: build\n',
+                });
 
                 const result = await step.prompt(hydratedContext());
 
                 expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
-                expect(fs.stat.mock.callCount()).to.equal(statCallsBefore);
+            });
+
+            it('should accept an absolute Windows project path used unchanged, not anchored under iacFolder', async () => {
+                const { step, fs, code } = createStep(githubPushed, {
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
+                });
+                // Derive the resolved path the same way the production code does (via Uri.file),
+                // rather than hand-guessing the URI's case-normalized representation.
+                const projectUri = code.Uri.file('C:/opt/app');
+                fs.directories.add(projectUri.path);
+                fs.addFile(code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                const result = await step.prompt(hydratedContext());
+
+                expect(result).to.deep.equal({
+                    deploy: false,
+                    deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                });
             });
         });
 

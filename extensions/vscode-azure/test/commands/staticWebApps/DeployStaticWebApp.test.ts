@@ -268,40 +268,63 @@ describe('DeployStaticWebApp (unit)', () => {
                     expect(azd.deploy.mock.callCount()).to.equal(0);
                 });
 
-                it('should block and never stat the filesystem when the project path traverses above iacFolder', async () => {
+                it('should accept a project path that traverses above iacFolder via ".." when it resolves to an existing directory, mirroring azd\'s filepath.Join', async () => {
                     const { command, azd, mockResult } = createCommand({
                         azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ../outside\n    dist: build\n',
                     });
-                    const statCallsBefore = mockResult.fs.stat.mock.callCount();
+                    mockResult.fs.directories.add('/outside');
+                    mockResult.fs.addFile(MockUri.file('/outside/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
                     await command.execute(args);
 
-                    expect(azd.deploy.mock.callCount()).to.equal(0);
-                    expect(mockResult.fs.stat.mock.callCount()).to.equal(statCallsBefore);
+                    expect(azd.deploy.mock.callCount()).to.equal(1);
                 });
 
-                it('should block and never stat the filesystem for an absolute POSIX project path', async () => {
-                    const { command, azd, mockResult } = createCommand({
-                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /etc\n    dist: build\n',
+                it('should block when a ".." project path resolves outside iacFolder but the target does not exist', async () => {
+                    const { command, azd } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ../doesnotexist\n    dist: build\n',
                     });
-                    const statCallsBefore = mockResult.fs.stat.mock.callCount();
 
                     await command.execute(args);
 
                     expect(azd.deploy.mock.callCount()).to.equal(0);
-                    expect(mockResult.fs.stat.mock.callCount()).to.equal(statCallsBefore);
                 });
 
-                it('should block and never stat the filesystem for an absolute Windows project path', async () => {
+                it('should accept an absolute POSIX project path used unchanged, not anchored under iacFolder', async () => {
                     const { command, azd, mockResult } = createCommand({
-                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\Windows\n    dist: build\n',
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
                     });
-                    const statCallsBefore = mockResult.fs.stat.mock.callCount();
+                    mockResult.fs.directories.add('/opt/app');
+                    mockResult.fs.addFile(MockUri.file('/opt/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(1);
+                });
+
+                it('should block when an absolute POSIX project path does not exist', async () => {
+                    const { command, azd } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/doesnotexist\n    dist: build\n',
+                    });
 
                     await command.execute(args);
 
                     expect(azd.deploy.mock.callCount()).to.equal(0);
-                    expect(mockResult.fs.stat.mock.callCount()).to.equal(statCallsBefore);
+                });
+
+                it('should accept an absolute Windows project path used unchanged, not anchored under iacFolder', async () => {
+                    const { command, azd, ctx, mockResult } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
+                    });
+                    // Derive the resolved path the same way the production code does (via Uri.file),
+                    // rather than hand-guessing the URI's case-normalized representation.
+                    const projectUri = ctx.code.Uri.file('C:/opt/app');
+                    mockResult.fs.directories.add(projectUri.path);
+                    mockResult.fs.addFile(ctx.code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(1);
                 });
             });
 

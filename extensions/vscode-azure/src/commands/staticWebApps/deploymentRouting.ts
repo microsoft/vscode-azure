@@ -123,16 +123,22 @@ export async function getStaticWebAppServiceConfig(
 /**
  * Resolves a `host: staticwebapp` service's raw `project` value (as returned
  * by {@linkcode getStaticWebAppServiceConfig}) to an actual, existing
- * directory URI, following azd's own path semantics: relative to
- * {@linkcode iacFolder} (the folder containing `azure.yaml`), with both `/`
- * and Windows `\` separators normalized. Returns `undefined` -- meaning
- * `'invalidServiceConfig'`, never a silent fallback to scanning
- * {@linkcode iacFolder} itself -- for any of:
+ * directory URI, mirroring azd's own `ServiceConfig.Path()` semantics
+ * exactly: an absolute `project` (POSIX `/...` or a Windows drive letter
+ * `C:...`) is used **unchanged**, and a relative `project` is resolved
+ * against {@linkcode iacFolder} (the folder containing `azure.yaml` -- azd's
+ * project root) via a plain path join, matching Go's `filepath.Join`. Both
+ * `/` and Windows `\` separators are normalized first. Critically, azd does
+ * **not** reject a relative `project` whose `..` segments traverse above the
+ * project root (`filepath.Join`/`filepath.Clean` happily resolve `..` past
+ * the root to an ancestor directory) -- so this function must not either;
+ * only non-existence, or resolving to a file rather than a directory, makes
+ * a path invalid.
+ *
+ * Returns `undefined` -- meaning `'invalidServiceConfig'`, never a silent
+ * fallback to scanning {@linkcode iacFolder} itself -- for any of:
  * - a missing/empty `project` (required; never assumed to default to the
- *   IaC folder),
- * - an absolute path (POSIX `/...` or a Windows drive letter `C:...`),
- * - a relative path whose `..` segments would traverse above
- *   {@linkcode iacFolder},
+ *   IaC folder -- azd itself requires a `project` on every service),
  * - a path that doesn't exist, or that exists but isn't a directory (e.g. it
  *   names a file).
  *
@@ -149,30 +155,17 @@ export async function resolveStaticWebAppServiceProjectFolder(
         return undefined;
     }
 
-    // Normalize Windows-style separators to the POSIX form azd/Uri.joinPath expect.
+    // Normalize Windows-style separators to the POSIX form azd/Uri expect.
     const normalized = project.replace(/\\/g, '/');
-    if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) {
-        return undefined;
-    }
+    const isAbsolute = normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized);
 
-    // Manually resolve `.`/`..` segments (rather than trusting Uri.joinPath to normalize them)
-    // so a `..` that would traverse above iacFolder is rejected outright.
-    const segments: string[] = [];
-    for (const segment of normalized.split('/')) {
-        if (segment === '' || segment === '.') {
-            continue;
-        }
-        if (segment === '..') {
-            if (segments.length === 0) {
-                return undefined;
-            }
-            segments.pop();
-            continue;
-        }
-        segments.push(segment);
-    }
-
-    const projectFolder = segments.length === 0 ? iacFolder : code.Uri.joinPath(iacFolder, ...segments);
+    // An absolute project path is azd's own project root, entirely unrelated to iacFolder --
+    // Uri.file resolves it directly (rather than Uri.joinPath, which would incorrectly anchor
+    // it under iacFolder as just another path segment).
+    // A relative path resolves against iacFolder via a plain join -- Uri.joinPath performs the
+    // same lexical `.`/`..` normalization as Go's filepath.Join, including permitting `..` to
+    // traverse above iacFolder, so no manual segment-walking/rejection is needed or correct here.
+    const projectFolder = isAbsolute ? code.Uri.file(normalized) : code.Uri.joinPath(iacFolder, normalized);
 
     try {
         const stat = await code.workspace.fs.stat(projectFolder);
