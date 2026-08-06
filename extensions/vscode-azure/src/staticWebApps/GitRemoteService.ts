@@ -51,6 +51,7 @@ interface GitRepository {
             readonly upstream?: { readonly remote?: string; readonly name?: string };
         };
         readonly remotes: readonly {
+            readonly name?: string;
             readonly fetchUrl?: string;
             readonly pushUrl?: string;
         }[];
@@ -80,8 +81,24 @@ export class GitRemoteService implements IGitRemoteService {
             return undefined;
         }
 
-        const remote = repository.state.remotes.find(candidate => candidate.fetchUrl || candidate.pushUrl);
-        const url = remote?.fetchUrl ?? remote?.pushUrl;
+        const remotes = repository.state.remotes.filter(candidate => candidate.fetchUrl || candidate.pushUrl);
+        if (remotes.length === 0) {
+            return undefined;
+        }
+
+        // Bind classification and pushed status to the *same* remote, deterministically,
+        // rather than classifying an arbitrary "first" remote while accepting any upstream.
+        const upstreamRemoteName = repository.state.HEAD?.upstream?.remote;
+        const trackedRemote = upstreamRemoteName
+            ? remotes.find(candidate => candidate.name === upstreamRemoteName)
+            : undefined;
+        // No branch is currently tracking a remote (or its upstream points at a remote that no
+        // longer exists) -- fall back to a deterministic pick so multi-remote repos are handled
+        // consistently: prefer a remote literally named `origin`, else the first remote in the
+        // (stable) array order.
+        const remote = trackedRemote ?? remotes.find(candidate => candidate.name === 'origin') ?? remotes[0];
+
+        const url = remote.fetchUrl ?? remote.pushUrl;
         if (!url) {
             return undefined;
         }
@@ -90,7 +107,9 @@ export class GitRemoteService implements IGitRemoteService {
             provider: this.classifyProvider(url),
             url,
             branch: repository.state.HEAD?.name,
-            hasUpstream: !!repository.state.HEAD?.upstream,
+            // "Pushed" specifically means the branch tracks *this* (the classified) remote --
+            // not merely that HEAD has some upstream, which could point at a different remote.
+            hasUpstream: !!trackedRemote && trackedRemote === remote,
         };
     }
 

@@ -22,7 +22,7 @@ import { DeployStaticWebAppCommandId } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { DeployStaticWebAppArgs } from './DeployStaticWebApp';
-import { staticWebAppLocationNames, type CreateStaticWebAppContext, type CreateStaticWebAppMode, type StaticWebAppDeploymentBlockedReason } from './CreateStaticWebAppContext';
+import { staticWebAppLocationNames, type CreateStaticWebAppContext, type CreateStaticWebAppMode } from './CreateStaticWebAppContext';
 import { ApiLocationStep } from './steps/ApiLocationStep';
 import { AppLocationStep } from './steps/AppLocationStep';
 import { ConfigureStaticWebAppAzureYamlStep } from './steps/ConfigureStaticWebAppAzureYamlStep';
@@ -124,38 +124,25 @@ export class CreateStaticWebApp implements ManagedCommand {
                     'Failed to start Static Web Apps CI/CD setup: {0}', stringifyError(error),
                 ));
             });
-        } else if (context.deploymentBlockedReason) {
-            this.showDeploymentBlockedGuidance(context.deploymentBlockedReason);
+        } else if (context.deploymentUnsupportedArtifact) {
+            this.showUnsupportedArtifactGuidance();
         }
     }
 
     /**
-     * Shown only when the artifact shape cannot be deployed directly
-     * (Next.js hybrid/SSR) *and* CI/CD could not be set up either -- no code
-     * was deployed by any path. Never claims deployment succeeded; offers a
-     * concrete next step.
+     * Shown only when the artifact shape cannot be deployed at all through
+     * this extension (Next.js hybrid/SSR, or any other output shape
+     * `canAzdDeployStaticWebApp` flags as unsupported) -- neither direct
+     * `azd deploy` nor a generated `azd pipeline config` workflow (which only
+     * runs `azd deploy` too) can serve this content, regardless of the Git
+     * remote. No code was deployed by any path; this never claims otherwise.
      */
-    private showDeploymentBlockedGuidance(reason: StaticWebAppDeploymentBlockedReason): void {
-        const messages: Record<StaticWebAppDeploymentBlockedReason, string> = {
-            noRemote: this.ctx.code.l10n.t(
-                'This app was provisioned, but its server-rendered content requires GitHub Actions or Azure Pipelines to deploy. Connect a GitHub or Azure DevOps repository, push it, then run "Deploy Static Web App".',
-            ),
-            unsupportedRemote: this.ctx.code.l10n.t(
-                'This app was provisioned, but its server-rendered content requires GitHub Actions or Azure Pipelines to deploy. The current Git remote isn\'t a supported GitHub or Azure DevOps repository -- connect one, push it, then run "Deploy Static Web App".',
-            ),
-            notPushed: this.ctx.code.l10n.t(
-                'This app was provisioned, but its server-rendered content requires GitHub Actions or Azure Pipelines to deploy. Push the current branch, then run "Deploy Static Web App".',
-            ),
-            azdVersionTooLow: this.ctx.code.l10n.t(
-                'This app was provisioned, but its server-rendered content requires GitHub Actions or Azure Pipelines to deploy. Upgrade the Azure Developer CLI (azd), then run "Deploy Static Web App".',
-            ),
-        };
-
-        const deployActionLabel = this.ctx.code.l10n.t('Deploy Static Web App');
-        void this.ctx.code.window.showWarningMessage(messages[reason], deployActionLabel).then((selection) => {
-            if (selection === deployActionLabel) {
-                void this.ctx.code.commands.executeCommand(DeployStaticWebAppCommandId);
-            }
-        });
+    private showUnsupportedArtifactGuidance(): void {
+        void this.ctx.code.window.showWarningMessage(this.ctx.code.l10n.t(
+            'This app was provisioned, but its build output cannot currently be deployed by this extension -- '
+            + 'direct deployment and the generated CI/CD workflow both require an output distinct from the source '
+            + '(server-rendered Next.js content in particular isn\'t supported by either). Deploy it manually, or '
+            + 'adjust the build to produce a supported static output.',
+        ));
     }
 }

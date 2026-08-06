@@ -65,11 +65,12 @@ describe('DeployStaticWebApp (unit)', () => {
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
         });
 
-        it('should configure CI/CD when a github provider is pre-filled', async () => {
-            const { command, azd } = createCommand();
+        it('should configure CI/CD when a github provider is pre-filled (skipping remote resolution)', async () => {
+            const { command, azd, gitRemote } = createCommand();
 
             await command.execute({ ...args, provider: 'github', environmentName: 'dev' });
 
+            expect(gitRemote.getRemoteInfo.mock.callCount()).to.equal(0);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
             expect(azd.pipelineConfig.mock.calls[0].arguments).to.deep.equal([args.iacFolder, 'github', 'dev']);
             expect(azd.deploy.mock.callCount()).to.equal(0);
@@ -84,33 +85,66 @@ describe('DeployStaticWebApp (unit)', () => {
             expect(azd.pipelineConfig.mock.calls[0].arguments[1]).to.equal('azdo');
         });
 
-        it('should never call azd.deploy for a Next.js hybrid/SSR project with no remote', async () => {
-            const { command, azd, mockResult } = createCommand();
+        it('should show a success message (not a deployed claim) once CI/CD is configured', async () => {
+            const { command, mockResult } = createCommand();
+
+            await command.execute({ ...args, provider: 'github' });
+
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(1);
+            const [message] = mockResult.window.showInformationMessage.mock.calls[0].arguments as unknown as [string];
+            expect(message).to.include('CI/CD configured');
+            expect(message).to.not.include('deployed');
+        });
+
+        it('should force fresh remote resolution when args omit provider, even with iacFolder pre-filled', async () => {
+            const { command, azd, gitRemote } = createCommand({
+                remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true },
+            });
+
+            await command.execute(args); // args has iacFolder but no provider
+
+            expect(gitRemote.getRemoteInfo.mock.callCount()).to.equal(1);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
+        });
+
+        it('should never call azd.deploy or azd.pipelineConfig for a Next.js hybrid/SSR project, even with a supported, pushed remote', async () => {
+            const { command, azd, mockResult, gitRemote } = createCommand({
+                remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true },
+            });
             mockResult.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
 
-            await command.execute(args);
+            await command.execute({ ...args, provider: 'github' });
 
             expect(azd.deploy.mock.callCount()).to.equal(0);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+            expect(gitRemote.getRemoteInfo.mock.callCount()).to.equal(0); // short-circuits before any remote check
             expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
+            const [message] = mockResult.window.showErrorMessage.mock.calls[0].arguments as unknown as [string];
+            expect(message).to.not.include('deployed');
         });
     });
 
-    describe('resolved routing (remote known via getRemoteInfo)', () => {
-        it('should deploy directly for an unsupported remote', async () => {
-            const { command, azd } = createCommand({ remote: { provider: 'unsupported', url: 'https://gitlab.com/x/y.git', hasUpstream: true } });
+    describe('routing via real no-args resolution (command palette)', () => {
+        function createResolvedCommand(options: { readonly remote?: GitRemoteInfo; readonly azdVersionOk?: boolean } = {}) {
+            const created = createCommand(options);
+            setupWorkspaceProject(created.mockResult, '/workspace', 'workspace');
+            return created;
+        }
 
-            await command.execute(args);
+        it('should deploy directly for an unsupported remote', async () => {
+            const { command, azd } = createResolvedCommand({ remote: { provider: 'unsupported', url: 'https://gitlab.com/x/y.git', hasUpstream: true } });
+
+            await command.execute();
 
             expect(azd.deploy.mock.callCount()).to.equal(1);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
         });
 
         it('should explain and offer a direct-deploy fallback when the branch is not pushed', async () => {
-            const { command, azd, mockResult } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: false } });
+            const { command, azd, mockResult } = createResolvedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: false } });
             mockResult.messageResponses.push('Deploy Directly Instead');
 
-            await command.execute(args);
+            await command.execute();
 
             expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
             expect(azd.deploy.mock.callCount()).to.equal(1);
@@ -118,45 +152,64 @@ describe('DeployStaticWebApp (unit)', () => {
         });
 
         it('should not deploy at all when the not-pushed fallback is declined', async () => {
-            const { command, azd, mockResult } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: false } });
+            const { command, azd, mockResult } = createResolvedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: false } });
             mockResult.messageResponses.push(undefined);
 
-            await command.execute(args);
+            await command.execute();
 
             expect(azd.deploy.mock.callCount()).to.equal(0);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
         });
 
         it('should offer a direct-deploy fallback when azd is below the pipeline version gate', async () => {
-            const { command, azd, mockResult } = createCommand({
+            const { command, azd, mockResult } = createResolvedCommand({
                 remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true },
                 azdVersionOk: false,
             });
             mockResult.messageResponses.push('Deploy Directly Instead');
 
-            await command.execute(args);
+            await command.execute();
 
             expect(azd.deploy.mock.callCount()).to.equal(1);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
         });
 
         it('should configure CI/CD for a supported, pushed, version-gated-ok remote', async () => {
-            const { command, azd } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
+            const { command, azd, gitRemote } = createResolvedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
 
-            await command.execute(args);
+            await command.execute();
 
+            expect(gitRemote.getRemoteInfo.mock.callCount()).to.equal(1);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
             expect(azd.deploy.mock.callCount()).to.equal(0);
+        });
+
+        it('should never route Next.js hybrid/SSR to CI/CD or direct deploy, even with a supported, pushed remote', async () => {
+            const { command, azd, mockResult, gitRemote } = createResolvedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
+            mockResult.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
+
+            await command.execute();
+
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+            expect(gitRemote.getRemoteInfo.mock.callCount()).to.equal(0);
+            expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
         });
     });
 
     describe('provider-switch guard', () => {
+        function createGuardedCommand(options: { readonly remote?: GitRemoteInfo } = {}) {
+            const created = createCommand(options);
+            setupWorkspaceProject(created.mockResult, '/workspace', 'workspace');
+            return created;
+        }
+
         it('should require confirmation when the other provider workflow already exists, and abort on cancel', async () => {
-            const { command, azd, mockResult } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
+            const { command, azd, mockResult } = createGuardedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
             mockResult.fs.addFile(MockUri.file('/workspace/.azdo/pipelines/azure-dev.yml'), 'trigger: none');
             mockResult.messageResponses.push(undefined);
 
-            await command.execute(args);
+            await command.execute();
 
             expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
@@ -164,11 +217,11 @@ describe('DeployStaticWebApp (unit)', () => {
         });
 
         it('should proceed when the user confirms the provider switch', async () => {
-            const { command, azd, mockResult } = createCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
+            const { command, azd, mockResult } = createGuardedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
             mockResult.fs.addFile(MockUri.file('/workspace/.azuredevops/pipelines/azure-dev.yaml'), 'trigger: none');
             mockResult.messageResponses.push('Continue');
 
-            await command.execute(args);
+            await command.execute();
 
             expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
         });
