@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { collectPageItems, createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { collectPageItems } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { SubscriptionClient } from '../../../src/rest/clients/SubscriptionClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';

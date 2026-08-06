@@ -12,6 +12,7 @@ export * from './base/IProcessExecutor';
 export { ITelemetryReporter, createTelemetryReporter } from './base/ITelemetryReporter'; // Excluding `NullTelemetryReporter` since it's only intended for testing
 export * from './base/stringifyError';
 export * from './base/toAbortSignal';
+export * from './data/collectAsync';
 export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './data/Page';

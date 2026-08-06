@@ -5,7 +5,7 @@
 
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { collectAsync } from '../data/collectAsync';
+import { collectAsync } from '../../src/data/collectAsync';
 import type { DataItemTree } from '../../src/tree/DataItemTree';
 import { drillChildren } from '../../src/tree/drillChildren';
 
