@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import * as path from 'node:path';
 import type * as vscode from 'vscode';
 import { parse } from 'yaml';
 import type { IAzdService } from '../../azd/AzdService';
@@ -123,17 +124,31 @@ export async function getStaticWebAppServiceConfig(
 /**
  * Resolves a `host: staticwebapp` service's raw `project` value (as returned
  * by {@linkcode getStaticWebAppServiceConfig}) to an actual, existing
- * directory URI, mirroring azd's own `ServiceConfig.Path()` semantics
- * exactly: an absolute `project` (POSIX `/...` or a Windows drive letter
- * `C:...`) is used **unchanged**, and a relative `project` is resolved
- * against {@linkcode iacFolder} (the folder containing `azure.yaml` -- azd's
- * project root) via a plain path join, matching Go's `filepath.Join`. Both
- * `/` and Windows `\` separators are normalized first. Critically, azd does
- * **not** reject a relative `project` whose `..` segments traverse above the
- * project root (`filepath.Join`/`filepath.Clean` happily resolve `..` past
- * the root to an ancestor directory) -- so this function must not either;
- * only non-existence, or resolving to a file rather than a directory, makes
- * a path invalid.
+ * directory URI, mirroring azd's own `ServiceConfig.Path()` semantics for
+ * **the current host platform** -- azd is a Go binary running on the same
+ * machine as this extension, and Go's `path/filepath` package itself
+ * branches on the host OS (backslash is a literal character on POSIX, and
+ * `filepath.IsAbs`/`filepath.Join` differ on Windows), so this must too,
+ * rather than normalizing both POSIX and Windows separator/absolute-path
+ * forms simultaneously regardless of host. `node:path`'s default export
+ * (`path.isAbsolute`/`path.resolve`) already resolves to the host-native
+ * `path.win32`/`path.posix` implementation at runtime, so it's used directly
+ * instead of hand-rolled cross-platform parsing:
+ * - An absolute `project` (per host semantics -- `path.isAbsolute`) is used
+ *   **unchanged** (`path.resolve(project)`, only lexically normalized),
+ *   entirely independent of {@linkcode iacFolder}.
+ * - A relative `project` is resolved against
+ *   {@linkcode vscode.Uri.fsPath iacFolder.fsPath} (azd's project root -- the
+ *   folder containing `azure.yaml`) via `path.resolve`, matching Go's
+ *   `filepath.Join` -- including permitting `..` to traverse above
+ *   {@linkcode iacFolder} to an ancestor directory, which azd itself does not
+ *   reject.
+ *
+ * This is pure string/path-API use (no Node `fs` I/O) -- the resulting
+ * host-native filesystem path is converted back to a {@linkcode vscode.Uri}
+ * via `code.Uri.file` before the one and only I/O call,
+ * {@linkcode vscode.FileSystem.stat workspace.fs.stat}, which is what
+ * actually verifies existence/directory-ness.
  *
  * Returns `undefined` -- meaning `'invalidServiceConfig'`, never a silent
  * fallback to scanning {@linkcode iacFolder} itself -- for any of:
@@ -142,9 +157,8 @@ export async function getStaticWebAppServiceConfig(
  * - a path that doesn't exist, or that exists but isn't a directory (e.g. it
  *   names a file).
  *
- * Existence/directory-ness is verified via
- * {@linkcode vscode.FileSystem.stat workspace.fs.stat} -- callers must not
- * run framework detection or grant eligibility before this check succeeds.
+ * Callers must not run framework detection or grant eligibility before this
+ * check succeeds.
  */
 export async function resolveStaticWebAppServiceProjectFolder(
     code: IVsCode,
@@ -155,17 +169,8 @@ export async function resolveStaticWebAppServiceProjectFolder(
         return undefined;
     }
 
-    // Normalize Windows-style separators to the POSIX form azd/Uri expect.
-    const normalized = project.replace(/\\/g, '/');
-    const isAbsolute = normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized);
-
-    // An absolute project path is azd's own project root, entirely unrelated to iacFolder --
-    // Uri.file resolves it directly (rather than Uri.joinPath, which would incorrectly anchor
-    // it under iacFolder as just another path segment).
-    // A relative path resolves against iacFolder via a plain join -- Uri.joinPath performs the
-    // same lexical `.`/`..` normalization as Go's filepath.Join, including permitting `..` to
-    // traverse above iacFolder, so no manual segment-walking/rejection is needed or correct here.
-    const projectFolder = isAbsolute ? code.Uri.file(normalized) : code.Uri.joinPath(iacFolder, normalized);
+    const resolvedPath = path.isAbsolute(project) ? path.resolve(project) : path.resolve(iacFolder.fsPath, project);
+    const projectFolder = code.Uri.file(resolvedPath);
 
     try {
         const stat = await code.workspace.fs.stat(projectFolder);
