@@ -188,6 +188,13 @@
                 "title": "%commands.vscode-azure/staticWebApps/deleteStaticWebApp%"
             },
             {
+                "command": "vscode-azure/staticWebApps/deploy",
+                "category": "%commands.category.azureStaticWebApps%",
+                "enablement": "!virtualWorkspace",
+                "icon": "$(cloud-upload)",
+                "title": "%commands.vscode-azure/staticWebApps/deploy%"
+            },
+            {
                 "command": "vscode-azure/staticWebApps/createSwaConfigFile",
                 "category": "%commands.category.azureStaticWebApps%",
                 "enablement": "!isWeb",

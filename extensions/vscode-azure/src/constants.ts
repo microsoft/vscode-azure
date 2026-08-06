@@ -24,6 +24,15 @@ export const AzdUpCommandId = 'vscode-azure/azdUp';
 /** Command id for the azd "Delete Deployment" (azd down) command. */
 export const AzdDownCommandId = 'vscode-azure/azdDown';
 
+/**
+ * Command id for the Static Web Apps deployment router (direct `azd deploy`
+ * vs. `azd pipeline config` CI/CD setup, chosen from the project's Git
+ * remote). Standalone and repeatable; also launched as a separate
+ * command/event by `CreateStaticWebApp` once a create wizard has already
+ * completed successfully.
+ */
+export const DeployStaticWebAppCommandId = 'vscode-azure/staticWebApps/deploy';
+
 /** Top-level configuration section name used with `workspace.getConfiguration()`. */
 export const ConfigurationSection = 'vscode-azure';
 

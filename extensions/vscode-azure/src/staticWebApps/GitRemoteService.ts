@@ -1,0 +1,147 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import type * as vscode from 'vscode';
+import { IStaticWebAppsGitHubService } from '../services/StaticWebAppsGitHubService';
+
+/**
+ * Classification of a Git remote for deployment routing purposes.
+ *
+ * `'unsupported'` covers any remote that is neither github.com nor Azure
+ * DevOps (e.g. a self-hosted GitLab/Bitbucket/Gitea remote).
+ */
+export type GitRemoteProvider = 'github' | 'azdo' | 'unsupported';
+
+/** Read-only classification of the Git remote for a local repository. */
+export interface GitRemoteInfo {
+    readonly provider: GitRemoteProvider;
+    readonly url: string;
+    /** Current branch name, if resolvable. */
+    readonly branch?: string;
+    /**
+     * `true` when the current branch has an upstream tracking ref, i.e. it
+     * has already been pushed to the remote. `false` when the branch exists
+     * locally only (or the branch could not be resolved).
+     */
+    readonly hasUpstream: boolean;
+}
+
+/** DI identifier for {@linkcode GitRemoteService}. */
+export const IGitRemoteService: ServiceIdentifier<IGitRemoteService> = Symbol.for('IGitRemoteService');
+export type IGitRemoteService = GitRemoteService;
+
+interface GitExtension {
+    getAPI(version: 1): GitApi;
+}
+
+interface GitApi {
+    readonly repositories: readonly GitRepository[];
+}
+
+interface GitRepository {
+    readonly rootUri: vscode.Uri;
+    readonly state: {
+        readonly HEAD?: {
+            readonly name?: string;
+            /** Present only when the current branch tracks a remote branch (i.e. has been pushed). */
+            readonly upstream?: { readonly remote?: string; readonly name?: string };
+        };
+        readonly remotes: readonly {
+            readonly fetchUrl?: string;
+            readonly pushUrl?: string;
+        }[];
+    };
+}
+
+const azureDevOpsHostnames = new Set(['dev.azure.com', 'ssh.dev.azure.com', 'vs-ssh.visualstudio.com']);
+
+/**
+ * Read-only Git remote inspection used to route Static Web Apps deployment
+ * between direct `azd deploy` and `azd pipeline config` CI/CD setup.
+ *
+ * Never mutates Git state (no init/add-remote/push) -- it only reads the
+ * `vscode.git` extension's already-known repository state.
+ */
+@injectable()
+export class GitRemoteService implements IGitRemoteService {
+    public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IStaticWebAppsGitHubService) private readonly github: IStaticWebAppsGitHubService,
+    ) { }
+
+    /** @inheritdoc */
+    public async getRemoteInfo(folder: vscode.Uri): Promise<GitRemoteInfo | undefined> {
+        const repository = await this.resolveRepository(folder);
+        if (!repository) {
+            return undefined;
+        }
+
+        const remote = repository.state.remotes.find(candidate => candidate.fetchUrl || candidate.pushUrl);
+        const url = remote?.fetchUrl ?? remote?.pushUrl;
+        if (!url) {
+            return undefined;
+        }
+
+        return {
+            provider: this.classifyProvider(url),
+            url,
+            branch: repository.state.HEAD?.name,
+            hasUpstream: !!repository.state.HEAD?.upstream,
+        };
+    }
+
+    /** Classifies a remote URL as `github`, `azdo`, or `unsupported`. */
+    private classifyProvider(url: string): GitRemoteProvider {
+        if (this.github.parseRepositoryUrl(url)) {
+            return 'github';
+        }
+        if (isAzureDevOpsRemoteUrl(url)) {
+            return 'azdo';
+        }
+        return 'unsupported';
+    }
+
+    /** Resolves the `vscode.git` repository whose root contains `folder`, if any. */
+    private async resolveRepository(folder: vscode.Uri): Promise<GitRepository | undefined> {
+        const extension = this.code.extensions.getExtension<GitExtension>('vscode.git');
+        if (!extension) {
+            return undefined;
+        }
+        const git = extension.isActive ? extension.exports : await extension.activate();
+        const folderPath = folder.path.replace(/\/$/, '');
+        const repositories = git.getAPI(1).repositories
+            .filter(candidate => {
+                const rootPath = candidate.rootUri.path.replace(/\/$/, '');
+                return folderPath === rootPath || folderPath.startsWith(`${rootPath}/`);
+            })
+            .sort((left, right) => right.rootUri.path.length - left.rootUri.path.length);
+        return repositories[0];
+    }
+}
+
+/**
+ * Matches Azure DevOps HTTPS (`dev.azure.com`, `*.visualstudio.com`) and SSH
+ * (`ssh.dev.azure.com`, `vs-ssh.visualstudio.com`) remote URLs.
+ */
+function isAzureDevOpsRemoteUrl(url: string): boolean {
+    // SSH form: git@ssh.dev.azure.com:v3/... or org@vs-ssh.visualstudio.com:v3/...
+    const sshMatch = /^(?:ssh:\/\/)?[^@/]+@([^:/]+)[:/]/i.exec(url);
+    if (sshMatch) {
+        return isAzureDevOpsHostname(sshMatch[1]);
+    }
+
+    try {
+        return isAzureDevOpsHostname(new URL(url).hostname);
+    } catch {
+        return false;
+    }
+}
+
+function isAzureDevOpsHostname(hostname: string): boolean {
+    const normalized = hostname.toLowerCase();
+    return azureDevOpsHostnames.has(normalized) || normalized.endsWith('.visualstudio.com');
+}

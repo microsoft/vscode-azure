@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { Everything, type ExecuteStep, IActionContext, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
+import { Everything, type ExecuteStep, IActionContext, ICodeContext, IOutputChannel, stringifyError, Wizard } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
 import { AzdDeployStep } from '../../azd/wizard/AzdDeployStep';
 import { AzdProvisionStep } from '../../azd/wizard/AzdProvisionStep';
@@ -18,12 +18,15 @@ import { HydrateAzdInfoStep } from '../../azd/wizard/HydrateAzdInfoStep';
 import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
+import { DeployStaticWebAppCommandId } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
-import { staticWebAppLocationNames, type CreateStaticWebAppContext, type CreateStaticWebAppMode } from './CreateStaticWebAppContext';
+import type { DeployStaticWebAppArgs } from './DeployStaticWebApp';
+import { staticWebAppLocationNames, type CreateStaticWebAppContext, type CreateStaticWebAppMode, type StaticWebAppDeploymentBlockedReason } from './CreateStaticWebAppContext';
 import { ApiLocationStep } from './steps/ApiLocationStep';
 import { AppLocationStep } from './steps/AppLocationStep';
 import { ConfigureStaticWebAppAzureYamlStep } from './steps/ConfigureStaticWebAppAzureYamlStep';
+import { DetermineStaticWebAppDeploymentRouteStep } from './steps/DetermineStaticWebAppDeploymentRouteStep';
 import { OutputLocationStep } from './steps/OutputLocationStep';
 import { PickBuildPresetStep } from './steps/PickBuildPresetStep';
 import { PickSkuStep } from './steps/PickSkuStep';
@@ -62,6 +65,7 @@ export class CreateStaticWebApp implements ManagedCommand {
             get(ApiLocationStep),
             get(OutputLocationStep),
             get(ConfirmProvisionStep),
+            get(DetermineStaticWebAppDeploymentRouteStep),
         ];
 
         const executeSteps: ExecuteStep<CreateStaticWebAppContext>[] = [
@@ -102,5 +106,56 @@ export class CreateStaticWebApp implements ManagedCommand {
 
         const subscriptionId = context.subscription?.subscriptionId ?? context.hydratedSubscriptionId;
         this.dataTree.invalidate(subscriptionId ? bySubscription(subscriptionId) : Everything);
+
+        // Follow-up is deliberately *after* the wizard has already fully and
+        // successfully completed (provisioning, and any direct deploy), and is
+        // launched as a separate command/event so its own interactivity,
+        // failure, or cancellation can never alter the create result above.
+        if (context.deploymentRoute && context.iacFolder) {
+            const deployArgs: DeployStaticWebAppArgs = {
+                iacFolder: context.iacFolder,
+                environmentName: context.environmentName,
+                provider: context.deploymentRoute.provider,
+                repositoryUrl: context.deploymentRoute.repositoryUrl,
+                branch: context.deploymentRoute.branch,
+            };
+            this.ctx.code.commands.executeCommand(DeployStaticWebAppCommandId, deployArgs).then(undefined, (error: unknown) => {
+                this.output.appendLine(this.ctx.code.l10n.t(
+                    'Failed to start Static Web Apps CI/CD setup: {0}', stringifyError(error),
+                ));
+            });
+        } else if (context.deploymentBlockedReason) {
+            this.showDeploymentBlockedGuidance(context.deploymentBlockedReason);
+        }
+    }
+
+    /**
+     * Shown only when the artifact shape cannot be deployed directly
+     * (Next.js hybrid/SSR) *and* CI/CD could not be set up either -- no code
+     * was deployed by any path. Never claims deployment succeeded; offers a
+     * concrete next step.
+     */
+    private showDeploymentBlockedGuidance(reason: StaticWebAppDeploymentBlockedReason): void {
+        const messages: Record<StaticWebAppDeploymentBlockedReason, string> = {
+            noRemote: this.ctx.code.l10n.t(
+                'This app was provisioned, but its server-rendered content requires GitHub Actions or Azure Pipelines to deploy. Connect a GitHub or Azure DevOps repository, push it, then run "Deploy Static Web App".',
+            ),
+            unsupportedRemote: this.ctx.code.l10n.t(
+                'This app was provisioned, but its server-rendered content requires GitHub Actions or Azure Pipelines to deploy. The current Git remote isn\'t a supported GitHub or Azure DevOps repository -- connect one, push it, then run "Deploy Static Web App".',
+            ),
+            notPushed: this.ctx.code.l10n.t(
+                'This app was provisioned, but its server-rendered content requires GitHub Actions or Azure Pipelines to deploy. Push the current branch, then run "Deploy Static Web App".',
+            ),
+            azdVersionTooLow: this.ctx.code.l10n.t(
+                'This app was provisioned, but its server-rendered content requires GitHub Actions or Azure Pipelines to deploy. Upgrade the Azure Developer CLI (azd), then run "Deploy Static Web App".',
+            ),
+        };
+
+        const deployActionLabel = this.ctx.code.l10n.t('Deploy Static Web App');
+        void this.ctx.code.window.showWarningMessage(messages[reason], deployActionLabel).then((selection) => {
+            if (selection === deployActionLabel) {
+                void this.ctx.code.commands.executeCommand(DeployStaticWebAppCommandId);
+            }
+        });
     }
 }
