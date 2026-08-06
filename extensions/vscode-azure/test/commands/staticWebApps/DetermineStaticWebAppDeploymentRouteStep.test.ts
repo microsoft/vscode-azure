@@ -34,7 +34,7 @@ function createStep(remote: GitRemoteInfo | undefined, options: { readonly azdVe
         }
     });
     const step = new DetermineStaticWebAppDeploymentRouteStep(code, gitRemote, azd);
-    return { step, azd, getRemoteInfo };
+    return { step, azd, getRemoteInfo, fs };
 }
 
 function baseContext(overrides: Partial<CreateStaticWebAppContext> = {}): CreateStaticWebAppContext {
@@ -69,15 +69,15 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
 
             const result = await step.prompt(baseContext({ outputLocation: '' }));
 
-            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             expect(getRemoteInfo.mock.callCount()).to.equal(0);
         });
 
         it('should block on "." and "/" output locations the same way', async () => {
             const { step } = createStep(githubPushed);
 
-            expect(await step.prompt(baseContext({ outputLocation: '.' }))).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
-            expect(await step.prompt(baseContext({ outputLocation: '/' }))).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(await step.prompt(baseContext({ outputLocation: '.' }))).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+            expect(await step.prompt(baseContext({ outputLocation: '/' }))).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
         });
 
         it('should block Next.js hybrid/SSR even when a non-empty custom output location is given', async () => {
@@ -88,7 +88,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
 
             const result = await step.prompt(baseContext({ buildPresetSelection: 'nextjs', outputLocation: 'build' }));
 
-            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'hybridSsr' });
             expect(getRemoteInfo.mock.callCount()).to.equal(0);
         });
 
@@ -144,7 +144,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
             return baseContext({ outputLocation: undefined, ...overrides });
         }
 
-        it('should not classify a hydrated project as unsupported when its existing SWA service has a valid dist', async () => {
+        it('should not classify a hydrated project as unsupported when its existing SWA service has a valid dist and a non-hybrid framework', async () => {
             const { step, getRemoteInfo } = createStep(undefined, {
                 azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n',
             });
@@ -157,18 +157,18 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
             expect(getRemoteInfo.mock.callCount()).to.equal(1);
         });
 
-        it('should block a hydrated project whose existing SWA service has an invalid dist', async () => {
+        it('should block (invalidServiceConfig) a hydrated project whose existing SWA service has an invalid dist', async () => {
             const { step, getRemoteInfo } = createStep(githubPushed, {
                 azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n',
             });
 
             const result = await step.prompt(hydratedContext());
 
-            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             expect(getRemoteInfo.mock.callCount()).to.equal(0);
         });
 
-        it('should block when no existing SWA service can be found at all (no positive evidence of eligibility)', async () => {
+        it('should block (invalidServiceConfig) when no existing SWA service can be found at all (no positive evidence of eligibility)', async () => {
             // No azure.yaml at all -- there is no valid deploy target to route direct deploy or
             // CI/CD against, so this must be treated as unsupported, not silently preserved as
             // eligible. The Git remote must not even be inspected once this is already decided.
@@ -176,50 +176,97 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
 
             const result = await step.prompt(hydratedContext());
 
-            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             expect(getRemoteInfo.mock.callCount()).to.equal(0);
         });
 
-        it('should block when azure.yaml exists but declares no host: staticwebapp service', async () => {
+        it('should block (invalidServiceConfig) when azure.yaml exists but declares no host: staticwebapp service', async () => {
             const { step, getRemoteInfo } = createStep(githubPushed, {
                 azureYaml: 'services:\n  api:\n    host: function\n',
             });
 
             const result = await step.prompt(hydratedContext());
 
-            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             expect(getRemoteInfo.mock.callCount()).to.equal(0);
         });
 
-        it('should block when the existing service dist is missing', async () => {
+        it('should block (invalidServiceConfig) when the existing service dist is missing', async () => {
             const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n' });
-            expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
         });
 
-        it('should block when the existing service dist is "."', async () => {
+        it('should block (invalidServiceConfig) when the existing service dist is "."', async () => {
             const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: "."\n' });
-            expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
         });
 
-        it('should block when the existing service dist is "/"', async () => {
+        it('should block (invalidServiceConfig) when the existing service dist is "/"', async () => {
             const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: "/"\n' });
-            expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
         });
 
-        it('should block when the existing service dist is a non-string value', async () => {
+        it('should block (invalidServiceConfig) when the existing service dist is a non-string value', async () => {
             const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: 123\n' });
-            expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
+            expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
         });
 
-        it('should still block Next.js hybrid/SSR without even reading azure.yaml', async () => {
-            const { step, azd, getRemoteInfo } = createStep(githubPushed, {
+        it('should block (hybridSsr) a hydrated project with a valid dist whose framework is detected as Next.js at the service project path, before any remote lookup', async () => {
+            // buildPresetSelection is unavailable for a hydrated project (PickBuildPresetStep also
+            // skips with hasInfra) -- this proves the framework is independently (re-)detected, not
+            // assumed non-hybrid just because buildPresetSelection is undefined.
+            const { step, fs, getRemoteInfo } = createStep(githubPushed, {
                 azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n',
             });
+            fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
 
-            const result = await step.prompt(hydratedContext({ buildPresetSelection: 'nextjs' }));
+            const result = await step.prompt(hydratedContext());
 
-            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifact: true });
-            expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'hybridSsr' });
+            expect(getRemoteInfo.mock.callCount()).to.equal(0);
+        });
+
+        it('should remain eligible for a hydrated project with a valid dist and a non-hybrid framework', async () => {
+            const { step, fs } = createStep(githubPushed, {
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n',
+            });
+            fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+            const result = await step.prompt(hydratedContext());
+
+            expect(result).to.deep.equal({
+                deploy: false,
+                deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+            });
+        });
+
+        it('should detect the framework at the service\'s configured project path, not repository-wide', async () => {
+            // A Next.js package.json sits at the repo root (outside the service's declared
+            // `project` folder) -- must not cause a false hybridSsr classification, proving
+            // detection is scoped to the service's project path rather than repository-wide.
+            const { step, fs } = createStep(githubPushed, {
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
+            });
+            fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
+            fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+            const result = await step.prompt(hydratedContext());
+
+            expect(result).to.deep.equal({
+                deploy: false,
+                deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+            });
+        });
+
+        it('should detect a hybrid/SSR framework nested under the service\'s configured project path', async () => {
+            const { step, fs, getRemoteInfo } = createStep(githubPushed, {
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
+            });
+            fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
+
+            const result = await step.prompt(hydratedContext());
+
+            expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'hybridSsr' });
             expect(getRemoteInfo.mock.callCount()).to.equal(0);
         });
     });

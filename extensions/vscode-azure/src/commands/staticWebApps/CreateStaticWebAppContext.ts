@@ -5,6 +5,7 @@
 
 import type { PickContext } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
+import type { StaticWebAppUnsupportedArtifactReason } from './deploymentRouting';
 import type { StaticWebAppBuildPreset, StaticWebAppBuildPresetId } from './buildPresets';
 
 /** Creation experience selected by the registered command ID. */
@@ -49,8 +50,9 @@ export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext
      * possible. When set, direct deploy (`AzdDeployStep`) is suppressed
      * (`deploy: false`) and `CreateStaticWebApp` launches the standalone
      * `DeployStaticWebApp` command with this info once the wizard succeeds.
-     * Only ever set when {@linkcode deploymentUnsupportedArtifact} is unset --
-     * direct deployment must be supported before CI/CD is even considered.
+     * Only ever set when {@linkcode deploymentUnsupportedArtifactReason} is
+     * unset -- direct deployment must be supported before CI/CD is even
+     * considered.
      */
     readonly deploymentRoute?: {
         readonly provider: 'github' | 'azdo';
@@ -60,13 +62,15 @@ export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext
     /**
      * Set by `DetermineStaticWebAppDeploymentRouteStep` when the artifact
      * shape cannot be deployed at all through this extension -- Next.js
-     * hybrid/SSR (`buildPresetSelection === 'nextjs'`), or any other shape
-     * `canAzdDeployStaticWebApp` flags as unsupported. Neither direct
-     * `azd deploy` nor a generated `azd pipeline config` workflow (which only
-     * runs `azd deploy` too) can serve this content, so the Git remote is
-     * never even inspected in this case. `deploy` is forced to `false`, and
-     * `CreateStaticWebApp` shows one honest "provisioned only" message
-     * instead of claiming (or silently skipping) a deployment.
+     * hybrid/SSR, or any other shape `canAzdDeployStaticWebApp` flags as
+     * unsupported (e.g. a missing/invalid existing service for a hydrated
+     * project). Neither direct `azd deploy` nor a generated
+     * `azd pipeline config` workflow (which only runs `azd deploy` too) can
+     * help in either case, so the Git remote is never even inspected.
+     * `deploy` is forced to `false`, and `CreateStaticWebApp` shows one
+     * honest, reason-specific "provisioned only" message instead of claiming
+     * (or silently skipping) a deployment -- see
+     * {@linkcode StaticWebAppUnsupportedArtifactReason} for the distinction.
      */
-    readonly deploymentUnsupportedArtifact?: boolean;
+    readonly deploymentUnsupportedArtifactReason?: StaticWebAppUnsupportedArtifactReason;
 }

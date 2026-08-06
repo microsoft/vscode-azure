@@ -128,6 +128,7 @@ describe('DeployStaticWebApp (unit)', () => {
             expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
             const [message] = mockResult.window.showErrorMessage.mock.calls[0].arguments as unknown as [string];
             expect(message).to.not.include('deployed');
+            expect(message).to.include('Next.js');
         });
 
         describe('fresh detection combines framework AND the existing service dist (artifactSupportsAutoDeploy omitted)', () => {
@@ -148,6 +149,19 @@ describe('DeployStaticWebApp (unit)', () => {
 
                 expect(azd.deploy.mock.callCount()).to.equal(0);
                 expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+            });
+
+            it('should show configuration guidance (not Next.js wording) for a malformed static service', async () => {
+                // A perfectly ordinary (non-hybrid) static app whose azure.yaml is just
+                // misconfigured -- must never be told it's a Next.js SSR problem.
+                const { command, mockResult } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n' });
+
+                await command.execute(args);
+
+                expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
+                const [message] = mockResult.window.showErrorMessage.mock.calls[0].arguments as unknown as [string];
+                expect(message).to.not.include('Next.js');
+                expect(message.toLowerCase()).to.include('configuration');
             });
 
             it('should block when the service dist is missing', async () => {
@@ -196,6 +210,31 @@ describe('DeployStaticWebApp (unit)', () => {
                 await command.execute(args);
 
                 expect(azd.deploy.mock.callCount()).to.equal(1);
+            });
+
+            it('should detect the framework at the service\'s configured project path, not repository-wide', async () => {
+                const { command, azd, mockResult } = createCommand({
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
+                });
+                mockResult.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
+                mockResult.fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(1);
+            });
+
+            it('should detect a hybrid/SSR framework nested under the service\'s configured project path', async () => {
+                const { command, azd, mockResult } = createCommand({
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
+                });
+                mockResult.fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(0);
+                const [message] = mockResult.window.showErrorMessage.mock.calls[0].arguments as unknown as [string];
+                expect(message).to.include('Next.js');
             });
         });
 

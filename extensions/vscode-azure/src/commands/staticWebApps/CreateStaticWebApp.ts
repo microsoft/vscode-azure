@@ -21,8 +21,9 @@ import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
 import { DeployStaticWebAppCommandId } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
-import type { DeployStaticWebAppArgs } from './DeployStaticWebApp';
 import { staticWebAppLocationNames, type CreateStaticWebAppContext, type CreateStaticWebAppMode } from './CreateStaticWebAppContext';
+import type { DeployStaticWebAppArgs } from './DeployStaticWebApp';
+import type { StaticWebAppUnsupportedArtifactReason } from './deploymentRouting';
 import { ApiLocationStep } from './steps/ApiLocationStep';
 import { AppLocationStep } from './steps/AppLocationStep';
 import { ConfigureStaticWebAppAzureYamlStep } from './steps/ConfigureStaticWebAppAzureYamlStep';
@@ -130,25 +131,32 @@ export class CreateStaticWebApp implements ManagedCommand {
                     'Failed to start Static Web Apps CI/CD setup: {0}', stringifyError(error),
                 ));
             });
-        } else if (context.deploymentUnsupportedArtifact) {
-            this.showUnsupportedArtifactGuidance();
+        } else if (context.deploymentUnsupportedArtifactReason) {
+            this.showUnsupportedArtifactGuidance(context.deploymentUnsupportedArtifactReason);
         }
     }
 
     /**
      * Shown only when the artifact shape cannot be deployed at all through
-     * this extension (Next.js hybrid/SSR, or any other output shape
-     * `canAzdDeployStaticWebApp` flags as unsupported) -- neither direct
-     * `azd deploy` nor a generated `azd pipeline config` workflow (which only
-     * runs `azd deploy` too) can serve this content, regardless of the Git
-     * remote. No code was deployed by any path; this never claims otherwise.
+     * this extension -- neither direct `azd deploy` nor a generated
+     * `azd pipeline config` workflow (which only runs `azd deploy` too) can
+     * help, regardless of the Git remote. No code was deployed by any path;
+     * this never claims otherwise. Wording is reason-specific so a plain
+     * misconfiguration is never described as Next.js-specific, and vice versa.
      */
-    private showUnsupportedArtifactGuidance(): void {
-        void this.ctx.code.window.showWarningMessage(this.ctx.code.l10n.t(
-            'This app was provisioned, but its build output cannot currently be deployed by this extension -- '
-            + 'direct deployment and the generated CI/CD workflow both require an output distinct from the source '
-            + '(server-rendered Next.js content in particular isn\'t supported by either). Deploy it manually, or '
-            + 'adjust the build to produce a supported static output.',
-        ));
+    private showUnsupportedArtifactGuidance(reason: StaticWebAppUnsupportedArtifactReason): void {
+        const message = reason === 'hybridSsr'
+            ? this.ctx.code.l10n.t(
+                'This app was provisioned, but its server-rendered Next.js content cannot currently be deployed '
+                + 'by this extension -- neither direct deployment nor the generated CI/CD workflow support it. '
+                + 'Deploy it manually, or adjust the build to produce a supported static output.',
+            )
+            : this.ctx.code.l10n.t(
+                'This app was provisioned, but its Static Web Apps configuration doesn\'t declare a valid deployable '
+                + 'output -- direct deployment and the generated CI/CD workflow both require a build output distinct '
+                + 'from the source. Check the output location (or the existing azure.yaml service), then deploy '
+                + 'manually or run "Deploy Static Web App" again.',
+            );
+        void this.ctx.code.window.showWarningMessage(message);
     }
 }
