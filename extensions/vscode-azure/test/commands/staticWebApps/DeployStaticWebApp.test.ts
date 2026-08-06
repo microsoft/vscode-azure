@@ -19,7 +19,7 @@ function createMockGitRemoteService(info: GitRemoteInfo | undefined): IGitRemote
     return { getRemoteInfo: mock.fn(() => Promise.resolve(info)) } as never;
 }
 
-function createCommand(options: { readonly remote?: GitRemoteInfo; readonly azdVersionOk?: boolean } = {}) {
+function createCommand(options: { readonly remote?: GitRemoteInfo; readonly azdVersionOk?: boolean; readonly azureYaml?: string | null } = {}) {
     const { ctx, mock: mockResult } = createMockCodeContext();
     const actionContext = createActionContext('test');
     const azd = createMockAzdService();
@@ -33,6 +33,13 @@ function createCommand(options: { readonly remote?: GitRemoteInfo; readonly azdV
             return [];
         }
     });
+    // Defaults to a valid `host: staticwebapp` service at /workspace/azure.yaml so tests that
+    // don't care about artifact-detection details (most "pre-filled args" tests) aren't
+    // incidentally blocked by the dist-validity check. Pass `azureYaml: null` to simulate no
+    // azure.yaml at all, or a custom string to simulate an invalid/absent service.
+    if (options.azureYaml !== null) {
+        mockResult.fs.addFile(MockUri.file('/workspace/azure.yaml'), options.azureYaml ?? azureYaml);
+    }
     const gitRemote = createMockGitRemoteService(options.remote);
     const codeProvider = createMockCodeProvider();
 
@@ -121,6 +128,75 @@ describe('DeployStaticWebApp (unit)', () => {
             expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
             const [message] = mockResult.window.showErrorMessage.mock.calls[0].arguments as unknown as [string];
             expect(message).to.not.include('deployed');
+        });
+
+        describe('fresh detection combines framework AND the existing service dist (artifactSupportsAutoDeploy omitted)', () => {
+            it('should block when no azure.yaml exists at all', async () => {
+                const { command, azd, mockResult } = createCommand({ azureYaml: null });
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(0);
+                expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+                expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
+            });
+
+            it('should block when azure.yaml has no host: staticwebapp service at all', async () => {
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  api:\n    host: function\n' });
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(0);
+                expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+            });
+
+            it('should block when the service dist is missing', async () => {
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n' });
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(0);
+            });
+
+            it('should block when the service dist is an empty string', async () => {
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n' });
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(0);
+            });
+
+            it('should block when the service dist is "."', async () => {
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: "."\n' });
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(0);
+            });
+
+            it('should block when the service dist is "/"', async () => {
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: "/"\n' });
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(0);
+            });
+
+            it('should block when the service dist is a non-string value', async () => {
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: 123\n' });
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(0);
+            });
+
+            it('should proceed when the service has a valid dist and the framework is not hybrid/SSR', async () => {
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n' });
+
+                await command.execute(args);
+
+                expect(azd.deploy.mock.callCount()).to.equal(1);
+            });
         });
 
         it('should trust artifactSupportsAutoDeploy=true from creation and skip re-detection (avoids monorepo/override contradictions)', async () => {
@@ -252,6 +328,19 @@ describe('DeployStaticWebApp (unit)', () => {
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
             expect(gitRemote.getRemoteInfo.mock.callCount()).to.equal(0);
             expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
+        });
+
+        it('should block via real no-args resolution when the recognized existing service has an invalid dist', async () => {
+            // hasStaticWebAppService (used to filter resolveProject candidates) only recognizes
+            // the service's *existence* -- this proves its *value* is still checked afterward,
+            // rather than being ignored once the project is recognized as "a SWA project".
+            const { command, azd, mockResult } = createResolvedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
+            mockResult.fs.addFile(MockUri.file('/workspace/azure.yaml'), 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n');
+
+            await command.execute();
+
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
         });
     });
 

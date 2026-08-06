@@ -35,10 +35,13 @@ import { canAzdDeployStaticWebApp } from './locationUtils';
  *   exists, so `outputLocation` is never captured this run), it is derived
  *   instead from the existing `azure.yaml`'s `host: staticwebapp` service
  *   `dist` -- a hydrated project must never be blanket-classified as
- *   unsupported just because this run didn't ask about output location. If
- *   no such service is found at all, eligibility is preserved (treated as
- *   supported) rather than newly blocked, since there's no positive evidence
- *   the artifact is actually unsupported.
+ *   unsupported just because this run didn't ask about output location. If no
+ *   such service can be found at all (absent, unreadable, or an invalid
+ *   `dist` -- missing/non-string/empty/`.`/`/`), eligibility is **not**
+ *   granted: there is no valid deploy target to route direct deploy or CI/CD
+ *   against, so this is treated the same as any other unsupported artifact
+ *   shape. Eligibility is only ever derived from a positively-found, valid
+ *   service.
  *
  * Decision (mutually exclusive):
  * 1. Neither direct deploy nor CI/CD is possible (either gate above) --
@@ -112,9 +115,13 @@ export class DetermineStaticWebAppDeploymentRouteStep extends PromptStep<CreateS
      * Prefers `context.outputLocation` (set this run by `OutputLocationStep`);
      * falls back to the existing `azure.yaml` SWA service's `dist` for an
      * already-hydrated project where `outputLocation` was never captured.
-     * Preserves eligibility (returns `true`) when no service can be found at
-     * all, rather than newly classifying an indeterminate project as
-     * unsupported.
+     *
+     * An absent, unreadable, or invalid service (no `host: staticwebapp`
+     * entry at all, or one with a missing/non-string/empty/`.`/`/` `dist`) is
+     * **ineligible** -- there is no valid deploy target to configure either
+     * direct deploy or CI/CD against, so this must never be treated as
+     * eligible by default. Eligibility is only ever granted when a valid
+     * service is positively found.
      */
     private async resolveCanAutoDeploy(context: Readonly<CreateStaticWebAppContext>, iacFolder: vscode.Uri): Promise<boolean> {
         if (context.outputLocation !== undefined) {
@@ -122,9 +129,6 @@ export class DetermineStaticWebAppDeploymentRouteStep extends PromptStep<CreateS
         }
 
         const dist = await getStaticWebAppServiceDist(this.azd, this.code, iacFolder);
-        if (dist === undefined) {
-            return true;
-        }
-        return canAzdDeployStaticWebApp(dist);
+        return dist !== undefined && canAzdDeployStaticWebApp(dist);
     }
 }
