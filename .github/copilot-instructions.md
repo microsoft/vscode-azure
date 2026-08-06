@@ -5,6 +5,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * `docs/tree-views.md` -- Data/view layer separation, providers, enrichment, caching, pagination, activity tree, resource icons
 * `docs/dependency-injection.md` -- Container setup, service identifiers, scoped execution, factory bindings
 * `docs/commands.md` -- ManagedCommand pattern, registration, context values, prefixArgs
+* `docs/settings.md` -- Shared settings framework: adapters, capabilities, JSONC editor, secrets, local sync
 * `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers
 * `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
 * `docs/resource-creation.md` -- AzdJob, wizard step sequence, scenario matrix, hydration, adding new resource types

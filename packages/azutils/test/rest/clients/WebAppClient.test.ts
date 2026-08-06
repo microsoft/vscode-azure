@@ -62,4 +62,57 @@ describe('WebAppClient (unit)', () => {
             greeting: 'updated',
         });
     });
+
+    it('should list connection strings, preserving each value/type pair', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+
+        const body = JSON.stringify({
+            properties: {
+                MyDb: { value: 'Server=tcp:...', type: 'SQLAzure' },
+                MyCache: { value: 'redis-conn', type: 'RedisCache' },
+            },
+        });
+
+        const httpClient = new MockHttpClient({
+            handler: (req) => makeResponse(req, 200, body),
+        });
+
+        const client = WebAppClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        const result = await client.webApps.listConnectionStrings('rg1', 'myapp');
+
+        expect(result.properties).to.deep.equal({
+            MyDb: { value: 'Server=tcp:...', type: 'SQLAzure' },
+            MyCache: { value: 'redis-conn', type: 'RedisCache' },
+        });
+    });
+
+    it('should update connection strings', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+
+        const body = JSON.stringify({
+            properties: {
+                MyDb: { value: 'updated-conn', type: 'Custom' },
+            },
+        });
+
+        const httpClient = new MockHttpClient({
+            handler: (req) => {
+                expect(req.method).to.equal('PUT');
+                return makeResponse(req, 200, body);
+            },
+        });
+
+        const client = WebAppClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        const result = await client.webApps.updateConnectionStrings('rg1', 'myapp', {
+            properties: { MyDb: { value: 'updated-conn', type: 'Custom' } },
+        });
+
+        expect(result.properties).to.deep.equal({
+            MyDb: { value: 'updated-conn', type: 'Custom' },
+        });
+    });
 });

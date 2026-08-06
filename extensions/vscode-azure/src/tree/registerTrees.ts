@@ -23,9 +23,9 @@ import { AcrDataProvider } from './resources/acr/AcrDataProvider';
 import { AcrViewProvider } from './resources/acr/AcrViewProvider';
 import { AzureAccountDataProvider, IAzureAccountDataProvider } from './resources/AzureAccountDataProvider';
 import { AzureResourceDataProvider } from './resources/AzureResourceDataProvider';
-import { FunctionAppDataProvider, IFunctionAppDataProvider } from './resources/functions/FunctionAppDataProvider';
-import { FunctionAppViewProvider } from './resources/functions/FunctionAppViewProvider';
 import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
+import { ISettingsDataProvider, SettingsDataProvider } from './resources/settings/SettingsDataProvider';
+import { SettingsViewProvider } from './resources/settings/SettingsViewProvider';
 import { AzdWorkspaceDataProvider } from './workspace/azd/AzdWorkspaceDataProvider';
 import { AzdWorkspaceViewProvider } from './workspace/azd/AzdWorkspaceViewProvider';
 import { EmulatorsWorkspaceDataProvider } from './workspace/emulators/EmulatorsWorkspaceDataProvider';
@@ -60,13 +60,16 @@ export function registerTrees(container: Container): void {
         // Registration order matters: specific providers first, generic fallback last.
         dataProviders: [
             AcrDataProvider,
-            [IFunctionAppDataProvider, FunctionAppDataProvider], // singleton so commands can @inject it directly
+            // Claims only the settings virtual nodes, so it must precede any provider that claims
+            // the owning resource. Aliased as a singleton so the resource-owning providers can
+            // inject it to compose their settings children.
+            [ISettingsDataProvider, SettingsDataProvider],
             [IAzureAccountDataProvider, AzureAccountDataProvider], // singleton so mock-data mode can rebind it
             AzureResourceDataProvider,
         ],
         viewProviders: [
             AcrViewProvider,
-            FunctionAppViewProvider,
+            SettingsViewProvider,
             GenericAzureViewProvider,
         ],
     });

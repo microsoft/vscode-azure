@@ -15,7 +15,7 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileSystem } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockFileChangeType, MockFilePermission, MockFileSystemError, MockFileType, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -167,6 +167,41 @@ export interface MockVsCodeResult {
      * ```
      */
     readonly taskProcessEndEmitter: EventEmitter<vscode.TaskProcessEndEvent>;
+
+    /**
+     * File system providers registered via `workspace.registerFileSystemProvider`, keyed by scheme.
+     *
+     * `openTextDocument` routes through these, so a test can register a provider and then open a
+     * document against it exactly as the editor would.
+     */
+    readonly fileSystemProviders: Map<string, vscode.FileSystemProvider>;
+
+    /**
+     * Documents opened via `workspace.openTextDocument`, in order.
+     *
+     * Each is a minimal stand-in exposing `uri`, `getText()`, `languageId`, and `save()`; `save()`
+     * writes the current text back through the registered provider, mirroring what the editor does
+     * on Ctrl+S.
+     */
+    readonly textDocuments: MockTextDocument[];
+
+    /** Documents passed to `window.showTextDocument`, in order. */
+    readonly shownDocuments: vscode.TextDocument[];
+}
+
+/**
+ * Minimal stand-in for {@linkcode vscode.TextDocument} covering what settings-editor tests need:
+ * reading the text the provider produced, editing it, and saving it back through the provider.
+ */
+export interface MockTextDocument {
+    readonly uri: vscode.Uri;
+    readonly languageId: string;
+    /** Current in-memory text. */
+    getText(): string;
+    /** Replace the in-memory text, simulating the user typing. */
+    setText(text: string): void;
+    /** Write the current text back through the registered provider, as Ctrl+S would. */
+    save(): Promise<boolean>;
 }
 
 /**
@@ -322,6 +357,15 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         openExternal,
         remoteName: undefined,
     };
+    const shownDocuments: vscode.TextDocument[] = [];
+
+    const showTextDocument = mock.fn(
+        (document: vscode.TextDocument) => {
+            shownDocuments.push(document);
+            return Promise.resolve({ document } as unknown as vscode.TextEditor);
+        },
+    );
+
     const window = {
         createQuickPick,
         createInputBox,
@@ -331,10 +375,61 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showErrorMessage,
         showOpenDialog,
         showWorkspaceFolderPick,
+        showTextDocument,
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
+
+    const fileSystemProviders = new Map<string, vscode.FileSystemProvider>();
+    const textDocuments: MockTextDocument[] = [];
+
+    const registerFileSystemProvider = mock.fn(
+        (scheme: string, provider: vscode.FileSystemProvider) => {
+            fileSystemProviders.set(scheme, provider);
+            return { dispose: () => { fileSystemProviders.delete(scheme); } };
+        },
+    );
+
+    // Mirrors the editor closely enough to exercise a provider end to end: read through the
+    // registered provider on open, and write back through it on save. Language id is derived from
+    // the extension the same way the editor's default associations do for the handful of
+    // extensions these tests use.
+    const openTextDocument = mock.fn(
+        async (uri: vscode.Uri): Promise<vscode.TextDocument> => {
+            const provider = fileSystemProviders.get(uri.scheme);
+            let text: string;
+
+            if (provider) {
+                text = Buffer.from(await provider.readFile(uri)).toString('utf8');
+            } else {
+                const data = fs.files.get(uri.path);
+                if (!data) {
+                    throw MockFileSystemError.FileNotFound(uri);
+                }
+                text = Buffer.from(data).toString('utf8');
+            }
+
+            let current = text;
+            const document: MockTextDocument = {
+                uri,
+                languageId: languageIdFor(uri.path),
+                getText: () => current,
+                setText: (value: string) => { current = value; },
+                save: async () => {
+                    if (provider) {
+                        await provider.writeFile(uri, Buffer.from(current, 'utf8'), { create: false, overwrite: true });
+                    } else {
+                        fs.files.set(uri.path, Buffer.from(current, 'utf8'));
+                    }
+                    return true;
+                },
+            };
+
+            textDocuments.push(document);
+            return document as unknown as vscode.TextDocument;
+        },
+    );
 
     const createFileSystemWatcher = mock.fn(
         (): vscode.FileSystemWatcher => {
@@ -362,6 +457,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         onDidChangeWorkspaceFolders: workspaceFoldersChangeEmitter.event,
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
+        registerFileSystemProvider,
+        openTextDocument,
     };
 
     const executeTask = mock.fn(
@@ -394,6 +491,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         RelativePattern: MockRelativePattern,
         Task: MockTask,
         TaskScope: MockTaskScope,
+        FileType: MockFileType,
+        FilePermission: MockFilePermission,
+        FileChangeType: MockFileChangeType,
+        FileSystemError: MockFileSystemError,
         Uri: MockUri,
         ...overrides,
     } as unknown as IVsCode;
@@ -417,7 +518,23 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspaceFoldersChangeEmitter,
         tasks,
         taskProcessEndEmitter,
+        fileSystemProviders,
+        textDocuments,
+        shownDocuments,
     } as unknown as MockVsCodeResult;
+}
+
+/**
+ * Maps a file extension to the language id the editor would assign by default. Only covers the
+ * extensions the mock's own tests rely on; anything else falls back to `plaintext`.
+ */
+function languageIdFor(path: string): string {
+    if (path.endsWith('.jsonc')) {
+        return 'jsonc';
+    } else if (path.endsWith('.json')) {
+        return 'json';
+    }
+    return 'plaintext';
 }
 
 /**

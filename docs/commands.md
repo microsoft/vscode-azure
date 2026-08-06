@@ -122,6 +122,12 @@ In `package.json`, commands use regex `when` clauses with word boundaries:
 
 The `\b` word boundary prevents unintended partial matches (e.g. `openInPortal` matching `openInPortalV2`).
 
+### Gating a command on a capability
+
+A context value does not have to be unconditional. When whether a command applies is a property of the *data* rather than of the node type, the view provider decides per node, and the command is contributed only when it is genuinely available.
+
+The settings tree does this: `SettingsViewProvider` assembles each node's `contextValue` from the `SettingsCapabilities` its adapter reports, so a product that forbids renaming simply never contributes `renameSetting`, its `when` clause never matches, and the menu item never appears. This is preferable to contributing the command and failing at execution time — the user never sees an action that cannot work — and it keeps product-specific behavior out of the shared command classes entirely. See [Settings](settings.md).
+
 ## Commands with Resource Selection
 
 Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command prompts the user to select a resource.

@@ -151,13 +151,21 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 // In registerTrees.ts — resources tree dataProviders, most specific first
 dataProviders: [
     AcrDataProvider,
-    [IFunctionAppDataProvider, FunctionAppDataProvider],   // singleton+alias tuple
+    [ISettingsDataProvider, SettingsDataProvider],         // settings virtual nodes only
     [IAzureAccountDataProvider, AzureAccountDataProvider], // accounts/tenants/subscriptions (root)
     AzureResourceDataProvider,                            // resource groups + resources (fallback)
 ],
 ```
 
 Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly. See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
+
+### Composing children instead of competing for a resource
+
+Because dispatch stops at the first match, **only one provider can serve a given resource**. Two providers that both want to contribute children to the same resource cannot both `canHandle` it.
+
+The settings framework shows the resolution: `SettingsDataProvider` claims only the *virtual* settings nodes, never the owning resource, and exposes `getCollectionNodes(resource)` for whichever provider does own the resource to compose into its own children. `AzureResourceDataProvider` — the generic fallback — calls it, so every resource with a registered settings adapter gets a settings node without any product-specific provider existing.
+
+The consequence to remember: **a new product `DataProvider` that claims a resource takes it away from the generic provider**, and must compose `ISettingsDataProvider.getCollectionNodes(resource)` itself or that resource silently loses its settings node. A product whose only children are settings should not add a provider at all. See [Settings](settings.md).
 
 ## Azure Resources Tree Providers
 
@@ -166,8 +174,9 @@ The Azure resources tree composes three data providers. They split responsibilit
 | Provider | Root? | Handles | TTL | Refresh trigger |
 |----------|-------|---------|-----|-----------------|
 | `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud` configuration change |
-| `AcrDataProvider` / `FunctionAppDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
-| `AzureResourceDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
+| `AcrDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
+| `SettingsDataProvider` | No | Settings collection and entry virtual nodes, for any product with a registered adapter | default | default TTL |
+| `AzureResourceDataProvider` | No | Resource groups (under a subscription), and generic resources (whose children are their settings collections) | default | default TTL |
 
 `AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes. An auth session change fires a reconciling root re-list (`{ target: Roots }`) that re-lists accounts — preserving tenant/subscription caches under surviving accounts and evicting a signed-out account's subtree because it drops out of the new listing. (This event is noisy — it also fires on individual token acquisitions — but an unchanged account set reconciles to a no-op.) A sovereign-cloud configuration change fires a full `{ target: Everything }` since the endpoint itself changed.
 

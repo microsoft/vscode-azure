@@ -150,7 +150,7 @@ Registration order in the array determines dispatch order — specific providers
 ```typescript
 dataProviders: [
     AcrDataProvider,                                     // specific
-    [IFunctionAppDataProvider, FunctionAppDataProvider],  // specific, with direct-inject support
+    [ISettingsDataProvider, SettingsDataProvider],        // specific, with direct-inject support
     AzureResourceDataProvider,                           // fallback
 ],
 ```

@@ -43,6 +43,7 @@ import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
 import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
+import { bindSettingsServices, registerSettingsFileSystem } from './settings/registerSettings';
 import { registerTrees } from './tree/registerTrees';
 import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
 import { CredentialOptionsScope, ICredentialOptionsScope } from './utils/CredentialOptionsScope';
@@ -90,6 +91,7 @@ export async function activateInternal(
 
         registerCommands(container);
         registerTrees(container);
+        registerSettingsFileSystem(container);
     });
 
     // Expose the DI container to E2E tests so they can resolve services (e.g.
@@ -206,6 +208,8 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         const credentialFactory = context.get(ICredentialFactory);
         return (subscription) => WebAppClient.create(ctx, executor, credentialFactory(subscription), subscription);
     });
+
+    bindSettingsServices(container);
 
     container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
 

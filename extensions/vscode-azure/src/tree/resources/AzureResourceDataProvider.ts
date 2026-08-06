@@ -5,7 +5,7 @@
 
 import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import {
-    getNodeType, IResourceClientProvider, isResourceGroup, isSubscription,
+    getNodeType, IResourceClientProvider, isGenericResource, isResourceGroup, isSubscription,
     type ConcreteAzureNode, type IResourceClient
 } from '@microsoft/vscode-azure-azutils';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection } from '../../constants';
+import { ISettingsDataProvider } from './settings/SettingsDataProvider';
 
 /**
  * Default page size used when fetching paginated Azure resource lists.
@@ -49,6 +50,7 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
+        @inject(ISettingsDataProvider) private readonly settings: ISettingsDataProvider,
     ) {
         this.disposables.push(code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.pageSize`)) {
@@ -65,12 +67,16 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
         }
 
         const node = resource as ConcreteAzureNode;
-        return isSubscription(node) || isResourceGroup(node);
+        // Resources are claimed too (not just subscriptions and groups) so that any resource with a
+        // registered settings adapter grows a settings node without needing a product-specific
+        // provider. A product provider that wants its own children registers ahead of this one and
+        // composes `ISettingsDataProvider.getCollectionNodes` itself.
+        return isSubscription(node) || isResourceGroup(node) || isGenericResource(node);
     }
 
     /**
      * @inheritdoc
-     * @throws if `resource` is not a subscription or resource group.
+     * @throws if `resource` is not a subscription, resource group, or resource.
      */
     public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
         if (!resource) {
@@ -91,6 +97,10 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
                 this.executor.output.debug(`[data] discover resources resourceGroup=${resource.subscription.subscriptionId}/${resource.name} pageSize=${this.pageSize}`);
                 return client.resources.listByResourceGroup(resource.name, { top: this.pageSize });
             }
+
+            case isGenericResource(resource):
+                // Empty for the vast majority of resource types, which have no settings adapter.
+                return this.settings.getCollectionNodes(resource);
 
             default:
                 throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
