@@ -6,6 +6,24 @@
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 
+/** Standard error codes produced by {@linkcode vscode.FileSystemError}. */
+export type MockFileSystemErrorCode =
+    | 'FileExists'
+    | 'FileIsADirectory'
+    | 'FileNotADirectory'
+    | 'FileNotFound'
+    | 'NoPermissions'
+    | 'Unavailable';
+
+const errorMessages: Record<MockFileSystemErrorCode, string> = {
+    FileExists: 'File exists',
+    FileIsADirectory: 'File is a directory',
+    FileNotADirectory: 'File is not a directory',
+    FileNotFound: 'File not found',
+    NoPermissions: 'No permissions',
+    Unavailable: 'Unavailable',
+};
+
 /**
  * In-memory mock of `vscode.workspace.fs`.
  *
@@ -22,6 +40,19 @@ export class MockFileSystem {
     /** Tracks directories created via {@linkcode createDirectory}. */
     readonly directories = new Set<string>();
 
+    /**
+     * Creates a filesystem error with the same `code` contract used by
+     * {@linkcode vscode.FileSystemError}.
+     */
+    static createError(code: MockFileSystemErrorCode, uri: vscode.Uri): vscode.FileSystemError {
+        return Object.assign(new Error(`${errorMessages[code]}: ${uri.path}`), { code });
+    }
+
+    /** Creates the standard missing-file error used by filesystem operations. */
+    static fileNotFound(uri: vscode.Uri): vscode.FileSystemError {
+        return MockFileSystem.createError('FileNotFound', uri);
+    }
+
     /** Pre-populate a file so {@linkcode stat} and {@linkcode readFile} find it. */
     addFile(uri: vscode.Uri, content: Uint8Array | string = new Uint8Array()): void {
         this.files.set(uri.path, typeof content === 'string' ? Buffer.from(content) : content);
@@ -33,7 +64,7 @@ export class MockFileSystem {
         } else if (this.directories.has(uri.path)) {
             return Promise.resolve({ type: 2, ctime: 0, mtime: 0, size: 0 });
         }
-        return Promise.reject(new Error(`File not found: ${uri.path}`));
+        return Promise.reject(MockFileSystem.fileNotFound(uri));
     });
 
     readonly readFile = mock.fn((uri: vscode.Uri) => {
@@ -41,7 +72,7 @@ export class MockFileSystem {
         if (data) {
             return Promise.resolve(data);
         }
-        return Promise.reject(new Error(`File not found: ${uri.path}`));
+        return Promise.reject(MockFileSystem.fileNotFound(uri));
     });
 
     readonly writeFile = mock.fn((uri: vscode.Uri, content: Uint8Array) => {
