@@ -118,6 +118,12 @@ export class CreateStaticWebApp implements ManagedCommand {
                 provider: context.deploymentRoute.provider,
                 repositoryUrl: context.deploymentRoute.repositoryUrl,
                 branch: context.deploymentRoute.branch,
+                // deploymentRoute is only ever set once DetermineStaticWebAppDeploymentRouteStep
+                // has already confirmed the artifact supports automatic deployment -- trust that
+                // decision here rather than letting the launched command re-detect it, so creation
+                // and this follow-up command can never disagree (e.g. in a monorepo, or when the
+                // user overrode the output location away from a preset's default).
+                artifactSupportsAutoDeploy: true,
             };
             this.ctx.code.commands.executeCommand(DeployStaticWebAppCommandId, deployArgs).then(undefined, (error: unknown) => {
                 this.output.appendLine(this.ctx.code.l10n.t(

@@ -216,5 +216,32 @@ describe('GitRemoteService (unit)', () => {
             expect(info?.provider).to.equal('github');
             expect(info?.hasUpstream).to.be.false;
         });
+
+        it('should prefer pushUrl over fetchUrl when a remote has both', async () => {
+            // A read-only fetch mirror (unsupported host) with a distinct GitHub push target --
+            // deployment routing must follow where pushes actually go.
+            const repository = multiRemoteRepo('/workspace', [
+                { name: 'origin', fetchUrl: 'https://gitlab.com/o/mirror.git', pushUrl: 'https://github.com/o/r.git' },
+            ], { trackedRemoteName: 'origin' });
+            const { service } = createService([repository]);
+
+            const info = await service.getRemoteInfo(MockUri.file('/workspace'));
+
+            expect(info?.provider).to.equal('github');
+            expect(info?.url).to.equal('https://github.com/o/r.git');
+            expect(info?.hasUpstream).to.be.true;
+        });
+
+        it('should fall back to fetchUrl when the tracked remote has no pushUrl', async () => {
+            const repository = multiRemoteRepo('/workspace', [
+                { name: 'origin', fetchUrl: 'https://github.com/o/r.git' },
+            ], { trackedRemoteName: 'origin' });
+            const { service } = createService([repository]);
+
+            const info = await service.getRemoteInfo(MockUri.file('/workspace'));
+
+            expect(info?.provider).to.equal('github');
+            expect(info?.url).to.equal('https://github.com/o/r.git');
+        });
     });
 });

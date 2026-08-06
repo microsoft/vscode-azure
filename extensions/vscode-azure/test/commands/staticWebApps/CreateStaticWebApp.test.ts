@@ -137,9 +137,13 @@ describe('CreateStaticWebApp (unit)', () => {
             // never claims "Application deployed" -- the launched CI command owns its own messaging.
             expect(azd.show.mock.callCount()).to.equal(0);
             expect(mock.commands.executeCommand.mock.callCount()).to.equal(1);
-            const [commandId, args] = mock.commands.executeCommand.mock.calls[0].arguments as [string, { readonly provider: string }];
+            const [commandId, args] = mock.commands.executeCommand.mock.calls[0].arguments as [string, { readonly provider: string; readonly artifactSupportsAutoDeploy: boolean }];
             expect(commandId).to.equal('vscode-azure/staticWebApps/deploy');
             expect(args.provider).to.equal('github');
+            // Creation already confirmed the artifact supports auto-deploy (that's why
+            // deploymentRoute was set) -- trust it explicitly rather than letting the launched
+            // command re-detect and potentially contradict it.
+            expect(args.artifactSupportsAutoDeploy).to.be.true;
         });
 
         it('should log and not throw when the CI/CD launch command rejects', async () => {

@@ -5,17 +5,19 @@
 
 import { IVsCode, PromptStep } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import type * as vscode from 'vscode';
 import { IAzdService, MinAzdPipelineVersion } from '../../../azd/AzdService';
 import { IGitRemoteService } from '../../../staticWebApps/GitRemoteService';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
-import { hasConflictingProviderWorkflow } from '../deploymentRouting';
+import { hasConflictingProviderWorkflow, getStaticWebAppServiceDist } from '../deploymentRouting';
 import { canAzdDeployStaticWebApp } from './locationUtils';
 
 /**
  * Silently routes Static Web Apps deployment during creation, without ever
  * showing UI (modeled on {@linkcode import('../../../azd/wizard/HydrateAzdInfoStep').HydrateAzdInfoStep HydrateAzdInfoStep}).
  * Runs last in `CreateStaticWebApp`'s prompt steps, once `iacFolder`,
- * `outputLocation`, and `buildPresetSelection` are already settled.
+ * `outputLocation` (when captured this run), and `buildPresetSelection` are
+ * already settled.
  *
  * **Direct deployment support is determined first, before any routing
  * decision.** Two independent signals gate it:
@@ -26,12 +28,17 @@ import { canAzdDeployStaticWebApp } from './locationUtils';
  *   `azd pipeline config` only runs `azd deploy` too, so CI/CD cannot help
  *   either. Until a native SSR-capable workflow exists, both direct deploy
  *   *and* CI/CD are treated as unavailable for this shape.
- * - `canAzdDeployStaticWebApp(outputLocation)` -- the existing, more general
- *   "output must be distinct from source" gate (`OutputLocationStep` already
- *   enforces this for direct deploy; CI/CD needs it too since
- *   `ConfigureStaticWebAppAzureYamlStep` never writes a `host: staticwebapp`
- *   service for an unsupported output, leaving CI's generated `azd deploy`
- *   with nothing to deploy).
+ * - Whether the artifact directory is distinct from source
+ *   (`canAzdDeployStaticWebApp`). For a **fresh** wizard run this reads
+ *   `context.outputLocation` directly. For an **already-hydrated** project
+ *   (`OutputLocationStep` skips prompting once `infra/main.bicep` already
+ *   exists, so `outputLocation` is never captured this run), it is derived
+ *   instead from the existing `azure.yaml`'s `host: staticwebapp` service
+ *   `dist` -- a hydrated project must never be blanket-classified as
+ *   unsupported just because this run didn't ask about output location. If
+ *   no such service is found at all, eligibility is preserved (treated as
+ *   supported) rather than newly blocked, since there's no positive evidence
+ *   the artifact is actually unsupported.
  *
  * Decision (mutually exclusive):
  * 1. Neither direct deploy nor CI/CD is possible (either gate above) --
@@ -75,9 +82,7 @@ export class DetermineStaticWebAppDeploymentRouteStep extends PromptStep<CreateS
         const iacFolder = context.iacFolder!;
 
         const isHybridSsr = context.buildPresetSelection === 'nextjs';
-        const canAutoDeploy = !isHybridSsr
-            && context.outputLocation !== undefined
-            && canAzdDeployStaticWebApp(context.outputLocation);
+        const canAutoDeploy = !isHybridSsr && await this.resolveCanAutoDeploy(context, iacFolder);
 
         if (!canAutoDeploy) {
             // Neither direct deploy nor CI/CD works for this artifact shape --
@@ -100,5 +105,26 @@ export class DetermineStaticWebAppDeploymentRouteStep extends PromptStep<CreateS
             deploy: false,
             deploymentRoute: { provider: remote.provider, repositoryUrl: remote.url, branch: remote.branch },
         };
+    }
+
+    /**
+     * Determines whether the artifact directory is distinct from source.
+     * Prefers `context.outputLocation` (set this run by `OutputLocationStep`);
+     * falls back to the existing `azure.yaml` SWA service's `dist` for an
+     * already-hydrated project where `outputLocation` was never captured.
+     * Preserves eligibility (returns `true`) when no service can be found at
+     * all, rather than newly classifying an indeterminate project as
+     * unsupported.
+     */
+    private async resolveCanAutoDeploy(context: Readonly<CreateStaticWebAppContext>, iacFolder: vscode.Uri): Promise<boolean> {
+        if (context.outputLocation !== undefined) {
+            return canAzdDeployStaticWebApp(context.outputLocation);
+        }
+
+        const dist = await getStaticWebAppServiceDist(this.azd, this.code, iacFolder);
+        if (dist === undefined) {
+            return true;
+        }
+        return canAzdDeployStaticWebApp(dist);
     }
 }
