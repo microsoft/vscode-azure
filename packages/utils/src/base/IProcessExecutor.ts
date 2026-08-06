@@ -7,15 +7,15 @@ import type { ServiceIdentifier } from 'inversify';
 import { SubprocessError, default as spawn, type Options as SpawnOptions, type Result as SpawnResult, type Subprocess } from 'nano-spawn';
 import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
+import { createShellTask } from '../vscode/createShellTask';
 import type { IVsCode } from '../vscode/IVsCode';
 import { argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
-import { createShellTask, resolveCommandLine } from './createShellTask';
 import { findOnPath } from './getSafeExecPath';
 import { killProcessTree, type KillProcessTreeFn } from './killProcessTree';
+import { resolveCommandLine } from './resolveCommandLine';
 import { toAbortSignal } from './toAbortSignal';
 
 export * from './CommandLineBuilder';
-export * from './createShellTask';
 export * from './getSafeExecPath';
 export * from './killProcessTree';
 export { SubprocessError } from 'nano-spawn';

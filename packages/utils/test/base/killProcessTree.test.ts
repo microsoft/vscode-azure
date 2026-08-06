@@ -40,8 +40,8 @@ describe('killProcessTree (integration)', () => {
             if (parent?.pid && isProcessRunning(parent.pid)) {
                 await killProcessTree(parent.pid);
             }
-            if (childProcessId && isProcessRunning(childProcessId)) {
-                process.kill(childProcessId);
+            if (childProcessId) {
+                await killProcessTree(childProcessId);
             }
         }
     });

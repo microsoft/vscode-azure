@@ -7,8 +7,8 @@ import { expect } from 'chai';
 import assert from 'node:assert/strict';
 import type * as vscode from 'vscode';
 import { ShellQuoting, command } from '../../src/base/CommandLineBuilder';
-import { createShellTask } from '../../src/base/createShellTask';
-import { createMockVsCode } from '../vscode/MockVsCode';
+import { createShellTask } from '../../src/vscode/createShellTask';
+import { createMockVsCode } from './MockVsCode';
 
 describe('createShellTask (unit)', () => {
     it('builds a configured task from a structured command line', async () => {

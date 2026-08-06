@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import type { IVsCode } from '../vscode/IVsCode';
-import { argToString, type CommandLineArgs } from './CommandLineBuilder';
-import { getSafeExecPath } from './getSafeExecPath';
+import type { CommandLineArgs } from '../base/CommandLineBuilder';
+import { resolveCommandLine } from '../base/resolveCommandLine';
+import type { IVsCode } from './IVsCode';
 
 /**
  * Options for constructing a VS Code shell task from a structured command line.
@@ -58,24 +58,4 @@ export async function createShellTask(code: IVsCode, options: CreateShellTaskOpt
     }
 
     return task;
-}
-
-/**
- * Splits a structured command line into a safely resolved executable and its
- * trailing arguments.
- *
- * The executable is resolved to a safe absolute path so a same-named binary in
- * the working directory cannot hijack execution on Windows. When a shell is
- * used, a resolved path containing spaces is quoted as one token.
- *
- * @throws {Error} When the command vector does not contain an executable.
- */
-export async function resolveCommandLine(commandLine: CommandLineArgs, shell: boolean | string = false): Promise<{ command: string; args: CommandLineArgs }> {
-    if (commandLine.length === 0) {
-        throw new Error('A command line must include at least the executable as its first element.');
-    }
-
-    const [executable, ...args] = commandLine;
-    const command = await getSafeExecPath(argToString(executable));
-    return { command: shell && command.includes(' ') ? `"${command}"` : command, args };
 }
