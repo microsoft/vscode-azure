@@ -48,6 +48,23 @@ function createStep(
 }
 
 describe('PickWorkspaceLocationStep (unit)', () => {
+    it('fails before prompting when no workspace folder is open', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const step = new PickWorkspaceLocationStep<TestContext>(ctx, {
+            kind: 'folder',
+            findFilesArgs: ['package.json'],
+            strings,
+            updateContext: location => ({ location }),
+        });
+
+        await assert.rejects(
+            step.prompt({}),
+            /Open a workspace folder before selecting a location\./,
+        );
+        expect(mock.workspace.findFiles.mock.calls).to.have.length(0);
+        expect(mock.quickPicks).to.have.length(0);
+    });
+
     it('passes all findFiles arguments and returns a relative file path', async () => {
         const token: vscode.CancellationToken = {
             isCancellationRequested: false,

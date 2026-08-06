@@ -64,6 +64,10 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
 
     /** @inheritdoc */
     public async prompt(_context: Readonly<TContext>): Promise<Partial<TContext>> {
+        if (!this.ctx.code.workspace.workspaceFolders?.length) {
+            throw new Error(this.ctx.code.l10n.t('Open a workspace folder before selecting a location.'));
+        }
+
         const matches = await this.ctx.code.workspace.findFiles(...this.options.findFilesArgs);
         const locations = this.toLocations(matches);
 
@@ -102,7 +106,7 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
                 canSelectFiles: this.options.kind === 'file',
                 canSelectFolders: this.options.kind === 'folder',
                 canSelectMany: false,
-                defaultUri: this.ctx.code.workspace.workspaceFolders?.[0]?.uri,
+                defaultUri: this.ctx.code.workspace.workspaceFolders[0].uri,
                 openLabel: this.options.strings.openLabel,
                 title: this.options.strings.title,
             });
