@@ -30,7 +30,7 @@ Framework-level building blocks with no Azure-specific knowledge:
 - **Wizard framework**: `Wizard`, `PromptStep`, `ExecuteStep`, `GoBackError`
 - **Telemetry & error handling**: `ActionExecutor`, `CommandRegistry`, `IActionContext`
 - **VS Code abstractions**: `CancellationError`, `Disposable`, `EventEmitter`
-- **Process execution**: `ProcessExecutor`, `IProcessExecutor` (background via `spawnStreamAsync`, foreground via VS Code tasks)
+- **Process execution**: `ProcessExecutor`, `IProcessExecutor`, and shared shell-task construction
 - **Data utilities**: `InflightMap`, `Limiter`
 
 ### `packages/azutils` — Azure Utilities
