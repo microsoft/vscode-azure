@@ -8,12 +8,16 @@ import { SubprocessError, default as spawn, type Options as SpawnOptions, type R
 import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
 import type { IVsCode } from '../vscode/IVsCode';
-import { argToString, argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
-import { findOnPath, getSafeExecPath } from './getSafeExecPath';
+import { argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
+import { createShellTask, resolveCommandLine } from './createShellTask';
+import { findOnPath } from './getSafeExecPath';
+import { killProcessTree, type KillProcessTreeFn } from './killProcessTree';
 import { toAbortSignal } from './toAbortSignal';
 
 export * from './CommandLineBuilder';
+export * from './createShellTask';
 export * from './getSafeExecPath';
+export * from './killProcessTree';
 export { SubprocessError } from 'nano-spawn';
 
 /**
@@ -170,6 +174,13 @@ export interface IProcessExecutor {
      * @returns `true` when the command can be resolved, `false` otherwise.
      */
     isOnPath(command: string): Promise<boolean>;
+
+    /**
+     * Terminates a process and its descendants.
+     *
+     * A process that has already exited is considered successfully stopped.
+     */
+    killProcess(processId: number): Promise<void>;
 }
 
 /**
@@ -179,11 +190,13 @@ export interface IProcessExecutor {
  * @param spawnFn - Optional override for {@linkcode nano-spawn}'s default export,
  *   primarily for injecting a mock in unit tests. Defaults to the real
  *   implementation.
+ * @param killFn - Optional process-tree termination override for tests.
  */
 export class ProcessExecutor implements IProcessExecutor {
     public constructor(
         private readonly code: IVsCode,
         private readonly spawnFn: SpawnFn = spawn,
+        private readonly killFn?: KillProcessTreeFn,
     ) { }
 
     public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
@@ -206,30 +219,17 @@ export class ProcessExecutor implements IProcessExecutor {
         return (await findOnPath(command)) !== undefined;
     }
 
+    /** @inheritdoc */
+    public async killProcess(processId: number): Promise<void> {
+        await killProcessTree(processId, this.killFn);
+    }
+
     private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
-        const { command, args } = await resolveCommandLine(options);
-
-        const shellExecution = new this.code.ShellExecution(
-            command,
-            args,
-            { cwd: options.cwd?.fsPath, env: { ...options.env } },
-        );
-
-        const task = new this.code.Task(
-            { type: 'shell' },
-            options.workspaceFolder ?? this.code.TaskScope.Workspace,
-            options.name,
-            options.source ?? 'process',
-            shellExecution,
-        );
-
-        if (options.alwaysRunNew) {
-            task.definition.idRandomizer = Math.random();
-        }
-
-        if (options.focus) {
-            task.presentationOptions = { focus: true };
-        }
+        const task = await createShellTask(this.code, {
+            ...options,
+            scope: options.workspaceFolder,
+            presentationOptions: options.focus ? { focus: true } : undefined,
+        });
 
         const taskExecution = await this.code.tasks.executeTask(task);
 
@@ -275,7 +275,7 @@ export class ProcessExecutor implements IProcessExecutor {
         options: BackgroundProcessOptions | BackgroundJsonProcessOptions | BackgroundJsonLinesProcessOptions,
         cancellation?: vscode.CancellationToken | AbortSignal,
     ): Promise<ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
-        const { command, args } = await resolveCommandLine(options);
+        const { command, args } = await resolveCommandLine(options.command, options.shell);
 
         const { signal, disposable } = toAbortSignal(cancellation);
 
@@ -341,44 +341,6 @@ export class ProcessExecutor implements IProcessExecutor {
 
         return { stdout, stderr };
     }
-}
-
-/**
- * Splits an {@linkcode ProcessExecutorOptions.command argument vector} into the
- * executable and its trailing arguments for execution.
- *
- * The executable is resolved to a safe absolute path via
- * {@linkcode getSafeExecPath} so that neither foreground nor background execution
- * can be hijacked by a same-named binary in the current working directory on
- * Windows. Under a shell, nano-spawn concatenates the command and arguments into
- * a single unquoted string, so a resolved path containing a space would be
- * mis-split; in that case the resolved path is wrapped in double quotes so the
- * shell treats it as a single token. Quoting (rather than falling back to the
- * bare command) keeps the cwd-hijack mitigation intact, since a bare command
- * would let the shell search the cwd first on Windows. A resolved path never
- * contains a double quote (Windows paths cannot, and on non-Windows the command
- * is returned unresolved), so the wrapping is unambiguous.
- *
- * @throws {Error} When the vector is empty (no executable to run).
- */
-async function resolveCommandLine(options: ProcessExecutorOptions): Promise<{ command: string; args: CommandLineArgs }> {
-    if (options.command.length === 0) {
-        throw new Error('A command line must include at least the executable as its first element.');
-    }
-    const [executable, ...args] = options.command;
-    const command = argToString(executable);
-
-    const safePath = await getSafeExecPath(command);
-
-    // A shell space-joins the command and arguments without quoting, so a
-    // resolved path containing a space would be mis-split. Quote it so the shell
-    // treats it as a single token, preserving the cwd-hijack mitigation instead
-    // of reverting to a bare command the shell would resolve against the cwd.
-    if (options.shell && safePath.includes(' ')) {
-        return { command: `"${safePath}"`, args };
-    }
-
-    return { command: safePath, args };
 }
 
 /** Extracts captured stderr from a spawn failure, if any. */
