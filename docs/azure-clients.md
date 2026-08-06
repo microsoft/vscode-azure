@@ -88,8 +88,6 @@ Do not cache Azure management clients to reuse pipelines or deduplicate requests
 
 The dedupe key includes authorization and response-affecting headers, preventing responses from being shared across credentials or representations. Request-specific observability headers are ignored. Completed requests, responses, credentials, and clients are not retained. Callers that need durable data caching should cache the resulting domain data explicitly rather than extending client lifetime.
 
-Static Web Apps features rebuilt from draft PR [#237](https://github.com/microsoft/vscode-azure/pull/237) should follow this cache-free client pattern rather than restoring their per-subscription client maps.
-
 ## Client Wrappers
 
 Three concrete client classes wrap Azure SDK clients with typed interfaces:

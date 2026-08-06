@@ -182,9 +182,10 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
 
     /**
      * Poll a deployment's status and refresh its operations. Fires targeted
-     * change events based on whether the operation count changed.
+     * change events based on whether the operation count changed. The client
+     * resolved by {@linkcode enrich} is reused for this poll loop's lifetime.
      */
-    private async poll(activity: ArmDeploymentActivity, initialClient?: IDeploymentClient): Promise<void> {
+    private async poll(activity: ArmDeploymentActivity, client: IDeploymentClient): Promise<void> {
         try {
             const abortSignal = activity.abortController.signal;
             abortSignal.throwIfAborted();
@@ -200,13 +201,6 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
                         context.telemetry.suppress = 'onSuccess';
                         context.telemetry.isUserEvent = false;
                         context.errorHandling.rethrow = true;
-                        const client = initialClient ?? await this.getClient(activity.subscriptionId, activity.tenantId, activity.accountId);
-                        initialClient = undefined;
-                        if (!client) {
-                            // The owning account may have signed out since the
-                            // previous poll cycle.
-                            return;
-                        }
 
                         const [deployment, operations] = await Promise.all([
                             client.deployments.getAtScope(
@@ -383,6 +377,10 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
      * owning tenant, and an optional {@linkcode accountId} hint narrows it to the
      * owning account. Returns `undefined` when the subscription cannot be resolved
      * (e.g. the owning account is not signed in).
+     *
+     * The injected subscription resolver owns its lookup and caching semantics;
+     * this provider retains the resulting client only for the operation that
+     * requested it (including the lifetime of a poll loop).
      */
     private async getClient(subscriptionId: string, tenantId?: string, accountId?: string): Promise<IDeploymentClient | undefined> {
         const subscription = await this.resolveSubscription(subscriptionId, tenantId, accountId);
