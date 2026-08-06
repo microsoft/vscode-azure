@@ -133,6 +133,9 @@ describe('CreateStaticWebApp (unit)', () => {
             expect(azd.provision.mock.callCount()).to.equal(1);
             expect(azd.deploy.mock.callCount()).to.equal(0);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0); // launched command is separate/mocked, not this azd instance's method directly
+            // ShowEndpointUrlStep is gated on deploy===true, so a CI-routed flow (deploy:false)
+            // never claims "Application deployed" -- the launched CI command owns its own messaging.
+            expect(azd.show.mock.callCount()).to.equal(0);
             expect(mock.commands.executeCommand.mock.callCount()).to.equal(1);
             const [commandId, args] = mock.commands.executeCommand.mock.calls[0].arguments as [string, { readonly provider: string }];
             expect(commandId).to.equal('vscode-azure/staticWebApps/deploy');
@@ -195,8 +198,29 @@ describe('CreateStaticWebApp (unit)', () => {
             expect(mock.window.showWarningMessage.mock.callCount()).to.be.greaterThanOrEqual(2);
             const lastCall = mock.window.showWarningMessage.mock.calls.at(-1);
             const [message] = lastCall!.arguments as unknown as [string];
-            expect(message).to.include('GitHub Actions or Azure Pipelines');
+            expect(message).to.include('cannot currently be deployed');
             expect(message).to.not.include('deployed:');
+        });
+
+        it('should never route Next.js hybrid/SSR to CI/CD even with a supported, pushed remote (BLOCKER fix)', async () => {
+            const { command, mock, azd } = createCommand(true, { remote: githubPushed });
+            respondToPrompts(mock, [
+                { pick: 'sub-1' },
+                { pick: 'East US 2' },
+                { input: 'my-swa' },
+                { pick: 'Next.js (SSR)' },
+                { input: '/' },
+                { input: '' },
+            ]);
+
+            await command.execute('basic');
+
+            expect(azd.deploy.mock.callCount()).to.equal(0);
+            expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+            expect(mock.commands.executeCommand.mock.callCount()).to.equal(0);
+            const lastCall = mock.window.showWarningMessage.mock.calls.at(-1);
+            const [message] = lastCall!.arguments as unknown as [string];
+            expect(message).to.include('cannot currently be deployed');
         });
     });
 });

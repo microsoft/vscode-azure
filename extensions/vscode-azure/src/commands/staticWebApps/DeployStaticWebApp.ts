@@ -12,13 +12,16 @@ import { ActivityTreeViewId } from '../../constants';
 import { IGitRemoteService, type GitRemoteProvider } from '../../staticWebApps/GitRemoteService';
 import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
+import { hasConflictingProviderWorkflow } from './deploymentRouting';
 import { detectStaticWebAppProject } from './steps/frameworkDetection';
 
 /**
  * Known-good context for {@linkcode DeployStaticWebApp}, supplied by a caller
  * (e.g. `CreateStaticWebApp`, immediately after a successful create) that has
- * already resolved the project and its Git remote. When supplied, the
- * command skips workspace-wide rediscovery entirely.
+ * already resolved the project and its Git remote. When supplied with a
+ * `provider`, the command trusts it and skips fresh remote resolution;
+ * omitting `provider` forces a fresh {@linkcode IGitRemoteService.getRemoteInfo}
+ * lookup even when `iacFolder` is already known.
  */
 export interface DeployStaticWebAppArgs {
     readonly iacFolder: vscode.Uri;
@@ -29,20 +32,20 @@ export interface DeployStaticWebAppArgs {
     readonly branch?: string;
 }
 
-const githubWorkflowPaths = ['.github/workflows/azure-dev.yml', '.github/workflows/azure-dev.yaml'];
-const azdoWorkflowPaths = [
-    '.azdo/pipelines/azure-dev.yml',
-    '.azdo/pipelines/azure-dev.yaml',
-    '.azuredevops/pipelines/azure-dev.yml',
-    '.azuredevops/pipelines/azure-dev.yaml',
-];
-
 /**
  * Standalone, repeatable Static Web Apps deployment router.
  *
  * Chooses between direct deployment (`azd deploy`, unmodified) and CI/CD
  * setup (`azd pipeline config`) based solely on the project's existing Git
  * remote -- never assists with initializing, adding, or pushing one.
+ *
+ * **Direct deployment support is determined first, before any routing
+ * decision.** Next.js hybrid/SSR projects can be deployed by *neither* path
+ * (direct `azd deploy` cannot serve server-rendered content, and the
+ * workflow `azd pipeline config` generates only runs `azd deploy` too) --
+ * this is checked immediately, before the Git remote is even inspected, and
+ * short-circuits with honest guidance instead of attempting (or silently
+ * skipping) a deployment that cannot work.
  *
  * Invocable two ways:
  * - With {@linkcode DeployStaticWebAppArgs} (e.g. launched by
@@ -70,10 +73,21 @@ export class DeployStaticWebApp implements ManagedCommand {
         }
         const { iacFolder, environmentName } = resolved;
 
-        let provider: GitRemoteProvider | undefined = args?.provider;
-        let hasUpstream = !!args;
+        // Determine whether direct deployment (and therefore CI/CD, which only
+        // runs `azd deploy` too) is supported *before* any routing decision --
+        // never call either for a Next.js hybrid/SSR project, regardless of
+        // remote state.
+        const detection = await detectStaticWebAppProject(this.ctx.code, iacFolder);
+        if (detection.primaryPresetId === 'nextjs') {
+            this.actionContext.telemetry.properties.deploymentRoute = 'unsupportedArtifact';
+            this.showUnsupportedArtifactGuidance();
+            return;
+        }
 
-        if (!args) {
+        let provider: GitRemoteProvider | undefined = args?.provider;
+        let hasUpstream = !!args?.provider;
+
+        if (!args?.provider) {
             const remote = await this.gitRemote.getRemoteInfo(iacFolder);
             provider = remote?.provider;
             hasUpstream = !!remote?.hasUpstream;
@@ -202,8 +216,7 @@ export class DeployStaticWebApp implements ManagedCommand {
      * never deletes or overwrites either file.
      */
     private async confirmProviderSwitch(iacFolder: vscode.Uri, provider: 'github' | 'azdo'): Promise<boolean> {
-        const otherPaths = provider === 'github' ? azdoWorkflowPaths : githubWorkflowPaths;
-        if (!await this.anyFileExists(iacFolder, otherPaths)) {
+        if (!await hasConflictingProviderWorkflow(this.ctx.code, iacFolder, provider)) {
             return true;
         }
 
@@ -222,24 +235,21 @@ export class DeployStaticWebApp implements ManagedCommand {
         return selection === continueLabel;
     }
 
-    private async anyFileExists(iacFolder: vscode.Uri, relativePaths: readonly string[]): Promise<boolean> {
-        for (const relativePath of relativePaths) {
-            try {
-                await this.ctx.code.workspace.fs.stat(this.ctx.code.Uri.joinPath(iacFolder, relativePath));
-                return true;
-            } catch {
-                // Not found -- check the next candidate path.
-            }
-        }
-        return false;
-    }
-
+    /**
+     * Configures CI/CD via `azd pipeline config`. Owns its own outcome
+     * messaging -- a successful run here means the pipeline is configured,
+     * not that code has been deployed yet (that happens on the next push).
+     */
     private async configureCicd(iacFolder: vscode.Uri, provider: 'github' | 'azdo', environmentName?: string): Promise<void> {
         const handle = this.codeProvider.trackDeployment({ title: 'azd pipeline config' });
         void this.ctx.code.commands.executeCommand(`${ActivityTreeViewId}.focus`);
         try {
             await this.azd.pipelineConfig(iacFolder, provider, environmentName);
             handle.complete('Completed');
+            const providerLabel = provider === 'github' ? this.ctx.code.l10n.t('GitHub Actions') : this.ctx.code.l10n.t('Azure Pipelines');
+            void this.ctx.code.window.showInformationMessage(this.ctx.code.l10n.t(
+                '{0} CI/CD configured. Push to your default branch to trigger a deployment.', providerLabel,
+            ));
         } catch (e) {
             handle.complete('Failed', e);
             this.actionContext.errorHandling.suppress = 'display';
@@ -253,19 +263,11 @@ export class DeployStaticWebApp implements ManagedCommand {
      * artifact through azd's existing Static Web Apps CLI integration -- no
      * new build/deploy behavior is introduced here.
      *
-     * Refuses to run for Next.js hybrid/SSR projects (`azd deploy` cannot
-     * deploy server-rendered content); shows guidance instead of pretending
-     * deployment succeeded.
+     * Callers must already have confirmed direct deployment is supported
+     * (Next.js hybrid/SSR is checked once, up front, in {@linkcode execute}) --
+     * this method assumes that and always attempts the deploy.
      */
     private async directDeploy(iacFolder: vscode.Uri): Promise<void> {
-        const detection = await detectStaticWebAppProject(this.ctx.code, iacFolder);
-        if (detection.primaryPresetId === 'nextjs') {
-            void this.ctx.code.window.showErrorMessage(this.ctx.code.l10n.t(
-                'This Next.js app uses server-side rendering, which cannot be deployed directly. Connect a pushed GitHub or Azure DevOps repository and run this command again to configure CI/CD.',
-            ));
-            return;
-        }
-
         const handle = this.codeProvider.trackDeployment({ title: 'azd deploy' });
         void this.ctx.code.commands.executeCommand(`${ActivityTreeViewId}.focus`);
         try {
@@ -276,6 +278,18 @@ export class DeployStaticWebApp implements ManagedCommand {
             this.actionContext.errorHandling.suppress = 'display';
             throw e;
         }
+    }
+
+    /**
+     * Shown when the project cannot be deployed by this command at all
+     * (Next.js hybrid/SSR) -- never claims a deployment occurred.
+     */
+    private showUnsupportedArtifactGuidance(): void {
+        void this.ctx.code.window.showErrorMessage(this.ctx.code.l10n.t(
+            'This Next.js app uses server-side rendering, which cannot be deployed directly or through the '
+            + 'generated CI/CD workflow (both require an output distinct from the source, and neither runs a '
+            + 'server). Deploy it manually, or adjust the build to produce a supported static output.',
+        ));
     }
 }
 

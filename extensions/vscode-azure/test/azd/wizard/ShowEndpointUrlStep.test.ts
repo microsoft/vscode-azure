@@ -20,10 +20,11 @@ function createStep() {
 
 describe('ShowEndpointUrlStep (unit)', () => {
     describe('shouldExecute', () => {
-        it('should return true when iacFolder is set', () => {
+        it('should return true when deploy is true and iacFolder is set', () => {
             const { step } = createStep();
 
             const context = {
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -33,7 +34,28 @@ describe('ShowEndpointUrlStep (unit)', () => {
         it('should return false when iacFolder is undefined', () => {
             const { step } = createStep();
 
-            expect(step.shouldExecute({})).to.be.false;
+            expect(step.shouldExecute({ deploy: true })).to.be.false;
+        });
+
+        it('should return false when deploy is false (provision-only, CI-routed, or blocked flows)', () => {
+            const { step } = createStep();
+
+            const context = {
+                deploy: false,
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            expect(step.shouldExecute(context)).to.be.false;
+        });
+
+        it('should return false when deploy is undefined', () => {
+            const { step } = createStep();
+
+            const context = {
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            expect(step.shouldExecute(context)).to.be.false;
         });
     });
 
@@ -49,6 +71,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
             }));
 
             const context = {
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -70,6 +93,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
             }));
 
             const context = {
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -88,6 +112,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
             }));
 
             const context = {
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -107,6 +132,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
             }));
 
             const context = {
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -120,6 +146,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
             // Default mock returns undefined for show()
 
             const context = {
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
@@ -139,6 +166,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
             respondToPrompts(mockResult, [{ button: 'Open in Browser' }]);
 
             const context = {
+                deploy: true,
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 

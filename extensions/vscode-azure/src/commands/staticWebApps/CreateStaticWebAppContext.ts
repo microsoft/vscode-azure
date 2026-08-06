@@ -16,14 +16,6 @@ export type StaticWebAppSkuName = 'Free' | 'Standard';
 /** Languages emitted into an azd Static Web Apps service definition. */
 export type StaticWebAppAzdLanguage = 'dotnet' | 'js' | 'ts';
 
-/**
- * Reason CI/CD setup could not be routed to after creation, when the
- * artifact shape also cannot be deployed directly (Next.js hybrid/SSR).
- * Drives the reason-specific post-wizard guidance message in
- * `CreateStaticWebApp`.
- */
-export type StaticWebAppDeploymentBlockedReason = 'noRemote' | 'unsupportedRemote' | 'notPushed' | 'azdVersionTooLow';
-
 /** Regions supported by the Static Web Apps creation API. */
 export const staticWebAppLocationNames: ReadonlySet<string> = new Set([
     'centralus',
@@ -57,6 +49,8 @@ export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext
      * possible. When set, direct deploy (`AzdDeployStep`) is suppressed
      * (`deploy: false`) and `CreateStaticWebApp` launches the standalone
      * `DeployStaticWebApp` command with this info once the wizard succeeds.
+     * Only ever set when {@linkcode deploymentUnsupportedArtifact} is unset --
+     * direct deployment must be supported before CI/CD is even considered.
      */
     readonly deploymentRoute?: {
         readonly provider: 'github' | 'azdo';
@@ -65,11 +59,14 @@ export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext
     };
     /**
      * Set by `DetermineStaticWebAppDeploymentRouteStep` when the artifact
-     * shape cannot be deployed directly (Next.js hybrid/SSR) *and* CI/CD is
-     * not currently possible for the reason given. `deploy` is also forced
-     * to `false` in this case -- no deployment happens by any path, and
-     * `CreateStaticWebApp` shows reason-specific guidance instead of
-     * claiming success.
+     * shape cannot be deployed at all through this extension -- Next.js
+     * hybrid/SSR (`buildPresetSelection === 'nextjs'`), or any other shape
+     * `canAzdDeployStaticWebApp` flags as unsupported. Neither direct
+     * `azd deploy` nor a generated `azd pipeline config` workflow (which only
+     * runs `azd deploy` too) can serve this content, so the Git remote is
+     * never even inspected in this case. `deploy` is forced to `false`, and
+     * `CreateStaticWebApp` shows one honest "provisioned only" message
+     * instead of claiming (or silently skipping) a deployment.
      */
-    readonly deploymentBlockedReason?: StaticWebAppDeploymentBlockedReason;
+    readonly deploymentUnsupportedArtifact?: boolean;
 }
