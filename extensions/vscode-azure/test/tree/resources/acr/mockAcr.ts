@@ -18,7 +18,7 @@ export function makeAcrRegistry(overrides?: Partial<AcrRegistry>): AcrRegistry {
         sku: { name: 'Basic', tier: 'Basic' },
         adminUserEnabled: false,
         ...overrides,
-    }) as AcrRegistry;
+    });
 }
 
 /**
