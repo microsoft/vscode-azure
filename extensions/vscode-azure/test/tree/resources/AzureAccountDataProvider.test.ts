@@ -213,7 +213,9 @@ describe('AzureAccountDataProvider (unit)', () => {
                 { id: 'b-id', label: 'Beta' },
             ]));
             let fired = 0;
+            const removedAccounts: string[][] = [];
             provider.onDidChange(() => { fired++; });
+            provider.onDidRemoveAccounts(ids => removedAccounts.push([...ids]));
 
             await provider.getChildren();
             mock.timers.tick(1001);
@@ -225,13 +227,16 @@ describe('AzureAccountDataProvider (unit)', () => {
             await flushMicrotasks();
 
             expect(fired).to.equal(1);
+            expect(removedAccounts).to.deep.equal([['b-id']]);
         });
 
         it('should NOT fire when the signed-in account set is unchanged', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
             let fired = 0;
+            let removalEvents = 0;
             provider.onDidChange(() => { fired++; });
+            provider.onDidRemoveAccounts(() => { removalEvents++; });
 
             // Prime the known account set, then move past the suppression window.
             await provider.getChildren();
@@ -245,6 +250,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             await flushMicrotasks();
 
             expect(fired).to.equal(0);
+            expect(removalEvents).to.equal(0);
         });
 
         it('should not loop when listing accounts itself emits onDidChangeSessions', async () => {

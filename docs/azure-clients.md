@@ -74,7 +74,7 @@ Every client created through the factory functions gets three custom pipeline po
 
 | Policy | Position | Description |
 |--------|----------|-------------|
-| `DedupeRequestPolicy` | after authentication, inside retry | Deduplicates concurrent equivalent GET attempts across independently created clients. In-flight state is transient and partitioned by authorization and response-affecting headers. Streaming, abortable, and unauthenticated requests are excluded. |
+| `DedupeRequestPolicy` | perCall | Deduplicates concurrent equivalent GET operations across independently created clients. In-flight state is transient and partitioned by opaque credential identity plus selected response-affecting headers. Streaming and abortable requests are excluded. |
 | `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command or tree operation that initiated them. The context is looked up via `IActionExecutor.currentContext` (backed by `AsyncLocalStorage`), so policies don't need `IActionContext` passed explicitly — it's established by whichever scope wraps the call (command execution or `DataItemTree` provider call). |
 | `AcceptLanguagePolicy` | perCall | Sets the `accept-language` header to VS Code's UI language (`vscode.env.language`), so ARM responses match the user's locale. |
 
@@ -84,9 +84,9 @@ The factory also sets a `userAgentPrefix` combining the extension's ID and versi
 
 ### Client Lifetime and Request Deduplication
 
-Do not cache Azure management clients to reuse pipelines or deduplicate requests. The standard factory installs `DedupeRequestPolicy` after authentication, and all policy instances share only currently in-flight requests. Equivalent concurrent GETs can therefore coalesce even when each caller creates its own client.
+Do not cache Azure management clients to reuse pipelines or deduplicate requests. The standard factory installs `DedupeRequestPolicy` as a per-call policy, and all policy instances share only currently in-flight requests. Equivalent concurrent GETs can therefore coalesce even when each caller creates its own client.
 
-The dedupe key includes authorization and response-affecting headers, preventing responses from being shared across credentials or representations. Request-specific observability headers are ignored. Completed requests, responses, credentials, and clients are not retained. Callers that need durable data caching should cache the resulting domain data explicitly rather than extending client lifetime.
+The dedupe key includes an opaque credential partition, the request URL, and selected headers that affect the returned representation (such as `Accept`, `Accept-Language`, range, and conditional headers). Default credentials scoped to the same account, tenant, and acquisition behavior share a partition across instances; unknown credentials use object identity. Authentication, observability, and unrelated headers are ignored, so token rotation does not prevent deduplication. Anonymous requests share their own partition. Completed requests, responses, credentials, and clients are not retained. Callers that need durable data caching should cache the resulting domain data explicitly rather than extending client lifetime.
 
 ## Client Wrappers
 

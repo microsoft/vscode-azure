@@ -6,6 +6,7 @@
 import type { TokenCredential } from '@azure/core-auth';
 import type { IOutputChannel, IVsCode, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
+import { createHash } from 'node:crypto';
 import type * as vscode from 'vscode';
 import { isAzureSubscription, type AzureSubscription } from './AzureSubscription';
 import { VsCodeExtensionCredential } from './VsCodeExtensionCredential';
@@ -50,6 +51,25 @@ export type ICredentialFactory = SyncFactory<TokenCredential, [input?: Credentia
 
 /** DI identifier for the {@linkcode ICredentialFactory}. */
 export const ICredentialFactory: ServiceIdentifier<ICredentialFactory> = Symbol.for('ICredentialFactory');
+
+const credentialDedupePartitions = new WeakMap<TokenCredential, string>();
+let nextOpaqueCredentialPartition = 0;
+
+/**
+ * Returns an opaque request-deduplication partition for a credential.
+ *
+ * Default credentials scoped to the same account, tenant, and token-acquisition
+ * behavior share a partition across instances. Unknown credential implementations
+ * fall back to object identity.
+ */
+export function getCredentialDedupePartition(credential: TokenCredential): string {
+    let partition = credentialDedupePartitions.get(credential);
+    if (!partition) {
+        partition = `credential-${++nextOpaqueCredentialPartition}`;
+        credentialDedupePartitions.set(credential, partition);
+    }
+    return partition;
+}
 
 /** Normalizes a {@linkcode CredentialFactoryInput} to {@linkcode CredentialFactoryOptions}. */
 function toCredentialFactoryOptions(input?: CredentialFactoryInput): CredentialFactoryOptions | undefined {
@@ -106,11 +126,41 @@ export function createDefaultCredentialFactory(
     return (input) => {
         const options = toCredentialFactoryOptions(input);
         const defaults = getDefaults?.();
-        return new VsCodeExtensionCredential({
+        const tenantId = options?.tenantId ?? defaults?.tenantId;
+        const sessionOptions = mergeSessionOptions(defaults?.sessionOptions, options?.sessionOptions);
+        const credential = new VsCodeExtensionCredential({
             code,
             output,
-            tenantId: options?.tenantId ?? defaults?.tenantId,
-            sessionOptions: mergeSessionOptions(defaults?.sessionOptions, options?.sessionOptions),
+            tenantId,
+            sessionOptions,
         });
+        const stablePartition = createStableCredentialPartition(tenantId, sessionOptions);
+        if (stablePartition) {
+            credentialDedupePartitions.set(credential, stablePartition);
+        }
+        return credential;
     };
+}
+
+function createStableCredentialPartition(
+    tenantId: string | undefined,
+    sessionOptions: vscode.AuthenticationGetSessionOptions | undefined,
+): string | undefined {
+    const accountId = sessionOptions?.account?.id;
+    if (!accountId) {
+        return undefined;
+    }
+
+    const effectiveCreateIfNone = sessionOptions.silent
+        ? undefined
+        : sessionOptions.createIfNone ?? true;
+    const identity = JSON.stringify([
+        accountId.toLowerCase(),
+        tenantId?.toLowerCase(),
+        sessionOptions.silent ?? false,
+        effectiveCreateIfNone,
+        sessionOptions.forceNewSession ?? false,
+        sessionOptions.clearSessionPreference ?? false,
+    ]);
+    return createHash('sha256').update(identity).digest('base64url');
 }

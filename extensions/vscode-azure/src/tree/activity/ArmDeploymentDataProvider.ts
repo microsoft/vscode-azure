@@ -13,6 +13,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { ISubscriptionResolver } from '../../services';
+import { IAzureAccountDataProvider } from '../resources/AzureAccountDataProvider';
 import { isActivity, isTerminalActivityStatus, type Activity } from './Activity';
 
 /** Identifier for the ARM deployment data provider */
@@ -84,6 +85,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
     private readonly activePolls = new Set<string>();
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<Activity>>();
+    private readonly disposables: Disposable[] = [this.onDidChangeEmitter];
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public constructor(
@@ -91,7 +93,13 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
         @inject(ISubscriptionResolver) private readonly resolveSubscription: ISubscriptionResolver,
-    ) { }
+        @inject(IAzureAccountDataProvider) accountProvider: IAzureAccountDataProvider,
+    ) {
+        this.disposables.push(accountProvider.onDidRemoveAccounts(accountIds => {
+            const removedIds = new Set(accountIds.map(id => id.toLowerCase()));
+            this.clearActivities(activity => !!activity.accountId && removedIds.has(activity.accountId.toLowerCase()));
+        }));
+    }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is ArmDeploymentActivity {
@@ -417,7 +425,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
         }
         this.knownDeployments.clear();
         this.activePolls.clear();
-        this.onDidChangeEmitter.dispose();
+        this.disposables.forEach(disposable => void disposable.dispose());
     }
 
     /**

@@ -5,8 +5,8 @@
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { createDefaultCredentialFactory } from '../../src/auth/CredentialFactory';
-import { makeSubscription } from '../mockAzure';
+import { createDefaultCredentialFactory, getCredentialDedupePartition } from '../../src/auth/CredentialFactory';
+import { makeCredential, makeSubscription } from '../mockAzure';
 
 describe('createDefaultCredentialFactory (unit)', () => {
     it('should produce a TokenCredential', () => {
@@ -96,5 +96,35 @@ describe('createDefaultCredentialFactory (unit)', () => {
         // No ambient defaults -> identical to the interactive default path.
         expect(options.silent).to.be.undefined;
         expect(options.createIfNone).to.equal(true);
+    });
+
+    it('should share a dedupe partition for equivalent account scopes', () => {
+        const { vscode } = createMockVsCode();
+        const factory = createDefaultCredentialFactory(vscode);
+        const subscription = makeSubscription();
+
+        const first = factory(subscription);
+        const second = factory(subscription);
+
+        expect(getCredentialDedupePartition(first)).to.equal(getCredentialDedupePartition(second));
+    });
+
+    it('should partition different tenants and acquisition behavior', () => {
+        const { vscode } = createMockVsCode();
+        const factory = createDefaultCredentialFactory(vscode);
+        const interactive = factory({ tenantId: 'tenant-1', sessionOptions: { account: { id: 'account-1', label: '' } } });
+        const otherTenant = factory({ tenantId: 'tenant-2', sessionOptions: { account: { id: 'account-1', label: '' } } });
+        const silent = factory({ tenantId: 'tenant-1', sessionOptions: { account: { id: 'account-1', label: '' }, silent: true } });
+
+        expect(getCredentialDedupePartition(interactive)).to.not.equal(getCredentialDedupePartition(otherTenant));
+        expect(getCredentialDedupePartition(interactive)).to.not.equal(getCredentialDedupePartition(silent));
+    });
+
+    it('should partition unknown credentials by object identity', () => {
+        const first = makeCredential();
+        const second = makeCredential();
+
+        expect(getCredentialDedupePartition(first)).to.equal(getCredentialDedupePartition(first));
+        expect(getCredentialDedupePartition(first)).to.not.equal(getCredentialDedupePartition(second));
     });
 });

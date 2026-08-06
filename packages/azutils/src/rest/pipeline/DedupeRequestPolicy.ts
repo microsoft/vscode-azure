@@ -5,24 +5,21 @@
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
 import { InflightMap } from '@microsoft/vscode-azure-utils';
-import { createHash } from 'node:crypto';
 
 const inflight = new InflightMap<PipelineResponse>();
 
-const ignoredHeaderNames = new Set([
-    'request-id',
-    'traceparent',
-    'tracestate',
-    'x-ms-client-request-id',
-    'x-ms-correlation-request-id',
-    'x-ms-request-id',
-]);
-
-const sensitiveHeaderNames = new Set([
-    'authorization',
-    'proxy-authorization',
-    'x-ms-authorization-auxiliary',
-]);
+const responseAffectingHeaderNames = [
+    'accept',
+    'accept-encoding',
+    'accept-language',
+    'if-match',
+    'if-modified-since',
+    'if-none-match',
+    'if-unmodified-since',
+    'prefer',
+    'range',
+    'x-ms-version',
+];
 
 /**
  * A pipeline policy that deduplicates identical in-flight GET requests.
@@ -33,14 +30,14 @@ const sensitiveHeaderNames = new Set([
  * also not deduplicated, since they cannot be easily shared across callers.
  *
  * Policy instances share transient in-flight state, allowing independently
- * created clients to deduplicate requests. The policy must run after
- * authentication so the request's authorization header partitions requests by
- * credential. This places deduplication inside each caller's retry loop, where
- * concurrent retry attempts can also coalesce. Request-specific observability
- * headers are excluded from the key.
+ * created clients in the same opaque identity partition to deduplicate requests.
+ * Only headers that can affect the returned representation participate in request
+ * equivalence; authentication and observability headers do not.
  */
 export class DedupeRequestPolicy implements PipelinePolicy {
     public readonly name = 'DedupeRequestPolicy';
+
+    public constructor(private readonly partition = 'anonymous') { }
 
     /** @inheritdoc */
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
@@ -49,36 +46,24 @@ export class DedupeRequestPolicy implements PipelinePolicy {
         // the owner's cancellation to every piggybacked caller.
         if (request.method !== 'GET'
             || request.streamResponseStatusCodes?.size
-            || request.abortSignal
-            || !request.headers.has('authorization')) {
+            || request.abortSignal) {
             return next(request);
         }
 
-        const response = await inflight.getOrRun(createRequestKey(request), () => next(request));
+        const response = await inflight.getOrRun(this.createRequestKey(request), () => next(request));
 
         // If this caller piggybacked on another request, clone the response
         // so each caller gets its own response object with the correct request ref
         return response.request === request ? response : cloneResponse(request, response);
     }
-}
 
-function createRequestKey(request: PipelineRequest): string {
-    const headers = [...request.headers]
-        .filter(([name]) => !ignoredHeaderNames.has(name.toLowerCase()))
-        .map(([name, value]) => {
-            const normalizedName = name.toLowerCase();
-            return [
-                normalizedName,
-                sensitiveHeaderNames.has(normalizedName) ? hashHeaderValue(value) : value,
-            ] as const;
-        })
-        .sort(([left], [right]) => left.localeCompare(right));
+    private createRequestKey(request: PipelineRequest): string {
+        const headers = responseAffectingHeaderNames
+            .map(name => [name, request.headers.get(name)] as const)
+            .filter((entry): entry is readonly [string, string] => entry[1] !== undefined);
 
-    return JSON.stringify([request.url, headers]);
-}
-
-function hashHeaderValue(value: string): string {
-    return createHash('sha256').update(value).digest('base64url');
+        return JSON.stringify([this.partition, request.url, headers]);
+    }
 }
 
 function cloneResponse(request: PipelineRequest, response: PipelineResponse): PipelineResponse {

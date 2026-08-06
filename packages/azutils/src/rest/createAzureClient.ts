@@ -5,9 +5,9 @@
 
 import type { Client as RestClient, ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
-import { bearerTokenAuthenticationPolicyName } from '@azure/core-rest-pipeline';
 import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '../auth/AzureSubscription';
+import { getCredentialDedupePartition } from '../auth/CredentialFactory';
 import type { EnvironmentLike } from '../auth/Environment';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
@@ -41,7 +41,7 @@ export function createArmRestClient<TClient extends RestClient, TOptions extends
 ): TClient {
     const endpoint = environment.resourceManagerEndpointUrl;
     executor.output.debug(`[rest] create rest client ${getClient.name}`);
-    return addDedupePolicy(getClient(credential, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions)));
+    return getClient(credential, applyDefaults(ctx, executor, credential, { ...options, endpoint } as TOptions));
 }
 
 /**
@@ -76,19 +76,13 @@ export function createArmRestSubscriptionClient<TClient extends RestClient, TOpt
 
     const endpoint = subscription.environment.resourceManagerEndpointUrl;
     executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
-    return addDedupePolicy(getClient(credential, subscriptionId, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions)));
-}
-
-function addDedupePolicy<TClient extends RestClient>(client: TClient): TClient {
-    client.pipeline.addPolicy(new DedupeRequestPolicy(), {
-        afterPolicies: [bearerTokenAuthenticationPolicyName],
-    });
-    return client;
+    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, credential, { ...options, endpoint } as TOptions));
 }
 
 function applyDefaults<TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
+    credential: TokenCredential,
     options?: TOptions,
 ): TOptions {
     const extensionUserAgentPrefix = `${ctx.extensionContext.extension.id}/${(ctx.extensionContext.extension.packageJSON as { version: string }).version}`;
@@ -107,6 +101,10 @@ function applyDefaults<TOptions extends RestClientOptions>(
             },
             {
                 policy: new AcceptLanguagePolicy(ctx.code.env.language),
+                position: 'perCall',
+            },
+            {
+                policy: new DedupeRequestPolicy(getCredentialDedupePartition(credential)),
                 position: 'perCall',
             },
         ],

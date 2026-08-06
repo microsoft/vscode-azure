@@ -109,26 +109,9 @@ describe('createArmRestSubscriptionClient (unit)', () => {
         ) as unknown as FakeSubResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
-        const addedPolicyNames = client.pipeline.addedPolicies.map(p => p.policy.name);
-
-        expect(addedPolicyNames).to.include('DedupeRequestPolicy');
+        expect(policyNames).to.include('DedupeRequestPolicy');
         expect(policyNames).to.include('CorrelationIdPolicy');
         expect(policyNames).to.include('AcceptLanguagePolicy');
-    });
-
-    it('should place request deduplication after bearer-token authentication', () => {
-        const { ctx } = createMockCodeContext();
-        const { executor } = createTestActionExecutor();
-
-        const client = createArmRestSubscriptionClient(
-            ctx,
-            executor,
-            typedSubFactory,
-            makeCredential(),
-            makeSubscription(),
-        ) as unknown as FakeSubResult;
-
-        expect(client.pipeline.addedPolicies[0].options?.afterPolicies).to.deep.equal(['bearerTokenAuthenticationPolicy']);
     });
 
     it('should set user agent prefix with extension ID and version', () => {
@@ -194,10 +177,8 @@ describe('createArmRestSubscriptionClient (unit)', () => {
         ) as unknown as FakeSubResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
-        const addedPolicyNames = client.pipeline.addedPolicies.map(p => p.policy.name);
-
         expect(policyNames).to.include('CustomPolicy');
-        expect(addedPolicyNames).to.include('DedupeRequestPolicy');
+        expect(policyNames).to.include('DedupeRequestPolicy');
     });
 });
 
@@ -248,9 +229,7 @@ describe('createArmRestClient (unit)', () => {
         ) as unknown as FakeResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
-        const addedPolicyNames = client.pipeline.addedPolicies.map(p => p.policy.name);
-
-        expect(addedPolicyNames).to.include('DedupeRequestPolicy');
+        expect(policyNames).to.include('DedupeRequestPolicy');
         expect(policyNames).to.include('CorrelationIdPolicy');
         expect(policyNames).to.include('AcceptLanguagePolicy');
         expect(policyNames).to.not.include('MFAChallengePolicy');
@@ -320,9 +299,7 @@ describe('createArmRestClient (unit)', () => {
         ) as unknown as FakeResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
-        const addedPolicyNames = client.pipeline.addedPolicies.map(p => p.policy.name);
-
         expect(policyNames).to.include('CustomPolicy');
-        expect(addedPolicyNames).to.include('DedupeRequestPolicy');
+        expect(policyNames).to.include('DedupeRequestPolicy');
     });
 });
