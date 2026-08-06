@@ -11,7 +11,7 @@ import { ActivityTreeViewId } from '../../constants';
 import { IGitRemoteService, type GitRemoteProvider } from '../../staticWebApps/GitRemoteService';
 import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
-import { getStaticWebAppServiceConfig, hasConflictingProviderWorkflow, type StaticWebAppAutoDeployEligibility } from './deploymentRouting';
+import { getStaticWebAppServiceConfig, hasConflictingProviderWorkflow, resolveStaticWebAppServiceProjectFolder, type StaticWebAppAutoDeployEligibility } from './deploymentRouting';
 import { detectStaticWebAppProject } from './steps/frameworkDetection';
 import { canAzdDeployStaticWebApp } from './steps/locationUtils';
 
@@ -225,8 +225,11 @@ export class DeployStaticWebApp implements ManagedCommand {
      * wording.
      *
      * Detects the framework at the existing service's own `project` folder
-     * (from `azure.yaml`) rather than scanning the whole workspace, when that
-     * path is available -- avoids false positives/negatives in a monorepo.
+     * (from `azure.yaml`) rather than scanning the whole workspace. `project`
+     * is required (never assumed to default to `iacFolder`) and must resolve
+     * to an existing directory following azd's path semantics -- an invalid
+     * path is `'invalidServiceConfig'`, never a silent fallback to scanning
+     * `iacFolder` itself.
      */
     private async resolveEligibility(iacFolder: vscode.Uri): Promise<StaticWebAppAutoDeployEligibility> {
         const serviceConfig = await getStaticWebAppServiceConfig(this.azd, this.ctx.code, iacFolder);
@@ -234,7 +237,11 @@ export class DeployStaticWebApp implements ManagedCommand {
             return 'invalidServiceConfig';
         }
 
-        const projectFolder = serviceConfig.project ? this.ctx.code.Uri.joinPath(iacFolder, serviceConfig.project) : iacFolder;
+        const projectFolder = await resolveStaticWebAppServiceProjectFolder(this.ctx.code, iacFolder, serviceConfig.project);
+        if (!projectFolder) {
+            return 'invalidServiceConfig';
+        }
+
         const detection = await detectStaticWebAppProject(this.ctx.code, projectFolder);
         if (detection.primaryPresetId === 'nextjs') {
             return 'hybridSsr';
