@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import { mock as nodeMock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
+import { resolveWindowsProjectPath } from '../../../src/commands/staticWebApps/deploymentRouting';
 import { DetermineStaticWebAppDeploymentRouteStep } from '../../../src/commands/staticWebApps/steps/DetermineStaticWebAppDeploymentRouteStep';
 import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
 import { createMockAzdService } from '../../azd/MockAzdService';
@@ -331,34 +332,50 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                 expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
             });
 
-            it('should accept an absolute POSIX-style project path used unchanged, not anchored under iacFolder', async () => {
-                // azd's ServiceConfig.Path() accepts an absolute project path unchanged. A
-                // leading-slash path is recognized as absolute by Node's path module on any host
-                // (POSIX natively; Windows treats it as rooted on the current drive without
-                // requiring/injecting a drive letter here), so this is safe to always run.
-                const { step, fs } = createStep(githubPushed, {
-                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
+            if (process.platform === 'win32') {
+                it('should treat a rooted-without-volume path ("/opt/app") as relative on Windows, joining it under iacFolder rather than treating it as OS-root-absolute (Go: filepath.IsAbs("/opt/app") is false on Windows)', async () => {
+                    const { step, fs, code } = createStep(githubPushed, {
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
+                    });
+                    const projectUri = code.Uri.file(resolveWindowsProjectPath(code.Uri.file('/workspace').fsPath, '/opt/app'));
+                    fs.directories.add(projectUri.path);
+                    fs.addFile(code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                    const result = await step.prompt(hydratedContext());
+
+                    expect(result).to.deep.equal({
+                        deploy: false,
+                        deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                    });
                 });
-                fs.directories.add('/opt/app');
-                fs.addFile(MockUri.file('/opt/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+            } else {
+                it('should accept an absolute POSIX-style project path ("/opt/app") used unchanged, not anchored under iacFolder', async () => {
+                    // On POSIX, a leading-slash path is absolute per both Node's path.posix and
+                    // Go's filepath.IsAbs -- no divergence to correct, unlike on Windows.
+                    const { step, fs } = createStep(githubPushed, {
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/app\n    dist: build\n',
+                    });
+                    fs.directories.add('/opt/app');
+                    fs.addFile(MockUri.file('/opt/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
-                const result = await step.prompt(hydratedContext());
+                    const result = await step.prompt(hydratedContext());
 
-                expect(result).to.deep.equal({
-                    deploy: false,
-                    deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                    expect(result).to.deep.equal({
+                        deploy: false,
+                        deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                    });
                 });
-            });
 
-            it('should block (invalidServiceConfig) when an absolute POSIX-style project path does not exist', async () => {
-                const { step } = createStep(githubPushed, {
-                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/doesnotexist\n    dist: build\n',
+                it('should block (invalidServiceConfig) when an absolute POSIX-style project path does not exist', async () => {
+                    const { step } = createStep(githubPushed, {
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /opt/doesnotexist\n    dist: build\n',
+                    });
+
+                    const result = await step.prompt(hydratedContext());
+
+                    expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
                 });
-
-                const result = await step.prompt(hydratedContext());
-
-                expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
-            });
+            }
 
             if (process.platform === 'win32') {
                 it('should accept a Windows drive-absolute project path (e.g. C:\\...) used unchanged, not anchored under iacFolder', async () => {
@@ -366,9 +383,9 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
                         azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\opt\\app\n    dist: build\n',
                     });
                     // Derive the resolved path the same way the production code does (via
-                    // path.resolve + Uri.file), rather than hand-guessing the URI's
+                    // resolveWindowsProjectPath + Uri.file), rather than hand-guessing the URI's
                     // case-normalized representation.
-                    const projectUri = code.Uri.file(path.resolve('C:\\opt\\app'));
+                    const projectUri = code.Uri.file(resolveWindowsProjectPath(code.Uri.file('/workspace').fsPath, 'C:\\opt\\app'));
                     fs.directories.add(projectUri.path);
                     fs.addFile(code.Uri.joinPath(projectUri, 'package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
