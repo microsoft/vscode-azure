@@ -11,13 +11,11 @@ import { createShellTask } from '../vscode/createShellTask';
 import type { IVsCode } from '../vscode/IVsCode';
 import { argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
 import { findOnPath } from './getSafeExecPath';
-import { killProcessTree, type KillProcessTreeFn } from './killProcessTree';
 import { resolveCommandLine } from './resolveCommandLine';
 import { toAbortSignal } from './toAbortSignal';
 
 export * from './CommandLineBuilder';
 export * from './getSafeExecPath';
-export * from './killProcessTree';
 export { SubprocessError } from 'nano-spawn';
 
 /**
@@ -175,12 +173,6 @@ export interface IProcessExecutor {
      */
     isOnPath(command: string): Promise<boolean>;
 
-    /**
-     * Terminates a process and its descendants.
-     *
-     * A process that has already exited is considered successfully stopped.
-     */
-    killProcess(processId: number): Promise<void>;
 }
 
 /**
@@ -190,13 +182,11 @@ export interface IProcessExecutor {
  * @param spawnFn - Optional override for {@linkcode nano-spawn}'s default export,
  *   primarily for injecting a mock in unit tests. Defaults to the real
  *   implementation.
- * @param killFn - Optional process-tree termination override for tests.
  */
 export class ProcessExecutor implements IProcessExecutor {
     public constructor(
         private readonly code: IVsCode,
         private readonly spawnFn: SpawnFn = spawn,
-        private readonly killFn?: KillProcessTreeFn,
     ) { }
 
     public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
@@ -217,11 +207,6 @@ export class ProcessExecutor implements IProcessExecutor {
     /** @inheritdoc */
     public async isOnPath(command: string): Promise<boolean> {
         return (await findOnPath(command)) !== undefined;
-    }
-
-    /** @inheritdoc */
-    public async killProcess(processId: number): Promise<void> {
-        await killProcessTree(processId, this.killFn);
     }
 
     private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {

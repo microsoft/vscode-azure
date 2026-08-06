@@ -46,7 +46,6 @@
     },
     "dependencies": {
         "nano-spawn": "^2.1.0",
-        "tree-kill": "^1.2.2",
         "vscode-uri": "^3.1.0"
     },
     "devDependencies": {

@@ -5,13 +5,11 @@
 
 import { expect } from 'chai';
 import { type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
-import assert from 'node:assert/strict';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
 import { ProcessExecutor, type SpawnFn } from '../../src/base/IProcessExecutor';
-import type { KillProcessTreeFn } from '../../src/base/killProcessTree';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import { createMockVsCode } from '../vscode/MockVsCode';
@@ -94,55 +92,6 @@ function createMockSpawn(options?: {
 }
 
 describe('ProcessExecutor (unit)', () => {
-    describe('process termination', () => {
-        it('kills the requested process tree', async () => {
-            const { vscode: code } = createMockVsCode();
-            const killFn = mock.fn<KillProcessTreeFn>((_processId, _signal, callback) => {
-                callback();
-            });
-            const executor = new ProcessExecutor(code, createMockSpawn(), killFn);
-
-            await executor.killProcess(process.pid);
-
-            expect(killFn.mock.callCount()).to.equal(1);
-            expect(killFn.mock.calls[0].arguments.slice(0, 2)).to.deep.equal([process.pid, undefined]);
-        });
-
-        it('succeeds when the backend reports that the process exited', async () => {
-            const { vscode: code } = createMockVsCode();
-            const error = Object.assign(new Error('Process not found'), { code: 'ESRCH' });
-            const killFn = mock.fn<KillProcessTreeFn>((_processId, _signal, callback) => {
-                callback(error);
-            });
-            const executor = new ProcessExecutor(code, createMockSpawn(), killFn);
-
-            await executor.killProcess(process.pid);
-        });
-
-        it('does not invoke the backend for an exited process', async () => {
-            const { vscode: code } = createMockVsCode();
-            const killFn = mock.fn<KillProcessTreeFn>((_processId, _signal, callback) => {
-                callback();
-            });
-            const executor = new ProcessExecutor(code, createMockSpawn(), killFn);
-
-            await executor.killProcess(2_147_483_647);
-
-            expect(killFn.mock.callCount()).to.equal(0);
-        });
-
-        it('propagates process termination failures', async () => {
-            const { vscode: code } = createMockVsCode();
-            const error = Object.assign(new Error('Access denied'), { code: 'EPERM' });
-            const killFn = mock.fn<KillProcessTreeFn>((_processId, _signal, callback) => {
-                callback(error);
-            });
-            const executor = new ProcessExecutor(code, createMockSpawn(), killFn);
-
-            await assert.rejects(executor.killProcess(process.pid), /Access denied/);
-        });
-    });
-
     describe('background execution', () => {
         it('should capture stdout and stderr', async () => {
             const { vscode: code } = createMockVsCode();
