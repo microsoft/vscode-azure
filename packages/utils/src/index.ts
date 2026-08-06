@@ -38,5 +38,6 @@ export * from './vscode/IVsCode';
 export * from './vscode/ProviderResult';
 export * from './wizard/ExecuteStep';
 export * from './wizard/GoBackError';
+export * from './wizard/PickWorkspaceLocationStep';
 export * from './wizard/PromptStep';
 export * from './wizard/Wizard';
