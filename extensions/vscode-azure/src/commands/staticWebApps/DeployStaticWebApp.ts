@@ -11,7 +11,7 @@ import { ActivityTreeViewId } from '../../constants';
 import { IGitRemoteService, type GitRemoteProvider } from '../../staticWebApps/GitRemoteService';
 import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
-import { getStaticWebAppServiceDist, hasConflictingProviderWorkflow } from './deploymentRouting';
+import { getStaticWebAppServiceConfig, hasConflictingProviderWorkflow, type StaticWebAppAutoDeployEligibility } from './deploymentRouting';
 import { detectStaticWebAppProject } from './steps/frameworkDetection';
 import { canAzdDeployStaticWebApp } from './steps/locationUtils';
 
@@ -97,17 +97,13 @@ export class DeployStaticWebApp implements ManagedCommand {
         // call via DetermineStaticWebAppDeploymentRouteStep) rather than
         // re-detecting -- a fresh heuristic scan could disagree with the
         // wizard's explicit preset/output choices in a monorepo or override
-        // scenario. Only run fresh detection for standalone invocation, and
-        // when doing so, combine *both* signals: the framework itself
-        // (Next.js hybrid/SSR is never deployable) *and* the existing
-        // `host: staticwebapp` service's actual `dist` value -- recognizing
-        // that a service exists is not enough; an absent, unreadable, or
-        // invalid `dist` (missing/non-string/empty/`.`/`/`) means there is no
-        // valid deploy target either way.
-        const supportsAutoDeploy = args?.artifactSupportsAutoDeploy ?? await this.detectAutoDeploySupport(iacFolder);
-        if (!supportsAutoDeploy) {
+        // scenario. Only run fresh detection for standalone invocation.
+        const eligibility: StaticWebAppAutoDeployEligibility = args?.artifactSupportsAutoDeploy === undefined
+            ? await this.resolveEligibility(iacFolder)
+            : (args.artifactSupportsAutoDeploy ? 'supported' : 'invalidServiceConfig');
+        if (eligibility !== 'supported') {
             this.actionContext.telemetry.properties.deploymentRoute = 'unsupportedArtifact';
-            this.showUnsupportedArtifactGuidance();
+            this.showUnsupportedArtifactGuidance(eligibility);
             return;
         }
 
@@ -215,25 +211,36 @@ export class DeployStaticWebApp implements ManagedCommand {
 
     /** Checks for an existing `host: staticwebapp` service in `azure.yaml`. */
     private async hasStaticWebAppService(iacFolder: vscode.Uri): Promise<boolean> {
-        return await getStaticWebAppServiceDist(this.azd, this.ctx.code, iacFolder) !== undefined;
+        return await getStaticWebAppServiceConfig(this.azd, this.ctx.code, iacFolder) !== undefined;
     }
 
     /**
      * Fresh (standalone-invocation-only) determination of whether automatic
-     * deployment is supported, combining two independent signals:
-     * - The framework itself: Next.js hybrid/SSR is never deployable this way.
-     * - The existing `host: staticwebapp` service's actual `dist` value.
-     *   Recognizing that a service exists is not sufficient -- an absent,
-     *   unreadable, or invalid `dist` (missing/non-string/empty/`.`/`/`) means
-     *   there is no valid deploy target for either direct deploy or CI/CD.
+     * deployment is supported. Framework/hybrid-SSR status is checked ahead
+     * of the existing service's `dist` validity, since Next.js hybrid/SSR is
+     * an independent, architectural reason unrelated to whether `dist`
+     * happens to look valid -- a hybrid/SSR project is always `'hybridSsr'`,
+     * never misreported as a generic configuration problem, and vice versa: a
+     * plain misconfigured static project is never described with Next.js
+     * wording.
+     *
+     * Detects the framework at the existing service's own `project` folder
+     * (from `azure.yaml`) rather than scanning the whole workspace, when that
+     * path is available -- avoids false positives/negatives in a monorepo.
      */
-    private async detectAutoDeploySupport(iacFolder: vscode.Uri): Promise<boolean> {
-        const detection = await detectStaticWebAppProject(this.ctx.code, iacFolder);
-        if (detection.primaryPresetId === 'nextjs') {
-            return false;
+    private async resolveEligibility(iacFolder: vscode.Uri): Promise<StaticWebAppAutoDeployEligibility> {
+        const serviceConfig = await getStaticWebAppServiceConfig(this.azd, this.ctx.code, iacFolder);
+        if (!serviceConfig) {
+            return 'invalidServiceConfig';
         }
-        const dist = await getStaticWebAppServiceDist(this.azd, this.ctx.code, iacFolder);
-        return dist !== undefined && canAzdDeployStaticWebApp(dist);
+
+        const projectFolder = serviceConfig.project ? this.ctx.code.Uri.joinPath(iacFolder, serviceConfig.project) : iacFolder;
+        const detection = await detectStaticWebAppProject(this.ctx.code, projectFolder);
+        if (detection.primaryPresetId === 'nextjs') {
+            return 'hybridSsr';
+        }
+
+        return serviceConfig.dist !== undefined && canAzdDeployStaticWebApp(serviceConfig.dist) ? 'supported' : 'invalidServiceConfig';
     }
 
     /**
@@ -311,14 +318,23 @@ export class DeployStaticWebApp implements ManagedCommand {
     }
 
     /**
-     * Shown when the project cannot be deployed by this command at all
-     * (Next.js hybrid/SSR) -- never claims a deployment occurred.
+     * Shown when the project cannot be deployed by this command at all --
+     * never claims a deployment occurred. Wording is reason-specific so a
+     * plain misconfiguration is never described as Next.js-specific, and vice
+     * versa.
      */
-    private showUnsupportedArtifactGuidance(): void {
-        void this.ctx.code.window.showErrorMessage(this.ctx.code.l10n.t(
-            'This Next.js app uses server-side rendering, which cannot be deployed directly or through the '
-            + 'generated CI/CD workflow (both require an output distinct from the source, and neither runs a '
-            + 'server). Deploy it manually, or adjust the build to produce a supported static output.',
-        ));
+    private showUnsupportedArtifactGuidance(reason: Exclude<StaticWebAppAutoDeployEligibility, 'supported'>): void {
+        const message = reason === 'hybridSsr'
+            ? this.ctx.code.l10n.t(
+                'This Next.js app uses server-side rendering, which cannot be deployed directly or through the '
+                + 'generated CI/CD workflow (both require an output distinct from the source, and neither runs a '
+                + 'server). Deploy it manually, or adjust the build to produce a supported static output.',
+            )
+            : this.ctx.code.l10n.t(
+                'This project\'s Static Web Apps configuration (azure.yaml) doesn\'t declare a valid deployable '
+                + 'output -- direct deployment and the generated CI/CD workflow both require a `host: staticwebapp` '
+                + 'service with an output ("dist") distinct from the source. Fix the configuration, then try again.',
+            );
+        void this.ctx.code.window.showErrorMessage(message);
     }
 }
