@@ -33,6 +33,9 @@ function createCommand(options: { readonly remote?: GitRemoteInfo; readonly azdV
             return [];
         }
     });
+    // Every test uses /workspace as the iacFolder; register it as a real directory so
+    // resolveStaticWebAppServiceProjectFolder's workspace.fs.stat check succeeds for `project: .`.
+    mockResult.fs.directories.add('/workspace');
     // Defaults to a valid `host: staticwebapp` service at /workspace/azure.yaml so tests that
     // don't care about artifact-detection details (most "pre-filled args" tests) aren't
     // incidentally blocked by the dist-validity check. Pass `azureYaml: null` to simulate no
@@ -49,6 +52,7 @@ function createCommand(options: { readonly remote?: GitRemoteInfo; readonly azdV
 
 function setupWorkspaceProject(mockResult: ReturnType<typeof createMockCodeContext>['mock'], folderPath: string, folderName: string, hasStaticWebApp = true) {
     mockResult.workspaceFolders.push({ uri: MockUri.file(folderPath), name: folderName, index: mockResult.workspaceFolders.length });
+    mockResult.fs.directories.add(folderPath);
     mockResult.fs.addFile(MockUri.file(`${folderPath}/azure.yaml`), hasStaticWebApp ? azureYaml : 'services:\n  api:\n    host: function\n');
 }
 
@@ -154,7 +158,7 @@ describe('DeployStaticWebApp (unit)', () => {
             it('should show configuration guidance (not Next.js wording) for a malformed static service', async () => {
                 // A perfectly ordinary (non-hybrid) static app whose azure.yaml is just
                 // misconfigured -- must never be told it's a Next.js SSR problem.
-                const { command, mockResult } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n' });
+                const { command, mockResult } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: ""\n' });
 
                 await command.execute(args);
 
@@ -165,7 +169,7 @@ describe('DeployStaticWebApp (unit)', () => {
             });
 
             it('should block when the service dist is missing', async () => {
-                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n' });
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n' });
 
                 await command.execute(args);
 
@@ -173,7 +177,7 @@ describe('DeployStaticWebApp (unit)', () => {
             });
 
             it('should block when the service dist is an empty string', async () => {
-                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n' });
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: ""\n' });
 
                 await command.execute(args);
 
@@ -181,7 +185,7 @@ describe('DeployStaticWebApp (unit)', () => {
             });
 
             it('should block when the service dist is "."', async () => {
-                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: "."\n' });
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: "."\n' });
 
                 await command.execute(args);
 
@@ -189,7 +193,7 @@ describe('DeployStaticWebApp (unit)', () => {
             });
 
             it('should block when the service dist is "/"', async () => {
-                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: "/"\n' });
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: "/"\n' });
 
                 await command.execute(args);
 
@@ -197,15 +201,112 @@ describe('DeployStaticWebApp (unit)', () => {
             });
 
             it('should block when the service dist is a non-string value', async () => {
-                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: 123\n' });
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: 123\n' });
 
                 await command.execute(args);
 
                 expect(azd.deploy.mock.callCount()).to.equal(0);
             });
 
+            describe('invalid service project paths (azd path semantics)', () => {
+                it('should block when the service project field is missing entirely', async () => {
+                    const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n' });
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(0);
+                    expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+                });
+
+                it('should block when the service project is a non-string value', async () => {
+                    const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: 123\n    dist: build\n' });
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(0);
+                });
+
+                it('should block when the service project is an empty string', async () => {
+                    const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ""\n    dist: build\n' });
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(0);
+                });
+
+                it('should resolve a Windows-style nested project path (backslash separators) the same as forward slashes', async () => {
+                    const { command, azd, mockResult } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: frontend\\app\n    dist: build\n',
+                    });
+                    mockResult.fs.directories.add('/workspace/frontend/app');
+                    mockResult.fs.addFile(MockUri.file('/workspace/frontend/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(1);
+                });
+
+                it('should block when the service project path does not exist', async () => {
+                    const { command, azd } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./doesnotexist\n    dist: build\n',
+                    });
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(0);
+                    expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
+                });
+
+                it('should block when the service project path resolves to a file, not a directory', async () => {
+                    const { command, azd, mockResult } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./config.json\n    dist: build\n',
+                    });
+                    mockResult.fs.addFile(MockUri.file('/workspace/config.json'), '{}');
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(0);
+                });
+
+                it('should block and never stat the filesystem when the project path traverses above iacFolder', async () => {
+                    const { command, azd, mockResult } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ../outside\n    dist: build\n',
+                    });
+                    const statCallsBefore = mockResult.fs.stat.mock.callCount();
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(0);
+                    expect(mockResult.fs.stat.mock.callCount()).to.equal(statCallsBefore);
+                });
+
+                it('should block and never stat the filesystem for an absolute POSIX project path', async () => {
+                    const { command, azd, mockResult } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /etc\n    dist: build\n',
+                    });
+                    const statCallsBefore = mockResult.fs.stat.mock.callCount();
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(0);
+                    expect(mockResult.fs.stat.mock.callCount()).to.equal(statCallsBefore);
+                });
+
+                it('should block and never stat the filesystem for an absolute Windows project path', async () => {
+                    const { command, azd, mockResult } = createCommand({
+                        azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\Windows\n    dist: build\n',
+                    });
+                    const statCallsBefore = mockResult.fs.stat.mock.callCount();
+
+                    await command.execute(args);
+
+                    expect(azd.deploy.mock.callCount()).to.equal(0);
+                    expect(mockResult.fs.stat.mock.callCount()).to.equal(statCallsBefore);
+                });
+            });
+
             it('should proceed when the service has a valid dist and the framework is not hybrid/SSR', async () => {
-                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n' });
+                const { command, azd } = createCommand({ azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: build\n' });
 
                 await command.execute(args);
 
@@ -216,6 +317,7 @@ describe('DeployStaticWebApp (unit)', () => {
                 const { command, azd, mockResult } = createCommand({
                     azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
                 });
+                mockResult.fs.directories.add('/workspace/frontend');
                 mockResult.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
                 mockResult.fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
@@ -228,6 +330,7 @@ describe('DeployStaticWebApp (unit)', () => {
                 const { command, azd, mockResult } = createCommand({
                     azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
                 });
+                mockResult.fs.directories.add('/workspace/frontend');
                 mockResult.fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
 
                 await command.execute(args);
@@ -374,7 +477,7 @@ describe('DeployStaticWebApp (unit)', () => {
             // the service's *existence* -- this proves its *value* is still checked afterward,
             // rather than being ignored once the project is recognized as "a SWA project".
             const { command, azd, mockResult } = createResolvedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
-            mockResult.fs.addFile(MockUri.file('/workspace/azure.yaml'), 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n');
+            mockResult.fs.addFile(MockUri.file('/workspace/azure.yaml'), 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: ""\n');
 
             await command.execute();
 

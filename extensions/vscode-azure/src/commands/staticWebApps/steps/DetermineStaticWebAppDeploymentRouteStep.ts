@@ -9,7 +9,7 @@ import type * as vscode from 'vscode';
 import { IAzdService, MinAzdPipelineVersion } from '../../../azd/AzdService';
 import { IGitRemoteService } from '../../../staticWebApps/GitRemoteService';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
-import { getStaticWebAppServiceConfig, hasConflictingProviderWorkflow, type StaticWebAppAutoDeployEligibility } from '../deploymentRouting';
+import { getStaticWebAppServiceConfig, hasConflictingProviderWorkflow, resolveStaticWebAppServiceProjectFolder, type StaticWebAppAutoDeployEligibility } from '../deploymentRouting';
 import { canAzdDeployStaticWebApp } from './locationUtils';
 import { detectStaticWebAppProject } from './frameworkDetection';
 
@@ -148,8 +148,15 @@ export class DetermineStaticWebAppDeploymentRouteStep extends PromptStep<CreateS
 
         // Detect the framework at the service's own project folder rather than scanning the
         // whole repository -- avoids false positives/negatives in a monorepo when a specific
-        // project path is already known from azure.yaml.
-        const projectFolder = serviceConfig.project ? this.code.Uri.joinPath(iacFolder, serviceConfig.project) : iacFolder;
+        // project path is already known from azure.yaml. `project` is required (never assumed
+        // to default to iacFolder) and must resolve to an existing directory following azd's
+        // path semantics -- an invalid path is `'invalidServiceConfig'`, never a silent fallback
+        // to scanning iacFolder itself.
+        const projectFolder = await resolveStaticWebAppServiceProjectFolder(this.code, iacFolder, serviceConfig.project);
+        if (!projectFolder) {
+            return 'invalidServiceConfig';
+        }
+
         const detection = await detectStaticWebAppProject(this.code, projectFolder);
         if (detection.primaryPresetId === 'nextjs') {
             return 'hybridSsr';

@@ -14,6 +14,9 @@ import { createMockAzdService } from '../../azd/MockAzdService';
 
 function createStep(remote: GitRemoteInfo | undefined, options: { readonly azdVersionOk?: boolean; readonly conflictingWorkflowPath?: string; readonly azureYaml?: string } = {}) {
     const { vscode: code, fs } = createMockVsCode();
+    // Every test uses /workspace as the iacFolder; register it as a real directory so
+    // resolveStaticWebAppServiceProjectFolder's workspace.fs.stat check succeeds for `project: .`.
+    fs.directories.add('/workspace');
     if (options.conflictingWorkflowPath) {
         fs.addFile(MockUri.file(options.conflictingWorkflowPath), 'trigger: none');
     }
@@ -146,7 +149,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
 
         it('should not classify a hydrated project as unsupported when its existing SWA service has a valid dist and a non-hybrid framework', async () => {
             const { step, getRemoteInfo } = createStep(undefined, {
-                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n',
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: build\n',
             });
 
             const result = await step.prompt(hydratedContext());
@@ -159,7 +162,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
 
         it('should block (invalidServiceConfig) a hydrated project whose existing SWA service has an invalid dist', async () => {
             const { step, getRemoteInfo } = createStep(githubPushed, {
-                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: ""\n',
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: ""\n',
             });
 
             const result = await step.prompt(hydratedContext());
@@ -192,23 +195,115 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
         });
 
         it('should block (invalidServiceConfig) when the existing service dist is missing', async () => {
-            const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n' });
+            const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n' });
             expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
         });
 
         it('should block (invalidServiceConfig) when the existing service dist is "."', async () => {
-            const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: "."\n' });
+            const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: "."\n' });
             expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
         });
 
         it('should block (invalidServiceConfig) when the existing service dist is "/"', async () => {
-            const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: "/"\n' });
+            const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: "/"\n' });
             expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
         });
 
         it('should block (invalidServiceConfig) when the existing service dist is a non-string value', async () => {
-            const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: 123\n' });
+            const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: 123\n' });
             expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+        });
+
+        describe('invalid service project paths (azd path semantics)', () => {
+            it('should block (invalidServiceConfig) when the existing service project field is missing entirely', async () => {
+                const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n' });
+                expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+            });
+
+            it('should block (invalidServiceConfig) when the existing service project is a non-string value', async () => {
+                const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: 123\n    dist: build\n' });
+                expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+            });
+
+            it('should block (invalidServiceConfig) when the existing service project is an empty string', async () => {
+                const { step } = createStep(githubPushed, { azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ""\n    dist: build\n' });
+                expect(await step.prompt(hydratedContext())).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+            });
+
+            it('should resolve a Windows-style nested project path (backslash separators) to the same directory as forward slashes', async () => {
+                const { step, fs } = createStep(githubPushed, {
+                    // A literal, unquoted YAML plain scalar backslash -- azd itself accepts Windows-style
+                    // paths in azure.yaml on any OS, so this must normalize the same as `./frontend/app`.
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: frontend\\app\n    dist: build\n',
+                });
+                fs.directories.add('/workspace/frontend/app');
+                fs.addFile(MockUri.file('/workspace/frontend/app/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
+
+                const result = await step.prompt(hydratedContext());
+
+                expect(result).to.deep.equal({
+                    deploy: false,
+                    deploymentRoute: { provider: 'github', repositoryUrl: githubPushed.url, branch: githubPushed.branch },
+                });
+            });
+
+            it('should block (invalidServiceConfig) when the existing service project path does not exist', async () => {
+                const { step } = createStep(githubPushed, {
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./doesnotexist\n    dist: build\n',
+                });
+
+                const result = await step.prompt(hydratedContext());
+
+                expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+            });
+
+            it('should block (invalidServiceConfig) when the existing service project path resolves to a file, not a directory', async () => {
+                const { step, fs } = createStep(githubPushed, {
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./config.json\n    dist: build\n',
+                });
+                fs.addFile(MockUri.file('/workspace/config.json'), '{}');
+
+                const result = await step.prompt(hydratedContext());
+
+                expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+            });
+
+            it('should block (invalidServiceConfig) and never stat the filesystem when the project path traverses above iacFolder', async () => {
+                const { step, fs } = createStep(githubPushed, {
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ../outside\n    dist: build\n',
+                });
+                const statCallsBefore = fs.stat.mock.callCount();
+
+                const result = await step.prompt(hydratedContext());
+
+                expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+                // Rejected purely from the string shape -- no filesystem access is ever attempted for it.
+                expect(fs.stat.mock.callCount()).to.equal(statCallsBefore);
+            });
+
+            it('should block (invalidServiceConfig) and never stat the filesystem for an absolute POSIX project path', async () => {
+                const { step, fs } = createStep(githubPushed, {
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: /etc\n    dist: build\n',
+                });
+                const statCallsBefore = fs.stat.mock.callCount();
+
+                const result = await step.prompt(hydratedContext());
+
+                expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+                expect(fs.stat.mock.callCount()).to.equal(statCallsBefore);
+            });
+
+            it('should block (invalidServiceConfig) and never stat the filesystem for an absolute Windows project path', async () => {
+                const { step, fs } = createStep(githubPushed, {
+                    azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: C:\\Windows\n    dist: build\n',
+                });
+                const statCallsBefore = fs.stat.mock.callCount();
+
+                const result = await step.prompt(hydratedContext());
+
+                expect(result).to.deep.equal({ deploy: false, deploymentUnsupportedArtifactReason: 'invalidServiceConfig' });
+                expect(fs.stat.mock.callCount()).to.equal(statCallsBefore);
+            });
         });
 
         it('should block (hybridSsr) a hydrated project with a valid dist whose framework is detected as Next.js at the service project path, before any remote lookup', async () => {
@@ -216,7 +311,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
             // skips with hasInfra) -- this proves the framework is independently (re-)detected, not
             // assumed non-hybrid just because buildPresetSelection is undefined.
             const { step, fs, getRemoteInfo } = createStep(githubPushed, {
-                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n',
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: build\n',
             });
             fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
 
@@ -228,7 +323,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
 
         it('should remain eligible for a hydrated project with a valid dist and a non-hybrid framework', async () => {
             const { step, fs } = createStep(githubPushed, {
-                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    dist: build\n',
+                azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: build\n',
             });
             fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
@@ -247,6 +342,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
             const { step, fs } = createStep(githubPushed, {
                 azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
             });
+            fs.directories.add('/workspace/frontend');
             fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
             fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
 
@@ -262,6 +358,7 @@ describe('DetermineStaticWebAppDeploymentRouteStep (unit)', () => {
             const { step, fs, getRemoteInfo } = createStep(githubPushed, {
                 azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
             });
+            fs.directories.add('/workspace/frontend');
             fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
 
             const result = await step.prompt(hydratedContext());

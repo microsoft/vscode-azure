@@ -66,7 +66,7 @@ export async function hasConflictingProviderWorkflow(
 export interface StaticWebAppServiceConfig {
     /** The service's `dist`, or `undefined` when missing/non-string. Note an explicit empty string is a distinct, still-invalid value. */
     readonly dist?: string;
-    /** The service's `project` (source folder, relative to `iacFolder`), or `undefined` when missing/non-string. */
+    /** The service's raw `project` value as written in `azure.yaml`, or `undefined` when missing/non-string. Not yet validated/resolved -- see {@linkcode resolveStaticWebAppServiceProjectFolder}. */
     readonly project?: string;
 }
 
@@ -75,7 +75,7 @@ export interface StaticWebAppServiceConfig {
  * `host: staticwebapp` service's `dist`/`project` fields, or `undefined` when
  * **no such service is configured at all** (or `azure.yaml`/the service can't
  * be read/parsed). This return-value distinction -- `undefined` (no service)
- * vs. an object with an empty/invalid `dist` (service present but
+ * vs. an object with an empty/invalid `dist`/`project` (service present but
  * misconfigured) -- matters to callers and to tests: both are ultimately
  * "unsupported", but for different, distinguishable reasons.
  *
@@ -118,6 +118,68 @@ export async function getStaticWebAppServiceConfig(
         }
     }
     return undefined;
+}
+
+/**
+ * Resolves a `host: staticwebapp` service's raw `project` value (as returned
+ * by {@linkcode getStaticWebAppServiceConfig}) to an actual, existing
+ * directory URI, following azd's own path semantics: relative to
+ * {@linkcode iacFolder} (the folder containing `azure.yaml`), with both `/`
+ * and Windows `\` separators normalized. Returns `undefined` -- meaning
+ * `'invalidServiceConfig'`, never a silent fallback to scanning
+ * {@linkcode iacFolder} itself -- for any of:
+ * - a missing/empty `project` (required; never assumed to default to the
+ *   IaC folder),
+ * - an absolute path (POSIX `/...` or a Windows drive letter `C:...`),
+ * - a relative path whose `..` segments would traverse above
+ *   {@linkcode iacFolder},
+ * - a path that doesn't exist, or that exists but isn't a directory (e.g. it
+ *   names a file).
+ *
+ * Existence/directory-ness is verified via
+ * {@linkcode vscode.FileSystem.stat workspace.fs.stat} -- callers must not
+ * run framework detection or grant eligibility before this check succeeds.
+ */
+export async function resolveStaticWebAppServiceProjectFolder(
+    code: IVsCode,
+    iacFolder: vscode.Uri,
+    project: string | undefined,
+): Promise<vscode.Uri | undefined> {
+    if (!project) {
+        return undefined;
+    }
+
+    // Normalize Windows-style separators to the POSIX form azd/Uri.joinPath expect.
+    const normalized = project.replace(/\\/g, '/');
+    if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) {
+        return undefined;
+    }
+
+    // Manually resolve `.`/`..` segments (rather than trusting Uri.joinPath to normalize them)
+    // so a `..` that would traverse above iacFolder is rejected outright.
+    const segments: string[] = [];
+    for (const segment of normalized.split('/')) {
+        if (segment === '' || segment === '.') {
+            continue;
+        }
+        if (segment === '..') {
+            if (segments.length === 0) {
+                return undefined;
+            }
+            segments.pop();
+            continue;
+        }
+        segments.push(segment);
+    }
+
+    const projectFolder = segments.length === 0 ? iacFolder : code.Uri.joinPath(iacFolder, ...segments);
+
+    try {
+        const stat = await code.workspace.fs.stat(projectFolder);
+        return (stat.type & code.FileType.Directory) !== 0 ? projectFolder : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
