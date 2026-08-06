@@ -13,6 +13,7 @@ import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentD
 import type { ManagedCommand } from '../ManagedCommand';
 import { getStaticWebAppServiceDist, hasConflictingProviderWorkflow } from './deploymentRouting';
 import { detectStaticWebAppProject } from './steps/frameworkDetection';
+import { canAzdDeployStaticWebApp } from './steps/locationUtils';
 
 /**
  * Known-good context for {@linkcode DeployStaticWebApp}, supplied by a caller
@@ -53,11 +54,15 @@ export interface DeployStaticWebAppArgs {
  * remote -- never assists with initializing, adding, or pushing one.
  *
  * **Direct deployment support is determined first, before any routing
- * decision.** Next.js hybrid/SSR projects can be deployed by *neither* path
+ * decision.** For standalone invocation this combines two independent
+ * signals: Next.js hybrid/SSR projects can be deployed by *neither* path
  * (direct `azd deploy` cannot serve server-rendered content, and the
- * workflow `azd pipeline config` generates only runs `azd deploy` too) --
- * this is checked immediately, before the Git remote is even inspected, and
- * short-circuits with honest guidance instead of attempting (or silently
+ * workflow `azd pipeline config` generates only runs `azd deploy` too), and
+ * the existing `host: staticwebapp` service's actual `dist` value must be
+ * valid (an absent service, or one with a missing/non-string/empty/`.`/`/`
+ * `dist`, means there is no valid deploy target either way). Both are
+ * checked immediately, before the Git remote is even inspected, and
+ * short-circuit with honest guidance instead of attempting (or silently
  * skipping) a deployment that cannot work.
  *
  * Invocable two ways:
@@ -92,9 +97,14 @@ export class DeployStaticWebApp implements ManagedCommand {
         // call via DetermineStaticWebAppDeploymentRouteStep) rather than
         // re-detecting -- a fresh heuristic scan could disagree with the
         // wizard's explicit preset/output choices in a monorepo or override
-        // scenario. Only run fresh detection for standalone invocation.
-        const supportsAutoDeploy = args?.artifactSupportsAutoDeploy
-            ?? (await detectStaticWebAppProject(this.ctx.code, iacFolder)).primaryPresetId !== 'nextjs';
+        // scenario. Only run fresh detection for standalone invocation, and
+        // when doing so, combine *both* signals: the framework itself
+        // (Next.js hybrid/SSR is never deployable) *and* the existing
+        // `host: staticwebapp` service's actual `dist` value -- recognizing
+        // that a service exists is not enough; an absent, unreadable, or
+        // invalid `dist` (missing/non-string/empty/`.`/`/`) means there is no
+        // valid deploy target either way.
+        const supportsAutoDeploy = args?.artifactSupportsAutoDeploy ?? await this.detectAutoDeploySupport(iacFolder);
         if (!supportsAutoDeploy) {
             this.actionContext.telemetry.properties.deploymentRoute = 'unsupportedArtifact';
             this.showUnsupportedArtifactGuidance();
@@ -206,6 +216,24 @@ export class DeployStaticWebApp implements ManagedCommand {
     /** Checks for an existing `host: staticwebapp` service in `azure.yaml`. */
     private async hasStaticWebAppService(iacFolder: vscode.Uri): Promise<boolean> {
         return await getStaticWebAppServiceDist(this.azd, this.ctx.code, iacFolder) !== undefined;
+    }
+
+    /**
+     * Fresh (standalone-invocation-only) determination of whether automatic
+     * deployment is supported, combining two independent signals:
+     * - The framework itself: Next.js hybrid/SSR is never deployable this way.
+     * - The existing `host: staticwebapp` service's actual `dist` value.
+     *   Recognizing that a service exists is not sufficient -- an absent,
+     *   unreadable, or invalid `dist` (missing/non-string/empty/`.`/`/`) means
+     *   there is no valid deploy target for either direct deploy or CI/CD.
+     */
+    private async detectAutoDeploySupport(iacFolder: vscode.Uri): Promise<boolean> {
+        const detection = await detectStaticWebAppProject(this.ctx.code, iacFolder);
+        if (detection.primaryPresetId === 'nextjs') {
+            return false;
+        }
+        const dist = await getStaticWebAppServiceDist(this.azd, this.ctx.code, iacFolder);
+        return dist !== undefined && canAzdDeployStaticWebApp(dist);
     }
 
     /**
