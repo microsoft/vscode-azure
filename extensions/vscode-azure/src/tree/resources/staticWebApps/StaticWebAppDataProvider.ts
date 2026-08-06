@@ -15,8 +15,6 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, IVsCode, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
-import type * as vscode from 'vscode';
-import { IStaticWebAppsGitHubService, type GitHubJob, type GitHubRepository, type GitHubWorkflowRun, type GitHubWorkflowStep } from '../../../services/StaticWebAppsGitHubService';
 import {
     isStaticWebApp,
     isStaticWebAppVirtualNode,
@@ -24,46 +22,16 @@ import {
     StaticWebAppVirtualTypes,
     type InvalidStaticWebAppNode,
     type StaticWebApp,
-    type StaticWebAppAction,
-    type StaticWebAppActions,
     type StaticWebAppEnvironment,
     type StaticWebAppFunction,
     type StaticWebAppFunctions,
     type StaticWebAppInvalidContext,
-    type StaticWebAppJob,
     type StaticWebAppNoFunctions,
-    type StaticWebAppStep,
-    type StaticWebAppWorkflow,
-    type StaticWebAppWorkflowGroup,
-    type StaticWebAppWorkflowParseError,
 } from './StaticWebApp';
-import { scanStaticWebAppWorkflows, type ParsedWorkflow } from './workflowParser';
 
 /** DI identifier for direct Static Web Apps cache mutation and command access. */
 export const IStaticWebAppDataProvider: ServiceIdentifier<IStaticWebAppDataProvider> = Symbol.for('IStaticWebAppDataProvider');
 export type IStaticWebAppDataProvider = StaticWebAppDataProvider;
-
-interface GitExtension {
-    getAPI(version: 1): GitApi;
-}
-
-interface GitApi {
-    readonly repositories: readonly GitRepository[];
-}
-
-interface GitRepository {
-    readonly rootUri: vscode.Uri;
-    readonly state: {
-        readonly HEAD?: { readonly name?: string };
-        readonly remotes: readonly {
-            readonly fetchUrl?: string;
-            readonly pushUrl?: string;
-        }[];
-    };
-}
-
-const completedConclusions = new Set(['success', 'failure', 'skipped', 'cancelled']);
-const actionStatuses = new Set(['queued', 'in_progress', 'completed']);
 
 /**
  * Data-layer provider for Azure Static Web Apps and all service-owned children.
@@ -80,7 +48,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IStaticWebAppClientProvider) private readonly createClient: IStaticWebAppClientProvider,
-        @inject(IStaticWebAppsGitHubService) private readonly github: IStaticWebAppsGitHubService,
     ) { }
 
     /** @inheritdoc */
@@ -88,10 +55,7 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         return isStaticWebApp(resource) || isStaticWebAppVirtualNode(resource);
     }
 
-    /**
-     * Enriches only the ARM resource root. Missing repository data is valid for
-     * portal-created or otherwise unlinked sites and never triggers GitHub auth.
-     */
+    /** Enriches only the ARM resource root with current service details. */
     public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
         if (!isStaticWebApp(resource)) {
             return false;
@@ -102,7 +66,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         const site = await client.staticSites.getStaticSite(resourceGroupName, resource.name);
         Object.assign(resource, {
             staticSite: site,
-            repositoryUrl: site.repositoryUrl,
             branch: site.branch,
             defaultHostname: site.defaultHostname,
         });
@@ -126,16 +89,8 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         switch (resource.virtualType) {
             case StaticWebAppVirtualTypes.Environment:
                 return this.getEnvironmentChildren(resource);
-            case StaticWebAppVirtualTypes.Actions:
-                return this.listActions(resource);
-            case StaticWebAppVirtualTypes.Action:
-                return this.listJobs(resource);
-            case StaticWebAppVirtualTypes.Job:
-                return this.listSteps(resource);
             case StaticWebAppVirtualTypes.Functions:
                 return this.listFunctions(resource);
-            case StaticWebAppVirtualTypes.WorkflowGroup:
-                return this.getWorkflowChildren(resource);
             default:
                 return [];
         }
@@ -147,57 +102,19 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         }
         const { client, resourceGroupName } = this.resolveClient(site);
         const builds = await collectPages(client.staticSites.listStaticSiteBuilds(resourceGroupName, site.name));
-        const environments = await Promise.all(builds.map(build => this.createEnvironmentOrInvalid(site, build)));
+        const environments = builds.map(build => this.createEnvironmentOrInvalid(site, build));
         return environments.sort((left, right) => compareEnvironments(left, right));
     }
 
     private async getEnvironmentChildren(environment: StaticWebAppEnvironment): Promise<ConcreteAzureNode[]> {
-        const repository = this.github.parseRepositoryUrl(environment.azureResource.repositoryUrl);
-        const actions: StaticWebAppActions = {
-            virtualType: StaticWebAppVirtualTypes.Actions,
-            virtualPath: `${environment.virtualPath}/actions`,
-            azureResource: environment.azureResource,
-            environmentBuildId: environment.buildId,
-            branch: environment.branch,
-            repository,
-        };
-
-        const children: ConcreteAzureNode[] = [actions];
+        const children: ConcreteAzureNode[] = [];
         if (await this.hasFunctionsApi(environment)) {
             children.push(this.createFunctionsGroup(environment));
         } else {
             children.push(this.createNoFunctions(environment, 'help'));
         }
 
-        if (environment.localRepositoryUri) {
-            const workflows = await scanStaticWebAppWorkflows(this.code, environment.localRepositoryUri);
-            children.push(...workflows.map(workflow => this.createWorkflowGroup(environment, workflow)));
-        }
-
         return children;
-    }
-
-    private async listActions(group: StaticWebAppActions): Promise<ConcreteAzureNode[]> {
-        if (!group.repository || !group.branch) {
-            return [];
-        }
-
-        const repository = group.repository;
-        const runs = await this.github.listWorkflowRuns(repository, group.branch);
-        return runs.map(run => this.createActionOrInvalid(group, repository, run));
-    }
-
-    private async listJobs(action: StaticWebAppAction): Promise<ConcreteAzureNode[]> {
-        const jobs = await this.github.listJobs(action.repository, action.run.id);
-        return jobs
-            .map(job => this.createJobOrInvalid(action, job))
-            .sort(compareJobs);
-    }
-
-    private listSteps(job: StaticWebAppJob): ConcreteAzureNode[] {
-        return [...(job.job.steps ?? [])]
-            .sort((left, right) => left.number - right.number)
-            .map(step => this.createStepOrInvalid(job, step));
     }
 
     private async listFunctions(group: StaticWebAppFunctions): Promise<ConcreteAzureNode[]> {
@@ -210,30 +127,7 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         return children.length ? children : [this.createNoFunctions(group, 'empty')];
     }
 
-    private getWorkflowChildren(group: StaticWebAppWorkflowGroup): ConcreteAzureNode[] {
-        if (group.workflow.errorRange) {
-            const node: StaticWebAppWorkflowParseError = {
-                virtualType: StaticWebAppVirtualTypes.WorkflowParseError,
-                virtualPath: `${group.virtualPath}/parseError`,
-                azureResource: group.azureResource,
-                uri: group.workflow.uri,
-                errorRange: group.workflow.errorRange,
-            };
-            return [node];
-        }
-
-        return group.workflow.settings.map(setting => ({
-            virtualType: StaticWebAppVirtualTypes.Workflow,
-            virtualPath: `${group.virtualPath}/${setting.name}`,
-            azureResource: group.azureResource,
-            uri: group.workflow.uri,
-            buildConfig: setting.name,
-            value: setting.value,
-            selectionRange: setting.range,
-        } satisfies StaticWebAppWorkflow));
-    }
-
-    private async createEnvironmentOrInvalid(site: StaticWebApp, data: StaticSiteBuildARMResource): Promise<StaticWebAppEnvironment | InvalidStaticWebAppNode> {
+    private createEnvironmentOrInvalid(site: StaticWebApp, data: StaticSiteBuildARMResource): StaticWebAppEnvironment | InvalidStaticWebAppNode {
         const sourceId = data.buildId ?? data.name ?? 'unknown';
         try {
             if (!data.buildId) {
@@ -243,10 +137,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             const isProduction = data.buildId === 'default';
             const sourceBranch = data.sourceBranch ?? site.branch ?? '';
             const branch = isProduction ? sourceBranch : normalizeStaticWebAppBranch(sourceBranch);
-            const repository = this.github.parseRepositoryUrl(site.repositoryUrl);
-            const localRepositoryUri = repository && branch
-                ? await this.findMatchingLocalRepository(repository, branch)
-                : undefined;
             return {
                 virtualType: StaticWebAppVirtualTypes.Environment,
                 virtualPath: `environments/${data.buildId}`,
@@ -260,86 +150,9 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
                 displayLabel: isProduction
                     ? this.code.l10n.t('Production')
                     : (data.pullRequestTitle ?? data.name ?? data.buildId),
-                inWorkspace: !!localRepositoryUri,
-                localRepositoryUri,
             };
         } catch {
             return this.createInvalid(site, `environments/invalid/${sourceId}`, 'invalidStaticEnvironment', data.name ?? sourceId);
-        }
-    }
-
-    private createActionOrInvalid(
-        group: StaticWebAppActions,
-        repository: GitHubRepository,
-        run: GitHubWorkflowRun,
-    ): StaticWebAppAction | InvalidStaticWebAppNode {
-        try {
-            validateActionState(run);
-            if (!Number.isFinite(run.id)) {
-                throw new Error('Workflow run is missing id');
-            }
-            return {
-                virtualType: StaticWebAppVirtualTypes.Action,
-                virtualPath: `${group.virtualPath}/runs/${run.id}`,
-                azureResource: group.azureResource,
-                repository,
-                run,
-            };
-        } catch {
-            return this.createInvalid(
-                group.azureResource,
-                `${group.virtualPath}/runs/invalid/${String(run.id)}`,
-                'invalidActionTreeItem',
-                run.head_commit?.message ?? run.head_sha,
-            );
-        }
-    }
-
-    private createJobOrInvalid(action: StaticWebAppAction, job: GitHubJob): StaticWebAppJob | InvalidStaticWebAppNode {
-        try {
-            validateActionState(job);
-            if (!Number.isFinite(job.id)) {
-                throw new Error('Workflow job is missing id');
-            }
-            return {
-                virtualType: StaticWebAppVirtualTypes.Job,
-                virtualPath: `${action.virtualPath}/jobs/${job.id}`,
-                azureResource: action.azureResource,
-                repository: action.repository,
-                runId: action.run.id,
-                job,
-            };
-        } catch {
-            return this.createInvalid(
-                action.azureResource,
-                `${action.virtualPath}/jobs/invalid/${String(job.id)}`,
-                'invalidJobTreeItem',
-                job.name,
-            );
-        }
-    }
-
-    private createStepOrInvalid(job: StaticWebAppJob, step: GitHubWorkflowStep): StaticWebAppStep | InvalidStaticWebAppNode {
-        try {
-            validateActionState(step);
-            if (!Number.isFinite(step.number) || !step.name) {
-                throw new Error('Workflow step is missing required data');
-            }
-            return {
-                virtualType: StaticWebAppVirtualTypes.Step,
-                virtualPath: `${job.virtualPath}/steps/${step.number}`,
-                azureResource: job.azureResource,
-                repository: job.repository,
-                jobId: job.job.id,
-                step,
-            };
-        } catch {
-            return this.createInvalid(
-                job.azureResource,
-                `${job.virtualPath}/steps/invalid/${String(step.number)}`,
-                'invalidStepTreeItem',
-                step.name,
-            );
         }
     }
 
@@ -394,15 +207,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         };
     }
 
-    private createWorkflowGroup(environment: StaticWebAppEnvironment, workflow: ParsedWorkflow): StaticWebAppWorkflowGroup {
-        return {
-            virtualType: StaticWebAppVirtualTypes.WorkflowGroup,
-            virtualPath: `${environment.virtualPath}/workflows/${workflow.uri.toString()}`,
-            azureResource: environment.azureResource,
-            workflow,
-        };
-    }
-
     private createInvalid(
         site: StaticWebApp,
         virtualPath: string,
@@ -436,31 +240,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             // the environment has no Functions API and is represented by help.
             return false;
         }
-    }
-
-    private async findMatchingLocalRepository(repository: GitHubRepository, branch: string): Promise<vscode.Uri | undefined> {
-        const gitExtension = this.code.extensions.getExtension<GitExtension>('vscode.git');
-        if (!gitExtension) {
-            return undefined;
-        }
-
-        const git = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
-        const api = git.getAPI(1);
-        for (const localRepository of api.repositories) {
-            if (localRepository.state.HEAD?.name !== branch || !this.code.workspace.getWorkspaceFolder(localRepository.rootUri)) {
-                continue;
-            }
-
-            const remoteMatches = localRepository.state.remotes.some(remote => {
-                const parsed = this.github.parseRepositoryUrl(remote.fetchUrl ?? remote.pushUrl);
-                return parsed?.owner.toLowerCase() === repository.owner.toLowerCase()
-                    && parsed.repo.toLowerCase() === repository.repo.toLowerCase();
-            });
-            if (remoteMatches) {
-                return localRepository.rootUri;
-            }
-        }
-        return undefined;
     }
 
     private resolveClient(site: StaticWebApp): { readonly client: IStaticWebAppClient; readonly resourceGroupName: string } {
@@ -500,17 +279,6 @@ function compareEnvironments(left: ConcreteAzureNode, right: ConcreteAzureNode):
     return displayLabel(left).localeCompare(displayLabel(right));
 }
 
-function compareJobs(left: ConcreteAzureNode, right: ConcreteAzureNode): number {
-    if (isJob(left) && isJob(right)) {
-        return Date.parse(left.job.started_at) - Date.parse(right.job.started_at);
-    } else if (isJob(left)) {
-        return -1;
-    } else if (isJob(right)) {
-        return 1;
-    }
-    return displayLabel(left).localeCompare(displayLabel(right));
-}
-
 function displayLabel(node: ConcreteAzureNode): string {
     if (isEnvironment(node)) {
         return node.displayLabel;
@@ -524,19 +292,6 @@ function isEnvironment(node: ConcreteAzureNode): node is StaticWebAppEnvironment
     return isStaticWebAppVirtualNode(node) && node.virtualType === StaticWebAppVirtualTypes.Environment;
 }
 
-function isJob(node: ConcreteAzureNode): node is StaticWebAppJob {
-    return isStaticWebAppVirtualNode(node) && node.virtualType === StaticWebAppVirtualTypes.Job;
-}
-
 function isInvalid(node: ConcreteAzureNode): node is InvalidStaticWebAppNode {
     return isStaticWebAppVirtualNode(node) && node.virtualType === StaticWebAppVirtualTypes.Invalid;
-}
-
-function validateActionState(data: { readonly status: string | null; readonly conclusion: string | null }): void {
-    if (!data.status || !actionStatuses.has(data.status)) {
-        throw new Error(`Unsupported GitHub Actions status: ${String(data.status)}`);
-    }
-    if (data.conclusion !== null && !completedConclusions.has(data.conclusion)) {
-        throw new Error(`Unsupported GitHub Actions conclusion: ${data.conclusion}`);
-    }
 }

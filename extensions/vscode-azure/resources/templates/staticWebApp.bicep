@@ -28,12 +28,6 @@ param outputLocation string = ''
 @description('Value applied as the azd service tag so azd can discover the resource.')
 param azdServiceName string = 'web'
 
-@description('Existing GitHub repository URL retained as optional resource metadata.')
-param repositoryUrl string = ''
-
-@description('Existing Git branch retained with repositoryUrl.')
-param branch string = ''
-
 var tags = { 'azd-env-name': environmentName }
 
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
@@ -55,12 +49,8 @@ module staticWebApp 'br/public:avm/res/web/static-site:0.9.5' = {
       appLocation: appLocation
       apiLocation: apiLocation
       outputLocation: outputLocation
-      // Keep the create API from committing a workflow file to the user's repository.
-      skipGithubActionWorkflowGeneration: true
     }
-    provider: empty(repositoryUrl) ? 'None' : 'GitHub'
-    repositoryUrl: empty(repositoryUrl) ? null : repositoryUrl
-    branch: empty(repositoryUrl) ? null : branch
+    provider: 'None'
     enableTelemetry: false
   }
 }

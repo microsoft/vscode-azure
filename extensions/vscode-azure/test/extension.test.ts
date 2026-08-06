@@ -13,16 +13,9 @@ const retainedSwaCommands = [
     `${swaCommandPrefix}browse`,
     `${swaCommandPrefix}createNew`,
     `${swaCommandPrefix}createAdvanced`,
-    `${swaCommandPrefix}cloneRepo`,
-    `${swaCommandPrefix}openGitHubRepo`,
-    `${swaCommandPrefix}openGitHubLog`,
-    `${swaCommandPrefix}showActions`,
-    `${swaCommandPrefix}action/cancel`,
-    `${swaCommandPrefix}action/rerun`,
     `${swaCommandPrefix}deleteEnvironment`,
     `${swaCommandPrefix}deploy`,
     `${swaCommandPrefix}createSwaConfigFile`,
-    `${swaCommandPrefix}openWorkflowConfigFile`,
     `${swaCommandPrefix}showDocumentation`,
     `${swaCommandPrefix}showFunctionsDocumentation`,
     `${swaCommandPrefix}viewProperties`,
@@ -131,7 +124,7 @@ describe('Static Web Apps manifest (integration)', () => {
 
         const viewContext = manifest.contributes.menus['view/item/context'];
         const swaEntries = viewContext.filter(entry => entry.command?.startsWith(swaCommandPrefix));
-        expect(swaEntries).to.have.length(12);
+        expect(swaEntries).to.have.length(5);
         expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/openInPortal')).to.be.true;
         expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/refresh' && entry.when?.includes('azureStatic'))).to.be.true;
 
@@ -149,18 +142,11 @@ describe('Static Web Apps manifest (integration)', () => {
             'azureResourceTypeGroup',
             'azureStaticWebApp',
             'azureStaticEnvironment',
-            'azureStaticActions',
-            'azureStaticActionCompleted',
-            'azureStaticActionInProgress',
-            'azureStaticJob',
-            'azureStaticStep',
         ]) {
             expect(swaWhenClauses, `Missing legacy context ${context}`).to.include(context);
         }
 
         for (const command of [
-            `${swaCommandPrefix}openGitHubLog`,
-            `${swaCommandPrefix}openWorkflowConfigFile`,
             `${swaCommandPrefix}showFunctionsDocumentation`,
         ]) {
             expect(contributedCommandIds.has(command), `Missing tree command ${command}`).to.be.true;
@@ -194,10 +180,7 @@ describe('Static Web Apps manifest (integration)', () => {
             .filter(entry => entry.command?.startsWith(swaCommandPrefix) && entry.when === 'false')
             .map(entry => entry.command);
         expect(hidden).to.have.members([
-            `${swaCommandPrefix}action/cancel`,
-            `${swaCommandPrefix}action/rerun`,
             `${swaCommandPrefix}deleteEnvironment`,
-            `${swaCommandPrefix}openGitHubLog`,
             `${swaCommandPrefix}showFunctionsDocumentation`,
             `${swaCommandPrefix}viewProperties`,
         ]);
@@ -327,7 +310,7 @@ describe('bundle size guardrail (integration)', () => {
     // upgrade). A PR that touches this number should explain, in its description,
     // *why* the bundle legitimately grew or shrank. If you cannot explain it,
     // investigate before updating the baseline.
-    const VSIX_BASELINE_BYTES = 367942;
+    const VSIX_BASELINE_BYTES = 348628;
     const VSIX_TOLERANCE = 0.1;
     const VSIX_WARN_THRESHOLD = 0.05;
 

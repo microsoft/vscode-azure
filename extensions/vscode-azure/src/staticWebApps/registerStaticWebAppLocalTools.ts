@@ -3,18 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IExtensionContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import type { Container } from 'inversify';
 import { SwaDebugConfigurationProvider, PwaChromeDebugType, SwaDebugType } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
-import { IStaticWebAppsGitHubService } from '../services/StaticWebAppsGitHubService';
 import { SwaTaskLifecycle } from '../tasks/staticWebApps/SwaTaskLifecycle';
 import { SwaTaskProvider } from '../tasks/staticWebApps/SwaTaskProvider';
-import { GitHubActionLogContentProvider, GitHubActionLogScheme } from './GitHubActionLogContentProvider';
-import { GitHubActionLogFoldingProvider } from './GitHubActionLogFoldingProvider';
 import { ISwaCliService } from './SwaCliService';
 
 /**
- * Registers Static Web Apps local task/debug/log providers and activation services.
+ * Registers Static Web Apps local task/debug providers and activation services.
  *
  * Every registration is owned by the extension context. Best-effort activation
  * checks use explicit rejection handlers so they cannot become unhandled promises.
@@ -22,10 +19,8 @@ import { ISwaCliService } from './SwaCliService';
 export function registerStaticWebAppLocalTools(container: Container): void {
     const code = container.get(IVsCode);
     const extensionContext = container.get(IExtensionContext);
-    const output = container.get(IOutputChannel);
     const taskProvider = container.get(SwaTaskProvider);
     const debugProvider = container.get(SwaDebugConfigurationProvider);
-    const contentProvider = container.get(GitHubActionLogContentProvider);
 
     extensionContext.subscriptions.push(
         code.tasks.registerTaskProvider('shell', taskProvider),
@@ -39,14 +34,6 @@ export function registerStaticWebAppLocalTools(container: Container): void {
             SwaDebugType,
             debugProvider,
             code.DebugConfigurationProviderTriggerKind.Initial,
-        ),
-        code.workspace.registerTextDocumentContentProvider(
-            GitHubActionLogScheme,
-            contentProvider,
-        ),
-        code.languages.registerFoldingRangeProvider(
-            { scheme: GitHubActionLogScheme },
-            new GitHubActionLogFoldingProvider(contentProvider),
         ),
     );
 
@@ -62,9 +49,5 @@ export function registerStaticWebAppLocalTools(container: Container): void {
                 await container.get(ISwaCliService).warnIfOutdated();
             },
         );
-
-        void container.get(IStaticWebAppsGitHubService).prepareAuthentication().catch(() => {
-            output.warn(code.l10n.t('[swa] GitHub authentication prewarm failed.'));
-        });
     }
 }

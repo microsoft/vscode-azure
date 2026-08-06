@@ -52,8 +52,8 @@ const maximumScanDepth = 8;
 const maximumFiles = 5000;
 
 /**
- * Detects retained framework presets, Function API roots, and existing Git
- * metadata using only VS Code workspace APIs.
+ * Detects retained framework presets and Function API roots using only VS Code
+ * workspace APIs.
  *
  * @remarks
  * The workspace walk below is Static Web Apps-specific by necessity: the

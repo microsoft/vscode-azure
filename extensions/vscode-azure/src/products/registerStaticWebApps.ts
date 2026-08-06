@@ -6,27 +6,19 @@
 import { IStaticWebAppClientProvider, StaticWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { DeployStaticWebAppCommandId } from '../constants';
-import { CancelAction, RerunAction } from '../commands/staticWebApps/ActionCommands';
 import { BrowseStaticWebApp } from '../commands/staticWebApps/BrowseStaticWebApp';
-import { CloneRepository } from '../commands/staticWebApps/CloneRepository';
 import { CreateStaticWebApp } from '../commands/staticWebApps/CreateStaticWebApp';
 import { CreateSwaConfigFile } from '../commands/staticWebApps/CreateSwaConfigFile';
 import { DeleteStaticWebAppEnvironment } from '../commands/staticWebApps/DeleteStaticWebAppEnvironment';
 import { DeployStaticWebApp } from '../commands/staticWebApps/DeployStaticWebApp';
 import { InstallOrUpdateSwaCli } from '../commands/staticWebApps/InstallOrUpdateSwaCli';
-import { OpenGitHubLog } from '../commands/staticWebApps/OpenGitHubLog';
-import { OpenGitHubRepository } from '../commands/staticWebApps/OpenGitHubRepository';
-import { OpenWorkflowConfigFile } from '../commands/staticWebApps/OpenWorkflowConfigFile';
 import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from '../commands/staticWebApps/ShowDocumentation';
-import { ShowGitHubActions } from '../commands/staticWebApps/ShowGitHubActions';
 import { StaticWebAppCommandResolver } from '../commands/staticWebApps/StaticWebAppCommandResolver';
 import { UninstallSwaCli } from '../commands/staticWebApps/UninstallSwaCli';
 import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStaticWebAppProperties';
 import { SwaDebugConfigurationProvider } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
-import { IStaticWebAppsGitHubService, StaticWebAppsGitHubService } from '../services/StaticWebAppsGitHubService';
-import { GitHubActionLogContentProvider } from '../staticWebApps/GitHubActionLogContentProvider';
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
 import { registerStaticWebAppLocalTools } from '../staticWebApps/registerStaticWebAppLocalTools';
 import { ISwaCliService, SwaCliService } from '../staticWebApps/SwaCliService';
@@ -43,7 +35,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
 
     registrar.registerBinding(container => {
         container.bind(StaticWebAppCommandResolver).toSelf();
-        container.bind(IStaticWebAppsGitHubService).to(StaticWebAppsGitHubService).inSingletonScope();
         container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
         container.bind(ISwaCliService).toDynamicValue(context => new SwaCliService(
             context.get(IVsCode),
@@ -53,7 +44,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
         )).inSingletonScope();
         container.bind(SwaTaskProvider).toSelf().inSingletonScope();
         container.bind(SwaDebugConfigurationProvider).toSelf().inSingletonScope();
-        container.bind(GitHubActionLogContentProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
         container.bind(IProcessTerminator).to(ProcessTerminator).inSingletonScope();
         container.bind(SwaTaskLifecycle).toSelf().inSingletonScope().onActivation(pushDisposable);
     });
@@ -61,16 +51,9 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/staticWebApps/browse', BrowseStaticWebApp);
     registrar.registerCommand('vscode-azure/staticWebApps/createNew', CreateStaticWebApp, 'basic');
     registrar.registerCommand('vscode-azure/staticWebApps/createAdvanced', CreateStaticWebApp, 'advanced');
-    registrar.registerCommand('vscode-azure/staticWebApps/cloneRepo', CloneRepository);
-    registrar.registerCommand('vscode-azure/staticWebApps/openGitHubRepo', OpenGitHubRepository);
-    registrar.registerCommand('vscode-azure/staticWebApps/openGitHubLog', OpenGitHubLog);
-    registrar.registerCommand('vscode-azure/staticWebApps/showActions', ShowGitHubActions);
-    registrar.registerCommand('vscode-azure/staticWebApps/action/cancel', CancelAction);
-    registrar.registerCommand('vscode-azure/staticWebApps/action/rerun', RerunAction);
     registrar.registerCommand('vscode-azure/staticWebApps/deleteEnvironment', DeleteStaticWebAppEnvironment);
     registrar.registerCommand(DeployStaticWebAppCommandId, DeployStaticWebApp);
     registrar.registerCommand('vscode-azure/staticWebApps/createSwaConfigFile', CreateSwaConfigFile);
-    registrar.registerCommand('vscode-azure/staticWebApps/openWorkflowConfigFile', OpenWorkflowConfigFile);
     registrar.registerCommand('vscode-azure/staticWebApps/showDocumentation', ShowStaticWebAppsDocumentation);
     registrar.registerCommand('vscode-azure/staticWebApps/showFunctionsDocumentation', ShowFunctionsDocumentation);
     registrar.registerCommand('vscode-azure/staticWebApps/viewProperties', ViewStaticWebAppProperties);

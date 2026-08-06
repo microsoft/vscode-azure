@@ -7,24 +7,17 @@ import { CancellationError, createActionContext } from '@microsoft/vscode-azure-
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { BrowseStaticWebApp } from '../../../src/commands/staticWebApps/BrowseStaticWebApp';
-import { CloneRepository } from '../../../src/commands/staticWebApps/CloneRepository';
 import {
     CreateSwaConfigFile,
     staticWebAppExampleConfig,
 } from '../../../src/commands/staticWebApps/CreateSwaConfigFile';
 import { DeleteStaticWebAppEnvironment } from '../../../src/commands/staticWebApps/DeleteStaticWebAppEnvironment';
-import { OpenGitHubRepository } from '../../../src/commands/staticWebApps/OpenGitHubRepository';
-import { ShowGitHubActions } from '../../../src/commands/staticWebApps/ShowGitHubActions';
 import { StaticWebAppCommandResolver } from '../../../src/commands/staticWebApps/StaticWebAppCommandResolver';
 import { ViewStaticWebAppProperties } from '../../../src/commands/staticWebApps/ViewStaticWebAppProperties';
-import {
-    StaticWebAppVirtualTypes,
-    type StaticWebAppActions,
-} from '../../../src/tree/resources/staticWebApps/StaticWebApp';
 import { makeStaticWebApp, makeStaticWebAppEnvironment } from '../../tree/resources/staticWebApps/mockStaticWebApp';
 
 describe('Static Web Apps resource commands (unit)', () => {
-    function createResolver(resource: ReturnType<typeof makeStaticWebApp> | ReturnType<typeof makeStaticWebAppEnvironment> | StaticWebAppActions) {
+    function createResolver(resource: ReturnType<typeof makeStaticWebApp> | ReturnType<typeof makeStaticWebAppEnvironment>) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const invalidate = mock.fn();
         const remove = mock.fn();
@@ -35,7 +28,7 @@ describe('Static Web Apps resource commands (unit)', () => {
             remove,
             whenEnriched: mock.fn((site: unknown) => Promise.resolve(site)),
         };
-        const selector = { select: mock.fn(() => Promise.resolve(isActions(resource) ? resource.azureResource : resource)) };
+        const selector = { select: mock.fn(() => Promise.resolve(resource)) };
         const resolver = new StaticWebAppCommandResolver(ctx, cache as never, selector as never);
         return { ctx, mockResult, cache, invalidate, remove, resolver };
     }
@@ -47,48 +40,6 @@ describe('Static Web Apps resource commands (unit)', () => {
 
         expect(mockResult.env.openExternal.mock.calls[0].arguments[0].toString()).to.equal(
             'https://preview.azurestaticapps.net/',
-        );
-    });
-
-    it('should clone the linked repository through git.clone', async () => {
-        const { mockResult, resolver } = createResolver(makeStaticWebApp());
-        await new CloneRepository(mockResult.vscode, resolver).execute('key');
-
-        expect(mockResult.commands.executeCommand.mock.calls[0].arguments).to.deep.equal([
-            'git.clone',
-            'https://github.com/octo-org/octo-repo',
-        ]);
-    });
-
-    it('should construct branch and Actions GitHub URLs', async () => {
-        const environment = makeStaticWebAppEnvironment({ branch: 'feature/my change' });
-        const environmentHarness = createResolver(environment);
-        const github = { parseRepositoryUrl: () => ({ owner: 'octo-org', repo: 'octo-repo' }) };
-        await new OpenGitHubRepository(
-            environmentHarness.mockResult.vscode,
-            environmentHarness.resolver,
-            github as never,
-        ).execute('key');
-        expect(environmentHarness.mockResult.env.openExternal.mock.calls[0].arguments[0].toString()).to.equal(
-            'https://github.com/octo-org/octo-repo/tree/feature/my%20change',
-        );
-
-        const actions: StaticWebAppActions = {
-            virtualType: StaticWebAppVirtualTypes.Actions,
-            virtualPath: 'environments/default/actions',
-            azureResource: makeStaticWebApp(),
-            environmentBuildId: 'default',
-            branch: 'main',
-            repository: { owner: 'octo-org', repo: 'octo-repo' },
-        };
-        const actionsHarness = createResolver(actions);
-        await new ShowGitHubActions(
-            actionsHarness.mockResult.vscode,
-            actionsHarness.resolver,
-            github as never,
-        ).execute('key');
-        expect(actionsHarness.mockResult.env.openExternal.mock.calls[0].arguments[0].toString()).to.equal(
-            'https://github.com/octo-org/octo-repo/actions',
         );
     });
 
@@ -174,7 +125,6 @@ describe('Static Web Apps resource commands (unit)', () => {
             createActionContext('test'),
             ctx,
             (() => ({ staticSites: { getStaticSiteBuild } })) as never,
-            {} as never,
             resolver,
         );
 
@@ -187,8 +137,3 @@ describe('Static Web Apps resource commands (unit)', () => {
         expect(documentOptions.content).not.to.include('must-not-appear');
     });
 });
-
-function isActions(value: unknown): value is StaticWebAppActions {
-    return !!value && typeof value === 'object' && 'virtualType' in value
-        && value.virtualType === StaticWebAppVirtualTypes.Actions;
-}

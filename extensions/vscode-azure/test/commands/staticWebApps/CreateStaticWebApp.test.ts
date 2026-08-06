@@ -12,7 +12,6 @@ import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import { CreateStaticWebApp } from '../../../src/commands/staticWebApps/CreateStaticWebApp';
 import { DeployStaticWebAppCommandId } from '../../../src/constants';
-import { StaticWebAppsGitHubService } from '../../../src/services/StaticWebAppsGitHubService';
 import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
@@ -67,7 +66,6 @@ describe('CreateStaticWebApp (unit)', () => {
             ]),
             armProvider: createMockArmProvider(),
             codeProvider: createMockCodeProvider(),
-            staticWebAppsGitHubService: new StaticWebAppsGitHubService(ctx.code, ctx.extensionContext),
             gitRemote,
         });
         return { command: container.get(CreateStaticWebApp), mock, azd, actionContext, gitRemote };
