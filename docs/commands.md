@@ -42,7 +42,7 @@ Key points:
 
 ## Registration
 
-Commands are registered in `registerCommands.ts` using `registerManagedCommand`:
+Core commands are registered in `registerCommands.ts` using `registerManagedCommand`:
 
 ```typescript
 export function registerCommands(container: Container): void {
@@ -61,6 +61,22 @@ export function registerCommands(container: Container): void {
     // ...
 }
 ```
+
+Product commands are declared from that product's registration entry point:
+
+```typescript
+export function registerFunctions(registrar: ProductRegistrar): void {
+    registrar.registerCommand(
+        'vscode-azure/functionApp/appSettings/add',
+        AddOrEditAppSetting,
+        'add',
+    );
+}
+```
+
+`registerCommands()` consumes these descriptors after test/mock overrides have
+been applied. Product command classes therefore do not need to be imported by
+the shared command registration module.
 
 Each call:
 1. Binds the command class to itself in the container (if not already)

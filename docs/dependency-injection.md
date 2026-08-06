@@ -67,6 +67,34 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
 }
 ```
 
+## Product Registration
+
+Each Azure product exposes one registration function under
+`extensions/vscode-azure/src/products`. It contributes its DI bindings, managed
+commands, and resource data/view providers through `ProductRegistrar`:
+
+```typescript
+export function registerAcr(registrar: ProductRegistrar): void {
+    registrar.registerAzureClientProvider(
+        IAcrClientProvider,
+        (context, executor, credential, subscription) =>
+            AcrClient.create(context, executor, credential, subscription),
+    );
+    registrar.registerCommand('vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
+    registrar.registerResourceDataProvider(AcrDataProvider);
+    registrar.registerResourceViewProvider(AcrViewProvider);
+}
+```
+
+`registerProducts()` is the only shared product list. Product-specific entries
+are followed by a first-class generic Azure product. It owns shared credential,
+subscription, resource, and deployment services; generic resource/auth
+commands; and the root/fallback resource providers. The registrar applies DI
+bindings while the root container is built, but defers commands and trees until
+after test/mock overrides. This keeps
+`activateInternal()` product-agnostic and preserves the existing activation
+timing.
+
 ## Disposable Management
 
 The `pushDisposable` helper (in `services.ts`) registers disposable services with the extension context so they're cleaned up on deactivation:
@@ -171,14 +199,19 @@ This makes code testable — unit tests can provide a mock `IVsCode` with only t
 
 ## Factory Bindings for Azure Clients
 
-Azure SDK client providers use `.toFactory()` bindings. Each factory captures `ICodeContext` and `IActionExecutor`, then returns a function (sync or async, depending on the client) that creates the client for a given subscription:
+Azure SDK client providers use `.toFactory()` bindings. The shared
+`bindAzureClientProvider()` helper captures `ICodeContext`, `IActionExecutor`,
+and `ICredentialFactory`, then returns a function that creates the client for a
+given subscription:
 
 ```typescript
-container.bind(IResourceClientProvider).toFactory(context => {
-    const ctx = context.get(ICodeContext);
-    const executor = context.get(IActionExecutor);
-    return (subscription) => ResourceClient.create(ctx, executor, subscription);
-});
+bindAzureClientProvider(
+    container,
+    IResourceClientProvider,
+    (context, executor, credential, subscription) => {
+        return ResourceClient.create(context, executor, credential, subscription);
+    },
+);
 ```
 
 The resulting `IResourceClientProvider` type is a `SyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `IResourceClient` directly. This matches `ResourceClient.create(...)`, which is synchronous. The sibling `AsyncFactory<T, TArgs>` type (same shape but returns `Promise<T>`) is used for providers whose `create()` is async. Both types are defined in `packages/utils/src/types/Factory.ts`. See [Azure Clients](azure-clients.md) for details on the client wrappers.

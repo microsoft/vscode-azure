@@ -4,20 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    AcrClient,
-    createDefaultCredentialFactory,
-    DeploymentClient,
-    findSubscriptionById,
-    IAcrClientProvider,
-    ICredentialFactory,
-    IDeploymentClientProvider,
-    IResourceClientProvider,
-    ISubscriptionClientProvider,
-    IWebAppClientProvider,
-    ResourceClient,
     setUpAzureSdkLogging,
-    SubscriptionClient,
-    WebAppClient,
 } from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
@@ -42,10 +29,10 @@ import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
-import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
+import { registerProducts } from './products/registerProducts';
+import { ProductRegistrar } from './registration/ProductRegistrar';
+import { pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
-import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
-import { CredentialOptionsScope, ICredentialOptionsScope } from './utils/CredentialOptionsScope';
 
 /**
  * Public API surface returned from {@linkcode activateInternal} (and thus from
@@ -80,7 +67,9 @@ export async function activateInternal(
     perfStats: { loadStartTime: number, loadEndTime: number },
     applyOverrides?: (container: Container) => void,
 ): Promise<E2EExtensionApi | undefined> {
-    const container = setUpContainer(extensionContext);
+    const products = new ProductRegistrar();
+    registerProducts(products);
+    const container = setUpContainer(extensionContext, products);
 
     applyOverrides?.(container);
 
@@ -88,8 +77,8 @@ export async function activateInternal(
         activateContext.telemetry.measurements.loadTimeMs = perfStats.loadEndTime - perfStats.loadStartTime;
         activateContext.telemetry.isUserEvent = false;
 
-        registerCommands(container);
-        registerTrees(container);
+        registerCommands(container, products.getCommands());
+        registerTrees(container, products);
     });
 
     // Expose the DI container to E2E tests so they can resolve services (e.g.
@@ -113,7 +102,7 @@ export function deactivateInternal(_extensionContext: IExtensionContext): Promis
  * Disposable services are registered with {@linkcode pushDisposable} so they
  * are torn down with the extension context.
  */
-function setUpContainer(extensionContext: IExtensionContext): Container {
+function setUpContainer(extensionContext: IExtensionContext, products: ProductRegistrar): Container {
     const container = new Container();
     const output = createOutputChannel('Azure', vscode);
 
@@ -151,13 +140,6 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         );
     }).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
-
-    container.bind(ICredentialFactory).toDynamicValue(context => {
-        const scope = context.get(ICredentialOptionsScope);
-        return createDefaultCredentialFactory(context.get(IVsCode), context.get(IOutputChannel), () => scope.current);
-    }).inSingletonScope();
-
     container.bind(ITempDirManager).to(TempDirManager).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IProcessExecutor).toDynamicValue(context => {
@@ -167,49 +149,9 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
     container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(IResourceClientProvider).toFactory(context => {
-        const ctx = context.get(ICodeContext);
-        const executor = context.get(IActionExecutor);
-        const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => ResourceClient.create(ctx, executor, credentialFactory(subscription), subscription);
-    });
-
-    container.bind(IDeploymentClientProvider).toFactory(context => {
-        const ctx = context.get(ICodeContext);
-        const executor = context.get(IActionExecutor);
-        const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => DeploymentClient.create(ctx, executor, credentialFactory(subscription), subscription);
-    });
-
-    container.bind(ISubscriptionResolver).toDynamicValue(context => {
-        const tree = context.get(IAzureViewDataTree);
-        return (subscriptionId: string, tenantId?: string, accountId?: string) => findSubscriptionById(tree, subscriptionId, tenantId, accountId);
-    }).inSingletonScope();
-
-    container.bind(IAcrClientProvider).toFactory(context => {
-        const ctx = context.get(ICodeContext);
-        const executor = context.get(IActionExecutor);
-        const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => AcrClient.create(ctx, executor, credentialFactory(subscription), subscription);
-    });
-
-    container.bind(ISubscriptionClientProvider).toFactory(context => {
-        const ctx = context.get(ICodeContext);
-        const executor = context.get(IActionExecutor);
-        const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => SubscriptionClient.create(ctx, executor, credentialFactory(subscription), subscription.environment);
-    });
-
-    container.bind(IWebAppClientProvider).toFactory(context => {
-        const ctx = context.get(ICodeContext);
-        const executor = context.get(IActionExecutor);
-        const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => WebAppClient.create(ctx, executor, credentialFactory(subscription), subscription);
-    });
-
-    container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
-
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
+
+    products.applyBindings(container);
 
     return container;
 }
