@@ -127,12 +127,6 @@ const IActivityViewViewProviders: ServiceIdentifier<ViewProvider<string>> = Symb
 // #region Binding glue
 
 /**
- * A provider entry for declarative binding. Either a bare class (simple
- * binding to the collection) or a `[primaryId, Class]` tuple that binds
- * the class as a singleton under `primaryId` and aliases it into the
- * collection, so commands can `@inject(primaryId)` directly.
- */
-/**
  * Configuration for {@linkcode registerTree}. All three trees share
  * the same wiring pattern; only these parameters vary.
  */
