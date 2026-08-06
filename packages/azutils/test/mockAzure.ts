@@ -97,7 +97,11 @@ export function makeResourceGroup(overrides?: Partial<ResourceGroup>): ResourceG
  * Product-specific resource interfaces can be supplied as {@linkcode TResource}
  * so their additional fields are preserved in the returned fixture.
  */
-export function makeGenericResource<TResource extends GenericResource = GenericResource>(overrides?: Partial<TResource>): TResource {
+export function makeGenericResource(overrides?: Partial<GenericResource>): GenericResource;
+export function makeGenericResource<TResource extends GenericResource>(
+    overrides: Partial<GenericResource> & Omit<TResource, keyof GenericResource>,
+): TResource;
+export function makeGenericResource(overrides?: Partial<GenericResource>): GenericResource {
     return {
         id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site1',
         name: 'site1',
@@ -106,7 +110,7 @@ export function makeGenericResource<TResource extends GenericResource = GenericR
         logicalType: 'Microsoft.Web/sites',
         subscription: makeSubscription(),
         ...overrides,
-    } as TResource;
+    };
 }
 
 /**

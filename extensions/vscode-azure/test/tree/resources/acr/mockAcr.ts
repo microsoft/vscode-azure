@@ -9,7 +9,7 @@ import type { AcrRegistry } from '../../../../src/tree/resources/acr/AcrRegistry
 import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry';
 
 export function makeAcrRegistry(overrides?: Partial<AcrRegistry>): AcrRegistry {
-    return makeGenericResource({
+    return makeGenericResource<AcrRegistry>({
         id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.ContainerRegistry/registries/myReg',
         name: 'myReg',
         type: AcrResourceType,

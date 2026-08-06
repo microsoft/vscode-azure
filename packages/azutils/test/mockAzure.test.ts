@@ -23,5 +23,10 @@ describe('mockAzure (unit)', () => {
             expect(resource.productProperty).to.equal('product-value');
             expect(resource.subscription.subscriptionId).to.equal('test-sub');
         });
+
+        it('requires product-specific resource fields', () => {
+            // @ts-expect-error -- Required product-specific fields cannot be omitted.
+            makeGenericResource<ProductResource>();
+        });
     });
 });
