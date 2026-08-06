@@ -10,9 +10,14 @@ import { getSafeExecPath } from './getSafeExecPath';
  * Splits a structured command line into a safely resolved executable and its
  * trailing arguments.
  *
- * The executable is resolved to a safe absolute path so a same-named binary in
- * the working directory cannot hijack execution on Windows. When a shell is
- * used, a resolved path containing spaces is quoted as one token.
+ * The executable is resolved to a safe absolute path via
+ * {@linkcode getSafeExecPath} so execution cannot be hijacked by a same-named
+ * binary in the current working directory on Windows. Under a shell, nano-spawn
+ * concatenates the command and arguments into a single unquoted string, so a
+ * resolved path containing a space would be mis-split; in that case the resolved
+ * path is wrapped in double quotes so the shell treats it as a single token.
+ * Quoting rather than falling back to the bare command keeps the cwd-hijack
+ * mitigation intact.
  *
  * @throws {Error} When the command vector does not contain an executable.
  */
@@ -23,5 +28,13 @@ export async function resolveCommandLine(commandLine: CommandLineArgs, shell: bo
 
     const [executable, ...args] = commandLine;
     const command = await getSafeExecPath(argToString(executable));
-    return { command: shell && command.includes(' ') ? `"${command}"` : command, args };
+
+    // A shell space-joins the command and arguments without quoting, so a
+    // resolved path containing a space would be mis-split. Quote it so the shell
+    // treats it as a single token while preserving the cwd-hijack mitigation.
+    if (shell && command.includes(' ')) {
+        return { command: `"${command}"`, args };
+    }
+
+    return { command, args };
 }

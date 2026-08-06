@@ -172,7 +172,6 @@ export interface IProcessExecutor {
      * @returns `true` when the command can be resolved, `false` otherwise.
      */
     isOnPath(command: string): Promise<boolean>;
-
 }
 
 /**
