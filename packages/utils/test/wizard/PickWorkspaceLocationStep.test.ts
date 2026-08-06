@@ -33,7 +33,7 @@ function createStep(
 ): { step: PickWorkspaceLocationStep<TestContext>; mock: ReturnType<typeof createMockCodeContext>['mock'] } {
     const { ctx, mock } = createMockCodeContext();
     mock.workspaceFolders.push({
-        uri: ctx.code.Uri.file('C:\\repo'),
+        uri: ctx.code.Uri.from({ scheme: 'file', path: '/repo' }),
         name: 'repo',
         index: 0,
     });
@@ -58,7 +58,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             findFilesArgs: ['**/*.csproj', '**/obj/**', 12, token],
             strings,
         });
-        const file = mock.vscode.Uri.file('C:\\repo\\src\\app.csproj');
+        const file = mock.vscode.Uri.from({ scheme: 'file', path: '/repo/src/app.csproj' });
         await createFile(mock.vscode, file);
         const tracker = respondToPrompts(mock, [{ pick: 'src/app.csproj' }]);
 
@@ -87,8 +87,8 @@ describe('PickWorkspaceLocationStep (unit)', () => {
                 openLabel: 'Select application folder',
             },
         });
-        await createFile(mock.vscode, mock.vscode.Uri.file('C:\\repo\\api\\package.json'));
-        await createFile(mock.vscode, mock.vscode.Uri.file('C:\\repo\\api\\nested\\package.json'));
+        await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/package.json' }));
+        await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/nested/package.json' }));
         const tracker = respondToPrompts(mock, [{ pick: 'api' }]);
 
         const result = await step.prompt({});
@@ -123,7 +123,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             findFilesArgs: ['package.json'],
             strings,
         });
-        const folder = mock.vscode.Uri.file('C:\\repo\\web');
+        const folder = mock.vscode.Uri.from({ scheme: 'file', path: '/repo/web' });
         mock.window.showOpenDialog.mock.mockImplementation(() => Promise.resolve([folder]));
         const tracker = respondToPrompts(mock, [{ pick: 'Browse for an application file...' }]);
 
