@@ -6,6 +6,17 @@
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
 import { InflightMap } from '@microsoft/vscode-azure-utils';
 
+const inflight = new InflightMap<PipelineResponse>();
+
+const ignoredHeaderNames = new Set([
+    'request-id',
+    'traceparent',
+    'tracestate',
+    'x-ms-client-request-id',
+    'x-ms-correlation-request-id',
+    'x-ms-request-id',
+]);
+
 /**
  * A pipeline policy that deduplicates identical in-flight GET requests.
  * If multiple callers issue GET requests to the same URL concurrently,
@@ -14,32 +25,43 @@ import { InflightMap } from '@microsoft/vscode-azure-utils';
  * Non-GET requests are never deduplicated. Non-text responses (i.e. streams) are
  * also not deduplicated, since they cannot be easily shared across callers.
  *
- * Note that this does not dedupe requests on behalf of different accounts,
- * because they will necessarily have different REST clients, and thus different
- * instances of this policy.
+ * Policy instances share transient in-flight state, allowing independently
+ * created clients to deduplicate requests. The policy must run after
+ * authentication so the request's authorization header partitions requests by
+ * credential. This places deduplication inside each caller's retry loop, where
+ * concurrent retry attempts can also coalesce. Request-specific observability
+ * headers are excluded from the key.
  */
 export class DedupeRequestPolicy implements PipelinePolicy {
-    private readonly inflight = new InflightMap<PipelineResponse>();
-
     public readonly name = 'DedupeRequestPolicy';
 
     /** @inheritdoc */
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
-        // Skip dedup for non-GET requests (mutations must always execute) and for
-        // streamed responses. `streamResponseStatusCodes` is the Azure SDK's pre-flight
-        // signal indicating the caller expects a stream body (e.g. blob downloads).
-        // When this property is absent/empty, the SDK will populate `bodyAsText`
-        // (i.e. JSON), which is safe to share.
-        if (request.method !== 'GET' || request.streamResponseStatusCodes?.size) {
+        // Mutations must always execute, and streamed responses cannot be shared.
+        // An abortable transport is also caller-owned: sharing it would couple
+        // the owner's cancellation to every piggybacked caller.
+        if (request.method !== 'GET'
+            || request.streamResponseStatusCodes?.size
+            || request.abortSignal
+            || !request.headers.has('authorization')) {
             return next(request);
         }
 
-        const response = await this.inflight.getOrRun(request.url, () => next(request));
+        const response = await inflight.getOrRun(createRequestKey(request), () => next(request));
 
         // If this caller piggybacked on another request, clone the response
         // so each caller gets its own response object with the correct request ref
         return response.request === request ? response : cloneResponse(request, response);
     }
+}
+
+function createRequestKey(request: PipelineRequest): string {
+    const headers = [...request.headers]
+        .filter(([name]) => !ignoredHeaderNames.has(name.toLowerCase()))
+        .map(([name, value]) => [name.toLowerCase(), value] as const)
+        .sort(([left], [right]) => left.localeCompare(right));
+
+    return JSON.stringify([request.url, headers]);
 }
 
 function cloneResponse(request: PipelineRequest, response: PipelineResponse): PipelineResponse {

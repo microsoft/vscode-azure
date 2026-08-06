@@ -11,7 +11,7 @@ Two REST-style factory functions in `createAzureClient.ts` create Azure SDK clie
 | `createArmRestClient` | REST-style `@azure-rest/core-client` | No |
 | `createArmRestSubscriptionClient` | REST-style `@azure-rest/core-client` | Yes |
 
-Both accept `ICodeContext`, `IActionExecutor` (for telemetry context and user agent), and a `TokenCredential`, and inject the same set of pipeline policies.
+Both accept `ICodeContext`, `IActionExecutor` (for telemetry context and user agent), and a `TokenCredential`, and inject the same set of pipeline policies. Client construction is lightweight: consumers should create a client at the point of use rather than cache clients by subscription.
 
 ### Credential Handling
 
@@ -74,13 +74,21 @@ Every client created through the factory functions gets three custom pipeline po
 
 | Policy | Position | Description |
 |--------|----------|-------------|
-| `DedupeRequestPolicy` | perCall | Deduplicates concurrent identical GET requests using `InflightMap`. If two concurrent calls hit the same URL, the second reuses the first's response (with a cloned response object). Streaming requests are excluded. |
+| `DedupeRequestPolicy` | after authentication, inside retry | Deduplicates concurrent equivalent GET attempts across independently created clients. In-flight state is transient and partitioned by authorization and response-affecting headers. Streaming, abortable, and unauthenticated requests are excluded. |
 | `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command or tree operation that initiated them. The context is looked up via `IActionExecutor.currentContext` (backed by `AsyncLocalStorage`), so policies don't need `IActionContext` passed explicitly — it's established by whichever scope wraps the call (command execution or `DataItemTree` provider call). |
 | `AcceptLanguagePolicy` | perCall | Sets the `accept-language` header to VS Code's UI language (`vscode.env.language`), so ARM responses match the user's locale. |
 
 Authentication (including CAE/MFA step-up) is handled by the SDK's built-in `bearerTokenAuthenticationPolicy`, which is wired up by the SDK's own credential plumbing from the supplied `TokenCredential` — not added by these factories.
 
 The factory also sets a `userAgentPrefix` combining the extension's ID and version with any caller-provided prefix.
+
+### Client Lifetime and Request Deduplication
+
+Do not cache Azure management clients to reuse pipelines or deduplicate requests. The standard factory installs `DedupeRequestPolicy` after authentication, and all policy instances share only currently in-flight requests. Equivalent concurrent GETs can therefore coalesce even when each caller creates its own client.
+
+The dedupe key includes authorization and response-affecting headers, preventing responses from being shared across credentials or representations. Request-specific observability headers are ignored. Completed requests, responses, credentials, and clients are not retained. Callers that need durable data caching should cache the resulting domain data explicitly rather than extending client lifetime.
+
+Static Web Apps features rebuilt from draft PR [#237](https://github.com/microsoft/vscode-azure/pull/237) should follow this cache-free client pattern rather than restoring their per-subscription client maps.
 
 ## Client Wrappers
 

@@ -5,6 +5,7 @@
 
 import type { ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
+import type { AddPipelineOptions, PipelinePolicy } from '@azure/core-rest-pipeline';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { AzurePublicCloud } from '../../src/auth/Environment';
@@ -19,15 +20,28 @@ const publicArmEndpoint = AzurePublicCloud.resourceManagerEndpointUrl;
  * the `create*(credential, subscriptionId, options?)` free-function
  * pattern used by the new-style REST SDKs.
  */
-interface FakeSubResult { credential: TokenCredential; subId: string; opts: RestClientOptions | undefined }
+interface AddedPolicy { policy: PipelinePolicy; options?: AddPipelineOptions }
+interface FakePipeline {
+    readonly addedPolicies: AddedPolicy[];
+    addPolicy(policy: PipelinePolicy, options?: AddPipelineOptions): void;
+}
+function createFakePipeline(): FakePipeline {
+    const addedPolicies: AddedPolicy[] = [];
+    return {
+        addedPolicies,
+        addPolicy: (policy, options) => addedPolicies.push({ policy, options }),
+    };
+}
+
+interface FakeSubResult { credential: TokenCredential; subId: string; opts: RestClientOptions | undefined; pipeline: FakePipeline }
 function fakeSubscriptionFactory(credential: TokenCredential, subscriptionId: string, options?: RestClientOptions): FakeSubResult {
-    return { credential, subId: subscriptionId, opts: options };
+    return { credential, subId: subscriptionId, opts: options, pipeline: createFakePipeline() };
 }
 const typedSubFactory = fakeSubscriptionFactory as any as Parameters<typeof createArmRestSubscriptionClient>[2]; // test fake
 
-interface FakeResult { credential: TokenCredential; opts: RestClientOptions | undefined }
+interface FakeResult { credential: TokenCredential; opts: RestClientOptions | undefined; pipeline: FakePipeline }
 function fakeFactory(credential: TokenCredential, options?: RestClientOptions): FakeResult {
-    return { credential, opts: options };
+    return { credential, opts: options, pipeline: createFakePipeline() };
 }
 const typedFactory = fakeFactory as any as Parameters<typeof createArmRestClient>[2]; // test fake
 
@@ -95,10 +109,26 @@ describe('createArmRestSubscriptionClient (unit)', () => {
         ) as unknown as FakeSubResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
+        const addedPolicyNames = client.pipeline.addedPolicies.map(p => p.policy.name);
 
-        expect(policyNames).to.include('DedupeRequestPolicy');
+        expect(addedPolicyNames).to.include('DedupeRequestPolicy');
         expect(policyNames).to.include('CorrelationIdPolicy');
         expect(policyNames).to.include('AcceptLanguagePolicy');
+    });
+
+    it('should place request deduplication after bearer-token authentication', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+
+        const client = createArmRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            makeCredential(),
+            makeSubscription(),
+        ) as unknown as FakeSubResult;
+
+        expect(client.pipeline.addedPolicies[0].options?.afterPolicies).to.deep.equal(['bearerTokenAuthenticationPolicy']);
     });
 
     it('should set user agent prefix with extension ID and version', () => {
@@ -164,9 +194,10 @@ describe('createArmRestSubscriptionClient (unit)', () => {
         ) as unknown as FakeSubResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
+        const addedPolicyNames = client.pipeline.addedPolicies.map(p => p.policy.name);
 
         expect(policyNames).to.include('CustomPolicy');
-        expect(policyNames).to.include('DedupeRequestPolicy');
+        expect(addedPolicyNames).to.include('DedupeRequestPolicy');
     });
 });
 
@@ -217,8 +248,9 @@ describe('createArmRestClient (unit)', () => {
         ) as unknown as FakeResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
+        const addedPolicyNames = client.pipeline.addedPolicies.map(p => p.policy.name);
 
-        expect(policyNames).to.include('DedupeRequestPolicy');
+        expect(addedPolicyNames).to.include('DedupeRequestPolicy');
         expect(policyNames).to.include('CorrelationIdPolicy');
         expect(policyNames).to.include('AcceptLanguagePolicy');
         expect(policyNames).to.not.include('MFAChallengePolicy');
@@ -288,8 +320,9 @@ describe('createArmRestClient (unit)', () => {
         ) as unknown as FakeResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
+        const addedPolicyNames = client.pipeline.addedPolicies.map(p => p.policy.name);
 
         expect(policyNames).to.include('CustomPolicy');
-        expect(policyNames).to.include('DedupeRequestPolicy');
+        expect(addedPolicyNames).to.include('DedupeRequestPolicy');
     });
 });

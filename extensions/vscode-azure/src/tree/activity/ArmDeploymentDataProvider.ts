@@ -83,9 +83,6 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
     private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
     private readonly activePolls = new Set<string>();
-    /** Shared deployment clients per subscription to reuse pipelines and dedupe identical GET requests. */
-    private readonly clientCache = new Map<string, IDeploymentClient>();
-
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<Activity>>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
@@ -136,7 +133,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
 
         // Start polling if not terminal and not already polling
         if (!isTerminalActivityStatus(resource.status) && !this.activePolls.has(resource.id)) {
-            void this.poll(resource);
+            void this.poll(resource, client);
         }
 
         // Children depend on operations, so signal that children changed
@@ -187,7 +184,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
      * Poll a deployment's status and refresh its operations. Fires targeted
      * change events based on whether the operation count changed.
      */
-    private async poll(activity: ArmDeploymentActivity): Promise<void> {
+    private async poll(activity: ArmDeploymentActivity, initialClient?: IDeploymentClient): Promise<void> {
         try {
             const abortSignal = activity.abortController.signal;
             abortSignal.throwIfAborted();
@@ -203,10 +200,11 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
                         context.telemetry.suppress = 'onSuccess';
                         context.telemetry.isUserEvent = false;
                         context.errorHandling.rethrow = true;
-                        const client = await this.getClient(activity.subscriptionId, activity.tenantId, activity.accountId);
+                        const client = initialClient ?? await this.getClient(activity.subscriptionId, activity.tenantId, activity.accountId);
+                        initialClient = undefined;
                         if (!client) {
-                            // Should not happen after a successful enrich (the
-                            // client is cached), but guard defensively.
+                            // The owning account may have signed out since the
+                            // previous poll cycle.
                             return;
                         }
 
@@ -380,25 +378,19 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
 
     /**
      * Returns a deployment client for {@linkcode subscriptionId}, resolving the
-     * full subscription on first use and caching the client per subscription id.
+     * current full subscription before creating the lightweight client.
      * An optional {@linkcode tenantId} hint narrows the resolution drill to the
      * owning tenant, and an optional {@linkcode accountId} hint narrows it to the
      * owning account. Returns `undefined` when the subscription cannot be resolved
      * (e.g. the owning account is not signed in).
      */
     private async getClient(subscriptionId: string, tenantId?: string, accountId?: string): Promise<IDeploymentClient | undefined> {
-        const key = subscriptionId.toLowerCase();
-        let client = this.clientCache.get(key);
-        if (!client) {
-            const subscription = await this.resolveSubscription(subscriptionId, tenantId, accountId);
-            if (!subscription) {
-                this.executor.output.debug(`[activity] could not resolve subscription ${subscriptionId} for deployment client`);
-                return undefined;
-            }
-            client = this.createClient(subscription);
-            this.clientCache.set(key, client);
+        const subscription = await this.resolveSubscription(subscriptionId, tenantId, accountId);
+        if (!subscription) {
+            this.executor.output.debug(`[activity] could not resolve subscription ${subscriptionId} for deployment client`);
+            return undefined;
         }
-        return client;
+        return this.createClient(subscription);
     }
 
     /**

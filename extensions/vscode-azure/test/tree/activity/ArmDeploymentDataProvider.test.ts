@@ -297,6 +297,23 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(createClientFn.mock.callCount()).to.equal(0);
         });
 
+        it('should resolve the subscription and create a lightweight client for each operation', async () => {
+            const { executor } = createTestActionExecutor();
+            const { vscode } = createMockVsCode();
+            const client = createMockClient();
+            const createClient = mock.fn(() => client);
+            const resolveSubscription = mock.fn((subscriptionId: string) => Promise.resolve(makeSubscription({ subscriptionId })));
+            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, resolveSubscription);
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+            const activity = provider.getChildren()[0];
+
+            await provider.enrich(activity);
+            await provider.enrich(activity);
+
+            expect(resolveSubscription.mock.callCount()).to.equal(2);
+            expect(createClient.mock.callCount()).to.equal(2);
+        });
+
         it('should return false if the deployment was aborted', async () => {
             const provider = createProvider();
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');

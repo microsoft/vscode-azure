@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    getResourceGroupName,
     getNodeType,
     isVirtualResource,
     IWebAppClientProvider,
-    parseAzureResourceId,
     type ConcreteAzureNode, type GenericResource, type IWebAppClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
@@ -29,9 +29,6 @@ export type IFunctionAppDataProvider = FunctionAppDataProvider;
  */
 @injectable()
 export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> {
-
-    private readonly clientCache = new Map<string, IWebAppClient>();
-
     /**
      * In-memory cache of app settings keyed by ARM resource ID.
      * Populated when listing children, used by CRUD commands to
@@ -132,21 +129,10 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
     }
 
     private resolveClient(resource: GenericResource): { client: IWebAppClient; resourceGroupName: string } {
-        const client = this.getOrCreateClient(resource);
-        const { resourceGroup: resourceGroupName } = parseAzureResourceId(resource.id);
-        if (!resourceGroupName) {
-            throw new Error(`Cannot extract resource group name from resource ID: ${resource.id}`);
-        }
-        return { client, resourceGroupName };
-    }
-
-    private getOrCreateClient(resource: GenericResource): IWebAppClient {
-        let client = this.clientCache.get(resource.subscription.subscriptionId);
-        if (!client) {
-            client = this.createClient(resource.subscription);
-            this.clientCache.set(resource.subscription.subscriptionId, client);
-        }
-        return client;
+        return {
+            client: this.createClient(resource.subscription),
+            resourceGroupName: getResourceGroupName(resource.id),
+        };
     }
 }
 

@@ -5,6 +5,7 @@
 
 import type { Client as RestClient, ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
+import { bearerTokenAuthenticationPolicyName } from '@azure/core-rest-pipeline';
 import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '../auth/AzureSubscription';
 import type { EnvironmentLike } from '../auth/Environment';
@@ -40,7 +41,7 @@ export function createArmRestClient<TClient extends RestClient, TOptions extends
 ): TClient {
     const endpoint = environment.resourceManagerEndpointUrl;
     executor.output.debug(`[rest] create rest client ${getClient.name}`);
-    return getClient(credential, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions));
+    return addDedupePolicy(getClient(credential, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions)));
 }
 
 /**
@@ -75,7 +76,14 @@ export function createArmRestSubscriptionClient<TClient extends RestClient, TOpt
 
     const endpoint = subscription.environment.resourceManagerEndpointUrl;
     executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
-    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions));
+    return addDedupePolicy(getClient(credential, subscriptionId, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions)));
+}
+
+function addDedupePolicy<TClient extends RestClient>(client: TClient): TClient {
+    client.pipeline.addPolicy(new DedupeRequestPolicy(), {
+        afterPolicies: [bearerTokenAuthenticationPolicyName],
+    });
+    return client;
 }
 
 function applyDefaults<TOptions extends RestClientOptions>(
@@ -93,10 +101,6 @@ function applyDefaults<TOptions extends RestClientOptions>(
         },
         additionalPolicies: [
             ...(options?.additionalPolicies ?? []),
-            {
-                policy: new DedupeRequestPolicy(),
-                position: 'perCall',
-            },
             {
                 policy: new CorrelationIdPolicy(executor),
                 position: 'perCall',
