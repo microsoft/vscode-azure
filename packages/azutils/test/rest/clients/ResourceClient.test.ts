@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { delay } from '@microsoft/vscode-azure-utils';
-import { collectPages, createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { collectPages, delay } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient } from '../../../src/rest/clients/ResourceClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';

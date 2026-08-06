@@ -5,8 +5,8 @@
 
 import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
-import { Everything, Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
-import { collectPages, createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { collectPages, Everything, Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../src/tree/resources/AzureAccountDataProvider';
