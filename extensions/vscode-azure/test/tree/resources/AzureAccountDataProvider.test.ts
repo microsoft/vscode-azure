@@ -319,7 +319,12 @@ describe('AzureAccountDataProvider (unit)', () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
             let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            const didChange = new Promise<void>(resolve => {
+                provider.onDidChange(() => {
+                    fired++;
+                    resolve();
+                });
+            });
 
             await provider.getChildren();
 
@@ -329,7 +334,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await didChange;
 
             expect(fired).to.equal(1);
         });
