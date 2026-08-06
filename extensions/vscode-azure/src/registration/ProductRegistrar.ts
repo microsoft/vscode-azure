@@ -92,5 +92,4 @@ export class ProductRegistrar {
     public getResourceViewProviders(): readonly ProviderEntry<ViewProvider<string>>[] {
         return this.resourceViewProviders;
     }
-
 }
