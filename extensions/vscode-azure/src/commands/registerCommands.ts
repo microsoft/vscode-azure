@@ -7,17 +7,12 @@ import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils'
 import { Container } from 'inversify';
 import { AzdDownCommandId, AzdUpCommandId, LoadMoreCommandId } from '../constants';
 import type { ManagedCommandRegistration } from '../registration/ProductRegistrar';
-import { SelectSubscriptions } from './auth/SelectSubscriptions';
-import { SignIn } from './auth/SignIn';
 import { AzdDown } from './deploy/AzdDown';
 import { AzdUp } from './deploy/AzdUp';
 import { ClearActivities } from './deploy/ClearActivities';
 import type { ManagedCommand } from './ManagedCommand';
 import { InstallAzd } from './tools/InstallAzd';
-import { GroupBy } from './tree/GroupBy';
 import { LoadMore } from './tree/LoadMore';
-import { OpenInPortal } from './tree/OpenInPortal';
-import { RefreshResourcesView } from './tree/RefreshResourcesView';
 import { RefreshWorkspaceView } from './tree/RefreshWorkspaceView';
 import { RevealInExplorer } from './tree/RevealInExplorer';
 
@@ -30,11 +25,6 @@ export function registerCommands(
     container: Container,
     productCommands: readonly ManagedCommandRegistration[] = [],
 ): void {
-    registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
-    registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
-    registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
-    registerManagedCommand(container, 'vscode-azure/signIn', SignIn);
-    registerManagedCommand(container, 'vscode-azure/selectSubscriptions', SelectSubscriptions);
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
 
     registerManagedCommand(container, 'vscode-azure/workspace/refresh', RefreshWorkspaceView);

@@ -145,14 +145,15 @@ View providers control presentation without modifying the data layer. They may:
 
 Both layers extend `ProviderRegistry`, which maintains an ordered list of providers. `findProvider(resource)` returns the **first** provider whose `canHandle(resource)` returns `true`.
 
-**Registration order matters** — specific providers must be registered before broader fallback providers. Product resource providers are collected by `ProductRegistrar` in product registration order, then `registerTrees.ts` places them ahead of core root and fallback providers:
+**Registration order matters** — specific providers must be registered before broader fallback providers. All resource providers, including the generic Azure root and fallback providers, are collected by `ProductRegistrar` in registration order:
 
 ```typescript
 // In registerTrees.ts — resources tree dataProviders, most specific first
 dataProviders: [
-    ...products.getResourceDataProviders(),                // product-specific providers
+    AcrDataProvider,
+    [IFunctionAppDataProvider, FunctionAppDataProvider],
     [IAzureAccountDataProvider, AzureAccountDataProvider], // accounts/tenants/subscriptions (root)
-    AzureResourceDataProvider,                            // resource groups + resources (fallback)
+    AzureResourceDataProvider,                             // resource groups + resources (fallback)
 ],
 ```
 
@@ -160,7 +161,8 @@ Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the c
 
 Products add both sides of their resource presentation from their single entry
 point with `registerResourceDataProvider()` and
-`registerResourceViewProvider()`.
+`registerResourceViewProvider()`. The generic Azure registration is deliberately
+last so its providers remain fallbacks.
 
 ## Azure Resources Tree Providers
 

@@ -9,6 +9,7 @@ import type { DataProvider, IActionExecutor, ICodeContext, ViewProvider } from '
 import { IActionExecutor as IActionExecutorId, ICodeContext as ICodeContextId } from '@microsoft/vscode-azure-utils';
 import type { Container, Newable, ServiceIdentifier } from 'inversify';
 import type { ManagedCommand } from '../commands/ManagedCommand';
+import { pushDisposable } from '../services';
 
 /** A constructor for a command resolved in a command-scoped DI container. */
 export type ManagedCommandConstructor = new (...ctorArgs: any[]) => ManagedCommand; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -145,4 +146,27 @@ export function bindAzureClientProvider<TResult>(
             subscription,
         );
     });
+}
+
+/**
+ * Bind provider entries to a collection {@linkcode ServiceIdentifier}.
+ * Bare classes are bound directly; `[primaryId, Class]` tuples are bound as
+ * singletons under `primaryId` and aliased into the collection.
+ */
+export function bindProviders<T>(
+    container: Container,
+    collectionId: ServiceIdentifier<T>,
+    entries: readonly ProviderEntry<T>[],
+): void {
+    for (const entry of entries) {
+        if (typeof entry === 'function') {
+            container.bind(collectionId).to(entry).onActivation(pushDisposable);
+        } else {
+            const [primaryId, providerClass] = entry;
+            if (!container.isBound(primaryId)) {
+                container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
+            }
+            container.bind(collectionId).toService(primaryId);
+        }
+    }
 }

@@ -8,7 +8,7 @@ import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, type LoadMor
 import type { Container, ResolutionContext, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/tree/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId, WorkspaceTreeViewId } from '../constants';
-import type { ProductRegistrar, ProviderEntry } from '../registration/ProductRegistrar';
+import { bindProviders, type ProductRegistrar, type ProviderEntry } from '../registration/ProductRegistrar';
 import {
     IActivityTreeView, IActivityViewDataTree, IActivityViewViewItemTree,
     IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree,
@@ -20,9 +20,6 @@ import { ArmDeploymentDataProvider, IArmDeploymentDataProvider } from './activit
 import { ArmDeploymentViewProvider } from './activity/ArmDeploymentViewProvider';
 import { CodeDeploymentDataProvider, ICodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvider';
 import { GenericActivityDataProvider, IGenericActivityDataProvider } from './activity/GenericActivityDataProvider';
-import { AzureAccountDataProvider, IAzureAccountDataProvider } from './resources/AzureAccountDataProvider';
-import { AzureResourceDataProvider } from './resources/AzureResourceDataProvider';
-import { GenericAzureViewProvider } from './resources/GenericAzureViewProvider';
 import { AzdWorkspaceDataProvider } from './workspace/azd/AzdWorkspaceDataProvider';
 import { AzdWorkspaceViewProvider } from './workspace/azd/AzdWorkspaceViewProvider';
 import { EmulatorsWorkspaceDataProvider } from './workspace/emulators/EmulatorsWorkspaceDataProvider';
@@ -55,15 +52,8 @@ export function registerTrees(container: Container, products?: ProductRegistrar)
         ttl: 5 * 60 * 1000, // 5 minute TTL
         loadMoreOptions: context => defaultLoadMoreOptions(context.get(IVsCode)),
         // Registration order matters: specific providers first, generic fallback last.
-        dataProviders: [
-            ...products?.getResourceDataProviders() ?? [],
-            [IAzureAccountDataProvider, AzureAccountDataProvider], // singleton so mock-data mode can rebind it
-            AzureResourceDataProvider,
-        ],
-        viewProviders: [
-            ...products?.getResourceViewProviders() ?? [],
-            GenericAzureViewProvider,
-        ],
+        dataProviders: products?.getResourceDataProviders() ?? [],
+        viewProviders: products?.getResourceViewProviders() ?? [],
     });
 
     // Workspace tree
@@ -142,27 +132,6 @@ interface TreeConfig<TData> {
     readonly loadMoreOptions?: (context: ResolutionContext) => LoadMoreOptions<string>;
     readonly dataProviders: readonly ProviderEntry<DataProvider<TData>>[];
     readonly viewProviders: readonly ProviderEntry<ViewProvider<string>>[];
-}
-
-/**
- * Bind provider entries to a collection {@linkcode ServiceIdentifier}.
- * Bare classes are bound directly; `[primaryId, Class]` tuples are
- * bound as singletons under `primaryId` and aliased into the collection.
- */
-export function bindProviders<T>(container: Container, collectionId: ServiceIdentifier<T>, entries: readonly ProviderEntry<T>[]): void {
-    for (const entry of entries) {
-        if (typeof entry === 'function') {
-            container.bind(collectionId).to(entry).onActivation(pushDisposable);
-        } else {
-            const [primaryId, providerClass] = entry;
-            // An override (e.g. the "Run (Mock Data)" entry point) may have
-            // already bound `primaryId` before the trees are registered.
-            if (!container.isBound(primaryId)) {
-                container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
-            }
-            container.bind(collectionId).toService(primaryId);
-        }
-    }
 }
 
 /**

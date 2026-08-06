@@ -74,7 +74,7 @@ The VS Code extension that wires everything together:
 - **Data/View separation**: The tree UI is split into a data layer (fetching, caching, enrichment) and a view layer (rendering, grouping, virtual nodes). See [Tree Views](tree-views.md).
 - **Provider dispatch**: Both layers use `ProviderRegistry` to dispatch to the first matching provider. Registration order matters — specific providers before generic fallbacks.
 - **DI everywhere**: Services are injected via inversify. Each command execution gets a scoped child container with `IActionContext`. See [Dependency Injection](dependency-injection.md).
-- **One product entry point**: Each Azure product owns a registration function under `src/products`. Adding a product changes the central product list, not the extension activation function or shared command/tree import lists.
+- **One product entry point**: Each Azure product owns a registration function under `src/products`. A generic Azure product owns shared Azure services, commands, and fallback providers. Adding a product changes the central product list, not the extension activation function or shared command/tree import lists.
 - **Automatic telemetry**: Every command is wrapped in `callWithTelemetryAndErrorHandling`, which captures duration, result, and errors. See [Telemetry](telemetry.md).
 - **Localization**: All user-facing strings use `IVsCode.l10n.t()`. Debug/trace output is exempt. See [Conventions](conventions.md).
 - **Azure client wrappers**: Typed wrappers around Azure SDK clients with custom pipeline policies, lazy SDK imports, and `AsyncIterable<Page<T>>` return types. See [Azure Clients](azure-clients.md).

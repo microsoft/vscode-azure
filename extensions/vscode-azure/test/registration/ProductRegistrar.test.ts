@@ -11,13 +11,12 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import {
-    type ActionCallback,
+    CommandRegistry,
     IActionExecutor,
-    type IActionContext,
     ICodeContext,
     ICommandRegistry,
-    type ICommandRegistry as ICommandRegistryType,
 } from '@microsoft/vscode-azure-utils';
+import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { Container, injectable, type ServiceIdentifier } from 'inversify';
 import { mock } from 'node:test';
@@ -26,6 +25,7 @@ import type { ManagedCommand } from '../../src/commands/ManagedCommand';
 import { registerProducts } from '../../src/products/registerProducts';
 import {
     bindAzureClientProvider,
+    bindProviders,
     ProductRegistrar,
 } from '../../src/registration/ProductRegistrar';
 import { AcrDataProvider } from '../../src/tree/resources/acr/AcrDataProvider';
@@ -35,19 +35,9 @@ import {
     IFunctionAppDataProvider,
 } from '../../src/tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../../src/tree/resources/functions/FunctionAppViewProvider';
-import { bindProviders } from '../../src/tree/registerTrees';
-
-class TestCommandRegistry implements ICommandRegistryType {
-    public readonly callbacks = new Map<string, ActionCallback<unknown>>();
-
-    public registerCommand<T = unknown>(commandId: string, callback: ActionCallback<T>): void {
-        this.callbacks.set(commandId, callback);
-    }
-
-    public dispose(): void {
-        this.callbacks.clear();
-    }
-}
+import { AzureAccountDataProvider, IAzureAccountDataProvider } from '../../src/tree/resources/AzureAccountDataProvider';
+import { AzureResourceDataProvider } from '../../src/tree/resources/AzureResourceDataProvider';
+import { GenericAzureViewProvider } from '../../src/tree/resources/GenericAzureViewProvider';
 
 @injectable()
 class TestCommand implements ManagedCommand {
@@ -71,9 +61,19 @@ describe('ProductRegistrar (unit)', () => {
 
         const dataProviders = registrar.getResourceDataProviders();
         const viewProviders = registrar.getResourceViewProviders();
+        const commandIds = registrar.getCommands().map(command => command.commandId);
         expect(dataProviders[0]).to.equal(AcrDataProvider);
         expect(dataProviders[1]).to.deep.equal([IFunctionAppDataProvider, FunctionAppDataProvider]);
-        expect(viewProviders).to.deep.equal([AcrViewProvider, FunctionAppViewProvider]);
+        expect(dataProviders[2]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
+        expect(dataProviders[3]).to.equal(AzureResourceDataProvider);
+        expect(viewProviders).to.deep.equal([AcrViewProvider, FunctionAppViewProvider, GenericAzureViewProvider]);
+        expect(commandIds).to.include.members([
+            'vscode-azure/resources/refresh',
+            'vscode-azure/resources/groupBy',
+            'vscode-azure/resources/openInPortal',
+            'vscode-azure/signIn',
+            'vscode-azure/selectSubscriptions',
+        ]);
     });
 
     it('binds primary provider identifiers as singleton collection aliases', () => {
@@ -104,16 +104,18 @@ describe('ProductRegistrar (unit)', () => {
 
     it('preserves command prefix arguments when registered commands execute', async () => {
         const registrar = new ProductRegistrar();
-        const registry = new TestCommandRegistry();
+        const { executor } = createTestActionExecutor();
+        const { vscode: code, registeredCommands } = createMockVsCode();
+        const registry = new CommandRegistry(executor, code);
         const container = new Container();
         container.bind(ICommandRegistry).toConstantValue(registry);
         registrar.registerCommand('test.command', TestCommand, 'fixed');
 
         registerCommands(container, registrar.getCommands());
-        const callback = registry.callbacks.get('test.command');
+        const callback = registeredCommands.get('test.command');
         expect(callback).to.not.equal(undefined);
 
-        await callback?.({} as IActionContext, 'runtime');
+        await callback?.('runtime');
 
         expect(TestCommand.calls).to.deep.equal([['fixed', 'runtime']]);
     });

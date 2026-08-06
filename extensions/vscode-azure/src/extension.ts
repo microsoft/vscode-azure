@@ -4,16 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    createDefaultCredentialFactory,
-    DeploymentClient,
-    findSubscriptionById,
-    ICredentialFactory,
-    IDeploymentClientProvider,
-    IResourceClientProvider,
-    ISubscriptionClientProvider,
-    ResourceClient,
     setUpAzureSdkLogging,
-    SubscriptionClient,
 } from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
@@ -39,11 +30,9 @@ import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
 import { registerProducts } from './products/registerProducts';
-import { bindAzureClientProvider, ProductRegistrar } from './registration/ProductRegistrar';
-import { IAzureViewDataTree, ISubscriptionResolver, pushDisposable } from './services';
+import { ProductRegistrar } from './registration/ProductRegistrar';
+import { pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
-import { IResourceSelector, ResourceSelector } from './tree/resources/ResourceSelector';
-import { CredentialOptionsScope, ICredentialOptionsScope } from './utils/CredentialOptionsScope';
 
 /**
  * Public API surface returned from {@linkcode activateInternal} (and thus from
@@ -152,13 +141,6 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
         );
     }).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
-
-    container.bind(ICredentialFactory).toDynamicValue(context => {
-        const scope = context.get(ICredentialOptionsScope);
-        return createDefaultCredentialFactory(context.get(IVsCode), context.get(IOutputChannel), () => scope.current);
-    }).inSingletonScope();
-
     container.bind(ITempDirManager).to(TempDirManager).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IProcessExecutor).toDynamicValue(context => {
@@ -167,27 +149,6 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
 
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
     container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
-
-    bindAzureClientProvider(container, IResourceClientProvider, (context, executor, credential, subscription) => {
-        return ResourceClient.create(context, executor, credential, subscription);
-    });
-    bindAzureClientProvider(container, IDeploymentClientProvider, (context, executor, credential, subscription) => {
-        return DeploymentClient.create(context, executor, credential, subscription);
-    });
-
-    container.bind(ISubscriptionResolver).toDynamicValue(context => {
-        const tree = context.get(IAzureViewDataTree);
-        return (subscriptionId: string, tenantId?: string, accountId?: string) => findSubscriptionById(tree, subscriptionId, tenantId, accountId);
-    }).inSingletonScope();
-
-    container.bind(ISubscriptionClientProvider).toFactory(context => {
-        const ctx = context.get(ICodeContext);
-        const executor = context.get(IActionExecutor);
-        const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => SubscriptionClient.create(ctx, executor, credentialFactory(subscription), subscription.environment);
-    });
-
-    container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
 
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 

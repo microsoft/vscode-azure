@@ -87,7 +87,10 @@ export function registerAcr(registrar: ProductRegistrar): void {
 }
 ```
 
-`registerProducts()` is the only shared product list. The registrar applies DI
+`registerProducts()` is the only shared product list. Product-specific entries
+are followed by a first-class generic Azure product. It owns shared credential,
+subscription, resource, and deployment services; generic resource/auth
+commands; and the root/fallback resource providers. The registrar applies DI
 bindings while the root container is built, but defers commands, trees, and
 activation hooks until after test/mock overrides. This keeps
 `activateInternal()` product-agnostic and preserves the existing activation
