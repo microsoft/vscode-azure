@@ -11,7 +11,7 @@ import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('ResourceClient (unit)', () => {
-    it('should deduplicate concurrent requests from independently created clients', async () => {
+    it('should isolate concurrent requests from clients with custom options', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const subscription = makeSubscription();
@@ -24,29 +24,6 @@ describe('ResourceClient (unit)', () => {
         });
         const client1 = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
         const client2 = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
-
-        await Promise.all([
-            collectPages(client1.resourceGroups.list()),
-            collectPages(client2.resourceGroups.list()),
-        ]);
-
-        expect(httpClient.requests).to.have.length(1);
-    });
-
-    it('should not deduplicate concurrent requests from different Azure identities', async () => {
-        const { ctx } = createMockCodeContext();
-        const { executor } = createTestActionExecutor();
-        const subscription1 = makeSubscription({ accountId: 'account-1' });
-        const subscription2 = makeSubscription({ accountId: 'account-2' });
-        const body = JSON.stringify({ value: [] });
-        const httpClient = new MockHttpClient({
-            handler: async (request) => {
-                await delay(10);
-                return makeResponse(request, 200, body);
-            },
-        });
-        const client1 = ResourceClient.create(ctx, executor, makeCredential('token-1'), subscription1, { httpClient });
-        const client2 = ResourceClient.create(ctx, executor, makeCredential('token-2'), subscription2, { httpClient });
 
         await Promise.all([
             collectPages(client1.resourceGroups.list()),

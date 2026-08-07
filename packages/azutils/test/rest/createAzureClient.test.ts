@@ -5,11 +5,14 @@
 
 import type { ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
+import type { PipelinePolicy, PipelineRequest } from '@azure/core-rest-pipeline';
+import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { AzurePublicCloud } from '../../src/auth/Environment';
 import { createArmRestClient, createArmRestSubscriptionClient } from '../../src/rest/createAzureClient';
 import { makeCredential, makeSubscription } from '../mockAzure';
+import { makeRequest, makeResponse } from '../mockPipeline';
 
 /** ARM endpoint of {@linkcode AzurePublicCloud} (stored without a trailing slash). */
 const publicArmEndpoint = AzurePublicCloud.resourceManagerEndpointUrl;
@@ -30,6 +33,28 @@ function fakeFactory(credential: TokenCredential, options?: RestClientOptions): 
     return { credential, opts: options };
 }
 const typedFactory = fakeFactory as any as Parameters<typeof createArmRestClient>[2]; // test fake
+
+function getDedupePolicy(client: FakeResult | FakeSubResult): PipelinePolicy {
+    const policy = client.opts?.additionalPolicies?.find(config => config.policy.name === 'DedupeRequestPolicy')?.policy;
+    if (!policy) {
+        throw new Error('DedupeRequestPolicy was not configured');
+    }
+    return policy;
+}
+
+async function countConcurrentRequests(policy1: PipelinePolicy, policy2: PipelinePolicy): Promise<number> {
+    let callCount = 0;
+    const next = async (request: PipelineRequest) => {
+        callCount++;
+        await delay(10);
+        return makeResponse(request);
+    };
+    await Promise.all([
+        policy1.sendRequest(makeRequest(), next),
+        policy2.sendRequest(makeRequest(), next),
+    ]);
+    return callCount;
+}
 
 describe('createArmRestSubscriptionClient (unit)', () => {
     it('should pass the credential and subscription ID to the factory', () => {
@@ -142,6 +167,33 @@ describe('createArmRestSubscriptionClient (unit)', () => {
         expect(userAgentPrefix).to.include('CustomClient/1.0.0');
     });
 
+    it('should preserve cross-client deduplication for harmless options', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+        const options = { userAgentOptions: { userAgentPrefix: 'CustomClient/1.0.0' } };
+        const client1 = createArmRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            makeCredential(),
+            subscription,
+            options,
+        ) as unknown as FakeSubResult;
+        const client2 = createArmRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            makeCredential(),
+            subscription,
+            options,
+        ) as unknown as FakeSubResult;
+
+        const callCount = await countConcurrentRequests(getDedupePolicy(client1), getDedupePolicy(client2));
+
+        expect(callCount).to.equal(1);
+    });
+
     it('should preserve custom additionalPolicies alongside defaults', () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
@@ -167,6 +219,37 @@ describe('createArmRestSubscriptionClient (unit)', () => {
 
         expect(policyNames).to.include('CustomPolicy');
         expect(policyNames).to.include('DedupeRequestPolicy');
+    });
+
+    it('should isolate clients with custom policies', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+        const customPolicy: PipelinePolicy = {
+            name: 'CustomPolicy',
+            sendRequest: (request, next) => next(request),
+        };
+        const options = { additionalPolicies: [{ policy: customPolicy, position: 'perCall' as const }] };
+        const client1 = createArmRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            makeCredential(),
+            subscription,
+            options,
+        ) as unknown as FakeSubResult;
+        const client2 = createArmRestSubscriptionClient(
+            ctx,
+            executor,
+            typedSubFactory,
+            makeCredential(),
+            subscription,
+            options,
+        ) as unknown as FakeSubResult;
+
+        const callCount = await countConcurrentRequests(getDedupePolicy(client1), getDedupePolicy(client2));
+
+        expect(callCount).to.equal(2);
     });
 });
 

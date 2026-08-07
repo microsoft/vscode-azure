@@ -44,8 +44,9 @@ export function createArmRestClient<TClient extends RestClient, TOptions extends
     dedupeIdentity?: DedupeRequestIdentity,
 ): TClient {
     const endpoint = environment.resourceManagerEndpointUrl;
+    const requestIdentity = getDedupeIdentity(dedupeIdentity ?? credential, options);
     executor.output.debug(`[rest] create rest client ${getClient.name}`);
-    return getClient(credential, applyDefaults(ctx, executor, dedupeIdentity ?? credential, { ...options, endpoint } as TOptions));
+    return getClient(credential, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions));
 }
 
 /**
@@ -79,8 +80,9 @@ export function createArmRestSubscriptionClient<TClient extends RestClient, TOpt
     }
 
     const endpoint = subscription.environment.resourceManagerEndpointUrl;
+    const requestIdentity = getDedupeIdentity(subscription, options);
     executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
-    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, subscription, { ...options, endpoint } as TOptions));
+    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions));
 }
 
 function applyDefaults<TOptions extends RestClientOptions>(
@@ -113,4 +115,24 @@ function applyDefaults<TOptions extends RestClientOptions>(
             },
         ],
     } satisfies RestClientOptions as TOptions;
+}
+
+function getDedupeIdentity(identity: DedupeRequestIdentity | object, options: RestClientOptions | undefined): DedupeRequestIdentity | object {
+    // Response-affecting options can change transport or pipeline semantics, so
+    // a unique object keeps in-flight requests local to this client.
+    return hasResponseAffectingClientOptions(options) ? {} : identity;
+}
+
+function hasResponseAffectingClientOptions(options: RestClientOptions | undefined): boolean {
+    return !!options && (
+        !!options.httpClient
+        || !!options.pipeline
+        || !!options.additionalPolicies?.length
+        || !!options.retryOptions
+        || !!options.redirectOptions
+        || !!options.credentials
+        || !!options.proxyOptions
+        || !!options.agent
+        || !!options.tlsOptions
+    );
 }
