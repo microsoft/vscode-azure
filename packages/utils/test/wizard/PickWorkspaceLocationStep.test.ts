@@ -11,7 +11,6 @@ import {
     type PickWorkspaceLocationOptions,
     type WorkspaceLocation,
 } from '../../src/wizard/PickWorkspaceLocationStep';
-import { CancellationError } from '../../src/vscode/CancellationError';
 import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
 
 interface TestContext {
@@ -21,8 +20,6 @@ interface TestContext {
 const strings = {
     title: 'Select the application location',
     placeHolder: 'Choose the application file',
-    browseLabel: 'Browse for an application file...',
-    openLabel: 'Select application file',
 };
 
 async function createFile(code: typeof vscode, uri: vscode.Uri): Promise<void> {
@@ -101,8 +98,6 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             strings: {
                 ...strings,
                 placeHolder: 'Choose the application folder',
-                browseLabel: 'Browse for an application folder...',
-                openLabel: 'Select application folder',
             },
         });
         await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/package.json' }));
@@ -115,84 +110,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal([
             'api',
             'api/nested',
-            'Browse for an application folder...',
         ]);
-        tracker.assertAllConsumed();
-    });
-
-    it('supports an optional location', async () => {
-        const { step, mock } = createStep(['package.json'], {
-            kind: 'folder',
-            strings: { ...strings, skipLabel: 'Do not configure an application folder' },
-            allowSkip: true,
-        });
-        const tracker = respondToPrompts(mock, [{ pick: 'Do not configure an application folder' }]);
-
-        const result = await step.prompt({});
-
-        expect(result).to.have.property('location', undefined);
-        tracker.assertAllConsumed();
-    });
-
-    it('uses the configured browse dialog strings and selection kind', async () => {
-        const { step, mock } = createStep(['package.json'], {
-            kind: 'folder',
-            strings,
-        });
-        const folder = mock.vscode.Uri.from({ scheme: 'file', path: '/repo/web' });
-        mock.window.showOpenDialog.mock.mockImplementation(() => Promise.resolve([folder]));
-        const tracker = respondToPrompts(mock, [{ pick: 'Browse for an application file...' }]);
-
-        const result = await step.prompt({});
-
-        expect(result.location?.relativePath).to.equal('web');
-        expect(mock.window.showOpenDialog.mock.calls[0].arguments[0]).to.include({
-            canSelectFiles: false,
-            canSelectFolders: true,
-            canSelectMany: false,
-            openLabel: 'Select application file',
-            title: 'Select the application location',
-        });
-        tracker.assertAllConsumed();
-    });
-
-    it('throws CancellationError when the browse dialog is dismissed', async () => {
-        const { step, mock } = createStep(['package.json'], {
-            kind: 'folder',
-            strings,
-        });
-        const tracker = respondToPrompts(mock, [{ pick: 'Browse for an application file...' }]);
-
-        try {
-            await step.prompt({});
-            expect.fail('Expected CancellationError');
-        } catch (error) {
-            expect(CancellationError.test(error)).to.be.true;
-        }
-        tracker.assertAllConsumed();
-    });
-
-    it('throws when the browsed location is outside the workspace', async () => {
-        const { step, mock } = createStep(['package.json'], {
-            kind: 'folder',
-            strings: {
-                ...strings,
-                outsideWorkspaceMessage: 'Choose an application folder in the workspace.',
-            },
-        });
-        const folder = mock.vscode.Uri.from({ scheme: 'file', path: '/other/web' });
-        mock.window.showOpenDialog.mock.mockImplementation(() => Promise.resolve([folder]));
-        const tracker = respondToPrompts(mock, [{ pick: 'Browse for an application file...' }]);
-
-        try {
-            await step.prompt({});
-            expect.fail('Expected an error');
-        } catch (error) {
-            expect(error).to.be.an('error').with.property(
-                'message',
-                'Choose an application folder in the workspace.',
-            );
-        }
         tracker.assertAllConsumed();
     });
 });
