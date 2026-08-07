@@ -4,6 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
+
+/** Numeric values used by VS Code's bitmask-style `FileType` enum. */
+export const MockFileType = {
+    Unknown: 0,
+    File: 1,
+    Directory: 2,
+    SymbolicLink: 64,
+} satisfies typeof vscode.FileType;
 import type { Satisfies } from '../../src/types/Satisfies';
 import { MockUri } from './MockUri';
 

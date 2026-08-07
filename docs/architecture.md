@@ -25,13 +25,14 @@ packages/utils    (@microsoft/vscode-azure-utils)
 
 Framework-level building blocks with no Azure-specific knowledge:
 
-- **DI service identifiers**: `IVsCode`, `IExtensionContext`, `ICodeContext`, `IActionExecutor`, `ICommandRegistry`, `ITelemetryReporter`, `IOutputChannel`, `IProcessExecutor`
+- **DI service identifiers**: `IVsCode`, `IExtensionContext`, `ICodeContext`, `IActionExecutor`, `ICommandRegistry`, `ITelemetryReporter`, `IOutputChannel`, `IProcessExecutor`, `IWorkspaceProjectService`
 - **Tree infrastructure**: `DataItemTree`, `DataProvider`, `ViewItemTree`, `ViewProvider`, `ProviderRegistry`
 - **Wizard framework**: `Wizard`, `PromptStep`, `ExecuteStep`, `GoBackError`
 - **Telemetry & error handling**: `ActionExecutor`, `CommandRegistry`, `IActionContext`
 - **VS Code abstractions**: `CancellationError`, `Disposable`, `EventEmitter`
 - **Process execution**: `ProcessExecutor`, `IProcessExecutor`, and shared shell-task construction
 - **Data utilities**: `InflightMap`, `Limiter`
+- **Workspace discovery**: `WorkspaceProjectService` performs bounded, cancelable, `.gitignore`-aware project scanning and declarative framework/build-tool detection
 
 ### `packages/azutils` — Azure Utilities
 

@@ -42,3 +42,8 @@ export * from './wizard/ExecuteStep';
 export * from './wizard/GoBackError';
 export * from './wizard/PromptStep';
 export * from './wizard/Wizard';
+export * from './workspace/defaultProjectDetectionRules';
+export * from './workspace/IWorkspaceProjectService';
+export * from './workspace/ProjectDetectionRule';
+export * from './workspace/WorkspaceProject';
+export * from './workspace/WorkspaceProjectService';

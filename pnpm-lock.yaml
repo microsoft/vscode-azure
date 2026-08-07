@@ -131,6 +131,9 @@ importers:
 
   packages/utils:
     dependencies:
+      ignore:
+        specifier: ^7.0.5
+        version: 7.0.6
       nano-spawn:
         specifier: ^2.1.0
         version: 2.1.0
