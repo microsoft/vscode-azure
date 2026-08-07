@@ -29,6 +29,10 @@ export class BrowseWebsite implements ManagedCommand {
             throw new Error(this.code.l10n.t('Select an Azure resource with a website endpoint.'));
         }
 
+        if (!this.endpointResolver.canHandle(resource)) {
+            throw new Error(this.code.l10n.t('The selected resource type does not support website browsing.'));
+        }
+
         const endpoint = await this.endpointResolver.resolve(resource);
         if (!endpoint) {
             throw new Error(this.code.l10n.t('The selected resource does not have a website endpoint yet.'));
