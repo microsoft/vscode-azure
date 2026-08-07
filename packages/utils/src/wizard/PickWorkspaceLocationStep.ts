@@ -33,15 +33,8 @@ export interface PickWorkspaceLocationStrings {
     readonly outsideWorkspaceMessage?: string;
 }
 
-/**
- * Configures the workspace scan performed by {@linkcode PickWorkspaceLocationStep}.
- */
-export interface FindWorkspaceFilesOptions {
-    readonly include: Parameters<IVsCode['workspace']['findFiles']>[0];
-    readonly exclude?: Parameters<IVsCode['workspace']['findFiles']>[1];
-    readonly maxResults?: Parameters<IVsCode['workspace']['findFiles']>[2];
-    readonly token?: Parameters<IVsCode['workspace']['findFiles']>[3];
-}
+/** Arguments forwarded to {@linkcode vscode.workspace.findFiles}. */
+export type FindWorkspaceFilesOptions = Parameters<IVsCode['workspace']['findFiles']>;
 
 type WorkspaceLocationProperty<TContext> = {
     [TKey in keyof TContext]: WorkspaceLocation | undefined extends TContext[TKey] ? TKey : never;
@@ -83,12 +76,7 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
             throw new Error(this.ctx.code.l10n.t('Open a workspace folder before selecting a location.'));
         }
 
-        const matches = await this.ctx.code.workspace.findFiles(
-            this.findFilesOptions.include,
-            this.findFilesOptions.exclude,
-            this.findFilesOptions.maxResults,
-            this.findFilesOptions.token,
-        );
+        const matches = await this.ctx.code.workspace.findFiles(...this.findFilesOptions);
         const locations = this.toLocations(matches);
 
         const picks: QuickPickItemWithData<LocationPickData>[] = locations.map(location => ({
@@ -140,7 +128,7 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
                 return this.createResult(location);
             }
 
-            await this.ctx.code.window.showErrorMessage(
+            throw new Error(
                 this.options.strings.outsideWorkspaceMessage ??
                 this.ctx.code.l10n.t('Select a location inside an open workspace folder.'),
             );

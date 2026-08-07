@@ -49,7 +49,7 @@ function createStep(
 describe('PickWorkspaceLocationStep (unit)', () => {
     it('fails before prompting when no workspace folder is open', async () => {
         const { ctx, mock } = createMockCodeContext();
-        const step = new PickWorkspaceLocationStep<TestContext>(ctx, { include: 'package.json' }, {
+        const step = new PickWorkspaceLocationStep<TestContext>(ctx, ['package.json'], {
             kind: 'folder',
             strings,
             contextProperty: 'location',
@@ -73,12 +73,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             isCancellationRequested: false,
             onCancellationRequested: () => ({ dispose: () => undefined }),
         };
-        const { step, mock } = createStep({
-            include: '**/*.csproj',
-            exclude: '**/obj/**',
-            maxResults: 12,
-            token,
-        }, {
+        const { step, mock } = createStep(['**/*.csproj', '**/obj/**', 12, token], {
             kind: 'file',
             strings,
         });
@@ -101,7 +96,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('deduplicates containing folders found from matching files', async () => {
-        const { step, mock } = createStep({ include: 'package.json' }, {
+        const { step, mock } = createStep(['package.json'], {
             kind: 'folder',
             strings: {
                 ...strings,
@@ -126,7 +121,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('supports an optional location', async () => {
-        const { step, mock } = createStep({ include: 'package.json' }, {
+        const { step, mock } = createStep(['package.json'], {
             kind: 'folder',
             strings: { ...strings, skipLabel: 'Do not configure an application folder' },
             allowSkip: true,
@@ -140,7 +135,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('uses the configured browse dialog strings and selection kind', async () => {
-        const { step, mock } = createStep({ include: 'package.json' }, {
+        const { step, mock } = createStep(['package.json'], {
             kind: 'folder',
             strings,
         });
@@ -162,7 +157,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('throws CancellationError when the browse dialog is dismissed', async () => {
-        const { step, mock } = createStep({ include: 'package.json' }, {
+        const { step, mock } = createStep(['package.json'], {
             kind: 'folder',
             strings,
         });
@@ -173,6 +168,30 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             expect.fail('Expected CancellationError');
         } catch (error) {
             expect(CancellationError.test(error)).to.be.true;
+        }
+        tracker.assertAllConsumed();
+    });
+
+    it('throws when the browsed location is outside the workspace', async () => {
+        const { step, mock } = createStep(['package.json'], {
+            kind: 'folder',
+            strings: {
+                ...strings,
+                outsideWorkspaceMessage: 'Choose an application folder in the workspace.',
+            },
+        });
+        const folder = mock.vscode.Uri.from({ scheme: 'file', path: '/other/web' });
+        mock.window.showOpenDialog.mock.mockImplementation(() => Promise.resolve([folder]));
+        const tracker = respondToPrompts(mock, [{ pick: 'Browse for an application file...' }]);
+
+        try {
+            await step.prompt({});
+            expect.fail('Expected an error');
+        } catch (error) {
+            expect(error).to.be.an('error').with.property(
+                'message',
+                'Choose an application folder in the workspace.',
+            );
         }
         tracker.assertAllConsumed();
     });
