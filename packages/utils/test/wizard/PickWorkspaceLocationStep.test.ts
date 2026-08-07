@@ -93,7 +93,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('deduplicates containing folders found from matching files', async () => {
-        const { step, mock } = createStep(['package.json'], {
+        const { step, mock } = createStep(['*.json'], {
             kind: 'folder',
             strings: {
                 ...strings,
@@ -101,7 +101,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             },
         });
         await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/package.json' }));
-        await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/nested/package.json' }));
+        await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/host.json' }));
         const tracker = respondToPrompts(mock, [{ pick: 'api' }]);
 
         const result = await step.prompt({});
@@ -109,7 +109,6 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         expect(result.location?.relativePath).to.equal('api');
         expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal([
             'api',
-            'api/nested',
         ]);
         tracker.assertAllConsumed();
     });
