@@ -17,9 +17,13 @@ import {
 import { IActionExecutor, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { SelectSubscriptions } from '../commands/auth/SelectSubscriptions';
 import { SignIn } from '../commands/auth/SignIn';
+import { DeleteResource } from '../commands/tree/DeleteResource';
+import { DeleteResourceGroup } from '../commands/tree/DeleteResourceGroup';
+import { GenericResourceDeletionProvider, GenericResourceGroupDeletionProvider } from '../commands/tree/GenericResourceDeletionProviders';
 import { GroupBy } from '../commands/tree/GroupBy';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
+import { DeleteResourceCommandId, DeleteResourceGroupCommandId } from '../constants';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { IAzureViewDataTree, ISubscriptionResolver } from '../services';
 import {
@@ -81,10 +85,14 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/resources/refresh', RefreshResourcesView);
     registrar.registerCommand('vscode-azure/resources/groupBy', GroupBy);
     registrar.registerCommand('vscode-azure/resources/openInPortal', OpenInPortal);
+    registrar.registerCommand(DeleteResourceCommandId, DeleteResource);
+    registrar.registerCommand(DeleteResourceGroupCommandId, DeleteResourceGroup);
     registrar.registerCommand('vscode-azure/signIn', SignIn);
     registrar.registerCommand('vscode-azure/selectSubscriptions', SelectSubscriptions);
 
     registrar.registerResourceDataProvider([IAzureAccountDataProvider, AzureAccountDataProvider]);
     registrar.registerResourceDataProvider(AzureResourceDataProvider);
     registrar.registerResourceViewProvider(GenericAzureViewProvider);
+    registrar.registerResourceDeletionProvider(GenericResourceDeletionProvider);
+    registrar.registerResourceDeletionProvider(GenericResourceGroupDeletionProvider);
 }

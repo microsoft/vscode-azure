@@ -18,6 +18,12 @@ export const ActivityTreeViewId = 'vscode-azure/activity';
 /** Command id for loading the next page of children in the resource tree. */
 export const LoadMoreCommandId = 'vscode-azure/resources/loadMore';
 
+/** Command id for deleting an ARM resource. */
+export const DeleteResourceCommandId = 'vscode-azure/resources/delete';
+
+/** Command id for deleting an ARM resource group. */
+export const DeleteResourceGroupCommandId = 'vscode-azure/resourceGroups/delete';
+
 /** Command id for the azd "Provision & Deploy" (azd up) command. */
 export const AzdUpCommandId = 'vscode-azure/azdUp';
 

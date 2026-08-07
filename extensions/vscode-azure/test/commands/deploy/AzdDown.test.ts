@@ -103,6 +103,17 @@ describe('AzdDown (unit)', () => {
         expect(invalidate.mock.callCount()).to.equal(1);
     });
 
+    it('should pass an explicitly selected environment to azd down', async () => {
+        const { cmd, azd } = createCommand();
+
+        await cmd.execute(MockUri.file('/workspace/azure.yaml'), {
+            skipConfirmation: true,
+            environmentName: 'staging',
+        });
+
+        expect(azd.down.mock.calls[0].arguments[1]).to.equal('staging');
+    });
+
     it('should resolve cwd from workspace folder when invoked from the command palette', async () => {
         const { cmd, mockResult, azd } = createCommand();
         mockResult.messageResponses.push('Delete');

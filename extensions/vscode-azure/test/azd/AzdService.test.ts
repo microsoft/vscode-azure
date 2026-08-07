@@ -450,6 +450,16 @@ describe('AzdService (unit)', () => {
             expect(opts.source).to.equal('azd');
         });
 
+        it('should target an explicitly selected environment', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve());
+            const { service, spawnMock } = createService(spawnFn);
+
+            await service.down(MockUri.file('/project'), 'staging');
+
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(argsToStrings(opts.command.slice(1))).to.include.members(['--environment', 'staging']);
+        });
+
         it('should pass the auth environment to the task', async () => {
             const spawnFn = mock.fn((_opts: unknown) => Promise.resolve());
             const mockResult = createMockVsCode();

@@ -38,6 +38,7 @@ export function createMockDataItemTree(nodes: ConcreteAzureNode[]): DataItemTree
             return keyMap.get(key);
         },
         invalidate: mock.fn(),
+        remove: mock.fn(),
     } as unknown as DataItemTree<ConcreteAzureNode>;
 }
 

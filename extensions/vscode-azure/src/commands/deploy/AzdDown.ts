@@ -26,6 +26,8 @@ export interface AzdDownOptions {
      * unset for interactive use so users are always asked to confirm.
      */
     readonly skipConfirmation?: boolean;
+    /** Explicit environment to delete instead of the project's default. */
+    readonly environmentName?: string;
 }
 
 /**
@@ -74,6 +76,7 @@ export class AzdDown implements ManagedCommand {
             this.output,
             {
                 iacFolder,
+                environmentName: options?.environmentName,
             },
             [
                 get(SelectIacFolderStep),

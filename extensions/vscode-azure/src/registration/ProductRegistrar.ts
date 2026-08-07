@@ -7,7 +7,8 @@ import type { AzureSubscription, ConcreteAzureNode } from '@microsoft/vscode-azu
 import type { DataProvider, ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import type { ManagedCommand } from '../commands/ManagedCommand';
-import { bindAzureClientProvider, type AzureClientCreate, type ProviderEntry } from '../services';
+import { bindAzureClientProvider, bindProviders, type AzureClientCreate, type ProviderEntry } from '../services';
+import { IResourceDeletionProvider, type ResourceDeletionProvider } from './ResourceDeletionProvider';
 
 /** A constructor for a command resolved in a command-scoped DI container. */
 export type ManagedCommandConstructor = new (...ctorArgs: any[]) => ManagedCommand; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -31,6 +32,7 @@ export class ProductRegistrar {
     private readonly managedCommands: ManagedCommandRegistration[] = [];
     private readonly resourceDataProviders: ProviderEntry<DataProvider<ConcreteAzureNode>>[] = [];
     private readonly resourceViewProviders: ProviderEntry<ViewProvider<string>>[] = [];
+    private readonly resourceDeletionProviders: ProviderEntry<ResourceDeletionProvider>[] = [];
 
     /** Add arbitrary product-owned DI bindings. */
     public registerBinding(binding: ProductBinding): void {
@@ -56,6 +58,11 @@ export class ProductRegistrar {
         this.resourceViewProviders.push(provider);
     }
 
+    /** Add product-specific resource deletion behavior. */
+    public registerResourceDeletionProvider(provider: ProviderEntry<ResourceDeletionProvider>): void {
+        this.resourceDeletionProviders.push(provider);
+    }
+
     /**
      * Add the standard subscription-scoped Azure client provider binding.
      *
@@ -76,6 +83,8 @@ export class ProductRegistrar {
         for (const binding of this.bindings) {
             binding(container);
         }
+
+        bindProviders(container, IResourceDeletionProvider, this.resourceDeletionProviders);
     }
 
     /** Return managed command contributions in product registration order. */
@@ -91,5 +100,10 @@ export class ProductRegistrar {
     /** Return Azure resource view providers in dispatch order. */
     public getResourceViewProviders(): readonly ProviderEntry<ViewProvider<string>>[] {
         return this.resourceViewProviders;
+    }
+
+    /** Return resource deletion providers in dispatch order. */
+    public getResourceDeletionProviders(): readonly ProviderEntry<ResourceDeletionProvider>[] {
+        return this.resourceDeletionProviders;
     }
 }

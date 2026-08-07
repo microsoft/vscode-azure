@@ -6,6 +6,7 @@
 import { collectPages } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import * as assert from 'node:assert';
 import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient } from '../../../src/rest/clients/ResourceClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
@@ -119,4 +120,145 @@ describe('ResourceClient (unit)', () => {
         expect(pages[0].hasMore).to.be.true;
         expect(pages[1].hasMore).to.be.false;
     });
+
+    it('should prefer the provider resource type default API version using case-insensitive nested matching', async () => {
+        const httpClient = providerClient({
+            namespace: 'Microsoft.Web',
+            resourceTypes: [{
+                resourceType: 'sites/slots',
+                defaultApiVersion: '2024-04-01',
+                apiVersions: ['2025-01-01-preview', '2023-01-01'],
+            }],
+        });
+        const client = createClient(httpClient);
+
+        const apiVersion = await client.providers.resolveApiVersion('microsoft.web/SITES/SLOTS');
+
+        expect(apiVersion).to.equal('2024-04-01');
+    });
+
+    it('should prefer the newest stable API version when no default is available', async () => {
+        const httpClient = providerClient({
+            namespace: 'Microsoft.Storage',
+            resourceTypes: [{
+                resourceType: 'storageAccounts',
+                apiVersions: ['2025-06-01-preview', '2023-01-01', '2024-01-01', '2024-06-01-preview'],
+            }],
+        });
+        const client = createClient(httpClient);
+
+        expect(await client.providers.resolveApiVersion('Microsoft.Storage/storageAccounts')).to.equal('2024-01-01');
+    });
+
+    it('should use the newest preview API version when no stable version is available', async () => {
+        const httpClient = providerClient({
+            namespace: 'Microsoft.Example',
+            resourceTypes: [{
+                resourceType: 'widgets',
+                apiVersions: ['2023-01-01-preview', '2025-01-01-preview', '2024-01-01-preview'],
+            }],
+        });
+        const client = createClient(httpClient);
+
+        expect(await client.providers.resolveApiVersion('Microsoft.Example/widgets')).to.equal('2025-01-01-preview');
+    });
+
+    it('should cache resolved API versions per client and normalized resource type', async () => {
+        const httpClient = providerClient({
+            namespace: 'Microsoft.Example',
+            resourceTypes: [{ resourceType: 'widgets', defaultApiVersion: '2024-01-01' }],
+        });
+        const client = createClient(httpClient);
+
+        await client.providers.resolveApiVersion('Microsoft.Example/widgets');
+        await client.providers.resolveApiVersion('microsoft.example/WIDGETS');
+
+        expect(httpClient.requests).to.have.length(1);
+    });
+
+    it('should fail when the provider, resource type, or API version is unavailable', async () => {
+        const missingProviderClient = new MockHttpClient({
+            handler: req => makeResponse(req, 404, JSON.stringify({ error: { code: 'NotFound', message: 'Not found' } })),
+        });
+        await assert.rejects(
+            createClient(missingProviderClient).providers.resolveApiVersion('Microsoft.Missing/widgets'),
+            /Not found/,
+        );
+
+        const missingTypeClient = providerClient({ namespace: 'Microsoft.Example', resourceTypes: [] });
+        await assert.rejects(
+            createClient(missingTypeClient).providers.resolveApiVersion('Microsoft.Example/widgets'),
+            /does not define resource type "widgets"/,
+        );
+
+        const missingVersionClient = providerClient({
+            namespace: 'Microsoft.Example',
+            resourceTypes: [{ resourceType: 'widgets', apiVersions: [] }],
+        });
+        await assert.rejects(
+            createClient(missingVersionClient).providers.resolveApiVersion('Microsoft.Example/widgets'),
+            /does not define an API version/,
+        );
+    });
+
+    it('should delete a nested resource by ID and await LRO completion', async () => {
+        const resourceId = '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/app1/slots/staging';
+        let pollCompleted = false;
+        const httpClient = new MockHttpClient({
+            handler: req => {
+                if (req.method === 'GET' && req.url.includes('/providers/Microsoft.Web?')) {
+                    return makeResponse(req, 200, JSON.stringify({
+                        namespace: 'Microsoft.Web',
+                        resourceTypes: [{ resourceType: 'sites/slots', defaultApiVersion: '2024-04-01' }],
+                    }));
+                } else if (req.method === 'DELETE') {
+                    return makeResponse(req, 202, undefined, { location: 'https://management.azure.com/operations/delete-resource' });
+                }
+
+                pollCompleted = true;
+                return makeResponse(req, 200);
+            },
+        });
+        const client = createClient(httpClient);
+
+        await client.resources.deleteById(resourceId, { updateIntervalInMs: 0 });
+
+        expect(pollCompleted).to.be.true;
+        const deleteRequest = httpClient.requests.find(request => request.method === 'DELETE');
+        expect(deleteRequest?.url).to.include(resourceId);
+        expect(deleteRequest?.url).to.include('api-version=2024-04-01');
+    });
+
+    it('should delete a resource group and await LRO completion', async () => {
+        let pollCompleted = false;
+        const httpClient = new MockHttpClient({
+            handler: req => {
+                if (req.method === 'DELETE') {
+                    return makeResponse(req, 202, undefined, { location: 'https://management.azure.com/operations/delete-resource-group' });
+                }
+
+                pollCompleted = true;
+                return makeResponse(req, 200);
+            },
+        });
+        const client = createClient(httpClient);
+
+        await client.resourceGroups.delete('rg1', { updateIntervalInMs: 0 });
+
+        expect(pollCompleted).to.be.true;
+        const deleteRequest = httpClient.requests.find(request => request.method === 'DELETE');
+        expect(deleteRequest?.url.toLowerCase()).to.include('/subscriptions/test-sub/resourcegroups/rg1');
+    });
 });
+
+function createClient(httpClient: MockHttpClient): ResourceClient {
+    const { ctx } = createMockCodeContext();
+    const { executor } = createTestActionExecutor();
+    return ResourceClient.create(ctx, executor, makeCredential(), makeSubscription(), { httpClient });
+}
+
+function providerClient(provider: object): MockHttpClient {
+    return new MockHttpClient({
+        handler: req => makeResponse(req, 200, JSON.stringify(provider)),
+    });
+}

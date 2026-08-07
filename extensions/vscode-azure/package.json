@@ -38,6 +38,16 @@
                 "title": "%commands.vscode-azure/resources/openInPortal%"
             },
             {
+                "command": "vscode-azure/resources/delete",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/resources/delete%"
+            },
+            {
+                "command": "vscode-azure/resourceGroups/delete",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/resourceGroups/delete%"
+            },
+            {
                 "command": "vscode-azure/installAzd",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/installAzd%"
@@ -144,6 +154,14 @@
                     "when": "false"
                 },
                 {
+                    "command": "vscode-azure/resources/delete",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/resourceGroups/delete",
+                    "when": "false"
+                },
+                {
                     "command": "vscode-azure/resources/loadMore",
                     "when": "false"
                 },
@@ -221,6 +239,14 @@
                 {
                     "command": "vscode-azure/resources/openInPortal",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bopenInPortal\\b/i"
+                },
+                {
+                    "command": "vscode-azure/resources/delete",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResource\\b/i"
+                },
+                {
+                    "command": "vscode-azure/resourceGroups/delete",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResourceGroup\\b/i"
                 },
                 {
                     "command": "vscode-azure/functionApp/appSettings/add",

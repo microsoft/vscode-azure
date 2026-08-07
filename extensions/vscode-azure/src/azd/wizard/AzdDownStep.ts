@@ -29,6 +29,6 @@ export class AzdDownStep<TContext extends AzdWizardContext> extends ExecuteStep<
     }
 
     public async execute(context: Readonly<TContext>): Promise<void> {
-        await this.azd.down(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        await this.azd.down(context.iacFolder!, context.environmentName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
 }

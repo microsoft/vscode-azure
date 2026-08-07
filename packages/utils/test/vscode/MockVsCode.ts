@@ -116,6 +116,9 @@ export interface MockVsCodeResult {
      */
     readonly messageResponses: (string | undefined)[];
 
+    /** Pre-programmed responses consumed by `window.showInputBox`. */
+    readonly inputBoxResponses: (string | undefined)[];
+
     /**
      * Fire this emitter to simulate a workspace configuration change.
      *
@@ -219,6 +222,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const showInformationMessage = mock.fn(nextMessageResponse);
     const showWarningMessage = mock.fn(nextMessageResponse);
     const showErrorMessage = mock.fn(nextMessageResponse);
+    const inputBoxResponses: (string | undefined)[] = [];
+    const showInputBox = mock.fn(() => Promise.resolve(inputBoxResponses.shift()));
 
     const showOpenDialog = mock.fn(
         () => Promise.resolve(undefined),
@@ -329,6 +334,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showInformationMessage,
         showWarningMessage,
         showErrorMessage,
+        showInputBox,
         showOpenDialog,
         showWorkspaceFolderPick,
     };
@@ -388,6 +394,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState: MockTreeItemCollapsibleState,
         ConfigurationTarget: MockConfigurationTarget,
+        ProgressLocation: { Notification: 15 },
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
         ShellExecution: MockShellExecution,
@@ -412,6 +419,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         window,
         workspace,
         messageResponses,
+        inputBoxResponses,
         configChangeEmitter,
         sessionsChangeEmitter,
         workspaceFoldersChangeEmitter,
