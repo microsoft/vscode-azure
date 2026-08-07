@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IWebAppClientProvider, parseAzureResourceId, SiteType, StaticWebAppType, type GenericResource, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { ResourceEndpointProvider } from './ResourceEndpointProvider';
 
@@ -13,6 +14,7 @@ export class MicrosoftWebEndpointProvider implements ResourceEndpointProvider {
     private readonly clientCache = new Map<string, IWebAppClient>();
 
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IWebAppClientProvider) private readonly createClient: IWebAppClientProvider,
     ) { }
 
@@ -26,7 +28,7 @@ export class MicrosoftWebEndpointProvider implements ResourceEndpointProvider {
     public async getEndpoint(resource: GenericResource): Promise<string | undefined> {
         const { resourceGroup } = parseAzureResourceId(resource.id);
         if (!resourceGroup) {
-            throw new Error('Cannot extract a resource group name from the selected resource ID.');
+            throw new Error(this.code.l10n.t('Cannot extract a resource group name from the selected resource ID.'));
         }
 
         const client = this.getOrCreateClient(resource);
