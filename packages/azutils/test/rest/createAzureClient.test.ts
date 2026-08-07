@@ -9,6 +9,7 @@ import type { PipelinePolicy, PipelineRequest } from '@azure/core-rest-pipeline'
 import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import { mock } from 'node:test';
 import { AzurePublicCloud } from '../../src/auth/Environment';
 import { createArmRestClient, createArmRestSubscriptionClient } from '../../src/rest/createAzureClient';
 import { makeCredential, makeSubscription } from '../mockAzure';
@@ -43,17 +44,15 @@ function getDedupePolicy(client: FakeResult | FakeSubResult): PipelinePolicy {
 }
 
 async function countConcurrentRequests(policy1: PipelinePolicy, policy2: PipelinePolicy): Promise<number> {
-    let callCount = 0;
-    const next = async (request: PipelineRequest) => {
-        callCount++;
+    const next = mock.fn(async (request: PipelineRequest) => {
         await delay(10);
         return makeResponse(request);
-    };
+    });
     await Promise.all([
         policy1.sendRequest(makeRequest(), next),
         policy2.sendRequest(makeRequest(), next),
     ]);
-    return callCount;
+    return next.mock.callCount();
 }
 
 describe('createArmRestSubscriptionClient (unit)', () => {
