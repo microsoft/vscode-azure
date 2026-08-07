@@ -173,6 +173,28 @@ describe('WorkspaceProjectService (unit)', () => {
         }]);
     });
 
+    it('omits configured output directories outside the project root', async () => {
+        for (const outputPath of ['/var/www', 'C:\\dist', '../dist', 'build/../../dist']) {
+            const m = createMockVsCode();
+            addWorkspace(m, '/repo');
+            addFile(m, '/repo/angular.json', JSON.stringify({
+                projects: {
+                    app: {
+                        architect: {
+                            build: {
+                                options: { outputPath },
+                            },
+                        },
+                    },
+                },
+            }));
+
+            const [project] = (await scan(m)).projects;
+
+            expect(project.outputDirectories, outputPath).to.be.empty;
+        }
+    });
+
     it('evaluates additional declarative rules', async () => {
         const m = createMockVsCode();
         addWorkspace(m, '/repo');
@@ -279,6 +301,60 @@ describe('WorkspaceProjectService (unit)', () => {
         service.invalidate(folder.uri);
         await service.scan(undefined, { cacheTtlMs: 10 });
         expect(m.fs.readDirectory.mock.callCount()).to.be.greaterThan(refreshedCalls);
+        service.dispose();
+    });
+
+    it('uses the requested TTL to constrain cache reads', async () => {
+        const m = createMockVsCode();
+        addWorkspace(m, '/repo');
+        addFile(m, '/repo/package.json', '{}');
+        let now = 100;
+        mock.method(Date, 'now', () => now);
+        const service = new WorkspaceProjectService(m.vscode);
+
+        await service.scan();
+        const defaultCalls = m.fs.readDirectory.mock.callCount();
+
+        await service.scan(undefined, { cacheTtlMs: 0 });
+        expect(m.fs.readDirectory.mock.callCount()).to.be.greaterThan(defaultCalls);
+
+        await service.scan();
+        const recachedCalls = m.fs.readDirectory.mock.callCount();
+        now += 1001;
+        await service.scan(undefined, { cacheTtlMs: 1000 });
+        expect(m.fs.readDirectory.mock.callCount()).to.be.greaterThan(recachedCalls);
+        service.dispose();
+    });
+
+    it('does not cache a scan invalidated while it is in flight', async () => {
+        const m = createMockVsCode();
+        const folder = addWorkspace(m, '/repo');
+        addFile(m, '/repo/package.json', '{}');
+        const service = new WorkspaceProjectService(m.vscode);
+        let releaseRead: (() => void) | undefined;
+        const readStarted = new Promise<void>(resolve => {
+            releaseRead = resolve;
+        });
+        let continueRead: (() => void) | undefined;
+        const readGate = new Promise<void>(resolve => {
+            continueRead = resolve;
+        });
+        m.fs.readDirectory.mock.mockImplementationOnce(async () => {
+            releaseRead?.();
+            await readGate;
+            return [['package.json', m.vscode.FileType.File]];
+        });
+
+        const inflight = service.scan();
+        await readStarted;
+        service.invalidate(folder.uri);
+        continueRead?.();
+        await inflight;
+        const callsAfterInflight = m.fs.readDirectory.mock.callCount();
+
+        await service.scan();
+
+        expect(m.fs.readDirectory.mock.callCount()).to.be.greaterThan(callsAfterInflight);
         service.dispose();
     });
 

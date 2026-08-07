@@ -34,6 +34,7 @@ import type {
 } from './WorkspaceProject';
 
 interface CacheEntry {
+    readonly cachedAt: number;
     readonly expiresAt: number;
     readonly roots: readonly string[];
     readonly result: WorkspaceScanResult;
@@ -101,6 +102,7 @@ const hardExcludedDirectories = new Set([
 export class WorkspaceProjectService implements IWorkspaceProjectService, vscode.Disposable {
     private readonly cache = new Map<string, CacheEntry>();
     private readonly workspaceFoldersSubscription: vscode.Disposable;
+    private invalidationGeneration = 0;
 
     public constructor(private readonly code: IVsCode) {
         this.workspaceFoldersSubscription = code.workspace.onDidChangeWorkspaceFolders(event => {
@@ -129,11 +131,21 @@ export class WorkspaceProjectService implements IWorkspaceProjectService, vscode
         validateBudgets(budgets);
 
         const key = createCacheKey(folders, rules, budgets);
+        const ttl = options.cacheTtlMs ?? defaultWorkspaceScanCacheTtlMs;
+        if (ttl < 0) {
+            throw new RangeError('cacheTtlMs must not be negative');
+        }
         const cached = this.cache.get(key);
-        if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) {
+        const now = Date.now();
+        if (!options.forceRefresh
+            && ttl > 0
+            && cached
+            && cached.expiresAt > now
+            && cached.cachedAt + ttl > now) {
             return cached.result;
         }
         this.cache.delete(key);
+        const scanGeneration = this.invalidationGeneration;
 
         const diagnostics: WorkspaceScanDiagnostic[] = [];
         const reachedLimits = new Set<WorkspaceScanLimit>();
@@ -174,10 +186,11 @@ export class WorkspaceProjectService implements IWorkspaceProjectService, vscode
             reachedLimits: [...reachedLimits].sort(),
         };
 
-        const ttl = options.cacheTtlMs ?? defaultWorkspaceScanCacheTtlMs;
-        if (ttl > 0) {
+        if (ttl > 0 && scanGeneration === this.invalidationGeneration) {
+            const cachedAt = Date.now();
             this.cache.set(key, {
-                expiresAt: Date.now() + ttl,
+                cachedAt,
+                expiresAt: cachedAt + ttl,
                 roots: folders.map(folder => folder.uri.toString()),
                 result,
             });
@@ -187,6 +200,7 @@ export class WorkspaceProjectService implements IWorkspaceProjectService, vscode
 
     /** @inheritdoc */
     public invalidate(root?: vscode.Uri): void {
+        this.invalidationGeneration++;
         if (!root) {
             this.cache.clear();
             return;
@@ -523,16 +537,20 @@ async function resolveOutputDirectory(
         return undefined;
     }
     if (typeof output === 'string') {
-        return { path: normalizeRelativePath(output), confidence: emission.confidence, ruleId };
+        const path = normalizeProjectRelativePath(output);
+        return path ? { path, confidence: emission.confidence, ruleId } : undefined;
     }
 
     const configured = await resolveJsonOutput(output, context);
     if (configured) {
-        return { path: normalizeRelativePath(configured), confidence: emission.confidence, ruleId };
+        const path = normalizeProjectRelativePath(configured);
+        if (path) {
+            return { path, confidence: emission.confidence, ruleId };
+        }
+        return undefined;
     }
-    return output.fallback
-        ? { path: normalizeRelativePath(output.fallback), confidence: 'low', ruleId }
-        : undefined;
+    const fallback = output.fallback ? normalizeProjectRelativePath(output.fallback) : undefined;
+    return fallback ? { path: fallback, confidence: 'low', ruleId } : undefined;
 }
 
 async function resolveJsonOutput(
@@ -736,8 +754,14 @@ function joinPath(parent: string, child: string): string {
     return parent ? `${parent}/${child}` : child;
 }
 
-function normalizeRelativePath(path: string): string {
-    const normalized = path.replace(/\\/g, '/').replace(/^\.?\//, '').replace(/\/$/, '');
+function normalizeProjectRelativePath(path: string): string | undefined {
+    const normalizedSeparators = path.replace(/\\/g, '/');
+    if (normalizedSeparators.startsWith('/')
+        || /^[A-Za-z]:/.test(normalizedSeparators)
+        || normalizedSeparators.split('/').some(segment => segment === '..')) {
+        return undefined;
+    }
+    const normalized = normalizedSeparators.replace(/^\.\//, '').replace(/\/$/, '');
     return normalized || '.';
 }
 
