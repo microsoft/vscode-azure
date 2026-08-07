@@ -5,7 +5,6 @@
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
 import { InflightMap } from '@microsoft/vscode-azure-utils';
-import { createHash } from 'node:crypto';
 
 const inflight = new InflightMap<PipelineResponse>();
 const objectPartitions = new WeakMap<object, string>();
@@ -42,7 +41,7 @@ export interface DedupeRequestIdentity {
  * also not deduplicated, since they cannot be easily shared across callers.
  *
  * Policy instances share transient in-flight state, allowing independently
- * created clients in the same opaque identity partition to deduplicate requests.
+ * created clients in the same identity partition to deduplicate requests.
  * Only headers that can affect the returned representation participate in request
  * equivalence; authentication and observability headers do not.
  */
@@ -92,11 +91,7 @@ function createPartition(identity: DedupeRequestIdentity | object | undefined): 
     }
 
     if ('accountId' in identity && typeof identity.accountId === 'string') {
-        const stableIdentity = JSON.stringify([
-            identity.accountId.toLowerCase(),
-            typeof identity.tenantId === 'string' ? identity.tenantId.toLowerCase() : undefined,
-        ]);
-        return createHash('sha256').update(stableIdentity).digest('base64url');
+        return `${identity.accountId.toLowerCase()}:${typeof identity.tenantId === 'string' ? identity.tenantId.toLowerCase() : ''}`;
     }
 
     let partition = objectPartitions.get(identity);
