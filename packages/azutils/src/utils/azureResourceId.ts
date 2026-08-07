@@ -34,6 +34,7 @@ export interface ParsedAzureResourceId {
  * - Resource group: `/subscriptions/{id}/resourceGroups/{name}`
  * - Subscription-scoped resources: `/subscriptions/{id}/providers/{ns}/{type}/{name}`
  * - Resource-group-scoped resources: `/subscriptions/{id}/resourceGroups/{rg}/providers/{ns}/{type}/{name}[/{child}/...]`
+ * - Extension resources: `.../providers/{ns}/{type}/{name}/providers/{extensionNs}/{extensionType}/{extensionName}`
  *
  * @throws Error if the ID does not start with `/subscriptions/`
  *
@@ -72,29 +73,31 @@ export function parseAzureResourceId(resourceId: string): ParsedAzureResourceId 
         i += 2;
     }
 
-    // Optional: /providers/{namespace}/{type}/{name}[/{childType}/{childName}...]
+    // Optional: one or more /providers/{namespace}/{type}/{name}[/{childType}/{childName}...] sections
     if (i < segments.length && segments[i].toLowerCase() === 'providers') {
-        if (i + 1 >= segments.length) {
-            throw new Error(`Invalid ARM resource ID (missing provider namespace): ${resourceId}`);
-        }
-        provider = segments[i + 1]; // e.g. Microsoft.ContainerRegistry
-        i += 2;
+        while (i < segments.length) {
+            if (segments[i].toLowerCase() !== 'providers' || i + 1 >= segments.length) {
+                throw new Error(`Invalid ARM resource ID (missing provider namespace): ${resourceId}`);
+            }
 
-        // After the namespace, the remainder must be one or more {type}/{name}
-        // pairs -- an empty, odd, or dangling tail is a malformed ARM ID.
-        const remaining = segments.length - i;
-        if (remaining < 2 || remaining % 2 !== 0) {
-            throw new Error(`Invalid ARM resource ID (expected provider type/name pairs): ${resourceId}`);
-        }
-
-        // Collect type/name pairs -- the type path can be nested (e.g. registries/replications)
-        const typeParts: string[] = [];
-        while (i + 1 < segments.length) {
-            typeParts.push(segments[i]);
-            resourceName = segments[i + 1];
+            provider = segments[i + 1];
             i += 2;
-        }
-        if (typeParts.length > 0) {
+
+            const typeParts: string[] = [];
+            while (i < segments.length && segments[i].toLowerCase() !== 'providers') {
+                if (i + 1 >= segments.length || segments[i + 1].toLowerCase() === 'providers') {
+                    throw new Error(`Invalid ARM resource ID (expected provider type/name pairs): ${resourceId}`);
+                }
+
+                typeParts.push(segments[i]);
+                resourceName = segments[i + 1];
+                i += 2;
+            }
+
+            if (typeParts.length === 0) {
+                throw new Error(`Invalid ARM resource ID (expected provider type/name pairs): ${resourceId}`);
+            }
+
             resourceType = typeParts.join('/');
         }
     }

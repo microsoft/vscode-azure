@@ -229,6 +229,33 @@ describe('ResourceClient (unit)', () => {
         expect(deleteRequest?.url).to.include('api-version=2024-04-01');
     });
 
+    it('should delete a cross-provider extension resource using its provider metadata', async () => {
+        const resourceId = '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1/providers/Microsoft.Insights/diagnosticSettings/settings1';
+        const httpClient = new MockHttpClient({
+            handler: req => {
+                if (req.method === 'GET' && req.url.includes('/providers/Microsoft.Insights?')) {
+                    return makeResponse(req, 200, JSON.stringify({
+                        namespace: 'Microsoft.Insights',
+                        resourceTypes: [{ resourceType: 'diagnosticSettings', defaultApiVersion: '2021-05-01-preview' }],
+                    }));
+                } else if (req.method === 'DELETE') {
+                    return makeResponse(req, 200);
+                }
+
+                return makeResponse(req, 404);
+            },
+        });
+        const client = createClient(httpClient);
+
+        await client.resources.deleteById(resourceId);
+
+        const providerRequest = httpClient.requests.find(request => request.method === 'GET');
+        expect(providerRequest?.url).to.include('/providers/Microsoft.Insights?');
+        const deleteRequest = httpClient.requests.find(request => request.method === 'DELETE');
+        expect(deleteRequest?.url).to.include(resourceId);
+        expect(deleteRequest?.url).to.include('api-version=2021-05-01-preview');
+    });
+
     it('should delete a resource group and await LRO completion', async () => {
         let pollCompleted = false;
         const httpClient = new MockHttpClient({

@@ -125,7 +125,7 @@ describe('AzdResourceAssociationService (unit)', () => {
         expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
     });
 
-    it('selects the first matching project and environment deterministically', async () => {
+    it('returns no match when multiple project and environment associations match', async () => {
         const azd = createMockAzdService();
         setProjects(azd, ['/z-project', '/a-project']);
         azd.envList.mock.mockImplementation((cwd: { path: string }) => Promise.resolve(
@@ -146,11 +146,38 @@ describe('AzdResourceAssociationService (unit)', () => {
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
         const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
 
+        expect(await service.find(resource)).to.be.undefined;
+        expect(azd.envList.mock.callCount()).to.equal(2);
+        expect(azd.envGetValues.mock.callCount()).to.equal(2);
+    });
+
+    it('returns the unique match amid nonmatching projects', async () => {
+        const azd = createMockAzdService();
+        setProjects(azd, ['/matching-project', '/other-environment', '/other-target']);
+        azd.envList.mock.mockImplementation((cwd: { path: string }) => Promise.resolve(
+            cwd.path === '/other-environment'
+                ? [{ Name: 'prod', IsDefault: true }]
+                : [{ Name: 'dev', IsDefault: true }],
+        ));
+        setEnvironmentValues(azd, {
+            '/matching-project|dev': {
+                [SubscriptionValue]: 'sub-1',
+                [ResourceGroupValue]: 'rg-1',
+            },
+            '/other-target|dev': {
+                [SubscriptionValue]: 'sub-1',
+                [ResourceGroupValue]: 'other-rg',
+            },
+        });
+        const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
+        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
+
         const result = await service.find(resource);
 
-        expect(result?.azureYamlUri.path).to.equal('/a-project/azure.yaml');
-        expect(azd.envList.mock.callCount()).to.equal(1);
-        expect(azd.envGetValues.mock.calls[0].arguments[0]).to.equal('dev');
+        expect(result?.azureYamlUri.path).to.equal('/matching-project/azure.yaml');
+        expect(result?.environmentName).to.equal('dev');
+        expect(azd.envList.mock.callCount()).to.equal(3);
+        expect(azd.envGetValues.mock.callCount()).to.equal(2);
     });
 
     it('propagates unexpected azd errors', async () => {

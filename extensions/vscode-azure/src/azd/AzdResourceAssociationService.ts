@@ -60,6 +60,7 @@ export class AzdResourceAssociationService implements IAzdResourceAssociationSer
         }
 
         const projects = await this.findProjects();
+        const matches = new Map<string, AzdResourceAssociation>();
         for (const project of projects) {
             const environments = (await this.azd.envList(project.folderUri)).slice().sort((left, right) => compareText(left.Name, right.Name));
             for (const environment of environments) {
@@ -70,12 +71,13 @@ export class AzdResourceAssociationService implements IAzdResourceAssociationSer
                 const values = await this.azd.envGetValues(environment.Name, project.folderUri);
                 if (equalsIgnoreCase(values[SubscriptionValue], parsed.subscriptionId)
                     && equalsIgnoreCase(values[ResourceGroupValue], parsed.resourceGroup)) {
-                    return { azureYamlUri: project.azureYamlUri, environmentName: environment.Name };
+                    const key = `${project.folderUri.toString().toLowerCase()}\0${environment.Name.toLowerCase()}`;
+                    matches.set(key, { azureYamlUri: project.azureYamlUri, environmentName: environment.Name });
                 }
             }
         }
 
-        return undefined;
+        return matches.size === 1 ? matches.values().next().value : undefined;
     }
 
     private getEnvironmentName(resource: GenericResource): string | undefined {

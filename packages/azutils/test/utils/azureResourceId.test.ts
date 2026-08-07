@@ -58,6 +58,16 @@ describe('azureResourceId (unit)', () => {
             expect(result.resourceName).to.equal('myRepl');
         });
 
+        it('should parse an extension resource from the final provider section', () => {
+            const id = '/subscriptions/abc/resourceGroups/myRg/providers/Microsoft.Compute/virtualMachines/myVm/providers/Microsoft.Insights/diagnosticSettings/mySettings';
+            const result = parseAzureResourceId(id);
+            expect(result.subscriptionId).to.equal('abc');
+            expect(result.resourceGroup).to.equal('myRg');
+            expect(result.provider).to.equal('Microsoft.Insights');
+            expect(result.resourceType).to.equal('diagnosticSettings');
+            expect(result.resourceName).to.equal('mySettings');
+        });
+
         it('should be case-insensitive for segment keywords', () => {
             const id = '/Subscriptions/sub1/ResourceGroups/rg1/Providers/Microsoft.Web/sites/site1';
             const result = parseAzureResourceId(id);
@@ -95,6 +105,13 @@ describe('azureResourceId (unit)', () => {
         it('should throw for a dangling child type without a child name', () => {
             const id = '/subscriptions/abc/resourceGroups/myRg/providers/Microsoft.ContainerRegistry/registries/myReg/replications';
             expect(() => parseAzureResourceId(id)).to.throw('expected provider type/name pairs');
+        });
+
+        it('should validate every provider section in an extension resource ID', () => {
+            const invalidBase = '/subscriptions/abc/resourceGroups/myRg/providers/Microsoft.Compute/virtualMachines/providers/Microsoft.Insights/diagnosticSettings/mySettings';
+            const invalidExtension = '/subscriptions/abc/resourceGroups/myRg/providers/Microsoft.Compute/virtualMachines/myVm/providers/Microsoft.Insights/diagnosticSettings';
+            expect(() => parseAzureResourceId(invalidBase)).to.throw('expected provider type/name pairs');
+            expect(() => parseAzureResourceId(invalidExtension)).to.throw('expected provider type/name pairs');
         });
 
         it('should handle a trailing slash', () => {
