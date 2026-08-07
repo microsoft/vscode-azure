@@ -32,7 +32,7 @@ export interface IAzdService {
      * folders using {@linkcode vscode.workspace.findFiles findFiles}.
      *
      * @param directory - Scope the search to a single folder.
-     * @param maxResults - Cap the number of results. Defaults to `1`.
+     * @param maxResults - Optional cap when searching across open workspace folders.
      */
     findAzureYaml(directory?: vscode.Uri, maxResults?: number): Promise<vscode.Uri[]>;
 
@@ -184,7 +184,7 @@ export class AzdService implements IAzdService {
     ) { }
 
     /** @inheritdoc */
-    public async findAzureYaml(directory?: vscode.Uri, maxResults: number = 1): Promise<vscode.Uri[]> {
+    public async findAzureYaml(directory?: vscode.Uri, maxResults?: number): Promise<vscode.Uri[]> {
         if (directory) {
             for (const name of AzureYamlFileNames) {
                 const fileUri = this.code.Uri.joinPath(directory, name);

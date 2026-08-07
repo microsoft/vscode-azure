@@ -82,6 +82,21 @@ describe('AzdService (unit)', () => {
 
             expect(result).to.deep.equal([]);
         });
+
+        it('should return all projects when searching across the workspace without a cap', async () => {
+            const { service, fs } = createService();
+            fs.addFile(MockUri.file('/workspace/one/azure.yaml'));
+            fs.addFile(MockUri.file('/workspace/two/azure.yml'));
+            fs.addFile(MockUri.file('/workspace/three/azure.yaml'));
+
+            const result = await service.findAzureYaml();
+
+            expect(result.map(uri => uri.path)).to.have.members([
+                '/workspace/one/azure.yaml',
+                '/workspace/two/azure.yml',
+                '/workspace/three/azure.yaml',
+            ]);
+        });
     });
 
     describe('init', () => {

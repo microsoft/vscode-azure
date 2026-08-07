@@ -49,6 +49,37 @@ describe('ResourceEndpointResolver (unit)', () => {
         expect(azd.show.mock.calls[0].arguments[1]).to.equal('dev');
     });
 
+    it('should inspect every azd project when one workspace contains many projects', async () => {
+        const mockResult = createMockVsCode();
+        mockResult.workspaceFolders.push({ uri: MockUri.file('/workspace'), name: 'workspace', index: 0 });
+        const azd = createMockAzdService();
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([
+            MockUri.file('/workspace/one/azure.yaml'),
+            MockUri.file('/workspace/two/azure.yaml'),
+            MockUri.file('/workspace/three/azure.yaml'),
+        ]));
+        azd.show.mock.mockImplementation((cwd: { path: string }) => Promise.resolve({
+            services: {
+                web: {
+                    ingressUrl: cwd.path.endsWith('/three')
+                        ? 'https://matching-project.example.com'
+                        : 'https://other-project.example.com',
+                    target: {
+                        resourceIds: [cwd.path.endsWith('/three') ? '/resource/id' : `/resource${cwd.path}/id`],
+                    },
+                },
+            },
+        }));
+        const { executor } = createTestActionExecutor();
+        const resolver = new ResourceEndpointResolver(mockResult.vscode, executor, azd, [createProvider()]);
+
+        const endpoint = await resolver.resolve(makeGenericResource({ id: '/resource/id' }));
+
+        expect(endpoint).to.equal('https://matching-project.example.com/');
+        expect(azd.findAzureYaml.mock.calls[0].arguments[1]).to.be.undefined;
+        expect(azd.show.mock.callCount()).to.equal(3);
+    });
+
     it('should support the legacy azd ingresUrl spelling', async () => {
         const mockResult = createMockVsCode();
         mockResult.workspaceFolders.push({ uri: MockUri.file('/project'), name: 'project', index: 0 });

@@ -61,12 +61,11 @@ export class ResourceEndpointResolver implements IResourceEndpointResolver {
     }
 
     private async resolveFromAzd(resource: GenericResource): Promise<string | undefined> {
-        const workspaceCount = this.code.workspace.workspaceFolders?.length ?? 0;
-        if (workspaceCount === 0) {
+        if (!this.code.workspace.workspaceFolders?.length) {
             return undefined;
         }
 
-        const azureYamls = await this.azd.findAzureYaml(undefined, workspaceCount * 2);
+        const azureYamls = await this.azd.findAzureYaml();
         const environmentName = resource.tags?.[AzdEnvNameTag];
         const resourceId = normalizeResourceId(resource.id);
         const visitedFolders = new Set<string>();
