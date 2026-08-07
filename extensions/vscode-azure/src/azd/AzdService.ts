@@ -65,7 +65,7 @@ export interface IAzdService {
      * metadata, or `undefined` when the call fails (typically because
      * there is no `azure.yaml` in {@linkcode cwd}).
      */
-    show(cwd: vscode.Uri): Promise<AzdShowResult | undefined>;
+    show(cwd: vscode.Uri, environmentName?: string): Promise<AzdShowResult | undefined>;
 
     /**
      * Runs `azd provision` as a visible VS Code task.
@@ -140,6 +140,13 @@ export interface AzdShowResult {
 export interface AzdServiceDescriptor extends Record<string, unknown> {
     /** Ingress URL for the deployed service, if available. */
     readonly ingressUrl?: string;
+    /** Historical misspelling emitted by older azd versions. */
+    readonly ingresUrl?: string;
+    /** ARM resources associated with the deployed service. */
+    readonly target?: {
+        /** Full ARM IDs for the service's deployment targets. */
+        readonly resourceIds?: readonly string[];
+    };
     /** Project containing the source code for this service. */
     readonly project?: {
         /** Absolute filesystem path to the service's project folder. */
@@ -147,6 +154,11 @@ export interface AzdServiceDescriptor extends Record<string, unknown> {
         /** Programming language of the service. */
         readonly language?: string;
     };
+}
+
+/** Return a service ingress URL across the current and legacy azd JSON spellings. */
+export function getAzdServiceIngressUrl(service: AzdServiceDescriptor): string | undefined {
+    return service.ingressUrl ?? service.ingresUrl;
 }
 
 /** Result of `azd version --output json`. */
@@ -266,13 +278,19 @@ export class AzdService implements IAzdService {
     }
 
     /** @inheritdoc */
-    public async show(cwd: vscode.Uri): Promise<AzdShowResult | undefined> {
+    public async show(cwd: vscode.Uri, environmentName?: string): Promise<AzdShowResult | undefined> {
         try {
+            const showCommand = environmentName
+                ? command(AzdCommand)
+                    .arg('show')
+                    .namedArg('--environment', environmentName)
+                    .namedArg('--output', 'json')
+                : command(AzdCommand)
+                    .arg('show')
+                    .namedArg('--output', 'json');
             const result = await this.processExecutor.spawn<AzdShowResult>({
                 execution: 'background',
-                command: command(AzdCommand)
-                    .arg('show')
-                    .namedArg('--output', 'json'),
+                command: showCommand,
                 cwd,
                 parseJson: true,
             });

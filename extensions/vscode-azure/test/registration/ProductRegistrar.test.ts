@@ -22,6 +22,7 @@ import { Container, injectable, type ServiceIdentifier } from 'inversify';
 import { mock } from 'node:test';
 import { registerCommands } from '../../src/commands/registerCommands';
 import type { ManagedCommand } from '../../src/commands/ManagedCommand';
+import { MicrosoftWebEndpointProvider } from '../../src/endpoints/MicrosoftWebEndpointProvider';
 import { registerProducts } from '../../src/products/registerProducts';
 import { ProductRegistrar } from '../../src/registration/ProductRegistrar';
 import { bindAzureClientProvider, bindProviders } from '../../src/services';
@@ -58,15 +59,18 @@ describe('ProductRegistrar (unit)', () => {
 
         const dataProviders = registrar.getResourceDataProviders();
         const viewProviders = registrar.getResourceViewProviders();
+        const endpointProviders = registrar.getResourceEndpointProviders();
         const commandIds = registrar.getCommands().map(command => command.commandId);
         expect(dataProviders[0]).to.equal(AcrDataProvider);
         expect(dataProviders[1]).to.deep.equal([IFunctionAppDataProvider, FunctionAppDataProvider]);
         expect(dataProviders[2]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
         expect(dataProviders[3]).to.equal(AzureResourceDataProvider);
         expect(viewProviders).to.deep.equal([AcrViewProvider, FunctionAppViewProvider, GenericAzureViewProvider]);
+        expect(endpointProviders).to.deep.equal([MicrosoftWebEndpointProvider]);
         expect(commandIds).to.include.members([
             'vscode-azure/resources/refresh',
             'vscode-azure/resources/groupBy',
+            'vscode-azure/resources/browseWebsite',
             'vscode-azure/resources/openInPortal',
             'vscode-azure/signIn',
             'vscode-azure/selectSubscriptions',

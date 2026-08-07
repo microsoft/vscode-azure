@@ -10,6 +10,7 @@ import { expect } from 'chai';
 import * as vscode from 'vscode';
 import { AddOrEditAppSetting } from '../../../../src/commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../src/commands/functions/DeleteAppSetting';
+import { BrowseWebsite } from '../../../../src/commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../src/tree/resources/functions/FunctionApp';
 import { FunctionAppViewProvider } from '../../../../src/tree/resources/functions/FunctionAppViewProvider';
@@ -35,7 +36,11 @@ describe('FunctionAppViewProvider (unit)', () => {
             get: (key: string) => cacheMap.get(key),
             getChildren: (node: ConcreteAzureNode) => Promise.resolve([] as ConcreteAzureNode[]),
         };
-        return new FunctionAppViewProvider(ctx, executor, mockCache as never);
+        const endpointResolver = {
+            canHandle: () => true,
+            resolve: () => Promise.resolve(undefined),
+        };
+        return new FunctionAppViewProvider(ctx, executor, mockCache as never, endpointResolver);
     }
 
     describe('canHandle', () => {
@@ -88,6 +93,7 @@ describe('FunctionAppViewProvider (unit)', () => {
             expect(item.label).to.equal('myFunc');
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
             expect(item.contextValue).to.include(OpenInPortal.ContextValue);
+            expect(item.contextValue).to.include(BrowseWebsite.ContextValue);
             expect(item.contextValue).to.include(FunctionAppViewProvider.ContextValue);
         });
 

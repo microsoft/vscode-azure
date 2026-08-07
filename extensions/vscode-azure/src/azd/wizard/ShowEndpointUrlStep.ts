@@ -5,7 +5,7 @@
 
 import { ExecuteStep, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzdService } from '../AzdService';
+import { getAzdServiceIngressUrl, IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -36,8 +36,9 @@ export class ShowEndpointUrlStep<TContext extends AzdWizardContext> extends Exec
 
         const urls: string[] = [];
         for (const svc of Object.values(showResult.services)) {
-            if (svc.ingressUrl) {
-                urls.push(svc.ingressUrl);
+            const ingressUrl = getAzdServiceIngressUrl(svc);
+            if (ingressUrl) {
+                urls.push(ingressUrl);
             }
         }
 

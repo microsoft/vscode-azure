@@ -23,6 +23,8 @@ export const FunctionAppLogicalType = `${SiteType}~functionapp`;
 export const LogicAppLogicalType = `${SiteType}~workflowapp`;
 /** Logical type assigned to App Service web apps (any other `Microsoft.Web/sites` kind). */
 export const AppServiceLogicalType = `${SiteType}~app`;
+/** ARM resource type string for Static Web Apps (`Microsoft.Web/staticSites`). */
+export const StaticWebAppType = 'Microsoft.Web/staticSites';
 
 /** ARM resource type string for Cognitive Services accounts (`Microsoft.CognitiveServices/accounts`). */
 export const CognitiveServicesAccountType = 'Microsoft.CognitiveServices/accounts';

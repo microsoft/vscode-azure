@@ -8,6 +8,7 @@ import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, 
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
+import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
@@ -41,7 +42,11 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
+        const endpointResolver = {
+            canHandle: (resource: { type: string }) => resource.type.toLowerCase() === 'microsoft.web/sites',
+            resolve: () => Promise.resolve(undefined),
+        };
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never, endpointResolver);
     }
 
     describe('canHandle', () => {
@@ -328,6 +333,7 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             expect(item.label).to.equal('site1');
             expect(item.description).to.equal('Microsoft.Web/sites');
+            expect(item.contextValue).to.include(BrowseWebsite.ContextValue);
         });
 
         it('should render a virtual group node', () => {

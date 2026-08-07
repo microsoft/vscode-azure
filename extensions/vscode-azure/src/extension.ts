@@ -29,9 +29,11 @@ import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
+import { IResourceEndpointProviders } from './endpoints/ResourceEndpointProvider';
+import { IResourceEndpointResolver, ResourceEndpointResolver } from './endpoints/ResourceEndpointResolver';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
-import { pushDisposable } from './services';
+import { bindProviders, pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
 
 /**
@@ -152,6 +154,15 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 
     products.applyBindings(container);
+    bindProviders(container, IResourceEndpointProviders, products.getResourceEndpointProviders());
+    container.bind(IResourceEndpointResolver).toDynamicValue(context => {
+        return new ResourceEndpointResolver(
+            context.get(IVsCode),
+            context.get(IActionExecutor),
+            context.get(IAzdService),
+            context.getAll(IResourceEndpointProviders),
+        );
+    }).inSingletonScope();
 
     return container;
 }

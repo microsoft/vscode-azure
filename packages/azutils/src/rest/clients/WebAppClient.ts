@@ -4,13 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type WebSiteManagementClientOptionalParams, type WebSiteManagementContext, createWebSiteManagement } from '@azure/arm-appservice/api';
-import { listApplicationSettings as sdkListApplicationSettings, updateApplicationSettings as sdkUpdateApplicationSettings } from '@azure/arm-appservice/api/webApps';
-import type { StringDictionary } from '@azure/arm-appservice/models';
+import { getStaticSite as sdkGetStaticSite, type StaticSitesGetStaticSiteOptionalParams } from '@azure/arm-appservice/api/staticSites';
+import { get as sdkGetWebApp, listApplicationSettings as sdkListApplicationSettings, updateApplicationSettings as sdkUpdateApplicationSettings, type WebAppsGetOptionalParams } from '@azure/arm-appservice/api/webApps';
+import type { Site, StaticSiteARMResource, StringDictionary } from '@azure/arm-appservice/models';
 import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
 import { createArmRestSubscriptionClient } from '../createAzureClient';
+
+export type { StaticSitesGetStaticSiteOptionalParams } from '@azure/arm-appservice/api/staticSites';
+export type { WebAppsGetOptionalParams } from '@azure/arm-appservice/api/webApps';
+export type { Site, StaticSiteARMResource, StringDictionary } from '@azure/arm-appservice/models';
 
 /** Factory that creates an {@linkcode IWebAppClient} for a given subscription. */
 export const IWebAppClientProvider: ServiceIdentifier<IWebAppClientProvider> = Symbol.for('IWebAppClientProvider');
@@ -21,8 +26,12 @@ export type IWebAppClientProvider = SyncFactory<IWebAppClient, [AzureSubscriptio
  */
 export interface IWebAppClient {
     readonly webApps: {
+        get(resourceGroupName: string, name: string, options?: WebAppsGetOptionalParams): Promise<Site>;
         listApplicationSettings(resourceGroupName: string, name: string): Promise<StringDictionary>;
         updateApplicationSettings(resourceGroupName: string, name: string, appSettings: StringDictionary): Promise<StringDictionary>;
+    };
+    readonly staticSites: {
+        getStaticSite(resourceGroupName: string, name: string, options?: StaticSitesGetStaticSiteOptionalParams): Promise<StaticSiteARMResource>;
     };
 }
 
@@ -60,10 +69,19 @@ export class WebAppClient implements IWebAppClient {
 
     public get webApps(): IWebAppClient['webApps'] {
         return {
+            get: (resourceGroupName, name, options) =>
+                sdkGetWebApp(this.inner, resourceGroupName, name, options),
             listApplicationSettings: (resourceGroupName, name) =>
                 sdkListApplicationSettings(this.inner, resourceGroupName, name),
             updateApplicationSettings: (resourceGroupName, name, appSettings) =>
                 sdkUpdateApplicationSettings(this.inner, resourceGroupName, name, appSettings),
+        };
+    }
+
+    public get staticSites(): IWebAppClient['staticSites'] {
+        return {
+            getStaticSite: (resourceGroupName, name, options) =>
+                sdkGetStaticSite(this.inner, resourceGroupName, name, options),
         };
     }
 }

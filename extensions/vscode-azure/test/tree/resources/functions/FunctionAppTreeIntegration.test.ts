@@ -57,6 +57,7 @@ describe('Function App Tree Integration (integration)', () => {
         const settings = { ...initialSettings ?? { APP_KEY: 'app-value', DB_HOST: 'localhost' } };
         const client: IWebAppClient = {
             webApps: {
+                get: mock.fn(() => Promise.resolve({ location: 'eastus' })),
                 listApplicationSettings: mock.fn(
                     () => Promise.resolve({ properties: { ...settings } }),
                 ),
@@ -70,6 +71,9 @@ describe('Function App Tree Integration (integration)', () => {
                         return Promise.resolve({ properties: { ...settings } });
                     },
                 ),
+            },
+            staticSites: {
+                getStaticSite: mock.fn(() => Promise.resolve({ location: 'eastus' })),
             },
         };
         return { client, settings };
@@ -141,8 +145,9 @@ describe('Function App Tree Integration (integration)', () => {
             undefined,
         );
 
-        const funcViewProvider = new FunctionAppViewProvider(ctx, executor, dataTree);
-        const genericViewProvider = new GenericAzureViewProvider(ctx, executor, dataTree);
+        const endpointResolver = { canHandle: () => true, resolve: () => Promise.resolve(undefined) };
+        const funcViewProvider = new FunctionAppViewProvider(ctx, executor, dataTree, endpointResolver);
+        const genericViewProvider = new GenericAzureViewProvider(ctx, executor, dataTree, endpointResolver);
 
         viewTree.registerProvider(funcViewProvider);
         viewTree.registerProvider(genericViewProvider);

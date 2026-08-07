@@ -10,6 +10,44 @@ import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('WebAppClient (unit)', () => {
+    it('should get a web app', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+        const httpClient = new MockHttpClient({
+            handler: (req) => makeResponse(req, 200, JSON.stringify({
+                name: 'myapp',
+                properties: {
+                    defaultHostName: 'myapp.azurewebsites.net',
+                },
+            })),
+        });
+
+        const client = WebAppClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        const result = await client.webApps.get('rg1', 'myapp');
+
+        expect(result.defaultHostName).to.equal('myapp.azurewebsites.net');
+    });
+
+    it('should get a static web app', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+        const httpClient = new MockHttpClient({
+            handler: (req) => makeResponse(req, 200, JSON.stringify({
+                name: 'myswa',
+                properties: {
+                    defaultHostname: 'example.azurestaticapps.net',
+                },
+            })),
+        });
+
+        const client = WebAppClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        const result = await client.staticSites.getStaticSite('rg1', 'myswa');
+
+        expect(result.defaultHostname).to.equal('example.azurestaticapps.net');
+    });
+
     it('should list application settings', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();

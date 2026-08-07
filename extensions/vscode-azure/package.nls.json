@@ -11,6 +11,7 @@
     "commands.vscode-azure/workspace/refresh": "Refresh",
     "commands.vscode-azure/workspace/revealInExplorer": "Reveal in Explorer View",
     "commands.vscode-azure/resources/openInPortal": "Open in Azure Portal",
+    "commands.vscode-azure/resources/browseWebsite": "Browse Website",
     "commands.vscode-azure/resources/loadMore": "Load More...",
     "commands.vscode-azure/resources/groupBy": "Group By...",
     "commands.vscode-azure/activity/clearSuccessful": "Clear Successful",

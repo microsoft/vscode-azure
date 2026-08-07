@@ -133,6 +133,7 @@ describe('ACR Tree Integration (integration)', () => {
             mockCtx.ctx,
             executor,
             dataTree,
+            { canHandle: () => false, resolve: () => Promise.resolve(undefined) },
         );
 
         // Register in correct order: ACR first, generic fallback second

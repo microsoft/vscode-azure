@@ -243,6 +243,16 @@ describe('AzdService (unit)', () => {
 
             expect(result).to.be.undefined;
         });
+
+        it('should pass an explicit environment to azd show', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve({ json: { services: {} } }));
+            const { service, spawnMock } = createService(spawnFn);
+
+            await service.show(MockUri.file('/project'), 'dev');
+
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(argsToStrings(opts.command.slice(1))).to.include.members(['--environment', 'dev']);
+        });
     });
 
     describe('ENOENT handling', () => {
