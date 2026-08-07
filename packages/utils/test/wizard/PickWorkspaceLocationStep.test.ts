@@ -3,14 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { strict as assert } from 'assert';
 import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import {
+    type FindWorkspaceFilesOptions,
     PickWorkspaceLocationStep,
     type PickWorkspaceLocationOptions,
     type WorkspaceLocation,
 } from '../../src/wizard/PickWorkspaceLocationStep';
+import { CancellationError } from '../../src/vscode/CancellationError';
 import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
 
 interface TestContext {
@@ -29,7 +30,8 @@ async function createFile(code: typeof vscode, uri: vscode.Uri): Promise<void> {
 }
 
 function createStep(
-    options: Omit<PickWorkspaceLocationOptions<TestContext>, 'updateContext'>,
+    findFilesOptions: FindWorkspaceFilesOptions,
+    options: Omit<PickWorkspaceLocationOptions<TestContext>, 'contextProperty'>,
 ): { step: PickWorkspaceLocationStep<TestContext>; mock: ReturnType<typeof createMockCodeContext>['mock'] } {
     const { ctx, mock } = createMockCodeContext();
     mock.workspaceFolders.push({
@@ -39,10 +41,7 @@ function createStep(
     });
 
     return {
-        step: new PickWorkspaceLocationStep(ctx, {
-            ...options,
-            updateContext: location => ({ location }),
-        }),
+        step: new PickWorkspaceLocationStep(ctx, findFilesOptions, { ...options, contextProperty: 'location' }),
         mock,
     };
 }
@@ -50,17 +49,21 @@ function createStep(
 describe('PickWorkspaceLocationStep (unit)', () => {
     it('fails before prompting when no workspace folder is open', async () => {
         const { ctx, mock } = createMockCodeContext();
-        const step = new PickWorkspaceLocationStep<TestContext>(ctx, {
+        const step = new PickWorkspaceLocationStep<TestContext>(ctx, { include: 'package.json' }, {
             kind: 'folder',
-            findFilesArgs: ['package.json'],
             strings,
-            updateContext: location => ({ location }),
+            contextProperty: 'location',
         });
 
-        await assert.rejects(
-            step.prompt({}),
-            /Open a workspace folder before selecting a location\./,
-        );
+        try {
+            await step.prompt({});
+            expect.fail('Expected an error');
+        } catch (error) {
+            expect(error).to.be.an('error').with.property(
+                'message',
+                'Open a workspace folder before selecting a location.',
+            );
+        }
         expect(mock.workspace.findFiles.mock.calls).to.have.length(0);
         expect(mock.quickPicks).to.have.length(0);
     });
@@ -71,8 +74,12 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             onCancellationRequested: () => ({ dispose: () => undefined }),
         };
         const { step, mock } = createStep({
+            include: '**/*.csproj',
+            exclude: '**/obj/**',
+            maxResults: 12,
+            token,
+        }, {
             kind: 'file',
-            findFilesArgs: ['**/*.csproj', '**/obj/**', 12, token],
             strings,
         });
         const file = mock.vscode.Uri.from({ scheme: 'file', path: '/repo/src/app.csproj' });
@@ -84,7 +91,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         expect(result.location?.uri.toString()).to.equal(file.toString());
         expect(result.location?.relativePath).to.equal('src/app.csproj');
         expect(mock.workspace.findFiles.mock.calls).to.have.length(1);
-        assert.deepEqual(mock.workspace.findFiles.mock.calls[0].arguments, [
+        expect(mock.workspace.findFiles.mock.calls[0].arguments).to.deep.equal([
             '**/*.csproj',
             '**/obj/**',
             12,
@@ -94,9 +101,8 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('deduplicates containing folders found from matching files', async () => {
-        const { step, mock } = createStep({
+        const { step, mock } = createStep({ include: 'package.json' }, {
             kind: 'folder',
-            findFilesArgs: ['package.json'],
             strings: {
                 ...strings,
                 placeHolder: 'Choose the application folder',
@@ -120,9 +126,8 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('supports an optional location', async () => {
-        const { step, mock } = createStep({
+        const { step, mock } = createStep({ include: 'package.json' }, {
             kind: 'folder',
-            findFilesArgs: ['package.json'],
             strings: { ...strings, skipLabel: 'Do not configure an application folder' },
             allowSkip: true,
         });
@@ -135,9 +140,8 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('uses the configured browse dialog strings and selection kind', async () => {
-        const { step, mock } = createStep({
+        const { step, mock } = createStep({ include: 'package.json' }, {
             kind: 'folder',
-            findFilesArgs: ['package.json'],
             strings,
         });
         const folder = mock.vscode.Uri.from({ scheme: 'file', path: '/repo/web' });
@@ -154,6 +158,22 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             openLabel: 'Select application file',
             title: 'Select the application location',
         });
+        tracker.assertAllConsumed();
+    });
+
+    it('throws CancellationError when the browse dialog is dismissed', async () => {
+        const { step, mock } = createStep({ include: 'package.json' }, {
+            kind: 'folder',
+            strings,
+        });
+        const tracker = respondToPrompts(mock, [{ pick: 'Browse for an application file...' }]);
+
+        try {
+            await step.prompt({});
+            expect.fail('Expected CancellationError');
+        } catch (error) {
+            expect(CancellationError.test(error)).to.be.true;
+        }
         tracker.assertAllConsumed();
     });
 });

@@ -5,6 +5,7 @@
 
 import type * as vscode from 'vscode';
 import { type QuickPickItemWithData, showSmartQuickPick } from '../ui/uiHelpers';
+import { CancellationError } from '../vscode/CancellationError';
 import type { ICodeContext, IVsCode } from '../vscode/IVsCode';
 import { PromptStep } from './PromptStep';
 
@@ -33,14 +34,28 @@ export interface PickWorkspaceLocationStrings {
 }
 
 /**
- * Configures a {@linkcode PickWorkspaceLocationStep}.
+ * Configures the workspace scan performed by {@linkcode PickWorkspaceLocationStep}.
+ */
+export interface FindWorkspaceFilesOptions {
+    readonly include: Parameters<IVsCode['workspace']['findFiles']>[0];
+    readonly exclude?: Parameters<IVsCode['workspace']['findFiles']>[1];
+    readonly maxResults?: Parameters<IVsCode['workspace']['findFiles']>[2];
+    readonly token?: Parameters<IVsCode['workspace']['findFiles']>[3];
+}
+
+type WorkspaceLocationProperty<TContext> = {
+    [TKey in keyof TContext]: WorkspaceLocation | undefined extends TContext[TKey] ? TKey : never;
+}[keyof TContext];
+
+/**
+ * Configures the selection experience and result produced by
+ * {@linkcode PickWorkspaceLocationStep}.
  */
 export interface PickWorkspaceLocationOptions<TContext> {
     readonly kind: 'file' | 'folder';
-    readonly findFilesArgs: Parameters<IVsCode['workspace']['findFiles']>;
     readonly strings: PickWorkspaceLocationStrings;
     readonly allowSkip?: boolean;
-    readonly updateContext: (location: WorkspaceLocation | undefined) => Partial<TContext>;
+    readonly contextProperty: WorkspaceLocationProperty<TContext>;
 }
 
 type LocationPickData = WorkspaceLocation | typeof browse | typeof skip;
@@ -51,12 +66,12 @@ type LocationPickData = WorkspaceLocation | typeof browse | typeof skip;
  *
  * Folder suggestions are the containing folders of the files returned by
  * {@linkcode vscode.workspace.findFiles}. Selected paths use `/` separators and are relative
- * to the containing workspace folder. The caller controls how the result is stored through
- * {@linkcode PickWorkspaceLocationOptions.updateContext}.
+ * to the containing workspace folder.
  */
 export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
     public constructor(
         private readonly ctx: ICodeContext,
+        private readonly findFilesOptions: FindWorkspaceFilesOptions,
         private readonly options: PickWorkspaceLocationOptions<TContext>,
     ) {
         super();
@@ -68,7 +83,12 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
             throw new Error(this.ctx.code.l10n.t('Open a workspace folder before selecting a location.'));
         }
 
-        const matches = await this.ctx.code.workspace.findFiles(...this.options.findFilesArgs);
+        const matches = await this.ctx.code.workspace.findFiles(
+            this.findFilesOptions.include,
+            this.findFilesOptions.exclude,
+            this.findFilesOptions.maxResults,
+            this.findFilesOptions.token,
+        );
         const locations = this.toLocations(matches);
 
         const picks: QuickPickItemWithData<LocationPickData>[] = locations.map(location => ({
@@ -95,11 +115,11 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
             });
 
             if (choice.data === skip) {
-                return this.options.updateContext(undefined);
+                return this.createResult(undefined);
             }
 
             if (choice.data !== browse) {
-                return this.options.updateContext(choice.data);
+                return this.createResult(choice.data);
             }
 
             const selected = await this.ctx.code.window.showOpenDialog({
@@ -112,12 +132,12 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
             });
 
             if (!selected?.[0]) {
-                continue;
+                throw new CancellationError();
             }
 
             const location = this.toLocation(selected[0]);
             if (location) {
-                return this.options.updateContext(location);
+                return this.createResult(location);
             }
 
             await this.ctx.code.window.showErrorMessage(
@@ -125,6 +145,10 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
                 this.ctx.code.l10n.t('Select a location inside an open workspace folder.'),
             );
         }
+    }
+
+    private createResult(location: WorkspaceLocation | undefined): Partial<TContext> {
+        return { [this.options.contextProperty]: location } as Partial<TContext>;
     }
 
     private toLocations(matches: readonly vscode.Uri[]): WorkspaceLocation[] {
