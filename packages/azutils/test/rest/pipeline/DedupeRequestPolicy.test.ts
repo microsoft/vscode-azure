@@ -195,6 +195,26 @@ describe('DedupeRequestPolicy (unit)', () => {
         expect(callCount).to.equal(2);
     });
 
+    it('should not deduplicate range requests with different validators', async () => {
+        const policy = new DedupeRequestPolicy();
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+        const req1 = makeRequest();
+        const req2 = makeRequest();
+        req1.headers.set('range', 'bytes=0-99');
+        req2.headers.set('range', 'bytes=0-99');
+        req1.headers.set('if-range', '"etag-1"');
+        req2.headers.set('if-range', '"etag-2"');
+
+        await Promise.all([policy.sendRequest(req1, next), policy.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(2);
+    });
+
     it('should ignore request-specific observability headers', async () => {
         const policy1 = new DedupeRequestPolicy();
         const policy2 = new DedupeRequestPolicy();

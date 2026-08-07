@@ -17,6 +17,7 @@ const responseAffectingHeaderNames = [
     'if-match',
     'if-modified-since',
     'if-none-match',
+    'if-range',
     'if-unmodified-since',
     'prefer',
     'range',
