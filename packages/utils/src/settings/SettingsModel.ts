@@ -7,9 +7,8 @@
  * Sentinel written in place of a value the backing service refuses to return.
  *
  * A collection whose {@linkcode SettingsSnapshot.valuesReadable valuesReadable} is `false` serializes
- * every value as this string. On save, an entry still carrying the sentinel means *leave the remote
- * value untouched*; the sentinel is never sent to the service. Using it as the value of a **new**
- * key is an error, because there is no existing value to preserve.
+ * every value as this string and is read-only because a whole-collection write cannot preserve the
+ * real values.
  */
 export const UnreadableValue = '********';
 
@@ -47,7 +46,7 @@ export interface SettingsSnapshot {
     readonly resourceName: string;
     /** Display name of the collection (e.g. "Application settings"), for the document header. */
     readonly collectionLabel: string;
-    /** When `false`, every value is {@linkcode UnreadableValue} and must be preserved on save. */
+    /** When `false`, every value is {@linkcode UnreadableValue} and the document is read-only. */
     readonly valuesReadable: boolean;
     /** When `false`, the document is opened read-only. */
     readonly writable: boolean;
@@ -106,32 +105,6 @@ export function diffSettings(before: SettingsMap, after: SettingsMap): SettingsD
     }
 
     return changes;
-}
-
-/**
- * Replace any entry still carrying {@linkcode UnreadableValue} with its value from
- * {@linkcode original}, so that saving a collection whose values could not be read back does not
- * overwrite real secrets with the sentinel.
- *
- * @throws if an entry carries the sentinel but has no counterpart in {@linkcode original}. There is
- * nothing to preserve in that case, so it must surface as a validation error rather than silently
- * writing a literal `********` as the value.
- */
-export function restoreUnreadableValues(entries: SettingsMap, original: SettingsMap): SettingsMap {
-    const originalIndex = toSettingsIndex(original);
-
-    return entries.map(entry => {
-        if (entry.value !== UnreadableValue) {
-            return entry;
-        }
-
-        const previous = originalIndex.get(entry.key);
-        if (!previous) {
-            throw new Error(`Cannot save the setting '${entry.key}': its value is the placeholder used for values that cannot be read back, but this setting does not exist yet, so there is no value to preserve. Enter a real value.`);
-        }
-
-        return { ...entry, value: previous.value };
-    });
 }
 
 function entriesEqual(a: SettingsEntry, b: SettingsEntry): boolean {

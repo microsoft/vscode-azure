@@ -239,6 +239,19 @@ describe('WebAppSettingsAdapter (unit)', () => {
             expect(updateConnectionStrings.mock.callCount()).to.equal(0);
         });
 
+        it('rejects unknown connection string metadata before calling ARM', async () => {
+            const { adapter, updateConnectionStrings } = createAdapter();
+
+            await assert.rejects(
+                adapter.write(makeSite(FunctionAppLogicalType), ConnectionStringsCollectionId, [
+                    { key: 'MyDb', value: 'conn', metadata: { typ: 'SQLAzure' } },
+                ]),
+                /typ/,
+            );
+
+            expect(updateConnectionStrings.mock.callCount()).to.equal(0);
+        });
+
         it('throws for a collection it does not expose', async () => {
             const { adapter } = createAdapter();
 

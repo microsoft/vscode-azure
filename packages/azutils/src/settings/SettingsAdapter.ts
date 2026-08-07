@@ -45,8 +45,8 @@ export interface SettingsCapabilities {
     /**
      * Whether the service returns real values on read.
      *
-     * When `false`, every value reads back as `UnreadableValue` and the framework preserves it on
-     * save rather than writing the placeholder over the real secret.
+     * When `false`, every value reads back as `UnreadableValue` and the framework makes the
+     * collection read-only rather than risk writing the placeholder over the real secret.
      */
     readonly valuesReadable: boolean;
     /**

@@ -200,14 +200,13 @@ describe('SettingsRegistry (unit)', () => {
                 await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be renamed/);
             });
 
-            it('refuses every single-key edit when values cannot be read back', async () => {
-                // Read-modify-write would replace every *other* secret in the collection with the
-                // unreadable-value placeholder, since that is all a read returns.
+            it('refuses every write when values cannot be read back', async () => {
                 const { adapter, registry, resource } = setup({ ...permissiveCapabilities, valuesReadable: false });
 
-                await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /cannot be changed one at a time/);
-                await assert.rejects(registry.remove(resource, 'appSettings', 'A'), /cannot be changed one at a time/);
-                await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be changed one at a time/);
+                await assert.rejects(registry.write(resource, 'appSettings', [entry('A', '1')]), /cannot be changed/);
+                await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /cannot be changed/);
+                await assert.rejects(registry.remove(resource, 'appSettings', 'A'), /cannot be changed/);
+                await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be changed/);
 
                 expect(adapter.writes).to.be.empty;
             });

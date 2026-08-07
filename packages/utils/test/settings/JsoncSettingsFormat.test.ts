@@ -79,6 +79,14 @@ describe('JsoncSettingsFormat (unit)', () => {
             expect(format.serialize(createSnapshot({ valuesReadable: true }))).to.not.contain('cannot be read back');
         });
 
+        it('describes unreadable collections as read-only', () => {
+            const text = createFormat().serialize(createSnapshot({ valuesReadable: false }));
+
+            expect(text).to.contain('read-only');
+            expect(text).to.contain('cannot be edited safely');
+            expect(text).to.not.contain('Saving this file writes');
+        });
+
         it('nests value and metadata for structured collections', () => {
             const format = createFormat();
             const text = format.serialize(createSnapshot({
@@ -229,7 +237,7 @@ describe('JsoncSettingsFormat (unit)', () => {
             expect(format.parse(format.serialize(snapshot), snapshot)).to.deep.equal(entries);
         });
 
-        it('preserves the sentinel so unreadable values survive a no-op edit', () => {
+        it('round-trips the sentinel in the serialized read-only representation', () => {
             const format = createFormat();
             const entries: SettingsMap = [{ key: 'SECRET', value: UnreadableValue }];
             const snapshot = createSnapshot({ valuesReadable: false, entries });

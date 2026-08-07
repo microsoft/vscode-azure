@@ -8,7 +8,7 @@ import type { Disposable } from '../vscode/Disposable';
 import { EventEmitter } from '../vscode/EventEmitter';
 import type { IVsCode } from '../vscode/IVsCode';
 import type { SettingsFormat } from './SettingsFormat';
-import { restoreUnreadableValues, type SettingsMap, type SettingsSnapshot } from './SettingsModel';
+import type { SettingsMap, SettingsSnapshot } from './SettingsModel';
 
 /**
  * Supplies and persists the settings behind a settings document URI.
@@ -116,7 +116,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
             size: Buffer.byteLength(entry.text, 'utf8'),
             // Per-file, rather than provider-wide, so a read-only collection on one resource does
             // not make every settings document read-only.
-            permissions: entry.snapshot.writable ? undefined : this.code.FilePermission.Readonly,
+            permissions: isWritable(entry.snapshot) ? undefined : this.code.FilePermission.Readonly,
         };
     }
 
@@ -132,9 +132,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     /**
      * @inheritdoc
      *
-     * Parses the document, restores any values the service would not hand back (see
-     * {@linkcode restoreUnreadableValues}), and writes the result as the collection's complete new
-     * contents.
+     * Parses the document and writes it as the collection's complete new contents.
      *
      * @throws `NoPermissions` if the collection is not writable, or the
      * {@linkcode SettingsParseError} raised by the format if the document is not valid. Parse errors
@@ -147,21 +145,18 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     public async writeFile(uri: vscode.Uri, content: Uint8Array, _options: { readonly create: boolean; readonly overwrite: boolean }): Promise<void> {
         const entry = await this.load(uri, { allowReuse: true });
 
-        if (!entry.snapshot.writable) {
+        if (!isWritable(entry.snapshot)) {
             throw this.code.FileSystemError.NoPermissions(uri);
         }
 
         const parsed = this.format.parse(Buffer.from(content).toString('utf8'), entry.snapshot);
-        const resolved = entry.snapshot.valuesReadable
-            ? parsed
-            : restoreUnreadableValues(parsed, entry.snapshot.entries);
 
-        await this.source.write(uri, resolved);
+        await this.source.write(uri, parsed);
 
         // Reflect what was just written rather than re-reading. A re-read would cost a round trip
         // and, under last-writer-wins, could only differ by a concurrent change that this write has
         // already overwritten.
-        const snapshot: SettingsSnapshot = { ...entry.snapshot, entries: resolved };
+        const snapshot: SettingsSnapshot = { ...entry.snapshot, entries: parsed };
         this.store(uri, snapshot);
 
         this.changeEmitter.fire([{ type: this.code.FileChangeType.Changed, uri }]);
@@ -248,4 +243,8 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
         this.cache.set(uri.toString(), entry);
         return entry;
     }
+}
+
+function isWritable(snapshot: SettingsSnapshot): boolean {
+    return snapshot.writable && snapshot.valuesReadable;
 }

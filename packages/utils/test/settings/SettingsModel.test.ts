@@ -5,8 +5,7 @@
 
 import { expect } from 'chai';
 import {
-    diffSettings, restoreUnreadableValues, type SettingsEntry, type SettingsMap,
-    toSettingsIndex, UnreadableValue,
+    diffSettings, type SettingsEntry, type SettingsMap, toSettingsIndex,
 } from '../../src/settings/SettingsModel';
 
 function entry(key: string, value: string, metadata?: Record<string, string>): SettingsEntry {
@@ -83,36 +82,4 @@ describe('SettingsModel (unit)', () => {
         });
     });
 
-    describe('restoreUnreadableValues', () => {
-        it('substitutes the original value for a preserved sentinel', () => {
-            const original: SettingsMap = [entry('SECRET', 'real-secret')];
-            const edited: SettingsMap = [entry('SECRET', UnreadableValue)];
-
-            expect(restoreUnreadableValues(edited, original)).to.deep.equal([entry('SECRET', 'real-secret')]);
-        });
-
-        it('keeps a value the user actually replaced', () => {
-            const original: SettingsMap = [entry('SECRET', 'real-secret')];
-            const edited: SettingsMap = [entry('SECRET', 'new-secret')];
-
-            expect(restoreUnreadableValues(edited, original)).to.deep.equal([entry('SECRET', 'new-secret')]);
-        });
-
-        it('preserves metadata while restoring the value', () => {
-            const original: SettingsMap = [entry('DB', 'real-conn', { type: 'SQLAzure' })];
-            const edited: SettingsMap = [entry('DB', UnreadableValue, { type: 'Custom' })];
-
-            expect(restoreUnreadableValues(edited, original)).to.deep.equal([entry('DB', 'real-conn', { type: 'Custom' })]);
-        });
-
-        it('throws when a new key is given the sentinel as its value', () => {
-            expect(() => restoreUnreadableValues([entry('BRAND_NEW', UnreadableValue)], []))
-                .to.throw(/BRAND_NEW/);
-        });
-
-        it('leaves entries without the sentinel untouched', () => {
-            const edited: SettingsMap = [entry('A', '1'), entry('B', '2')];
-            expect(restoreUnreadableValues(edited, [])).to.deep.equal(edited);
-        });
-    });
 });

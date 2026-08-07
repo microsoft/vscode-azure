@@ -164,7 +164,7 @@ export class JsoncSettingsFormat implements SettingsFormat {
             this.code.l10n.t('{0} for \'{1}\'.', snapshot.collectionLabel, snapshot.resourceName),
         ];
 
-        if (snapshot.writable) {
+        if (snapshot.writable && snapshot.valuesReadable) {
             lines.push(this.code.l10n.t('Saving this file writes these settings to Azure. Removing a setting deletes it.'));
             lines.push(this.code.l10n.t('The file is saved to Azure as-is: it overwrites any changes made elsewhere since it was opened.'));
             lines.push(this.code.l10n.t('Deployments and infrastructure-as-code tools may overwrite edits made here.'));
@@ -173,7 +173,7 @@ export class JsoncSettingsFormat implements SettingsFormat {
         }
 
         if (!snapshot.valuesReadable) {
-            lines.push(this.code.l10n.t('Values shown as "{0}" cannot be read back. Leave them as-is to keep the current value.', UnreadableValue));
+            lines.push(this.code.l10n.t('Values shown as "{0}" cannot be read back, so this document cannot be edited safely.', UnreadableValue));
         }
 
         lines.push(this.code.l10n.t('This file lives only in the editor. Saving a copy to disk would store its values in plain text.'));

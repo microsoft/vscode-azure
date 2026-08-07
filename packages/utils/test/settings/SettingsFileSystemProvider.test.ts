@@ -221,47 +221,24 @@ describe('SettingsFileSystemProvider (unit)', () => {
                 }));
             });
 
-            it('preserves a value the user left as the sentinel', async () => {
-                // The source reports the sentinel, as a service that will not return values does.
-                harness.setSnapshot(createSnapshot({
-                    valuesReadable: false,
-                    entries: [{ key: 'SECRET', value: UnreadableValue }],
-                }));
-                await harness.provider.readFile(harness.uri);
+            it('reports the document as read-only', async () => {
+                const stat = await harness.provider.stat(harness.uri);
 
-                await harness.provider.writeFile(
-                    harness.uri,
-                    Buffer.from(`{ "SECRET": "${UnreadableValue}" }`, 'utf8'),
-                    { create: false, overwrite: true },
-                );
-
-                expect(harness.write.mock.calls[0].arguments[1]).to.deep.equal([{ key: 'SECRET', value: UnreadableValue }]);
+                expect(stat.permissions).to.equal(harness.code.vscode.FilePermission.Readonly);
             });
 
-            it('writes a value the user actually replaced', async () => {
-                await harness.provider.readFile(harness.uri);
-
-                await harness.provider.writeFile(
-                    harness.uri,
-                    Buffer.from('{ "SECRET": "brand-new" }', 'utf8'),
-                    { create: false, overwrite: true },
-                );
-
-                expect(harness.write.mock.calls[0].arguments[1]).to.deep.equal([{ key: 'SECRET', value: 'brand-new' }]);
-            });
-
-            it('rejects a new key whose value is the sentinel', async () => {
+            it('rejects writes without calling the source', async () => {
                 await harness.provider.readFile(harness.uri);
 
                 try {
                     await harness.provider.writeFile(
                         harness.uri,
-                        Buffer.from(`{ "SECRET": "${UnreadableValue}", "NEW": "${UnreadableValue}" }`, 'utf8'),
+                        Buffer.from('{ "SECRET": "brand-new" }', 'utf8'),
                         { create: false, overwrite: true },
                     );
                     expect.fail('expected an error');
                 } catch (error) {
-                    expect((error as Error).message).to.contain('NEW');
+                    expect(error).to.have.property('code', 'NoPermissions');
                 }
                 expect(harness.write.mock.callCount()).to.equal(0);
             });

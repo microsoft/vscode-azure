@@ -85,9 +85,13 @@ export class SettingsRegistry {
     /**
      * Replace a collection's entire contents. Keys absent from {@linkcode entries} are deleted.
      *
-     * @throws if no adapter handles the resource, or the collection id is unknown to it.
+     * @throws if no adapter handles the resource, the collection is unknown or read-only, or its
+     * values cannot be read back safely.
      */
     public async write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
+        const capabilities = this.getCapabilities(resource, collectionId);
+        this.requireWritable(capabilities);
+        this.requireReadableValues(capabilities, collectionId);
         await this.require(resource, collectionId).write(resource, collectionId, entries);
     }
 
@@ -104,7 +108,7 @@ export class SettingsRegistry {
     public async upsert(resource: GenericResource, collectionId: string, entry: SettingsEntry): Promise<void> {
         const capabilities = this.getCapabilities(resource, collectionId);
         this.requireWritable(capabilities);
-        this.requireSafeSingleKeyWrite(capabilities, collectionId);
+        this.requireReadableValues(capabilities, collectionId);
 
         const current = (await this.read(resource, collectionId)).entries;
         const existing = current.some(candidate => candidate.key === entry.key);
@@ -128,7 +132,7 @@ export class SettingsRegistry {
     public async remove(resource: GenericResource, collectionId: string, key: string): Promise<void> {
         const capabilities = this.getCapabilities(resource, collectionId);
         this.requireWritable(capabilities);
-        this.requireSafeSingleKeyWrite(capabilities, collectionId);
+        this.requireReadableValues(capabilities, collectionId);
         if (!capabilities.canDelete) {
             throw new Error(`Settings cannot be deleted from '${collectionId}' on this resource.`);
         }
@@ -146,7 +150,7 @@ export class SettingsRegistry {
     public async rename(resource: GenericResource, collectionId: string, fromKey: string, toKey: string): Promise<void> {
         const capabilities = this.getCapabilities(resource, collectionId);
         this.requireWritable(capabilities);
-        this.requireSafeSingleKeyWrite(capabilities, collectionId);
+        this.requireReadableValues(capabilities, collectionId);
         if (!capabilities.canRename) {
             throw new Error(`Settings cannot be renamed in '${collectionId}' on this resource.`);
         }
@@ -172,20 +176,9 @@ export class SettingsRegistry {
         }
     }
 
-    /**
-     * Reject a single-key edit on a collection whose values cannot be read back.
-     *
-     * These helpers work by reading the whole collection, changing one key, and writing it all back.
-     * When `valuesReadable` is `false` every value reads as the unreadable-value sentinel, so that
-     * write would replace every *other* secret in the collection with a literal `********`. The
-     * editor avoids this because it can map the sentinel back to "leave unchanged"; there is no
-     * equivalent here, because the real values were never in hand.
-     *
-     * Refusing is the only safe option until the adapter contract grows a per-key patch.
-     */
-    private requireSafeSingleKeyWrite(capabilities: SettingsCapabilities, collectionId: string): void {
+    private requireReadableValues(capabilities: SettingsCapabilities, collectionId: string): void {
         if (!capabilities.valuesReadable) {
-            throw new Error(`Settings in '${collectionId}' cannot be changed one at a time, because their current values cannot be read back from Azure. Use the settings editor instead.`);
+            throw new Error(`Settings in '${collectionId}' cannot be changed because their current values cannot be read back from Azure.`);
         }
     }
 

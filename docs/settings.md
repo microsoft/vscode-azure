@@ -55,10 +55,10 @@ dictionary. The trade-off is real: two people editing the same collection in two
 each other silently. `SettingsAdapter.write` takes the full map, so adding etag / `If-Match` support
 later is additive rather than a redesign.
 
-The per-setting tree commands are different: they read, modify one key, and write, so keys they do
-not touch survive. They are also **refused outright** on a collection whose `valuesReadable` is
-`false` — read-modify-write over a collection that reads back as all sentinels would replace every
-untouched secret with `********`, and unlike the editor there is no real value in hand to restore.
+The per-setting tree commands read, modify one key, and write, so keys they do not touch survive.
+Both these commands and the editor are **read-only** on a collection whose `valuesReadable` is
+`false`: every available value is only a sentinel, so any whole-collection write could replace real
+secrets with `********`.
 
 ### Keeping the tree and an open document in step
 
@@ -101,7 +101,7 @@ never contributed, its `when` clause never matches, and the menu item never appe
 | `canAdd` | "Add New Setting" is withheld |
 | `canDelete` | "Delete Setting" is withheld |
 | `canRename` | "Rename Setting" is withheld |
-| `valuesReadable` | Values render as the `UnreadableValue` sentinel and are preserved on save |
+| `valuesReadable` | Values render as the `UnreadableValue` sentinel and the document is read-only |
 
 Adding a product that forbids renaming means returning `canRename: false` — not adding a branch.
 
@@ -122,10 +122,9 @@ Unstructured collections serialize as plain `"KEY": "value"`. The framework pick
 ### Unreadable values
 
 Some services will not return values on read. Such a collection sets `valuesReadable: false`; every
-value reads back as `UnreadableValue` (`********`). On save, an entry still carrying the sentinel
-means *leave the remote value alone*, so a no-op save cannot overwrite real secrets with the
-placeholder. Using the sentinel as the value of a **new** key is an error, because there is nothing
-to preserve.
+value reads back as `UnreadableValue` (`********`). The framework marks the virtual document
+read-only and rejects writes because the adapter's whole-collection `write` contract cannot express
+"preserve this key" without sending the placeholder.
 
 `WebAppSettingsAdapter` sets `valuesReadable: true`, since ARM does return App Service values; the
 machinery exists for products that do not.

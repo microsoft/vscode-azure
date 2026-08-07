@@ -164,9 +164,8 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
      */
     private validateConnectionStrings(entries: SettingsMap): void {
         for (const entry of entries) {
-            const type = entry.metadata?.[TypeField];
-            if (type !== undefined) {
-                const error = this.validateConnectionStringMetadata(TypeField, type);
+            for (const [field, value] of Object.entries(entry.metadata ?? {})) {
+                const error = this.validateConnectionStringMetadata(field, value);
                 if (error) {
                     throw new Error(this.code.l10n.t('Connection string \'{0}\': {1}', entry.key, error));
                 }
