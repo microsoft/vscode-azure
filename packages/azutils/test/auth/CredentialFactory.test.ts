@@ -97,5 +97,4 @@ describe('createDefaultCredentialFactory (unit)', () => {
         expect(options.silent).to.be.undefined;
         expect(options.createIfNone).to.equal(true);
     });
-
 });

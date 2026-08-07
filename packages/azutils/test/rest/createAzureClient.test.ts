@@ -95,6 +95,7 @@ describe('createArmRestSubscriptionClient (unit)', () => {
         ) as unknown as FakeSubResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
+
         expect(policyNames).to.include('DedupeRequestPolicy');
         expect(policyNames).to.include('CorrelationIdPolicy');
         expect(policyNames).to.include('AcceptLanguagePolicy');
@@ -163,6 +164,7 @@ describe('createArmRestSubscriptionClient (unit)', () => {
         ) as unknown as FakeSubResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
+
         expect(policyNames).to.include('CustomPolicy');
         expect(policyNames).to.include('DedupeRequestPolicy');
     });
@@ -215,6 +217,7 @@ describe('createArmRestClient (unit)', () => {
         ) as unknown as FakeResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
+
         expect(policyNames).to.include('DedupeRequestPolicy');
         expect(policyNames).to.include('CorrelationIdPolicy');
         expect(policyNames).to.include('AcceptLanguagePolicy');
@@ -285,6 +288,7 @@ describe('createArmRestClient (unit)', () => {
         ) as unknown as FakeResult;
 
         const policyNames = (client.opts?.additionalPolicies ?? []).map(p => p.policy.name);
+
         expect(policyNames).to.include('CustomPolicy');
         expect(policyNames).to.include('DedupeRequestPolicy');
     });

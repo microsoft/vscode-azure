@@ -106,13 +106,11 @@ export function createDefaultCredentialFactory(
     return (input) => {
         const options = toCredentialFactoryOptions(input);
         const defaults = getDefaults?.();
-        const tenantId = options?.tenantId ?? defaults?.tenantId;
-        const sessionOptions = mergeSessionOptions(defaults?.sessionOptions, options?.sessionOptions);
         return new VsCodeExtensionCredential({
             code,
             output,
-            tenantId,
-            sessionOptions,
+            tenantId: options?.tenantId ?? defaults?.tenantId,
+            sessionOptions: mergeSessionOptions(defaults?.sessionOptions, options?.sessionOptions),
         });
     };
 }
