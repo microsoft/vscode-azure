@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup } from '@microsoft/vscode-azure-azutils/testing';
-import { MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzdResourceAssociationService } from '../../src/azd/AzdResourceAssociationService';
@@ -28,6 +28,10 @@ function setEnvironmentValues(
     });
 }
 
+function createService(azd: MockAzdService, dataTree = createMockDataItemTree([])): AzdResourceAssociationService {
+    return new AzdResourceAssociationService(createMockVsCode().vscode, azd, dataTree);
+}
+
 describe('AzdResourceAssociationService (unit)', () => {
     afterEach(() => {
         mock.restoreAll();
@@ -43,7 +47,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             },
         });
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
+        const service = createService(azd);
 
         const result = await service.find(resource);
 
@@ -71,7 +75,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             subscription: resourceGroup.subscription,
             tags: {},
         });
-        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([resourceGroup]));
+        const service = createService(azd, createMockDataItemTree([resourceGroup]));
 
         const result = await service.find(resource);
 
@@ -93,7 +97,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             groupingValue: 'rg-1',
             tags: { 'AZD-ENV-NAME': 'dev' },
         });
-        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
+        const service = createService(azd);
 
         const result = await service.find(resourceGroup);
 
@@ -110,7 +114,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             },
         });
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
+        const service = createService(azd);
 
         expect(await service.find(resource)).to.be.undefined;
     });
@@ -119,7 +123,7 @@ describe('AzdResourceAssociationService (unit)', () => {
         const azd = createMockAzdService([{ Name: 'dev', IsDefault: true }]);
         setProjects(azd, ['/project']);
         const resource = makeGenericResource({ id: ResourceId, tags: {} });
-        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
+        const service = createService(azd);
 
         expect(await service.find(resource)).to.be.undefined;
         expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
@@ -144,7 +148,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             },
         });
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
+        const service = createService(azd);
 
         expect(await service.find(resource)).to.be.undefined;
         expect(azd.envList.mock.callCount()).to.equal(2);
@@ -170,7 +174,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             },
         });
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
+        const service = createService(azd);
 
         const result = await service.find(resource);
 
@@ -186,7 +190,7 @@ describe('AzdResourceAssociationService (unit)', () => {
         const expectedError = new Error('azd env list failed');
         azd.envList.mock.mockImplementation(() => Promise.reject(expectedError));
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = new AzdResourceAssociationService(azd, createMockDataItemTree([]));
+        const service = createService(azd);
 
         let actualError: unknown;
         try {

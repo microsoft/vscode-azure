@@ -194,7 +194,7 @@ export class ResourceClient implements IResourceClient {
             return defaultApiVersion;
         }
 
-        const apiVersions = match.apiVersions?.filter(version => version.trim()).sort((a, b) => b.localeCompare(a)) ?? [];
+        const apiVersions = match.apiVersions?.map(version => version.trim()).filter(version => version).sort((a, b) => b.localeCompare(a)) ?? [];
         const apiVersion = apiVersions.find(version => !version.toLowerCase().includes('preview')) ?? apiVersions[0];
         if (!apiVersion) {
             throw new Error(`Resource type "${resourceType}" does not define an API version.`);

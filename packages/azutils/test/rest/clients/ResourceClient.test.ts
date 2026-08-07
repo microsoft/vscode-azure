@@ -150,6 +150,19 @@ describe('ResourceClient (unit)', () => {
         expect(await client.providers.resolveApiVersion('Microsoft.Storage/storageAccounts')).to.equal('2024-01-01');
     });
 
+    it('should trim API version metadata before filtering, sorting, and preview detection', async () => {
+        const httpClient = providerClient({
+            namespace: 'Microsoft.Example',
+            resourceTypes: [{
+                resourceType: 'widgets',
+                apiVersions: [' 2025-06-01-preview ', '   ', ' 2023-01-01 ', '2024-01-01  '],
+            }],
+        });
+        const client = createClient(httpClient);
+
+        expect(await client.providers.resolveApiVersion('Microsoft.Example/widgets')).to.equal('2024-01-01');
+    });
+
     it('should use the newest preview API version when no stable version is available', async () => {
         const httpClient = providerClient({
             namespace: 'Microsoft.Example',

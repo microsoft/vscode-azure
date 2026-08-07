@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, isResourceGroup, parseAzureResourceId, type GenericResource } from '@microsoft/vscode-azure-azutils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { AzdEnvNameTag } from '../constants';
@@ -43,6 +44,7 @@ const ResourceGroupValue = 'AZURE_RESOURCE_GROUP';
 @injectable()
 export class AzdResourceAssociationService implements IAzdResourceAssociationService {
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IAzureViewDataTree) private readonly dataTree: AzureViewDataTree,
     ) { }
@@ -100,7 +102,7 @@ export class AzdResourceAssociationService implements IAzdResourceAssociationSer
         const projects = new Map<string, AzdProject>();
 
         for (const yamlFile of yamlFiles) {
-            const folder = yamlFile.with({ path: yamlFile.path.replace(/\/[^/]*$/, '') || '/' });
+            const folder = this.code.Uri.joinPath(yamlFile, '..');
             const key = folder.toString().toLowerCase();
             if (!projects.has(key)) {
                 projects.set(key, { azureYamlUri: yamlFile, folderUri: folder });
