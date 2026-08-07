@@ -31,6 +31,7 @@ export * from './types/Satisfies';
 export * from './types/WithRequired';
 export * from './ui/uiHelpers';
 export * from './vscode/CancellationError';
+export * from './vscode/createShellTask';
 export * from './vscode/Disposable';
 export * from './vscode/EventEmitter';
 export * from './vscode/fsHelpers';
