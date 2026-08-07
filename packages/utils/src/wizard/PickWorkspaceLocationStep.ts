@@ -81,11 +81,7 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
             matchOnDescription: true,
         });
 
-        return this.createResult(choice.data);
-    }
-
-    private createResult(location: WorkspaceLocation | undefined): Partial<TContext> {
-        return { [this.options.contextProperty]: location } as Partial<TContext>;
+        return { [this.options.contextProperty]: choice.data } as Partial<TContext>;
     }
 
     private toLocations(matches: readonly vscode.Uri[]): WorkspaceLocation[] {
