@@ -14,7 +14,7 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import {
     Debouncer, EventEmitter, Everything, IActionExecutor, ICodeContext, Roots, stringifyError,
-    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Page, type ProviderResult,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Event, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../constants';
@@ -25,7 +25,12 @@ import { readSignedInTenants } from '../../utils/signedInTenants';
  * singleton and aliased into the resource tree's data-provider collection so the
  * "Run (Mock Data)" debug entry point can rebind it with mock data.
  */
-export const IAzureAccountDataProvider: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IAzureAccountDataProvider');
+export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNode> {
+    /** Fires with normalized account IDs removed by a reconciled session change. */
+    readonly onDidRemoveAccounts: Event<readonly string[]>;
+}
+
+export const IAzureAccountDataProvider: ServiceIdentifier<IAzureAccountDataProvider> = Symbol.for('IAzureAccountDataProvider');
 
 /**
  * Debounce window (ms) for `authentication.onDidChangeSessions`. These events
@@ -69,10 +74,11 @@ function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
  * view layer, not here.
  */
 @injectable()
-export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
+export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disposable {
     public readonly isRoot = true;
 
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
+    private readonly removeAccountsEmitter = new EventEmitter<readonly string[]>();
 
     /**
      * Debounces `onDidChangeSessions` bursts into a single reconciling root
@@ -80,7 +86,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private readonly debouncer = new Debouncer();
 
-    private readonly disposables: Disposable[] = [this.changeEmitter, this.debouncer];
+    private readonly disposables: Disposable[] = [this.changeEmitter, this.removeAccountsEmitter, this.debouncer];
 
     /**
      * Count of in-flight {@linkcode listAccounts} calls. While greater than
@@ -112,6 +118,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
     private knownAccountIds: ReadonlySet<string> | undefined;
 
     public readonly onDidChange = this.changeEmitter.event;
+    public readonly onDidRemoveAccounts = this.removeAccountsEmitter.event;
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
@@ -239,7 +246,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
                 tenantId: resource.tenantId,
                 sessionOptions: { account: { id: resource.accountId, label: '' }, silent: true },
             });
-            const client = SubscriptionClient.create(this.ctx, this.executor, credential, resource.environment);
+            const client = SubscriptionClient.create(this.ctx, this.executor, credential, resource.environment, undefined, resource);
             for await (const page of client.tenants.list()) {
                 const match = page.items.find(tenant => tenant.tenantId?.toLowerCase() === wantedTenantId);
                 // Skip a match that still only carries the id (no real name yet).
@@ -293,7 +300,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
 
         // Track the current account-id set so session-change events can be
         // reconciled against it (see reconcileAccountsOnSessionChange).
-        this.knownAccountIds = new Set(result.map(account => account.id));
+        this.knownAccountIds = new Set(result.map(account => account.id.toLowerCase()));
 
         return result;
     }
@@ -327,7 +334,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
         try {
             const previousIds = this.knownAccountIds;
             const accounts = await this.listAccounts();
-            const currentIds = new Set(accounts.map(account => account.id));
+            const currentIds = new Set(accounts.map(account => account.id.toLowerCase()));
 
             if (previousIds !== undefined && idSetsEqual(previousIds, currentIds)) {
                 this.executor.output.trace(`[auth] sessions changed provider=${providerId}; account set unchanged (count=${currentIds.size}), ignoring`);
@@ -340,6 +347,12 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
             // a signed-out account's subtree is evicted because it drops out of the
             // new listing.
             this.executor.output.debug(`[auth] sessions changed provider=${providerId}; account set changed (count=${currentIds.size}), re-listing accounts`);
+            if (previousIds) {
+                const removedIds = [...previousIds].filter(id => !currentIds.has(id));
+                if (removedIds.length > 0) {
+                    this.removeAccountsEmitter.fire(removedIds);
+                }
+            }
             this.changeEmitter.fire({ target: Roots });
         } catch (error) {
             // This runs as a fire-and-forget reconcile, and listAccounts() can
@@ -373,7 +386,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
         let emittedTerminalPage = false;
 
         const credential = this.credentialFactory({ sessionOptions: { account } });
-        const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment);
+        const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment, undefined, { accountId: account.id });
         try {
             for await (const page of client.tenants.list()) {
                 const items = page.items
@@ -458,7 +471,7 @@ export class AzureAccountDataProvider implements DataProvider<ConcreteAzureNode>
      */
     private async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
         const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
-        const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment);
+        const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment, undefined, tenant);
         for await (const page of client.subscriptions.list()) {
             const items = page.items
                 .filter((sub): sub is typeof sub & { subscriptionId: string; tenantId: string; displayName: string } => !!sub.subscriptionId && !!sub.tenantId && !!sub.displayName)

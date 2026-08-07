@@ -212,8 +212,10 @@ describe('AzureAccountDataProvider (unit)', () => {
                 { id: 'a-id', label: 'Alpha' },
                 { id: 'b-id', label: 'Beta' },
             ]));
-            let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            const onChange = mock.fn();
+            const onDidRemoveAccounts = mock.fn();
+            provider.onDidChange(onChange);
+            provider.onDidRemoveAccounts(onDidRemoveAccounts);
 
             await provider.getChildren();
             mock.timers.tick(1001);
@@ -224,14 +226,17 @@ describe('AzureAccountDataProvider (unit)', () => {
             mock.timers.tick(500);
             await flushMicrotasks();
 
-            expect(fired).to.equal(1);
+            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onDidRemoveAccounts.mock.calls[0].arguments[0]).to.deep.equal(['b-id']);
         });
 
         it('should NOT fire when the signed-in account set is unchanged', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
-            let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            const onChange = mock.fn();
+            const onDidRemoveAccounts = mock.fn();
+            provider.onDidChange(onChange);
+            provider.onDidRemoveAccounts(onDidRemoveAccounts);
 
             // Prime the known account set, then move past the suppression window.
             await provider.getChildren();
@@ -244,7 +249,8 @@ describe('AzureAccountDataProvider (unit)', () => {
             mock.timers.tick(500);
             await flushMicrotasks();
 
-            expect(fired).to.equal(0);
+            expect(onChange.mock.callCount()).to.equal(0);
+            expect(onDidRemoveAccounts.mock.callCount()).to.equal(0);
         });
 
         it('should not loop when listing accounts itself emits onDidChangeSessions', async () => {

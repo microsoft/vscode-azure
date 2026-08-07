@@ -65,6 +65,8 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
                     executor,
                     credentialFactory(subscription),
                     subscription.environment,
+                    undefined,
+                    subscription,
                 );
             };
         });

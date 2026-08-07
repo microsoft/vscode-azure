@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -135,7 +135,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             ? mock.fn(() => clientOrFactory)
             : mock.fn(() => ({}));
         const resolveSubscription = mock.fn((subscriptionId: string) => Promise.resolve(makeSubscription({ subscriptionId })));
-        return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, resolveSubscription);
+        return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, resolveSubscription, createMockAccountDataProvider());
     }
 
     describe('canHandle', () => {
@@ -225,6 +225,22 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
             expect(provider.getChildren()).to.have.length(2);
         });
+
+        it('should remove deployments and abort their tracking when the owning account signs out', () => {
+            const { executor } = createTestActionExecutor();
+            const { vscode } = createMockVsCode();
+            const accountProvider = createMockAccountDataProvider();
+            const resolveSubscription = mock.fn((subscriptionId: string) => Promise.resolve(makeSubscription({ subscriptionId })));
+            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription, accountProvider);
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/removed', 'tenant', 'ACCOUNT-1');
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/kept', 'tenant', 'account-2');
+            const removed = provider.getChildren()[0];
+
+            accountProvider.removeAccountsEmitter.fire(['account-1']);
+
+            expect(removed.abortController.signal.aborted).to.be.true;
+            expect(provider.getChildren().map(activity => activity.accountId)).to.deep.equal(['account-2']);
+        });
     });
 
     describe('getChildren', () => {
@@ -258,7 +274,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
             const resolveSubscription = mock.fn((subscriptionId: string, _tenantId?: string) => Promise.resolve(makeSubscription({ subscriptionId })));
-            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription);
+            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription, createMockAccountDataProvider());
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9');
 
             await provider.enrich(provider.getChildren()[0]);
@@ -272,7 +288,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
             const resolveSubscription = mock.fn((subscriptionId: string, _tenantId?: string, _accountId?: string) => Promise.resolve(makeSubscription({ subscriptionId })));
-            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription);
+            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription, createMockAccountDataProvider());
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9', 'acct-9');
 
             await provider.enrich(provider.getChildren()[0]);
@@ -286,7 +302,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const { vscode } = createMockVsCode();
             const createClientFn = mock.fn(() => createMockClient());
             const resolveSubscription = mock.fn((_id: string) => Promise.resolve(undefined));
-            const provider = new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, resolveSubscription);
+            const provider = new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, resolveSubscription, createMockAccountDataProvider());
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const activity = provider.getChildren()[0];
@@ -295,6 +311,23 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(changed).to.be.false;
             expect(activity.operations).to.be.undefined;
             expect(createClientFn.mock.callCount()).to.equal(0);
+        });
+
+        it('should resolve the subscription and create a lightweight client for each operation', async () => {
+            const { executor } = createTestActionExecutor();
+            const { vscode } = createMockVsCode();
+            const client = createMockClient();
+            const createClient = mock.fn(() => client);
+            const resolveSubscription = mock.fn((subscriptionId: string) => Promise.resolve(makeSubscription({ subscriptionId })));
+            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, resolveSubscription, createMockAccountDataProvider());
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+            const activity = provider.getChildren()[0];
+
+            await provider.enrich(activity);
+            await provider.enrich(activity);
+
+            expect(resolveSubscription.mock.callCount()).to.equal(2);
+            expect(createClient.mock.callCount()).to.equal(2);
         });
 
         it('should return false if the deployment was aborted', async () => {
