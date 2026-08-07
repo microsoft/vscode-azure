@@ -6,23 +6,30 @@
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import * as vscode from 'vscode';
+import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 
 describe('OpenInPortal (unit)', () => {
-    it('should open the portal URL for a subscription node', () => {
+    it('should open the portal URL for a subscription node', async () => {
         const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const command = new OpenUrl(mockResult.vscode);
 
-        const cmd = new OpenInPortal(mockResult.vscode);
-        cmd.execute('azr://user1@portal.azure.com/tenants/t1/subscriptions/sub-1');
+        await command.execute(
+            OpenInPortal.getUrl,
+            'azr://user1@portal.azure.com/tenants/t1/subscriptions/sub-1',
+        );
 
         expect(mockResult.env.openExternal.mock.callCount()).to.equal(1);
     });
 
-    it('should open the portal URL for a resource node', () => {
+    it('should open the portal URL for a resource node', async () => {
         const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const command = new OpenUrl(mockResult.vscode);
 
-        const cmd = new OpenInPortal(mockResult.vscode);
-        cmd.execute('azr://user1@portal.azure.com/tenants/t1/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Web/sites/site1');
+        await command.execute(
+            OpenInPortal.getUrl,
+            'azr://user1@portal.azure.com/tenants/t1/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Web/sites/site1',
+        );
 
         expect(mockResult.env.openExternal.mock.callCount()).to.equal(1);
     });
