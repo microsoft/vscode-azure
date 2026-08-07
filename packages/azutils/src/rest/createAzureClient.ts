@@ -7,11 +7,12 @@ import type { Client as RestClient, ClientOptions as RestClientOptions } from '@
 import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '../auth/AzureSubscription';
-import { getCredentialDedupePartition } from '../auth/CredentialFactory';
 import type { EnvironmentLike } from '../auth/Environment';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
-import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
+import { DedupeRequestPolicy, type DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
+
+export type { DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
 
 /**
  * REST-style (`@azure-rest/core-client`) factory for SDKs whose
@@ -30,6 +31,8 @@ import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
  * @param credential - The token credential used to authenticate requests.
  * @param environment - The Azure environment (cloud) whose ARM endpoint is used.
  * @param options - Optional client options merged over the factory defaults.
+ * @param dedupeIdentity - Optional stable account and tenant identity. When
+ * omitted, deduplication is limited to clients sharing `credential`.
  */
 export function createArmRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
@@ -38,10 +41,11 @@ export function createArmRestClient<TClient extends RestClient, TOptions extends
     credential: TokenCredential,
     environment: EnvironmentLike,
     options?: TOptions,
+    dedupeIdentity?: DedupeRequestIdentity,
 ): TClient {
     const endpoint = environment.resourceManagerEndpointUrl;
     executor.output.debug(`[rest] create rest client ${getClient.name}`);
-    return getClient(credential, applyDefaults(ctx, executor, credential, { ...options, endpoint } as TOptions));
+    return getClient(credential, applyDefaults(ctx, executor, dedupeIdentity ?? credential, { ...options, endpoint } as TOptions));
 }
 
 /**
@@ -76,13 +80,13 @@ export function createArmRestSubscriptionClient<TClient extends RestClient, TOpt
 
     const endpoint = subscription.environment.resourceManagerEndpointUrl;
     executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
-    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, credential, { ...options, endpoint } as TOptions));
+    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, subscription, { ...options, endpoint } as TOptions));
 }
 
 function applyDefaults<TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
-    credential: TokenCredential,
+    dedupeIdentity: DedupeRequestIdentity | object,
     options?: TOptions,
 ): TOptions {
     const extensionUserAgentPrefix = `${ctx.extensionContext.extension.id}/${(ctx.extensionContext.extension.packageJSON as { version: string }).version}`;
@@ -104,7 +108,7 @@ function applyDefaults<TOptions extends RestClientOptions>(
                 position: 'perCall',
             },
             {
-                policy: new DedupeRequestPolicy(getCredentialDedupePartition(credential)),
+                policy: new DedupeRequestPolicy(dedupeIdentity),
                 position: 'perCall',
             },
         ],

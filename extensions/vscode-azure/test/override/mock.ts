@@ -10,7 +10,6 @@
 
 import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { EventEmitter } from '@microsoft/vscode-azure-utils';
 import type { Container } from 'inversify';
 import { createMockAcrClient } from '../tree/resources/acr/mockAcr';
 import { createMockResourceClient } from '../tree/resources/mockResourceClient';
@@ -122,14 +121,11 @@ export function applyOverrides(container: Container): void {
     // -- Rebind Azure providers with mock implementations ---------------------
 
     const accountProvider = createMockAccountDataProvider({
-            accounts: [account],
-            tenants: [tenant],
-            subscriptions: [subscription],
-        });
-    container.rebind(IAzureAccountDataProvider).toConstantValue({
-        ...accountProvider,
-        onDidRemoveAccounts: new EventEmitter<readonly string[]>().event,
+        accounts: [account],
+        tenants: [tenant],
+        subscriptions: [subscription],
     });
+    container.rebind(IAzureAccountDataProvider).toConstantValue(accountProvider);
 
     container.rebind(IResourceClientProvider).toConstantValue(
         () => createMockResourceClient([demoRg, stagingRg], resourcesByGroup),

@@ -49,8 +49,8 @@ describe('DedupeRequestPolicy (unit)', () => {
     });
 
     it('should not deduplicate requests from different partitions', async () => {
-        const policy1 = new DedupeRequestPolicy('account-1');
-        const policy2 = new DedupeRequestPolicy('account-2');
+        const policy1 = new DedupeRequestPolicy({ accountId: 'account-1' });
+        const policy2 = new DedupeRequestPolicy({ accountId: 'account-2' });
         let callCount = 0;
         const next = async (req: PipelineRequest) => {
             callCount++;
@@ -62,6 +62,45 @@ describe('DedupeRequestPolicy (unit)', () => {
         const req2 = makeRequest({ headers: createHttpHeaders({ authorization: 'Bearer account-2' }) });
 
         await Promise.all([policy1.sendRequest(req1, next), policy2.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should partition the same account by tenant', async () => {
+        const policy1 = new DedupeRequestPolicy({ accountId: 'account-1', tenantId: 'tenant-1' });
+        const policy2 = new DedupeRequestPolicy({ accountId: 'account-1', tenantId: 'tenant-2' });
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        await Promise.all([
+            policy1.sendRequest(makeRequest(), next),
+            policy2.sendRequest(makeRequest(), next),
+        ]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should partition unknown identities by object identity', async () => {
+        const sharedIdentity = {};
+        const policy1 = new DedupeRequestPolicy(sharedIdentity);
+        const policy2 = new DedupeRequestPolicy(sharedIdentity);
+        const policy3 = new DedupeRequestPolicy({});
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        await Promise.all([
+            policy1.sendRequest(makeRequest(), next),
+            policy2.sendRequest(makeRequest(), next),
+            policy3.sendRequest(makeRequest(), next),
+        ]);
 
         expect(callCount).to.equal(2);
     });
@@ -102,8 +141,8 @@ describe('DedupeRequestPolicy (unit)', () => {
     });
 
     it('should ignore rotated authorization headers within a stable partition', async () => {
-        const policy1 = new DedupeRequestPolicy('account-1');
-        const policy2 = new DedupeRequestPolicy('account-1');
+        const policy1 = new DedupeRequestPolicy({ accountId: 'account-1' });
+        const policy2 = new DedupeRequestPolicy({ accountId: 'account-1' });
         let callCount = 0;
         const next = async (req: PipelineRequest) => {
             callCount++;

@@ -246,7 +246,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
                 tenantId: resource.tenantId,
                 sessionOptions: { account: { id: resource.accountId, label: '' }, silent: true },
             });
-            const client = SubscriptionClient.create(this.ctx, this.executor, credential, resource.environment);
+            const client = SubscriptionClient.create(this.ctx, this.executor, credential, resource.environment, undefined, resource);
             for await (const page of client.tenants.list()) {
                 const match = page.items.find(tenant => tenant.tenantId?.toLowerCase() === wantedTenantId);
                 // Skip a match that still only carries the id (no real name yet).
@@ -386,7 +386,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         let emittedTerminalPage = false;
 
         const credential = this.credentialFactory({ sessionOptions: { account } });
-        const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment);
+        const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment, undefined, { accountId: account.id });
         try {
             for await (const page of client.tenants.list()) {
                 const items = page.items
@@ -471,7 +471,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      */
     private async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
         const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
-        const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment);
+        const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment, undefined, tenant);
         for await (const page of client.subscriptions.list()) {
             const items = page.items
                 .filter((sub): sub is typeof sub & { subscriptionId: string; tenantId: string; displayName: string } => !!sub.subscriptionId && !!sub.tenantId && !!sub.displayName)

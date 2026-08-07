@@ -5,7 +5,6 @@
 
 import type { ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
-import type { AddPipelineOptions, PipelinePolicy } from '@azure/core-rest-pipeline';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { AzurePublicCloud } from '../../src/auth/Environment';
@@ -20,28 +19,15 @@ const publicArmEndpoint = AzurePublicCloud.resourceManagerEndpointUrl;
  * the `create*(credential, subscriptionId, options?)` free-function
  * pattern used by the new-style REST SDKs.
  */
-interface AddedPolicy { policy: PipelinePolicy; options?: AddPipelineOptions }
-interface FakePipeline {
-    readonly addedPolicies: AddedPolicy[];
-    addPolicy(policy: PipelinePolicy, options?: AddPipelineOptions): void;
-}
-function createFakePipeline(): FakePipeline {
-    const addedPolicies: AddedPolicy[] = [];
-    return {
-        addedPolicies,
-        addPolicy: (policy, options) => addedPolicies.push({ policy, options }),
-    };
-}
-
-interface FakeSubResult { credential: TokenCredential; subId: string; opts: RestClientOptions | undefined; pipeline: FakePipeline }
+interface FakeSubResult { credential: TokenCredential; subId: string; opts: RestClientOptions | undefined }
 function fakeSubscriptionFactory(credential: TokenCredential, subscriptionId: string, options?: RestClientOptions): FakeSubResult {
-    return { credential, subId: subscriptionId, opts: options, pipeline: createFakePipeline() };
+    return { credential, subId: subscriptionId, opts: options };
 }
 const typedSubFactory = fakeSubscriptionFactory as any as Parameters<typeof createArmRestSubscriptionClient>[2]; // test fake
 
-interface FakeResult { credential: TokenCredential; opts: RestClientOptions | undefined; pipeline: FakePipeline }
+interface FakeResult { credential: TokenCredential; opts: RestClientOptions | undefined }
 function fakeFactory(credential: TokenCredential, options?: RestClientOptions): FakeResult {
-    return { credential, opts: options, pipeline: createFakePipeline() };
+    return { credential, opts: options };
 }
 const typedFactory = fakeFactory as any as Parameters<typeof createArmRestClient>[2]; // test fake
 

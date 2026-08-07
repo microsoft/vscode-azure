@@ -5,8 +5,11 @@
 
 import type { PipelinePolicy, PipelineRequest, PipelineResponse, SendRequest } from '@azure/core-rest-pipeline';
 import { InflightMap } from '@microsoft/vscode-azure-utils';
+import { createHash } from 'node:crypto';
 
 const inflight = new InflightMap<PipelineResponse>();
+const objectPartitions = new WeakMap<object, string>();
+let nextObjectPartition = 0;
 
 const responseAffectingHeaderNames = [
     'accept',
@@ -20,6 +23,15 @@ const responseAffectingHeaderNames = [
     'range',
     'x-ms-version',
 ];
+
+/**
+ * Stable request identity used to prevent responses from being shared across
+ * Azure principals or tenants.
+ */
+export interface DedupeRequestIdentity {
+    readonly accountId: string;
+    readonly tenantId?: string;
+}
 
 /**
  * A pipeline policy that deduplicates identical in-flight GET requests.
@@ -36,8 +48,16 @@ const responseAffectingHeaderNames = [
  */
 export class DedupeRequestPolicy implements PipelinePolicy {
     public readonly name = 'DedupeRequestPolicy';
+    private readonly partition: string;
 
-    public constructor(private readonly partition = 'anonymous') { }
+    /**
+     * @param identity - A stable Azure identity for cross-client deduplication,
+     * or an object whose identity limits deduplication to clients sharing that
+     * object. Omit only for anonymous requests.
+     */
+    public constructor(identity?: DedupeRequestIdentity | object) {
+        this.partition = createPartition(identity);
+    }
 
     /** @inheritdoc */
     public async sendRequest(request: PipelineRequest, next: SendRequest): Promise<PipelineResponse> {
@@ -64,6 +84,27 @@ export class DedupeRequestPolicy implements PipelinePolicy {
 
         return JSON.stringify([this.partition, request.url, headers]);
     }
+}
+
+function createPartition(identity: DedupeRequestIdentity | object | undefined): string {
+    if (!identity) {
+        return 'anonymous';
+    }
+
+    if ('accountId' in identity && typeof identity.accountId === 'string') {
+        const stableIdentity = JSON.stringify([
+            identity.accountId.toLowerCase(),
+            typeof identity.tenantId === 'string' ? identity.tenantId.toLowerCase() : undefined,
+        ]);
+        return createHash('sha256').update(stableIdentity).digest('base64url');
+    }
+
+    let partition = objectPartitions.get(identity);
+    if (!partition) {
+        partition = `object-${++nextObjectPartition}`;
+        objectPartitions.set(identity, partition);
+    }
+    return partition;
 }
 
 function cloneResponse(request: PipelineRequest, response: PipelineResponse): PipelineResponse {

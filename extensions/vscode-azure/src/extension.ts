@@ -197,7 +197,7 @@ function setUpContainer(extensionContext: IExtensionContext): Container {
         const ctx = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription) => SubscriptionClient.create(ctx, executor, credentialFactory(subscription), subscription.environment);
+        return (subscription) => SubscriptionClient.create(ctx, executor, credentialFactory(subscription), subscription.environment, undefined, subscription);
     });
 
     container.bind(IWebAppClientProvider).toFactory(context => {
