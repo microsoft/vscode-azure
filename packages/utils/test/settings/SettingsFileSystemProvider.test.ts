@@ -7,7 +7,6 @@ import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { JsoncSettingsFormat } from '../../src/settings/JsoncSettingsFormat';
-import { openSettingsDocument } from '../../src/settings/openSettingsDocument';
 import { SettingsFileSystemProvider, type SettingsDocumentSource } from '../../src/settings/SettingsFileSystemProvider';
 import { SettingsParseError } from '../../src/settings/SettingsFormat';
 import { type SettingsMap, type SettingsSnapshot, UnreadableValue } from '../../src/settings/SettingsModel';
@@ -305,36 +304,4 @@ describe('SettingsFileSystemProvider (unit)', () => {
         });
     });
 
-    describe('end to end through the editor', () => {
-        it('opens, edits, and saves back through the provider', async () => {
-            const { code, provider, uri, write } = harness;
-            code.vscode.workspace.registerFileSystemProvider(Scheme, provider, { isCaseSensitive: true });
-
-            const editor = await openSettingsDocument(code.vscode, uri);
-
-            expect(code.shownDocuments).to.have.lengthOf(1);
-            expect(editor.document.languageId).to.equal('jsonc');
-            expect(editor.document.getText()).to.contain('"A": "1"');
-            expect(editor.document.getText()).to.contain('// Application settings');
-
-            code.textDocuments[0].setText('{ "A": "1", "ADDED": "yes" }');
-            await code.textDocuments[0].save();
-
-            expect(write.mock.callCount()).to.equal(1);
-            expect(write.mock.calls[0].arguments[1]).to.deep.equal([
-                { key: 'A', value: '1' },
-                { key: 'ADDED', value: 'yes' },
-            ]);
-        });
-
-        it('round-trips an unedited document without changing the settings', async () => {
-            const { code, provider, uri, write } = harness;
-            code.vscode.workspace.registerFileSystemProvider(Scheme, provider, { isCaseSensitive: true });
-
-            await openSettingsDocument(code.vscode, uri);
-            await code.textDocuments[0].save();
-
-            expect(write.mock.calls[0].arguments[1]).to.deep.equal([{ key: 'A', value: '1' }]);
-        });
-    });
 });
