@@ -155,8 +155,13 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
     }
 
     /**
-     * Reject invalid connection string types before the ARM call, so the user gets a message naming
-     * the offending setting instead of a generic 400 from the service.
+     * Reject invalid connection string metadata before the ARM call.
+     *
+     * An unrecognized *field* is the load-bearing case: {@linkcode fromConnectionStringEntries} reads
+     * only `type`, so a typo such as `typ` would be dropped silently and the entry would default to
+     * `Custom` -- ARM receives a well-formed payload and accepts it, changing the type on a live
+     * resource with no error anywhere. An invalid *value* would most likely be rejected by ARM as
+     * well; checking it here just names the offending setting instead of surfacing a bare 400.
      */
     private validateConnectionStrings(entries: SettingsMap): void {
         for (const entry of entries) {

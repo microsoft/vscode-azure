@@ -11,10 +11,10 @@ import { registerSettings } from './registerSettings';
 
 /** Apply each product's single registration entry point in dispatch order. */
 export function registerProducts(registrar: ProductRegistrar): void {
+    // First: claims only the settings virtual nodes, never a resource, so it must win dispatch over
+    // any product provider that claims the resource those nodes hang off.
+    registerSettings(registrar);
     registerAcr(registrar);
     registerFunctions(registrar);
-    // Claims only the settings virtual nodes, so it must precede any provider that claims the
-    // owning resource.
-    registerSettings(registrar);
     registerGenericAzure(registrar);
 }

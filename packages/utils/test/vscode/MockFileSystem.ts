@@ -5,6 +5,7 @@
 
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import type { Satisfies } from '../../src/types/Satisfies';
 
 /** Standard error codes produced by {@linkcode vscode.FileSystemError}. */
 export type MockFileSystemErrorCode =
@@ -99,3 +100,69 @@ export class MockFileSystem {
         return Promise.resolve();
     });
 }
+
+/** Test stand-in for {@linkcode vscode.FileType}. */
+export const MockFileType = {
+    Unknown: 0,
+    File: 1,
+    Directory: 2,
+    SymbolicLink: 64,
+} satisfies typeof vscode.FileType;
+
+/** Test stand-in for {@linkcode vscode.FilePermission}. */
+export const MockFilePermission = {
+    Readonly: 1,
+} satisfies typeof vscode.FilePermission;
+
+/** Test stand-in for {@linkcode vscode.FileChangeType}. */
+export const MockFileChangeType = {
+    Changed: 1,
+    Created: 2,
+    Deleted: 3,
+} satisfies typeof vscode.FileChangeType;
+
+/**
+ * Test stand-in for {@linkcode vscode.FileSystemError}.
+ *
+ * The editor identifies these errors by their {@linkcode MockFileSystemError.code code}, not by
+ * class identity, so a `FileSystemProvider` under test must be asserted the same way -- which is
+ * also how {@linkcode MockFileSystem.createError} shapes the errors it throws. Each static factory
+ * mirrors the real API, including its dual `Uri | string | undefined` argument.
+ */
+export class MockFileSystemError extends Error implements vscode.FileSystemError {
+    public constructor(messageOrUri?: string | vscode.Uri, public readonly code: string = 'Unknown') {
+        super(typeof messageOrUri === 'string' || messageOrUri === undefined ? messageOrUri : messageOrUri.toString());
+        this.name = 'FileSystemError';
+    }
+
+    public static FileNotFound(messageOrUri?: string | vscode.Uri): MockFileSystemError {
+        return new MockFileSystemError(messageOrUri, 'FileNotFound');
+    }
+
+    public static FileExists(messageOrUri?: string | vscode.Uri): MockFileSystemError {
+        return new MockFileSystemError(messageOrUri, 'FileExists');
+    }
+
+    public static FileNotADirectory(messageOrUri?: string | vscode.Uri): MockFileSystemError {
+        return new MockFileSystemError(messageOrUri, 'FileNotADirectory');
+    }
+
+    public static FileIsADirectory(messageOrUri?: string | vscode.Uri): MockFileSystemError {
+        return new MockFileSystemError(messageOrUri, 'FileIsADirectory');
+    }
+
+    public static NoPermissions(messageOrUri?: string | vscode.Uri): MockFileSystemError {
+        return new MockFileSystemError(messageOrUri, 'NoPermissions');
+    }
+
+    public static Unavailable(messageOrUri?: string | vscode.Uri): MockFileSystemError {
+        return new MockFileSystemError(messageOrUri, 'Unavailable');
+    }
+}
+
+// Compile-time check: the error type is mutually assignable to its vscode counterpart, so the
+// shape is faithful in both directions.
+/* eslint-disable @typescript-eslint/no-unused-vars */
+type ForwardCheckFileSystemError = Satisfies<MockFileSystemError, vscode.FileSystemError>;
+type ReverseCheckFileSystemError = Satisfies<vscode.FileSystemError, MockFileSystemError>;
+/* eslint-enable @typescript-eslint/no-unused-vars */

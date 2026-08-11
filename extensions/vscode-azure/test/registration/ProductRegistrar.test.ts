@@ -56,11 +56,11 @@ describe('ProductRegistrar (unit)', () => {
         const dataProviders = registrar.getResourceDataProviders();
         const viewProviders = registrar.getResourceViewProviders();
         const commandIds = registrar.getCommands().map(command => command.commandId);
-        expect(dataProviders[0]).to.equal(AcrDataProvider);
-        expect(dataProviders[1]).to.deep.equal([ISettingsDataProvider, SettingsDataProvider]);
+        expect(dataProviders[0]).to.deep.equal([ISettingsDataProvider, SettingsDataProvider]);
+        expect(dataProviders[1]).to.equal(AcrDataProvider);
         expect(dataProviders[2]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
         expect(dataProviders[3]).to.equal(AzureResourceDataProvider);
-        expect(viewProviders).to.deep.equal([AcrViewProvider, SettingsViewProvider, GenericAzureViewProvider]);
+        expect(viewProviders).to.deep.equal([SettingsViewProvider, AcrViewProvider, GenericAzureViewProvider]);
         expect(commandIds).to.include.members([
             'vscode-azure/resources/refresh',
             'vscode-azure/resources/groupBy',

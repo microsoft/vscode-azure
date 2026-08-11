@@ -23,8 +23,13 @@ export type { ConnectionStringDictionary, ConnectionStringType, ConnStringValueT
 /**
  * The database types a connection string may declare, as accepted by ARM.
  *
- * Exposed as a runtime array (the SDK models it only as a string-literal union, which is erased at
- * compile time) so callers can offer it as a pick list and validate user input against it.
+ * Exposed as a runtime array so callers can offer it as a pick list and validate user input. The
+ * SDK has no `KnownConnectionStringType` enum to reuse: unlike most of its enums it models this one
+ * as a bare string-literal union (`ConnectionStringType`), which is erased at compile time. The
+ * similarly-named `KnownDatabaseType` is a different type for a different field (site backups), with
+ * only four members and different casing -- `SqlAzure` rather than `SQLAzure` -- so it is not
+ * interchangeable. Typing this array as `ConnectionStringType[]` keeps it checked against the SDK,
+ * so a member added or renamed upstream fails the build here.
  */
 export const ConnectionStringTypes: readonly ConnectionStringType[] = [
     'MySql', 'SQLServer', 'SQLAzure', 'Custom', 'NotificationHub',

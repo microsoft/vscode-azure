@@ -185,9 +185,9 @@ For the Azure resources tree the entries come from `ProductRegistrar`, so **disp
 
 ```typescript
 // registerProducts.ts
+registerSettings(registrar);     // claims only the settings virtual nodes, so it goes first
 registerAcr(registrar);
 registerFunctions(registrar);
-registerSettings(registrar);     // claims only the settings virtual nodes
 registerGenericAzure(registrar); // root and fallback providers last
 ```
 

@@ -149,9 +149,9 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 
 ```typescript
 // Product registrations run in this order.
+registerSettings(registrar);     // settings virtual nodes only, so it goes first
 registerAcr(registrar);
 registerFunctions(registrar);
-registerSettings(registrar);     // settings virtual nodes only
 registerGenericAzure(registrar); // root and fallback providers last
 ```
 
