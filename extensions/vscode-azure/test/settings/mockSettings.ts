@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type {
-    GenericResource, SettingsAdapter, SettingsCollectionDescriptor,
-} from '@microsoft/vscode-azure-azutils';
+import type { GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '@microsoft/vscode-azure-utils';
+import type { SettingsAdapter, SettingsCollectionDescriptor } from '../../src/settings/SettingsAdapter';
+import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '../../src/settings/core/SettingsModel';
 import { SettingsRegistry } from '../../src/settings/SettingsRegistry';
 import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
 

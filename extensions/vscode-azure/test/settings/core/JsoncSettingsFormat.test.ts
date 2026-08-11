@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { JsoncSettingsFormat } from '../../src/settings/JsoncSettingsFormat';
-import { SettingsParseError } from '../../src/settings/SettingsFormat';
-import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
-import { createMockVsCode } from '../vscode/MockVsCode';
+import { JsoncSettingsFormat } from '../../../src/settings/core/JsoncSettingsFormat';
+import { SettingsParseError } from '../../../src/settings/core/SettingsFormat';
+import type { SettingsMap, SettingsSnapshot } from '../../../src/settings/core/SettingsModel';
+import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 
 function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot {
     return {

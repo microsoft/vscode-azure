@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import { IVsCode, type SettingsFileSystemProvider } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
+import type { SettingsFileSystemProvider } from './core/SettingsFileSystemProvider';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { IAzureViewDataTree } from '../services';
 import { createCollectionNode } from '../tree/resources/settings/SettingsNode';

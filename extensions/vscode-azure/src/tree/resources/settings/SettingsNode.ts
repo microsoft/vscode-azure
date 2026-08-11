@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { isVirtualResource, type GenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
-import type { SettingsEntry } from '@microsoft/vscode-azure-utils';
+import type { SettingsEntry } from '../../../settings/core/SettingsModel';
 
 /**
  * Separator between the collection id and the setting key inside an entry node's `virtualPath`.

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Node, parseTree, printParseErrorCode } from 'jsonc-parser';
-import type { IVsCode } from '../vscode/IVsCode';
+import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import { type SettingsFormat, SettingsParseError } from './SettingsFormat';
 import type { SettingsEntry, SettingsMap, SettingsSnapshot } from './SettingsModel';
 

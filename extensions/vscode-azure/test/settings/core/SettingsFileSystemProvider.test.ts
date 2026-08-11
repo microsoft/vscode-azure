@@ -6,11 +6,11 @@
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { JsoncSettingsFormat } from '../../src/settings/JsoncSettingsFormat';
-import { SettingsFileSystemProvider, type SettingsDocumentSource } from '../../src/settings/SettingsFileSystemProvider';
-import { SettingsParseError } from '../../src/settings/SettingsFormat';
-import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
-import { createMockVsCode, type MockVsCodeResult } from '../vscode/MockVsCode';
+import { JsoncSettingsFormat } from '../../../src/settings/core/JsoncSettingsFormat';
+import { SettingsFileSystemProvider, type SettingsDocumentSource } from '../../../src/settings/core/SettingsFileSystemProvider';
+import { SettingsParseError } from '../../../src/settings/core/SettingsFormat';
+import type { SettingsMap, SettingsSnapshot } from '../../../src/settings/core/SettingsModel';
+import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 
 const Scheme = 'azure-settings';
 

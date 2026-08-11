@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ICodeContext, openSettingsDocument } from '@microsoft/vscode-azure-utils';
+import { ICodeContext } from '@microsoft/vscode-azure-utils';
+import { openSettingsDocument } from '../../settings/core/openSettingsDocument';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { SettingsUri } from '../../settings/SettingsUri';

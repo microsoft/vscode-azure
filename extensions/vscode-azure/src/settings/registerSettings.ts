@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ISettingsAdapter } from '@microsoft/vscode-azure-azutils';
-import { IExtensionContext, IVsCode, JsoncSettingsFormat, SettingsFileSystemProvider } from '@microsoft/vscode-azure-utils';
+import { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { JsoncSettingsFormat } from './core/JsoncSettingsFormat';
+import { SettingsFileSystemProvider } from './core/SettingsFileSystemProvider';
+import { ISettingsAdapter } from './SettingsAdapter';
 import type { Container, ServiceIdentifier } from 'inversify';
 import { WebAppSettingsAdapter } from './adapters/WebAppSettingsAdapter';
 import { AzureSettingsDocumentSource } from './AzureSettingsDocumentSource';

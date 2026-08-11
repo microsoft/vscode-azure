@@ -4,9 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import type { Disposable } from '../vscode/Disposable';
-import { EventEmitter } from '../vscode/EventEmitter';
-import type { IVsCode } from '../vscode/IVsCode';
+import { EventEmitter, type Disposable, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type { SettingsFormat } from './SettingsFormat';
 import type { SettingsMap, SettingsSnapshot } from './SettingsModel';
 

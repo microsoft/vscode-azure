@@ -4,7 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getConfiguredAzureEnv, getPortalHost, parseAzureResourceId, type GenericResource } from '@microsoft/vscode-azure-azutils';
-import { IVsCode, type SettingsDocumentSource, type SettingsMap, type SettingsSnapshot } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
+import type { SettingsDocumentSource } from './core/SettingsFileSystemProvider';
+import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzureViewDataTree } from '../services';

@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { SettingsMap, SettingsSnapshot } from '@microsoft/vscode-azure-utils';
+import type { GenericResource } from '@microsoft/vscode-azure-azutils';
 import type { ServiceIdentifier } from 'inversify';
-import type { GenericResource } from '../models/GenericResource';
+import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 
 /**
  * Identifies one settings collection on a resource.

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import type { IVsCode } from '../vscode/IVsCode';
+import type { IVsCode } from '@microsoft/vscode-azure-utils';
 
 /**
  * Open a settings document in the editor.

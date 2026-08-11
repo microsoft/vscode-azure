@@ -6,7 +6,7 @@
 import { expect } from 'chai';
 import {
     diffSettings, type SettingsEntry, type SettingsMap, toSettingsIndex,
-} from '../../src/settings/SettingsModel';
+} from '../../../src/settings/core/SettingsModel';
 
 function entry(key: string, value: string, metadata?: Record<string, string>): SettingsEntry {
     return metadata ? { key, value, metadata } : { key, value };

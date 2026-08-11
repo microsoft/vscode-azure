@@ -8,16 +8,22 @@ tree, a command set, and an editor of its own.
 ## Layers
 
 ```
-packages/utils/src/settings/           Azure-agnostic: model, JSONC format, generic FileSystemProvider
-packages/azutils/src/settings/         SettingsAdapter contract
-extensions/vscode-azure/src/settings/  Registry, adapters, URI codec, document sources, registration
+extensions/vscode-azure/src/settings/core/   Model, JSONC format, document FileSystemProvider
+extensions/vscode-azure/src/settings/        Adapter contract, registry, adapters, URI codec, registration
 extensions/vscode-azure/src/tree/resources/settings/   Data + view providers
 extensions/vscode-azure/src/commands/settings/         Commands
 ```
 
-The file system provider in `utils` knows nothing about Azure. It is generic over a
-`SettingsDocumentSource` (resolve a URI, read a snapshot, write a map), which keeps it unit-testable
-against `createMockVsCode()` with no ARM mocking.
+**This all lives in the extension, not in `packages/`.** App settings are not a reusable primitive
+today — nothing outside this extension consumes any of it, and the document header ships strings that
+name Azure directly, so the code could not honestly sit in a package documented as having "no
+Azure-specific knowledge". Move a piece into `utils` or `azutils` when a second consumer actually
+appears.
+
+`SettingsFileSystemProvider` is still written against a `SettingsDocumentSource` seam (resolve a URI,
+read a snapshot, write a map) rather than against ARM. That keeps it unit-testable with
+`createMockVsCode()` and no ARM mocking — the seam earns its keep for testing regardless of which
+package the file lives in.
 
 ## The editor is the primary surface
 
@@ -69,7 +75,7 @@ which invalidates both the tree subtree and the document, rather than touching t
 
 ## Adapters
 
-A product supports settings by implementing `SettingsAdapter` (in azutils) and binding it to
+A product supports settings by implementing `SettingsAdapter` and binding it to
 `ISettingsAdapter` in `registerSettings.ts`. Nothing else changes.
 
 ```typescript

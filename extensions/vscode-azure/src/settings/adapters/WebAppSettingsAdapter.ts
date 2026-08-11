@@ -7,9 +7,11 @@ import {
     AppServiceLogicalType, ConnectionStringTypes, FunctionAppLogicalType, IWebAppClientProvider,
     LogicAppLogicalType, parseAzureResourceId,
     type ConnectionStringType, type ConnStringValueTypePair, type GenericResource,
-    type IWebAppClient, type SettingsAdapter, type SettingsCollectionDescriptor,
+    type IWebAppClient,
 } from '@microsoft/vscode-azure-azutils';
-import { IVsCode, type SettingsMap, type SettingsSnapshot } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
+import type { SettingsAdapter, SettingsCollectionDescriptor } from '../SettingsAdapter';
+import type { SettingsMap, SettingsSnapshot } from '../core/SettingsModel';
 import { inject, injectable } from 'inversify';
 
 /** Stable id of the application settings collection. Appears in URIs and node keys. */

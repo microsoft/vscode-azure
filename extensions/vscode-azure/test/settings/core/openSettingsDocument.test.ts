@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { openSettingsDocument } from '../../src/settings/openSettingsDocument';
-import { createMockVsCode } from '../vscode/MockVsCode';
+import { openSettingsDocument } from '../../../src/settings/core/openSettingsDocument';
+import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 
 describe('openSettingsDocument (unit)', () => {
     it('opens the URI and shows its document', async () => {

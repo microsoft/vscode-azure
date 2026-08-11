@@ -3,11 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    ISettingsAdapter,
-    type GenericResource, type SettingsAdapter, type SettingsCollectionDescriptor,
-} from '@microsoft/vscode-azure-azutils';
-import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '@microsoft/vscode-azure-utils';
+import type { GenericResource } from '@microsoft/vscode-azure-azutils';
+import { ISettingsAdapter, type SettingsAdapter, type SettingsCollectionDescriptor } from './SettingsAdapter';
+import type { SettingsEntry, SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 import { injectable, multiInject, optional, type ServiceIdentifier } from 'inversify';
 
 export const ISettingsRegistry: ServiceIdentifier<ISettingsRegistry> = Symbol.for('ISettingsRegistry');
