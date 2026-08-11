@@ -426,7 +426,7 @@ export class AzureNodeId {
  * subscription) so callers can pass the node directly without first
  * resolving its owning account object.
  */
-export function getPortalHost(entity: { readonly environment: EnvironmentLike }): string {
+function getPortalHost(entity: { readonly environment: EnvironmentLike }): string {
     return new URL(entity.environment.portalUrl).hostname;
 }
 

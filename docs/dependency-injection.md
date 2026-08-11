@@ -160,28 +160,38 @@ type ProviderEntry<T> = Newable<T> | readonly [ServiceIdentifier<T>, Newable<T>]
 The `bindProviders` helper iterates the array and handles both cases:
 
 ```typescript
-function bindProviders<T>(container, collectionId, entries: readonly ProviderEntry<T>[]) {
+export function bindProviders<T>(
+    container: Container,
+    collectionId: ServiceIdentifier<T>,
+    entries: readonly ProviderEntry<T>[],
+): void {
     for (const entry of entries) {
         if (typeof entry === 'function') {
             container.bind(collectionId).to(entry).onActivation(pushDisposable);
         } else {
             const [primaryId, providerClass] = entry;
-            container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
+            if (!container.isBound(primaryId)) {
+                container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
+            }
             container.bind(collectionId).toService(primaryId);
         }
     }
 }
 ```
 
-Registration order in the array determines dispatch order — specific providers must come before the generic fallback:
+The `isBound` guard lets a test (or the mock-data entry point) rebind a provider under its `primaryId` before registration, without the product registration overwriting it.
+
+For the Azure resources tree the entries come from `ProductRegistrar`, so **dispatch order is the order products register** — specific products first, the generic fallback last:
 
 ```typescript
-dataProviders: [
-    AcrDataProvider,                                     // specific
-    [ISettingsDataProvider, SettingsDataProvider],        // specific, with direct-inject support
-    AzureResourceDataProvider,                           // fallback
-],
+// registerProducts.ts
+registerAcr(registrar);
+registerFunctions(registrar);
+registerSettings(registrar);     // claims only the settings virtual nodes
+registerGenericAzure(registrar); // root and fallback providers last
 ```
+
+Each product contributes its own entries with `registrar.registerResourceDataProvider()` and `registrar.registerResourceViewProvider()`. See [Tree Views](tree-views.md) for why order matters. The workspace and activity trees, which have no product registration, still pass literal arrays to `registerTree`.
 
 ## VS Code API Abstraction
 
