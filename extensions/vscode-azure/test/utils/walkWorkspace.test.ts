@@ -206,6 +206,7 @@ describe('walkWorkspace (unit)', () => {
         it('reports truncation instead of walking past the entry budget', async () => {
             const m = createMockVsCode();
             addWorkspace(m, '/repo');
+            addFile(m, '/repo/package.json', '{"name":"app"}');
             for (let i = 0; i < 20; i++) {
                 addFile(m, `/repo/dir${i}/file.txt`, '');
             }
@@ -218,6 +219,47 @@ describe('walkWorkspace (unit)', () => {
 
             expect(walk.truncated).to.be.true;
             expect(seen.length).to.be.lessThan(20);
+            // A directory that has already been read must still be reported: the
+            // budget bounds how far the walk descends, it does not discard work
+            // already done. Dropping it would hide the root's own manifests.
+            expect(seen.map(d => d.relativePath)).to.include('.');
+            expect(await seen[0].json('package.json')).to.deep.equal({ name: 'app' });
+        });
+
+        it('does not report truncation when the budget is exactly met', async () => {
+            const m = createMockVsCode();
+            addWorkspace(m, '/repo');
+            addFile(m, '/repo/a.txt', '');
+            addFile(m, '/repo/b.txt', '');
+
+            const walk = walkWorkspace(m.vscode, undefined, { maxEntries: 2 });
+            await drain(walk);
+
+            expect(walk.truncated).to.be.false;
+        });
+
+        it('reports truncation per iteration rather than latching', async () => {
+            const m = createMockVsCode();
+            addWorkspace(m, '/repo');
+            addFile(m, '/repo/a/file.txt', '');
+            addFile(m, '/repo/b/file.txt', '');
+
+            const walk = walkWorkspace(m.vscode, undefined, { maxEntries: 2 });
+            await drain(walk);
+            expect(walk.truncated).to.be.true;
+
+            // The tree shrinks under the budget, so re-iterating the same walk
+            // must report this run's outcome rather than the earlier one.
+            await m.fs.delete(m.vscode.Uri.file('/repo/b/file.txt'));
+            await m.fs.delete(m.vscode.Uri.file('/repo/b'));
+
+            const paths: string[] = [];
+            for await (const directory of walk) {
+                paths.push(directory.relativePath);
+            }
+
+            expect(paths).to.deep.equal(['.', 'a']);
+            expect(walk.truncated).to.be.false;
         });
 
         it('rejects an invalid entry budget', () => {
@@ -343,6 +385,13 @@ async function collect(
         directories.push(directory);
     }
     return directories;
+}
+
+/** Iterates a walk to completion, discarding the directories. */
+async function drain(walk: AsyncIterable<ScannedDirectory>): Promise<void> {
+    for await (const directory of walk) {
+        void directory;
+    }
 }
 
 function addWorkspace(m: MockVsCodeResult, path: string, index = 0): vscode.WorkspaceFolder {

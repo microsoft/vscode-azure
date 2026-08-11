@@ -47,8 +47,10 @@ export interface WalkWorkspaceOptions {
     readonly respectGitignore?: boolean;
 
     /**
-     * Directory entries to visit per scope root before the walk stops and sets
-     * {@linkcode WorkspaceWalk.truncated}. Bounds a pathological tree.
+     * Directory entries to visit per scope root before the walk stops descending
+     * and sets {@linkcode WorkspaceWalk.truncated}. Directories already read are
+     * still reported, so a budget shrinks how deep the walk goes rather than
+     * discarding results.
      */
     readonly maxEntries?: number;
 
@@ -97,8 +99,8 @@ export interface ScannedDirectory {
 /**
  * The directories reached by a walk, plus whether it stopped early.
  *
- * Iterate once and inspect {@linkcode truncated} afterwards; it is only
- * meaningful once iteration has finished.
+ * {@linkcode truncated} is only meaningful once iteration has finished, and
+ * reflects the most recent iteration.
  */
 export interface WorkspaceWalk extends AsyncIterable<ScannedDirectory> {
     readonly truncated: boolean;
@@ -156,6 +158,9 @@ export function walkWorkspace(
     const walk = {
         truncated: false,
         async *[Symbol.asyncIterator](): AsyncIterator<ScannedDirectory> {
+            // Reset so a re-iteration reports its own outcome rather than
+            // inheriting truncation from an earlier pass.
+            walk.truncated = false;
             for (const root of roots) {
                 yield* walkRoot(root);
             }
@@ -188,10 +193,6 @@ export function walkWorkspace(
                 throw error;
             }
 
-            if (entriesVisited + entries.length > maxEntries) {
-                walk.truncated = true;
-                return;
-            }
             entriesVisited += entries.length;
 
             // The filesystem gives no ordering guarantee, so sort for a stable
@@ -225,16 +226,24 @@ export function walkWorkspace(
             const scanned = createScannedDirectory(code, directory, fileNames, maxFileBytes, token);
             yield scanned.directory;
 
-            if (scanned.childrenSkipped()) {
-                continue;
+            if (!scanned.childrenSkipped()) {
+                for (const name of subdirectories) {
+                    pending.push({
+                        uri: code.Uri.joinPath(directory.uri, name),
+                        relativePath: join(directory.relativePath, name),
+                        ignoreScopes,
+                    });
+                }
             }
 
-            for (const name of subdirectories) {
-                pending.push({
-                    uri: code.Uri.joinPath(directory.uri, name),
-                    relativePath: join(directory.relativePath, name),
-                    ignoreScopes,
-                });
+            // Enforce the budget only after reporting this directory. It has
+            // already been read, so dropping it would waste that work and could
+            // hide the very manifest the caller came for -- a wide root would
+            // otherwise yield nothing at all. Truncation means "there was more
+            // to walk", so it is reported only when something is still queued.
+            if (entriesVisited >= maxEntries && pending.length > 0) {
+                walk.truncated = true;
+                return;
             }
         }
     }
