@@ -30,4 +30,15 @@ export interface WorkspaceScanResult {
      * incomplete. Consumers should not present the list as exhaustive.
      */
     readonly truncated: boolean;
+    /**
+     * Whether the walk would skip `relativePath` (a workspace-folder-relative,
+     * POSIX-style path) as generated, vendored, or `.gitignore`d.
+     *
+     * Retained from the walk so incremental consumers can discard file events
+     * without re-reading every `.gitignore`. This matters more than it looks: a
+     * watcher for `**‍/package.json` also matches every manifest under
+     * `node_modules`, so an `npm install` would otherwise trigger thousands of
+     * pointless rescans.
+     */
+    isExcluded(workspaceFolder: vscode.WorkspaceFolder, relativePath: string): boolean;
 }

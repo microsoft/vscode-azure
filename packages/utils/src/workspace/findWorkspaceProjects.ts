@@ -84,16 +84,31 @@ export async function findWorkspaceProjects(
     }
 
     const projects: WorkspaceProject[] = [];
+    const ignoreScopesByFolder = new Map<string, readonly IgnoreScope[]>();
     let truncated = false;
 
     for (const workspaceFolder of folders) {
         const folderResult = await scanWorkspaceFolder(
             code, workspaceFolder, detectors, markers, maxEntries, token);
         projects.push(...folderResult.projects);
+        ignoreScopesByFolder.set(workspaceFolder.uri.toString(), folderResult.ignoreScopes);
         truncated ||= folderResult.truncated;
     }
 
-    return { projects, truncated };
+    return {
+        projects,
+        truncated,
+        isExcluded: (workspaceFolder, relativePath) => {
+            const normalized = relativePath.replace(/\\/g, '/').replace(/^\.?\//, '');
+            if (normalized.split('/').some(segment => excludedDirectories.has(segment.toLowerCase()))) {
+                return true;
+            }
+            const scopes = ignoreScopesByFolder.get(workspaceFolder.uri.toString()) ?? [];
+            // Every scope discovered in the folder is tested; `isIgnored` skips
+            // the ones that are not ancestors of this path.
+            return isIgnored(normalized, false, scopes);
+        },
+    };
 }
 
 async function scanWorkspaceFolder(
@@ -103,8 +118,9 @@ async function scanWorkspaceFolder(
     markers: ProjectMarkers,
     maxEntries: number,
     token: vscode.CancellationToken | undefined,
-): Promise<{ projects: WorkspaceProject[]; truncated: boolean }> {
+): Promise<{ projects: WorkspaceProject[]; truncated: boolean; ignoreScopes: readonly IgnoreScope[] }> {
     const projects: WorkspaceProject[] = [];
+    const allIgnoreScopes: IgnoreScope[] = [];
     const pending: PendingDirectory[] = [{ uri: workspaceFolder.uri, relativePath: '', ignoreScopes: [] }];
     let entriesVisited = 0;
     let truncated = false;
@@ -137,6 +153,11 @@ async function scanWorkspaceFolder(
         entriesVisited += entries.length;
 
         const ignoreScopes = await loadIgnoreScopes(code, directory, entries, token);
+        if (ignoreScopes.length > directory.ignoreScopes.length) {
+            // A new `.gitignore` was parsed here; retain it so incremental
+            // consumers can reuse the compiled matcher.
+            allIgnoreScopes.push(ignoreScopes[ignoreScopes.length - 1]);
+        }
         const fileNames = new Set<string>();
         const subdirectories: string[] = [];
 
@@ -177,7 +198,7 @@ async function scanWorkspaceFolder(
         }
     }
 
-    return { projects, truncated };
+    return { projects, truncated, ignoreScopes: allIgnoreScopes };
 }
 
 async function evaluateDirectory(

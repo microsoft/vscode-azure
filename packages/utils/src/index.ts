@@ -46,3 +46,4 @@ export * from './workspace/defaultProjectDetectors';
 export * from './workspace/findWorkspaceProjects';
 export * from './workspace/ProjectDetector';
 export * from './workspace/WorkspaceProject';
+export * from './workspace/WorkspaceProjectService';
