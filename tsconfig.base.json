@@ -9,9 +9,10 @@
         "types": [
             "node",
             "mocha",
-            // Loads the global Chai.Assertion augmentation for chai-as-promised
-            // (registered in scripts/chaiSetup.mjs) so `rejectedWith` and
-            // friends typecheck in tests.
+            // chai-as-promised augments the global Chai.Assertion interface, and
+            // this array disables automatic @types discovery, so it has to be
+            // listed for `rejectedWith` and friends to typecheck. Registered at
+            // runtime in scripts/chaiSetup.mjs.
             "chai-as-promised",
         ],
         "sourceMap": true,
