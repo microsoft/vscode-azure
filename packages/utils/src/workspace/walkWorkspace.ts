@@ -120,8 +120,11 @@ export interface WorkspaceWalk extends AsyncIterable<ScannedDirectory> {
  * difference between one pass over the workspace and one pass per consumer.
  *
  * The walk is breadth-first, so shallower directories arrive first, and within a
- * directory entries are visited in name order so repeated walks agree. It never
- * follows directory symlinks (they can escape the scope or form cycles).
+ * directory entries are visited in name order so repeated walks agree.
+ *
+ * Symlinked *directories* are not descended into, since they can form cycles or
+ * point outside the scope; symlinked *files* are still listed and readable,
+ * because reading one is bounded and cannot loop.
  *
  * @throws {@linkcode CancellationError} when `token` is cancelled.
  *

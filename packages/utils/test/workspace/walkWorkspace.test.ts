@@ -90,6 +90,17 @@ describe('walkWorkspace (unit)', () => {
 
             expect(paths).to.deep.equal(['.']);
         });
+
+        it('still reads symlinked files, which cannot cause cycles', async () => {
+            const m = createMockVsCode();
+            const folder = addWorkspace(m, '/repo');
+            addFile(m, '/repo/real.json', '{"linked":true}');
+            m.fs.addSymbolicLink(m.vscode.Uri.joinPath(folder.uri, 'link.json'), m.vscode.FileType.File);
+
+            const [root] = await collect(m);
+
+            expect([...root.fileNames]).to.include('link.json');
+        });
     });
 
     describe('exclusions', () => {
