@@ -33,6 +33,7 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.deleteById.mock.calls[0].arguments).to.deep.equal([resource.id, resource.type]);
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.calls[0].arguments[0]).to.equal(resource);
+        expect(shownToasts(setup)).to.deep.equal([`Deleted resource '${resource.name}'.`]);
     });
 
     it('does not remove the node when the remote delete fails', async () => {
@@ -44,6 +45,7 @@ describe('DeleteAzureResource (unit)', () => {
         await assert.rejects(setup.command.execute(AzureNodeId.from(resource).toString()), failure);
 
         expect(setup.remove.mock.callCount()).to.equal(0);
+        expect(shownToasts(setup)).to.be.empty;
     });
 
     it('does not delete a resource when the confirmation is dismissed', async () => {
@@ -54,6 +56,7 @@ describe('DeleteAzureResource (unit)', () => {
 
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.callCount()).to.equal(0);
+        expect(shownToasts(setup)).to.be.empty;
     });
 
     it('deletes a resource group only after its name is typed', async () => {
@@ -67,6 +70,7 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.deleteResourceGroup.mock.calls[0].arguments[0]).to.equal(resourceGroup.name);
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.calls[0].arguments[0]).to.equal(resourceGroup);
+        expect(shownToasts(setup)).to.deep.equal([`Deleted resource group '${resourceGroup.name}'.`]);
     });
 
     it('blocks deletion while the typed name does not match the resource group', async () => {
@@ -84,6 +88,7 @@ describe('DeleteAzureResource (unit)', () => {
         inputBox.triggerHide();
         await assert.rejects(pending, (error: unknown) => CancellationError.test(error));
         expect(setup.remove.mock.callCount()).to.equal(0);
+        expect(shownToasts(setup)).to.be.empty;
     });
 
     it('does not delete a resource group when the typed confirmation is cancelled', async () => {
@@ -98,6 +103,32 @@ describe('DeleteAzureResource (unit)', () => {
 
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.callCount()).to.equal(0);
+    });
+
+    it('reports success only after a slow delete finishes', async () => {
+        const resource = makeGenericResource();
+        let finishDelete: (() => void) | undefined;
+        const deleteById = mock.fn((_resourceId: string, _resourceType: string) =>
+            new Promise<void>(resolve => { finishDelete = resolve; }));
+        const setup = createCommand(resource, { deleteById });
+        setup.mockResult.messageResponses.push('Delete');
+
+        const pending = setup.command.execute(AzureNodeId.from(resource).toString());
+
+        // withDelayedProgress only surfaces a notification once the work
+        // outlives its threshold, so wait for the progress path to engage.
+        await waitFor(() => setup.mockResult.window.withProgress.mock.callCount() === 1);
+
+        // Still in flight: no toast and the node is still in the tree.
+        expect(deleteById.mock.callCount()).to.equal(1);
+        expect(shownToasts(setup)).to.be.empty;
+        expect(setup.remove.mock.callCount()).to.equal(0);
+
+        finishDelete?.();
+        await pending;
+
+        expect(setup.remove.mock.callCount()).to.equal(1);
+        expect(shownToasts(setup)).to.deep.equal([`Deleted resource '${resource.name}'.`]);
     });
 
     it('routes an azd-managed resource through azd down against the matched environment', async () => {
@@ -174,13 +205,24 @@ interface CommandSetup {
     readonly remove: Mock<(target: unknown) => void>;
 }
 
-/** Wait for the command to open its confirmation prompt. */
-async function waitForInputBox(mockResult: MockVsCodeResult): Promise<MockInputBox> {
-    for (let attempt = 0; attempt < 100 && mockResult.inputBoxes.length === 0; attempt++) {
-        await new Promise(resolve => setImmediate(resolve));
+/** Yield to the event loop until {@linkcode condition} holds. */
+async function waitFor(condition: () => boolean): Promise<void> {
+    for (let attempt = 0; attempt < 1000 && !condition(); attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 1));
     }
 
-    expect(mockResult.inputBoxes, 'Expected the command to show an input box').to.have.length.greaterThan(0);
+    expect(condition(), 'Timed out waiting for the expected state').to.be.true;
+}
+
+/** Localized information toasts shown by the command, in order. */
+function shownToasts(setup: CommandSetup): string[] {
+    return setup.mockResult.window.showInformationMessage.mock.calls
+        .map(call => call.arguments[0]);
+}
+
+/** Wait for the command to open its confirmation prompt. */
+async function waitForInputBox(mockResult: MockVsCodeResult): Promise<MockInputBox> {
+    await waitFor(() => mockResult.inputBoxes.length > 0);
     return mockResult.inputBoxes[0];
 }
 
