@@ -4,20 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type {
-    GenericResource, SettingsAdapter, SettingsCapabilities, SettingsCollectionDescriptor,
+    GenericResource, SettingsAdapter, SettingsCollectionDescriptor,
 } from '@microsoft/vscode-azure-azutils';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '@microsoft/vscode-azure-utils';
 import { SettingsRegistry } from '../../src/settings/SettingsRegistry';
 import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
-
-/** Default capabilities: everything permitted. Override per test as needed. */
-export const permissiveCapabilities: SettingsCapabilities = {
-    canAdd: true,
-    canDelete: true,
-    canRename: true,
-    canWrite: true,
-};
 
 /** Options for {@linkcode createStubAdapter}. */
 export interface StubAdapterOptions {
@@ -25,8 +17,8 @@ export interface StubAdapterOptions {
     readonly logicalTypes: readonly string[];
     /** Collections the adapter exposes. Defaults to a single unstructured `appSettings`. */
     readonly collections?: readonly SettingsCollectionDescriptor[];
-    /** Capabilities per collection id. Falls back to {@linkcode permissiveCapabilities}. */
-    readonly capabilities?: Readonly<Record<string, SettingsCapabilities>>;
+    /** Collection ids the adapter refuses to write. Defaults to none. */
+    readonly readOnlyCollections?: readonly string[];
     /** Seed contents per collection id. Defaults to empty. */
     readonly entries?: Readonly<Record<string, SettingsMap>>;
 }
@@ -65,33 +57,34 @@ export class StubAdapter implements SettingsAdapter {
     }
 
     /** @inheritdoc */
-    public getCapabilities(_resource: GenericResource, collectionId: string): SettingsCapabilities {
-        return this.options.capabilities?.[collectionId] ?? permissiveCapabilities;
-    }
-
-    /** @inheritdoc */
     public read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot> {
         const collection = this.collections.find(candidate => candidate.id === collectionId);
         if (!collection) {
             return Promise.reject(new Error(`Unknown collection '${collectionId}'`));
         }
 
-        const capabilities = this.getCapabilities(resource, collectionId);
-
         return Promise.resolve({
             entries: this.store.get(collectionId) ?? [],
             resourceName: resource.name,
             collectionLabel: collection.label,
-            writable: capabilities.canWrite,
+            writable: !this.isReadOnly(collectionId),
             structured: collection.structured,
         });
     }
 
     /** @inheritdoc */
     public write(_resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
+        if (this.isReadOnly(collectionId)) {
+            return Promise.reject(new Error(`Settings in '${collectionId}' are read-only.`));
+        }
+
         this.writes.push([collectionId, entries]);
         this.store.set(collectionId, entries);
         return Promise.resolve();
+    }
+
+    private isReadOnly(collectionId: string): boolean {
+        return this.options.readOnlyCollections?.includes(collectionId) ?? false;
     }
 
     /** Current contents of a collection, as the stub sees them. */

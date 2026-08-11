@@ -46,7 +46,6 @@ export class RenameSetting implements ManagedCommand {
         const collectionId = collectionIdOf(node);
         const currentKey = settingKeyOf(node);
 
-        const capabilities = this.registry.getCapabilities(resource, collectionId);
         const existing = (await this.registry.read(resource, collectionId)).entries;
 
         const newKey = await showSmartInputBox(this.ctx, {
@@ -60,7 +59,7 @@ export class RenameSetting implements ManagedCommand {
                 if (trimmed !== currentKey && existing.some(entry => entry.key === trimmed)) {
                     return this.ctx.code.l10n.t('A setting named \'{0}\' already exists.', trimmed);
                 }
-                return capabilities.validateKey?.(trimmed);
+                return this.registry.validateKey(resource, collectionId, trimmed);
             },
         });
 

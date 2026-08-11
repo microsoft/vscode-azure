@@ -60,8 +60,6 @@ export class AddOrEditSetting implements ManagedCommand {
     }
 
     private async add(resource: GenericResource, collectionId: string): Promise<void> {
-        const capabilities = this.registry.getCapabilities(resource, collectionId);
-
         const existing = (await this.registry.read(resource, collectionId)).entries;
 
         const settingKey = await showSmartInputBox(this.ctx, {
@@ -75,7 +73,7 @@ export class AddOrEditSetting implements ManagedCommand {
                 if (existing.some(entry => entry.key === trimmed)) {
                     return this.ctx.code.l10n.t('A setting named \'{0}\' already exists.', trimmed);
                 }
-                return capabilities.validateKey?.(trimmed);
+                return this.registry.validateKey(resource, collectionId, trimmed);
             },
         });
 

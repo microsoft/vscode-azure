@@ -114,21 +114,20 @@ implementation** rather than re-vendoring the source's code:
 
 - **Application settings / connection strings** — there **is** a shared settings framework
   (`docs/settings.md`). Do **not** build product-specific settings trees, commands, or an editor.
-  Implement a single `SettingsAdapter` (`canHandle` / `getCollections` / `getCapabilities` / `read` /
-  `write`) in `extensions/vscode-azure/src/settings/adapters/`, bind it to `ISettingsAdapter` in
+  Implement a single `SettingsAdapter` (`canHandle` / `getCollections` / `read` / `write`) in
+  `extensions/vscode-azure/src/settings/adapters/`, bind it to `ISettingsAdapter` in
   `registerSettings.ts`, and stop. The collection tree node, the per-setting nodes, the JSONC editor,
-  shared commands, and value masking all follow automatically from the `SettingsCapabilities` the
-  adapter reports. Local configuration synchronization belongs to azd or the product's deployment
-  workflow, not this framework.
-  - Product differences are expressed as **capability flags** (`canAdd`, `canDelete`, `canRename`,
-    `canWrite`), never as branches on product identity. A product that forbids renaming returns
-    `canRename: false`. Add a new flag only when a real adapter needs it.
+  shared commands, and value masking all come for free. Local configuration synchronization belongs
+  to azd or the product's deployment workflow, not this framework.
+  - There is no capability model. A product that permits only a subset of the commands registers its
+    own view provider and attaches only the context values it wants; a collection it will not let the
+    user edit returns `writable: false` on its snapshot. Enforcement lives in `write`, which runs for
+    both the editor and the commands.
   - A collection whose entries carry side-channel data (e.g. a connection string's `type`) sets
     `structured: true` and puts that data in each entry's `metadata`.
   - (Note: the source likely uses the shared `@microsoft/vscode-azext-azureappsettings` package with
     `contextValuesToAdd: ['<product>']`. That azext package is **not** the monorepo pattern; the
-    inventory should record which operations the product supports, which becomes its capability
-    flags.)
+    inventory should record which operations the product supports.)
 - **Sign-in, accounts, tenants, subscriptions, subscription filtering** — the account data provider +
   `Azure: Select Subscriptions`.
 - **Open in portal, resource-group grouping** — generic commands + `AzureResourceDataProvider` /

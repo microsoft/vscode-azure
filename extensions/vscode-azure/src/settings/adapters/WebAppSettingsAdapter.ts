@@ -7,7 +7,7 @@ import {
     AppServiceLogicalType, ConnectionStringTypes, FunctionAppLogicalType, IWebAppClientProvider,
     LogicAppLogicalType, parseAzureResourceId,
     type ConnectionStringType, type ConnStringValueTypePair, type GenericResource,
-    type IWebAppClient, type SettingsAdapter, type SettingsCapabilities, type SettingsCollectionDescriptor,
+    type IWebAppClient, type SettingsAdapter, type SettingsCollectionDescriptor,
 } from '@microsoft/vscode-azure-azutils';
 import { IVsCode, type SettingsMap, type SettingsSnapshot } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -77,28 +77,6 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
     }
 
     /** @inheritdoc */
-    public getCapabilities(resource: GenericResource, collectionId: string): SettingsCapabilities {
-        this.requireCollection(resource, collectionId);
-
-        const base = {
-            canAdd: true,
-            canDelete: true,
-            canRename: true,
-            canWrite: true,
-            validateKey: (key: string) => this.validateKey(key),
-        } satisfies Partial<SettingsCapabilities>;
-
-        if (collectionId === ConnectionStringsCollectionId) {
-            return {
-                ...base,
-                validateMetadata: (field, value) => this.validateConnectionStringMetadata(field, value),
-            };
-        }
-
-        return base;
-    }
-
-    /** @inheritdoc */
     public async read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot> {
         const collection = this.requireCollection(resource, collectionId);
         const { client, resourceGroupName } = this.resolveClient(resource);
@@ -107,13 +85,12 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
             ? toConnectionStringEntries((await client.webApps.listConnectionStrings(resourceGroupName, resource.name)).properties)
             : toAppSettingEntries((await client.webApps.listApplicationSettings(resourceGroupName, resource.name)).properties);
 
-        const capabilities = this.getCapabilities(resource, collectionId);
-
         return {
             entries,
             resourceName: resource.name,
             collectionLabel: collection.label,
-            writable: capabilities.canWrite,
+            // ARM permits editing every collection this adapter exposes.
+            writable: true,
             structured: collection.structured,
         };
     }
@@ -122,6 +99,7 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
     public async write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
         this.requireCollection(resource, collectionId);
         const { client, resourceGroupName } = this.resolveClient(resource);
+        this.validateKeys(entries);
 
         if (collectionId === ConnectionStringsCollectionId) {
             this.validateConnectionStrings(entries);
@@ -136,7 +114,26 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
         });
     }
 
-    private validateKey(key: string): string | undefined {
+    /** @inheritdoc */
+    public validateKey(resource: GenericResource, collectionId: string, key: string): string | undefined {
+        this.requireCollection(resource, collectionId);
+        return this.validateSettingKey(key);
+    }
+
+    /**
+     * Reject invalid names before the ARM call. Runs on every write, including editor saves, which
+     * never pass through the prompt-time {@linkcode validateKey}.
+     */
+    private validateKeys(entries: SettingsMap): void {
+        for (const entry of entries) {
+            const error = this.validateSettingKey(entry.key);
+            if (error) {
+                throw new Error(error);
+            }
+        }
+    }
+
+    private validateSettingKey(key: string): string | undefined {
         if (!key.trim()) {
             return this.code.l10n.t('The setting name cannot be empty.');
         }

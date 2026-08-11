@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, getNodeType, type SettingsCapabilities } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, getNodeType } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { AddOrEditSetting } from '../../../commands/settings/AddOrEditSetting';
@@ -27,10 +27,15 @@ const MaskedValue = '\u2022'.repeat(8);
 /**
  * View-layer provider for settings nodes.
  *
- * Renders the collection category and each individual setting, and assembles each node's
- * `contextValue` from the **capabilities** the owning adapter reports. A command whose capability is
- * absent is simply not listed, so its `when` clause never matches and the menu item never appears --
- * that is how product differences stay out of the shared command layer.
+ * Renders the collection category and each individual setting, and attaches the context values for
+ * the full shared command set.
+ *
+ * A product that permits only a subset registers its **own** view provider ahead of this one and
+ * attaches only the context values it wants: a command whose context value is absent never matches
+ * its `when` clause, so the menu item never appears. That is the same mechanism every other tree
+ * node uses, which is why there is no separate capability model here. Enforcement lives in
+ * {@linkcode SettingsAdapter.write}, so a restricted collection is safe even if a command is invoked
+ * from the palette.
  *
  * @remarks
  * Must be registered **before** the generic view provider in `registerTrees.ts`.
@@ -110,7 +115,7 @@ export class SettingsViewProvider implements ViewProvider<string> {
         );
         item.id = key;
         item.iconPath = new this.ctx.code.ThemeIcon('settings');
-        item.contextValue = combineContextValues(...this.collectionContextValues(node));
+        item.contextValue = combineContextValues(...this.collectionContextValues());
 
         return item;
     }
@@ -120,7 +125,7 @@ export class SettingsViewProvider implements ViewProvider<string> {
         item.id = key;
         item.iconPath = new this.ctx.code.ThemeIcon('symbol-key');
         item.description = this.describeValue(node);
-        item.contextValue = combineContextValues(...this.entryContextValues(node));
+        item.contextValue = combineContextValues(...this.entryContextValues());
 
         return item;
     }
@@ -133,46 +138,22 @@ export class SettingsViewProvider implements ViewProvider<string> {
         return this.visibility.showValues ? node.value : MaskedValue;
     }
 
-    private collectionContextValues(node: SettingsCollectionNode): string[] {
-        const values = [EditSettings.ContextValue, ToggleSettingValueVisibility.ContextValue];
-
-        const capabilities = this.tryGetCapabilities(node);
-        if (capabilities?.canAdd && capabilities.canWrite) {
-            values.push(AddOrEditSetting.AddContextValue);
-        }
-
-        return values;
+    private collectionContextValues(): string[] {
+        return [
+            EditSettings.ContextValue,
+            ToggleSettingValueVisibility.ContextValue,
+            AddOrEditSetting.AddContextValue,
+        ];
     }
 
-    private entryContextValues(node: SettingsEntryNode): string[] {
-        const values = [EditSettings.ContextValue, CopySettingValue.ContextValue, ToggleSettingValueVisibility.ContextValue];
-
-        const capabilities = this.tryGetCapabilities(node);
-        if (capabilities?.canWrite) {
-            values.push(AddOrEditSetting.EditContextValue);
-
-            if (capabilities.canRename) {
-                values.push(RenameSetting.ContextValue);
-            }
-            if (capabilities.canDelete) {
-                values.push(DeleteSetting.ContextValue);
-            }
-        }
-
-        return values;
-    }
-
-    /**
-     * Capabilities for a node's collection, or `undefined` if they cannot be determined.
-     *
-     * Rendering must never fail because an adapter rejected a lookup; the node still shows, just
-     * without the mutating commands, which is the safe direction to fail.
-     */
-    private tryGetCapabilities(node: SettingsCollectionNode | SettingsEntryNode): SettingsCapabilities | undefined {
-        try {
-            return this.registry.getCapabilities(node.azureResource, collectionIdOf(node));
-        } catch {
-            return undefined;
-        }
+    private entryContextValues(): string[] {
+        return [
+            EditSettings.ContextValue,
+            CopySettingValue.ContextValue,
+            ToggleSettingValueVisibility.ContextValue,
+            AddOrEditSetting.EditContextValue,
+            RenameSetting.ContextValue,
+            DeleteSetting.ContextValue,
+        ];
     }
 }

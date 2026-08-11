@@ -16,8 +16,7 @@ import { SettingsViewProvider } from '../../../../src/tree/resources/settings/Se
 import {
     createCollectionNode, createEntryNode,
 } from '../../../../src/tree/resources/settings/SettingsNode';
-import { createSettingsRegistry, createStubAdapter, entry, permissiveCapabilities } from '../../../settings/mockSettings';
-import type { SettingsCapabilities } from '@microsoft/vscode-azure-azutils';
+import { createSettingsRegistry, createStubAdapter, entry } from '../../../settings/mockSettings';
 
 const resource = makeGenericResource({
     id: '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Web/sites/app',
@@ -25,7 +24,7 @@ const resource = makeGenericResource({
     logicalType: FunctionAppLogicalType,
 });
 
-function createProvider(options?: { showValues?: boolean; capabilities?: SettingsCapabilities }) {
+function createProvider(options?: { showValues?: boolean }) {
     const mockCtx = createMockCodeContext();
     const { executor } = createTestActionExecutor();
 
@@ -41,10 +40,7 @@ function createProvider(options?: { showValues?: boolean; capabilities?: Setting
         getChildren: () => Promise.resolve([]),
     };
 
-    const adapter = createStubAdapter({
-        logicalTypes: [FunctionAppLogicalType],
-        capabilities: { appSettings: options?.capabilities ?? permissiveCapabilities },
-    });
+    const adapter = createStubAdapter({ logicalTypes: [FunctionAppLogicalType] });
 
     const provider = new SettingsViewProvider(
         mockCtx.ctx,
@@ -73,31 +69,13 @@ describe('SettingsViewProvider (unit)', () => {
             expect(provider.getTreeItem(key).collapsibleState).to.equal(1);
         });
 
-        it('offers edit, toggle, and add when adding is permitted', () => {
+        it('offers edit, toggle, and add', () => {
             const { provider, register } = createProvider();
             const key = register(createCollectionNode(resource, 'appSettings'));
 
             const contextValue = provider.getTreeItem(key).contextValue ?? '';
             expect(contextValue).to.contain(EditSettings.ContextValue);
             expect(contextValue).to.contain(AddOrEditSetting.AddContextValue);
-        });
-
-        it('omits add when the adapter forbids it', () => {
-            const { provider, register } = createProvider({
-                capabilities: { ...permissiveCapabilities, canAdd: false },
-            });
-            const key = register(createCollectionNode(resource, 'appSettings'));
-
-            expect(provider.getTreeItem(key).contextValue ?? '').to.not.contain(AddOrEditSetting.AddContextValue);
-        });
-
-        it('omits add on a read-only collection', () => {
-            const { provider, register } = createProvider({
-                capabilities: { ...permissiveCapabilities, canWrite: false },
-            });
-            const key = register(createCollectionNode(resource, 'appSettings'));
-
-            expect(provider.getTreeItem(key).contextValue ?? '').to.not.contain(AddOrEditSetting.AddContextValue);
         });
     });
 
@@ -132,7 +110,7 @@ describe('SettingsViewProvider (unit)', () => {
             expect(provider.getTreeItem(key).description).to.equal('super-secret');
         });
 
-        it('offers copy and edit-value when writable', () => {
+        it('offers the full per-setting command set', () => {
             const { provider, register } = createProvider();
             const key = register(createEntryNode(resource, 'appSettings', entry('A', '1')));
 
@@ -141,31 +119,6 @@ describe('SettingsViewProvider (unit)', () => {
             expect(contextValue).to.contain(AddOrEditSetting.EditContextValue);
             expect(contextValue).to.contain(RenameSetting.ContextValue);
             expect(contextValue).to.contain(DeleteSetting.ContextValue);
-        });
-
-        it('omits every mutating command on a read-only collection', () => {
-            const { provider, register } = createProvider({
-                capabilities: { ...permissiveCapabilities, canWrite: false },
-            });
-            const key = register(createEntryNode(resource, 'appSettings', entry('A', '1')));
-
-            const contextValue = provider.getTreeItem(key).contextValue ?? '';
-            expect(contextValue).to.not.contain(AddOrEditSetting.EditContextValue);
-            expect(contextValue).to.not.contain(RenameSetting.ContextValue);
-            expect(contextValue).to.not.contain(DeleteSetting.ContextValue);
-            // Reading is still fine.
-            expect(contextValue).to.contain(CopySettingValue.ContextValue);
-        });
-
-        it('omits delete but keeps rename when only deletion is forbidden', () => {
-            const { provider, register } = createProvider({
-                capabilities: { ...permissiveCapabilities, canDelete: false },
-            });
-            const key = register(createEntryNode(resource, 'appSettings', entry('A', '1')));
-
-            const contextValue = provider.getTreeItem(key).contextValue ?? '';
-            expect(contextValue).to.not.contain(DeleteSetting.ContextValue);
-            expect(contextValue).to.contain(RenameSetting.ContextValue);
         });
     });
 

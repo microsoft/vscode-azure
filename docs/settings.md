@@ -9,7 +9,7 @@ tree, a command set, and an editor of its own.
 
 ```
 packages/utils/src/settings/           Azure-agnostic: model, JSONC format, generic FileSystemProvider
-packages/azutils/src/settings/         SettingsAdapter contract + capabilities
+packages/azutils/src/settings/         SettingsAdapter contract
 extensions/vscode-azure/src/settings/  Registry, adapters, URI codec, document sources, registration
 extensions/vscode-azure/src/tree/resources/settings/   Data + view providers
 extensions/vscode-azure/src/commands/settings/         Commands
@@ -76,9 +76,9 @@ A product supports settings by implementing `SettingsAdapter` (in azutils) and b
 export interface SettingsAdapter {
     canHandle(resource: GenericResource): boolean;
     getCollections(resource: GenericResource): readonly SettingsCollectionDescriptor[];
-    getCapabilities(resource: GenericResource, collectionId: string): SettingsCapabilities;
     read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot>;
     write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void>;
+    validateKey?(resource: GenericResource, collectionId: string, key: string): string | undefined;
 }
 ```
 
@@ -86,20 +86,23 @@ export interface SettingsAdapter {
 lookup by logical type because `getCollections` runs for every resource the generic data provider
 lists; an adapter that also inspected, say, the resource's location would be memoized incorrectly.
 
-### Capabilities, not product branches
+### Restricting what a product permits
 
-`SettingsCapabilities` is how product differences stay out of the shared layer. The view provider
-assembles each node's `contextValue` from these flags, so a command whose capability is absent is
-never contributed, its `when` clause never matches, and the menu item never appears:
+There is deliberately **no capability model**. Two existing mechanisms already cover it:
 
-| Flag | Effect when false |
-|---|---|
-| `canWrite` | Document opens read-only; every mutating command is withheld |
-| `canAdd` | "Add New Setting" is withheld |
-| `canDelete` | "Delete Setting" is withheld |
-| `canRename` | "Rename Setting" is withheld |
+- **What the user sees** is the tree's context values. A product that permits only a subset registers
+  its own view provider ahead of `SettingsViewProvider` and attaches only the context values it
+  wants; a command whose context value is absent never matches its `when` clause, so the menu item
+  never appears. This is the same mechanism every other tree node uses.
+- **What is actually allowed** is `SettingsAdapter.write`. It runs for the editor *and* every
+  per-setting command, so it is the one place a rule cannot be bypassed — including from the command
+  palette, which ignores context values entirely.
 
-Adding a product that forbids renaming means returning `canRename: false` — not adding a branch.
+A collection the product will not let the user edit sets `writable: false` on the snapshot it returns
+from `read`, which makes the editor document read-only.
+
+`validateKey` is advisory: it exists only for live feedback while typing in an input box. `write`
+must reject an invalid name regardless, since an editor save never passes through a prompt.
 
 ### Structured collections
 
@@ -117,8 +120,8 @@ Unstructured collections serialize as plain `"KEY": "value"`. The framework pick
 
 > **Not modeled:** services that refuse to return values on read. Every adapter today returns real
 > values, and a whole-collection `write` cannot express "preserve this key" without sending a
-> placeholder over the real secret. Add a capability for it alongside the first adapter that needs
-> one, rather than carrying unexercised machinery.
+> placeholder over the real secret. Model it alongside the first adapter that needs it, rather than
+> carrying unexercised machinery.
 
 ## Secrets
 
@@ -210,14 +213,14 @@ a confirmation prompt to every save.
 2. Implement `SettingsAdapter` in `extensions/vscode-azure/src/settings/adapters/`.
 3. Bind it in `bindSettingsServices` in `registerSettings.ts`.
 
-That is all. The tree nodes, editor, shared command set, and masking follow from the capabilities the
-adapter reports.
+That is all. The tree nodes, editor, shared command set, and masking come for free.
 
 ## Testing
 
 `extensions/vscode-azure/test/settings/mockSettings.ts` provides `StubAdapter` (an in-memory adapter
-that retains writes for assertion), `createSettingsRegistry`, `createSettingsDataProvider`, and
-`permissiveCapabilities`. Prefer these over hand-rolled fixtures.
+that retains writes for assertion, and refuses writes to any collection listed in
+`readOnlyCollections`), `createSettingsRegistry`, and `createSettingsDataProvider`. Prefer these over
+hand-rolled fixtures.
 
 Use Node's `assert.rejects` when testing rejected promises rather than a hand-written
 `try { await ...; expect.fail(); } catch { ... }` shape.

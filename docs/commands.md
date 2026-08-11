@@ -122,11 +122,13 @@ In `package.json`, commands use regex `when` clauses with word boundaries:
 
 The `\b` word boundary prevents unintended partial matches (e.g. `openInPortal` matching `openInPortalV2`).
 
-### Gating a command on a capability
+### Gating a command conditionally
 
 A context value does not have to be unconditional. When whether a command applies is a property of the *data* rather than of the node type, the view provider decides per node, and the command is contributed only when it is genuinely available.
 
-The settings tree does this: `SettingsViewProvider` assembles each node's `contextValue` from the `SettingsCapabilities` its adapter reports, so a product that forbids renaming simply never contributes `renameSetting`, its `when` clause never matches, and the menu item never appears. This is preferable to contributing the command and failing at execution time — the user never sees an action that cannot work — and it keeps product-specific behavior out of the shared command classes entirely. See [Settings](settings.md).
+Prefer expressing this in the view provider that owns the node rather than inventing a separate permission model: a product that permits only a subset of the shared settings commands registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values it wants. This is preferable to contributing the command and failing at execution time — the user never sees an action that cannot work.
+
+Note that a context value only controls *menu visibility*. The command palette ignores it, so anything that must never happen has to be enforced where the work is actually done (for settings, that is `SettingsAdapter.write`). See [Settings](settings.md).
 
 ## Commands with Resource Selection
 

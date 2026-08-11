@@ -5,7 +5,7 @@
 
 import {
     ISettingsAdapter,
-    type GenericResource, type SettingsAdapter, type SettingsCapabilities, type SettingsCollectionDescriptor,
+    type GenericResource, type SettingsAdapter, type SettingsCollectionDescriptor,
 } from '@microsoft/vscode-azure-azutils';
 import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '@microsoft/vscode-azure-utils';
 import { injectable, multiInject, optional, type ServiceIdentifier } from 'inversify';
@@ -65,12 +65,13 @@ export class SettingsRegistry {
     }
 
     /**
-     * What is permitted on a collection.
+     * Validate a proposed setting name, for live feedback in an input box.
      *
-     * @throws if no adapter handles the resource, or the collection id is unknown to it.
+     * @returns a localized error message, or `undefined` if the name is acceptable or the adapter
+     * has no opinion.
      */
-    public getCapabilities(resource: GenericResource, collectionId: string): SettingsCapabilities {
-        return this.require(resource, collectionId).getCapabilities(resource, collectionId);
+    public validateKey(resource: GenericResource, collectionId: string, key: string): string | undefined {
+        return this.getAdapter(resource)?.validateKey?.(resource, collectionId, key);
     }
 
     /**
@@ -85,10 +86,9 @@ export class SettingsRegistry {
     /**
      * Replace a collection's entire contents. Keys absent from {@linkcode entries} are deleted.
      *
-     * @throws if no adapter handles the resource, or the collection is unknown or read-only.
+     * @throws if no adapter handles the resource, or the adapter rejects the write.
      */
     public async write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
-        this.requireWritable(this.getCapabilities(resource, collectionId));
         await this.require(resource, collectionId).write(resource, collectionId, entries);
     }
 
@@ -100,18 +100,11 @@ export class SettingsRegistry {
      * unlike the editor, it re-reads immediately beforehand, so keys it does *not* touch are
      * preserved.
      *
-     * @throws if the collection does not permit the change.
+     * @throws if the adapter rejects the write.
      */
     public async upsert(resource: GenericResource, collectionId: string, entry: SettingsEntry): Promise<void> {
-        const capabilities = this.getCapabilities(resource, collectionId);
-        this.requireWritable(capabilities);
-
         const current = (await this.read(resource, collectionId)).entries;
         const existing = current.some(candidate => candidate.key === entry.key);
-
-        if (!existing && !capabilities.canAdd) {
-            throw new Error(`Settings cannot be added to '${collectionId}' on this resource.`);
-        }
 
         const next = existing
             ? current.map(candidate => candidate.key === entry.key ? entry : candidate)
@@ -123,15 +116,9 @@ export class SettingsRegistry {
     /**
      * Delete a setting by key. Deleting a key that is already absent is a no-op.
      *
-     * @throws if the collection does not permit deletion.
+     * @throws if the adapter rejects the write.
      */
     public async remove(resource: GenericResource, collectionId: string, key: string): Promise<void> {
-        const capabilities = this.getCapabilities(resource, collectionId);
-        this.requireWritable(capabilities);
-        if (!capabilities.canDelete) {
-            throw new Error(`Settings cannot be deleted from '${collectionId}' on this resource.`);
-        }
-
         const current = (await this.read(resource, collectionId)).entries;
         await this.write(resource, collectionId, current.filter(entry => entry.key !== key));
     }
@@ -139,16 +126,10 @@ export class SettingsRegistry {
     /**
      * Rename a setting, preserving its value, metadata, and position in the collection.
      *
-     * @throws if the collection does not permit renaming, the source key is missing, or the target
-     * key already exists -- renaming onto an existing key would silently destroy it.
+     * @throws if the source key is missing, the target key already exists -- renaming onto an
+     * existing key would silently destroy it -- or the adapter rejects the write.
      */
     public async rename(resource: GenericResource, collectionId: string, fromKey: string, toKey: string): Promise<void> {
-        const capabilities = this.getCapabilities(resource, collectionId);
-        this.requireWritable(capabilities);
-        if (!capabilities.canRename) {
-            throw new Error(`Settings cannot be renamed in '${collectionId}' on this resource.`);
-        }
-
         const current = (await this.read(resource, collectionId)).entries;
         if (!current.some(entry => entry.key === fromKey)) {
             throw new Error(`There is no setting named '${fromKey}' to rename.`);
@@ -162,12 +143,6 @@ export class SettingsRegistry {
             collectionId,
             current.map(entry => entry.key === fromKey ? { ...entry, key: toKey } : entry),
         );
-    }
-
-    private requireWritable(capabilities: SettingsCapabilities): void {
-        if (!capabilities.canWrite) {
-            throw new Error('These settings are read-only.');
-        }
     }
 
     private require(resource: GenericResource, collectionId: string): SettingsAdapter {

@@ -86,37 +86,18 @@ describe('WebAppSettingsAdapter (unit)', () => {
         });
     });
 
-    describe('getCapabilities', () => {
-        it('permits full editing of application settings', () => {
-            const { adapter } = createAdapter();
-            const capabilities = adapter.getCapabilities(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);
-
-            expect(capabilities.canAdd).to.be.true;
-            expect(capabilities.canDelete).to.be.true;
-            expect(capabilities.canRename).to.be.true;
-            expect(capabilities.canWrite).to.be.true;
-        });
-
+    describe('validateKey', () => {
         it('rejects an empty setting name', () => {
             const { adapter } = createAdapter();
-            const { validateKey } = adapter.getCapabilities(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);
+            const site = makeSite(FunctionAppLogicalType);
 
-            expect(validateKey?.('  ')).to.be.a('string');
-            expect(validateKey?.('OK')).to.be.undefined;
-        });
-
-        it('validates connection string types against the ARM-accepted set', () => {
-            const { adapter } = createAdapter();
-            const { validateMetadata } = adapter.getCapabilities(makeSite(FunctionAppLogicalType), ConnectionStringsCollectionId);
-
-            expect(validateMetadata?.('type', 'SQLAzure')).to.be.undefined;
-            expect(validateMetadata?.('type', 'NotAType')).to.be.a('string');
-            expect(validateMetadata?.('unknownField', 'x')).to.be.a('string');
+            expect(adapter.validateKey(site, AppSettingsCollectionId, '  ')).to.be.a('string');
+            expect(adapter.validateKey(site, AppSettingsCollectionId, 'OK')).to.be.undefined;
         });
 
         it('throws for a collection it does not expose', () => {
             const { adapter } = createAdapter();
-            expect(() => adapter.getCapabilities(makeSite(FunctionAppLogicalType), 'nope')).to.throw();
+            expect(() => adapter.validateKey(makeSite(FunctionAppLogicalType), 'nope', 'A')).to.throw();
         });
     });
 
@@ -222,6 +203,19 @@ describe('WebAppSettingsAdapter (unit)', () => {
             expect(updateConnectionStrings.mock.calls[0].arguments[2]).to.deep.equal({
                 properties: { MyDb: { value: 'conn', type: 'Custom' } },
             });
+        });
+
+        it('rejects an invalid setting name before calling ARM, even from an editor save', async () => {
+            const { adapter, updateApplicationSettings } = createAdapter();
+
+            await assert.rejects(
+                adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, [
+                    { key: '  ', value: 'x' },
+                ]),
+                /cannot be empty/,
+            );
+
+            expect(updateApplicationSettings.mock.callCount()).to.equal(0);
         });
 
         it('rejects an invalid connection string type before calling ARM', async () => {

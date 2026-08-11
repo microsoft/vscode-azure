@@ -7,7 +7,7 @@ import { AppServiceLogicalType, FunctionAppLogicalType } from '@microsoft/vscode
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import * as assert from 'node:assert';
 import { expect } from 'chai';
-import { createSettingsRegistry, createStubAdapter, entry, permissiveCapabilities } from './mockSettings';
+import { createSettingsRegistry, createStubAdapter, entry } from './mockSettings';
 
 function makeApp(logicalType: string) {
     return makeGenericResource({
@@ -97,10 +97,10 @@ describe('SettingsRegistry (unit)', () => {
     });
 
     describe('single-key mutations', () => {
-        function setup(capabilities = permissiveCapabilities) {
+        function setup(readOnlyCollections?: readonly string[]) {
             const adapter = createStubAdapter({
                 logicalTypes: [FunctionAppLogicalType],
-                capabilities: { appSettings: capabilities },
+                readOnlyCollections,
                 entries: { appSettings: [entry('A', '1'), entry('B', '2')] },
             });
             return { adapter, registry: createSettingsRegistry(adapter), resource: makeApp(FunctionAppLogicalType) };
@@ -172,30 +172,9 @@ describe('SettingsRegistry (unit)', () => {
             expect(adapter.contents('connectionStrings')).to.deep.equal([entry('DB2', 'conn', { type: 'SQLAzure' })]);
         });
 
-        describe('capability enforcement', () => {
-            it('refuses to add when adding is not permitted, but still allows editing', async () => {
-                const { adapter, registry, resource } = setup({ ...permissiveCapabilities, canAdd: false });
-
-                await assert.rejects(registry.upsert(resource, 'appSettings', entry('NEW', 'x')), /cannot be added/);
-
-                await registry.upsert(resource, 'appSettings', entry('A', 'edited'));
-                expect(adapter.contents('appSettings')[0]).to.deep.equal(entry('A', 'edited'));
-            });
-
-            it('refuses to delete when deletion is not permitted', async () => {
-                const { registry, resource } = setup({ ...permissiveCapabilities, canDelete: false });
-
-                await assert.rejects(registry.remove(resource, 'appSettings', 'A'), /cannot be deleted/);
-            });
-
-            it('refuses to rename when renaming is not permitted', async () => {
-                const { registry, resource } = setup({ ...permissiveCapabilities, canRename: false });
-
-                await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be renamed/);
-            });
-
-            it('refuses every write on a read-only collection', async () => {
-                const { adapter, registry, resource } = setup({ ...permissiveCapabilities, canWrite: false });
+        describe('adapter enforcement', () => {
+            it('surfaces the adapter\'s refusal on every write path', async () => {
+                const { adapter, registry, resource } = setup(['appSettings']);
 
                 await assert.rejects(registry.write(resource, 'appSettings', [entry('A', '1')]), /read-only/);
                 await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /read-only/);

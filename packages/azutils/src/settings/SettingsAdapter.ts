@@ -27,42 +27,11 @@ export interface SettingsCollectionDescriptor {
 }
 
 /**
- * What a product permits on one settings collection.
- *
- * This is the mechanism that keeps product differences out of the shared layer: the framework gates
- * commands and editor behavior on these flags rather than on product identity. Adding a product
- * that, say, forbids renaming means returning `canRename: false` -- not adding a branch.
- */
-export interface SettingsCapabilities {
-    /** Whether new settings may be added. */
-    readonly canAdd: boolean;
-    /** Whether existing settings may be deleted. */
-    readonly canDelete: boolean;
-    /** Whether a setting may be renamed. */
-    readonly canRename: boolean;
-    /** Whether any write is permitted. When `false`, the editor opens read-only. */
-    readonly canWrite: boolean;
-    /**
-     * Validate a proposed setting name.
-     *
-     * @returns a localized error message, or `undefined` if the name is acceptable.
-     */
-    readonly validateKey?: (key: string) => string | undefined;
-    /**
-     * Validate a proposed metadata field value on a structured collection (e.g. a connection
-     * string's `type`).
-     *
-     * @returns a localized error message, or `undefined` if acceptable.
-     */
-    readonly validateMetadata?: (field: string, value: string) => string | undefined;
-}
-
-/**
  * Per-product access to settings on a resource.
  *
- * Implementations own everything product-specific: which collections exist, what may be done to
- * them, and how to read and write them. The shared model, tree, editor, and commands consult this
- * interface and never branch on resource type themselves.
+ * Implementations own everything product-specific: which collections exist, how to read and write
+ * them, and what a valid setting name looks like. The shared model, tree, editor, and commands
+ * consult this interface and never branch on resource type themselves.
  *
  * @remarks
  * {@linkcode SettingsAdapter.write write} receives the collection's **complete** new contents. Keys
@@ -77,14 +46,10 @@ export interface SettingsAdapter {
     getCollections(resource: GenericResource): readonly SettingsCollectionDescriptor[];
 
     /**
-     * What is permitted on {@linkcode collectionId} for {@linkcode resource}.
-     *
-     * @throws if the collection id is not one this adapter exposes for the resource.
-     */
-    getCapabilities(resource: GenericResource, collectionId: string): SettingsCapabilities;
-
-    /**
      * Read the current contents of a collection.
+     *
+     * Set {@linkcode SettingsSnapshot.writable writable} on the returned snapshot to `false` for a
+     * collection this product will not let the user edit; the editor then opens it read-only.
      *
      * @throws if the collection id is not one this adapter exposes for the resource.
      */
@@ -93,9 +58,24 @@ export interface SettingsAdapter {
     /**
      * Replace a collection's entire contents with {@linkcode entries}.
      *
-     * @throws if the collection is not writable, or the id is not one this adapter exposes.
+     * Implementations own enforcement: reject the write if the collection is read-only or any entry
+     * is invalid. This runs for both the editor and the per-setting commands, so it is the one place
+     * a product's rules cannot be bypassed.
+     *
+     * @throws if the collection is not writable, an entry is invalid, or the id is not one this
+     * adapter exposes.
      */
     write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void>;
+
+    /**
+     * Validate a proposed setting name, for live feedback in an input box.
+     *
+     * Advisory only -- {@linkcode SettingsAdapter.write write} must reject an invalid name regardless,
+     * since the editor can save one without ever going through a prompt.
+     *
+     * @returns a localized error message, or `undefined` if the name is acceptable.
+     */
+    validateKey?(resource: GenericResource, collectionId: string, key: string): string | undefined;
 }
 
 /**
