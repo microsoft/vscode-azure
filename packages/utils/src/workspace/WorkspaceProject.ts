@@ -5,61 +5,29 @@
 
 import type * as vscode from 'vscode';
 
-/** How strongly a rule's evidence identifies the emitted project characteristic. */
-export type ProjectDetectionConfidence = 'high' | 'medium' | 'low';
-
-/** The kind of project characteristic emitted by a detection rule. */
-export type ProjectDetectionKind = 'project' | 'framework' | 'buildTool' | 'language';
-
-/** A path or manifest value that caused a project rule to match. */
-export interface ProjectDetectionEvidence {
-    readonly uri: vscode.Uri;
-    readonly description: string;
-}
-
-/** One explainable result produced by a {@linkcode ProjectDetectionRule}. */
-export interface ProjectDetection {
-    readonly ruleId: string;
-    readonly kind: ProjectDetectionKind;
-    readonly id: string;
-    readonly confidence: ProjectDetectionConfidence;
-    readonly evidence: readonly ProjectDetectionEvidence[];
-}
-
-/** A likely build output directory, relative to {@linkcode WorkspaceProject.rootUri}. */
-export interface ProjectOutputDirectory {
-    readonly path: string;
-    readonly confidence: ProjectDetectionConfidence;
-    readonly ruleId: string;
-}
-
 /** One candidate project discovered in an open workspace folder. */
 export interface WorkspaceProject {
     readonly workspaceFolder: vscode.WorkspaceFolder;
     readonly rootUri: vscode.Uri;
-    /** POSIX-style path relative to the workspace folder, or `.` for its root. */
+    /** POSIX-style path relative to {@linkcode workspaceFolder}, or `.` for its root. */
     readonly relativePath: string;
     readonly frameworks: readonly string[];
     readonly buildTools: readonly string[];
     readonly languages: readonly string[];
-    readonly outputDirectories: readonly ProjectOutputDirectory[];
-    readonly detections: readonly ProjectDetection[];
+    /**
+     * Likely build output, relative to {@linkcode rootUri}. Always project-relative:
+     * absolute and parent-traversing paths are discarded rather than rewritten,
+     * since consumers assume this stays inside {@linkcode rootUri}.
+     */
+    readonly outputDirectory?: string;
 }
-
-/** A non-fatal problem encountered while reading project evidence. */
-export interface WorkspaceScanDiagnostic {
-    readonly uri: vscode.Uri;
-    readonly code: 'invalidJson';
-    readonly message: string;
-}
-
-/** The budget that stopped a scan before it could inspect the whole workspace. */
-export type WorkspaceScanLimit = 'depth' | 'entries' | 'projects' | 'evidenceFileSize';
 
 /** Results of a bounded workspace project scan. */
 export interface WorkspaceScanResult {
     readonly projects: readonly WorkspaceProject[];
-    readonly diagnostics: readonly WorkspaceScanDiagnostic[];
+    /**
+     * `true` when the entry budget stopped the walk, so {@linkcode projects} may be
+     * incomplete. Consumers should not present the list as exhaustive.
+     */
     readonly truncated: boolean;
-    readonly reachedLimits: readonly WorkspaceScanLimit[];
 }
