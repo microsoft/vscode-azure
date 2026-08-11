@@ -13,6 +13,7 @@ import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
+import { createMockEndpointResolver } from '../../endpoints/mockEndpointResolver';
 
 describe('GenericAzureViewProvider (unit)', () => {
     const mockCodeContext = createMockCodeContext();
@@ -42,10 +43,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        const endpointResolver = {
-            canHandle: (resource: { type: string }) => resource.type.toLowerCase() === 'microsoft.web/sites',
-            resolve: () => Promise.resolve(undefined),
-        };
+        const endpointResolver = createMockEndpointResolver(resource => resource.type.toLowerCase() === 'microsoft.web/sites');
         return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never, endpointResolver);
     }
 

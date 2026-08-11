@@ -5,7 +5,7 @@
 
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
 import { EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
-import { mock } from 'node:test';
+import { mock, type Mock } from 'node:test';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../src/auth/AzureSubscription';
 import { AzurePublicCloud, type EnvironmentLike } from '../src/auth/Environment';
 import { isAccount, isTenant, type ConcreteAzureNode } from '../src/models/AzureNode';
@@ -13,6 +13,7 @@ import type { GenericResource } from '../src/models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
 import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
+import type { IWebAppClient } from '../src/rest/clients/WebAppClient';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
 
@@ -238,3 +239,56 @@ export function createMockSubscriptionClientProvider(locations: Location[] = [])
     const client = createMockSubscriptionClient({ locations });
     return () => client;
 }
+
+/** Options for {@linkcode createMockWebAppClient}. */
+export interface MockWebAppClientOptions {
+    /**
+     * Backing application-settings store. Mutated in place by
+     * `webApps.updateApplicationSettings` so later reads observe the change.
+     */
+    readonly settings?: Record<string, string>;
+    /** `defaultHostName` returned by `webApps.get`. */
+    readonly defaultHostName?: string;
+    /** `defaultHostname` returned by `staticSites.getStaticSite`. */
+    readonly staticSiteHostname?: string;
+}
+
+/**
+ * Creates a mock {@linkcode IWebAppClient} whose methods are `mock.fn()` instances,
+ * so tests can assert call counts and arguments via `client.webApps.get.mock`.
+ *
+ * Application settings are backed by a mutable store shared with the returned
+ * {@linkcode MockWebAppClient.settings settings} object, letting tests exercise
+ * read-modify-write flows without re-stubbing.
+ */
+export function createMockWebAppClient(options?: MockWebAppClientOptions): MockWebAppClient {
+    const settings: Record<string, string> = { ...options?.settings };
+
+    return {
+        settings,
+        webApps: {
+            get: mock.fn(() => Promise.resolve({ location: 'eastus', defaultHostName: options?.defaultHostName })),
+            listApplicationSettings: mock.fn(() => Promise.resolve({ properties: { ...settings } })),
+            updateApplicationSettings: mock.fn((_resourceGroupName: string, _name: string, appSettings: { properties?: Record<string, string> }) => {
+                for (const key of Object.keys(settings)) {
+                    Reflect.deleteProperty(settings, key);
+                }
+                Object.assign(settings, appSettings.properties);
+                return Promise.resolve({ properties: { ...settings } });
+            }),
+        },
+        staticSites: {
+            getStaticSite: mock.fn(() => Promise.resolve({ location: 'eastus', defaultHostname: options?.staticSiteHostname })),
+        },
+    };
+}
+
+/**
+ * An {@linkcode IWebAppClient} whose methods are `mock.fn()` instances, plus the
+ * mutable application-settings store backing them.
+ */
+export type MockWebAppClient = IWebAppClient & {
+    readonly settings: Record<string, string>;
+    readonly webApps: { [K in keyof IWebAppClient['webApps']]: Mock<IWebAppClient['webApps'][K]> };
+    readonly staticSites: { [K in keyof IWebAppClient['staticSites']]: Mock<IWebAppClient['staticSites'][K]> };
+};

@@ -15,6 +15,7 @@ import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../src/tree/resources/functions/FunctionApp';
 import { FunctionAppViewProvider } from '../../../../src/tree/resources/functions/FunctionAppViewProvider';
 import { makeFunctionApp } from './mockFunctionApp';
+import { createMockEndpointResolver } from '../../../endpoints/mockEndpointResolver';
 
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {
     return makeVirtualResource({
@@ -36,11 +37,7 @@ describe('FunctionAppViewProvider (unit)', () => {
             get: (key: string) => cacheMap.get(key),
             getChildren: (node: ConcreteAzureNode) => Promise.resolve([] as ConcreteAzureNode[]),
         };
-        const endpointResolver = {
-            canHandle: () => true,
-            resolve: () => Promise.resolve(undefined),
-        };
-        return new FunctionAppViewProvider(ctx, executor, mockCache as never, endpointResolver);
+        return new FunctionAppViewProvider(ctx, executor, mockCache as never, createMockEndpointResolver(true));
     }
 
     describe('canHandle', () => {

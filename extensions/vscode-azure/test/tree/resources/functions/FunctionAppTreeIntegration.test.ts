@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, createMockWebAppClient, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -18,6 +18,7 @@ import { FunctionAppDataProvider } from '../../../../src/tree/resources/function
 import { FunctionAppViewProvider } from '../../../../src/tree/resources/functions/FunctionAppViewProvider';
 import { GenericAzureViewProvider } from '../../../../src/tree/resources/GenericAzureViewProvider';
 import { createMockResourceClient } from '../mockResourceClient';
+import { createMockEndpointResolver } from '../../../endpoints/mockEndpointResolver';
 import { makeFunctionApp } from './mockFunctionApp';
 
 /**
@@ -52,31 +53,12 @@ describe('Function App Tree Integration (integration)', () => {
 
     // -- Mock WebAppClient ------------------------------------------------
 
-    function createMockWebAppClient(initialSettings?: Record<string, string>): { client: IWebAppClient; settings: Record<string, string> } {
-        // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
-        const settings = { ...initialSettings ?? { APP_KEY: 'app-value', DB_HOST: 'localhost' } };
-        const client: IWebAppClient = {
-            webApps: {
-                get: mock.fn(() => Promise.resolve({ location: 'eastus' })),
-                listApplicationSettings: mock.fn(
-                    () => Promise.resolve({ properties: { ...settings } }),
-                ),
-                updateApplicationSettings: mock.fn(
-                    (_rg: string, _name: string, body: { properties?: Record<string, string> }) => {
-                        // Synchronize the backing store so subsequent list calls reflect mutations
-                        for (const k of Object.keys(settings)) {
-                            Reflect.deleteProperty(settings, k);
-                        }
-                        Object.assign(settings, body.properties);
-                        return Promise.resolve({ properties: { ...settings } });
-                    },
-                ),
-            },
-            staticSites: {
-                getStaticSite: mock.fn(() => Promise.resolve({ location: 'eastus' })),
-            },
-        };
-        return { client, settings };
+    function createMockClient(initialSettings?: Record<string, string>): { client: MockWebAppClient; settings: Record<string, string> } {
+        const client = createMockWebAppClient({
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
+            settings: initialSettings ?? { APP_KEY: 'app-value', DB_HOST: 'localhost' },
+        });
+        return { client, settings: client.settings };
     }
 
     // -- Pipeline factory -------------------------------------------------
@@ -101,7 +83,7 @@ describe('Function App Tree Integration (integration)', () => {
         const ctx = mockCtx.ctx;
         const code = ctx.code;
 
-        const { client: webAppClient, settings: backingSettings } = createMockWebAppClient(options?.initialSettings);
+        const { client: webAppClient, settings: backingSettings } = createMockClient(options?.initialSettings);
         const webAppClientProvider = () => webAppClient;
 
         // Data layer
@@ -145,7 +127,7 @@ describe('Function App Tree Integration (integration)', () => {
             undefined,
         );
 
-        const endpointResolver = { canHandle: () => true, resolve: () => Promise.resolve(undefined) };
+        const endpointResolver = createMockEndpointResolver(true);
         const funcViewProvider = new FunctionAppViewProvider(ctx, executor, dataTree, endpointResolver);
         const genericViewProvider = new GenericAzureViewProvider(ctx, executor, dataTree, endpointResolver);
 

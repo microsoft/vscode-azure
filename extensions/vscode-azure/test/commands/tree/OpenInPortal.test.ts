@@ -5,6 +5,7 @@
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import { Container } from 'inversify';
 import * as vscode from 'vscode';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
@@ -12,7 +13,7 @@ import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 describe('OpenInPortal (unit)', () => {
     it('should open the portal URL for a subscription node', async () => {
         const mockResult = createMockVsCode({ Uri: vscode.Uri });
-        const command = new OpenUrl(mockResult.vscode);
+        const command = new OpenUrl(mockResult.vscode, new Container());
 
         await command.execute(
             OpenInPortal.getUrl,
@@ -24,7 +25,7 @@ describe('OpenInPortal (unit)', () => {
 
     it('should open the portal URL for a resource node', async () => {
         const mockResult = createMockVsCode({ Uri: vscode.Uri });
-        const command = new OpenUrl(mockResult.vscode);
+        const command = new OpenUrl(mockResult.vscode, new Container());
 
         await command.execute(
             OpenInPortal.getUrl,

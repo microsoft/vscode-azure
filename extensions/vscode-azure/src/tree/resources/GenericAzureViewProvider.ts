@@ -8,7 +8,6 @@ import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalTy
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { BrowseWebsite } from '../../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
@@ -16,6 +15,7 @@ import { IResourceEndpointResolver } from '../../endpoints/ResourceEndpointResol
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
+import { resourceContextValue } from './resourceContextValue';
 import { AcrResourceType } from './acr/AcrRegistry';
 
 /**
@@ -159,9 +159,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.None);
                 item.id = key;
                 item.description = resource.logicalType;
-                item.contextValue = this.endpointResolver.canHandle(resource)
-                    ? combineContextValues(OpenInPortal.ContextValue, BrowseWebsite.ContextValue)
-                    : combineContextValues(OpenInPortal.ContextValue);
+                item.contextValue = resourceContextValue(this.endpointResolver, resource);
                 item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
                 return item;
             }

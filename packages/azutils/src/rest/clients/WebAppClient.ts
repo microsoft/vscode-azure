@@ -13,9 +13,7 @@ import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
 import { createArmRestSubscriptionClient } from '../createAzureClient';
 
-export type { StaticSitesGetStaticSiteOptionalParams } from '@azure/arm-appservice/api/staticSites';
-export type { WebAppsGetOptionalParams } from '@azure/arm-appservice/api/webApps';
-export type { Site, StaticSiteARMResource, StringDictionary } from '@azure/arm-appservice/models';
+export type { Site, StaticSiteARMResource, StaticSitesGetStaticSiteOptionalParams, StringDictionary, WebAppsGetOptionalParams };
 
 /** Factory that creates an {@linkcode IWebAppClient} for a given subscription. */
 export const IWebAppClientProvider: ServiceIdentifier<IWebAppClientProvider> = Symbol.for('IWebAppClientProvider');

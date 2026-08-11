@@ -8,12 +8,11 @@ import { createMockDataItemTree, makeGenericResource } from '@microsoft/vscode-a
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import type { IResourceEndpointResolver } from '../../../src/endpoints/ResourceEndpointResolver';
 
 describe('BrowseWebsite (unit)', () => {
-    function createCommand(endpoint: string | undefined, canHandle: boolean = true) {
+    function createProvider(endpoint: string | undefined, canHandle: boolean = true) {
         const mockResult = createMockVsCode();
         const resource = makeGenericResource();
         const dataTree = createMockDataItemTree([resource]);
@@ -22,39 +21,35 @@ describe('BrowseWebsite (unit)', () => {
             canHandle: mock.fn(() => canHandle),
             resolve,
         };
-        const command = new BrowseWebsite(mockResult.vscode, dataTree, resolver, new OpenUrl(mockResult.vscode));
-        return { command, key: AzureNodeId.from(resource).toString(), mockResult, resolve };
+        const provider = new BrowseWebsite(mockResult.vscode, dataTree, resolver);
+        return { provider, key: AzureNodeId.from(resource).toString(), resolve };
     }
 
-    it('should open the resolved endpoint', async () => {
-        const { command, key, mockResult } = createCommand('https://example.com/');
+    it('should return the resolved endpoint', async () => {
+        const { provider, key } = createProvider('https://example.com/');
 
-        await command.execute(key);
-
-        expect(mockResult.env.openExternal.mock.callCount()).to.equal(1);
-        expect(mockResult.env.openExternal.mock.calls[0].arguments[0].toString()).to.equal('https://example.com/');
+        expect(await provider.getUrl(key)).to.equal('https://example.com/');
     });
 
     it('should report when the selected resource has no endpoint yet', async () => {
-        const { command, key, mockResult } = createCommand(undefined);
+        const { provider, key } = createProvider(undefined);
         let thrown: unknown;
 
         try {
-            await command.execute(key);
+            await provider.getUrl(key);
         } catch (error) {
             thrown = error;
         }
 
         expect(thrown).to.be.instanceOf(Error).with.property('message', 'The selected resource does not have a website endpoint yet.');
-        expect(mockResult.env.openExternal.mock.callCount()).to.equal(0);
     });
 
     it('should report when direct invocation selects an unsupported resource type', async () => {
-        const { command, key, resolve } = createCommand(undefined, false);
+        const { provider, key, resolve } = createProvider(undefined, false);
         let thrown: unknown;
 
         try {
-            await command.execute(key);
+            await provider.getUrl(key);
         } catch (error) {
             thrown = error;
         }
@@ -64,11 +59,11 @@ describe('BrowseWebsite (unit)', () => {
     });
 
     it('should reject an invalid tree selection without invoking the resolver', async () => {
-        const { command, resolve } = createCommand('https://example.com/');
+        const { provider, resolve } = createProvider('https://example.com/');
         let thrown: unknown;
 
         try {
-            await command.execute('missing');
+            await provider.getUrl('missing');
         } catch (error) {
             thrown = error;
         }

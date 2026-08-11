@@ -21,7 +21,7 @@ import { SelectSubscriptions } from '../commands/auth/SelectSubscriptions';
 import { SignIn } from '../commands/auth/SignIn';
 import { OpenUrl } from '../commands/OpenUrl';
 import { GroupBy } from '../commands/tree/GroupBy';
-import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
+import { BrowseWebsite, IBrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import { MicrosoftWebEndpointProvider } from '../endpoints/MicrosoftWebEndpointProvider';
@@ -78,6 +78,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
 
         container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
         container.bind(IResourceEndpointProviders).to(MicrosoftWebEndpointProvider);
+        container.bind(IBrowseWebsite).to(BrowseWebsite);
     });
 
     registrar.registerAzureClientProvider(IResourceClientProvider, (context, executor, credential, subscription) => {
@@ -92,7 +93,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
 
     registrar.registerCommand('vscode-azure/resources/refresh', RefreshResourcesView);
     registrar.registerCommand('vscode-azure/resources/groupBy', GroupBy);
-    registrar.registerCommand('vscode-azure/resources/browseWebsite', BrowseWebsite);
+    registrar.registerCommand('vscode-azure/resources/browseWebsite', OpenUrl, IBrowseWebsite);
     registrar.registerCommand('vscode-azure/resources/openInPortal', OpenUrl, OpenInPortal.getUrl);
     registrar.registerCommand('vscode-azure/signIn', SignIn);
     registrar.registerCommand('vscode-azure/selectSubscriptions', SelectSubscriptions);

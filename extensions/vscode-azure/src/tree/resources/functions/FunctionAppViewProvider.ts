@@ -9,12 +9,11 @@ import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../commands/functions/DeleteAppSetting';
-import { BrowseWebsite } from '../../../commands/tree/BrowseWebsite';
-import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IResourceEndpointResolver } from '../../../endpoints/ResourceEndpointResolver';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { getResourceTypeIconUri } from '../../iconPath';
+import { resourceContextValue } from '../resourceContextValue';
 import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './FunctionApp';
 
 /**
@@ -72,9 +71,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         // Function App resource node
         const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
-        item.contextValue = this.endpointResolver.canHandle(resource)
-            ? combineContextValues(OpenInPortal.ContextValue, BrowseWebsite.ContextValue, FunctionAppViewProvider.ContextValue)
-            : combineContextValues(OpenInPortal.ContextValue, FunctionAppViewProvider.ContextValue);
+        item.contextValue = resourceContextValue(this.endpointResolver, resource, FunctionAppViewProvider.ContextValue);
         item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
         item.description = resource.logicalType;
 
