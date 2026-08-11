@@ -8,8 +8,7 @@ import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalTy
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { DeleteResource } from '../../commands/tree/DeleteResource';
-import { DeleteResourceGroup } from '../../commands/tree/DeleteResourceGroup';
+import { DeleteAzureResource } from '../../commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
@@ -143,7 +142,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             case isResourceGroup(resource): {
                 const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.contextValue = combineContextValues(OpenInPortal.ContextValue, DeleteResourceGroup.ContextValue);
+                item.contextValue = combineContextValues(OpenInPortal.ContextValue, DeleteAzureResource.ResourceGroupContextValue);
                 const azdEnvName = resource.tags?.[AzdEnvNameTag];
                 if (azdEnvName) {
                     item.iconPath = new this.ctx.code.ThemeIcon('rocket');
@@ -158,7 +157,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.None);
                 item.id = key;
                 item.description = resource.logicalType;
-                item.contextValue = combineContextValues(OpenInPortal.ContextValue, DeleteResource.ContextValue);
+                item.contextValue = combineContextValues(OpenInPortal.ContextValue, DeleteAzureResource.ContextValue);
                 item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
                 return item;
             }

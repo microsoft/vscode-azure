@@ -78,18 +78,16 @@ export function registerFunctions(registrar: ProductRegistrar): void {
 been applied. Product command classes therefore do not need to be imported by
 the shared command registration module.
 
-### Resource deletion providers
+### Resource deletion
 
-Products should use the shared Delete Resource command instead of duplicating
-confirmation, azd detection, tree updates, and success handling. Concrete ARM
-resources use the generic `ResourceClient.resources.deleteById()` fallback.
+Products should use the shared Delete Resource command rather than shipping
+their own delete. `DeleteAzureResource` handles confirmation, azd steering,
+tree invalidation, and progress for any ARM resource or resource group, using
+the generic `ResourceClient` delete operations.
 
-A product that needs extra warning text or a service-specific child-resource
-operation can call `ProductRegistrar.registerResourceDeletionProvider()`.
-Matching providers return a partial deletion plan. Product providers are
-registered before the generic fallback, so their fields override generic
-confirmation or execution. A virtual child node must provide a complete plan
-and add `DeleteResource.ContextValue` to its tree item.
+A product only needs its own delete command for targets the generic command
+cannot express -- for example a virtual child node that maps to a
+service-specific API rather than an ARM resource ID.
 
 Each call:
 1. Binds the command class to itself in the container (if not already)

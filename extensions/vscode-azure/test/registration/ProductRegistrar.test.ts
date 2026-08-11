@@ -21,7 +21,6 @@ import { expect } from 'chai';
 import { Container, injectable, type ServiceIdentifier } from 'inversify';
 import { mock } from 'node:test';
 import { registerCommands } from '../../src/commands/registerCommands';
-import { GenericResourceDeletionProvider, GenericResourceGroupDeletionProvider } from '../../src/commands/tree/GenericResourceDeletionProviders';
 import type { ManagedCommand } from '../../src/commands/ManagedCommand';
 import { registerProducts } from '../../src/products/registerProducts';
 import { ProductRegistrar } from '../../src/registration/ProductRegistrar';
@@ -59,14 +58,12 @@ describe('ProductRegistrar (unit)', () => {
 
         const dataProviders = registrar.getResourceDataProviders();
         const viewProviders = registrar.getResourceViewProviders();
-        const deletionProviders = registrar.getResourceDeletionProviders();
         const commandIds = registrar.getCommands().map(command => command.commandId);
         expect(dataProviders[0]).to.equal(AcrDataProvider);
         expect(dataProviders[1]).to.deep.equal([IFunctionAppDataProvider, FunctionAppDataProvider]);
         expect(dataProviders[2]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
         expect(dataProviders[3]).to.equal(AzureResourceDataProvider);
         expect(viewProviders).to.deep.equal([AcrViewProvider, FunctionAppViewProvider, GenericAzureViewProvider]);
-        expect(deletionProviders).to.deep.equal([GenericResourceDeletionProvider, GenericResourceGroupDeletionProvider]);
         expect(commandIds).to.include.members([
             'vscode-azure/resources/refresh',
             'vscode-azure/resources/groupBy',

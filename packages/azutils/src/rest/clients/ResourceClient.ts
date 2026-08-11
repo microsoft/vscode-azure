@@ -13,7 +13,6 @@ import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
 import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
-import { parseAzureResourceId } from '../../utils/azureResourceId';
 import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
@@ -69,7 +68,7 @@ export interface IResourceClient {
     };
     readonly resources: {
         listByResourceGroup(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>>;
-        deleteById(resourceId: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void>;
+        deleteById(resourceId: string, resourceType: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void>;
     };
     readonly providers: {
         resolveApiVersion(resourceType: string): Promise<string>;
@@ -122,7 +121,7 @@ export class ResourceClient implements IResourceClient {
     public get resources(): IResourceClient['resources'] {
         return {
             listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options),
-            deleteById: (resourceId, options) => this.deleteResourceById(resourceId, options),
+            deleteById: (resourceId, resourceType, options) => this.deleteResourceById(resourceId, resourceType, options),
         };
     }
 
@@ -154,13 +153,8 @@ export class ResourceClient implements IResourceClient {
         await sdkDeleteResourceGroup(this.inner, resourceGroupName, options).pollUntilDone();
     }
 
-    private async deleteResourceById(resourceId: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void> {
-        const { provider, resourceType } = parseAzureResourceId(resourceId);
-        if (!provider || !resourceType) {
-            throw new Error(`Unable to determine the resource type from resource ID "${resourceId}".`);
-        }
-
-        const apiVersion = await this.resolveApiVersion(`${provider}/${resourceType}`);
+    private async deleteResourceById(resourceId: string, resourceType: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void> {
+        const apiVersion = await this.resolveApiVersion(resourceType);
         await sdkDeleteById(this.inner, resourceId, apiVersion, options).pollUntilDone();
     }
 
@@ -194,8 +188,7 @@ export class ResourceClient implements IResourceClient {
             return defaultApiVersion;
         }
 
-        const apiVersions = match.apiVersions?.map(version => version.trim()).filter(version => version).sort((a, b) => b.localeCompare(a)) ?? [];
-        const apiVersion = apiVersions.find(version => !version.toLowerCase().includes('preview')) ?? apiVersions[0];
+        const apiVersion = match.apiVersions?.map(version => version.trim()).filter(version => version).sort((a, b) => b.localeCompare(a))[0];
         if (!apiVersion) {
             throw new Error(`Resource type "${resourceType}" does not define an API version.`);
         }

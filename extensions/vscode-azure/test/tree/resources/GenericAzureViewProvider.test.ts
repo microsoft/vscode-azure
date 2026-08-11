@@ -8,8 +8,7 @@ import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, 
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { DeleteResource } from '../../../src/commands/tree/DeleteResource';
-import { DeleteResourceGroup } from '../../../src/commands/tree/DeleteResourceGroup';
+import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
@@ -295,7 +294,7 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             expect(item.label).to.equal('rg1');
             expect(item.contextValue).to.include(OpenInPortal.ContextValue);
-            expect(item.contextValue).to.include(DeleteResourceGroup.ContextValue);
+            expect(item.contextValue).to.include(DeleteAzureResource.ResourceGroupContextValue);
         });
 
         it('should use a rocket icon and azd env name as description for resource groups with azd-env-name tag', () => {
@@ -331,7 +330,7 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             expect(item.label).to.equal('site1');
             expect(item.description).to.equal('Microsoft.Web/sites');
-            expect(item.contextValue).to.include(DeleteResource.ContextValue);
+            expect(item.contextValue).to.include(DeleteAzureResource.ContextValue);
         });
 
         it('should render a virtual group node', () => {

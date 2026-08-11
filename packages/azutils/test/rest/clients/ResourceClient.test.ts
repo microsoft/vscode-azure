@@ -137,7 +137,7 @@ describe('ResourceClient (unit)', () => {
         expect(apiVersion).to.equal('2024-04-01');
     });
 
-    it('should prefer the newest stable API version when no default is available', async () => {
+    it('should use the newest API version when no default is available', async () => {
         const httpClient = providerClient({
             namespace: 'Microsoft.Storage',
             resourceTypes: [{
@@ -147,10 +147,10 @@ describe('ResourceClient (unit)', () => {
         });
         const client = createClient(httpClient);
 
-        expect(await client.providers.resolveApiVersion('Microsoft.Storage/storageAccounts')).to.equal('2024-01-01');
+        expect(await client.providers.resolveApiVersion('Microsoft.Storage/storageAccounts')).to.equal('2025-06-01-preview');
     });
 
-    it('should trim API version metadata before filtering, sorting, and preview detection', async () => {
+    it('should trim API version metadata before filtering and sorting', async () => {
         const httpClient = providerClient({
             namespace: 'Microsoft.Example',
             resourceTypes: [{
@@ -160,20 +160,7 @@ describe('ResourceClient (unit)', () => {
         });
         const client = createClient(httpClient);
 
-        expect(await client.providers.resolveApiVersion('Microsoft.Example/widgets')).to.equal('2024-01-01');
-    });
-
-    it('should use the newest preview API version when no stable version is available', async () => {
-        const httpClient = providerClient({
-            namespace: 'Microsoft.Example',
-            resourceTypes: [{
-                resourceType: 'widgets',
-                apiVersions: ['2023-01-01-preview', '2025-01-01-preview', '2024-01-01-preview'],
-            }],
-        });
-        const client = createClient(httpClient);
-
-        expect(await client.providers.resolveApiVersion('Microsoft.Example/widgets')).to.equal('2025-01-01-preview');
+        expect(await client.providers.resolveApiVersion('Microsoft.Example/widgets')).to.equal('2025-06-01-preview');
     });
 
     it('should cache resolved API versions per client and normalized resource type', async () => {
@@ -234,39 +221,12 @@ describe('ResourceClient (unit)', () => {
         });
         const client = createClient(httpClient);
 
-        await client.resources.deleteById(resourceId, { updateIntervalInMs: 0 });
+        await client.resources.deleteById(resourceId, 'Microsoft.Web/sites/slots', { updateIntervalInMs: 0 });
 
         expect(pollCompleted).to.be.true;
         const deleteRequest = httpClient.requests.find(request => request.method === 'DELETE');
         expect(deleteRequest?.url).to.include(resourceId);
         expect(deleteRequest?.url).to.include('api-version=2024-04-01');
-    });
-
-    it('should delete a cross-provider extension resource using its provider metadata', async () => {
-        const resourceId = '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1/providers/Microsoft.Insights/diagnosticSettings/settings1';
-        const httpClient = new MockHttpClient({
-            handler: req => {
-                if (req.method === 'GET' && req.url.includes('/providers/Microsoft.Insights?')) {
-                    return makeResponse(req, 200, JSON.stringify({
-                        namespace: 'Microsoft.Insights',
-                        resourceTypes: [{ resourceType: 'diagnosticSettings', defaultApiVersion: '2021-05-01-preview' }],
-                    }));
-                } else if (req.method === 'DELETE') {
-                    return makeResponse(req, 200);
-                }
-
-                return makeResponse(req, 404);
-            },
-        });
-        const client = createClient(httpClient);
-
-        await client.resources.deleteById(resourceId);
-
-        const providerRequest = httpClient.requests.find(request => request.method === 'GET');
-        expect(providerRequest?.url).to.include('/providers/Microsoft.Insights?');
-        const deleteRequest = httpClient.requests.find(request => request.method === 'DELETE');
-        expect(deleteRequest?.url).to.include(resourceId);
-        expect(deleteRequest?.url).to.include('api-version=2021-05-01-preview');
     });
 
     it('should delete a resource group and await LRO completion', async () => {
