@@ -43,6 +43,7 @@ export * from './wizard/GoBackError';
 export * from './wizard/PickWorkspaceLocationStep';
 export * from './wizard/PromptStep';
 export * from './wizard/Wizard';
+export * from './wizard/workspaceLocations';
 export * from './workspace/defaultProjectDetectors';
 export * from './workspace/findWorkspaceProjects';
 export * from './workspace/ProjectDetector';

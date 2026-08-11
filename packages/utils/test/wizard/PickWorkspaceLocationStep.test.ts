@@ -6,11 +6,12 @@
 import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import {
-    type FindWorkspaceFilesOptions,
     PickWorkspaceLocationStep,
     type PickWorkspaceLocationOptions,
-    type WorkspaceLocation,
 } from '../../src/wizard/PickWorkspaceLocationStep';
+import { projectLocations, type WorkspaceLocation, type WorkspaceLocationSource } from '../../src/wizard/workspaceLocations';
+import type { WorkspaceProject } from '../../src/workspace/WorkspaceProject';
+import type { IWorkspaceProjectService } from '../../src/workspace/WorkspaceProjectService';
 import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
 
 interface TestContext {
@@ -19,97 +20,226 @@ interface TestContext {
 
 const strings = {
     title: 'Select the application location',
-    placeHolder: 'Choose the application file',
+    placeHolder: 'Choose the application folder',
 };
-
-async function createFile(code: typeof vscode, uri: vscode.Uri): Promise<void> {
-    await code.workspace.fs.writeFile(uri, new Uint8Array());
-}
-
-function createStep(
-    findFilesOptions: FindWorkspaceFilesOptions,
-    options: Omit<PickWorkspaceLocationOptions<TestContext>, 'contextProperty'>,
-): { step: PickWorkspaceLocationStep<TestContext>; mock: ReturnType<typeof createMockCodeContext>['mock'] } {
-    const { ctx, mock } = createMockCodeContext();
-    mock.workspaceFolders.push({
-        uri: ctx.code.Uri.from({ scheme: 'file', path: '/repo' }),
-        name: 'repo',
-        index: 0,
-    });
-
-    return {
-        step: new PickWorkspaceLocationStep(ctx, findFilesOptions, { ...options, contextProperty: 'location' }),
-        mock,
-    };
-}
 
 describe('PickWorkspaceLocationStep (unit)', () => {
     it('fails before prompting when no workspace folder is open', async () => {
         const { ctx, mock } = createMockCodeContext();
-        const step = new PickWorkspaceLocationStep<TestContext>(ctx, ['package.json'], {
-            kind: 'folder',
+        let sourceCalls = 0;
+        const source: WorkspaceLocationSource = () => { sourceCalls++; return Promise.resolve([]); };
+        const step = new PickWorkspaceLocationStep<TestContext>(ctx, source, {
             strings,
             contextProperty: 'location',
         });
 
-        try {
-            await step.prompt({});
-            expect.fail('Expected an error');
-        } catch (error) {
-            expect(error).to.be.an('error').with.property(
-                'message',
-                'Open a workspace folder before selecting a location.',
-            );
-        }
-        expect(mock.workspace.findFiles.mock.calls).to.have.length(0);
+        await expectError(step.prompt({}), 'Open a workspace folder before selecting a location.');
+
+        expect(sourceCalls).to.equal(0);
         expect(mock.quickPicks).to.have.length(0);
     });
 
-    it('passes all findFiles arguments and returns a relative file path', async () => {
-        const token: vscode.CancellationToken = {
-            isCancellationRequested: false,
-            onCancellationRequested: () => ({ dispose: () => undefined }),
-        };
-        const { step, mock } = createStep(['**/*.csproj', '**/obj/**', 12, token], {
-            kind: 'file',
-            strings,
-        });
-        const file = mock.vscode.Uri.from({ scheme: 'file', path: '/repo/src/app.csproj' });
-        await createFile(mock.vscode, file);
-        const tracker = respondToPrompts(mock, [{ pick: 'src/app.csproj' }]);
+    it('reports when the source finds nothing instead of showing an empty pick', async () => {
+        const { step, mock } = createStep([], { strings });
 
-        const result = await step.prompt({});
+        await expectError(step.prompt({}), 'No matching locations were found in the workspace.');
 
-        expect(result.location?.uri.toString()).to.equal(file.toString());
-        expect(result.location?.relativePath).to.equal('src/app.csproj');
-        expect(mock.workspace.findFiles.mock.calls).to.have.length(1);
-        expect(mock.workspace.findFiles.mock.calls[0].arguments).to.deep.equal([
-            '**/*.csproj',
-            '**/obj/**',
-            12,
-            token,
-        ]);
-        tracker.assertAllConsumed();
+        expect(mock.quickPicks).to.have.length(0);
     });
 
-    it('deduplicates containing folders found from matching files', async () => {
-        const { step, mock } = createStep(['*.json'], {
-            kind: 'folder',
-            strings: {
-                ...strings,
-                placeHolder: 'Choose the application folder',
-            },
+    it('uses a caller-supplied message when nothing is found', async () => {
+        const { step } = createStep([], {
+            strings: { ...strings, noneFound: 'No API projects were found.' },
         });
-        await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/package.json' }));
-        await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/host.json' }));
+
+        await expectError(step.prompt({}), 'No API projects were found.');
+    });
+
+    it('returns the selected location', async () => {
+        const { step, mock } = createStep([location('api', { description: 'nextjs' })], { strings });
         const tracker = respondToPrompts(mock, [{ pick: 'api' }]);
 
         const result = await step.prompt({});
 
         expect(result.location?.relativePath).to.equal('api');
-        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal([
-            'api',
-        ]);
+        expect(result.location?.uri.path).to.equal('/repo/api');
+        tracker.assertAllConsumed();
+    });
+
+    it('describes each suggestion with what was detected there', async () => {
+        const { step, mock } = createStep(
+            [location('.', { description: 'react' }), location('api', {})],
+            { strings },
+        );
+        const tracker = respondToPrompts(mock, [{ pick: '.' }]);
+
+        await step.prompt({});
+
+        expect(mock.quickPicks[0].items.map(item => ({ label: item.label, description: item.description })))
+            .to.deep.equal([
+                { label: '.', description: 'react' },
+                { label: 'api', description: undefined },
+            ]);
+        tracker.assertAllConsumed();
+    });
+
+    it('names the workspace folder only when the workspace has several', async () => {
+        const { step, mock } = createStep(
+            [location('api', { description: 'react' })],
+            { strings },
+            ['/repo', '/other'],
+        );
+        const tracker = respondToPrompts(mock, [{ pick: 'api' }]);
+
+        await step.prompt({});
+
+        expect(mock.quickPicks[0].items[0].description).to.equal('react - repo');
         tracker.assertAllConsumed();
     });
 });
+
+describe('projectLocations (unit)', () => {
+    it('offers every detected project root by default', async () => {
+        const source = projectLocations(serviceWith([
+            project('.', { frameworks: ['react'] }),
+            project('api', { frameworks: [] }),
+        ]));
+
+        const locations = await source();
+
+        expect(locations.map(l => l.relativePath)).to.deep.equal(['.', 'api']);
+        expect(locations[0].uri.path).to.equal('/repo');
+        expect(locations[0].description).to.equal('react');
+        expect(locations[1].description).to.be.undefined;
+    });
+
+    it('restricts suggestions with a filter', async () => {
+        const source = projectLocations(serviceWith([
+            project('web', { frameworks: ['react'] }),
+            project('api', { frameworks: ['functions'] }),
+        ]), { filter: p => p.frameworks.includes('functions') });
+
+        const locations = await source();
+
+        expect(locations.map(l => l.relativePath)).to.deep.equal(['api']);
+    });
+
+    it('offers a sub-path of each project, skipping those without one', async () => {
+        const source = projectLocations(serviceWith([
+            project('.', { frameworks: ['react'], outputDirectory: 'build' }),
+            project('site', { frameworks: ['angular'], outputDirectory: 'dist/app' }),
+            project('ssr', { frameworks: ['nextjs'] }),
+        ]), { subPath: p => p.outputDirectory });
+
+        const locations = await source();
+
+        expect(locations.map(l => l.relativePath)).to.deep.equal(['build', 'site/dist/app']);
+        expect(locations[0].uri.path).to.equal('/repo/build');
+        expect(locations[1].uri.path).to.equal('/repo/site/dist/app');
+    });
+
+    it('keeps the project root when the sub-path is the project itself', async () => {
+        const source = projectLocations(serviceWith([
+            project('site', { frameworks: ['html'], outputDirectory: '.' }),
+        ]), { subPath: p => p.outputDirectory });
+
+        const [picked] = await source();
+
+        expect(picked.relativePath).to.equal('site');
+        expect(picked.uri.path).to.equal('/repo/site');
+    });
+
+    it('forwards the cancellation token to the service', async () => {
+        const token: vscode.CancellationToken = {
+            isCancellationRequested: false,
+            onCancellationRequested: () => ({ dispose: () => undefined }),
+        };
+        let received: vscode.CancellationToken | undefined;
+        const source = projectLocations({
+            getProjects: passed => { received = passed; return Promise.resolve([]); },
+            onDidChangeProjects: () => ({ dispose: () => undefined }),
+        });
+
+        await source(token);
+
+        expect(received).to.equal(token);
+    });
+});
+
+function createStep(
+    locations: readonly WorkspaceLocation[],
+    options: Omit<PickWorkspaceLocationOptions<TestContext>, 'contextProperty'>,
+    folders: readonly string[] = ['/repo'],
+) {
+    const { ctx, mock } = createMockCodeContext();
+    folders.forEach((path, index) => {
+        mock.workspaceFolders.push({
+            uri: ctx.code.Uri.from({ scheme: 'file', path }),
+            name: path.slice(1),
+            index,
+        });
+    });
+
+    return {
+        step: new PickWorkspaceLocationStep<TestContext>(
+            ctx,
+            () => Promise.resolve(locations),
+            { ...options, contextProperty: 'location' },
+        ),
+        mock,
+    };
+}
+
+/** A stand-in service returning fixed projects rooted under `/repo`. */
+function serviceWith(projects: readonly WorkspaceProject[]): IWorkspaceProjectService {
+    return {
+        getProjects: () => Promise.resolve(projects),
+        onDidChangeProjects: () => ({ dispose: () => undefined }),
+    };
+}
+
+function project(relativePath: string, overrides: Partial<WorkspaceProject>): WorkspaceProject {
+    return {
+        workspaceFolder: { uri: uri('/repo'), name: 'repo', index: 0 },
+        rootUri: relativePath === '.' ? uri('/repo') : uri(`/repo/${relativePath}`),
+        relativePath,
+        frameworks: [],
+        buildTools: [],
+        languages: [],
+        ...overrides,
+    };
+}
+
+function location(relativePath: string, overrides: Partial<WorkspaceLocation>): WorkspaceLocation {
+    return {
+        uri: relativePath === '.' ? uri('/repo') : uri(`/repo/${relativePath}`),
+        relativePath,
+        workspaceFolder: { uri: uri('/repo'), name: 'repo', index: 0 },
+        ...overrides,
+    };
+}
+
+/** A minimal `Uri` supporting the `path` and `with` the source relies on. */
+function uri(path: string): vscode.Uri {
+    return {
+        scheme: 'file',
+        authority: '',
+        path,
+        query: '',
+        fragment: '',
+        fsPath: path,
+        with: (change: { path?: string }) => uri(change.path ?? path),
+        toString: () => `file://${path}`,
+        toJSON: () => ({ scheme: 'file', path }),
+    };
+}
+
+async function expectError(promise: Promise<unknown>, message: string): Promise<void> {
+    try {
+        await promise;
+    } catch (error) {
+        expect(error).to.be.an('error').with.property('message', message);
+        return;
+    }
+    expect.fail(`Expected an error with message "${message}"`);
+}

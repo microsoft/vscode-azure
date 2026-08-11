@@ -3,30 +3,18 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as vscode from 'vscode';
 import { type QuickPickItemWithData, showSmartQuickPick } from '../ui/uiHelpers';
-import type { ICodeContext, IVsCode } from '../vscode/IVsCode';
+import type { ICodeContext } from '../vscode/IVsCode';
 import { PromptStep } from './PromptStep';
+import type { WorkspaceLocation, WorkspaceLocationSource } from './workspaceLocations';
 
-/**
- * A file or folder selected relative to its containing workspace folder.
- */
-export interface WorkspaceLocation {
-    readonly uri: vscode.Uri;
-    readonly relativePath: string;
-    readonly workspaceFolder: vscode.WorkspaceFolder;
-}
-
-/**
- * User-facing text that describes the location being selected.
- */
+/** User-facing text that describes the location being selected. */
 export interface PickWorkspaceLocationStrings {
     readonly title?: string;
     readonly placeHolder: string;
+    /** Shown when the source finds nothing. Defaults to a generic message. */
+    readonly noneFound?: string;
 }
-
-/** Arguments forwarded to {@linkcode vscode.workspace.findFiles}. */
-export type FindWorkspaceFilesOptions = Parameters<IVsCode['workspace']['findFiles']>;
 
 type WorkspaceLocationProperty<TContext> = {
     [TKey in keyof TContext]: WorkspaceLocation | undefined extends TContext[TKey] ? TKey : never;
@@ -37,23 +25,26 @@ type WorkspaceLocationProperty<TContext> = {
  * {@linkcode PickWorkspaceLocationStep}.
  */
 export interface PickWorkspaceLocationOptions<TContext> {
-    readonly kind: 'file' | 'folder';
     readonly strings: PickWorkspaceLocationStrings;
     readonly contextProperty: WorkspaceLocationProperty<TContext>;
 }
 
 /**
- * Prompts for a file or folder in the workspace, using {@linkcode vscode.workspace.findFiles}
- * results as suggestions.
+ * Prompts for a location in the workspace, choosing from the suggestions a
+ * {@linkcode WorkspaceLocationSource} provides.
  *
- * Folder suggestions are the containing folders of the files returned by
- * {@linkcode vscode.workspace.findFiles}. Selected paths use `/` separators and are relative
- * to the containing workspace folder.
+ * Suggestions normally come from `projectLocations`, so the list is the set of
+ * detected projects rather than raw glob matches -- generated, vendored, and
+ * `.gitignore`d paths are already excluded, and each entry is labelled with the
+ * frameworks that were detected.
+ *
+ * Selected paths use `/` separators and are relative to the containing
+ * workspace folder.
  */
 export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
     public constructor(
         private readonly ctx: ICodeContext,
-        private readonly findFilesOptions: FindWorkspaceFilesOptions,
+        private readonly source: WorkspaceLocationSource,
         private readonly options: PickWorkspaceLocationOptions<TContext>,
     ) {
         super();
@@ -65,12 +56,16 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
             throw new Error(this.ctx.code.l10n.t('Open a workspace folder before selecting a location.'));
         }
 
-        const matches = await this.ctx.code.workspace.findFiles(...this.findFilesOptions);
-        const locations = this.toLocations(matches);
+        const locations = await this.source();
+        if (locations.length === 0) {
+            throw new Error(this.options.strings.noneFound
+                ?? this.ctx.code.l10n.t('No matching locations were found in the workspace.'));
+        }
 
+        const multiRoot = this.ctx.code.workspace.workspaceFolders.length > 1;
         const picks: QuickPickItemWithData<WorkspaceLocation>[] = locations.map(location => ({
             label: location.relativePath || '.',
-            description: this.ctx.code.workspace.workspaceFolders?.length === 1 ? undefined : location.workspaceFolder.name,
+            description: describe(location, multiRoot),
             data: location,
         }));
 
@@ -83,30 +78,16 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
 
         return { [this.options.contextProperty]: choice.data } as Partial<TContext>;
     }
+}
 
-    private toLocations(matches: readonly vscode.Uri[]): WorkspaceLocation[] {
-        const locations = new Map<string, WorkspaceLocation>();
-
-        for (const match of matches) {
-            const uri = this.options.kind === 'folder' ? this.ctx.code.Uri.joinPath(match, '..') : match;
-            const location = this.toLocation(uri);
-            if (location) {
-                locations.set(location.uri.toString(), location);
-            }
-        }
-
-        return [...locations.values()]
-            .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+/**
+ * Builds the secondary text for a suggestion: what was detected there, plus the
+ * owning workspace folder when there is more than one.
+ */
+function describe(location: WorkspaceLocation, multiRoot: boolean): string | undefined {
+    const parts = [location.description];
+    if (multiRoot) {
+        parts.push(location.workspaceFolder.name);
     }
-
-    private toLocation(uri: vscode.Uri): WorkspaceLocation | undefined {
-        const workspaceFolder = this.ctx.code.workspace.getWorkspaceFolder(uri);
-        if (!workspaceFolder) {
-            return undefined;
-        }
-
-        const rootPath = workspaceFolder.uri.path.replace(/\/$/, '');
-        const relativePath = uri.path.slice(rootPath.length).replace(/^\/+/, '');
-        return { uri, relativePath, workspaceFolder };
-    }
+    return parts.filter(Boolean).join(' - ') || undefined;
 }
