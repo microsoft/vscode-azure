@@ -4,14 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-
-/** Numeric values used by VS Code's bitmask-style `FileType` enum. */
-export const MockFileType = {
-    Unknown: 0,
-    File: 1,
-    Directory: 2,
-    SymbolicLink: 64,
-} satisfies typeof vscode.FileType;
 import type { Satisfies } from '../../src/types/Satisfies';
 import { MockUri } from './MockUri';
 
@@ -25,6 +17,14 @@ import { MockUri } from './MockUri';
  * code constructs the editor's real types at runtime; the `Mock` prefix keeps
  * IntelliSense from auto-importing them into product code by mistake.
  */
+
+/** Numeric values used by VS Code's bitmask-style `FileType` enum. */
+export const MockFileType = {
+    Unknown: 0,
+    File: 1,
+    Directory: 2,
+    SymbolicLink: 64,
+} satisfies typeof vscode.FileType;
 
 /** Test stand-in for {@linkcode vscode.ThemeColor}. */
 export class MockThemeColor implements vscode.ThemeColor {
