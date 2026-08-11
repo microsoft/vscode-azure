@@ -11,8 +11,8 @@
  * `chai-as-promised` but does not call `use()` on it, so each repo has to do
  * this itself. Once https://github.com/microsoft/vscode-azuretools/issues/2382
  * ships this in the shared mocha setup, delete this file along with the
- * `mocha.require` entries that reference it and the `publicHoistPattern`
- * entries in `pnpm-workspace.yaml`.
+ * `mocha.require` entries that reference it. The `tsconfig.base.json` `types`
+ * entry must stay -- it is what loads the type augmentation.
  */
 
 import { use } from 'chai';

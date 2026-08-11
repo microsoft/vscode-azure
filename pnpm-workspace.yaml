@@ -22,12 +22,8 @@ publicHoistPattern:
   # linting. Once TS 7.1 ships its API and typescript-eslint adopts it, `typescript` can be declared/
   # hoisted normally again. See docs/build-and-dev.md ("TypeScript toolchain").
   - "*eslint*"
-  - "mocha"
-  - "@types/mocha"
-  - "chai"
-  - "@types/chai"
-  - "chai-as-promised"
-  - "@types/chai-as-promised"
+  - "*mocha*"
+  - "*chai*"
 
 catalog:
   "@vscode/extension-telemetry": ^1.5.2
