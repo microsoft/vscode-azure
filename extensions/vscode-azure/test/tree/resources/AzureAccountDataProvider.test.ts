@@ -54,26 +54,66 @@ describe('AzureAccountDataProvider (unit)', () => {
     }
 
     /**
-     * Yield several event-loop turns (e.g. to let the async session-change
-     * reconcile complete) while fake timers are enabled. `setImmediate` is not
-     * faked, so awaiting it advances past one event-loop turn, allowing queued
-     * promise continuations -- the `await listAccounts()` chain in the
-     * debounced session handler -- to run to completion.
+     * Yield several event-loop turns while fake timers are enabled, giving any
+     * pending work a chance to run. `setImmediate` is not faked, so awaiting it
+     * advances past one event-loop turn, allowing queued promise continuations
+     * -- the `await listAccounts()` chain in the debounced session handler -- to
+     * progress.
      *
-     * The reconcile is dispatched fire-and-forget (`void reconcile()`) from the
-     * debounce timer callback, and `reconcile -> listAccounts -> await
-     * getAccounts` spans several async hops. A single `setImmediate` is not
-     * guaranteed to let that whole chain settle before the caller asserts on it:
-     * depending on how the host event loop interleaves the (faked) timer
-     * callback with real microtasks and immediates, the reconcile can still be
-     * in flight after one turn, which made the assertions flaky. Awaiting a few
-     * turns settles the chain deterministically -- once it has finished, the
-     * extra turns are harmless no-ops.
+     * Only use this for **negative** assertions ("nothing fired"). A fixed
+     * number of turns is a guess, so waiting this way before asserting that
+     * something *did* happen is inherently flaky: the reconcile is dispatched
+     * fire-and-forget (`void reconcile()`) from the debounce timer callback, and
+     * `reconcile -> listAccounts -> await getAccounts` spans several async hops
+     * that can still be in flight when the turns run out. Await
+     * {@linkcode ChangeTracker.wait} instead for those.
      */
-    async function flushMicrotasks(turns = 5): Promise<void> {
+    async function settle(turns = 5): Promise<void> {
         for (let i = 0; i < turns; i++) {
             await new Promise(resolve => setImmediate(resolve));
         }
+    }
+
+    /** Records provider change events and lets a test await the next one. */
+    interface ChangeTracker {
+        /** Every {@linkcode AzureAccountDataProvider.onDidChange} event seen so far, in order. */
+        readonly events: readonly DataProviderChangeEvent<ConcreteAzureNode>[];
+        /**
+         * Resolve once at least {@linkcode count} events have been observed,
+         * immediately if that many already have been.
+         */
+        wait(count?: number): Promise<void>;
+    }
+
+    /**
+     * Start recording `provider.onDidChange` events.
+     *
+     * Call this before triggering the provider so no event is missed, then await
+     * {@linkcode ChangeTracker.wait} rather than a fixed number of event-loop
+     * turns: the session-change reconcile runs fire-and-forget from a debounce
+     * timer, so its event can land an unpredictable number of turns after
+     * `mock.timers.tick()` returns. If the event never arrives the test fails on
+     * the mocha timeout, which is a clearer signal than a miscounted assertion.
+     */
+    function trackChanges(provider: AzureAccountDataProvider): ChangeTracker {
+        const events: DataProviderChangeEvent<ConcreteAzureNode>[] = [];
+        const waiters: (() => void)[] = [];
+
+        provider.onDidChange(e => {
+            events.push(e);
+            for (const resolve of waiters.splice(0)) {
+                resolve();
+            }
+        });
+
+        return {
+            events,
+            async wait(count = 1): Promise<void> {
+                while (events.length < count) {
+                    await new Promise<void>(resolve => waiters.push(resolve));
+                }
+            },
+        };
     }
 
     describe('canHandle', () => {
@@ -137,22 +177,20 @@ describe('AzureAccountDataProvider (unit)', () => {
         it('should emit a reconciling root re-list (debounced) on the first authentication session change for the Microsoft provider', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
-            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
-            let fired = 0;
-            provider.onDidChange(e => { event = e; fired++; });
+            const changes = trackChanges(provider);
 
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             // Debounced: nothing fires until the timer elapses.
-            expect(fired).to.equal(0);
+            expect(changes.events.length).to.equal(0);
 
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await changes.wait();
 
             // First event (no prior known set), so the reconcile fires. A
             // reconciling root re-list (target Roots) preserves tenant /
             // subscription subtrees under surviving accounts.
-            expect(fired).to.equal(1);
-            expect(event?.target).to.equal(Roots);
+            expect(changes.events.length).to.equal(1);
+            expect(changes.events[0].target).to.equal(Roots);
         });
 
         it('should not fire on authentication session changes for unrelated providers', () => {
@@ -169,24 +207,23 @@ describe('AzureAccountDataProvider (unit)', () => {
         it('should coalesce a burst of session changes into a single re-list', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
-            let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            const changes = trackChanges(provider);
 
             for (let i = 0; i < 5; i++) {
                 vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             }
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await changes.wait();
+            // Give any additional (unwanted) re-list a chance to surface.
+            await settle();
 
-            expect(fired).to.equal(1);
+            expect(changes.events.length).to.equal(1);
         });
 
         it('should fire a reconciling re-list when an account is added (sign-in)', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
-            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
-            let fired = 0;
-            provider.onDidChange(e => { event = e; fired++; });
+            const changes = trackChanges(provider);
 
             // Prime the known account set with a single account.
             await provider.getChildren();
@@ -200,10 +237,10 @@ describe('AzureAccountDataProvider (unit)', () => {
             ]));
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await changes.wait();
 
-            expect(fired).to.equal(1);
-            expect(event?.target).to.equal(Roots);
+            expect(changes.events.length).to.equal(1);
+            expect(changes.events[0].target).to.equal(Roots);
         });
 
         it('should fire a reconciling re-list when an account is removed (sign-out)', async () => {
@@ -212,8 +249,9 @@ describe('AzureAccountDataProvider (unit)', () => {
                 { id: 'a-id', label: 'Alpha' },
                 { id: 'b-id', label: 'Beta' },
             ]));
-            let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            const changes = trackChanges(provider);
+            const onDidRemoveAccounts = mock.fn();
+            provider.onDidRemoveAccounts(onDidRemoveAccounts);
 
             await provider.getChildren();
             mock.timers.tick(1001);
@@ -222,16 +260,19 @@ describe('AzureAccountDataProvider (unit)', () => {
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await changes.wait();
 
-            expect(fired).to.equal(1);
+            expect(changes.events.length).to.equal(1);
+            expect(onDidRemoveAccounts.mock.calls[0].arguments[0]).to.deep.equal(['b-id']);
         });
 
         it('should NOT fire when the signed-in account set is unchanged', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
-            let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            const onChange = mock.fn();
+            const onDidRemoveAccounts = mock.fn();
+            provider.onDidChange(onChange);
+            provider.onDidRemoveAccounts(onDidRemoveAccounts);
 
             // Prime the known account set, then move past the suppression window.
             await provider.getChildren();
@@ -242,9 +283,10 @@ describe('AzureAccountDataProvider (unit)', () => {
             // other extensions' activity) look like this and must be ignored.
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await settle();
 
-            expect(fired).to.equal(0);
+            expect(onChange.mock.callCount()).to.equal(0);
+            expect(onDidRemoveAccounts.mock.callCount()).to.equal(0);
         });
 
         it('should not loop when listing accounts itself emits onDidChangeSessions', async () => {
@@ -260,23 +302,22 @@ describe('AzureAccountDataProvider (unit)', () => {
                 vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
                 return Promise.resolve([{ id: 'a-id', label: 'Alpha' }]);
             });
-            let fired = 0;
-            provider.onDidChange(() => { fired++; });
+            const changes = trackChanges(provider);
 
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await changes.wait();
 
             // The first event drives exactly one reconcile (one getAccounts call)
             // and one onDidChange; the re-entrant event it triggers is suppressed.
             expect(getAccountsMock.callCount()).to.equal(1);
-            expect(fired).to.equal(1);
+            expect(changes.events.length).to.equal(1);
 
             // Advancing time must not surface any further re-lists.
             mock.timers.tick(5000);
-            await flushMicrotasks();
+            await settle();
             expect(getAccountsMock.callCount()).to.equal(1);
-            expect(fired).to.equal(1);
+            expect(changes.events.length).to.equal(1);
         });
 
         it('should swallow a listAccounts failure during reconcile instead of rejecting', async () => {
@@ -291,7 +332,7 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await settle();
 
             // No change event fired, and the rejection was swallowed (the test
             // completing without an unhandled rejection is the assertion).
@@ -310,7 +351,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             // An event arriving inside the window is ignored, so nothing is scheduled.
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await settle();
 
             expect(fired).to.equal(0);
         });
@@ -318,13 +359,7 @@ describe('AzureAccountDataProvider (unit)', () => {
         it('should resume handling session-change events after the suppression window elapses', async () => {
             const { provider, mock: vscodeMock } = createProvider();
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
-            let fired = 0;
-            const didChange = new Promise<void>(resolve => {
-                provider.onDidChange(() => {
-                    fired++;
-                    resolve();
-                });
-            });
+            const changes = trackChanges(provider);
 
             await provider.getChildren();
 
@@ -334,9 +369,9 @@ describe('AzureAccountDataProvider (unit)', () => {
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([{ id: 'a-id', label: 'Alpha' }]));
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await didChange;
+            await changes.wait();
 
-            expect(fired).to.equal(1);
+            expect(changes.events.length).to.equal(1);
         });
 
         it('should keep suppressing while getAccounts is in flight, even past the trailing-window duration', async () => {
@@ -359,7 +394,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             // A self-induced event arriving mid-call must still be suppressed.
             vscodeMock.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
             mock.timers.tick(500);
-            await flushMicrotasks();
+            await settle();
             expect(fired).to.equal(0);
 
             // Let the in-flight call complete so the promise settles.

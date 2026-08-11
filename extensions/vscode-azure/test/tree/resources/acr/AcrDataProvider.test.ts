@@ -100,6 +100,22 @@ describe('AcrDataProvider (unit)', () => {
             expect(registry.loginServer).to.equal('');
             expect(registry.adminUserEnabled).to.equal(true);
         });
+
+        it('should create a lightweight client for each operation', async () => {
+            const { executor } = createTestActionExecutor();
+            const client = {
+                registries: {
+                    get: mock.fn(() => Promise.resolve({})),
+                },
+            };
+            const createClient = mock.fn(() => client);
+            const provider = new AcrDataProvider(executor, createClient as never);
+
+            await provider.enrich(makeAcrRegistry());
+            await provider.enrich(makeAcrRegistry());
+
+            expect(createClient.mock.callCount()).to.equal(2);
+        });
     });
 
     describe('getChildren', () => {

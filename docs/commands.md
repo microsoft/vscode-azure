@@ -98,6 +98,32 @@ function registerManagedCommand(
 
 This enables a single command class to be registered multiple times with different fixed arguments. For example, `ClearActivities` is registered three times with different modes (`'completed'`, `'successful'`, `'all'`) rather than needing three separate classes. `CreateFunctionApp` uses it to distinguish `'createNew'` vs `'deploy'` jobs — see [Resource Creation](resource-creation.md).
 
+### Open-a-URL Commands
+
+Commands whose only action is opening an external URL use the shared `OpenUrl`
+managed command. Declare the command id and localized title in `package.json`,
+then register `OpenUrl` with either a fixed URL or a resolver as its prefix
+argument:
+
+```typescript
+registrar.registerCommand(
+    'vscode-azure/product/showDocumentation',
+    OpenUrl,
+    'https://example.com/docs',
+);
+
+registrar.registerCommand(
+    'vscode-azure/resources/openInPortal',
+    OpenUrl,
+    OpenInPortal.getUrl,
+);
+```
+
+Resolvers receive the arguments supplied by VS Code and may return a URL
+synchronously or asynchronously. Returning `undefined` produces the same
+localized error for every open-a-URL command. Telemetry and error handling are
+provided by the normal managed-command registration path.
+
 ## Context Values for Tree Item Commands
 
 Commands that act on tree items define a static `ContextValue` property:

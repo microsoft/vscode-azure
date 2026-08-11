@@ -83,7 +83,7 @@ describe('AzureResourceDataProvider (unit)', () => {
             expect(children).to.deep.equal(resources);
         });
 
-        it('should reuse a cached client across calls for the same subscription', async () => {
+        it('should create a lightweight client for each operation', async () => {
             const sub = makeSubscription();
             const createClient = mock.fn(() => ({ resourceGroups: { list: () => [] } }));
             const provider = createProvider(createClient);
@@ -91,7 +91,7 @@ describe('AzureResourceDataProvider (unit)', () => {
             await provider.getChildren(sub);
             await provider.getChildren(sub);
 
-            expect(createClient.mock.callCount()).to.equal(1);
+            expect(createClient.mock.callCount()).to.equal(2);
         });
 
         it('should pass configured page size to resource list calls', async () => {

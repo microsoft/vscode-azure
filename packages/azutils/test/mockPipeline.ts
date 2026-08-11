@@ -14,7 +14,7 @@ export function makeRequest(overrides?: Partial<PipelineRequest>): PipelineReque
     return {
         url: 'https://management.azure.com/subscriptions',
         method: 'GET',
-        headers: createHttpHeaders(),
+        headers: createHttpHeaders({ authorization: 'Bearer mock-token' }),
         body: undefined,
         timeout: 0,
         withCredentials: false,
