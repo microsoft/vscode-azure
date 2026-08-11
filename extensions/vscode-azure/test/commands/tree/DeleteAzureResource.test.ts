@@ -5,8 +5,8 @@
 
 import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createActionContext, IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, MockUri, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { CancellationError, createActionContext, IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, MockUri, respondToPrompts, type MockInputBox, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { Container } from 'inversify';
 import * as assert from 'node:assert';
@@ -59,22 +59,42 @@ describe('DeleteAzureResource (unit)', () => {
     it('deletes a resource group only after its name is typed', async () => {
         const resourceGroup = makeResourceGroup();
         const setup = createCommand(resourceGroup);
-        setup.mockResult.inputBoxResponses.push(resourceGroup.name);
+        const tracker = respondToPrompts(setup.mockResult, [{ input: resourceGroup.name }]);
 
         await setup.command.execute(AzureNodeId.from(resourceGroup).toString());
 
-        expect(setup.mockResult.window.showInputBox.mock.callCount()).to.equal(1);
+        tracker.assertAllConsumed();
         expect(setup.deleteResourceGroup.mock.calls[0].arguments[0]).to.equal(resourceGroup.name);
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.calls[0].arguments[0]).to.equal(resourceGroup);
     });
 
-    it('does not delete a resource group when the typed name does not match', async () => {
+    it('blocks deletion while the typed name does not match the resource group', async () => {
         const resourceGroup = makeResourceGroup();
         const setup = createCommand(resourceGroup);
-        setup.mockResult.inputBoxResponses.push('not-the-name');
+        respondToPrompts(setup.mockResult, [{ input: 'not-the-name' }]);
 
-        await setup.command.execute(AzureNodeId.from(resourceGroup).toString());
+        const pending = setup.command.execute(AzureNodeId.from(resourceGroup).toString());
+        const inputBox = await waitForInputBox(setup.mockResult);
+
+        // Validation refused the accept, so the prompt stays open and nothing is deleted.
+        expect(inputBox.validationMessage).to.be.a('string').that.includes(resourceGroup.name);
+        expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
+
+        inputBox.triggerHide();
+        await assert.rejects(pending, (error: unknown) => CancellationError.test(error));
+        expect(setup.remove.mock.callCount()).to.equal(0);
+    });
+
+    it('does not delete a resource group when the typed confirmation is cancelled', async () => {
+        const resourceGroup = makeResourceGroup();
+        const setup = createCommand(resourceGroup);
+        respondToPrompts(setup.mockResult, ['cancel']);
+
+        await assert.rejects(
+            setup.command.execute(AzureNodeId.from(resourceGroup).toString()),
+            (error: unknown) => CancellationError.test(error),
+        );
 
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.callCount()).to.equal(0);
@@ -154,8 +174,17 @@ interface CommandSetup {
     readonly remove: Mock<(target: unknown) => void>;
 }
 
-function createCommand(resource: GenericResource, options: CommandOptions = {}): CommandSetup {
-    const mockResult = createMockVsCode();
+/** Wait for the command to open its confirmation prompt. */
+async function waitForInputBox(mockResult: MockVsCodeResult): Promise<MockInputBox> {
+    for (let attempt = 0; attempt < 100 && mockResult.inputBoxes.length === 0; attempt++) {
+        await new Promise(resolve => setImmediate(resolve));
+    }
+
+    expect(mockResult.inputBoxes, 'Expected the command to show an input box').to.have.length.greaterThan(0);
+    return mockResult.inputBoxes[0];
+}
+
+function createCommand(resource: GenericResource, options: CommandOptions = {}): CommandSetup {    const { ctx, mock: mockResult } = createMockCodeContext();
     const dataTree = createMockDataItemTree([resource, ...(options.extraNodes ?? [])]);
     const remove = (dataTree as unknown as { remove: Mock<(target: unknown) => void> }).remove;
 
@@ -167,7 +196,7 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
     };
 
     const container = new Container();
-    container.bind(IVsCode).toConstantValue(mockResult.vscode);
+    container.bind(ICodeContext).toConstantValue(ctx);
     container.bind(IActionContext).toConstantValue(createActionContext('deleteAzureResource'));
     container.bind(IAzureViewDataTree).toConstantValue(dataTree);
     container.bind(IAzdResourceAssociationService).toConstantValue(azdAssociation);

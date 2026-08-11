@@ -10,7 +10,7 @@ import {
     isResourceGroup,
     type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, IVsCode, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, showSmartInputBox, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
 import { IAzdResourceAssociationService } from '../../azd/AzdResourceAssociationService';
 import { IAzureViewDataTree } from '../../services';
@@ -41,13 +41,17 @@ export class DeleteAzureResource implements ManagedCommand {
     public static readonly ResourceGroupContextValue = 'deleteResourceGroup';
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionContext) private readonly context: IActionContext,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IAzdResourceAssociationService) private readonly azdAssociation: IAzdResourceAssociationService,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
         @inject(Container) private readonly container: Container,
     ) { }
+
+    private get code() {
+        return this.ctx.code;
+    }
 
     /**
      * @inheritdoc
@@ -139,16 +143,23 @@ export class DeleteAzureResource implements ManagedCommand {
         return choice !== deleteDirectly;
     }
 
-    /** Ask the user to confirm, requiring the typed name for cascading deletes. */
+    /**
+     * Ask the user to confirm, requiring the typed name for cascading deletes.
+     *
+     * @returns `false` when a modal confirmation is dismissed.
+     * @throws {@linkcode CancellationError} if a typed confirmation is dismissed.
+     */
     private async confirm(resource: GenericResource): Promise<boolean> {
         if (isResourceGroup(resource)) {
-            const typed = await this.code.window.showInputBox({
+            // Validation blocks acceptance until the name matches, so returning
+            // at all means the user confirmed; cancelling rejects instead.
+            await showSmartInputBox(this.ctx, {
                 prompt: this.code.l10n.t('Type \'{0}\' to confirm deletion of this resource group and everything in it.', resource.name),
                 validateInput: input => input === resource.name
                     ? undefined
                     : this.code.l10n.t('Enter \'{0}\' to confirm deletion.', resource.name),
             });
-            return typed === resource.name;
+            return true;
         }
 
         const deleteLabel = this.code.l10n.t('Delete');
