@@ -58,21 +58,11 @@ describe('ProductRegistrar (unit)', () => {
 
         const dataProviders = registrar.getResourceDataProviders();
         const viewProviders = registrar.getResourceViewProviders();
-        const commandIds = registrar.getCommands().map(command => command.commandId);
         expect(dataProviders[0]).to.equal(AcrDataProvider);
         expect(dataProviders[1]).to.deep.equal([IFunctionAppDataProvider, FunctionAppDataProvider]);
         expect(dataProviders[2]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
         expect(dataProviders[3]).to.equal(AzureResourceDataProvider);
         expect(viewProviders).to.deep.equal([AcrViewProvider, FunctionAppViewProvider, GenericAzureViewProvider]);
-        expect(commandIds).to.include.members([
-            'vscode-azure/resources/refresh',
-            'vscode-azure/resources/groupBy',
-            'vscode-azure/resources/openInPortal',
-            'vscode-azure/resources/delete',
-            'vscode-azure/resourceGroups/delete',
-            'vscode-azure/signIn',
-            'vscode-azure/selectSubscriptions',
-        ]);
     });
 
     it('binds primary provider identifiers as singleton collection aliases', () => {

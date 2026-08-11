@@ -330,7 +330,7 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             expect(item.label).to.equal('site1');
             expect(item.description).to.equal('Microsoft.Web/sites');
-            expect(item.contextValue).to.include(DeleteAzureResource.ContextValue);
+            expect(item.contextValue).to.include(DeleteAzureResource.ResourceContextValue);
         });
 
         it('should render a virtual group node', () => {

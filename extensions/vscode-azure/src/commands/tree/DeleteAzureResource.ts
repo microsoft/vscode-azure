@@ -10,7 +10,7 @@ import {
     isResourceGroup,
     type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, ICodeContext, showSmartInputBox, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { CancellationError, IActionContext, ICodeContext, showSmartInputBox, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
 import { IAzdResourceAssociationService } from '../../azd/AzdResourceAssociationService';
 import { IAzureViewDataTree } from '../../services';
@@ -35,7 +35,7 @@ import type { ManagedCommand } from '../ManagedCommand';
 @injectable()
 export class DeleteAzureResource implements ManagedCommand {
     /** Context value gating deletion of an individual resource. */
-    public static readonly ContextValue = 'deleteResource';
+    public static readonly ResourceContextValue = 'deleteResource';
 
     /** Context value gating deletion of a resource group. */
     public static readonly ResourceGroupContextValue = 'deleteResourceGroup';
@@ -49,13 +49,10 @@ export class DeleteAzureResource implements ManagedCommand {
         @inject(Container) private readonly container: Container,
     ) { }
 
-    private get code() {
-        return this.ctx.code;
-    }
-
     /**
      * @inheritdoc
      * @throws if the key is missing, stale, or does not identify a deletable node.
+     * @throws {@linkcode CancellationError} if the user backs out at any prompt.
      */
     public async execute(key?: string): Promise<void> {
         const resource = this.resolve(key);
@@ -65,38 +62,36 @@ export class DeleteAzureResource implements ManagedCommand {
             return;
         }
 
-        if (!await this.confirm(resource)) {
-            return;
-        }
+        await this.confirm(resource);
 
         await withDelayedProgress(
-            this.code,
+            this.ctx.code,
             {
-                location: this.code.ProgressLocation.Notification,
-                title: this.code.l10n.t('Deleting \'{0}\'...', resource.name),
+                location: this.ctx.code.ProgressLocation.Notification,
+                title: this.ctx.code.l10n.t('Deleting \'{0}\'...', resource.name),
             },
             this.deleteResource(resource),
         );
 
         this.dataTree.remove(resource);
-        void this.code.window.showInformationMessage(isResourceGroup(resource)
-            ? this.code.l10n.t('Deleted resource group \'{0}\'.', resource.name)
-            : this.code.l10n.t('Deleted resource \'{0}\'.', resource.name));
+        void this.ctx.code.window.showInformationMessage(isResourceGroup(resource)
+            ? this.ctx.code.l10n.t('Deleted resource group \'{0}\'.', resource.name)
+            : this.ctx.code.l10n.t('Deleted resource \'{0}\'.', resource.name));
     }
 
     /** Look up the selected node and confirm it is something we can delete. */
     private resolve(key: string | undefined): GenericResource {
         if (!key) {
-            throw new Error(this.code.l10n.t('Select an Azure resource to delete.'));
+            throw new Error(this.ctx.code.l10n.t('Select an Azure resource to delete.'));
         }
 
         const resource = this.dataTree.get(key);
         if (!resource) {
-            throw new Error(this.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'));
+            throw new Error(this.ctx.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'));
         }
 
         if (!isGenericResource(resource) && !isResourceGroup(resource)) {
-            throw new Error(this.code.l10n.t('The selected item cannot be deleted.'));
+            throw new Error(this.ctx.code.l10n.t('The selected item cannot be deleted.'));
         }
 
         return resource;
@@ -106,8 +101,9 @@ export class DeleteAzureResource implements ManagedCommand {
      * Offer to tear down the owning azd deployment instead of deleting a single
      * Azure target.
      *
-     * @returns `true` when the deletion has been handled (either by running
-     * `azd down` or because the user dismissed the prompt).
+     * @returns `true` when `azd down` handled the teardown, so no direct
+     * deletion should follow.
+     * @throws {@linkcode CancellationError} if the user dismisses the prompt.
      */
     private async steerToAzd(resource: GenericResource): Promise<boolean> {
         const association = await this.azdAssociation.find(resource);
@@ -117,14 +113,14 @@ export class DeleteAzureResource implements ManagedCommand {
             return false;
         }
 
-        const deleteDeployment = this.code.l10n.t('Delete Deployment');
+        const deleteDeployment = this.ctx.code.l10n.t('Delete Deployment');
         const deleteDirectly = isResourceGroup(resource)
-            ? this.code.l10n.t('Delete Resource Group Anyway')
-            : this.code.l10n.t('Delete Resource Anyway');
-        const choice = await this.code.window.showWarningMessage(
+            ? this.ctx.code.l10n.t('Delete Resource Group Anyway')
+            : this.ctx.code.l10n.t('Delete Resource Anyway');
+        const choice = await this.ctx.code.window.showWarningMessage(
             isResourceGroup(resource)
-                ? this.code.l10n.t('This resource group is managed by a local Azure Developer CLI project. Delete the full deployment instead?')
-                : this.code.l10n.t('This resource is managed by a local Azure Developer CLI project. Delete the full deployment instead?'),
+                ? this.ctx.code.l10n.t('This resource group is managed by a local Azure Developer CLI project. Delete the full deployment instead?')
+                : this.ctx.code.l10n.t('This resource is managed by a local Azure Developer CLI project. Delete the full deployment instead?'),
             { modal: true },
             deleteDeployment,
             deleteDirectly,
@@ -137,38 +133,41 @@ export class DeleteAzureResource implements ManagedCommand {
                 environmentName: association.environmentName,
             });
             return true;
+        } else if (choice !== deleteDirectly) {
+            throw new CancellationError(undefined, 'confirmAzdDeletionChoice');
         }
 
         this.context.telemetry.properties.deletionPath = 'direct';
-        return choice !== deleteDirectly;
+        return false;
     }
 
     /**
      * Ask the user to confirm, requiring the typed name for cascading deletes.
      *
-     * @returns `false` when a modal confirmation is dismissed.
-     * @throws {@linkcode CancellationError} if a typed confirmation is dismissed.
+     * @throws {@linkcode CancellationError} if the user dismisses the prompt.
      */
-    private async confirm(resource: GenericResource): Promise<boolean> {
+    private async confirm(resource: GenericResource): Promise<void> {
         if (isResourceGroup(resource)) {
             // Validation blocks acceptance until the name matches, so returning
             // at all means the user confirmed; cancelling rejects instead.
             await showSmartInputBox(this.ctx, {
-                prompt: this.code.l10n.t('Type \'{0}\' to confirm deletion of this resource group and everything in it.', resource.name),
+                prompt: this.ctx.code.l10n.t('Type \'{0}\' to confirm deletion of this resource group and everything in it.', resource.name),
                 validateInput: input => input === resource.name
                     ? undefined
-                    : this.code.l10n.t('Enter \'{0}\' to confirm deletion.', resource.name),
+                    : this.ctx.code.l10n.t('Enter \'{0}\' to confirm deletion.', resource.name),
             });
-            return true;
+            return;
         }
 
-        const deleteLabel = this.code.l10n.t('Delete');
-        const choice = await this.code.window.showWarningMessage(
-            this.code.l10n.t('Are you sure you want to delete resource \'{0}\'? This cannot be undone.', resource.name),
+        const deleteLabel = this.ctx.code.l10n.t('Delete');
+        const choice = await this.ctx.code.window.showWarningMessage(
+            this.ctx.code.l10n.t('Are you sure you want to delete resource \'{0}\'? This cannot be undone.', resource.name),
             { modal: true },
             deleteLabel,
         );
-        return choice === deleteLabel;
+        if (choice !== deleteLabel) {
+            throw new CancellationError(undefined, 'confirmResourceDeletion');
+        }
     }
 
     /** Issue the ARM delete and resolve once Azure reports it complete. */
@@ -177,5 +176,4 @@ export class DeleteAzureResource implements ManagedCommand {
         return isResourceGroup(resource)
             ? client.resourceGroups.delete(resource.name)
             : client.resources.deleteById(resource.id, resource.type);
-    }
-}
+    }}

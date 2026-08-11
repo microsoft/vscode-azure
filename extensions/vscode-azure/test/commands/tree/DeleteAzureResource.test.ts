@@ -48,11 +48,13 @@ describe('DeleteAzureResource (unit)', () => {
         expect(shownToasts(setup)).to.be.empty;
     });
 
-    it('does not delete a resource when the confirmation is dismissed', async () => {
+    it('cancels instead of deleting when the confirmation is dismissed', async () => {
         const resource = makeGenericResource();
         const setup = createCommand(resource);
 
-        await setup.command.execute(AzureNodeId.from(resource).toString());
+        const error = await expect(setup.command.execute(AzureNodeId.from(resource).toString())).to.be.rejected;
+        expect(CancellationError.test(error)).to.be.true;
+        expect((error as CancellationError).stepName).to.equal('confirmResourceDeletion');
 
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.callCount()).to.equal(0);
@@ -160,13 +162,15 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.remove.mock.callCount()).to.equal(1);
     });
 
-    it('does nothing when the azd prompt is dismissed', async () => {
+    it('cancels when the azd prompt is dismissed', async () => {
         const resource = makeGenericResource();
         const setup = createCommand(resource, {
             association: { azureYamlUri: MockUri.file('/project/azure.yaml'), environmentName: 'dev' },
         });
 
-        await setup.command.execute(AzureNodeId.from(resource).toString());
+        const error = await expect(setup.command.execute(AzureNodeId.from(resource).toString())).to.be.rejected;
+        expect(CancellationError.test(error)).to.be.true;
+        expect((error as CancellationError).stepName).to.equal('confirmAzdDeletionChoice');
 
         expect(setup.executeAzdDown.mock.callCount()).to.equal(0);
         expect(setup.deleteById.mock.callCount()).to.equal(0);

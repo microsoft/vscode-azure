@@ -6,7 +6,6 @@
 import { collectPages } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import * as assert from 'node:assert';
 import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient } from '../../../src/rest/clients/ResourceClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
@@ -137,7 +136,7 @@ describe('ResourceClient (unit)', () => {
         expect(apiVersion).to.equal('2024-04-01');
     });
 
-    it('should use the newest API version when no default is available', async () => {
+    it('should prefer the newest stable API version over newer previews', async () => {
         const httpClient = providerClient({
             namespace: 'Microsoft.Storage',
             resourceTypes: [{
@@ -147,7 +146,20 @@ describe('ResourceClient (unit)', () => {
         });
         const client = createClient(httpClient);
 
-        expect(await client.providers.resolveApiVersion('Microsoft.Storage/storageAccounts')).to.equal('2025-06-01-preview');
+        expect(await client.providers.resolveApiVersion('Microsoft.Storage/storageAccounts')).to.equal('2024-01-01');
+    });
+
+    it('should fall back to the newest preview when no stable version exists', async () => {
+        const httpClient = providerClient({
+            namespace: 'Microsoft.Example',
+            resourceTypes: [{
+                resourceType: 'widgets',
+                apiVersions: ['2023-01-01-preview', '2025-01-01-preview', '2024-01-01-preview'],
+            }],
+        });
+        const client = createClient(httpClient);
+
+        expect(await client.providers.resolveApiVersion('Microsoft.Example/widgets')).to.equal('2025-01-01-preview');
     });
 
     it('should trim API version metadata before filtering and sorting', async () => {
@@ -160,7 +172,7 @@ describe('ResourceClient (unit)', () => {
         });
         const client = createClient(httpClient);
 
-        expect(await client.providers.resolveApiVersion('Microsoft.Example/widgets')).to.equal('2025-06-01-preview');
+        expect(await client.providers.resolveApiVersion('Microsoft.Example/widgets')).to.equal('2024-01-01');
     });
 
     it('should cache resolved API versions per client and normalized resource type', async () => {
@@ -180,25 +192,19 @@ describe('ResourceClient (unit)', () => {
         const missingProviderClient = new MockHttpClient({
             handler: req => makeResponse(req, 404, JSON.stringify({ error: { code: 'NotFound', message: 'Not found' } })),
         });
-        await assert.rejects(
-            createClient(missingProviderClient).providers.resolveApiVersion('Microsoft.Missing/widgets'),
-            /Not found/,
-        );
+        await expect(createClient(missingProviderClient).providers.resolveApiVersion('Microsoft.Missing/widgets'))
+            .to.be.rejectedWith(/Not found/);
 
         const missingTypeClient = providerClient({ namespace: 'Microsoft.Example', resourceTypes: [] });
-        await assert.rejects(
-            createClient(missingTypeClient).providers.resolveApiVersion('Microsoft.Example/widgets'),
-            /does not define resource type "widgets"/,
-        );
+        await expect(createClient(missingTypeClient).providers.resolveApiVersion('Microsoft.Example/widgets'))
+            .to.be.rejectedWith(/does not define resource type "widgets"/);
 
         const missingVersionClient = providerClient({
             namespace: 'Microsoft.Example',
             resourceTypes: [{ resourceType: 'widgets', apiVersions: [] }],
         });
-        await assert.rejects(
-            createClient(missingVersionClient).providers.resolveApiVersion('Microsoft.Example/widgets'),
-            /does not define an API version/,
-        );
+        await expect(createClient(missingVersionClient).providers.resolveApiVersion('Microsoft.Example/widgets'))
+            .to.be.rejectedWith(/does not define an API version/);
     });
 
     it('should delete a nested resource by ID and await LRO completion', async () => {
