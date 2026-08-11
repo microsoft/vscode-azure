@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CancellationError } from '@microsoft/vscode-azure-utils';
+import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import assert from 'node:assert/strict';
 import type * as vscode from 'vscode';
-import { CancellationError } from '../../src/vscode/CancellationError';
-import { defaultExcludedDirectories, walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from '../../src/workspace/walkWorkspace';
-import { createMockVsCode, type MockVsCodeResult } from '../vscode/MockVsCode';
+import { defaultExcludedDirectories, walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from '../../src/utils/walkWorkspace';
 
 describe('walkWorkspace (unit)', () => {
     describe('traversal', () => {

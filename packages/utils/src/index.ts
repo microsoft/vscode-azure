@@ -43,4 +43,3 @@ export * from './wizard/GoBackError';
 export * from './wizard/PickWorkspaceLocationStep';
 export * from './wizard/PromptStep';
 export * from './wizard/Wizard';
-export * from './workspace/walkWorkspace';

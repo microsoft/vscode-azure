@@ -32,7 +32,6 @@ Framework-level building blocks with no Azure-specific knowledge:
 - **VS Code abstractions**: `CancellationError`, `Disposable`, `EventEmitter`
 - **Process execution**: `ProcessExecutor`, `IProcessExecutor`, and shared shell-task construction
 - **Data utilities**: `InflightMap`, `Limiter`
-- **Workspace scanning**: `walkWorkspace` — a bounded, cancelable, `.gitignore`-aware directory walk that consumers layer their own detection on top of
 
 ### `packages/azutils` — Azure Utilities
 
@@ -58,6 +57,7 @@ The VS Code extension that wires everything together:
   - Workspace (local): `AzdWorkspaceDataProvider`/`ViewProvider`, `FunctionsWorkspaceDataProvider`/`ViewProvider`, `EmulatorsWorkspaceDataProvider`/`ViewProvider`
   - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`
 - **Services**: Extension-scoped DI identifiers (`ICredentialFactory`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)
+- **Workspace scanning**: `walkWorkspace` — a bounded, cancelable, `.gitignore`-aware directory walk that product code layers its own detection on top of. It lives here rather than in `utils` because its consumers (project and function detection) are Azure product concerns.
 
 ## Activation Flow
 

@@ -45,7 +45,6 @@
         ]
     },
     "dependencies": {
-        "ignore": "^7.0.5",
         "nano-spawn": "^2.1.0",
         "vscode-uri": "^3.1.0"
     },

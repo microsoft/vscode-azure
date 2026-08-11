@@ -60,6 +60,9 @@ importers:
       '@vscode/extension-telemetry':
         specifier: 'catalog:'
         version: 1.5.2(tslib@2.8.1)
+      ignore:
+        specifier: ^7.0.5
+        version: 7.0.6
       inversify:
         specifier: 'catalog:'
         version: 8.2.3(reflect-metadata@0.2.2)
@@ -131,9 +134,6 @@ importers:
 
   packages/utils:
     dependencies:
-      ignore:
-        specifier: ^7.0.5
-        version: 7.0.6
       nano-spawn:
         specifier: ^2.1.0
         version: 2.1.0

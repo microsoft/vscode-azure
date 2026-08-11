@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CancellationError, type IVsCode } from '@microsoft/vscode-azure-utils';
 import ignore, { type Ignore } from 'ignore';
 import type * as vscode from 'vscode';
-import { CancellationError } from '../vscode/CancellationError';
-import type { IVsCode } from '../vscode/IVsCode';
 
 /**
  * Directories skipped by default: generated output, dependency caches, and VCS
