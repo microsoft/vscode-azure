@@ -10,7 +10,9 @@ import type { AzureSubscription } from '../auth/AzureSubscription';
 import type { EnvironmentLike } from '../auth/Environment';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
-import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
+import { DedupeRequestPolicy, type DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
+
+export type { DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
 
 /**
  * REST-style (`@azure-rest/core-client`) factory for SDKs whose
@@ -29,6 +31,8 @@ import { DedupeRequestPolicy } from './pipeline/DedupeRequestPolicy';
  * @param credential - The token credential used to authenticate requests.
  * @param environment - The Azure environment (cloud) whose ARM endpoint is used.
  * @param options - Optional client options merged over the factory defaults.
+ * @param dedupeIdentity - Optional stable account and tenant identity. When
+ * omitted, deduplication is limited to clients sharing `credential`.
  */
 export function createArmRestClient<TClient extends RestClient, TOptions extends RestClientOptions>(
     ctx: ICodeContext,
@@ -37,10 +41,12 @@ export function createArmRestClient<TClient extends RestClient, TOptions extends
     credential: TokenCredential,
     environment: EnvironmentLike,
     options?: TOptions,
+    dedupeIdentity?: DedupeRequestIdentity,
 ): TClient {
     const endpoint = environment.resourceManagerEndpointUrl;
+    const requestIdentity = getDedupeIdentity(dedupeIdentity ?? credential, options);
     executor.output.debug(`[rest] create rest client ${getClient.name}`);
-    return getClient(credential, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions));
+    return getClient(credential, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions));
 }
 
 /**
@@ -74,13 +80,15 @@ export function createArmRestSubscriptionClient<TClient extends RestClient, TOpt
     }
 
     const endpoint = subscription.environment.resourceManagerEndpointUrl;
+    const requestIdentity = getDedupeIdentity(subscription, options);
     executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
-    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, { ...options, endpoint } as TOptions));
+    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions));
 }
 
 function applyDefaults<TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
+    dedupeIdentity: DedupeRequestIdentity | object,
     options?: TOptions,
 ): TOptions {
     const extensionUserAgentPrefix = `${ctx.extensionContext.extension.id}/${(ctx.extensionContext.extension.packageJSON as { version: string }).version}`;
@@ -94,10 +102,6 @@ function applyDefaults<TOptions extends RestClientOptions>(
         additionalPolicies: [
             ...(options?.additionalPolicies ?? []),
             {
-                policy: new DedupeRequestPolicy(),
-                position: 'perCall',
-            },
-            {
                 policy: new CorrelationIdPolicy(executor),
                 position: 'perCall',
             },
@@ -105,6 +109,30 @@ function applyDefaults<TOptions extends RestClientOptions>(
                 policy: new AcceptLanguagePolicy(ctx.code.env.language),
                 position: 'perCall',
             },
+            {
+                policy: new DedupeRequestPolicy(dedupeIdentity),
+                position: 'perCall',
+            },
         ],
     } satisfies RestClientOptions as TOptions;
+}
+
+function getDedupeIdentity(identity: DedupeRequestIdentity | object, options: RestClientOptions | undefined): DedupeRequestIdentity | object {
+    // Response-affecting options can change transport or pipeline semantics, so
+    // a unique object keeps in-flight requests local to this client.
+    return hasResponseAffectingClientOptions(options) ? {} : identity;
+}
+
+function hasResponseAffectingClientOptions(options: RestClientOptions | undefined): boolean {
+    return !!options && (
+        !!options.httpClient
+        || !!options.pipeline
+        || !!options.additionalPolicies?.length
+        || !!options.retryOptions
+        || !!options.redirectOptions
+        || !!options.credentials
+        || !!options.proxyOptions
+        || !!options.agent
+        || !!options.tlsOptions
+    );
 }

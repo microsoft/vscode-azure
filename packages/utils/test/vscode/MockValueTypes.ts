@@ -46,7 +46,7 @@ export class MockShellExecution implements vscode.ShellExecution {
 export class MockTask implements vscode.Task {
     public isBackground = false;
     public presentationOptions: vscode.TaskPresentationOptions = {};
-    public problemMatchers: string[] = [];
+    public problemMatchers: string[];
     public runOptions: vscode.RunOptions = {};
 
     constructor(
@@ -55,7 +55,12 @@ export class MockTask implements vscode.Task {
         public name: string,
         public source: string,
         public execution?: vscode.ProcessExecution | vscode.ShellExecution | vscode.CustomExecution,
-    ) { }
+        problemMatchers?: string | string[],
+    ) {
+        this.problemMatchers = typeof problemMatchers === 'string'
+            ? [problemMatchers]
+            : problemMatchers ?? [];
+    }
 }
 
 /** Test stand-in for {@linkcode vscode.RelativePattern}. */

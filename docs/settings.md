@@ -76,7 +76,7 @@ which invalidates both the tree subtree and the document, rather than touching t
 ## Adapters
 
 A product supports settings by implementing `SettingsAdapter` and binding it to
-`ISettingsAdapter` in `registerSettings.ts`. Nothing else changes.
+`ISettingsAdapter` in `products/registerSettings.ts`. Nothing else changes.
 
 ```typescript
 export interface SettingsAdapter {
@@ -150,22 +150,33 @@ Unstructured collections serialize as plain `"KEY": "value"`. The framework pick
 ## Document URIs
 
 ```
-azure-settings:/<identity>/<armResourceId>/<resourceName>.<collectionId>.jsonc
+azure-settings:/<nodeKey>/<resourceName>.<collectionId>.jsonc
 ```
 
-`<identity>` is a hex-encoded JSON payload containing account identity and the minimal resource
-context needed by a settings adapter.
+`<nodeKey>` is the hex-encoded `AzureNodeId` of the settings collection node — the data tree's own
+primary key. `AzureSettingsDocumentSource` resolves a URI with a single `tree.get(nodeKey)`, so the
+resource passed to the adapter is always **the object the tree loaded from Azure**.
 
-The URI is **self-describing** rather than a handle into a session map, because the editor restores
-open tabs on window reload and calls `readFile` before the extension has any tree state — a handle
-would dangle. `AzureSettingsDocumentSource` reconstructs a minimal `GenericResource` directly from
-the URI instead of loading or searching the resource tree.
+Two alternatives were tried and rejected:
 
-Two details are load-bearing:
+- *Searching the tree by ARM id* — drilling account → tenant → subscription → group to find a
+  resource is expensive and turns a lookup into a scan.
+- *Rebuilding a `GenericResource` from the URI* — cheap, but it fabricates a resource that was never
+  read from Azure, so it can silently disagree with reality.
 
-- **Identity goes in the path, never the authority.** VS Code lowercases a URI's authority when
+The trade-off of the current design: a document only resolves while its node is in the tree. That is
+the normal case, since the document is opened from the tree and the tree caches it. A document
+restored by the editor after a window reload will not resolve until that node has loaded, and fails
+with a message telling the user to reopen it from the Azure view.
+
+The file name is cosmetic — it makes the tab readable and selects the `jsonc` language mode. Nothing
+parses meaning out of it.
+
+Two encoding details are load-bearing:
+
+- **The key goes in the path, never the authority.** VS Code lowercases a URI's authority when
   round-tripping through `Uri.parse(uri.toString())` but preserves the path byte-for-byte, and
-  account ids are not safe to lowercase.
+  neither account ids nor ARM ids are safe to lowercase.
 - **Hex, not base64url**, for the same reason: hex survives case normalization regardless.
 
 `SettingsUri` has a round-trip test covering exactly this.
@@ -217,7 +228,8 @@ a confirmation prompt to every save.
 1. Add a client wrapper in `packages/azutils/src/rest/clients/` if the product needs one, re-exporting
    any SDK types from the wrapper.
 2. Implement `SettingsAdapter` in `extensions/vscode-azure/src/settings/adapters/`.
-3. Bind it in `bindSettingsServices` in `registerSettings.ts`.
+3. Bind it to `ISettingsAdapter` in the settings product entry point,
+   `src/products/registerSettings.ts`.
 
 That is all. The tree nodes, editor, shared command set, and masking come for free.
 

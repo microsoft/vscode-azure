@@ -145,19 +145,22 @@ View providers control presentation without modifying the data layer. They may:
 
 Both layers extend `ProviderRegistry`, which maintains an ordered list of providers. `findProvider(resource)` returns the **first** provider whose `canHandle(resource)` returns `true`.
 
-**Registration order matters** — specific providers must be registered before broader fallback providers. In `registerTrees.ts`, each tree is configured via a `TreeConfig` object whose `dataProviders` and `viewProviders` arrays are processed in order:
+**Registration order matters** — specific providers must be registered before broader fallback providers. All resource providers, including the generic Azure root and fallback providers, are collected by `ProductRegistrar` in registration order:
 
 ```typescript
-// In registerTrees.ts — resources tree dataProviders, most specific first
-dataProviders: [
-    AcrDataProvider,
-    [ISettingsDataProvider, SettingsDataProvider],         // settings virtual nodes only
-    [IAzureAccountDataProvider, AzureAccountDataProvider], // accounts/tenants/subscriptions (root)
-    AzureResourceDataProvider,                            // resource groups + resources (fallback)
-],
+// Product registrations run in this order.
+registerAcr(registrar);
+registerFunctions(registrar);
+registerSettings(registrar);     // settings virtual nodes only
+registerGenericAzure(registrar); // root and fallback providers last
 ```
 
 Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly. See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
+
+Products add both sides of their resource presentation from their single entry
+point with `registerResourceDataProvider()` and
+`registerResourceViewProvider()`. The generic Azure registration is deliberately
+last so its providers remain fallbacks.
 
 ### Composing children instead of competing for a resource
 

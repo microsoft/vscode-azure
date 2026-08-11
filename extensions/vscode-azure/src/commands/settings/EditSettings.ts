@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ICodeContext } from '@microsoft/vscode-azure-utils';
-import { openSettingsDocument } from '../../settings/core/openSettingsDocument';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { SettingsUri } from '../../settings/SettingsUri';
@@ -43,6 +42,9 @@ export class EditSettings implements ManagedCommand {
         // An entry node opens its containing collection, so the command works from either level.
         const collection = isSettingsEntryNode(node) ? parentCollectionOf(node) : node;
 
-        await openSettingsDocument(this.ctx.code, SettingsUri.from(this.ctx.code, collection));
+        // `preview: false` so the tab is not reused: the URI identifies the collection, and two
+        // views of one collection could disagree after a save.
+        const document = await this.ctx.code.workspace.openTextDocument(SettingsUri.from(this.ctx.code, collection));
+        await this.ctx.code.window.showTextDocument(document, { preview: false });
     }
 }

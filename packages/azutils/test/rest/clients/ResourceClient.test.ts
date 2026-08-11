@@ -3,13 +3,36 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { collectPages, createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { collectPages, delay } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient } from '../../../src/rest/clients/ResourceClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('ResourceClient (unit)', () => {
+    it('should isolate concurrent requests from clients with custom options', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+        const body = JSON.stringify({ value: [] });
+        const httpClient = new MockHttpClient({
+            handler: async (request) => {
+                await delay(10);
+                return makeResponse(request, 200, body);
+            },
+        });
+        const client1 = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        const client2 = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+
+        await Promise.all([
+            collectPages(client1.resourceGroups.list()),
+            collectPages(client2.resourceGroups.list()),
+        ]);
+
+        expect(httpClient.requests).to.have.length(2);
+    });
+
     it('should list resource groups with metadata attached', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();

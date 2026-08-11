@@ -111,13 +111,26 @@ export function getSubscriptionArmId(resourceId: string): string {
 }
 
 /**
+ * Extracts the resource group name from a full ARM resource ID.
+ *
+ * @throws Error if the ID has no resource group segment.
+ */
+export function getResourceGroupName(resourceId: string): string {
+    return requireResourceGroup(parseAzureResourceId(resourceId));
+}
+
+/**
  * Extracts the resource group ARM ID from a full ARM resource ID.
  * @throws Error if the ID has no resource group segment.
  */
 export function getResourceGroupArmId(resourceId: string): string {
     const parsed = parseAzureResourceId(resourceId);
+    return `/subscriptions/${parsed.subscriptionId}/resourceGroups/${requireResourceGroup(parsed)}`;
+}
+
+function requireResourceGroup(parsed: ParsedAzureResourceId): string {
     if (!parsed.resourceGroup) {
-        throw new Error(`ARM resource ID does not contain a resource group: ${resourceId}`);
+        throw new Error(`ARM resource ID does not contain a resource group: ${parsed.resourceId}`);
     }
-    return `/subscriptions/${parsed.subscriptionId}/resourceGroups/${parsed.resourceGroup}`;
+    return parsed.resourceGroup;
 }

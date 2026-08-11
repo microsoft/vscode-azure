@@ -120,13 +120,12 @@ const mockCodeDeployments: ReadonlyArray<{
 export function applyOverrides(container: Container): void {
     // -- Rebind Azure providers with mock implementations ---------------------
 
-    container.rebind(IAzureAccountDataProvider).toConstantValue(
-        createMockAccountDataProvider({
-            accounts: [account],
-            tenants: [tenant],
-            subscriptions: [subscription],
-        }),
-    );
+    const accountProvider = createMockAccountDataProvider({
+        accounts: [account],
+        tenants: [tenant],
+        subscriptions: [subscription],
+    });
+    container.rebind(IAzureAccountDataProvider).toConstantValue(accountProvider);
 
     container.rebind(IResourceClientProvider).toConstantValue(
         () => createMockResourceClient([demoRg, stagingRg], resourcesByGroup),

@@ -4,29 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { IVsCode } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
-import type { ManagedCommand } from '../ManagedCommand';
 
-/**
- * Opens the selected tree node in the Azure Portal in an external browser.
- * No-op for nodes that do not have a portal URL (e.g., accounts, tenants).
- */
-@injectable()
-export class OpenInPortal implements ManagedCommand {
-    /** Context value gating this command's visibility in the tree view. */
-    public static ContextValue = 'openInPortal';
-
-    public constructor(
-        @inject(IVsCode) private readonly code: IVsCode
-    ) { }
-
-    /** @inheritdoc */
-    public execute(key: string): void {
-        const portalUrl = AzureNodeId.parse(key).toPortalUrl();
-
-        if (portalUrl) {
-            void this.code.env.openExternal(this.code.Uri.parse(portalUrl));
-        }
-    }
+/** Resolves the Azure Portal URL represented by the selected tree node key. */
+function getUrl(...args: unknown[]): string | undefined {
+    const [key] = args;
+    return typeof key === 'string' ? AzureNodeId.parse(key).toPortalUrl() : undefined;
 }
+
+/** Declarative metadata for the open-in-portal URL command. */
+export const OpenInPortal = {
+    ContextValue: 'openInPortal',
+    getUrl,
+} as const;

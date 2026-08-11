@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -23,21 +23,12 @@ function makeApp(overrides?: Parameters<typeof makeGenericResource>[0]) {
 describe('SettingsUri (unit)', () => {
     const code = createMockVsCode().vscode;
 
-    describe('from / parse', () => {
-        it('round-trips every identity component', () => {
-            const resource = makeApp();
-            const uri = SettingsUri.from(code, createCollectionNode(resource, 'appSettings'));
+    describe('from / parseNodeKey', () => {
+        it('round-trips the node key the tree uses', () => {
+            const node = createCollectionNode(makeApp(), 'appSettings');
+            const uri = SettingsUri.from(code, node);
 
-            const parts = SettingsUri.parse(uri);
-            expect(parts.accountId).to.equal(resource.subscription.accountId);
-            expect(parts.tenantId).to.equal(resource.subscription.tenantId);
-            expect(parts.subscriptionDisplayName).to.equal(resource.subscription.displayName);
-            expect(parts.armResourceId).to.equal(resource.id);
-            expect(parts.resourceName).to.equal(resource.name);
-            expect(parts.resourceType).to.equal(resource.type);
-            expect(parts.logicalType).to.equal(resource.logicalType);
-            expect(parts.location).to.equal(resource.location);
-            expect(parts.collectionId).to.equal('appSettings');
+            expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(node).toString());
         });
 
         it('uses the azure-settings scheme', () => {
@@ -63,86 +54,65 @@ describe('SettingsUri (unit)', () => {
             expect(appSettings.toString()).to.not.equal(connectionStrings.toString());
         });
 
-        it('keeps the ARM id verbatim, including its casing', () => {
-            const resource = makeApp();
-            const uri = SettingsUri.from(code, createCollectionNode(resource, 'appSettings'));
-
-            expect(SettingsUri.parse(uri).armResourceId).to.equal(resource.id);
-            expect(uri.path).to.contain('/resourceGroups/MyRG/');
-        });
-
         it('survives a full serialize / re-parse cycle, as it must after a window reload', () => {
-            const resource = makeApp({
+            const node = createCollectionNode(makeApp({
                 subscription: makeSubscription({
                     accountId: 'User@Contoso.com',
                     tenantId: '72F988BF-86F1-41AF-91AB-2D7CD011DB47',
                 }),
-            });
+            }), 'appSettings');
 
-            const original = SettingsUri.from(code, createCollectionNode(resource, 'appSettings'));
+            const original = SettingsUri.from(code, node);
             // Exactly what the editor does when it restores a tab.
             const restored = code.Uri.parse(original.toString());
 
-            expect(SettingsUri.parse(restored)).to.deep.equal(SettingsUri.parse(original));
+            expect(SettingsUri.parseNodeKey(restored)).to.equal(SettingsUri.parseNodeKey(original));
         });
 
         it('preserves a case-sensitive account id through serialize / re-parse', () => {
             const accountId = 'MixedCase@Contoso.com';
-            const resource = makeApp({ subscription: makeSubscription({ accountId }) });
+            const node = createCollectionNode(makeApp({ subscription: makeSubscription({ accountId }) }), 'appSettings');
 
-            const uri = code.Uri.parse(SettingsUri.from(code, createCollectionNode(resource, 'appSettings')).toString());
+            const uri = code.Uri.parse(SettingsUri.from(code, node).toString());
 
-            expect(SettingsUri.parse(uri).accountId).to.equal(accountId);
+            expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(node).toString());
         });
 
         it('handles a resource name containing dots', () => {
-            const resource = makeApp({
+            const node = createCollectionNode(makeApp({
                 id: '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Web/sites/my.dotted.app',
                 name: 'my.dotted.app',
-            });
+            }), 'appSettings');
 
-            const uri = SettingsUri.from(code, createCollectionNode(resource, 'appSettings'));
+            const uri = SettingsUri.from(code, node);
 
-            expect(SettingsUri.parse(uri).collectionId).to.equal('appSettings');
-            expect(SettingsUri.parse(uri).armResourceId).to.equal(resource.id);
+            expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(node).toString());
         });
     });
 
-    describe('parse rejection', () => {
+    describe('parseNodeKey rejection', () => {
         it('rejects a foreign scheme', () => {
-            expect(() => SettingsUri.parse(code.Uri.file('/tmp/x.jsonc'))).to.throw(/scheme/);
+            expect(() => SettingsUri.parseNodeKey(code.Uri.file('/tmp/x.jsonc'))).to.throw(/scheme/);
         });
 
-        it('rejects a path with too few segments', () => {
-            const uri = code.Uri.from({ scheme: SettingsScheme, path: '/only/two' });
-            expect(() => SettingsUri.parse(uri)).to.throw();
+        it('rejects a path with the wrong number of segments', () => {
+            const uri = code.Uri.from({ scheme: SettingsScheme, path: '/only-one-segment' });
+            expect(() => SettingsUri.parseNodeKey(uri)).to.throw();
         });
 
-        it('rejects a malformed identity segment', () => {
-            const uri = code.Uri.from({ scheme: SettingsScheme, path: '/6162/subscriptions/s/app.appSettings.jsonc' });
-            expect(() => SettingsUri.parse(uri)).to.throw(/identity/);
-        });
+        it('rejects non-hex and odd-length node keys before decoding', () => {
+            const nonHex = code.Uri.from({ scheme: SettingsScheme, path: '/zz/app.appSettings.jsonc' });
+            const oddLength = code.Uri.from({ scheme: SettingsScheme, path: '/abc/app.appSettings.jsonc' });
 
-        it('rejects non-hex and odd-length identity segments before decoding', () => {
-            const nonHex = code.Uri.from({ scheme: SettingsScheme, path: '/zz/subscriptions/s/app.appSettings.jsonc' });
-            const oddLength = code.Uri.from({ scheme: SettingsScheme, path: '/abc/subscriptions/s/app.appSettings.jsonc' });
-
-            expect(() => SettingsUri.parse(nonHex)).to.throw(/hexadecimal/);
-            expect(() => SettingsUri.parse(oddLength)).to.throw(/hexadecimal/);
-        });
-
-        it('rejects a file name with no collection id', () => {
-            const valid = SettingsUri.from(code, createCollectionNode(makeApp(), 'appSettings'));
-            const segments = valid.path.split('/');
-            segments[segments.length - 1] = 'appSettings.jsonc';
-            const uri = code.Uri.from({ scheme: SettingsScheme, path: segments.join('/') });
-            expect(() => SettingsUri.parse(uri)).to.throw(/collection/);
+            expect(() => SettingsUri.parseNodeKey(nonHex)).to.throw(/hexadecimal/);
+            expect(() => SettingsUri.parseNodeKey(oddLength)).to.throw(/hexadecimal/);
         });
 
         it('rejects a non-jsonc file name', () => {
             const valid = SettingsUri.from(code, createCollectionNode(makeApp(), 'appSettings'));
             const uri = code.Uri.from({ scheme: SettingsScheme, path: valid.path.replace(/\.jsonc$/, '.txt') });
-            expect(() => SettingsUri.parse(uri)).to.throw(/jsonc/);
+
+            expect(() => SettingsUri.parseNodeKey(uri)).to.throw(/jsonc/);
         });
     });
 });

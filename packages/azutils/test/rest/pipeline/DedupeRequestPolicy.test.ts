@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelineRequest } from '@azure/core-rest-pipeline';
+import { createHttpHeaders } from '@azure/core-rest-pipeline';
 import { delay } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
 import { DedupeRequestPolicy } from '../../../src/rest/pipeline/DedupeRequestPolicy';
@@ -16,7 +17,8 @@ describe('DedupeRequestPolicy (unit)', () => {
     });
 
     it('should deduplicate concurrent GET requests to the same URL', async () => {
-        const policy = new DedupeRequestPolicy();
+        const policy1 = new DedupeRequestPolicy();
+        const policy2 = new DedupeRequestPolicy();
         let callCount = 0;
 
         const next = async (req: PipelineRequest) => {
@@ -30,8 +32,8 @@ describe('DedupeRequestPolicy (unit)', () => {
         const req2 = makeRequest({ requestId: 'r2' });
 
         const [res1, res2] = await Promise.all([
-            policy.sendRequest(req1, next),
-            policy.sendRequest(req2, next),
+            policy1.sendRequest(req1, next),
+            policy2.sendRequest(req2, next),
         ]);
 
         // Only one actual HTTP call should have been made
@@ -44,6 +46,205 @@ describe('DedupeRequestPolicy (unit)', () => {
 
         // Both responses have the same body
         expect(res1.bodyAsText).to.equal(res2.bodyAsText);
+    });
+
+    it('should not deduplicate requests from different partitions', async () => {
+        const policy1 = new DedupeRequestPolicy({ accountId: 'account-1' });
+        const policy2 = new DedupeRequestPolicy({ accountId: 'account-2' });
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        const req1 = makeRequest({ headers: createHttpHeaders({ authorization: 'Bearer account-1' }) });
+        const req2 = makeRequest({ headers: createHttpHeaders({ authorization: 'Bearer account-2' }) });
+
+        await Promise.all([policy1.sendRequest(req1, next), policy2.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should partition the same account by tenant', async () => {
+        const policy1 = new DedupeRequestPolicy({ accountId: 'account-1', tenantId: 'tenant-1' });
+        const policy2 = new DedupeRequestPolicy({ accountId: 'account-1', tenantId: 'tenant-2' });
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        await Promise.all([
+            policy1.sendRequest(makeRequest(), next),
+            policy2.sendRequest(makeRequest(), next),
+        ]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should partition unknown identities by object identity', async () => {
+        const sharedIdentity = {};
+        const policy1 = new DedupeRequestPolicy(sharedIdentity);
+        const policy2 = new DedupeRequestPolicy(sharedIdentity);
+        const policy3 = new DedupeRequestPolicy({});
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        await Promise.all([
+            policy1.sendRequest(makeRequest(), next),
+            policy2.sendRequest(makeRequest(), next),
+            policy3.sendRequest(makeRequest(), next),
+        ]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should deduplicate unauthenticated requests', async () => {
+        const policy = new DedupeRequestPolicy();
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        await Promise.all([
+            policy.sendRequest(makeRequest({ headers: createHttpHeaders() }), next),
+            policy.sendRequest(makeRequest({ headers: createHttpHeaders() }), next),
+        ]);
+
+        expect(callCount).to.equal(1);
+    });
+
+    it('should not deduplicate requests with different representation headers', async () => {
+        const policy1 = new DedupeRequestPolicy();
+        const policy2 = new DedupeRequestPolicy();
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        const req1 = makeRequest({ headers: createHttpHeaders({ authorization: 'Bearer account-1', 'accept-language': 'en' }) });
+        const req2 = makeRequest({ headers: createHttpHeaders({ authorization: 'Bearer account-1', 'accept-language': 'fr' }) });
+
+        await Promise.all([policy1.sendRequest(req1, next), policy2.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should ignore rotated authorization headers within a stable partition', async () => {
+        const policy1 = new DedupeRequestPolicy({ accountId: 'account-1' });
+        const policy2 = new DedupeRequestPolicy({ accountId: 'account-1' });
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+        const req1 = makeRequest();
+        const req2 = makeRequest();
+        req1.headers.set('authorization', 'Bearer rotated-token-1');
+        req2.headers.set('authorization', 'Bearer rotated-token-2');
+
+        await Promise.all([policy1.sendRequest(req1, next), policy2.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(1);
+    });
+
+    it('should not deduplicate requests with different accepted content types', async () => {
+        const policy = new DedupeRequestPolicy();
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+        const req1 = makeRequest();
+        const req2 = makeRequest();
+        req1.headers.set('accept', 'application/json');
+        req2.headers.set('accept', 'text/plain');
+
+        await Promise.all([policy.sendRequest(req1, next), policy.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should not deduplicate requests with different conditional headers', async () => {
+        const policy = new DedupeRequestPolicy();
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+        const req1 = makeRequest();
+        const req2 = makeRequest();
+        req1.headers.set('if-none-match', '"etag-1"');
+        req2.headers.set('if-none-match', '"etag-2"');
+
+        await Promise.all([policy.sendRequest(req1, next), policy.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should not deduplicate range requests with different validators', async () => {
+        const policy = new DedupeRequestPolicy();
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+        const req1 = makeRequest();
+        const req2 = makeRequest();
+        req1.headers.set('range', 'bytes=0-99');
+        req2.headers.set('range', 'bytes=0-99');
+        req1.headers.set('if-range', '"etag-1"');
+        req2.headers.set('if-range', '"etag-2"');
+
+        await Promise.all([policy.sendRequest(req1, next), policy.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should ignore request-specific observability headers', async () => {
+        const policy1 = new DedupeRequestPolicy();
+        const policy2 = new DedupeRequestPolicy();
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        const req1 = makeRequest({
+            headers: createHttpHeaders({
+                authorization: 'Bearer account-1',
+                traceparent: 'trace-1',
+                'x-ms-client-request-id': 'request-1',
+                'x-ms-correlation-request-id': 'correlation-1',
+            }),
+        });
+        const req2 = makeRequest({
+            headers: createHttpHeaders({
+                authorization: 'Bearer account-1',
+                traceparent: 'trace-2',
+                'x-ms-client-request-id': 'request-2',
+                'x-ms-correlation-request-id': 'correlation-2',
+            }),
+        });
+
+        await Promise.all([policy1.sendRequest(req1, next), policy2.sendRequest(req2, next)]);
+
+        expect(callCount).to.equal(1);
     });
 
     it('should not deduplicate non-GET requests', async () => {
@@ -84,6 +285,25 @@ describe('DedupeRequestPolicy (unit)', () => {
         await Promise.all([
             policy.sendRequest(req1, next),
             policy.sendRequest(req2, next),
+        ]);
+
+        expect(callCount).to.equal(2);
+    });
+
+    it('should not deduplicate abortable requests', async () => {
+        const policy = new DedupeRequestPolicy();
+        const controller1 = new AbortController();
+        const controller2 = new AbortController();
+        let callCount = 0;
+        const next = async (req: PipelineRequest) => {
+            callCount++;
+            await delay(10);
+            return makeResponse(req);
+        };
+
+        await Promise.all([
+            policy.sendRequest(makeRequest({ abortSignal: controller1.signal }), next),
+            policy.sendRequest(makeRequest({ abortSignal: controller2.signal }), next),
         ]);
 
         expect(callCount).to.equal(2);
@@ -173,5 +393,33 @@ describe('DedupeRequestPolicy (unit)', () => {
         expect(res2.status).to.equal(200);
         expect(res2.bodyAsText).to.equal('{"data":true}');
         expect(res2.headers).to.equal(res1.headers);
+    });
+
+    it('should remove failed requests from the in-flight map', async () => {
+        const policy = new DedupeRequestPolicy();
+        const req1 = makeRequest({ requestId: 'r1' });
+        const req2 = makeRequest({ requestId: 'r2' });
+        let callCount = 0;
+        const next = async () => {
+            callCount++;
+            await delay(10);
+            throw new Error('request failed');
+        };
+
+        const firstResults = await Promise.allSettled([
+            policy.sendRequest(req1, next),
+            policy.sendRequest(req2, next),
+        ]);
+        expect(firstResults.every(result => result.status === 'rejected')).to.be.true;
+        expect(callCount).to.equal(1);
+
+        let error: unknown;
+        try {
+            await policy.sendRequest(makeRequest({ requestId: 'r3' }), next);
+        } catch (err) {
+            error = err;
+        }
+        expect(error).to.be.an.instanceOf(Error).with.property('message', 'request failed');
+        expect(callCount).to.equal(2);
     });
 });

@@ -16,6 +16,7 @@ import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsof
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
 import type { EnvironmentLike } from '../../auth/Environment';
+import type { DedupeRequestIdentity } from '../pipeline/DedupeRequestPolicy';
 import { createArmRestClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
@@ -58,6 +59,8 @@ export class SubscriptionClient implements ISubscriptionClient {
      *
      * @param credential - The token credential used to authenticate requests.
      * @param environment - The Azure environment whose ARM endpoint is used.
+     * @param dedupeIdentity - Optional stable account and tenant identity for
+     * cross-client request deduplication.
      */
     public static create(
         ctx: ICodeContext,
@@ -65,6 +68,7 @@ export class SubscriptionClient implements ISubscriptionClient {
         credential: TokenCredential,
         environment: EnvironmentLike,
         options?: SubscriptionClientOptionalParams,
+        dedupeIdentity?: DedupeRequestIdentity,
     ): SubscriptionClient {
         const context = createArmRestClient(
             ctx,
@@ -73,6 +77,7 @@ export class SubscriptionClient implements ISubscriptionClient {
             credential,
             environment,
             options,
+            dedupeIdentity,
         );
         return new SubscriptionClient(context);
     }

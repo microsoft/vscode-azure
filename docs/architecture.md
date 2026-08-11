@@ -30,7 +30,7 @@ Framework-level building blocks with no Azure-specific knowledge:
 - **Wizard framework**: `Wizard`, `PromptStep`, `ExecuteStep`, `GoBackError`
 - **Telemetry & error handling**: `ActionExecutor`, `CommandRegistry`, `IActionContext`
 - **VS Code abstractions**: `CancellationError`, `Disposable`, `EventEmitter`
-- **Process execution**: `ProcessExecutor`, `IProcessExecutor` (background via `spawnStreamAsync`, foreground via VS Code tasks)
+- **Process execution**: `ProcessExecutor`, `IProcessExecutor`, and shared shell-task construction
 - **Data utilities**: `InflightMap`, `Limiter`
 
 ### `packages/azutils` — Azure Utilities
@@ -49,7 +49,7 @@ Azure-specific models and helpers that build on `utils`:
 
 The VS Code extension that wires everything together:
 
-- **Activation**: Container setup, command and tree registration
+- **Activation**: Core container setup plus declarative product, command, and tree registration
 - **Commands**: `RefreshResourcesView`, `GroupBy`, `OpenInPortal`, `LoadMore`, `RefreshWorkspaceView`, `RevealInExplorer`, `DisableAcrAdminUser`, the settings command set (`EditSettings`, `AddOrEditSetting`, `RenameSetting`, `DeleteSetting`, `CopySettingValue`, `ToggleSettingValueVisibility`), `ClearActivities`, `AzdUp`, `InstallAzd`
 - **Resource creation wizards**: `CreateFunctionApp` — azd-backed wizard for creating and deploying Azure resources. See [Resource Creation](resource-creation.md).
 - **Tree providers**:
@@ -61,17 +61,19 @@ The VS Code extension that wires everything together:
 ## Activation Flow
 
 1. VS Code loads `main.js`, which imports the esbuild bundle
-2. `activateInternal()` creates the DI container via `setUpContainer()`
-3. Container binds all core services as singletons
-4. `registerCommands()` binds command classes and registers them with VS Code
-5. `registerTrees()` sets up data providers, view providers, and the tree view
-6. The tree view is eagerly resolved, kicking off the provider chain
+2. Product entry points contribute bindings, commands, and resource providers to `ProductRegistrar`
+3. `activateInternal()` creates the DI container via `setUpContainer()` and applies product bindings
+4. Test or mock overrides are applied before any contributed feature is activated
+5. `registerCommands()` binds command classes and registers core and product commands with VS Code
+6. `registerTrees()` sets up core and product data/view providers and the tree views
+7. The tree view is eagerly resolved, kicking off the provider chain
 
 ## Key Design Principles
 
 - **Data/View separation**: The tree UI is split into a data layer (fetching, caching, enrichment) and a view layer (rendering, grouping, virtual nodes). See [Tree Views](tree-views.md).
 - **Provider dispatch**: Both layers use `ProviderRegistry` to dispatch to the first matching provider. Registration order matters — specific providers before generic fallbacks.
 - **DI everywhere**: Services are injected via inversify. Each command execution gets a scoped child container with `IActionContext`. See [Dependency Injection](dependency-injection.md).
+- **One product entry point**: Each Azure product owns a registration function under `src/products`. A generic Azure product owns shared Azure services, commands, and fallback providers. Adding a product changes the central product list, not the extension activation function or shared command/tree import lists.
 - **Automatic telemetry**: Every command is wrapped in `callWithTelemetryAndErrorHandling`, which captures duration, result, and errors. See [Telemetry](telemetry.md).
 - **Localization**: All user-facing strings use `IVsCode.l10n.t()`. Debug/trace output is exempt. See [Conventions](conventions.md).
 - **Azure client wrappers**: Typed wrappers around Azure SDK clients with custom pipeline policies, lazy SDK imports, and `AsyncIterable<Page<T>>` return types. See [Azure Clients](azure-clients.md).

@@ -3,9 +3,22 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription, ConcreteAzureNode, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
-import { type DataItemTree, Disposable, IExtensionContext, type ViewItemTree } from '@microsoft/vscode-azure-utils';
-import type { ResolutionContext, ServiceIdentifier } from 'inversify';
+import {
+    type AzureSubscription,
+    type ConcreteAzureNode,
+    type ConcreteAzureNodeTree,
+    ICredentialFactory,
+    type TokenCredential,
+} from '@microsoft/vscode-azure-azutils';
+import {
+    type DataItemTree,
+    Disposable,
+    IActionExecutor,
+    ICodeContext,
+    IExtensionContext,
+    type ViewItemTree,
+} from '@microsoft/vscode-azure-utils';
+import type { Container, Newable, ResolutionContext, ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { Activity } from './tree/activity/Activity';
 import type { WorkspaceNode } from './tree/workspace/WorkspaceNode';
@@ -83,4 +96,67 @@ export function pushDisposable<T>(context: ResolutionContext, injectable: T): T 
         context.get(IExtensionContext).subscriptions.push(injectable);
     }
     return injectable;
+}
+
+/**
+ * A provider contribution that is either bound directly to a collection or
+ * exposed as a singleton under a primary identifier and aliased into it.
+ */
+export type ProviderEntry<T> = Newable<T> | readonly [ServiceIdentifier<T>, Newable<T>];
+
+/** Signature shared by subscription-scoped Azure REST client `create` methods. */
+export type AzureClientCreate<TResult> = (
+    context: ICodeContext,
+    executor: IActionExecutor,
+    credential: TokenCredential,
+    subscription: AzureSubscription,
+) => TResult;
+
+/**
+ * Bind a subscription-scoped Azure client provider unless another product
+ * already registered the same shared provider.
+ */
+export function bindAzureClientProvider<TResult>(
+    container: Container,
+    providerId: ServiceIdentifier<(subscription: AzureSubscription) => TResult>,
+    create: AzureClientCreate<TResult>,
+): void {
+    if (container.isBound(providerId)) {
+        return;
+    }
+
+    container.bind(providerId).toFactory(context => {
+        const codeContext = context.get(ICodeContext);
+        const executor = context.get(IActionExecutor);
+        const credentialFactory = context.get(ICredentialFactory);
+        return (subscription: AzureSubscription) => create(
+            codeContext,
+            executor,
+            credentialFactory(subscription),
+            subscription,
+        );
+    });
+}
+
+/**
+ * Bind provider entries to a collection {@linkcode ServiceIdentifier}.
+ * Bare classes are bound directly; `[primaryId, Class]` tuples are bound as
+ * singletons under `primaryId` and aliased into the collection.
+ */
+export function bindProviders<T>(
+    container: Container,
+    collectionId: ServiceIdentifier<T>,
+    entries: readonly ProviderEntry<T>[],
+): void {
+    for (const entry of entries) {
+        if (typeof entry === 'function') {
+            container.bind(collectionId).to(entry).onActivation(pushDisposable);
+        } else {
+            const [primaryId, providerClass] = entry;
+            if (!container.isBound(primaryId)) {
+                container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
+            }
+            container.bind(collectionId).toService(primaryId);
+        }
+    }
 }

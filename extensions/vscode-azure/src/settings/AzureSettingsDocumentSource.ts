@@ -3,24 +3,26 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getConfiguredAzureEnv, getPortalHost, parseAzureResourceId, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
-import type { SettingsDocumentSource } from './core/SettingsFileSystemProvider';
-import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzureViewDataTree } from '../services';
-import { createCollectionNode } from '../tree/resources/settings/SettingsNode';
+import { collectionIdOf, isSettingsCollectionNode, type SettingsCollectionNode } from '../tree/resources/settings/SettingsNode';
+import type { SettingsDocumentSource } from './core/SettingsFileSystemProvider';
+import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 import { ISettingsRegistry } from './SettingsRegistry';
-import { SettingsUri, type SettingsUriParts } from './SettingsUri';
+import { SettingsUri } from './SettingsUri';
 
 /**
  * Bridges settings document URIs to the {@linkcode ISettingsRegistry}.
  *
- * The URI is the only state a settings document carries, which is what lets a document survive a
- * window reload: the editor restores the tab and calls `readFile` before any tree node exists. The
- * URI carries enough context to rebuild the minimal {@linkcode GenericResource} required by the
- * adapter without loading or searching the resource tree.
+ * A settings URI carries the collection node's tree key, so resolving one is a direct lookup in the
+ * data tree. The resource handed to the adapter is therefore always the same object the tree loaded
+ * from Azure -- never one rebuilt from the URI, which could disagree with reality.
+ *
+ * The consequence is that a document only resolves while its node is in the tree. That covers the
+ * ordinary case (the document was opened from the tree, and the tree caches it), but a document
+ * restored by the editor after a window reload will not resolve until the tree has loaded that node.
  */
 @injectable()
 export class AzureSettingsDocumentSource implements SettingsDocumentSource {
@@ -32,50 +34,33 @@ export class AzureSettingsDocumentSource implements SettingsDocumentSource {
 
     /** @inheritdoc */
     public async read(uri: vscode.Uri): Promise<SettingsSnapshot> {
-        const { resource, parts } = this.resolve(uri);
-        return await this.registry.read(resource, parts.collectionId);
+        const node = this.resolve(uri);
+        return await this.registry.read(node.azureResource, collectionIdOf(node));
     }
 
     /** @inheritdoc */
     public async write(uri: vscode.Uri, entries: SettingsMap): Promise<void> {
-        const { resource, parts } = this.resolve(uri);
-        await this.registry.write(resource, parts.collectionId, entries);
+        const node = this.resolve(uri);
+        await this.registry.write(node.azureResource, collectionIdOf(node), entries);
 
         // The tree renders one node per setting, so a save that added or removed keys changes the
         // node set. Invalidate just the collection subtree, so sibling collections on the same
         // resource keep their cached children.
-        this.tree.invalidate(createCollectionNode(resource, parts.collectionId));
+        this.tree.invalidate(node);
     }
 
     /**
-     * Resolve the resource a settings URI addresses.
+     * Resolve the settings collection node a URI addresses.
      *
-     * @throws if the URI is malformed or belongs to a different Azure cloud than the one configured.
+     * @throws if the URI is malformed, or its node is not currently in the tree.
      */
-    private resolve(uri: vscode.Uri): { resource: GenericResource; parts: SettingsUriParts } {
-        const parts = SettingsUri.parse(uri);
-        const parsedId = parseAzureResourceId(parts.armResourceId);
+    private resolve(uri: vscode.Uri): SettingsCollectionNode {
+        const node = this.tree.get(SettingsUri.parseNodeKey(uri));
 
-        const environment = getConfiguredAzureEnv(this.code);
-        if (getPortalHost({ environment }).toLowerCase() !== parts.portalHost.toLowerCase()) {
-            throw new Error(`Cannot open these settings: the URI belongs to the '${parts.portalHost}' Azure cloud, which is not currently configured.`);
+        if (!isSettingsCollectionNode(node)) {
+            throw new Error(this.code.l10n.t('These settings are no longer available. Open them again from the Azure view.'));
         }
 
-        const resource: GenericResource = {
-            id: parts.armResourceId,
-            name: parts.resourceName,
-            type: parts.resourceType,
-            logicalType: parts.logicalType,
-            location: parts.location,
-            subscription: {
-                accountId: parts.accountId,
-                tenantId: parts.tenantId,
-                subscriptionId: parsedId.subscriptionId,
-                displayName: parts.subscriptionDisplayName,
-                environment,
-            },
-        };
-
-        return { resource, parts };
+        return node;
     }
 }

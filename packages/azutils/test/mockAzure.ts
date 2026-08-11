@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
-import type { ChildResult, DataProvider, Page } from '@microsoft/vscode-azure-utils';
+import { EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
 import { mock } from 'node:test';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../src/auth/AzureSubscription';
 import { AzurePublicCloud, type EnvironmentLike } from '../src/auth/Environment';
@@ -93,7 +93,14 @@ export function makeResourceGroup(overrides?: Partial<ResourceGroup>): ResourceG
 /**
  * Builds a mock {@linkcode GenericResource} representing a web site in
  * the default resource group.
+ *
+ * Product-specific resource interfaces can be supplied as {@linkcode TResource}
+ * so their additional fields are preserved in the returned fixture.
  */
+export function makeGenericResource(overrides?: Partial<GenericResource>): GenericResource;
+export function makeGenericResource<TResource extends GenericResource>(
+    overrides: Partial<GenericResource> & Omit<TResource, keyof GenericResource>,
+): TResource;
 export function makeGenericResource(overrides?: Partial<GenericResource>): GenericResource {
     return {
         id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site1',
@@ -140,6 +147,12 @@ export interface MockAccountDataProviderOptions {
     readonly subscriptions?: AzureSubscription[];
 }
 
+/** Account provider fixture with a controllable account-removal event. */
+export interface MockAccountDataProvider extends DataProvider<ConcreteAzureNode> {
+    readonly onDidRemoveAccounts: Event<readonly string[]>;
+    readonly removeAccountsEmitter: EventEmitter<readonly string[]>;
+}
+
 /**
  * Creates a mock root {@linkcode DataProvider} that yields canned accounts,
  * tenants, and subscriptions -- a stand-in for the real
@@ -148,13 +161,16 @@ export interface MockAccountDataProviderOptions {
  * {@linkcode DataProvider.getChildren getChildren} is wrapped with `mock.fn()`
  * so callers can assert call counts and arguments.
  */
-export function createMockAccountDataProvider(options?: MockAccountDataProviderOptions): DataProvider<ConcreteAzureNode> {
+export function createMockAccountDataProvider(options?: MockAccountDataProviderOptions): MockAccountDataProvider {
     const accounts = options?.accounts ?? [makeAccount()];
     const tenants = options?.tenants ?? [makeTenant()];
     const subscriptions = options?.subscriptions ?? [makeSubscription()];
+    const removeAccountsEmitter = new EventEmitter<readonly string[]>();
 
     return {
         isRoot: true,
+        onDidRemoveAccounts: removeAccountsEmitter.event,
+        removeAccountsEmitter,
         getTtl: () => Infinity,
         canHandle: (resource: unknown): resource is ConcreteAzureNode => {
             if (!resource || typeof resource !== 'object') {
