@@ -8,6 +8,7 @@ import { createMockDataItemTree, makeGenericResource } from '@microsoft/vscode-a
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
+import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import type { IResourceEndpointResolver } from '../../../src/endpoints/ResourceEndpointResolver';
 
@@ -21,7 +22,7 @@ describe('BrowseWebsite (unit)', () => {
             canHandle: mock.fn(() => canHandle),
             resolve,
         };
-        const command = new BrowseWebsite(mockResult.vscode, dataTree, resolver);
+        const command = new BrowseWebsite(mockResult.vscode, dataTree, resolver, new OpenUrl(mockResult.vscode));
         return { command, key: AzureNodeId.from(resource).toString(), mockResult, resolve };
     }
 

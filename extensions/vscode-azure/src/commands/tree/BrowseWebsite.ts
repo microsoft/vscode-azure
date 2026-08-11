@@ -9,6 +9,7 @@ import { inject, injectable } from 'inversify';
 import { IResourceEndpointResolver } from '../../endpoints/ResourceEndpointResolver';
 import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
+import { OpenUrl } from '../OpenUrl';
 
 /** Opens the selected Azure resource's primary HTTP endpoint in a browser. */
 @injectable()
@@ -20,6 +21,7 @@ export class BrowseWebsite implements ManagedCommand {
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IResourceEndpointResolver) private readonly endpointResolver: IResourceEndpointResolver,
+        @inject(OpenUrl) private readonly openUrl: OpenUrl,
     ) { }
 
     /** @inheritdoc */
@@ -38,6 +40,6 @@ export class BrowseWebsite implements ManagedCommand {
             throw new Error(this.code.l10n.t('The selected resource does not have a website endpoint yet.'));
         }
 
-        await this.code.env.openExternal(this.code.Uri.parse(endpoint));
+        await this.openUrl.execute(endpoint);
     }
 }
