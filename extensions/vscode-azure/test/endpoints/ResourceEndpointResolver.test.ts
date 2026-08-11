@@ -4,11 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
+import { Container } from 'inversify';
 import { mock } from 'node:test';
-import { ResourceEndpointResolver } from '../../src/endpoints/ResourceEndpointResolver';
-import type { ResourceEndpointProvider } from '../../src/endpoints/ResourceEndpointProvider';
+import { IAzdService } from '../../src/azd/AzdService';
+import { IResourceEndpointProviders, IResourceEndpointResolver, ResourceEndpointResolver, type ResourceEndpointProvider } from '../../src/endpoints/ResourceEndpointResolver';
 import { createMockAzdService } from '../azd/MockAzdService';
 
 describe('ResourceEndpointResolver (unit)', () => {
@@ -165,5 +167,21 @@ describe('ResourceEndpointResolver (unit)', () => {
         expect(resolver.canHandle(makeGenericResource())).to.be.true;
         expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
         expect(provider.getEndpoint.mock.callCount()).to.equal(0);
+    });
+
+    it('should resolve from the container with the injected provider collection', async () => {
+        const mockResult = createMockVsCode();
+        const { executor } = createTestActionExecutor();
+        const container = new Container();
+        container.bind(IVsCode).toConstantValue(mockResult.vscode);
+        container.bind(IActionExecutor).toConstantValue(executor);
+        container.bind(IAzdService).toConstantValue(createMockAzdService());
+        container.bind(IResourceEndpointProviders).toConstantValue(createProvider());
+        container.bind(IResourceEndpointResolver).to(ResourceEndpointResolver).inSingletonScope();
+
+        const resolver = container.get(IResourceEndpointResolver);
+
+        expect(resolver.canHandle(makeGenericResource())).to.be.true;
+        expect(await resolver.resolve(makeGenericResource())).to.equal('https://fallback.example.com/');
     });
 });

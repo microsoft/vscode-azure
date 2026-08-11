@@ -3,50 +3,35 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IWebAppClientProvider, parseAzureResourceId, SiteType, StaticWebAppType, type GenericResource, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { getResourceGroupName, IWebAppClientProvider, SiteType, StaticWebAppType, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { inject, injectable } from 'inversify';
-import type { ResourceEndpointProvider } from './ResourceEndpointProvider';
+import type { ResourceEndpointProvider } from './ResourceEndpointResolver';
 
 /** Resolves endpoints for App Service-family resources and Static Web Apps. */
 @injectable()
 export class MicrosoftWebEndpointProvider implements ResourceEndpointProvider {
-    private readonly clientCache = new Map<string, IWebAppClient>();
-
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IWebAppClientProvider) private readonly createClient: IWebAppClientProvider,
     ) { }
 
     /** @inheritdoc */
     public canHandle(resource: GenericResource): boolean {
-        return resource.type.toLowerCase() === SiteType.toLowerCase()
-            || resource.type.toLowerCase() === StaticWebAppType.toLowerCase();
+        return isType(resource, SiteType) || isType(resource, StaticWebAppType);
     }
 
     /** @inheritdoc */
     public async getEndpoint(resource: GenericResource): Promise<string | undefined> {
-        const { resourceGroup } = parseAzureResourceId(resource.id);
-        if (!resourceGroup) {
-            throw new Error(this.code.l10n.t('Cannot extract a resource group name from the selected resource ID.'));
+        const client = this.createClient(resource.subscription);
+        const resourceGroupName = getResourceGroupName(resource.id);
+
+        if (isType(resource, StaticWebAppType)) {
+            return (await client.staticSites.getStaticSite(resourceGroupName, resource.name)).defaultHostname;
         }
 
-        const client = this.getOrCreateClient(resource);
-        if (resource.type.toLowerCase() === StaticWebAppType.toLowerCase()) {
-            const site = await client.staticSites.getStaticSite(resourceGroup, resource.name);
-            return site.defaultHostname;
-        }
-
-        const site = await client.webApps.get(resourceGroup, resource.name);
-        return site.defaultHostName;
+        return (await client.webApps.get(resourceGroupName, resource.name)).defaultHostName;
     }
+}
 
-    private getOrCreateClient(resource: GenericResource): IWebAppClient {
-        let client = this.clientCache.get(resource.subscription.subscriptionId);
-        if (!client) {
-            client = this.createClient(resource.subscription);
-            this.clientCache.set(resource.subscription.subscriptionId, client);
-        }
-        return client;
-    }
+function isType(resource: GenericResource, armType: string): boolean {
+    return resource.type.toLowerCase() === armType.toLowerCase();
 }

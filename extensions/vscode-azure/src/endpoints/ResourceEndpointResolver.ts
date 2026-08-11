@@ -4,11 +4,28 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import type { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
-import type { ServiceIdentifier } from 'inversify';
-import { getAzdServiceIngressUrl, type IAzdService } from '../azd/AzdService';
+import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { inject, injectable, multiInject, type ServiceIdentifier } from 'inversify';
+import { getAzdServiceIngressUrl, IAzdService } from '../azd/AzdService';
 import { AzdEnvNameTag } from '../constants';
-import type { ResourceEndpointProvider } from './ResourceEndpointProvider';
+
+/** Identifier for the ordered collection of product-contributed endpoint providers. */
+export const IResourceEndpointProviders: ServiceIdentifier<ResourceEndpointProvider> = Symbol.for('IResourceEndpointProviders');
+
+/**
+ * Resolves a browser endpoint for one family of Azure resources.
+ *
+ * Providers must keep {@linkcode ResourceEndpointProvider.canHandle canHandle}
+ * synchronous because tree view rendering uses it to decide whether to expose
+ * the Browse Website command.
+ */
+export interface ResourceEndpointProvider {
+    /** Return whether this provider owns endpoint resolution for the resource. */
+    canHandle(resource: GenericResource): boolean;
+
+    /** Query the product API for the resource's current endpoint, if deployed. */
+    getEndpoint(resource: GenericResource): Promise<string | undefined>;
+}
 
 /** Identifier for the shared resource endpoint capability resolver. */
 export const IResourceEndpointResolver: ServiceIdentifier<IResourceEndpointResolver> = Symbol.for('IResourceEndpointResolver');
@@ -25,15 +42,18 @@ export interface IResourceEndpointResolver {
 /**
  * Coordinates azd endpoint discovery with product-specific ARM fallbacks.
  *
- * Azd is queried only on command execution. Its result is accepted only when a
- * service target contains the selected resource's full ARM ID.
+ * azd is preferred because a project may override a service's endpoint in
+ * `azure.yaml`, which cannot be derived from ARM. It is queried only on command
+ * execution, and its result is accepted only when a service target contains the
+ * selected resource's full ARM ID.
  */
+@injectable()
 export class ResourceEndpointResolver implements IResourceEndpointResolver {
     public constructor(
-        private readonly code: IVsCode,
-        private readonly executor: IActionExecutor,
-        private readonly azd: IAzdService,
-        private readonly providers: readonly ResourceEndpointProvider[],
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IActionExecutor) private readonly executor: IActionExecutor,
+        @inject(IAzdService) private readonly azd: IAzdService,
+        @multiInject(IResourceEndpointProviders) private readonly providers: readonly ResourceEndpointProvider[],
     ) { }
 
     /** @inheritdoc */
@@ -43,11 +63,10 @@ export class ResourceEndpointResolver implements IResourceEndpointResolver {
 
     /** @inheritdoc */
     public async resolve(resource: GenericResource): Promise<string | undefined> {
-        const azdEndpoint = normalizeEndpoint(await this.resolveFromAzd(resource));
-        if (azdEndpoint) {
-            return azdEndpoint;
-        }
+        return await this.resolveFromAzd(resource) ?? await this.resolveFromProvider(resource);
+    }
 
+    private async resolveFromProvider(resource: GenericResource): Promise<string | undefined> {
         const provider = this.providers.find(candidate => candidate.canHandle(resource));
         if (!provider) {
             return undefined;
@@ -80,14 +99,15 @@ export class ResourceEndpointResolver implements IResourceEndpointResolver {
 
             const showResult = await this.azd.show(folder, environmentName);
             for (const service of Object.values(showResult?.services ?? {})) {
-                const isTargetResource = service.target?.resourceIds?.some(id => normalizeResourceId(id) === resourceId);
-                const endpoint = getAzdServiceIngressUrl(service);
-                if (isTargetResource) {
-                    if (normalizeEndpoint(endpoint)) {
-                        return endpoint;
-                    }
-                    this.executor.output.debug('[endpoint] azd target returned no usable endpoint');
+                if (!service.target?.resourceIds?.some(id => normalizeResourceId(id) === resourceId)) {
+                    continue;
                 }
+
+                const endpoint = normalizeEndpoint(getAzdServiceIngressUrl(service));
+                if (endpoint) {
+                    return endpoint;
+                }
+                this.executor.output.debug('[endpoint] azd target returned no usable endpoint');
             }
         }
 
@@ -99,20 +119,20 @@ function normalizeResourceId(resourceId: string): string {
     return resourceId.replace(/\/+$/, '').toLowerCase();
 }
 
+/**
+ * Converts an endpoint to an absolute HTTP(S) URL, rejecting anything a browser
+ * should not be sent to. ARM reports bare hostnames while azd reports absolute
+ * URLs, so a value without a scheme is assumed to be HTTPS.
+ */
 function normalizeEndpoint(endpoint: string | undefined): string | undefined {
     const value = endpoint?.trim();
     if (!value) {
         return undefined;
     }
 
-    if (/^[a-z][a-z\d+.-]*:\/\//i.test(value) && !/^https?:\/\//i.test(value)) {
-        return undefined;
-    }
-
-    const url = /^https?:\/\//i.test(value) ? value : `https://${value}`;
     try {
-        const parsed = new URL(url);
-        return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : undefined;
+        const url = new URL(value.includes('://') ? value : `https://${value}`);
+        return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
     } catch {
         return undefined;
     }

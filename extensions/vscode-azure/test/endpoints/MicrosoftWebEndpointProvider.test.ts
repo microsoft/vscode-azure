@@ -5,7 +5,6 @@
 
 import { SiteType, StaticWebAppType, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { MicrosoftWebEndpointProvider } from '../../src/endpoints/MicrosoftWebEndpointProvider';
@@ -30,8 +29,7 @@ describe('MicrosoftWebEndpointProvider (unit)', () => {
                 getStaticSite,
             },
         };
-        const { vscode } = createMockVsCode();
-        return { provider: new MicrosoftWebEndpointProvider(vscode, () => client), getWebApp, getStaticSite };
+        return { provider: new MicrosoftWebEndpointProvider(() => client), getWebApp, getStaticSite };
     }
 
     it('should handle Microsoft.Web sites and Static Web Apps case-insensitively', () => {

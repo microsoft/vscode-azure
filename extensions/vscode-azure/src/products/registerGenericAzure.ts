@@ -25,6 +25,7 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import { MicrosoftWebEndpointProvider } from '../endpoints/MicrosoftWebEndpointProvider';
+import { IResourceEndpointProviders } from '../endpoints/ResourceEndpointResolver';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { IAzureViewDataTree, ISubscriptionResolver } from '../services';
 import {
@@ -76,6 +77,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
         });
 
         container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
+        container.bind(IResourceEndpointProviders).to(MicrosoftWebEndpointProvider);
     });
 
     registrar.registerAzureClientProvider(IResourceClientProvider, (context, executor, credential, subscription) => {
@@ -98,5 +100,4 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
     registrar.registerResourceDataProvider([IAzureAccountDataProvider, AzureAccountDataProvider]);
     registrar.registerResourceDataProvider(AzureResourceDataProvider);
     registrar.registerResourceViewProvider(GenericAzureViewProvider);
-    registrar.registerResourceEndpointProvider(MicrosoftWebEndpointProvider);
 }
