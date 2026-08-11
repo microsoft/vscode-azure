@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockDataItemTree, makeGenericResource, makeResourceGroup } from '@microsoft/vscode-azure-azutils/testing';
+import { makeGenericResource, makeResourceGroup } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
@@ -28,8 +28,8 @@ function setEnvironmentValues(
     });
 }
 
-function createService(azd: MockAzdService, dataTree = createMockDataItemTree([])): AzdResourceAssociationService {
-    return new AzdResourceAssociationService(createMockVsCode().vscode, azd, dataTree);
+function createService(azd: MockAzdService): AzdResourceAssociationService {
+    return new AzdResourceAssociationService(createMockVsCode().vscode, azd);
 }
 
 describe('AzdResourceAssociationService (unit)', () => {
@@ -55,7 +55,7 @@ describe('AzdResourceAssociationService (unit)', () => {
         expect(result?.environmentName).to.equal('dev');
     });
 
-    it('inherits the cached parent resource group tag', async () => {
+    it('rejects an untagged resource without spawning azd', async () => {
         const azd = createMockAzdService([{ Name: 'dev', IsDefault: true }]);
         setProjects(azd, ['/project']);
         setEnvironmentValues(azd, {
@@ -64,22 +64,15 @@ describe('AzdResourceAssociationService (unit)', () => {
                 [ResourceGroupValue]: 'rg-1',
             },
         });
-        const resourceGroup = makeResourceGroup({
-            id: ResourceGroupId,
-            name: 'rg-1',
-            groupingValue: 'rg-1',
-            tags: { 'azd-env-name': 'dev' },
-        });
-        const resource = makeGenericResource({
-            id: ResourceId,
-            subscription: resourceGroup.subscription,
-            tags: {},
-        });
-        const service = createService(azd, createMockDataItemTree([resourceGroup]));
+        const untagged = makeGenericResource({ id: ResourceId, tags: {} });
+        const noTags = makeGenericResource({ id: ResourceId, tags: undefined });
+        const service = createService(azd);
 
-        const result = await service.find(resource);
-
-        expect(result?.azureYamlUri.path).to.equal('/project/azure.yaml');
+        expect(await service.find(untagged)).to.be.undefined;
+        expect(await service.find(noTags)).to.be.undefined;
+        expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
+        expect(azd.envList.mock.callCount()).to.equal(0);
+        expect(azd.envGetValues.mock.callCount()).to.equal(0);
     });
 
     it('matches tag keys, names, subscription ids, and resource groups case-insensitively', async () => {
@@ -104,7 +97,7 @@ describe('AzdResourceAssociationService (unit)', () => {
         expect(result?.azureYamlUri.path).to.equal('/project/azure.yaml');
     });
 
-    it('returns no match when any ownership value differs', async () => {
+    it('returns no match when the tagged environment values differ', async () => {
         const azd = createMockAzdService([{ Name: 'dev', IsDefault: true }]);
         setProjects(azd, ['/project']);
         setEnvironmentValues(azd, {
@@ -117,16 +110,6 @@ describe('AzdResourceAssociationService (unit)', () => {
         const service = createService(azd);
 
         expect(await service.find(resource)).to.be.undefined;
-    });
-
-    it('returns no match for an untagged resource without a cached parent', async () => {
-        const azd = createMockAzdService([{ Name: 'dev', IsDefault: true }]);
-        setProjects(azd, ['/project']);
-        const resource = makeGenericResource({ id: ResourceId, tags: {} });
-        const service = createService(azd);
-
-        expect(await service.find(resource)).to.be.undefined;
-        expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
     });
 
     it('returns no match when multiple project and environment associations match', async () => {

@@ -3,12 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, isResourceGroup, parseAzureResourceId, type GenericResource } from '@microsoft/vscode-azure-azutils';
+import { parseAzureResourceId, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { AzdEnvNameTag } from '../constants';
-import { IAzureViewDataTree, type IAzureViewDataTree as AzureViewDataTree } from '../services';
 import { IAzdService } from './AzdService';
 
 export const IAzdResourceAssociationService: ServiceIdentifier<IAzdResourceAssociationService> = Symbol.for('IAzdResourceAssociationService');
@@ -27,6 +26,10 @@ export interface IAzdResourceAssociationService {
      * Returns the matching azd project YAML, or `undefined` when the target
      * cannot be associated unambiguously with a local environment.
      *
+     * Targets without an {@linkcode AzdEnvNameTag} tag are rejected outright,
+     * so the common case costs nothing: only tagged targets are worth probing
+     * the local azd projects for.
+     *
      * Discovery is fresh for each call. Errors from azd are allowed to
      * propagate so an unavailable or malformed environment is not mistaken
      * for a clean no-match result.
@@ -40,24 +43,26 @@ const ResourceGroupValue = 'AZURE_RESOURCE_GROUP';
 /**
  * Associates ARM targets with local azd environments using the ownership tag
  * emitted by azd and the environment's subscription and resource group.
+ *
+ * Only targets carrying the tag can be associated, so an untagged resource is
+ * rejected before any `azd` process is spawned.
  */
 @injectable()
 export class AzdResourceAssociationService implements IAzdResourceAssociationService {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzdService) private readonly azd: IAzdService,
-        @inject(IAzureViewDataTree) private readonly dataTree: AzureViewDataTree,
     ) { }
 
     /** @inheritdoc */
     public async find(resource: GenericResource): Promise<AzdResourceAssociation | undefined> {
-        const parsed = parseAzureResourceId(resource.id);
-        if (!parsed.resourceGroup) {
+        const environmentName = getTagValue(resource.tags, AzdEnvNameTag);
+        if (!environmentName) {
             return undefined;
         }
 
-        const environmentName = this.getEnvironmentName(resource);
-        if (!environmentName) {
+        const parsed = parseAzureResourceId(resource.id);
+        if (!parsed.resourceGroup) {
             return undefined;
         }
 
@@ -80,19 +85,6 @@ export class AzdResourceAssociationService implements IAzdResourceAssociationSer
         }
 
         return matches.size === 1 ? matches.values().next().value : undefined;
-    }
-
-    private getEnvironmentName(resource: GenericResource): string | undefined {
-        const directTag = getTagValue(resource.tags, AzdEnvNameTag);
-        if (directTag !== undefined || isResourceGroup(resource)) {
-            return directTag || undefined;
-        }
-
-        const parentId = AzureNodeId.from(resource).parentNodeId();
-        const parent = parentId ? this.dataTree.get(parentId.toString()) : undefined;
-        return parent && isResourceGroup(parent)
-            ? getTagValue(parent.tags, AzdEnvNameTag) || undefined
-            : undefined;
     }
 
     private async findProjects(): Promise<AzdProject[]> {
