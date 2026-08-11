@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode, UnreadableValue } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { isSettingsEntryNode, settingKeyOf } from '../../tree/resources/settings/SettingsNode';
@@ -32,13 +32,6 @@ export class CopySettingValue implements ManagedCommand {
 
         const node = this.tree.get(key);
         if (!isSettingsEntryNode(node)) {
-            return;
-        }
-
-        if (node.value === UnreadableValue) {
-            void this.code.window.showWarningMessage(
-                this.code.l10n.t('The value of \'{0}\' cannot be read back from Azure, so there is nothing to copy.', settingKeyOf(node))
-            );
             return;
         }
 

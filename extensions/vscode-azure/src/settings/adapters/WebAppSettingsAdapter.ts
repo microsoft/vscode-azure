@@ -85,8 +85,6 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
             canDelete: true,
             canRename: true,
             canWrite: true,
-            // ARM returns real values for both collections on these resource types.
-            valuesReadable: true,
             validateKey: (key: string) => this.validateKey(key),
         } satisfies Partial<SettingsCapabilities>;
 
@@ -115,7 +113,6 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
             entries,
             resourceName: resource.name,
             collectionLabel: collection.label,
-            valuesReadable: capabilities.valuesReadable,
             writable: capabilities.canWrite,
             structured: collection.structured,
         };

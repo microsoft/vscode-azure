@@ -85,13 +85,10 @@ export class SettingsRegistry {
     /**
      * Replace a collection's entire contents. Keys absent from {@linkcode entries} are deleted.
      *
-     * @throws if no adapter handles the resource, the collection is unknown or read-only, or its
-     * values cannot be read back safely.
+     * @throws if no adapter handles the resource, or the collection is unknown or read-only.
      */
     public async write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
-        const capabilities = this.getCapabilities(resource, collectionId);
-        this.requireWritable(capabilities);
-        this.requireReadableValues(capabilities, collectionId);
+        this.requireWritable(this.getCapabilities(resource, collectionId));
         await this.require(resource, collectionId).write(resource, collectionId, entries);
     }
 
@@ -108,7 +105,6 @@ export class SettingsRegistry {
     public async upsert(resource: GenericResource, collectionId: string, entry: SettingsEntry): Promise<void> {
         const capabilities = this.getCapabilities(resource, collectionId);
         this.requireWritable(capabilities);
-        this.requireReadableValues(capabilities, collectionId);
 
         const current = (await this.read(resource, collectionId)).entries;
         const existing = current.some(candidate => candidate.key === entry.key);
@@ -132,7 +128,6 @@ export class SettingsRegistry {
     public async remove(resource: GenericResource, collectionId: string, key: string): Promise<void> {
         const capabilities = this.getCapabilities(resource, collectionId);
         this.requireWritable(capabilities);
-        this.requireReadableValues(capabilities, collectionId);
         if (!capabilities.canDelete) {
             throw new Error(`Settings cannot be deleted from '${collectionId}' on this resource.`);
         }
@@ -150,7 +145,6 @@ export class SettingsRegistry {
     public async rename(resource: GenericResource, collectionId: string, fromKey: string, toKey: string): Promise<void> {
         const capabilities = this.getCapabilities(resource, collectionId);
         this.requireWritable(capabilities);
-        this.requireReadableValues(capabilities, collectionId);
         if (!capabilities.canRename) {
             throw new Error(`Settings cannot be renamed in '${collectionId}' on this resource.`);
         }
@@ -173,12 +167,6 @@ export class SettingsRegistry {
     private requireWritable(capabilities: SettingsCapabilities): void {
         if (!capabilities.canWrite) {
             throw new Error('These settings are read-only.');
-        }
-    }
-
-    private requireReadableValues(capabilities: SettingsCapabilities, collectionId: string): void {
-        if (!capabilities.valuesReadable) {
-            throw new Error(`Settings in '${collectionId}' cannot be changed because their current values cannot be read back from Azure.`);
         }
     }
 

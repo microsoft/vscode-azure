@@ -121,9 +121,8 @@ implementation** rather than re-vendoring the source's code:
   adapter reports. Local configuration synchronization belongs to azd or the product's deployment
   workflow, not this framework.
   - Product differences are expressed as **capability flags** (`canAdd`, `canDelete`, `canRename`,
-    `canWrite`, `valuesReadable`), never as branches on product identity. A product that forbids
-    renaming returns `canRename: false`; a product whose service will not return values returns
-    `valuesReadable: false` and gets a read-only editor rather than unsafe whole-collection writes.
+    `canWrite`), never as branches on product identity. A product that forbids renaming returns
+    `canRename: false`. Add a new flag only when a real adapter needs it.
   - A collection whose entries carry side-channel data (e.g. a connection string's `type`) sets
     `structured: true` and puts that data in each entry's `metadata`.
   - (Note: the source likely uses the shared `@microsoft/vscode-azext-azureappsettings` package with

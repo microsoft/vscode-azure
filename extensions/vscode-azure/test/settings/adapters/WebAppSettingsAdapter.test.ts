@@ -95,7 +95,6 @@ describe('WebAppSettingsAdapter (unit)', () => {
             expect(capabilities.canDelete).to.be.true;
             expect(capabilities.canRename).to.be.true;
             expect(capabilities.canWrite).to.be.true;
-            expect(capabilities.valuesReadable).to.be.true;
         });
 
         it('rejects an empty setting name', () => {
@@ -137,7 +136,6 @@ describe('WebAppSettingsAdapter (unit)', () => {
 
             expect(snapshot.resourceName).to.equal('mysite');
             expect(snapshot.writable).to.be.true;
-            expect(snapshot.valuesReadable).to.be.true;
             expect(snapshot.structured).to.be.false;
         });
 

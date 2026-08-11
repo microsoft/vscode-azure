@@ -6,7 +6,7 @@
 import { expect } from 'chai';
 import { JsoncSettingsFormat } from '../../src/settings/JsoncSettingsFormat';
 import { SettingsParseError } from '../../src/settings/SettingsFormat';
-import { type SettingsMap, type SettingsSnapshot, UnreadableValue } from '../../src/settings/SettingsModel';
+import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
 function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot {
@@ -14,7 +14,6 @@ function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot
         entries: [],
         resourceName: 'myFunctionApp',
         collectionLabel: 'Application settings',
-        valuesReadable: true,
         writable: true,
         structured: false,
         ...overrides,
@@ -70,21 +69,6 @@ describe('JsoncSettingsFormat (unit)', () => {
             const text = format.serialize(createSnapshot());
 
             expect(text).to.contain('plain text');
-        });
-
-        it('explains the sentinel only when values are unreadable', () => {
-            const format = createFormat();
-
-            expect(format.serialize(createSnapshot({ valuesReadable: false }))).to.contain('cannot be read back');
-            expect(format.serialize(createSnapshot({ valuesReadable: true }))).to.not.contain('cannot be read back');
-        });
-
-        it('describes unreadable collections as read-only', () => {
-            const text = createFormat().serialize(createSnapshot({ valuesReadable: false }));
-
-            expect(text).to.contain('read-only');
-            expect(text).to.contain('cannot be edited safely');
-            expect(text).to.not.contain('Saving this file writes');
         });
 
         it('nests value and metadata for structured collections', () => {
@@ -233,14 +217,6 @@ describe('JsoncSettingsFormat (unit)', () => {
             const format = createFormat();
             const entries: SettingsMap = [{ key: 'DB', value: 'conn', metadata: { type: 'SQLAzure' } }];
             const snapshot = createSnapshot({ structured: true, entries });
-
-            expect(format.parse(format.serialize(snapshot), snapshot)).to.deep.equal(entries);
-        });
-
-        it('round-trips the sentinel in the serialized read-only representation', () => {
-            const format = createFormat();
-            const entries: SettingsMap = [{ key: 'SECRET', value: UnreadableValue }];
-            const snapshot = createSnapshot({ valuesReadable: false, entries });
 
             expect(format.parse(format.serialize(snapshot), snapshot)).to.deep.equal(entries);
         });

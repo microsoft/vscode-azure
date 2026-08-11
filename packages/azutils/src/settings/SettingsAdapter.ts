@@ -43,13 +43,6 @@ export interface SettingsCapabilities {
     /** Whether any write is permitted. When `false`, the editor opens read-only. */
     readonly canWrite: boolean;
     /**
-     * Whether the service returns real values on read.
-     *
-     * When `false`, every value reads back as `UnreadableValue` and the framework makes the
-     * collection read-only rather than risk writing the placeholder over the real secret.
-     */
-    readonly valuesReadable: boolean;
-    /**
      * Validate a proposed setting name.
      *
      * @returns a localized error message, or `undefined` if the name is acceptable.

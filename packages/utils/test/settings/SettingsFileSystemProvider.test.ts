@@ -9,7 +9,7 @@ import type * as vscode from 'vscode';
 import { JsoncSettingsFormat } from '../../src/settings/JsoncSettingsFormat';
 import { SettingsFileSystemProvider, type SettingsDocumentSource } from '../../src/settings/SettingsFileSystemProvider';
 import { SettingsParseError } from '../../src/settings/SettingsFormat';
-import { type SettingsMap, type SettingsSnapshot, UnreadableValue } from '../../src/settings/SettingsModel';
+import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
 import { createMockVsCode, type MockVsCodeResult } from '../vscode/MockVsCode';
 
 const Scheme = 'azure-settings';
@@ -19,7 +19,6 @@ function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot
         entries: [{ key: 'A', value: '1' }],
         resourceName: 'myFunctionApp',
         collectionLabel: 'Application settings',
-        valuesReadable: true,
         writable: true,
         structured: false,
         ...overrides,
@@ -213,12 +212,9 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(harness.read.mock.callCount()).to.equal(1);
         });
 
-        describe('unreadable values', () => {
+        describe('read-only collections', () => {
             beforeEach(() => {
-                harness.setSnapshot(createSnapshot({
-                    valuesReadable: false,
-                    entries: [{ key: 'SECRET', value: UnreadableValue }],
-                }));
+                harness.setSnapshot(createSnapshot({ writable: false }));
             });
 
             it('reports the document as read-only', async () => {
@@ -233,7 +229,7 @@ describe('SettingsFileSystemProvider (unit)', () => {
                 try {
                     await harness.provider.writeFile(
                         harness.uri,
-                        Buffer.from('{ "SECRET": "brand-new" }', 'utf8'),
+                        Buffer.from('{ "A": "brand-new" }', 'utf8'),
                         { create: false, overwrite: true },
                     );
                     expect.fail('expected an error');

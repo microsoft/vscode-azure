@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, getNodeType, type SettingsCapabilities } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, ICodeContext, UnreadableValue, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { AddOrEditSetting } from '../../../commands/settings/AddOrEditSetting';
 import { CopySettingValue } from '../../../commands/settings/CopySettingValue';
@@ -126,16 +126,10 @@ export class SettingsViewProvider implements ViewProvider<string> {
     }
 
     /**
-     * The text shown beside a setting's name.
-     *
-     * Hidden by default. A value the service will not return is always rendered as such rather than
-     * masked, so the two cases are distinguishable: "you may not see this" versus "nobody can".
+     * The text shown beside a setting's name. Masked by default, since the resources tree is often
+     * visible during screen shares.
      */
     private describeValue(node: SettingsEntryNode): string {
-        if (node.value === UnreadableValue) {
-            return this.ctx.code.l10n.t('(value hidden by Azure)');
-        }
-
         return this.visibility.showValues ? node.value : MaskedValue;
     }
 

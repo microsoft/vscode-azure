@@ -6,7 +6,7 @@
 import { type Node, parseTree, printParseErrorCode } from 'jsonc-parser';
 import type { IVsCode } from '../vscode/IVsCode';
 import { type SettingsFormat, SettingsParseError } from './SettingsFormat';
-import { type SettingsEntry, type SettingsMap, type SettingsSnapshot, UnreadableValue } from './SettingsModel';
+import type { SettingsEntry, SettingsMap, SettingsSnapshot } from './SettingsModel';
 
 /** Property name holding the value of a structured entry. */
 const ValueProperty = 'value' as const;
@@ -15,10 +15,10 @@ const ValueProperty = 'value' as const;
  * JSON-with-comments {@linkcode SettingsFormat}.
  *
  * Chosen over strict JSON so the document can carry a header explaining that saving writes to
- * Azure, which values cannot be read back, and that removing a key deletes the setting -- guidance
- * that has nowhere else to live in a plain editor. Comments are advisory only: they are stripped on
- * parse and regenerated on serialize, so user edits to the header are silently discarded rather
- * than persisted somewhere they could go stale.
+ * Azure and that removing a key deletes the setting -- guidance that has nowhere else to live in a
+ * plain editor. Comments are advisory only: they are stripped on parse and regenerated on
+ * serialize, so user edits to the header are silently discarded rather than persisted somewhere
+ * they could go stale.
  *
  * Unstructured collections serialize as `{ "KEY": "value" }`. Structured collections (those whose
  * entries carry {@linkcode SettingsEntry.metadata}) serialize as
@@ -164,16 +164,12 @@ export class JsoncSettingsFormat implements SettingsFormat {
             this.code.l10n.t('{0} for \'{1}\'.', snapshot.collectionLabel, snapshot.resourceName),
         ];
 
-        if (snapshot.writable && snapshot.valuesReadable) {
+        if (snapshot.writable) {
             lines.push(this.code.l10n.t('Saving this file writes these settings to Azure. Removing a setting deletes it.'));
             lines.push(this.code.l10n.t('The file is saved to Azure as-is: it overwrites any changes made elsewhere since it was opened.'));
             lines.push(this.code.l10n.t('Deployments and infrastructure-as-code tools may overwrite edits made here.'));
         } else {
             lines.push(this.code.l10n.t('These settings are read-only and cannot be edited here.'));
-        }
-
-        if (!snapshot.valuesReadable) {
-            lines.push(this.code.l10n.t('Values shown as "{0}" cannot be read back, so this document cannot be edited safely.', UnreadableValue));
         }
 
         lines.push(this.code.l10n.t('This file lives only in the editor. Saving a copy to disk would store its values in plain text.'));

@@ -56,9 +56,6 @@ each other silently. `SettingsAdapter.write` takes the full map, so adding etag 
 later is additive rather than a redesign.
 
 The per-setting tree commands read, modify one key, and write, so keys they do not touch survive.
-Both these commands and the editor are **read-only** on a collection whose `valuesReadable` is
-`false`: every available value is only a sentinel, so any whole-collection write could replace real
-secrets with `********`.
 
 ### Keeping the tree and an open document in step
 
@@ -101,7 +98,6 @@ never contributed, its `when` clause never matches, and the menu item never appe
 | `canAdd` | "Add New Setting" is withheld |
 | `canDelete` | "Delete Setting" is withheld |
 | `canRename` | "Rename Setting" is withheld |
-| `valuesReadable` | Values render as the `UnreadableValue` sentinel and the document is read-only |
 
 Adding a product that forbids renaming means returning `canRename: false` — not adding a branch.
 
@@ -119,15 +115,10 @@ the value. App Service connection strings are the reference case: each has a dat
 Unstructured collections serialize as plain `"KEY": "value"`. The framework picks the shape from
 `SettingsCollectionDescriptor.structured`; nothing downstream special-cases connection strings.
 
-### Unreadable values
-
-Some services will not return values on read. Such a collection sets `valuesReadable: false`; every
-value reads back as `UnreadableValue` (`********`). The framework marks the virtual document
-read-only and rejects writes because the adapter's whole-collection `write` contract cannot express
-"preserve this key" without sending the placeholder.
-
-`WebAppSettingsAdapter` sets `valuesReadable: true`, since ARM does return App Service values; the
-machinery exists for products that do not.
+> **Not modeled:** services that refuse to return values on read. Every adapter today returns real
+> values, and a whole-collection `write` cannot express "preserve this key" without sending a
+> placeholder over the real secret. Add a capability for it alongside the first adapter that needs
+> one, rather than carrying unexercised machinery.
 
 ## Secrets
 

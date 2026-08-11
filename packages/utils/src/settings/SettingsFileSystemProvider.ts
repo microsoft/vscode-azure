@@ -116,7 +116,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
             size: Buffer.byteLength(entry.text, 'utf8'),
             // Per-file, rather than provider-wide, so a read-only collection on one resource does
             // not make every settings document read-only.
-            permissions: isWritable(entry.snapshot) ? undefined : this.code.FilePermission.Readonly,
+            permissions: entry.snapshot.writable ? undefined : this.code.FilePermission.Readonly,
         };
     }
 
@@ -145,7 +145,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     public async writeFile(uri: vscode.Uri, content: Uint8Array, _options: { readonly create: boolean; readonly overwrite: boolean }): Promise<void> {
         const entry = await this.load(uri, { allowReuse: true });
 
-        if (!isWritable(entry.snapshot)) {
+        if (!entry.snapshot.writable) {
             throw this.code.FileSystemError.NoPermissions(uri);
         }
 
@@ -243,8 +243,4 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
         this.cache.set(uri.toString(), entry);
         return entry;
     }
-}
-
-function isWritable(snapshot: SettingsSnapshot): boolean {
-    return snapshot.writable && snapshot.valuesReadable;
 }

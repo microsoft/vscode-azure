@@ -26,7 +26,6 @@ describe('AzureSettingsDocumentSource (unit)', () => {
             entries: [],
             resourceName: resource.name,
             collectionLabel: 'Application Settings',
-            valuesReadable: true,
             writable: true,
             structured: false,
         }));

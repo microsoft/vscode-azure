@@ -173,12 +173,6 @@ describe('SettingsRegistry (unit)', () => {
         });
 
         describe('capability enforcement', () => {
-            it('refuses to write a read-only collection', async () => {
-                const { registry, resource } = setup({ ...permissiveCapabilities, canWrite: false });
-
-                await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /read-only/);
-            });
-
             it('refuses to add when adding is not permitted, but still allows editing', async () => {
                 const { adapter, registry, resource } = setup({ ...permissiveCapabilities, canAdd: false });
 
@@ -200,13 +194,13 @@ describe('SettingsRegistry (unit)', () => {
                 await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be renamed/);
             });
 
-            it('refuses every write when values cannot be read back', async () => {
-                const { adapter, registry, resource } = setup({ ...permissiveCapabilities, valuesReadable: false });
+            it('refuses every write on a read-only collection', async () => {
+                const { adapter, registry, resource } = setup({ ...permissiveCapabilities, canWrite: false });
 
-                await assert.rejects(registry.write(resource, 'appSettings', [entry('A', '1')]), /cannot be changed/);
-                await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /cannot be changed/);
-                await assert.rejects(registry.remove(resource, 'appSettings', 'A'), /cannot be changed/);
-                await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /cannot be changed/);
+                await assert.rejects(registry.write(resource, 'appSettings', [entry('A', '1')]), /read-only/);
+                await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /read-only/);
+                await assert.rejects(registry.remove(resource, 'appSettings', 'A'), /read-only/);
+                await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /read-only/);
 
                 expect(adapter.writes).to.be.empty;
             });

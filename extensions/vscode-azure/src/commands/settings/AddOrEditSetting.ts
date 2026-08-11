@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type GenericResource } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, showSmartInputBox, UnreadableValue } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { ISettingsChangeNotifier } from '../../settings/SettingsChangeNotifier';
@@ -101,19 +101,14 @@ export class AddOrEditSetting implements ManagedCommand {
         settingKey: string,
         currentValue: string,
     ): Promise<void> {
-        // A value the service refuses to return must not be offered as the starting point, or
-        // accepting the prompt unchanged would write the placeholder over the real secret.
-        const readable = currentValue !== UnreadableValue;
-
         const newValue = await showSmartInputBox(this.ctx, {
             prompt: this.ctx.code.l10n.t('Enter the new value for \'{0}\'', settingKey),
-            value: readable ? currentValue : '',
-            placeHolder: readable ? undefined : this.ctx.code.l10n.t('The current value cannot be shown'),
+            value: currentValue,
             // See the note in `add`: setting values must not be persisted to workspace state.
             rememberRecent: false,
         });
 
-        if (readable && newValue === currentValue) {
+        if (newValue === currentValue) {
             return;
         }
 

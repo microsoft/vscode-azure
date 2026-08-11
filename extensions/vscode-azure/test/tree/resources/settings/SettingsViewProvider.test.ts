@@ -6,7 +6,6 @@
 import { AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { UnreadableValue } from '@microsoft/vscode-azure-utils';
 import { expect } from 'chai';
 import { AddOrEditSetting } from '../../../../src/commands/settings/AddOrEditSetting';
 import { CopySettingValue } from '../../../../src/commands/settings/CopySettingValue';
@@ -131,13 +130,6 @@ describe('SettingsViewProvider (unit)', () => {
             const key = register(createEntryNode(resource, 'appSettings', entry('A', 'super-secret')));
 
             expect(provider.getTreeItem(key).description).to.equal('super-secret');
-        });
-
-        it('distinguishes a value Azure will not return from one merely hidden', () => {
-            const { provider, register } = createProvider({ showValues: true });
-            const key = register(createEntryNode(resource, 'appSettings', entry('A', UnreadableValue)));
-
-            expect(provider.getTreeItem(key).description).to.contain('Azure');
         });
 
         it('offers copy and edit-value when writable', () => {

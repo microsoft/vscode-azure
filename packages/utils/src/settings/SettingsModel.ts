@@ -4,15 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Sentinel written in place of a value the backing service refuses to return.
- *
- * A collection whose {@linkcode SettingsSnapshot.valuesReadable valuesReadable} is `false` serializes
- * every value as this string and is read-only because a whole-collection write cannot preserve the
- * real values.
- */
-export const UnreadableValue = '********';
-
-/**
  * A single name/value setting.
  *
  * {@linkcode SettingsEntry.metadata metadata} carries service-specific side-channel fields that
@@ -22,7 +13,7 @@ export const UnreadableValue = '********';
 export interface SettingsEntry {
     /** The setting name. Unique within its collection; compared case-sensitively. */
     readonly key: string;
-    /** The setting value, or {@linkcode UnreadableValue} when the service will not return it. */
+    /** The setting value. */
     readonly value: string;
     /** Service-specific fields that accompany the value, if the collection is structured. */
     readonly metadata?: Readonly<Record<string, string>>;
@@ -46,8 +37,6 @@ export interface SettingsSnapshot {
     readonly resourceName: string;
     /** Display name of the collection (e.g. "Application settings"), for the document header. */
     readonly collectionLabel: string;
-    /** When `false`, every value is {@linkcode UnreadableValue} and the document is read-only. */
-    readonly valuesReadable: boolean;
     /** When `false`, the document is opened read-only. */
     readonly writable: boolean;
     /** Whether entries carry {@linkcode SettingsEntry.metadata}, which changes the serialized shape. */

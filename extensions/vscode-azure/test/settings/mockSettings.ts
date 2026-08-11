@@ -11,13 +11,12 @@ import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '@microsoft/vs
 import { SettingsRegistry } from '../../src/settings/SettingsRegistry';
 import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
 
-/** Default capabilities: everything permitted, values readable. Override per test as needed. */
+/** Default capabilities: everything permitted. Override per test as needed. */
 export const permissiveCapabilities: SettingsCapabilities = {
     canAdd: true,
     canDelete: true,
     canRename: true,
     canWrite: true,
-    valuesReadable: true,
 };
 
 /** Options for {@linkcode createStubAdapter}. */
@@ -83,7 +82,6 @@ export class StubAdapter implements SettingsAdapter {
             entries: this.store.get(collectionId) ?? [],
             resourceName: resource.name,
             collectionLabel: collection.label,
-            valuesReadable: capabilities.valuesReadable,
             writable: capabilities.canWrite,
             structured: collection.structured,
         });
