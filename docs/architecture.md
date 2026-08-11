@@ -32,7 +32,7 @@ Framework-level building blocks with no Azure-specific knowledge:
 - **VS Code abstractions**: `CancellationError`, `Disposable`, `EventEmitter`
 - **Process execution**: `ProcessExecutor`, `IProcessExecutor`, and shared shell-task construction
 - **Data utilities**: `InflightMap`, `Limiter`
-- **Workspace discovery**: `findWorkspaceProjects` performs a bounded, cancelable, `.gitignore`-aware project walk, classifying each directory with composable detector functions
+- **Workspace scanning**: `walkWorkspace` — a bounded, cancelable, `.gitignore`-aware directory walk that consumers layer their own detection on top of
 
 ### `packages/azutils` — Azure Utilities
 

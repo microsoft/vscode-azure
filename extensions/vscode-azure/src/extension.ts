@@ -19,9 +19,7 @@ import {
     IProcessExecutor,
     ITelemetryReporter,
     IVsCode,
-    IWorkspaceProjectService,
     ProcessExecutor,
-    WorkspaceProjectService,
 } from '@microsoft/vscode-azure-utils';
 import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { Container } from 'inversify';
@@ -146,10 +144,6 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
 
     container.bind(IProcessExecutor).toDynamicValue(context => {
         return new ProcessExecutor(context.get(IVsCode));
-    }).inSingletonScope().onActivation(pushDisposable);
-
-    container.bind(IWorkspaceProjectService).toDynamicValue(context => {
-        return new WorkspaceProjectService(context.get(IVsCode));
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
