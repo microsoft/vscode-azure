@@ -9,7 +9,6 @@ import { CancellationError, createActionContext, IActionContext, ICodeContext } 
 import { createMockCodeContext, MockUri, respondToPrompts, type MockInputBox, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { Container } from 'inversify';
-import * as assert from 'node:assert';
 import { mock, type Mock } from 'node:test';
 import type { AzdResourceAssociation } from '../../../src/azd/AzdResourceAssociationService';
 import { IAzdResourceAssociationService } from '../../../src/azd/AzdResourceAssociationService';
@@ -42,7 +41,8 @@ describe('DeleteAzureResource (unit)', () => {
         const setup = createCommand(resource, { deleteById: mock.fn(() => Promise.reject(failure)) });
         setup.mockResult.messageResponses.push('Delete');
 
-        await assert.rejects(setup.command.execute(AzureNodeId.from(resource).toString()), failure);
+        await expect(setup.command.execute(AzureNodeId.from(resource).toString()))
+            .to.be.rejectedWith(failure);
 
         expect(setup.remove.mock.callCount()).to.equal(0);
         expect(shownToasts(setup)).to.be.empty;
@@ -86,7 +86,8 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
 
         inputBox.triggerHide();
-        await assert.rejects(pending, (error: unknown) => CancellationError.test(error));
+        const error = await expect(pending).to.be.rejected;
+        expect(CancellationError.test(error)).to.be.true;
         expect(setup.remove.mock.callCount()).to.equal(0);
         expect(shownToasts(setup)).to.be.empty;
     });
@@ -96,10 +97,9 @@ describe('DeleteAzureResource (unit)', () => {
         const setup = createCommand(resourceGroup);
         respondToPrompts(setup.mockResult, ['cancel']);
 
-        await assert.rejects(
-            setup.command.execute(AzureNodeId.from(resourceGroup).toString()),
-            (error: unknown) => CancellationError.test(error),
-        );
+        const error = await expect(setup.command.execute(AzureNodeId.from(resourceGroup).toString()))
+            .to.be.rejected;
+        expect(CancellationError.test(error)).to.be.true;
 
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.callCount()).to.equal(0);
@@ -175,18 +175,17 @@ describe('DeleteAzureResource (unit)', () => {
     it('throws for a missing key and for a node that is no longer cached', async () => {
         const setup = createCommand(makeGenericResource());
 
-        await assert.rejects(setup.command.execute(), /Select an Azure resource/);
-        await assert.rejects(setup.command.execute('azr://missing@portal.azure.com/tenants/t1/subscriptions/sub1'), /no longer available/);
+        await expect(setup.command.execute()).to.be.rejectedWith(/Select an Azure resource/);
+        await expect(setup.command.execute('azr://missing@portal.azure.com/tenants/t1/subscriptions/sub1'))
+            .to.be.rejectedWith(/no longer available/);
     });
 
     it('throws for a node that is not an Azure resource', async () => {
         const subscription = makeSubscription();
         const setup = createCommand(makeGenericResource(), { extraNodes: [subscription] });
 
-        await assert.rejects(
-            setup.command.execute(AzureNodeId.from(subscription).toString()),
-            /cannot be deleted/,
-        );
+        await expect(setup.command.execute(AzureNodeId.from(subscription).toString()))
+            .to.be.rejectedWith(/cannot be deleted/);
     });
 });
 

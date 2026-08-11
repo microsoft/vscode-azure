@@ -26,6 +26,8 @@ publicHoistPattern:
   - "@types/mocha"
   - "chai"
   - "@types/chai"
+  - "chai-as-promised"
+  - "@types/chai-as-promised"
 
 catalog:
   "@vscode/extension-telemetry": ^1.5.2
