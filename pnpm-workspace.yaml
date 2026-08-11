@@ -5,6 +5,12 @@ packages:
 
 minimumReleaseAge: 10080 # One week in minutes
 
+minimumReleaseAgeExclude:
+  # @microsoft/vscode-azext-eng 1.1.0-alpha.5 was published 2026-08-11 and is a first-party
+  # package we own, so we take it before it ages out. Remove this exclusion on or after
+  # 2026-08-19, once the one-week minimum release age has elapsed.
+  - "@microsoft/vscode-azext-eng"
+
 allowBuilds:
   esbuild: true
   keytar: true
@@ -29,7 +35,7 @@ publicHoistPattern:
 
 catalog:
   "@vscode/extension-telemetry": ^1.5.2
-  "@vscode/test-cli": ^0.0.12
+  "@vscode/test-cli": ^0.0.15
   "@vscode/test-electron": ^3.0.0
   esbuild: ^0.28.1
   esbuild-plugin-copy: ^2.1.1
