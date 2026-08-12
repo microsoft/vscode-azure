@@ -22,7 +22,6 @@ import { DeleteAzureResource } from '../commands/tree/DeleteAzureResource';
 import { GroupBy } from '../commands/tree/GroupBy';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
-import { DeleteResourceCommandId, DeleteResourceGroupCommandId } from '../constants';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { IAzureViewDataTree, ISubscriptionResolver } from '../services';
 import {
@@ -86,8 +85,8 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/resources/refresh', RefreshResourcesView);
     registrar.registerCommand('vscode-azure/resources/groupBy', GroupBy);
     registrar.registerCommand('vscode-azure/resources/openInPortal', OpenUrl, OpenInPortal.getUrl);
-    registrar.registerCommand(DeleteResourceCommandId, DeleteAzureResource);
-    registrar.registerCommand(DeleteResourceGroupCommandId, DeleteAzureResource);
+    registrar.registerCommand('vscode-azure/resources/delete', DeleteAzureResource);
+    registrar.registerCommand('vscode-azure/resourceGroups/delete', DeleteAzureResource);
     registrar.registerCommand('vscode-azure/signIn', SignIn);
     registrar.registerCommand('vscode-azure/selectSubscriptions', SelectSubscriptions);
 

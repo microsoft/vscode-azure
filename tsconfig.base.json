@@ -9,10 +9,6 @@
         "types": [
             "node",
             "mocha",
-            // chai-as-promised augments the global Chai.Assertion interface, and
-            // this array disables automatic @types discovery, so it has to be
-            // listed for `rejectedWith` and friends to typecheck. Registered at
-            // runtime by @microsoft/vscode-azext-eng.
             "chai-as-promised",
         ],
         "sourceMap": true,
