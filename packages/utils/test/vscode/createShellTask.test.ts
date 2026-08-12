@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import { ShellQuoting, command } from '../../src/base/CommandLineBuilder';
 import { createShellTask } from '../../src/vscode/createShellTask';

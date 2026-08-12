@@ -5,7 +5,6 @@
 
 import { makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { DeleteAppSetting } from '../../../src/commands/functions/DeleteAppSetting';
 import { FunctionAppVirtualTypes } from '../../../src/tree/resources/functions/FunctionApp';

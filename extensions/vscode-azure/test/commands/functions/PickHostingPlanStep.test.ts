@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type { CreateFunctionAppContext } from '../../../src/commands/functions/CreateFunctionAppContext';
 import { PickHostingPlanStep } from '../../../src/commands/functions/steps/PickHostingPlanStep';
 

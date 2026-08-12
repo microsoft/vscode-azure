@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { isActivity, isTerminalActivityStatus } from '../../../src/tree/activity/Activity';
 import { makeActivity } from './mockActivity';
 

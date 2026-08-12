@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { EmulatorsWorkspaceViewProvider } from '../../../../src/tree/workspace/emulators/EmulatorsWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeEmulatorNode, makeEmulatorsGroupNode } from '../mockWorkspaceNode';

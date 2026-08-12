@@ -8,7 +8,6 @@ import type { TokenCredential } from '@azure/core-auth';
 import type { PipelinePolicy, PipelineRequest } from '@azure/core-rest-pipeline';
 import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzurePublicCloud } from '../../src/auth/Environment';
 import { createArmRestClient, createArmRestSubscriptionClient } from '../../src/rest/createAzureClient';

@@ -178,7 +178,18 @@ it('(integration) should execute without error', async () => {
 
 ### Assertion Library
 
-All tests use **chai** for assertions (`expect` style).
+All tests use **chai** for assertions (`expect` style). `expect` is registered as
+a global by `@microsoft/vscode-azext-eng`, so tests use it without importing
+chai. That same eng entry supplies every other test global too -- mocha's
+`describe`/`it` and the `chai-as-promised` augmentation -- so `types` names it
+alone rather than listing `mocha` and `chai-as-promised` separately:
+
+```jsonc
+"types": [
+    "node",
+    "@microsoft/vscode-azext-eng/mocha/test-globals",
+]
+```
 
 `chai-as-promised` is registered by `@microsoft/vscode-azext-eng` for every test
 package, so assert on rejections through `expect` rather than `try`/`catch` with

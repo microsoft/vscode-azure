@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { mock, type Mock } from 'node:test';
 import { delay } from '../../src/base/delay';
 import type { ITelemetryReporter } from '../../src/base/ITelemetryReporter';

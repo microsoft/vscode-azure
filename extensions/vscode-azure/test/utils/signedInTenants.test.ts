@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, withSettings } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../src/constants';
 import { addSignedInTenant, readSignedInTenants, type SignedInTenant } from '../../src/utils/signedInTenants';
 

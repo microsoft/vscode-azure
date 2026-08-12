@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { AcrClient } from '../../../src/rest/clients/AcrClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';

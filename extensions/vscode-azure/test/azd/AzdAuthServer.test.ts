@@ -6,7 +6,6 @@
 import { createDefaultCredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { makeCredential } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { request as httpsRequest } from 'node:https';
 import { mock } from 'node:test';
 import { AzdAuthServer, certDerToPem } from '../../src/azd/AzdAuthServer';
