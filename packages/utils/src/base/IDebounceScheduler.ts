@@ -70,18 +70,14 @@ export class DebounceScheduler implements IDebounceScheduler {
             // rejected promise would otherwise escape as an uncaught exception / unhandled
             // rejection and destabilize the extension host.
             try {
-                void Promise.resolve(callback()).catch((error: unknown) => { this.handleError(error); });
+                void Promise.resolve(callback()).catch((error: unknown) => this.onError?.(error));
             } catch (error) {
-                this.handleError(error);
+                this.onError?.(error);
             }
         });
     }
 
     public dispose(): void {
         this.debouncer.dispose();
-    }
-
-    private handleError(error: unknown): void {
-        this.onError?.(error);
     }
 }
