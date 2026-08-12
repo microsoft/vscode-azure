@@ -75,13 +75,18 @@ describe('DeleteAzureResource (unit)', () => {
         expect(shownToasts(setup)).to.deep.equal([`Deleted resource group '${resourceGroup.name}'.`]);
     });
 
-    it('never pre-fills the typed confirmation from a previous deletion', async () => {
+    it('never remembers or pre-fills the typed confirmation', async () => {
         const first = makeResourceGroup();
         const setup = createCommand(first);
         respondToPrompts(setup.mockResult, [{ input: first.name }]);
 
         await setup.command.execute(AzureNodeId.from(first).toString());
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(1);
+
+        // The accepted name must not be written to workspace state at all, so
+        // it can never be replayed into this or any other prompt.
+        const workspaceState = setup.codeContext.ctx.extensionContext.workspaceState;
+        expect(workspaceState.keys().filter(key => key.startsWith('recentInput:')), 'the name must not be persisted').to.be.empty;
 
         // Reuse only the persisted workspace state, so the second prompt is a
         // genuinely fresh input box. No response is queued, so its value

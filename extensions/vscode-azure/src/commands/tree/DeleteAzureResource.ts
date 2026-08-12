@@ -171,13 +171,11 @@ export class DeleteAzureResource implements ManagedCommand {
             // Validation blocks acceptance until the name matches, so returning
             // at all means the user confirmed; cancelling rejects instead.
             //
-            // `value` is set explicitly so the prompt never pre-fills from a
-            // previously remembered input -- a recalled name would satisfy the
-            // validation immediately and reduce this deliberate speed bump to a
-            // single Enter.
+            // The name is deliberately never remembered: a recalled value would
+            // satisfy the validation immediately and reduce this speed bump to
+            // a single Enter.
             await showSmartInputBox(this.ctx, {
-                value: '',
-                stepName: 'confirmResourceGroupDeletion',
+                rememberRecent: false,
                 prompt: this.ctx.code.l10n.t('Type \'{0}\' to confirm deletion of this resource group and everything in it.', resource.name),
                 validateInput: input => input === resource.name
                     ? undefined

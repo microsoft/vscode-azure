@@ -138,6 +138,44 @@ describe('uiHelpers (unit)', () => {
             const result = await showSmartInputBox(ctx, { prompt: 'Enter value', fallbackValue: 'default-val' });
             expect(result).to.equal('hello');
         });
+
+        describe('rememberRecent', () => {
+            it('should not persist the value when rememberRecent is false', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ input: 'super-secret' }]);
+                await showSmartInputBox(ctx, { prompt: 'Enter value', rememberRecent: false });
+
+                // Nothing about the value may reach workspace state -- it is often a secret.
+                const state = ctx.extensionContext.workspaceState;
+                const stored = state.keys().map(key => String(state.get(key)));
+                expect(stored).to.not.include('super-secret');
+            });
+
+            it('should not restore a value from a prompt that opted out', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ input: 'super-secret' }]);
+                await showSmartInputBox(ctx, { prompt: 'Enter value', rememberRecent: false });
+
+                respondToPrompts(mock, ['acceptDefault']);
+                const result = await showSmartInputBox(ctx, { prompt: 'Enter value', rememberRecent: false });
+
+                expect(result).to.equal('');
+            });
+
+            it('should treat a password prompt as opted out even without the flag', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ input: 'super-secret' }]);
+                await showSmartInputBox(ctx, { prompt: 'Enter value', password: true });
+
+                respondToPrompts(mock, ['acceptDefault']);
+                const result = await showSmartInputBox(ctx, { prompt: 'Enter value', password: true });
+
+                expect(result).to.equal('');
+            });
+        });
     });
 
     describe('showSmartQuickPick', () => {

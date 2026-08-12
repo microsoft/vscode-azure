@@ -258,6 +258,27 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
      * Use this instead of {@link value} to allow the recently entered value to take precedence.
      */
     readonly fallbackValue?: string;
+
+    /**
+     * Whether the accepted value may be persisted to workspace state and offered back as the
+     * pre-filled value next time this prompt appears. Defaults to `true`.
+     *
+     * Set to `false` for anything the user would not want written to disk in cleartext or replayed
+     * into an unrelated prompt -- secrets, connection strings, keys, tokens. Setting
+     * {@link vscode.InputBoxOptions.password password} implies `false`, so a masked prompt can never
+     * leak its value through this path by omission.
+     */
+    readonly rememberRecent?: boolean;
+}
+
+/**
+ * Whether {@linkcode showSmartInputBox} may persist and restore this prompt's value.
+ *
+ * A masked prompt is treated as opted out regardless of {@linkcode ExtendedInputBoxOptions.rememberRecent},
+ * so that forgetting the flag fails safe.
+ */
+function mayRememberRecent(options: ExtendedInputBoxOptions): boolean {
+    return options.rememberRecent !== false && !options.password;
 }
 
 /**
@@ -281,7 +302,7 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
 export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxOptions): Promise<string> {
     const showBack = options?.showBack ?? false;
     const input = ctx.code.window.createInputBox();
-    const recentKey = options ? inputBoxRecentKey(options) : undefined;
+    const recentKey = options && mayRememberRecent(options) ? inputBoxRecentKey(options) : undefined;
 
     if (showBack) {
         input.buttons = [ctx.code.QuickInputButtons.Back];
