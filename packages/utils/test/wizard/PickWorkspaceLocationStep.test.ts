@@ -52,11 +52,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             contextProperty: 'location',
         });
 
-        const error = await expect(step.prompt({})).to.be.rejected;
-        expect(error).to.be.an('error').with.property(
-            'message',
-            'Open a workspace folder before selecting a location.',
-        );
+        await expect(step.prompt({})).to.be.rejectedWith('Open a workspace folder before selecting a location.');
         expect(mock.workspace.findFiles.mock.calls).to.have.length(0);
         expect(mock.quickPicks).to.have.length(0);
     });

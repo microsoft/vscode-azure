@@ -48,8 +48,7 @@ describe('Limiter (unit)', () => {
         const p1 = limiter.queue(() => Promise.reject(new Error('fail1')));
         const p2 = limiter.queue(() => Promise.resolve('ok'));
 
-        const error = await expect(p1).to.be.rejected;
-        expect((error as Error).message).to.equal('fail1');
+        await expect(p1).to.be.rejectedWith('fail1');
 
         const result = await p2;
         expect(result).to.equal('ok');
@@ -58,8 +57,7 @@ describe('Limiter (unit)', () => {
     it('should handle synchronous errors in the factory', async () => {
         const limiter = new Limiter<string>(1);
 
-        const error = await expect(limiter.queue(() => { throw new Error('sync fail'); })).to.be.rejected;
-        expect((error as Error).message).to.equal('sync fail');
+        await expect(limiter.queue(() => { throw new Error('sync fail'); })).to.be.rejectedWith('sync fail');
 
         // Subsequent tasks should still work
         const result = await limiter.queue(() => Promise.resolve('ok'));

@@ -6,7 +6,7 @@
 import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { collectPages, Everything, Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider, type IAzureAccountSessionChangeScheduler } from '../../../src/tree/resources/AzureAccountDataProvider';
@@ -17,34 +17,18 @@ describe('AzureAccountDataProvider (unit)', () => {
         mock.restoreAll();
     });
 
-    class ManualSessionChangeScheduler implements IAzureAccountSessionChangeScheduler {
+    /**
+     * Adds the suppression-window clock to the shared
+     * {@linkcode ManualDebounceScheduler}, so a test drives both the debounce and
+     * the passage of time by hand.
+     */
+    class ManualSessionChangeScheduler extends ManualDebounceScheduler implements IAzureAccountSessionChangeScheduler {
         private currentTime = 0;
-        private pending: (() => Promise<void>) | undefined;
 
         public readonly now = mock.fn(() => this.currentTime);
-        public readonly debounce = mock.fn((callback: () => Promise<void>) => {
-            this.pending = callback;
-        });
-        public readonly dispose = mock.fn(() => {
-            this.pending = undefined;
-        });
-
-        public get hasPending(): boolean {
-            return this.pending !== undefined;
-        }
 
         public advance(ms: number): void {
             this.currentTime += ms;
-        }
-
-        public async flush(): Promise<void> {
-            const callback = this.pending;
-            if (!callback) {
-                throw new Error('No session-change reconcile is pending');
-            }
-
-            this.pending = undefined;
-            await callback();
         }
     }
 
@@ -436,17 +420,12 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(getToken.mock.callCount()).to.equal(0);
         });
 
-        it('should throw for an unsupported resource type', async () => {
+        it('should throw for an unsupported resource type', () => {
             const { provider, mock } = createProvider();
             mock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
 
-            let error: unknown;
-            try {
-                await provider.getChildren(makeGenericResource());
-            } catch (e) {
-                error = e;
-            }
-            expect((error as Error).message).to.include('Unsupported resource type');
+            // `getChildren` is not `async`, so this surfaces as a synchronous throw.
+            expect(() => provider.getChildren(makeGenericResource())).to.throw('Unsupported resource type');
         });
     });
 

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
+import { Utils } from 'vscode-uri';
 import type { IVsCode } from './IVsCode';
 
 /**
@@ -80,14 +81,19 @@ export async function readText(code: IVsCode, uri: vscode.Uri): Promise<string |
  *
  * Malformed JSON reads as absent because these files are usually
  * work-in-progress edits, and a half-typed manifest should not fail the caller.
+ *
+ * @typeParam T - Shape the caller expects. This is an **unvalidated assertion**
+ *   over whatever the file contained, exactly like `JSON.parse(...) as T`;
+ *   supply it only when the caller is prepared for the file to disagree.
+ *   Defaults to `unknown`, which forces the caller to narrow.
  */
-export async function readJson(code: IVsCode, uri: vscode.Uri): Promise<unknown> {
+export async function readJson<T = unknown>(code: IVsCode, uri: vscode.Uri): Promise<T | undefined> {
     const contents = await readText(code, uri);
     if (contents === undefined) {
         return undefined;
     }
     try {
-        return JSON.parse(contents) as unknown;
+        return JSON.parse(contents) as T;
     } catch (error) {
         if (error instanceof SyntaxError) {
             return undefined;
@@ -103,4 +109,15 @@ export async function readJson(code: IVsCode, uri: vscode.Uri): Promise<unknown>
 export function basename(uri: vscode.Uri): string {
     const segments = uri.path.split('/').filter(Boolean);
     return segments[segments.length - 1] ?? uri.path;
+}
+
+/**
+ * Returns the parent directory of {@linkcode uri}.
+ *
+ * At the root, the result equals the input -- walk upwards by comparing
+ * {@linkcode vscode.Uri.path path} against the previous value to know when to
+ * stop, rather than looping unconditionally.
+ */
+export function dirname(uri: vscode.Uri): vscode.Uri {
+    return Utils.dirname(uri);
 }

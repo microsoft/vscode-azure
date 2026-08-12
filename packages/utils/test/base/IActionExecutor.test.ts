@@ -85,11 +85,10 @@ describe('ActionExecutor (unit)', () => {
 
         it('should rethrow when errorHandling.rethrow is set', async () => {
             const { executor } = createExecutor();
-            const error = await expect(executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
+            await expect(executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
                 ctx.errorHandling.rethrow = true;
                 throw new Error('rethrown');
-            })).to.be.rejected;
-            expect((error as Error).message).to.equal('rethrown');
+            })).to.be.rejectedWith('rethrown');
         });
 
         it('should record duration in measurements', async () => {

@@ -34,6 +34,47 @@ describe('IDebounceScheduler (unit)', () => {
             await delay(40);
             expect(ran).to.be.false;
         });
+
+        it('contains a synchronous throw and reports it', async () => {
+            const errors: unknown[] = [];
+            const scheduler = new DebounceScheduler(5, undefined, error => errors.push(error));
+            const boom = new Error('boom');
+
+            scheduler.debounce(() => { throw boom; });
+
+            await delay(40);
+            expect(errors).to.deep.equal([boom]);
+
+            scheduler.dispose();
+        });
+
+        it('contains a rejected promise and reports it', async () => {
+            const errors: unknown[] = [];
+            const scheduler = new DebounceScheduler(5, undefined, error => errors.push(error));
+            const boom = new Error('boom');
+
+            scheduler.debounce(() => Promise.reject(boom));
+
+            await delay(40);
+            expect(errors).to.deep.equal([boom]);
+
+            scheduler.dispose();
+        });
+
+        it('keeps working after a failed run', async () => {
+            const scheduler = new DebounceScheduler(5);
+            let ran = false;
+
+            scheduler.debounce(() => Promise.reject(new Error('boom')));
+            await delay(40);
+
+            scheduler.debounce(() => { ran = true; });
+            await delay(40);
+
+            expect(ran).to.be.true;
+
+            scheduler.dispose();
+        });
     });
 
     describe('ManualDebounceScheduler', () => {

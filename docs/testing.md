@@ -62,8 +62,10 @@ it('(unit) should invalidate the cache', async () => {
 - `registeredCommands` — commands registered via `commands.registerCommand`
 - `fs` — a `MockFileSystem` (in-memory `workspace.fs`; see below)
 - `workspaceFolders` — mutable array backing `workspace.workspaceFolders`
-- `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`- `tasks` -- the mock `tasks` namespace (includes `executeTask` with call tracking)
-- `taskProcessEndEmitter` -- fire to simulate a task process ending with an exit code- `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
+- `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`
+- `tasks` — the mock `tasks` namespace (includes `executeTask` with call tracking)
+- `taskProcessEndEmitter` — fire to simulate a task process ending with an exit code
+- `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
 - `textDocuments` / `shownDocuments` — documents opened via `workspace.openTextDocument` and passed to `window.showTextDocument`, in order
 
 All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior. The namespace objects exposed on the result (`authentication`, `commands`, `env`, `window`, `workspace`, `tasks`) are typed so their methods expose `.mock` directly -- read `mockResult.window.showErrorMessage.mock.callCount()` with no cast. (Note: the namespaces on `mockResult.vscode` are typed as the real `IVsCode` module, so reach for the top-level handles when you need `.mock`.)

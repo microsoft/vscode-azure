@@ -93,8 +93,7 @@ describe('uiHelpers (unit)', () => {
             const { ctx, mock } = createMockCodeContext();
             respondToPrompts(mock, ['goBack']);
 
-            const error = await expect(showSmartInputBox(ctx, { prompt: 'Enter value', showBack: true })).to.be.rejected;
-            expect(GoBackError.test(error)).to.be.true;
+            await expect(showSmartInputBox(ctx, { prompt: 'Enter value', showBack: true })).to.be.rejectedWith(GoBackError);
         });
 
         it('should restore recently entered value on subsequent calls', async () => {
@@ -366,11 +365,10 @@ describe('uiHelpers (unit)', () => {
             const { ctx, mock } = createMockCodeContext();
             respondToPrompts(mock, ['goBack']);
 
-            const error = await expect(showSmartQuickPick(ctx, [
+            await expect(showSmartQuickPick(ctx, [
                 { label: 'A' },
                 { label: 'B' },
-            ], { showBack: true })).to.be.rejected;
-            expect(GoBackError.test(error)).to.be.true;
+            ], { showBack: true })).to.be.rejectedWith(GoBackError);
         });
 
         describe('combo box (createItemFromValue)', () => {
@@ -724,8 +722,7 @@ describe('uiHelpers (unit)', () => {
             const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
             showPick.mock.mockImplementation(() => Promise.resolve(undefined));
 
-            const error = await expect(getWorkspaceFolder(mockResult.vscode)).to.be.rejected;
-            expect(CancellationError.test(error)).to.be.true;
+            await expect(getWorkspaceFolder(mockResult.vscode)).to.be.rejectedWith(CancellationError);
         });
     });
 });

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { basename, fileExists, isFileNotFoundError, readJson, readText, relativePath } from '../../src/vscode/fsHelpers';
+import { basename, dirname, fileExists, isFileNotFoundError, readJson, readText, relativePath } from '../../src/vscode/fsHelpers';
 import { MockFileSystem } from './MockFileSystem';
 import { MockUri } from './MockUri';
 import { createMockVsCode } from './MockVsCode';
@@ -108,6 +108,18 @@ describe('fsHelpers (unit)', () => {
             const m = createMockVsCode();
             const uri = m.vscode.Uri.file('/project/missing.json');
             expect(await fileExists(m.vscode, uri)).to.be.false;
+        });
+    });
+
+    describe('dirname', () => {
+        it('returns the containing directory', () => {
+            expect(dirname(MockUri.file('/repo/src/app.ts')).path).to.equal('/repo/src');
+        });
+
+        it('is a fixed point at the root, so upward walks terminate', () => {
+            const root = dirname(MockUri.file('/repo'));
+            expect(root.path).to.equal('/');
+            expect(dirname(root).path).to.equal('/');
         });
     });
 

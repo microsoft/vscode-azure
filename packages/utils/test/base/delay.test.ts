@@ -19,8 +19,7 @@ describe('delay (unit)', () => {
         const controller = new AbortController();
         controller.abort();
 
-        const error = await expect(delay(5000, controller.signal)).to.be.rejected;
-        expect(CancellationError.test(error)).to.be.true;
+        await expect(delay(5000, controller.signal)).to.be.rejectedWith(CancellationError);
     });
 
     it('should reject with CancellationError when AbortSignal fires during delay', async () => {
@@ -29,8 +28,7 @@ describe('delay (unit)', () => {
         const promise = delay(5000, controller.signal);
         setTimeout(() => { controller.abort(); }, 30);
 
-        const error = await expect(promise).to.be.rejected;
-        expect(CancellationError.test(error)).to.be.true;
+        await expect(promise).to.be.rejectedWith(CancellationError);
     });
 
     it('should reject with CancellationError when cancellationToken is already cancelled', async () => {
@@ -39,8 +37,7 @@ describe('delay (unit)', () => {
             onCancellationRequested: () => ({ dispose: () => { /* noop */ } }),
         };
 
-        const error = await expect(delay(5000, token)).to.be.rejected;
-        expect(CancellationError.test(error)).to.be.true;
+        await expect(delay(5000, token)).to.be.rejectedWith(CancellationError);
     });
 
     it('should reject with CancellationError when cancellationToken fires during delay', async () => {
@@ -53,8 +50,7 @@ describe('delay (unit)', () => {
         const promise = delay(5000, token);
         setTimeout(() => { emitter.fire(); }, 30);
 
-        const error = await expect(promise).to.be.rejected;
-        expect(CancellationError.test(error)).to.be.true;
+        await expect(promise).to.be.rejectedWith(CancellationError);
     });
 
     it('should resolve without options', async () => {

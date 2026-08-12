@@ -127,13 +127,11 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ exitCode: 1, stderr: 'failure reason' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            const error = await expect(executor.spawn({
+            const error: SubprocessError = await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
-            })).to.be.rejected;
-            expect(error).to.be.instanceOf(SubprocessError);
-            expect((error as Error).message).to.include('failure reason');
-            expect((error as SubprocessError).exitCode).to.equal(1);
+            })).to.be.rejectedWith(SubprocessError, 'failure reason');
+            expect(error.exitCode).to.equal(1);
         });
 
         it('should throw SubprocessError when terminated by a signal', async () => {
@@ -141,13 +139,11 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ signalName: 'SIGTERM', stderr: 'killed' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            const error = await expect(executor.spawn({
+            const error: SubprocessError = await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
-            })).to.be.rejected;
-            expect(error).to.be.instanceOf(SubprocessError);
-            expect((error as Error).message).to.include('killed');
-            expect((error as SubprocessError).signalName).to.equal('SIGTERM');
+            })).to.be.rejectedWith(SubprocessError, 'killed');
+            expect(error.signalName).to.equal('SIGTERM');
         });
 
         it('should throw CancellationError when the subprocess reports isCanceled', async () => {
@@ -155,11 +151,10 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ isCanceled: true }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            const error = await expect(executor.spawn({
+            await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
-            })).to.be.rejected;
-            expect(CancellationError.test(error)).to.be.true;
+            })).to.be.rejectedWith(CancellationError);
         });
 
         it('should preserve the ENOENT code from a spawn-time failure', async () => {
@@ -170,12 +165,12 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ message: 'Command failed', cause }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            const error = await expect(executor.spawn({
+            const error: Error & { code?: string } = await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
             })).to.be.rejected;
             expect(error).to.not.be.instanceOf(SubprocessError);
-            expect((error as { code?: string }).code).to.equal('ENOENT');
+            expect(error.code).to.equal('ENOENT');
         });
 
         it('should reject promptly when the process fails to spawn', async () => {
@@ -328,10 +323,9 @@ describe('ProcessExecutor (unit)', () => {
                 exitCode: 42,
             });
 
-            const error = await expect(promise).to.be.rejected;
-            expect(error).to.be.instanceOf(Error);
-            expect((error as Error).message).to.include('42');
-            expect((error as Error).message).to.include('Failing Task');
+            const error: Error = await expect(promise).to.be.rejectedWith(Error);
+            expect(error.message).to.include('42');
+            expect(error.message).to.include('Failing Task');
         });
 
         it('should reject with CancellationError when cancelled', async () => {
@@ -355,8 +349,7 @@ describe('ProcessExecutor (unit)', () => {
             // Cancel
             emitter.fire();
 
-            const error = await expect(promise).to.be.rejected;
-            expect(CancellationError.test(error)).to.be.true;
+            await expect(promise).to.be.rejectedWith(CancellationError);
 
             // Verify terminate was called
             const terminate = (taskExecution as unknown as { terminate: Mock<() => void> }).terminate;
@@ -519,12 +512,10 @@ describe('ProcessExecutor (integration)', () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
-            const error = await expect(executor.spawn({
+            await expect(executor.spawn({
                 execution: 'background',
                 ...evalNode('process.stderr.write("failure reason"); process.exit(1);'),
-            })).to.be.rejected;
-            expect(error).to.be.instanceOf(SubprocessError);
-            expect((error as Error).message).to.include('failure reason');
+            })).to.be.rejectedWith(SubprocessError, 'failure reason');
         });
 
         it('should throw CancellationError when cancelled', async () => {
@@ -546,8 +537,7 @@ describe('ProcessExecutor (integration)', () => {
             token.isCancellationRequested = true;
             emitter.fire();
 
-            const error = await expect(promise).to.be.rejected;
-            expect(CancellationError.test(error)).to.be.true;
+            await expect(promise).to.be.rejectedWith(CancellationError);
         });
 
         it('should stream JSON lines from stderr', async () => {
@@ -728,8 +718,7 @@ describe('ProcessExecutor (integration)', () => {
             token.isCancellationRequested = true;
             emitter.fire();
 
-            const error = await expect(result.completed).to.be.rejected;
-            expect(CancellationError.test(error)).to.be.true;
+            await expect(result.completed).to.be.rejectedWith(CancellationError);
 
             // Must not hang: the live stream terminates when the child dies.
             await drained;

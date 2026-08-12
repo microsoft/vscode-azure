@@ -13,7 +13,7 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    Debouncer, EventEmitter, Everything, IActionExecutor, ICodeContext, Roots, stringifyError,
+    DebounceScheduler, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Event, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
@@ -52,36 +52,28 @@ const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidat
 /**
  * Owns timing for authentication session-change handling.
  *
- * The production implementation debounces with wall-clock time. Tests can
- * inject a manually driven implementation and await the scheduled reconcile
- * directly, without coordinating fake timers with asynchronous work.
+ * Extends the shared {@linkcode IDebounceScheduler} with the clock used to
+ * evaluate the self-induced suppression window, so tests can drive both the
+ * debounce and the passage of time deterministically.
  */
-export interface IAzureAccountSessionChangeScheduler extends Disposable {
+export interface IAzureAccountSessionChangeScheduler extends IDebounceScheduler {
     /** Current epoch time used to evaluate the self-induced suppression window. */
     now(): number;
-
-    /**
-     * Replace any pending session-change callback and run the latest callback
-     * after the debounce window.
-     */
-    debounce(callback: () => Promise<void>): void;
 }
 
 class AzureAccountSessionChangeScheduler implements IAzureAccountSessionChangeScheduler {
-    private readonly debouncer = new Debouncer();
+    private readonly scheduler = new DebounceScheduler(SessionChangeDebounceMs, SessionInvalidationKey);
 
     public now(): number {
         return Date.now();
     }
 
-    public debounce(callback: () => Promise<void>): void {
-        this.debouncer.debounce(SessionInvalidationKey, SessionChangeDebounceMs, () => {
-            void callback();
-        });
+    public debounce(callback: () => void | Promise<void>): void {
+        this.scheduler.debounce(callback);
     }
 
     public dispose(): void {
-        this.debouncer.dispose();
+        this.scheduler.dispose();
     }
 }
 

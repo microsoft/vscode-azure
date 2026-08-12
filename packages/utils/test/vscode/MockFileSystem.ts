@@ -5,6 +5,7 @@
 
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { dirname } from '../../src/vscode/fsHelpers';
 import type { Satisfies } from '../../src/types/Satisfies';
 
 /** Standard error codes produced by {@linkcode vscode.FileSystemError}. */
@@ -58,19 +59,19 @@ export class MockFileSystem {
 
     /** Pre-populate a file so {@linkcode stat} and {@linkcode readFile} find it. */
     addFile(uri: vscode.Uri, content: Uint8Array | string = new Uint8Array()): void {
-        this.addParentDirectories(uri.path);
+        this.addParentDirectories(uri);
         this.files.set(uri.path, typeof content === 'string' ? Buffer.from(content) : content);
     }
 
     /** Pre-populate a directory so {@linkcode stat} and {@linkcode readDirectory} find it. */
     addDirectory(uri: vscode.Uri): void {
-        this.addParentDirectories(uri.path);
+        this.addParentDirectories(uri);
         this.directories.add(uri.path);
     }
 
     /** Pre-populate a symbolic link without following it to a target. */
     addSymbolicLink(uri: vscode.Uri, targetType: vscode.FileType): void {
-        this.addParentDirectories(uri.path);
+        this.addParentDirectories(uri);
         this.symbolicLinks.set(uri.path, targetType);
     }
 
@@ -137,11 +138,14 @@ export class MockFileSystem {
         return Promise.resolve();
     });
 
-    private addParentDirectories(path: string): void {
-        let parent = parentPath(path);
-        while (parent) {
-            this.directories.add(parent);
-            parent = parentPath(parent);
+    private addParentDirectories(uri: vscode.Uri): void {
+        let current = uri;
+        let parent = dirname(current);
+        // `dirname` is a fixed point at the root, which is what stops the walk.
+        while (parent.path !== current.path) {
+            this.directories.add(parent.path);
+            current = parent;
+            parent = dirname(current);
         }
     }
 
@@ -159,14 +163,6 @@ export class MockFileSystem {
             entries.set(relativePath, type);
         }
     }
-}
-
-function parentPath(path: string): string | undefined {
-    const index = path.lastIndexOf('/');
-    if (index <= 0) {
-        return undefined;
-    }
-    return path.slice(0, index);
 }
 
 /** Test stand-in for {@linkcode vscode.FileType}. */

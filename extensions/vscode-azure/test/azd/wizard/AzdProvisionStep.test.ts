@@ -270,8 +270,7 @@ describe('AzdProvisionStep (unit)', () => {
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
-            const error = await expect(step.execute(context)).to.be.rejected;
-            expect((error as Error).message).to.equal('provision failed');
+            await expect(step.execute(context)).to.be.rejectedWith('provision failed');
         });
     });
 });
