@@ -49,34 +49,6 @@ const GetAccountsSuppressionMs = 1000;
 /** Debounce key for coalescing `onDidChangeSessions` bursts. */
 const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
 
-/**
- * Owns timing for authentication session-change handling.
- *
- * Extends the shared {@linkcode IDebounceScheduler} with the clock used to
- * evaluate the self-induced suppression window, so tests can drive both the
- * debounce and the passage of time deterministically.
- */
-export interface IAzureAccountSessionChangeScheduler extends IDebounceScheduler {
-    /** Current epoch time used to evaluate the self-induced suppression window. */
-    now(): number;
-}
-
-class AzureAccountSessionChangeScheduler implements IAzureAccountSessionChangeScheduler {
-    private readonly scheduler = new DebounceScheduler(SessionChangeDebounceMs, SessionInvalidationKey);
-
-    public now(): number {
-        return Date.now();
-    }
-
-    public debounce(callback: () => void | Promise<void>): void {
-        this.scheduler.debounce(callback);
-    }
-
-    public dispose(): void {
-        this.scheduler.dispose();
-    }
-}
-
 /** Whether two sets contain exactly the same string ids. */
 function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
     return a.size === b.size && a.isSubsetOf(b);
@@ -146,7 +118,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
-        @unmanaged() private readonly sessionChangeScheduler: IAzureAccountSessionChangeScheduler = new AzureAccountSessionChangeScheduler(),
+        @unmanaged() private readonly sessionChangeScheduler: IDebounceScheduler = new DebounceScheduler(SessionChangeDebounceMs, SessionInvalidationKey),
     ) {
         this.disposables = [this.changeEmitter, this.removeAccountsEmitter, this.sessionChangeScheduler];
         this.disposables.push(this.ctx.code.authentication.onDidChangeSessions(e => {

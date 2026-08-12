@@ -9,7 +9,7 @@ import { collectPages, Everything, Roots, type DataProviderChangeEvent } from '@
 import { createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { AzureAccountDataProvider, type IAzureAccountSessionChangeScheduler } from '../../../src/tree/resources/AzureAccountDataProvider';
+import { AzureAccountDataProvider } from '../../../src/tree/resources/AzureAccountDataProvider';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../../src/constants';
 
 describe('AzureAccountDataProvider (unit)', () => {
@@ -17,26 +17,11 @@ describe('AzureAccountDataProvider (unit)', () => {
         mock.restoreAll();
     });
 
-    /**
-     * Adds the suppression-window clock to the shared
-     * {@linkcode ManualDebounceScheduler}, so a test drives both the debounce and
-     * the passage of time by hand.
-     */
-    class ManualSessionChangeScheduler extends ManualDebounceScheduler implements IAzureAccountSessionChangeScheduler {
-        private currentTime = 0;
-
-        public readonly now = mock.fn(() => this.currentTime);
-
-        public advance(ms: number): void {
-            this.currentTime += ms;
-        }
-    }
-
     function createProvider() {
         const { ctx, mock } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const credentialFactory = () => makeCredential();
-        const scheduler = new ManualSessionChangeScheduler();
+        const scheduler = new ManualDebounceScheduler();
         const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, scheduler);
         return { provider, mock, scheduler };
     }

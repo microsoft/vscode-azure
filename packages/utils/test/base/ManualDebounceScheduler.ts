@@ -17,6 +17,7 @@ import type { IDebounceScheduler } from '../../src/base/IDebounceScheduler';
  */
 export class ManualDebounceScheduler implements IDebounceScheduler {
     private pending: (() => void | Promise<void>) | undefined;
+    private currentTime = 0;
 
     public readonly debounce = mock.fn((callback: () => void | Promise<void>) => {
         // Replacing rather than queueing mirrors real debounce semantics: a
@@ -27,6 +28,14 @@ export class ManualDebounceScheduler implements IDebounceScheduler {
     public readonly dispose = mock.fn(() => {
         this.pending = undefined;
     });
+
+    /** Frozen clock, moved only by {@linkcode advance}. Starts at 0. */
+    public readonly now = mock.fn(() => this.currentTime);
+
+    /** Moves {@linkcode now} forward, for asserting time-window behavior. */
+    public advance(ms: number): void {
+        this.currentTime += ms;
+    }
 
     /** Whether a callback is currently scheduled. */
     public get hasPending(): boolean {

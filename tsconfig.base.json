@@ -9,7 +9,6 @@
         "types": [
             "node",
             "mocha",
-            "chai",
             "chai-as-promised",
         ],
         "sourceMap": true,

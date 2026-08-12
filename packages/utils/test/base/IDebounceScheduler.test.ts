@@ -75,6 +75,16 @@ describe('IDebounceScheduler (unit)', () => {
 
             scheduler.dispose();
         });
+
+        it('reports wall-clock time', () => {
+            const scheduler = new DebounceScheduler(5);
+            const before = Date.now();
+
+            expect(scheduler.now()).to.be.at.least(before);
+            expect(scheduler.now()).to.be.at.most(Date.now());
+
+            scheduler.dispose();
+        });
     });
 
     describe('ManualDebounceScheduler', () => {
@@ -120,6 +130,14 @@ describe('IDebounceScheduler (unit)', () => {
             scheduler.dispose();
 
             expect(scheduler.hasPending).to.be.false;
+        });
+
+        it('holds a frozen clock that only advance() moves', () => {
+            const scheduler = new ManualDebounceScheduler();
+
+            expect(scheduler.now()).to.equal(0);
+            scheduler.advance(1500);
+            expect(scheduler.now()).to.equal(1500);
         });
     });
 });

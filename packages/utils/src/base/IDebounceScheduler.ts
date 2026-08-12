@@ -28,6 +28,17 @@ export interface IDebounceScheduler extends Disposable {
      * exceptions or unhandled rejections.
      */
     debounce(callback: () => void | Promise<void>): void;
+
+    /**
+     * Current epoch time, in milliseconds.
+     *
+     * Exposed here because a caller that debounces on this scheduler's clock
+     * usually also compares timestamps against it (suppression windows,
+     * cooldowns). Reading the time through the scheduler keeps both on one
+     * clock, so a test that drives {@linkcode debounce} by hand can drive the
+     * passage of time with it instead of reaching for fake timers.
+     */
+    now(): number;
 }
 
 /** Wall-clock {@linkcode IDebounceScheduler} backed by {@linkcode Debouncer}. */
@@ -46,6 +57,11 @@ export class DebounceScheduler implements IDebounceScheduler {
         private readonly key: DebounceKey = Symbol('DebounceScheduler'),
         private readonly onError?: (error: unknown) => void,
     ) { }
+
+    /** @inheritdoc */
+    public now(): number {
+        return Date.now();
+    }
 
     /** @inheritdoc */
     public debounce(callback: () => void | Promise<void>): void {
