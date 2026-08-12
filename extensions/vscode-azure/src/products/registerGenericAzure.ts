@@ -17,6 +17,7 @@ import {
 import { IActionExecutor, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { SelectSubscriptions } from '../commands/auth/SelectSubscriptions';
 import { SignIn } from '../commands/auth/SignIn';
+import { OpenUrl } from '../commands/OpenUrl';
 import { DeleteAzureResource } from '../commands/tree/DeleteAzureResource';
 import { GroupBy } from '../commands/tree/GroupBy';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
@@ -66,6 +67,8 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
                     executor,
                     credentialFactory(subscription),
                     subscription.environment,
+                    undefined,
+                    subscription,
                 );
             };
         });
@@ -82,7 +85,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
 
     registrar.registerCommand('vscode-azure/resources/refresh', RefreshResourcesView);
     registrar.registerCommand('vscode-azure/resources/groupBy', GroupBy);
-    registrar.registerCommand('vscode-azure/resources/openInPortal', OpenInPortal);
+    registrar.registerCommand('vscode-azure/resources/openInPortal', OpenUrl, OpenInPortal.getUrl);
     registrar.registerCommand(DeleteResourceCommandId, DeleteAzureResource);
     registrar.registerCommand(DeleteResourceGroupCommandId, DeleteAzureResource);
     registrar.registerCommand('vscode-azure/signIn', SignIn);

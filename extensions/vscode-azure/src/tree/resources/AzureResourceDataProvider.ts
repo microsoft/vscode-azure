@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import {
     getNodeType, IResourceClientProvider, isResourceGroup, isSubscription,
-    type ConcreteAzureNode, type IResourceClient
+    type ConcreteAzureNode
 } from '@microsoft/vscode-azure-azutils';
 import {
     EventEmitter, Everything, IActionExecutor, IVsCode,
@@ -34,12 +33,6 @@ const DEFAULT_PAGE_SIZE = 50;
  */
 @injectable()
 export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode>, Disposable {
-    /**
-     * Cached REST clients per subscription ID, so all calls for the same
-     * subscription share one client instance.
-     */
-    private readonly clientCache = new Map<string, IResourceClient>();
-
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
 
@@ -81,13 +74,13 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
 
         switch (true) {
             case isSubscription(resource): {
-                const client = this.getOrCreateClient(resource);
+                const client = this.createClient(resource);
                 this.executor.output.debug(`[data] discover resource groups subscription=${resource.subscriptionId} pageSize=${this.pageSize}`);
                 return client.resourceGroups.list({ top: this.pageSize });
             }
 
             case isResourceGroup(resource): {
-                const client = this.getOrCreateClient(resource.subscription);
+                const client = this.createClient(resource.subscription);
                 this.executor.output.debug(`[data] discover resources resourceGroup=${resource.subscription.subscriptionId}/${resource.name} pageSize=${this.pageSize}`);
                 return client.resources.listByResourceGroup(resource.name, { top: this.pageSize });
             }
@@ -95,20 +88,6 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
             default:
                 throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
         }
-    }
-
-    /**
-     * Get or create a cached REST client for the given subscription.
-     * All callers for the same subscription share the same client instance.
-     */
-    private getOrCreateClient(subscription: AzureSubscription): IResourceClient {
-        let client = this.clientCache.get(subscription.subscriptionId);
-        if (!client) {
-            client = this.createClient(subscription);
-            this.clientCache.set(subscription.subscriptionId, client);
-        }
-
-        return client;
     }
 
     private get pageSize(): number {

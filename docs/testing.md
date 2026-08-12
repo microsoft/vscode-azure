@@ -165,9 +165,9 @@ it('(integration) should execute without error', async () => {
 
 All tests use **chai** for assertions (`expect` style).
 
-`chai-as-promised` is registered for every test package (see
-`scripts/chaiSetup.mjs`), so assert on rejections through `expect` rather than
-`try`/`catch` with `expect.fail()`, or `assert.rejects` from `node:assert`:
+`chai-as-promised` is registered by `@microsoft/vscode-azext-eng` for every test
+package, so assert on rejections through `expect` rather than `try`/`catch` with
+`expect.fail()`, or `assert.rejects` from `node:assert`:
 ```ts
 // Assert the rejection and its message
 await expect(command.execute()).to.be.rejectedWith(/no longer available/);

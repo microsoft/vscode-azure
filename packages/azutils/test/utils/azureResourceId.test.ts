@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { getResourceGroupArmId, getSubscriptionArmId, parseAzureResourceId } from '../../src/utils/azureResourceId';
+import { getResourceGroupArmId, getResourceGroupName, getSubscriptionArmId, parseAzureResourceId } from '../../src/utils/azureResourceId';
 
 describe('azureResourceId (unit)', () => {
     describe('parseAzureResourceId', () => {
@@ -128,6 +128,18 @@ describe('azureResourceId (unit)', () => {
         it('should throw for a subscription-scoped resource without resource group', () => {
             const id = '/subscriptions/abc/providers/Microsoft.Authorization/policyDefinitions/p1';
             expect(() => getResourceGroupArmId(id)).to.throw('does not contain a resource group');
+        });
+    });
+
+    describe('getResourceGroupName', () => {
+        it('should extract the resource group name from a full resource ID', () => {
+            const id = '/subscriptions/abc/resourceGroups/myRg/providers/Microsoft.Web/sites/site1';
+            expect(getResourceGroupName(id)).to.equal('myRg');
+        });
+
+        it('should throw a consistent error when there is no resource group segment', () => {
+            const id = '/subscriptions/abc/providers/Microsoft.Authorization/policyDefinitions/p1';
+            expect(() => getResourceGroupName(id)).to.throw(`ARM resource ID does not contain a resource group: ${id}`);
         });
     });
 });

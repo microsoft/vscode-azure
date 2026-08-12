@@ -40,9 +40,6 @@
             "experimental-transform-types",
             "import=@microsoft/vscode-azext-eng/mocha"
         ],
-        "require": [
-            "../../scripts/chaiSetup.mjs"
-        ],
         "spec": [
             "test/**/*.test.ts"
         ]

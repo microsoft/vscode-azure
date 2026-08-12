@@ -17,13 +17,6 @@ import { defineConfig } from '@vscode/test-cli';
 // Force BDD so the global describe/it are available without importing them.
 azExtTestConfig.mocha.ui = 'bdd';
 
-// Register chai-as-promised so `rejectedWith` and friends are available here
-// too, matching the other test packages.
-azExtTestConfig.mocha.require = [
-    ...(azExtTestConfig.mocha.require ?? []),
-    '../../scripts/chaiSetup.mjs',
-];
-
 export default defineConfig({
     tests: [azExtTestConfig],
     coverage: {

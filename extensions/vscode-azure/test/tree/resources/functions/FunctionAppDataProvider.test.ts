@@ -133,6 +133,16 @@ describe('FunctionAppDataProvider (unit)', () => {
             // Cache should be updated
             expect(provider.getSettingValue(app.id, 'NEW_KEY')).to.equal('new-value');
         });
+
+        it('should create a lightweight client for each operation', async () => {
+            const { provider, createClient } = createProvider();
+            const app = makeFunctionApp();
+
+            await provider.addOrUpdateSetting(app, 'FIRST', 'one');
+            await provider.addOrUpdateSetting(app, 'SECOND', 'two');
+
+            expect(createClient.mock.callCount()).to.equal(2);
+        });
     });
 
     describe('deleteSetting', () => {
