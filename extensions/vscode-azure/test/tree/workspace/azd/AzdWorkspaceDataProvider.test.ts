@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
@@ -28,7 +28,7 @@ function createProvider(options: ProviderOptions = {}) {
     }
     // Projects now come from the shared index, so these tests drive the real
     // service and detector rather than stubbing discovery.
-    const indexService = new WorkspaceIndexService(m.vscode, [azdDetector]);
+    const indexService = new WorkspaceIndexService(m.vscode, [azdDetector], new ManualDebounceScheduler());
     const provider = new AzdWorkspaceDataProvider(m.vscode, executor, azd, indexService);
     return { provider, mock: m, azd };
 }

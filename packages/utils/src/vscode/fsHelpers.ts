@@ -40,6 +40,10 @@ export function isFileNotFoundError(error: unknown): boolean {
  *
  * Returns an empty string when the two refer to the same location. Compares
  * paths only, so both should share a scheme and authority.
+ *
+ * Hand-written because `vscode-uri`'s `Utils` only offers the joining
+ * direction (`joinPath`, `resolvePath`, `dirname`, `basename`, `extname`) and
+ * has no relative-path counterpart.
  */
 export function relativePath(base: vscode.Uri, uri: vscode.Uri): string | undefined {
     const basePath = base.path.replace(/\/+$/, '');
@@ -49,6 +53,47 @@ export function relativePath(base: vscode.Uri, uri: vscode.Uri): string | undefi
     return uri.path.startsWith(`${basePath}/`)
         ? uri.path.slice(basePath.length + 1)
         : undefined;
+}
+
+/**
+ * Reads {@linkcode uri} as UTF-8 text, or returns `undefined` when it does not
+ * exist.
+ *
+ * Only the missing-file case is swallowed; other failures (permissions, a
+ * failing filesystem provider) propagate so they are not mistaken for an empty
+ * file.
+ */
+export async function readText(code: IVsCode, uri: vscode.Uri): Promise<string | undefined> {
+    try {
+        return new TextDecoder().decode(await code.workspace.fs.readFile(uri));
+    } catch (error) {
+        if (isFileNotFoundError(error)) {
+            return undefined;
+        }
+        throw error;
+    }
+}
+
+/**
+ * Reads {@linkcode uri} as JSON, or returns `undefined` when it does not exist
+ * or is malformed.
+ *
+ * Malformed JSON reads as absent because these files are usually
+ * work-in-progress edits, and a half-typed manifest should not fail the caller.
+ */
+export async function readJson(code: IVsCode, uri: vscode.Uri): Promise<unknown> {
+    const contents = await readText(code, uri);
+    if (contents === undefined) {
+        return undefined;
+    }
+    try {
+        return JSON.parse(contents) as unknown;
+    } catch (error) {
+        if (error instanceof SyntaxError) {
+            return undefined;
+        }
+        throw error;
+    }
 }
 
 /**

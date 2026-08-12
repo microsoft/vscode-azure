@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, ManualDebounceScheduler, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
 
@@ -17,7 +17,7 @@ function createProvider() {
     const { executor } = createTestActionExecutor();
     // The real index service, so these tests cover the detector and the
     // provider's use of it rather than a hand-rolled stand-in.
-    const indexService = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+    const indexService = new WorkspaceIndexService(m.vscode, [functionsDetector], new ManualDebounceScheduler());
     return {
         provider: new FunctionsWorkspaceDataProvider(indexService, executor),
         indexService,

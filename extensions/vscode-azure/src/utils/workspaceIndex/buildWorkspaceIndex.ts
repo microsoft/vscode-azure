@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import { basename, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import { walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from './walkWorkspace';
 import { MutableWorkspaceIndex, type WorkspaceIndex } from './WorkspaceIndex';
@@ -44,16 +44,16 @@ export async function buildWorkspaceIndex(
     const fileDetectors = detectors.filter(detector => detector.files);
     // Nearest tagged ancestor is resolved by walking up this map, which is safe
     // because a directory is always recorded before its descendants are visited.
-    const directoriesByPath = new Map<string, IndexedNode>();
+    const directoriesByUri = new Map<string, IndexedNode>();
 
     const walk = walkWorkspace(code, token, options);
     for await (const directory of walk) {
-        const directoryNode = toIndexedNode(directory);
-        directoriesByPath.set(directory.relativePath, directoryNode);
+        const directoryNode = toIndexedNode(code, directory);
+        directoriesByUri.set(directory.uri.toString(), directoryNode);
 
         for (const detector of directoryDetectors) {
             await detector.inspect(createContext(
-                detector, directoryNode, directory, undefined, index, directoriesByPath));
+                code, detector, directoryNode, directory, undefined, index, directoriesByUri));
         }
 
         for (const fileName of directory.fileNames) {
@@ -65,7 +65,7 @@ export async function buildWorkspaceIndex(
             const fileNode = toFileNode(directory, fileName);
             for (const detector of interested) {
                 await detector.inspect(createContext(
-                    detector, fileNode, directory, fileName, index, directoriesByPath));
+                    code, detector, fileNode, directory, fileName, index, directoriesByUri));
             }
         }
     }
@@ -75,12 +75,13 @@ export async function buildWorkspaceIndex(
 }
 
 function createContext(
+    code: IVsCode,
     detector: WorkspaceDetector,
     node: IndexedNode,
     directory: ScannedDirectory,
     fileName: string | undefined,
     index: MutableWorkspaceIndex,
-    directoriesByPath: ReadonlyMap<string, IndexedNode>,
+    directoriesByUri: ReadonlyMap<string, IndexedNode>,
 ): DetectorContext {
     return {
         ...node,
@@ -95,7 +96,7 @@ function createContext(
             : directory.json(fileName),
         has: tag => index.has(node.uri, tag),
         valuesOf: tag => index.valuesOf(node.uri, tag),
-        ancestor: tag => findAncestor(node, directoriesByPath, index, tag),
+        ancestor: tag => findAncestor(code, node, directoriesByUri, index, tag),
         tag: (tag, value) => {
             if (tag.namespace !== detector.namespace.name) {
                 throw new RangeError(
@@ -112,29 +113,39 @@ function createContext(
  *
  * A file's own directory counts as an ancestor, so a detector can ask whether
  * the file sits inside a project root without special-casing depth.
+ *
+ * Traverses by URI (`..` joins) rather than slicing path strings, and stops
+ * once a step no longer changes the URI -- the filesystem root.
  */
 function findAncestor<T>(
+    code: IVsCode,
     node: IndexedNode,
-    directoriesByPath: ReadonlyMap<string, IndexedNode>,
+    directoriesByUri: ReadonlyMap<string, IndexedNode>,
     index: MutableWorkspaceIndex,
     tag: WorkspaceTag<T>,
 ): IndexedNode | undefined {
-    let path = node.isDirectory ? parentPath(node.relativePath) : directoryPath(node.relativePath);
+    let current = node.isDirectory ? parentUri(code, node.uri) : code.Uri.joinPath(node.uri, '..');
 
-    while (path !== undefined) {
-        const directory = directoriesByPath.get(path);
+    while (current) {
+        const directory = directoriesByUri.get(current.toString());
         if (directory && index.has(directory.uri, tag)) {
             return directory;
         }
-        path = parentPath(path);
+        current = parentUri(code, current);
     }
     return undefined;
 }
 
-function toIndexedNode(directory: ScannedDirectory): IndexedNode {
+/** The containing directory, or `undefined` once the root is reached. */
+function parentUri(code: IVsCode, uri: vscode.Uri): vscode.Uri | undefined {
+    const parent = code.Uri.joinPath(uri, '..');
+    return parent.toString() === uri.toString() ? undefined : parent;
+}
+
+function toIndexedNode(code: IVsCode, directory: ScannedDirectory): IndexedNode {
     return {
         uri: directory.uri,
-        name: lastSegment(directory.relativePath) ?? lastSegment(directory.uri.path) ?? '',
+        name: basename(directory.uri),
         relativePath: directory.relativePath,
         workspaceFolder: directory.workspaceFolder,
         isDirectory: true,
@@ -164,23 +175,4 @@ function assertDistinctNamespaces(detectors: readonly WorkspaceDetector[]): void
         }
         seen.set(detector.namespace.name, detector.id);
     }
-}
-
-/** The directory containing a file, in the same form directories are keyed by. */
-function directoryPath(relativePath: string): string {
-    const index = relativePath.lastIndexOf('/');
-    return index === -1 ? '.' : relativePath.slice(0, index);
-}
-
-/** The parent of a directory path, or `undefined` at the scope root. */
-function parentPath(relativePath: string): string | undefined {
-    if (relativePath === '.') {
-        return undefined;
-    }
-    const index = relativePath.lastIndexOf('/');
-    return index === -1 ? '.' : relativePath.slice(0, index);
-}
-
-function lastSegment(path: string): string | undefined {
-    return path.split('/').filter(Boolean).pop();
 }

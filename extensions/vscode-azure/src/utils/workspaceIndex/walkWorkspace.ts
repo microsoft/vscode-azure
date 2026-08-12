@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isFileNotFoundError, relativePath, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { isFileNotFoundError, readJson, readText, relativePath, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
 import ignore, { type Ignore } from 'ignore';
 import type * as vscode from 'vscode';
 
@@ -137,7 +137,7 @@ export function walkWorkspace(
         let entriesVisited = 0;
 
         while (pending.length > 0) {
-            throwIfCancelled(token);
+            throwIfCancelled(token, 'walkWorkspace');
             // Breadth-first: shallower directories are reported before deeper ones.
             const directory = pending.shift();
             if (!directory) {
@@ -247,7 +247,7 @@ function createScannedDirectory(
         if (!fileNames.has(name)) {
             return undefined;
         }
-        throwIfCancelled(token);
+        throwIfCancelled(token, 'walkWorkspace');
         return readText(code, fileUri(name));
     };
 
@@ -259,20 +259,11 @@ function createScannedDirectory(
         fileUri,
         text,
         json: async name => {
-            const contents = await text(name);
-            if (contents === undefined) {
+            if (!fileNames.has(name)) {
                 return undefined;
             }
-            try {
-                return JSON.parse(contents) as unknown;
-            } catch (error) {
-                // Treat a malformed file as absent: it is usually a
-                // work-in-progress edit, not a reason to fail the walk.
-                if (error instanceof SyntaxError) {
-                    return undefined;
-                }
-                throw error;
-            }
+            throwIfCancelled(token, 'walkWorkspace');
+            return readJson(code, fileUri(name));
         },
     };
 }
@@ -289,7 +280,7 @@ async function loadIgnoreScopes(
         return directory.ignoreScopes;
     }
 
-    throwIfCancelled(token);
+    throwIfCancelled(token, 'walkWorkspace');
     const contents = await readText(code, code.Uri.joinPath(directory.uri, '.gitignore'));
     if (contents === undefined) {
         return directory.ignoreScopes;
@@ -324,15 +315,4 @@ function isIgnored(
         }
     }
     return ignored;
-}
-
-async function readText(code: IVsCode, uri: vscode.Uri): Promise<string | undefined> {
-    try {
-        return new TextDecoder().decode(await code.workspace.fs.readFile(uri));
-    } catch (error) {
-        if (isFileNotFoundError(error)) {
-            return undefined;
-        }
-        throw error;
-    }
 }

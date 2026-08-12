@@ -3,8 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { TagNamespace, WorkspaceTag } from './WorkspaceTag';
+
+/**
+ * Collection identifier every product binds its detectors to.
+ *
+ * Bindings are gathered by the index service, so adding a product adds a
+ * detector to the single shared walk rather than a second pass.
+ */
+export const IWorkspaceDetector: ServiceIdentifier<WorkspaceDetector> = Symbol.for('IWorkspaceDetector');
 
 /** A file or directory the index knows about. */
 export interface IndexedNode {

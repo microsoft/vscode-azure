@@ -3,18 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Debouncer, EventEmitter, type IVsCode } from '@microsoft/vscode-azure-utils';
-import type { ServiceIdentifier } from 'inversify';
+import { EventEmitter, IDebounceScheduler, IVsCode, relativePath } from '@microsoft/vscode-azure-utils';
+import { inject, injectable, multiInject, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { defaultExcludedDirectories } from './walkWorkspace';
-import { buildWorkspaceIndex, type BuildWorkspaceIndexOptions } from './buildWorkspaceIndex';
-import type { WorkspaceDetector } from './WorkspaceDetector';
+import { buildWorkspaceIndex } from './buildWorkspaceIndex';
+import { IWorkspaceDetector, type WorkspaceDetector } from './WorkspaceDetector';
 import type { WorkspaceIndex } from './WorkspaceIndex';
 
 /** Quiet period before a burst of file events triggers a rebuild. */
-const rebuildDebounceMs = 500;
-
-const RebuildKey = Symbol('WorkspaceIndexService.rebuild');
+export const rebuildDebounceMs = 500;
 
 export const IWorkspaceIndexService: ServiceIdentifier<IWorkspaceIndexService> = Symbol.for('IWorkspaceIndexService');
 
@@ -50,25 +48,22 @@ export interface IWorkspaceIndexService {
  * `DetectorContext.ancestor` and cross-namespace reads let a tag depend on
  * state outside the directory that changed.
  */
+@injectable()
 export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Disposable {
     private readonly changeEmitter = new EventEmitter<void>();
-    private readonly debouncer = new Debouncer();
-    private readonly disposables: vscode.Disposable[] = [this.changeEmitter, this.debouncer];
+    private readonly disposables: vscode.Disposable[] = [this.changeEmitter];
     private index: Promise<WorkspaceIndex> | undefined;
-    /** Directories excluded by the walk, used to drop uninteresting events. */
-    private readonly excluded: ReadonlySet<string>;
 
     public readonly onDidChangeIndex = this.changeEmitter.event;
 
     public constructor(
-        private readonly code: IVsCode,
-        private readonly detectors: readonly WorkspaceDetector[],
-        private readonly options: BuildWorkspaceIndexOptions = {},
+        @inject(IVsCode) private readonly code: IVsCode,
+        @multiInject(IWorkspaceDetector) private readonly detectors: readonly WorkspaceDetector[],
+        @inject(IDebounceScheduler) private readonly scheduler: IDebounceScheduler,
     ) {
-        this.excluded = options.excludeDirectories ?? defaultExcludedDirectories;
+        this.disposables.push(scheduler);
 
-        const patterns = watchPatterns(detectors);
-        for (const pattern of patterns) {
+        for (const pattern of watchPatterns(detectors)) {
             this.disposables.push(this.watch(pattern));
         }
         this.disposables.push(
@@ -78,7 +73,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
 
     /** @inheritdoc */
     public async getIndex(token?: vscode.CancellationToken): Promise<WorkspaceIndex> {
-        this.index ??= buildWorkspaceIndex(this.code, this.detectors, token, this.options);
+        this.index ??= buildWorkspaceIndex(this.code, this.detectors, token);
         try {
             return await this.index;
         } catch (error) {
@@ -120,7 +115,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
         if (!this.index || this.isExcluded(uri)) {
             return;
         }
-        this.debouncer.debounce(RebuildKey, rebuildDebounceMs, () => { this.invalidate(); });
+        this.scheduler.debounce(() => { this.invalidate(); });
     }
 
     /**
@@ -135,15 +130,14 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
         if (!folder) {
             return true;
         }
-        const relativePath = uri.path.slice(folder.uri.path.replace(/\/$/, '').length + 1);
-        return relativePath
+        const path = relativePath(folder.uri, uri) ?? '';
+        return path
             .split('/')
             .slice(0, -1)
-            .some(segment => this.excluded.has(segment.toLowerCase()));
+            .some(segment => defaultExcludedDirectories.has(segment.toLowerCase()));
     }
 
     private invalidate(): void {
-        this.debouncer.cancel(RebuildKey);
         this.index = undefined;
         this.changeEmitter.fire();
     }
