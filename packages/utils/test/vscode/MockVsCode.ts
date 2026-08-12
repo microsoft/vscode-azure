@@ -12,10 +12,10 @@ import { MockMemento } from './config/MockMemento';
 import { MockWorkspaceConfiguration } from './config/MockWorkspaceConfiguration';
 import { MockInputBox } from './input/MockInputBox';
 import { MockQuickPick } from './input/MockQuickPick';
-import { MockFileSystem } from './MockFileSystem';
+import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -167,6 +167,12 @@ export interface MockVsCodeResult {
      * ```
      */
     readonly taskProcessEndEmitter: EventEmitter<vscode.TaskProcessEndEvent>;
+
+    /** Documents opened via `workspace.openTextDocument`, in order. */
+    readonly textDocuments: vscode.TextDocument[];
+
+    /** Documents passed to `window.showTextDocument`, in order. */
+    readonly shownDocuments: vscode.TextDocument[];
 }
 
 /**
@@ -326,6 +332,15 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         openExternal,
         remoteName: undefined,
     };
+    const shownDocuments: vscode.TextDocument[] = [];
+
+    const showTextDocument = mock.fn(
+        (document: vscode.TextDocument) => {
+            shownDocuments.push(document);
+            return Promise.resolve({ document } as unknown as vscode.TextEditor);
+        },
+    );
+
     const window = {
         createQuickPick,
         createInputBox,
@@ -335,11 +350,26 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showErrorMessage,
         showOpenDialog,
         showWorkspaceFolderPick,
+        showTextDocument,
         withProgress,
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
+
+    const textDocuments: vscode.TextDocument[] = [];
+
+    const registerFileSystemProvider = mock.fn(
+        (_scheme: string, _provider: vscode.FileSystemProvider) => ({ dispose: () => undefined }),
+    );
+
+    const openTextDocument = mock.fn(
+        (uri: vscode.Uri): Promise<vscode.TextDocument> => {
+            const document = { uri } as vscode.TextDocument;
+            textDocuments.push(document);
+            return Promise.resolve(document);
+        },
+    );
 
     const createFileSystemWatcher = mock.fn(
         (): vscode.FileSystemWatcher => {
@@ -367,6 +397,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         onDidChangeWorkspaceFolders: workspaceFoldersChangeEmitter.event,
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
+        registerFileSystemProvider,
+        openTextDocument,
     };
 
     const executeTask = mock.fn(
@@ -393,7 +425,11 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState: MockTreeItemCollapsibleState,
         ConfigurationTarget: MockConfigurationTarget,
-        ProgressLocation: { Notification: 15 },
+        FileType: MockFileType,
+        FilePermission: MockFilePermission,
+        FileChangeType: MockFileChangeType,
+        FileSystemError: MockFileSystemError,
+        ProgressLocation: MockProgressLocation,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
         ShellExecution: MockShellExecution,
@@ -423,6 +459,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspaceFoldersChangeEmitter,
         tasks,
         taskProcessEndEmitter,
+        textDocuments,
+        shownDocuments,
     } as unknown as MockVsCodeResult;
 }
 
