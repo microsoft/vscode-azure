@@ -27,12 +27,6 @@ publicHoistPattern:
   # `typescript` package would let typescript-eslint resolve its peer to the API-less TS 7 and break
   # linting. Once TS 7.1 ships its API and typescript-eslint adopts it, `typescript` can be declared/
   # hoisted normally again. See docs/build-and-dev.md ("TypeScript toolchain").
-  # NOTE: `chai` is deliberately NOT hoisted. Tests reach chai only through the global `expect` and
-  # the `chai-as-promised` augmentation, both supplied by the
-  # `@microsoft/vscode-azext-eng/mocha/test-globals` entry in tsconfig.base.json's `types`, which
-  # resolves them inside the eng package. `mocha` stays hoisted because the packages' `test` scripts
-  # invoke the `mocha` binary, but its *types* come from that same eng entry, so neither `chai` nor
-  # `mocha` needs a `types` entry of its own.
   - "*eslint*"
   - "*mocha*"
 

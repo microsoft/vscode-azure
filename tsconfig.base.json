@@ -8,10 +8,6 @@
         ],
         "types": [
             "node",
-            // Supplies every test global: mocha's `describe`/`it`, chai's `expect` (registered as a
-            // global by the setup hook), and the `chai-as-promised` augmentation -- all resolved
-            // inside the eng package, so neither `mocha`, `chai`, nor `chai-as-promised` needs a
-            // `types` entry of its own
             "@microsoft/vscode-azext-eng/mocha/test-globals",
         ],
         "sourceMap": true,
