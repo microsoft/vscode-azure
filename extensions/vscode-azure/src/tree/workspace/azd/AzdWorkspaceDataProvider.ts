@@ -9,24 +9,22 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { AzureYamlGlobPattern, IAzdService } from '../../../azd/AzdService';
+import { IAzdService } from '../../../azd/AzdService';
+import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
+import { AzdProjectFile } from './azdDetector';
 
 /**
  * Data-layer provider for {@linkcode AzdProjectNode}s and their
  * {@linkcode AzdServiceNode} children.
  *
- * Discovers azd projects via a single {@linkcode IAzdService.findAzureYaml}
- * call across the workspace, then maps each result to its containing
- * workspace folder. Enumerates services by invoking
- * {@linkcode IAzdService.show} (which shells out to `azd show --output json`).
- * Caching is handled by the surrounding `DataItemTree` so `azd` is only
- * re-invoked when the data layer's TTL expires or an explicit invalidate
- * fires.
- *
- * Fires {@linkcode onDidChange} when the set of workspace folders
- * changes so the tree re-discovers projects.
+ * Projects come from the shared workspace index rather than a private search,
+ * so one walk serves every workspace provider and one watcher invalidates them
+ * all. Services are enumerated by invoking {@linkcode IAzdService.show} (which
+ * shells out to `azd show --output json`). Caching is handled by the
+ * surrounding `DataItemTree` so `azd` is only re-invoked when the data layer's
+ * TTL expires or an explicit invalidate fires.
  */
 @injectable()
 export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
@@ -41,24 +39,12 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) {
-        const invalidateRoots = (reason: string) => {
-            this.executor.output.debug(`[data] azd workspace: ${reason}`);
+        this.disposables.push(indexService.onDidChangeIndex(() => {
+            this.executor.output.debug('[data] azd workspace: index changed');
             this.changeEmitter.fire({ target: Roots });
-        };
-
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateRoots('folders changed'); }));
-
-        // When passed a plain string glob (not a RelativePattern), VS Code
-        // filters events from its existing recursive workspace watcher rather
-        // than creating a new OS-level file watcher, so this is essentially free.
-        const watcher = code.workspace.createFileSystemWatcher(AzureYamlGlobPattern);
-        this.disposables.push(
-            watcher,
-            watcher.onDidCreate(() => { invalidateRoots('azure.yaml created'); }),
-            watcher.onDidChange(() => { invalidateRoots('azure.yaml changed'); }),
-            watcher.onDidDelete(() => { invalidateRoots('azure.yaml deleted'); }),
-        );
+        }));
     }
 
     /** @inheritdoc */
@@ -99,23 +85,20 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
         return false;
     }
 
-    /**
-     * Discover azd projects by searching for `azure.yaml` / `azure.yml`
-     * across all open workspace folders via {@linkcode IAzdService.findAzureYaml}.
-     */
+    /** Discover azd projects from the shared workspace index. */
     private async discoverProjects(): Promise<AzdProjectNode[]> {
-        const azureYamls = await this.azd.findAzureYaml(undefined, 5);
+        const index = await this.indexService.getIndex();
         const projects: AzdProjectNode[] = [];
-        for (const azureYamlUri of azureYamls) {
-            const folder = this.code.workspace.getWorkspaceFolder(azureYamlUri);
-            if (folder) {
-                projects.push({
-                    id: `${AzdProjectKeyPrefix}${azureYamlUri.toString()}`,
-                    type: 'azdProject',
-                    label: folder.name,
-                    resourceUri: azureYamlUri,
-                });
+        for (const projectFile of index.withTag(AzdProjectFile)) {
+            if (!projectFile.workspaceFolder) {
+                continue;
             }
+            projects.push({
+                id: `${AzdProjectKeyPrefix}${projectFile.uri.toString()}`,
+                type: 'azdProject',
+                label: projectFile.workspaceFolder.name,
+                resourceUri: projectFile.uri,
+            });
         }
         this.executor.output.debug(`[data] azd workspace: discovered=${projects.length}`);
         return projects;

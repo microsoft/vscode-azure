@@ -82,18 +82,11 @@ export interface ScannedDirectory {
     text(name: string): Promise<string | undefined>;
 
     /**
-     * Parsed JSON contents of a file here, or `undefined` if absent, too large,
+     * This node's parsed JSON contents, or `undefined` if absent, too large,
      * or malformed. Malformed files are reported as absent so a broken manifest
      * cannot abort a walk.
      */
     json(name: string): Promise<unknown>;
-
-    /**
-     * Skips this directory's subdirectories. Useful once a consumer knows
-     * nothing below is interesting -- for example after recognising a project
-     * root that owns everything beneath it.
-     */
-    skipChildren(): void;
 }
 
 /**
@@ -135,7 +128,6 @@ export interface WorkspaceWalk extends AsyncIterable<ScannedDirectory> {
  * for await (const directory of walk) {
  *     if (directory.fileNames.has('host.json')) {
  *         projects.push(directory.uri);
- *         directory.skipChildren();
  *     }
  * }
  * if (walk.truncated) { -- results may be incomplete -- }
@@ -223,17 +215,14 @@ export function walkWorkspace(
                 }
             }
 
-            const scanned = createScannedDirectory(code, directory, fileNames, maxFileBytes, token);
-            yield scanned.directory;
+            yield createScannedDirectory(code, directory, fileNames, maxFileBytes, token);
 
-            if (!scanned.childrenSkipped()) {
-                for (const name of subdirectories) {
-                    pending.push({
-                        uri: code.Uri.joinPath(directory.uri, name),
-                        relativePath: join(directory.relativePath, name),
-                        ignoreScopes,
-                    });
-                }
+            for (const name of subdirectories) {
+                pending.push({
+                    uri: code.Uri.joinPath(directory.uri, name),
+                    relativePath: join(directory.relativePath, name),
+                    ignoreScopes,
+                });
             }
 
             // Enforce the budget only after reporting this directory. It has
@@ -278,12 +267,11 @@ function createScannedDirectory(
     fileNames: ReadonlySet<string>,
     maxFileBytes: number,
     token: vscode.CancellationToken | undefined,
-): { directory: ScannedDirectory; childrenSkipped: () => boolean } {
+): ScannedDirectory {
     // Reads are memoized here so multiple consumers sharing one walk -- or one
     // consumer checking several things -- read each file at most once.
     const textReads = new Map<string, Promise<string | undefined>>();
     const jsonReads = new Map<string, Promise<unknown>>();
-    let skipped = false;
 
     const fileUri = (name: string) => code.Uri.joinPath(directory.uri, name);
 
@@ -322,17 +310,13 @@ function createScannedDirectory(
     };
 
     return {
-        directory: {
-            uri: directory.uri,
-            workspaceFolder: code.workspace.getWorkspaceFolder(directory.uri),
-            relativePath: directory.relativePath || '.',
-            fileNames,
-            fileUri,
-            text,
-            json,
-            skipChildren: () => { skipped = true; },
-        },
-        childrenSkipped: () => skipped,
+        uri: directory.uri,
+        workspaceFolder: code.workspace.getWorkspaceFolder(directory.uri),
+        relativePath: directory.relativePath || '.',
+        fileNames,
+        fileUri,
+        text,
+        json,
     };
 }
 

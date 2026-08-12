@@ -64,23 +64,6 @@ describe('walkWorkspace (unit)', () => {
             expect(paths).to.deep.equal(['.', 'src']);
         });
 
-        it('stops descending when a consumer prunes the subtree', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/project/host.json', '{}');
-            addFile(m, '/repo/project/deep/nested.txt', '');
-
-            const visited: string[] = [];
-            for await (const directory of walkWorkspace(m.vscode)) {
-                visited.push(directory.relativePath);
-                if (directory.fileNames.has('host.json')) {
-                    directory.skipChildren();
-                }
-            }
-
-            expect(visited).to.deep.equal(['.', 'project']);
-        });
-
         it('does not follow directory symlinks', async () => {
             const m = createMockVsCode();
             const folder = addWorkspace(m, '/repo');

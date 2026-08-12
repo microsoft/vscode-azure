@@ -32,7 +32,10 @@ import { registerCommands } from './commands/registerCommands';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
+import { azdDetector } from './tree/workspace/azd/azdDetector';
+import { functionsDetector } from './tree/workspace/functions/functionsDetector';
 import { registerTrees } from './tree/registerTrees';
+import { IWorkspaceIndexService, WorkspaceIndexService } from './utils/workspaceIndex/WorkspaceIndexService';
 
 /**
  * Public API surface returned from {@linkcode activateInternal} (and thus from
@@ -144,6 +147,13 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
 
     container.bind(IProcessExecutor).toDynamicValue(context => {
         return new ProcessExecutor(context.get(IVsCode));
+    }).inSingletonScope().onActivation(pushDisposable);
+
+    // Detectors are registered here rather than per-product because the index
+    // makes one pass for all of them; adding a product adds a detector, not a
+    // second walk.
+    container.bind(IWorkspaceIndexService).toDynamicValue(context => {
+        return new WorkspaceIndexService(context.get(IVsCode), [functionsDetector, azdDetector]);
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);

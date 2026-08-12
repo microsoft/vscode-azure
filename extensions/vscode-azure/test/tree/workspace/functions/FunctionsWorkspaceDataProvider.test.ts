@@ -3,17 +3,32 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
+import { functionsDetector } from '../../../../src/tree/workspace/functions/functionsDetector';
 import { FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { isFunctionsProjectNode } from '../../../../src/tree/workspace/WorkspaceNode';
+import { WorkspaceIndexService } from '../../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
 function createProvider() {
     const m = createMockVsCode();
     const { executor } = createTestActionExecutor();
-    return { provider: new FunctionsWorkspaceDataProvider(m.vscode, executor), mock: m };
+    // The real index service, so these tests cover the detector and the
+    // provider's use of it rather than a hand-rolled stand-in.
+    const indexService = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+    return {
+        provider: new FunctionsWorkspaceDataProvider(indexService, executor),
+        indexService,
+        mock: m,
+    };
+}
+
+function addWorkspace(m: MockVsCodeResult, path = '/repo'): void {
+    const uri = m.vscode.Uri.file(path);
+    m.workspaceFolders.push({ uri, name: path.slice(1), index: m.workspaceFolders.length });
+    m.fs.addDirectory(uri);
 }
 
 describe('FunctionsWorkspaceDataProvider (unit)', () => {
@@ -34,39 +49,67 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
 
         it('returns empty when no host.json is present', async () => {
             const { provider, mock: m } = createProvider();
-            m.workspaceFolders.push({ uri: m.vscode.Uri.file('/repo'), name: 'repo', index: 0 });
+            addWorkspace(m);
             expect(await provider.getChildren()).to.deep.equal([]);
         });
 
         it('detects a Functions project from host.json', async () => {
             const { provider, mock: m } = createProvider();
-            m.workspaceFolders.push({ uri: m.vscode.Uri.file('/repo'), name: 'repo', index: 0 });
+            addWorkspace(m);
             m.fs.addFile(m.vscode.Uri.file('/repo/host.json'), '{}');
 
             const children = await provider.getChildren();
+
             expect(children).to.have.length(1);
             expect(isFunctionsProjectNode(children[0])).to.be.true;
             expect(children[0].label).to.equal('repo');
+            expect(children[0].resourceUri.path).to.equal('/repo/host.json');
+        });
+
+        it('detects a nested Functions project', async () => {
+            const { provider, mock: m } = createProvider();
+            addWorkspace(m);
+            m.fs.addFile(m.vscode.Uri.file('/repo/api/host.json'), '{}');
+
+            const children = await provider.getChildren();
+
+            expect(children).to.have.length(1);
+            expect(children[0].resourceUri.path).to.equal('/repo/api/host.json');
+        });
+
+        it('ignores a host.json inside an excluded directory', async () => {
+            const { provider, mock: m } = createProvider();
+            addWorkspace(m);
+            m.fs.addFile(m.vscode.Uri.file('/repo/node_modules/pkg/host.json'), '{}');
+
+            expect(await provider.getChildren()).to.deep.equal([]);
         });
 
         it('returns empty for any non-root node (leaf)', async () => {
             const { provider } = createProvider();
             expect(await provider.getChildren(makeFunctionsProjectNode())).to.deep.equal([]);
         });
+    });
 
-        it('fires onDidChange when workspace folders change', () => {
+    describe('onDidChange', () => {
+        it('fires when the workspace index changes', () => {
             const { provider, mock: m } = createProvider();
             const onChange = mock.fn();
             provider.onDidChange(onChange);
 
             m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
+
             expect(onChange.mock.callCount()).to.equal(1);
         });
 
-        it('creates a file system watcher for host.json', () => {
+        it('does not create its own watcher', () => {
             const { mock: m } = createProvider();
-            expect(m.workspace.createFileSystemWatcher.mock.calls.length).to.equal(1);
-            expect(m.workspace.createFileSystemWatcher.mock.calls[0].arguments[0]).to.equal('host.json');
+
+            // Watching belongs to the index service, which is what lets one
+            // watcher serve every workspace provider.
+            const patterns = m.workspace.createFileSystemWatcher.mock.calls
+                .map(call => call.arguments[0]);
+            expect(patterns).to.deep.equal(['**/{host.json}', '**/.gitignore']);
         });
     });
 });

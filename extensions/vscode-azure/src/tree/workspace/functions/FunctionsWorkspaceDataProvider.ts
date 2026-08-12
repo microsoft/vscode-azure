@@ -4,29 +4,23 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode, Roots,
+    EventEmitter, IActionExecutor, Roots,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../WorkspaceNode';
-
-/** File name that marks an Azure Functions project. */
-const FunctionsHostFileName = 'host.json';
+import { FunctionsHostFile } from './functionsDetector';
 
 /**
  * Data-layer provider for {@linkcode FunctionsProjectNode}s.
  *
- * Searches for a {@linkcode FunctionsHostFileName host.json}
- * across all open workspace folders via
- * {@linkcode vscode.workspace.findFiles findFiles}, then maps each
- * result to its containing workspace folder. Function-app children inside
- * the project (individual function trigger definitions, deployed
- * function apps, ...) are out of scope for this initial pass --
- * future work can add an `enrich` step or a child provider.
- *
- * Fires {@linkcode onDidChange} when the set of workspace folders
- * changes so the tree re-discovers projects.
+ * Projects come from the shared workspace index rather than a private search,
+ * so one walk serves every workspace provider and one watcher invalidates them
+ * all. Function-app children inside the project (individual function trigger
+ * definitions, deployed function apps, ...) are tracked by
+ * https://github.com/microsoft/vscode-azure/issues/178.
  */
 @injectable()
 export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
@@ -38,23 +32,13 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
     public readonly onDidChange = this.changeEmitter.event;
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
     ) {
-        const invalidateRoots = (reason: string) => {
-            this.executor.output.debug(`[data] functions workspace: ${reason}`);
+        this.disposables.push(indexService.onDidChangeIndex(() => {
+            this.executor.output.debug('[data] functions workspace: index changed');
             this.changeEmitter.fire({ target: Roots });
-        };
-
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateRoots('folders changed'); }));
-
-        const watcher = code.workspace.createFileSystemWatcher(FunctionsHostFileName);
-        this.disposables.push(
-            watcher,
-            watcher.onDidCreate(() => { invalidateRoots('host.json created'); }),
-            watcher.onDidChange(() => { invalidateRoots('host.json changed'); }),
-            watcher.onDidDelete(() => { invalidateRoots('host.json deleted'); }),
-        );
+        }));
     }
 
     /** @inheritdoc */
@@ -71,21 +55,23 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         }
     }
 
-    // Showing the individual functions under a project is tracked by https://github.com/microsoft/vscode-azure/issues/178
     private async discoverProjects(): Promise<FunctionsProjectNode[]> {
-        const hostJsons = await this.code.workspace.findFiles(FunctionsHostFileName, undefined, 5);
+        const index = await this.indexService.getIndex();
+        // The tagged node is the `host.json` file, matching the `resourceUri`
+        // this tree has always exposed to "Reveal in Explorer".
         const projects: FunctionsProjectNode[] = [];
-        for (const uri of hostJsons) {
-            const folder = this.code.workspace.getWorkspaceFolder(uri);
-            if (folder) {
-                projects.push({
-                    id: `${FunctionsProjectKeyPrefix}${uri.toString()}`,
-                    type: 'functionsProject',
-                    label: folder.name,
-                    resourceUri: uri,
-                });
+        for (const hostFile of index.withTag(FunctionsHostFile)) {
+            if (!hostFile.workspaceFolder) {
+                continue;
             }
+            projects.push({
+                id: `${FunctionsProjectKeyPrefix}${hostFile.uri.toString()}`,
+                type: 'functionsProject',
+                label: hostFile.workspaceFolder.name,
+                resourceUri: hostFile.uri,
+            });
         }
+
         this.executor.output.debug(`[data] functions workspace: discovered=${projects.length}`);
         return projects;
     }

@@ -1,0 +1,294 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { expect } from 'chai';
+import { mock } from 'node:test';
+import type * as vscode from 'vscode';
+import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
+import { watchPatterns, WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
+import { StandardTagNames, tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
+
+const functions = tagNamespace('functions');
+const FunctionsProject = functions.tag(StandardTagNames.projectRoot);
+
+const functionsDetector: WorkspaceDetector = {
+    id: 'functions',
+    namespace: functions,
+    directories: true,
+    files: { names: ['host.json'] },
+    inspect(node) {
+        if (node.isDirectory && node.fileNames.has('host.json')) {
+            node.tag(FunctionsProject);
+        }
+    },
+};
+
+describe('WorkspaceIndexService (unit)', () => {
+    afterEach(() => {
+        mock.restoreAll();
+    });
+
+    it('builds lazily and reuses the result', async () => {
+        const m = createMockVsCode();
+        addWorkspace(m);
+        addFile(m, '/repo/host.json', '{}');
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+
+        // Constructing the service must not touch the filesystem.
+        expect(m.fs.readDirectory.mock.callCount()).to.equal(0);
+
+        const first = await service.getIndex();
+        const reads = m.fs.readDirectory.mock.callCount();
+        const second = await service.getIndex();
+
+        expect(reads).to.be.greaterThan(0);
+        expect(second).to.equal(first);
+        expect(m.fs.readDirectory.mock.callCount()).to.equal(reads);
+        service.dispose();
+    });
+
+    it('watches only the declared files, with string globs', () => {
+        const m = createMockVsCode();
+        addWorkspace(m);
+
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+
+        const patterns = m.workspace.createFileSystemWatcher.mock.calls.map(call => call.arguments[0]);
+        expect(patterns).to.deep.equal(['**/{host.json}', '**/.gitignore']);
+        // Strings only: a RelativePattern would start a second recursive watch.
+        expect(patterns.every(pattern => typeof pattern === 'string')).to.be.true;
+        service.dispose();
+    });
+
+    it('rebuilds and notifies when a watched file changes', async () => {
+        const m = createMockVsCode();
+        const watchers = captureWatchers(m);
+        addWorkspace(m);
+        addFile(m, '/repo/host.json', '{}');
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+        await service.getIndex();
+
+        let changed = 0;
+        service.onDidChangeIndex(() => { changed++; });
+
+        addFile(m, '/repo/api/host.json', '{}');
+        await fireAndSettle(watchers, m, '/repo/api/host.json');
+
+        expect(changed).to.equal(1);
+        const index = await service.getIndex();
+        expect(index.withTag(FunctionsProject).map(n => n.relativePath))
+            .to.deep.equal(['.', 'api']);
+        service.dispose();
+    });
+
+    it('ignores events inside excluded directories', async () => {
+        const m = createMockVsCode();
+        const watchers = captureWatchers(m);
+        addWorkspace(m);
+        addFile(m, '/repo/host.json', '{}');
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+        await service.getIndex();
+        const reads = m.fs.readDirectory.mock.callCount();
+
+        let changed = 0;
+        service.onDidChangeIndex(() => { changed++; });
+
+        // What an `npm install` produces in bulk.
+        for (const path of [
+            '/repo/node_modules/left-pad/host.json',
+            '/repo/node_modules/a/node_modules/b/host.json',
+            '/repo/bin/host.json',
+        ]) {
+            await fireAndSettle(watchers, m, path);
+        }
+
+        expect(changed).to.equal(0);
+        expect(m.fs.readDirectory.mock.callCount()).to.equal(reads);
+        service.dispose();
+    });
+
+    it('coalesces a burst of events into a single rebuild', async () => {
+        const m = createMockVsCode();
+        const watchers = captureWatchers(m);
+        addWorkspace(m);
+        addFile(m, '/repo/host.json', '{}');
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+        await service.getIndex();
+
+        let changed = 0;
+        service.onDidChangeIndex(() => { changed++; });
+
+        mock.timers.enable({ apis: ['setTimeout'] });
+        for (let i = 0; i < 10; i++) {
+            fire(watchers, m, '/repo/host.json');
+        }
+        await flush();
+        mock.timers.tick(600);
+        mock.timers.reset();
+
+        expect(changed).to.equal(1);
+        service.dispose();
+    });
+
+    it('rebuilds when workspace folders change', async () => {
+        const m = createMockVsCode();
+        addWorkspace(m);
+        addFile(m, '/repo/host.json', '{}');
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+        await service.getIndex();
+        const reads = m.fs.readDirectory.mock.callCount();
+
+        m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
+        await service.getIndex();
+
+        expect(m.fs.readDirectory.mock.callCount()).to.be.greaterThan(reads);
+        service.dispose();
+    });
+
+    it('does not retain a failed build', async () => {
+        const m = createMockVsCode();
+        addWorkspace(m);
+        addFile(m, '/repo/host.json', '{}');
+        m.fs.readDirectory.mock.mockImplementationOnce(
+            () => Promise.reject(Object.assign(new Error('denied'), { code: 'NoPermissions' })));
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+
+        await expectRejection(service.getIndex(), 'denied');
+        const index = await service.getIndex();
+
+        expect(index.withTag(FunctionsProject)).to.have.length(1);
+        service.dispose();
+    });
+
+    it('stops watching once disposed', async () => {
+        const m = createMockVsCode();
+        const watchers = captureWatchers(m);
+        addWorkspace(m);
+        addFile(m, '/repo/host.json', '{}');
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector]);
+        await service.getIndex();
+
+        let changed = 0;
+        service.onDidChangeIndex(() => { changed++; });
+        service.dispose();
+
+        await fireAndSettle(watchers, m, '/repo/host.json');
+
+        expect(changed).to.equal(0);
+    });
+
+    describe('watchPatterns', () => {
+        it('merges every detector interest into one glob', () => {
+            const other: WorkspaceDetector = {
+                id: 'other',
+                namespace: tagNamespace('other'),
+                files: { names: ['azure.yaml'], suffixes: ['.csproj'] },
+                inspect() { /* no-op */ },
+            };
+
+            expect(watchPatterns([functionsDetector, other]))
+                .to.deep.equal(['**/{*.csproj,azure.yaml,host.json}', '**/.gitignore']);
+        });
+
+        it('still watches gitignore when no detector declares files', () => {
+            const directoriesOnly: WorkspaceDetector = {
+                id: 'dirs',
+                namespace: tagNamespace('dirs'),
+                directories: true,
+                inspect() { /* no-op */ },
+            };
+
+            expect(watchPatterns([directoriesOnly])).to.deep.equal(['**/.gitignore']);
+        });
+    });
+});
+
+interface CapturedWatcher {
+    readonly pattern: string;
+    fire(uri: vscode.Uri): void;
+}
+
+/** Replaces `createFileSystemWatcher` with watchers the test can drive. */
+function captureWatchers(m: MockVsCodeResult): CapturedWatcher[] {
+    const captured: CapturedWatcher[] = [];
+    m.workspace.createFileSystemWatcher.mock.mockImplementation((pattern: unknown) => {
+        const listeners: ((uri: vscode.Uri) => void)[] = [];
+        const register = (listener: (uri: vscode.Uri) => void) => {
+            listeners.push(listener);
+            return { dispose: () => { listeners.splice(listeners.indexOf(listener), 1); } };
+        };
+        captured.push({
+            pattern: typeof pattern === 'string' ? pattern : '',
+            fire: uri => { for (const listener of [...listeners]) { listener(uri); } },
+        });
+        return {
+            ignoreCreateEvents: false,
+            ignoreChangeEvents: false,
+            ignoreDeleteEvents: false,
+            onDidCreate: register,
+            onDidChange: register,
+            onDidDelete: register,
+            dispose: () => { listeners.length = 0; },
+        };
+    });
+    return captured;
+}
+
+/** Fires the watcher whose glob matches `path`, mirroring VS Code's filtering. */
+function fire(watchers: readonly CapturedWatcher[], m: MockVsCodeResult, path: string): void {
+    const name = path.split('/').pop() ?? path;
+    for (const watcher of watchers) {
+        const alternatives = watcher.pattern.includes('{')
+            ? watcher.pattern.slice(watcher.pattern.indexOf('{') + 1, -1).split(',')
+            : [watcher.pattern.replace('**/', '')];
+        const matches = alternatives.some(alternative => alternative.startsWith('*')
+            ? name.endsWith(alternative.slice(1))
+            : alternative === name);
+        if (matches) {
+            watcher.fire(m.vscode.Uri.file(path));
+        }
+    }
+}
+
+async function fireAndSettle(
+    watchers: readonly CapturedWatcher[],
+    m: MockVsCodeResult,
+    path: string,
+): Promise<void> {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    fire(watchers, m, path);
+    await flush();
+    mock.timers.tick(600);
+    mock.timers.reset();
+    await flush();
+}
+
+/** Lets queued promise continuations run while timers are faked. */
+async function flush(turns = 5): Promise<void> {
+    for (let i = 0; i < turns; i++) {
+        await new Promise(resolve => setImmediate(resolve));
+    }
+}
+
+async function expectRejection(promise: Promise<unknown>, message: string): Promise<void> {
+    try {
+        await promise;
+    } catch (error) {
+        expect(String(error)).to.contain(message);
+        return;
+    }
+    expect.fail(`expected rejection containing "${message}"`);
+}
+
+function addWorkspace(m: MockVsCodeResult, path = '/repo'): void {
+    const uri = m.vscode.Uri.file(path);
+    m.workspaceFolders.push({ uri, name: path.slice(1), index: m.workspaceFolders.length });
+    m.fs.addDirectory(uri);
+}
+
+function addFile(m: MockVsCodeResult, path: string, contents: string): void {
+    m.fs.addFile(m.vscode.Uri.file(path), contents);
+}
