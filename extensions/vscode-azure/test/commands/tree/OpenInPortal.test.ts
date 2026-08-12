@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import * as vscode from 'vscode';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';

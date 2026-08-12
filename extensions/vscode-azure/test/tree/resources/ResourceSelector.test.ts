@@ -6,7 +6,6 @@
 import { AzureNodeId, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, createMockViewItemTree, makeGenericResource, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import type { IAzureViewDataTree, IAzureViewViewItemTree } from '../../../src/services';
 import { ResourceSelector } from '../../../src/tree/resources/ResourceSelector';

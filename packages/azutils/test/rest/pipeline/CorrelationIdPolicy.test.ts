@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { CorrelationIdPolicy } from '../../../src/rest/pipeline/CorrelationIdPolicy';
 import { makeRequest, makeResponse } from '../../mockPipeline';
 

@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';

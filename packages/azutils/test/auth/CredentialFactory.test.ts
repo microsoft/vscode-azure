@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { createDefaultCredentialFactory } from '../../src/auth/CredentialFactory';
 import { makeSubscription } from '../mockAzure';
 

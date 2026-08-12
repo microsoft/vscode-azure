@@ -5,7 +5,6 @@
 
 import { type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
 import { MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
 import { AzdCommand, AzdService, MinAzdUpdateVersion, MinAzdVersion } from '../../src/azd/AzdService';

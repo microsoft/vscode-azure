@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import { AzdDownStep } from '../../../src/azd/wizard/AzdDownStep';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';

@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { CommandRegistry } from '../../src/base/ICommandRegistry';
 import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';

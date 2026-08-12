@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { RevealInExplorer } from '../../../src/commands/tree/RevealInExplorer';
 import { makeAzdProjectNode, makeAzdServiceNode } from '../../tree/workspace/mockWorkspaceNode';
 

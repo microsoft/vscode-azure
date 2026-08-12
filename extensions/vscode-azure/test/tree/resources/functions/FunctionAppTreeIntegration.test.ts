@@ -7,7 +7,6 @@ import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider } fro
 import { createMockAccountDataProvider, createMockWebAppClient, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import { AddOrEditAppSetting } from '../../../../src/commands/functions/AddOrEditAppSetting';

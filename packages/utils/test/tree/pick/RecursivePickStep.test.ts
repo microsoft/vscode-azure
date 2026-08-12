@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { GenericPickStep, type PickClassification } from '../../../src/tree/pick/GenericPickStep';
 import type { PickContext } from '../../../src/tree/pick/PickContext';
 import { RecursivePickStep } from '../../../src/tree/pick/RecursivePickStep';

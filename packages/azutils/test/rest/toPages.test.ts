@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PagedAsyncIterableIterator } from '@azure/core-paging';
-import { expect } from 'chai';
 import { toPages } from '../../src/rest/toPages';
 
 /** Helper to create a mock PagedAsyncIterableIterator from an array of pages. */
