@@ -13,10 +13,10 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    Debouncer, EventEmitter, Everything, IActionExecutor, ICodeContext, Roots, stringifyError,
+    DebounceScheduler, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Event, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
-import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../constants';
 import { readSignedInTenants } from '../../utils/signedInTenants';
 
@@ -80,13 +80,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<ConcreteAzureNode>>();
     private readonly removeAccountsEmitter = new EventEmitter<readonly string[]>();
 
-    /**
-     * Debounces `onDidChangeSessions` bursts into a single reconciling root
-     * re-list. Keyed so it can be shared if more debounced streams are added later.
-     */
-    private readonly debouncer = new Debouncer();
-
-    private readonly disposables: Disposable[] = [this.changeEmitter, this.removeAccountsEmitter, this.debouncer];
+    private readonly disposables: Disposable[];
 
     /**
      * Count of in-flight {@linkcode listAccounts} calls. While greater than
@@ -124,7 +118,9 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
+        @unmanaged() private readonly sessionChangeScheduler: IDebounceScheduler = new DebounceScheduler(SessionChangeDebounceMs, SessionInvalidationKey),
     ) {
+        this.disposables = [this.changeEmitter, this.removeAccountsEmitter, this.sessionChangeScheduler];
         this.disposables.push(this.ctx.code.authentication.onDidChangeSessions(e => {
             if (e.provider.id !== PublicAuthProviderId && e.provider.id !== SovereignAuthProviderId) {
                 return;
@@ -133,7 +129,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // Listing accounts can itself trigger a session-change event;
             // ignore events while a getAccounts() call is in flight (any
             // duration) or inside the trailing window, to avoid looping.
-            if (this.getAccountsInFlight > 0 || Date.now() < this.suppressSessionEventsUntil) {
+            if (this.getAccountsInFlight > 0 || this.sessionChangeScheduler.now() < this.suppressSessionEventsUntil) {
                 this.executor.output.trace(`[auth] sessions changed provider=${e.provider.id}; suppressed (self-induced window)`);
                 return;
             }
@@ -142,9 +138,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // set. The reconcile itself decides whether anything actually
             // changed (see reconcileAccountsOnSessionChange).
             const providerId = e.provider.id;
-            this.debouncer.debounce(SessionInvalidationKey, SessionChangeDebounceMs, () => {
-                void this.reconcileAccountsOnSessionChange(providerId);
-            });
+            this.sessionChangeScheduler.debounce(() => this.reconcileAccountsOnSessionChange(providerId));
         }));
 
         this.disposables.push(this.ctx.code.workspace.onDidChangeConfiguration(e => {
@@ -287,7 +281,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         try {
             accounts = await this.ctx.code.authentication.getAccounts(getAuthProviderId(environment));
         } finally {
-            this.suppressSessionEventsUntil = Date.now() + GetAccountsSuppressionMs;
+            this.suppressSessionEventsUntil = this.sessionChangeScheduler.now() + GetAccountsSuppressionMs;
             this.getAccountsInFlight--;
         }
 

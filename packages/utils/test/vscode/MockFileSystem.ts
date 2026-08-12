@@ -5,6 +5,7 @@
 
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { dirname } from '../../src/vscode/fsHelpers';
 import type { Satisfies } from '../../src/types/Satisfies';
 
 /** Standard error codes produced by {@linkcode vscode.FileSystemError}. */
@@ -40,6 +41,8 @@ export class MockFileSystem {
     readonly files = new Map<string, Uint8Array>();
     /** Tracks directories created via {@linkcode createDirectory}. */
     readonly directories = new Set<string>();
+    /** Tracks symbolic links and the file type they point to. */
+    readonly symbolicLinks = new Map<string, vscode.FileType>();
 
     /**
      * Creates a filesystem error with the same `code` contract used by
@@ -56,12 +59,27 @@ export class MockFileSystem {
 
     /** Pre-populate a file so {@linkcode stat} and {@linkcode readFile} find it. */
     addFile(uri: vscode.Uri, content: Uint8Array | string = new Uint8Array()): void {
+        this.addParentDirectories(uri);
         this.files.set(uri.path, typeof content === 'string' ? Buffer.from(content) : content);
+    }
+
+    /** Pre-populate a directory so {@linkcode stat} and {@linkcode readDirectory} find it. */
+    addDirectory(uri: vscode.Uri): void {
+        this.addParentDirectories(uri);
+        this.directories.add(uri.path);
+    }
+
+    /** Pre-populate a symbolic link without following it to a target. */
+    addSymbolicLink(uri: vscode.Uri, targetType: vscode.FileType): void {
+        this.addParentDirectories(uri);
+        this.symbolicLinks.set(uri.path, targetType);
     }
 
     readonly stat = mock.fn((uri: vscode.Uri) => {
         if (this.files.has(uri.path)) {
             return Promise.resolve({ type: 1, ctime: 0, mtime: 0, size: this.files.get(uri.path)?.byteLength ?? 0 });
+        } else if (this.symbolicLinks.has(uri.path)) {
+            return Promise.resolve({ type: 64 | (this.symbolicLinks.get(uri.path) ?? 0), ctime: 0, mtime: 0, size: 0 });
         } else if (this.directories.has(uri.path)) {
             return Promise.resolve({ type: 2, ctime: 0, mtime: 0, size: 0 });
         }
@@ -77,13 +95,32 @@ export class MockFileSystem {
     });
 
     readonly writeFile = mock.fn((uri: vscode.Uri, content: Uint8Array) => {
-        this.files.set(uri.path, content);
+        this.addFile(uri, content);
         return Promise.resolve();
     });
 
     readonly createDirectory = mock.fn((uri: vscode.Uri) => {
-        this.directories.add(uri.path);
+        this.addDirectory(uri);
         return Promise.resolve();
+    });
+
+    readonly readDirectory = mock.fn((uri: vscode.Uri) => {
+        if (!this.directories.has(uri.path)) {
+            return Promise.reject(MockFileSystem.fileNotFound(uri));
+        }
+
+        const prefix = uri.path.endsWith('/') ? uri.path : `${uri.path}/`;
+        const entries = new Map<string, vscode.FileType>();
+        for (const path of this.directories) {
+            this.addDirectChild(entries, prefix, path, 2);
+        }
+        for (const path of this.files.keys()) {
+            this.addDirectChild(entries, prefix, path, 1);
+        }
+        for (const [path, targetType] of this.symbolicLinks) {
+            this.addDirectChild(entries, prefix, path, 64 | targetType);
+        }
+        return Promise.resolve([...entries]);
     });
 
     readonly copy = mock.fn((source: vscode.Uri, target: vscode.Uri) => {
@@ -97,8 +134,35 @@ export class MockFileSystem {
     readonly delete = mock.fn((uri: vscode.Uri) => {
         this.files.delete(uri.path);
         this.directories.delete(uri.path);
+        this.symbolicLinks.delete(uri.path);
         return Promise.resolve();
     });
+
+    private addParentDirectories(uri: vscode.Uri): void {
+        let current = uri;
+        let parent = dirname(current);
+        // `dirname` is a fixed point at the root, which is what stops the walk.
+        while (parent.path !== current.path) {
+            this.directories.add(parent.path);
+            current = parent;
+            parent = dirname(current);
+        }
+    }
+
+    private addDirectChild(
+        entries: Map<string, vscode.FileType>,
+        prefix: string,
+        path: string,
+        type: vscode.FileType,
+    ): void {
+        if (!path.startsWith(prefix)) {
+            return;
+        }
+        const relativePath = path.slice(prefix.length);
+        if (relativePath && !relativePath.includes('/')) {
+            entries.set(relativePath, type);
+        }
+    }
 }
 
 /** Test stand-in for {@linkcode vscode.FileType}. */

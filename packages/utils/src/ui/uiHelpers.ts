@@ -319,9 +319,11 @@ export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxO
     input.step = options?.step;
     input.totalSteps = options?.totalSteps;
 
-    // If the caller did not provide a default value, try to pre-fill based on recent input
-    if (recentKey && options?.value === undefined) {
-        const recentValue = ctx.extensionContext.workspaceState.get<string>(recentKey);
+    // If the caller did not provide a default value, try to pre-fill based on recent input.
+    // `fallbackValue` is independent of persistence, so it still applies when the prompt opted
+    // out of remembering its value.
+    if (options?.value === undefined) {
+        const recentValue = recentKey ? ctx.extensionContext.workspaceState.get<string>(recentKey) : undefined;
         if (recentValue) {
             input.value = recentValue;
         } else if (options?.fallbackValue !== undefined) {

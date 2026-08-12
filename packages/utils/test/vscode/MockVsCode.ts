@@ -15,7 +15,7 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -234,6 +234,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(undefined),
     );
 
+    const withProgress = mock.fn(
+        <T>(_options: vscode.ProgressOptions, task: () => Thenable<T>) => Promise.resolve(task()),
+    );
+
     const t = mock.fn(
         (message: string, ...args: unknown[]) => {
             // eslint-disable-next-line @typescript-eslint/no-base-to-string
@@ -347,6 +351,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showOpenDialog,
         showWorkspaceFolderPick,
         showTextDocument,
+        withProgress,
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
@@ -420,16 +425,17 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState: MockTreeItemCollapsibleState,
         ConfigurationTarget: MockConfigurationTarget,
+        FileType: MockFileType,
+        FilePermission: MockFilePermission,
+        FileChangeType: MockFileChangeType,
+        FileSystemError: MockFileSystemError,
+        ProgressLocation: MockProgressLocation,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
         ShellExecution: MockShellExecution,
         RelativePattern: MockRelativePattern,
         Task: MockTask,
         TaskScope: MockTaskScope,
-        FileType: MockFileType,
-        FilePermission: MockFilePermission,
-        FileChangeType: MockFileChangeType,
-        FileSystemError: MockFileSystemError,
         Uri: MockUri,
         ...overrides,
     } as unknown as IVsCode;

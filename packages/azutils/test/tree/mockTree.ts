@@ -38,6 +38,7 @@ export function createMockDataItemTree(nodes: ConcreteAzureNode[]): DataItemTree
             return keyMap.get(key);
         },
         invalidate: mock.fn(),
+        remove: mock.fn(),
     } as unknown as DataItemTree<ConcreteAzureNode>;
 }
 
@@ -45,9 +46,9 @@ export function createMockDataItemTree(nodes: ConcreteAzureNode[]): DataItemTree
  * Creates a mock {@linkcode DataItemTree} backed by a hierarchy of
  * nodes. Supports both `get()` and `getChildren()`.
  *
- * Also exposes an `invalidate` spy (a `mock.fn()`, consistent with
+ * Also exposes `invalidate` and `remove` spies (`mock.fn()`s, consistent with
  * {@linkcode createMockDataItemTree}) so callers can assert how the code under
- * test invalidated the tree. Access it via a cast, e.g.
+ * test invalidated or evicted from the tree. Access them via a cast, e.g.
  * `(tree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate`.
  */
 export function createMockHierarchicalDataItemTree(
@@ -83,6 +84,7 @@ export function createMockHierarchicalDataItemTree(
             return Promise.resolve();
         },
         invalidate: mock.fn(),
+        remove: mock.fn(),
     } as unknown as DataItemTree<ConcreteAzureNode>;
 }
 

@@ -72,12 +72,7 @@ describe('AzdUp (unit)', () => {
     it('should show error when no workspace folders are open', async () => {
         const { cmd, azd } = createCommand({ workspaceFolders: false });
 
-        try {
-            await cmd.execute();
-            expect.fail('Expected error');
-        } catch (e) {
-            expect((e as Error).message).to.include('workspace folder');
-        }
+        await expect(cmd.execute()).to.be.rejectedWith('workspace folder');
 
         expect(azd.provision.mock.callCount()).to.equal(0);
     });
@@ -86,12 +81,7 @@ describe('AzdUp (unit)', () => {
         const { cmd, azd } = createCommand();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([]));
 
-        try {
-            await cmd.execute();
-            expect.fail('Expected error');
-        } catch (e) {
-            expect((e as Error).message).to.include('azure.yaml');
-        }
+        await expect(cmd.execute()).to.be.rejectedWith('azure.yaml');
 
         expect(azd.provision.mock.callCount()).to.equal(0);
     });

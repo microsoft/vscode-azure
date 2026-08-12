@@ -57,15 +57,10 @@ describe('AzureResourceDataProvider (unit)', () => {
     });
 
     describe('getChildren', () => {
-        it('should throw when called as a root provider', async () => {
+        it('should throw when called as a root provider', () => {
             const provider = createProvider();
-            let error: unknown;
-            try {
-                await provider.getChildren();
-            } catch (e) {
-                error = e;
-            }
-            expect((error as Error).message).to.include('not a root provider');
+            // `getChildren` is not `async`, so this surfaces as a synchronous throw.
+            expect(() => provider.getChildren()).to.throw('not a root provider');
         });
 
         it('should return resource groups for a subscription', async () => {
