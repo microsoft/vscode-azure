@@ -4,27 +4,57 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode, Roots, fileExists,
+    EventEmitter, IActionExecutor, IVsCode, fileExists,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzdService } from '../../../azd/AzdService';
+import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
+import { StandardTagNames, tagNamespace } from '../../../utils/workspaceIndex/WorkspaceTag';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
-import { AzdProjectFile } from './azdDetector';
+
+/** File names that mark an azd project. */
+export const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
+
+const azd = tagNamespace('azd');
+
+/** A directory containing an `azure.yaml` / `azure.yml`. */
+export const AzdProject = azd.tag(StandardTagNames.projectRoot);
+
+/** The `azure.yaml` / `azure.yml` file itself. */
+export const AzdProjectFile = azd.tag(StandardTagNames.projectFile);
+
+/** Tags azd projects and their `azure.yaml`. */
+export const azdDetector: WorkspaceDetector = {
+    id: 'azd',
+    namespace: azd,
+    directories: true,
+    files: { names: AzureYamlFileNames },
+    inspect(node) {
+        if (node.isDirectory) {
+            if (AzureYamlFileNames.some(name => node.fileNames.has(name))) {
+                node.tag(AzdProject);
+            }
+        } else {
+            node.tag(AzdProjectFile);
+        }
+    },
+};
 
 /**
  * Data-layer provider for {@linkcode AzdProjectNode}s and their
  * {@linkcode AzdServiceNode} children.
  *
  * Projects come from the shared workspace index rather than a private search,
- * so one walk serves every workspace provider and one watcher invalidates them
- * all. Services are enumerated by invoking {@linkcode IAzdService.show} (which
- * shells out to `azd show --output json`). Caching is handled by the
- * surrounding `DataItemTree` so `azd` is only re-invoked when the data layer's
- * TTL expires or an explicit invalidate fires.
+ * so one walk serves every workspace provider. Invalidation is wired up once
+ * for the whole tree in `registerTrees`, not per provider. Services are
+ * enumerated by invoking {@linkcode IAzdService.show} (which shells out to
+ * `azd show --output json`). Caching is handled by the surrounding
+ * `DataItemTree` so `azd` is only re-invoked when the data layer's TTL expires
+ * or an explicit invalidate fires.
  */
 @injectable()
 export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
@@ -40,12 +70,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
-    ) {
-        this.disposables.push(indexService.onDidChangeIndex(() => {
-            this.executor.output.debug('[data] azd workspace: index changed');
-            this.changeEmitter.fire({ target: Roots });
-        }));
-    }
+    ) { }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is AzdProjectNode | AzdServiceNode {

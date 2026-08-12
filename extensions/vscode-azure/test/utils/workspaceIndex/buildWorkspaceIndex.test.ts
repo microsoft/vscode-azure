@@ -252,7 +252,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             expect(sizes.get('App.cs')).to.equal(0);
         });
 
-        it('reads a file at most once across detectors', async () => {
+        it('reads a file once per detector that asks for it', async () => {
             const m = createMockVsCode();
             addWorkspace(m);
             addFile(m, '/repo/App.cs', 'contents');
@@ -265,7 +265,9 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             await build(m, [reader('a'), reader('b')]);
 
-            expect(m.fs.readFile.mock.callCount()).to.equal(1);
+            // Reads are not cached: unrelated detectors rarely want the same
+            // file, so a shared cache would cost more than it saves.
+            expect(m.fs.readFile.mock.callCount()).to.equal(2);
         });
     });
 

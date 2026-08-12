@@ -32,8 +32,8 @@ import { registerCommands } from './commands/registerCommands';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
-import { azdDetector } from './tree/workspace/azd/azdDetector';
-import { functionsDetector } from './tree/workspace/functions/functionsDetector';
+import { azdDetector } from './tree/workspace/azd/AzdWorkspaceDataProvider';
+import { functionsDetector } from './tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { registerTrees } from './tree/registerTrees';
 import { IWorkspaceIndexService, WorkspaceIndexService } from './utils/workspaceIndex/WorkspaceIndexService';
 

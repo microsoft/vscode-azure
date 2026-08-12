@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, type LoadMoreOptions, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, IActionExecutor, IExtensionContext, IVsCode, type LoadMoreOptions, Roots, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ResolutionContext, ServiceIdentifier } from 'inversify';
+import type * as vscode from 'vscode';
 import { defaultLoadMoreOptions } from '../commands/tree/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId, WorkspaceTreeViewId } from '../constants';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
@@ -28,6 +29,7 @@ import { EmulatorsWorkspaceViewProvider } from './workspace/emulators/EmulatorsW
 import { FunctionsWorkspaceDataProvider } from './workspace/functions/FunctionsWorkspaceDataProvider';
 import { FunctionsWorkspaceViewProvider } from './workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from './workspace/WorkspaceNode';
+import { IWorkspaceIndexService } from '../utils/workspaceIndex/WorkspaceIndexService';
 
 /**
  * Bind the Azure resources tree, workspace tree, and activity tree into the
@@ -69,6 +71,9 @@ export function registerTrees(container: Container, products: ProductRegistrar):
         // Workspace discovery is cheap (filesystem stats); refresh every
         // minute so newly-added `azure.yaml` / `host.json` files appear.
         ttl: 60 * 1000,
+        // One subscription for the whole tree: the index fires a single change
+        // event regardless of how many providers read from it.
+        invalidateOn: context => context.get(IWorkspaceIndexService).onDidChangeIndex,
         dataProviders: [
             AzdWorkspaceDataProvider,
             FunctionsWorkspaceDataProvider,
@@ -131,6 +136,12 @@ interface TreeConfig<TData> {
     readonly getKey: (resource: TData) => string;
     readonly ttl: number;
     readonly loadMoreOptions?: (context: ResolutionContext) => LoadMoreOptions<string>;
+    /**
+     * An event that invalidates the whole tree when it fires. Subscribed once
+     * here rather than by each provider, so a single external change produces
+     * one root refresh instead of one per provider.
+     */
+    readonly invalidateOn?: (context: ResolutionContext) => vscode.Event<unknown>;
     readonly dataProviders: readonly ProviderEntry<DataProvider<TData>>[];
     readonly viewProviders: readonly ProviderEntry<ViewProvider<string>>[];
 }
@@ -155,6 +166,12 @@ function registerTree<TData>(container: Container, config: TreeConfig<TData>): v
 
         for (const provider of context.getAll(config.dataProvidersId)) {
             cache.registerProvider(provider);
+        }
+
+        const invalidateOn = config.invalidateOn?.(context);
+        if (invalidateOn) {
+            context.get(IExtensionContext).subscriptions.push(
+                invalidateOn(() => { cache.invalidate(Roots); }));
         }
 
         return cache;

@@ -142,24 +142,15 @@ describe('walkWorkspace (unit)', () => {
     });
 
     describe('reads', () => {
-        it('reads text and json lazily, and only once per file', async () => {
+        it('reads text and json from the same file', async () => {
             const m = createMockVsCode();
             addWorkspace(m, '/repo');
             addFile(m, '/repo/package.json', '{"name":"app"}');
 
             const [root] = await collect(m);
-            expect(m.fs.readFile.mock.callCount()).to.equal(0);
 
-            const [first, second, asText] = await Promise.all([
-                root.json('package.json'),
-                root.json('package.json'),
-                root.text('package.json'),
-            ]);
-
-            expect(first).to.deep.equal({ name: 'app' });
-            expect(second).to.deep.equal({ name: 'app' });
-            expect(asText).to.equal('{"name":"app"}');
-            expect(m.fs.readFile.mock.callCount()).to.equal(1);
+            expect(await root.json('package.json')).to.deep.equal({ name: 'app' });
+            expect(await root.text('package.json')).to.equal('{"name":"app"}');
         });
 
         it('reports absent and malformed files as undefined', async () => {
@@ -174,14 +165,17 @@ describe('walkWorkspace (unit)', () => {
             expect(await root.text('missing.txt')).to.be.undefined;
         });
 
-        it('skips files larger than the read budget', async () => {
+        it('reads a file of any size', async () => {
             const m = createMockVsCode();
             addWorkspace(m, '/repo');
-            addFile(m, '/repo/big.json', '{"padding":"aaaaaaaaaaaaaaaaaaaa"}');
+            const big = 'x'.repeat(4 * 1024 * 1024);
+            addFile(m, '/repo/big.txt', big);
 
-            const [root] = await collect(m, { maxFileBytes: 8 });
+            const [root] = await collect(m);
 
-            expect(await root.text('big.json')).to.be.undefined;
+            // Consumers decide what is worth reading; the walk does not
+            // silently withhold data from an interested detector.
+            expect((await root.text('big.txt'))?.length).to.equal(big.length);
         });
     });
 

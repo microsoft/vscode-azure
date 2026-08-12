@@ -6,8 +6,8 @@
 import { createMockVsCode, createTestActionExecutor, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { mock } from 'node:test';
-import { functionsDetector } from '../../../../src/tree/workspace/functions/functionsDetector';
-import { FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
+
+import { functionsDetector, FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { isFunctionsProjectNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { WorkspaceIndexService } from '../../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
@@ -91,25 +91,21 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
         });
     });
 
-    describe('onDidChange', () => {
-        it('fires when the workspace index changes', () => {
+    describe('watching', () => {
+        it('does not create its own watcher or index subscription', () => {
             const { provider, mock: m } = createProvider();
             const onChange = mock.fn();
             provider.onDidChange(onChange);
 
-            m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
-
-            expect(onChange.mock.callCount()).to.equal(1);
-        });
-
-        it('does not create its own watcher', () => {
-            const { mock: m } = createProvider();
-
-            // Watching belongs to the index service, which is what lets one
-            // watcher serve every workspace provider.
+            // Watching and invalidation both belong to shared infrastructure:
+            // the index service owns the watcher, and registerTrees subscribes
+            // once for the whole tree so N providers do not cause N refreshes.
             const patterns = m.workspace.createFileSystemWatcher.mock.calls
                 .map(call => call.arguments[0]);
             expect(patterns).to.deep.equal(['**/{host.json}', '**/.gitignore']);
+
+            m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
+            expect(onChange.mock.callCount()).to.equal(0);
         });
     });
 });

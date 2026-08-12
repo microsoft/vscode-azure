@@ -4,22 +4,58 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, Roots,
+    EventEmitter, IActionExecutor,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
+import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
+import { StandardTagNames, tagNamespace } from '../../../utils/workspaceIndex/WorkspaceTag';
 import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../WorkspaceNode';
-import { FunctionsHostFile } from './functionsDetector';
+
+/** File name that marks an Azure Functions project. */
+export const FunctionsHostFileName = 'host.json';
+
+const functions = tagNamespace('functions');
+
+/** A directory containing a Functions `host.json`. */
+export const FunctionsProject = functions.tag(StandardTagNames.projectRoot);
+
+/** The `host.json` file itself. */
+export const FunctionsHostFile = functions.tag(StandardTagNames.projectFile);
+
+/**
+ * Tags Azure Functions projects and their `host.json`.
+ *
+ * Listing the individual functions inside a project is tracked by
+ * https://github.com/microsoft/vscode-azure/issues/178; it fits here as a
+ * further tag applied to the project's source files.
+ */
+export const functionsDetector: WorkspaceDetector = {
+    id: 'functions',
+    namespace: functions,
+    directories: true,
+    files: { names: [FunctionsHostFileName] },
+    inspect(node) {
+        if (node.isDirectory) {
+            if (node.fileNames.has(FunctionsHostFileName)) {
+                node.tag(FunctionsProject);
+            }
+        } else {
+            node.tag(FunctionsHostFile);
+        }
+    },
+};
 
 /**
  * Data-layer provider for {@linkcode FunctionsProjectNode}s.
  *
  * Projects come from the shared workspace index rather than a private search,
- * so one walk serves every workspace provider and one watcher invalidates them
- * all. Function-app children inside the project (individual function trigger
- * definitions, deployed function apps, ...) are tracked by
+ * so one walk serves every workspace provider. Invalidation is wired up once
+ * for the whole tree in `registerTrees`, not per provider. Function-app
+ * children inside the project (individual function trigger definitions,
+ * deployed function apps, ...) are tracked by
  * https://github.com/microsoft/vscode-azure/issues/178.
  */
 @injectable()
@@ -34,12 +70,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
     public constructor(
         @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-    ) {
-        this.disposables.push(indexService.onDidChangeIndex(() => {
-            this.executor.output.debug('[data] functions workspace: index changed');
-            this.changeEmitter.fire({ target: Roots });
-        }));
-    }
+    ) { }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is FunctionsProjectNode {

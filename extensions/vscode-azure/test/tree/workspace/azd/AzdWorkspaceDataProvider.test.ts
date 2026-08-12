@@ -8,8 +8,8 @@ import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { AzdShowResult } from '../../../../src/azd/AzdService';
-import { azdDetector } from '../../../../src/tree/workspace/azd/azdDetector';
-import { AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
+
+import { azdDetector, AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
 import { isAzdProjectNode, isAzdServiceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { WorkspaceIndexService } from '../../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { createMockAzdService } from '../../../azd/MockAzdService';
@@ -83,13 +83,13 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(children[0].resourceUri.path).to.equal('/repo/azure.yaml');
         });
 
-        it('emits onDidChange when the workspace index changes', () => {
+        it('does not fire its own change event; the tree subscribes once', () => {
             const { provider, mock: m } = createProvider();
             const onChange = mock.fn();
             provider.onDidChange(onChange);
 
             m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
-            expect(onChange.mock.callCount()).to.equal(1);
+            expect(onChange.mock.callCount()).to.equal(0);
         });
     });
 

@@ -3,15 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { isFileNotFoundError, relativePath, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
 import ignore, { type Ignore } from 'ignore';
 import type * as vscode from 'vscode';
 
 /**
  * Directories skipped by default: generated output, dependency caches, and VCS
  * metadata. Skipping these is most of what makes a walk affordable, and it
- * matters most when scanning source files -- `**‍/*.cs` would otherwise hit
- * `bin`/`obj`, and `**‍/*.py` would hit `.venv`.
+ * matters most when scanning source files -- a `.cs` sweep would otherwise hit
+ * `bin`/`obj`, and a `.py` sweep would hit `.venv`.
  *
  * Spread this when adding to it rather than replacing it wholesale.
  */
@@ -23,13 +23,6 @@ export const defaultExcludedDirectories: ReadonlySet<string> = new Set([
     '.venv', 'venv', '__pycache__', '.tox',
     '.gradle', '.terraform', 'coverage',
 ]);
-
-/**
- * Largest file {@linkcode ScannedDirectory.text} will read. Manifests and source
- * files are small; anything larger is far more likely to be generated output or
- * a binary than something worth parsing.
- */
-const defaultMaxFileBytes = 1024 * 1024;
 
 /** Options for {@linkcode walkWorkspace}. */
 export interface WalkWorkspaceOptions {
@@ -53,18 +46,11 @@ export interface WalkWorkspaceOptions {
      * discarding results.
      */
     readonly maxEntries?: number;
-
-    /** Largest file {@linkcode ScannedDirectory.text} will read. */
-    readonly maxFileBytes?: number;
 }
 
 /**
  * One directory reached by {@linkcode walkWorkspace}, with its immediate file
- * names and lazy, memoized reads of those files.
- *
- * Reads are deferred until a consumer asks for them and cached for the lifetime
- * of this object, so several consumers inspecting the same manifest in one walk
- * cost a single read.
+ * names and reads of those files.
  */
 export interface ScannedDirectory {
     readonly uri: vscode.Uri;
@@ -78,12 +64,12 @@ export interface ScannedDirectory {
     /** The {@linkcode vscode.Uri Uri} of a file in this directory. */
     fileUri(name: string): vscode.Uri;
 
-    /** Contents of a file here, or `undefined` if absent or too large. */
+    /** Full contents of a file here, or `undefined` if it is not present. */
     text(name: string): Promise<string | undefined>;
 
     /**
-     * This node's parsed JSON contents, or `undefined` if absent, too large,
-     * or malformed. Malformed files are reported as absent so a broken manifest
+     * Parsed JSON contents of a file here, or `undefined` if absent or
+     * malformed. Malformed files are reported as absent so a broken manifest
      * cannot abort a walk.
      */
     json(name: string): Promise<unknown>;
@@ -101,25 +87,21 @@ export interface WorkspaceWalk extends AsyncIterable<ScannedDirectory> {
 
 /**
  * Walks the workspace (or one subtree), yielding each directory with its file
- * names and lazy reads.
+ * names and reads.
  *
  * **Internal to the workspace index.** It is the traversal engine behind
- * {@linkcode buildWorkspaceIndex} -- owning exclusions, `.gitignore`, bounds,
- * cancellation, and read caching -- and is kept separate because those concerns
- * are testable and changeable independently of tagging. Product code should go
- * through `IWorkspaceIndexService` instead, so that one walk and one watcher
- * serve every consumer.
- *
- * Because it yields rather than collecting, a single traversal feeds every
- * detector, and per-directory reads are memoized so inspecting the same
- * manifest twice costs one read.
+ * `buildWorkspaceIndex` -- owning exclusions, `.gitignore`, bounds and
+ * cancellation -- and is kept separate because those concerns are testable and
+ * changeable independently of tagging. Product code should go through
+ * `IWorkspaceIndexService` instead, so that one walk and one watcher serve
+ * every consumer.
  *
  * The walk is breadth-first, so shallower directories arrive first, and within a
  * directory entries are visited in name order so repeated walks agree.
  *
  * Symlinked *directories* are not descended into, since they can form cycles or
  * point outside the scope; symlinked *files* are still listed and readable,
- * because reading one is bounded and cannot loop.
+ * because reading one cannot loop.
  *
  * @throws {@linkcode CancellationError} when `token` is cancelled.
  */
@@ -131,7 +113,6 @@ export function walkWorkspace(
     const excluded = options.excludeDirectories ?? defaultExcludedDirectories;
     const respectGitignore = options.respectGitignore ?? true;
     const maxEntries = options.maxEntries ?? 5000;
-    const maxFileBytes = options.maxFileBytes ?? defaultMaxFileBytes;
     if (!Number.isInteger(maxEntries) || maxEntries < 1) {
         throw new RangeError('maxEntries must be a positive integer');
     }
@@ -152,11 +133,11 @@ export function walkWorkspace(
     return walk;
 
     async function* walkRoot(root: vscode.Uri): AsyncIterable<ScannedDirectory> {
-        const pending: PendingDirectory[] = [{ uri: root, relativePath: '', ignoreScopes: [] }];
+        const pending: PendingDirectory[] = [{ uri: root, ignoreScopes: [] }];
         let entriesVisited = 0;
 
         while (pending.length > 0) {
-            throwIfCanceled(token);
+            throwIfCancelled(token);
             // Breadth-first: shallower directories are reported before deeper ones.
             const directory = pending.shift();
             if (!directory) {
@@ -169,7 +150,7 @@ export function walkWorkspace(
             } catch (error) {
                 // A directory disappearing mid-walk is an expected race; anything
                 // else (permissions, provider failure) is worth surfacing.
-                if (isFileNotFound(error)) {
+                if (isFileNotFoundError(error)) {
                     continue;
                 }
                 throw error;
@@ -183,36 +164,32 @@ export function walkWorkspace(
             entries.sort(([left], [right]) => left.localeCompare(right));
 
             const ignoreScopes = respectGitignore
-                ? await loadIgnoreScopes(code, directory, entries, maxFileBytes, token)
+                ? await loadIgnoreScopes(code, directory, entries, token)
                 : [];
             const fileNames = new Set<string>();
-            const subdirectories: string[] = [];
+            const subdirectories: vscode.Uri[] = [];
 
             for (const [name, type] of entries) {
-                const relativePath = join(directory.relativePath, name);
+                const entryUri = code.Uri.joinPath(directory.uri, name);
                 const isDirectory = (type & code.FileType.Directory) !== 0;
-                if (isIgnored(relativePath, isDirectory, ignoreScopes)) {
+                if (isIgnored(entryUri, isDirectory, ignoreScopes)) {
                     continue;
                 }
 
                 if (isDirectory) {
                     const isSymbolicLink = (type & code.FileType.SymbolicLink) !== 0;
                     if (!isSymbolicLink && !excluded.has(name.toLowerCase())) {
-                        subdirectories.push(name);
+                        subdirectories.push(entryUri);
                     }
                 } else if ((type & code.FileType.File) !== 0) {
                     fileNames.add(name);
                 }
             }
 
-            yield createScannedDirectory(code, directory, fileNames, maxFileBytes, token);
+            yield createScannedDirectory(code, directory.uri, root, fileNames, token);
 
-            for (const name of subdirectories) {
-                pending.push({
-                    uri: code.Uri.joinPath(directory.uri, name),
-                    relativePath: join(directory.relativePath, name),
-                    ignoreScopes,
-                });
+            for (const uri of subdirectories) {
+                pending.push({ uri, ignoreScopes });
             }
 
             // Enforce the budget only after reporting this directory. It has
@@ -228,14 +205,20 @@ export function walkWorkspace(
     }
 }
 
+/**
+ * A `.gitignore` and the directory it governs.
+ *
+ * Matching is delegated to the `ignore` package, which expects paths relative
+ * to that directory; {@linkcode relativePath} produces them, so nothing here
+ * interprets ignore syntax itself.
+ */
 interface IgnoreScope {
-    readonly path: string;
+    readonly directoryUri: vscode.Uri;
     readonly matcher: Ignore;
 }
 
 interface PendingDirectory {
     readonly uri: vscode.Uri;
-    readonly relativePath: string;
     readonly ignoreScopes: readonly IgnoreScope[];
 }
 
@@ -253,60 +236,44 @@ function resolveRoots(
 
 function createScannedDirectory(
     code: IVsCode,
-    directory: PendingDirectory,
+    uri: vscode.Uri,
+    root: vscode.Uri,
     fileNames: ReadonlySet<string>,
-    maxFileBytes: number,
     token: vscode.CancellationToken | undefined,
 ): ScannedDirectory {
-    // Reads are memoized here so multiple consumers sharing one walk -- or one
-    // consumer checking several things -- read each file at most once.
-    const textReads = new Map<string, Promise<string | undefined>>();
-    const jsonReads = new Map<string, Promise<unknown>>();
+    const fileUri = (name: string) => code.Uri.joinPath(uri, name);
 
-    const fileUri = (name: string) => code.Uri.joinPath(directory.uri, name);
-
-    const text = (name: string): Promise<string | undefined> => {
-        let pending = textReads.get(name);
-        if (!pending) {
-            pending = fileNames.has(name)
-                ? readBoundedText(code, fileUri(name), maxFileBytes, token)
-                : Promise.resolve(undefined);
-            textReads.set(name, pending);
+    const text = async (name: string): Promise<string | undefined> => {
+        if (!fileNames.has(name)) {
+            return undefined;
         }
-        return pending;
-    };
-
-    const json = (name: string): Promise<unknown> => {
-        let pending = jsonReads.get(name);
-        if (!pending) {
-            pending = text(name).then(contents => {
-                if (contents === undefined) {
-                    return undefined;
-                }
-                try {
-                    return JSON.parse(contents) as unknown;
-                } catch (error) {
-                    // Treat a malformed file as absent: it is usually a
-                    // work-in-progress edit, not a reason to fail the walk.
-                    if (error instanceof SyntaxError) {
-                        return undefined;
-                    }
-                    throw error;
-                }
-            });
-            jsonReads.set(name, pending);
-        }
-        return pending;
+        throwIfCancelled(token);
+        return readText(code, fileUri(name));
     };
 
     return {
-        uri: directory.uri,
-        workspaceFolder: code.workspace.getWorkspaceFolder(directory.uri),
-        relativePath: directory.relativePath || '.',
+        uri,
+        workspaceFolder: code.workspace.getWorkspaceFolder(uri),
+        relativePath: relativePath(root, uri) || '.',
         fileNames,
         fileUri,
         text,
-        json,
+        json: async name => {
+            const contents = await text(name);
+            if (contents === undefined) {
+                return undefined;
+            }
+            try {
+                return JSON.parse(contents) as unknown;
+            } catch (error) {
+                // Treat a malformed file as absent: it is usually a
+                // work-in-progress edit, not a reason to fail the walk.
+                if (error instanceof SyntaxError) {
+                    return undefined;
+                }
+                throw error;
+            }
+        },
     };
 }
 
@@ -314,7 +281,6 @@ async function loadIgnoreScopes(
     code: IVsCode,
     directory: PendingDirectory,
     entries: readonly [string, vscode.FileType][],
-    maxFileBytes: number,
     token: vscode.CancellationToken | undefined,
 ): Promise<readonly IgnoreScope[]> {
     const hasGitignore = entries.some(([name, type]) =>
@@ -323,24 +289,28 @@ async function loadIgnoreScopes(
         return directory.ignoreScopes;
     }
 
-    throwIfCanceled(token);
-    const contents = await readBoundedText(
-        code, code.Uri.joinPath(directory.uri, '.gitignore'), maxFileBytes, token);
+    throwIfCancelled(token);
+    const contents = await readText(code, code.Uri.joinPath(directory.uri, '.gitignore'));
     if (contents === undefined) {
         return directory.ignoreScopes;
     }
 
     // Scopes accumulate down the tree so a nested file layers over its parents,
     // which is what lets a child re-include something an ancestor ignored.
-    return [...directory.ignoreScopes, { path: directory.relativePath, matcher: ignore().add(contents) }];
+    return [...directory.ignoreScopes, {
+        directoryUri: directory.uri,
+        matcher: ignore().add(contents),
+    }];
 }
 
-function isIgnored(relativePath: string, isDirectory: boolean, scopes: readonly IgnoreScope[]): boolean {
+function isIgnored(
+    uri: vscode.Uri,
+    isDirectory: boolean,
+    scopes: readonly IgnoreScope[],
+): boolean {
     let ignored = false;
     for (const scope of scopes) {
-        const scopedPath = scope.path
-            ? relativePath.startsWith(`${scope.path}/`) ? relativePath.slice(scope.path.length + 1) : undefined
-            : relativePath;
+        const scopedPath = relativePath(scope.directoryUri, uri);
         if (!scopedPath) {
             continue;
         }
@@ -356,37 +326,13 @@ function isIgnored(relativePath: string, isDirectory: boolean, scopes: readonly 
     return ignored;
 }
 
-async function readBoundedText(
-    code: IVsCode,
-    uri: vscode.Uri,
-    maxFileBytes: number,
-    token: vscode.CancellationToken | undefined,
-): Promise<string | undefined> {
-    throwIfCanceled(token);
+async function readText(code: IVsCode, uri: vscode.Uri): Promise<string | undefined> {
     try {
-        const stat = await code.workspace.fs.stat(uri);
-        if (stat.size > maxFileBytes) {
-            return undefined;
-        }
         return new TextDecoder().decode(await code.workspace.fs.readFile(uri));
     } catch (error) {
-        if (isFileNotFound(error)) {
+        if (isFileNotFoundError(error)) {
             return undefined;
         }
         throw error;
-    }
-}
-
-function join(parent: string, child: string): string {
-    return parent ? `${parent}/${child}` : child;
-}
-
-function isFileNotFound(error: unknown): boolean {
-    return error !== null && typeof error === 'object' && 'code' in error && error.code === 'FileNotFound';
-}
-
-function throwIfCanceled(token: vscode.CancellationToken | undefined): void {
-    if (token?.isCancellationRequested) {
-        throw new CancellationError();
     }
 }

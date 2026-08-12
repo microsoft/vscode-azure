@@ -32,3 +32,16 @@ export class CancellationError extends Error implements vscode.CancellationError
 }
 
 const CanceledName = 'Canceled'; // VS Code's error uses this spelling and we need to match. https://github.com/microsoft/vscode/blob/ff7ffa542f145bbd0bad82c38ed1ba1c54f72ec3/src/vs/base/common/errors.ts#L196
+
+/**
+ * Throws a {@linkcode CancellationError} if {@linkcode token} has been
+ * cancelled, and does nothing otherwise.
+ *
+ * Long-running loops should call this at their await boundaries so
+ * cancellation surfaces promptly and uniformly.
+ */
+export function throwIfCancelled(token: vscode.CancellationToken | undefined): void {
+    if (token?.isCancellationRequested) {
+        throw new CancellationError();
+    }
+}
