@@ -18,14 +18,6 @@ import { MockUri } from './MockUri';
  * IntelliSense from auto-importing them into product code by mistake.
  */
 
-/** Numeric values used by VS Code's bitmask-style `FileType` enum. */
-export const MockFileType = {
-    Unknown: 0,
-    File: 1,
-    Directory: 2,
-    SymbolicLink: 64,
-} satisfies typeof vscode.FileType;
-
 /** Test stand-in for {@linkcode vscode.ThemeColor}. */
 export class MockThemeColor implements vscode.ThemeColor {
     constructor(public readonly id: string) { }
@@ -107,6 +99,13 @@ export const MockTaskScope = {
     Global: 1,
     Workspace: 2,
 } satisfies typeof vscode.TaskScope;
+
+/** Test stand-in for {@linkcode vscode.ProgressLocation}. */
+export const MockProgressLocation = {
+    SourceControl: 1,
+    Window: 10,
+    Notification: 15,
+} satisfies typeof vscode.ProgressLocation;
 
 // Compile-time checks: each value type is mutually assignable to its vscode
 // counterpart, so the shapes are faithful in both directions.

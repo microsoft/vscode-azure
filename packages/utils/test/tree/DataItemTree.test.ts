@@ -128,12 +128,7 @@ describe('DataItemTree (unit)', () => {
             tree.registerProvider(createRootProvider([{ id: 'root' }]));
             await tree.getChildren();
 
-            try {
-                await tree.getChildren({ id: 'unknown' });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('not found');
-            }
+            await expect(tree.getChildren({ id: 'unknown' })).to.be.rejectedWith('not found');
         });
     });
 

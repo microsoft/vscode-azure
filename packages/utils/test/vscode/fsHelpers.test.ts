@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { basename, fileExists, isFileNotFoundError, relativePath } from '../../src/vscode/fsHelpers';
+import { basename, dirname, fileExists, isFileNotFoundError, readJson, readText, relativePath } from '../../src/vscode/fsHelpers';
+import { MockFileSystem } from './MockFileSystem';
 import { MockUri } from './MockUri';
 import { createMockVsCode } from './MockVsCode';
 
@@ -50,6 +51,51 @@ describe('fsHelpers (unit)', () => {
         });
     });
 
+    describe('readText', () => {
+        it('decodes the file as UTF-8', async () => {
+            const m = createMockVsCode();
+            const uri = m.vscode.Uri.file('/project/readme.md');
+            m.fs.addFile(uri, 'hello');
+            expect(await readText(m.vscode, uri)).to.equal('hello');
+        });
+
+        it('returns undefined when the file does not exist', async () => {
+            const m = createMockVsCode();
+            expect(await readText(m.vscode, m.vscode.Uri.file('/project/missing.md'))).to.be.undefined;
+        });
+
+        it('propagates other filesystem errors', async () => {
+            const m = createMockVsCode();
+            const uri = m.vscode.Uri.file('/project/denied.md');
+            m.fs.readFile.mock.mockImplementation(
+                () => Promise.reject(MockFileSystem.createError('NoPermissions', uri)),
+            );
+
+            await expect(readText(m.vscode, uri)).to.be.rejectedWith(/No permissions/);
+        });
+    });
+
+    describe('readJson', () => {
+        it('parses the file contents', async () => {
+            const m = createMockVsCode();
+            const uri = m.vscode.Uri.file('/project/package.json');
+            m.fs.addFile(uri, '{ "name": "test" }');
+            expect(await readJson(m.vscode, uri)).to.deep.equal({ name: 'test' });
+        });
+
+        it('returns undefined when the file does not exist', async () => {
+            const m = createMockVsCode();
+            expect(await readJson(m.vscode, m.vscode.Uri.file('/project/missing.json'))).to.be.undefined;
+        });
+
+        it('returns undefined for malformed JSON', async () => {
+            const m = createMockVsCode();
+            const uri = m.vscode.Uri.file('/project/package.json');
+            m.fs.addFile(uri, '{ "name": ');
+            expect(await readJson(m.vscode, uri)).to.be.undefined;
+        });
+    });
+
     describe('fileExists', () => {
         it('returns true when the file exists', async () => {
             const m = createMockVsCode();
@@ -62,6 +108,18 @@ describe('fsHelpers (unit)', () => {
             const m = createMockVsCode();
             const uri = m.vscode.Uri.file('/project/missing.json');
             expect(await fileExists(m.vscode, uri)).to.be.false;
+        });
+    });
+
+    describe('dirname', () => {
+        it('returns the containing directory', () => {
+            expect(dirname(MockUri.file('/repo/src/app.ts')).path).to.equal('/repo/src');
+        });
+
+        it('is a fixed point at the root, so upward walks terminate', () => {
+            const root = dirname(MockUri.file('/repo'));
+            expect(root.path).to.equal('/');
+            expect(dirname(root).path).to.equal('/');
         });
     });
 
