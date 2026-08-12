@@ -5,7 +5,7 @@
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import { walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from '../walkWorkspace';
+import { walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from './walkWorkspace';
 import { MutableWorkspaceIndex, type WorkspaceIndex } from './WorkspaceIndex';
 import { wantsFile, type DetectorContext, type IndexedNode, type WorkspaceDetector } from './WorkspaceDetector';
 import type { WorkspaceTag } from './WorkspaceTag';

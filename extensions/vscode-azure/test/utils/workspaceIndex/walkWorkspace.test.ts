@@ -8,7 +8,7 @@ import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure
 import { expect } from 'chai';
 import assert from 'node:assert/strict';
 import type * as vscode from 'vscode';
-import { defaultExcludedDirectories, walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from '../../src/utils/walkWorkspace';
+import { defaultExcludedDirectories, walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from '../../../src/utils/workspaceIndex/walkWorkspace';
 
 describe('walkWorkspace (unit)', () => {
     describe('traversal', () => {

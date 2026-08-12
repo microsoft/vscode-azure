@@ -6,7 +6,7 @@
 import { Debouncer, EventEmitter, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import { defaultExcludedDirectories } from '../walkWorkspace';
+import { defaultExcludedDirectories } from './walkWorkspace';
 import { buildWorkspaceIndex, type BuildWorkspaceIndexOptions } from './buildWorkspaceIndex';
 import type { WorkspaceDetector } from './WorkspaceDetector';
 import type { WorkspaceIndex } from './WorkspaceIndex';

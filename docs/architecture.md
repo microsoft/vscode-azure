@@ -57,7 +57,7 @@ The VS Code extension that wires everything together:
   - Workspace (local): `AzdWorkspaceDataProvider`/`ViewProvider`, `FunctionsWorkspaceDataProvider`/`ViewProvider`, `EmulatorsWorkspaceDataProvider`/`ViewProvider`
   - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`
 - **Services**: Extension-scoped DI identifiers (`ICredentialFactory`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)
-- **Workspace scanning**: `walkWorkspace` — a bounded, cancelable, `.gitignore`-aware directory walk — and `IWorkspaceIndexService`, which walks once, lets registered `WorkspaceDetector`s attach namespaced tags to files and directories, and keeps the resulting index fresh with a single shared watcher. Workspace tree providers query the index by tag (`withTag`) rather than searching the workspace themselves. It lives here rather than in `utils` because its consumers are Azure product concerns.
+- **Workspace scanning**: `IWorkspaceIndexService` walks the workspace once, lets registered `WorkspaceDetector`s attach namespaced tags to files and directories, and keeps the resulting index fresh with a single shared watcher. Workspace tree providers query it by tag (`withTag`) rather than searching the workspace themselves. It lives here rather than in `utils` because its consumers are Azure product concerns.
 
 ## Activation Flow
 

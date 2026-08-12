@@ -103,15 +103,16 @@ export interface WorkspaceWalk extends AsyncIterable<ScannedDirectory> {
  * Walks the workspace (or one subtree), yielding each directory with its file
  * names and lazy reads.
  *
- * This is the shared substrate for workspace scanning: it owns traversal,
- * exclusions, `.gitignore`, bounds, cancellation, and read caching, while
- * leaving *what a directory means* entirely to the caller. Consumers with
- * different result shapes -- classifying a project from its manifests, or
- * extracting many definitions from source files -- use the same walk.
+ * **Internal to the workspace index.** It is the traversal engine behind
+ * {@linkcode buildWorkspaceIndex} -- owning exclusions, `.gitignore`, bounds,
+ * cancellation, and read caching -- and is kept separate because those concerns
+ * are testable and changeable independently of tagging. Product code should go
+ * through `IWorkspaceIndexService` instead, so that one walk and one watcher
+ * serve every consumer.
  *
- * Because it yields rather than collecting, several consumers can share a
- * single traversal by inspecting each directory in one loop, which is the
- * difference between one pass over the workspace and one pass per consumer.
+ * Because it yields rather than collecting, a single traversal feeds every
+ * detector, and per-directory reads are memoized so inspecting the same
+ * manifest twice costs one read.
  *
  * The walk is breadth-first, so shallower directories arrive first, and within a
  * directory entries are visited in name order so repeated walks agree.
@@ -121,17 +122,6 @@ export interface WorkspaceWalk extends AsyncIterable<ScannedDirectory> {
  * because reading one is bounded and cannot loop.
  *
  * @throws {@linkcode CancellationError} when `token` is cancelled.
- *
- * @example
- * ```ts
- * const walk = walkWorkspace(code, token);
- * for await (const directory of walk) {
- *     if (directory.fileNames.has('host.json')) {
- *         projects.push(directory.uri);
- *     }
- * }
- * if (walk.truncated) { -- results may be incomplete -- }
- * ```
  */
 export function walkWorkspace(
     code: IVsCode,
