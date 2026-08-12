@@ -165,9 +165,15 @@ it('(integration) should execute without error', async () => {
 
 All tests use **chai** for assertions (`expect` style).
 
-`chai-as-promised` is hoisted for every test package, so assert on rejections
-through `expect` rather than `try`/`catch` with `expect.fail()`, or
-`assert.rejects` from `node:assert`:
+`chai-as-promised` is registered by `@microsoft/vscode-azext-eng` for every test
+package -- plain-mocha packages get it from the `import=@microsoft/vscode-azext-eng/mocha`
+node option, and the extension gets it from `@microsoft/vscode-azext-eng/mocha/chai-setup`
+in the `vscode-test` runner's `require` list, since that runner does not load the
+mocha hooks. Packages only need `chai-as-promised` in the `types` array of
+`tsconfig.base.json` to pick up the global type augmentation.
+
+So assert on rejections through `expect`, rather than `try`/`catch` with
+`expect.fail()` or `assert.rejects` from `node:assert`:
 
 ```ts
 // Assert the rejection and its message
