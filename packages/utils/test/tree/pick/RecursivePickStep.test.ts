@@ -150,12 +150,7 @@ describe('RecursivePickStep (unit)', () => {
             })],
         );
 
-        try {
-            await wizard.run();
-            expect.fail('Expected error');
-        } catch (e) {
-            expect((e as Error).message).to.include('No items found');
-        }
+        await expect(wizard.run()).to.be.rejectedWith('No items found');
     });
 
     it('should support multi-level recursion', async () => {

@@ -100,6 +100,13 @@ export const MockTaskScope = {
     Workspace: 2,
 } satisfies typeof vscode.TaskScope;
 
+/** Test stand-in for {@linkcode vscode.ProgressLocation}. */
+export const MockProgressLocation = {
+    SourceControl: 1,
+    Window: 10,
+    Notification: 15,
+} satisfies typeof vscode.ProgressLocation;
+
 // Compile-time checks: each value type is mutually assignable to its vscode
 // counterpart, so the shapes are faithful in both directions.
 /* eslint-disable @typescript-eslint/no-unused-vars */

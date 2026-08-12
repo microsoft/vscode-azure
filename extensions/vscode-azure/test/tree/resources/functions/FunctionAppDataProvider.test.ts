@@ -14,9 +14,10 @@ import { makeFunctionApp } from './mockFunctionApp';
 describe('FunctionAppDataProvider (unit)', () => {
     function createProvider(settingsOverride?: Record<string, string>) {
         const { executor } = createTestActionExecutor();
-        // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
-        const settings = settingsOverride ?? { MY_KEY: 'my-value', OTHER: 'other-value' };
-        const mockClient = createMockWebAppClient({ settings });
+        const mockClient = createMockWebAppClient({
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
+            settings: settingsOverride ?? { MY_KEY: 'my-value', OTHER: 'other-value' },
+        });
         const createClient = mock.fn(() => mockClient);
         const provider = new FunctionAppDataProvider(executor, createClient);
         return { provider, mockClient, createClient };

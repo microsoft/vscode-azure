@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider, createMockWebAppClient, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
@@ -51,16 +51,6 @@ describe('Function App Tree Integration (integration)', () => {
         subscription,
     });
 
-    // -- Mock WebAppClient ------------------------------------------------
-
-    function createMockClient(initialSettings?: Record<string, string>): { client: MockWebAppClient; settings: Record<string, string> } {
-        const client = createMockWebAppClient({
-            // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
-            settings: initialSettings ?? { APP_KEY: 'app-value', DB_HOST: 'localhost' },
-        });
-        return { client, settings: client.settings };
-    }
-
     // -- Pipeline factory -------------------------------------------------
 
     interface TestPipeline {
@@ -70,7 +60,7 @@ describe('Function App Tree Integration (integration)', () => {
         readonly funcDataProvider: FunctionAppDataProvider;
         readonly funcViewProvider: FunctionAppViewProvider;
         readonly genericViewProvider: GenericAzureViewProvider;
-        readonly webAppClient: IWebAppClient;
+        readonly webAppClient: MockWebAppClient;
         readonly backingSettings: Record<string, string>;
     }
 
@@ -83,7 +73,11 @@ describe('Function App Tree Integration (integration)', () => {
         const ctx = mockCtx.ctx;
         const code = ctx.code;
 
-        const { client: webAppClient, settings: backingSettings } = createMockClient(options?.initialSettings);
+        const webAppClient = createMockWebAppClient({
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
+            settings: options?.initialSettings ?? { APP_KEY: 'app-value', DB_HOST: 'localhost' },
+        });
+        const backingSettings = webAppClient.settings;
         const webAppClientProvider = () => webAppClient;
 
         // Data layer

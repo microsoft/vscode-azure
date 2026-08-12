@@ -60,13 +60,8 @@ describe('SelectIacFolderStep (unit)', () => {
             const { ctx } = createMockCodeContext();
             const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
 
-            try {
-                await step.prompt({ job: 'deploy' });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(CancellationError.test(e)).to.be.false;
-                expect((e as Error).message).to.include('Open a folder');
-            }
+            const error: Error = await expect(step.prompt({ job: 'deploy' })).to.be.rejectedWith(Error, 'Open a folder');
+            expect(CancellationError.test(error)).to.be.false;
         });
     });
 });

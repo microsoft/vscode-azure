@@ -127,17 +127,11 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ exitCode: 1, stderr: 'failure reason' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            try {
-                await executor.spawn({
-                    execution: 'background',
-                    command: ['test-cmd'],
-                });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(e).to.be.instanceOf(SubprocessError);
-                expect((e as Error).message).to.include('failure reason');
-                expect((e as SubprocessError).exitCode).to.equal(1);
-            }
+            await expect(executor.spawn({
+                execution: 'background',
+                command: ['test-cmd'],
+            })).to.be.rejectedWith(SubprocessError, 'failure reason')
+                .and.eventually.have.property('exitCode', 1);
         });
 
         it('should throw SubprocessError when terminated by a signal', async () => {
@@ -145,17 +139,11 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ signalName: 'SIGTERM', stderr: 'killed' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            try {
-                await executor.spawn({
-                    execution: 'background',
-                    command: ['test-cmd'],
-                });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(e).to.be.instanceOf(SubprocessError);
-                expect((e as Error).message).to.include('killed');
-                expect((e as SubprocessError).signalName).to.equal('SIGTERM');
-            }
+            await expect(executor.spawn({
+                execution: 'background',
+                command: ['test-cmd'],
+            })).to.be.rejectedWith(SubprocessError, 'killed')
+                .and.eventually.have.property('signalName', 'SIGTERM');
         });
 
         it('should throw CancellationError when the subprocess reports isCanceled', async () => {
@@ -163,15 +151,10 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ isCanceled: true }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            try {
-                await executor.spawn({
-                    execution: 'background',
-                    command: ['test-cmd'],
-                });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(CancellationError.test(e)).to.be.true;
-            }
+            await expect(executor.spawn({
+                execution: 'background',
+                command: ['test-cmd'],
+            })).to.be.rejectedWith(CancellationError);
         });
 
         it('should preserve the ENOENT code from a spawn-time failure', async () => {
@@ -182,16 +165,12 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ message: 'Command failed', cause }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            try {
-                await executor.spawn({
-                    execution: 'background',
-                    command: ['test-cmd'],
-                });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(e).to.not.be.instanceOf(SubprocessError);
-                expect((e as { code?: string }).code).to.equal('ENOENT');
-            }
+            const error: Error & { code?: string } = await expect(executor.spawn({
+                execution: 'background',
+                command: ['test-cmd'],
+            })).to.be.rejected;
+            expect(error).to.not.be.instanceOf(SubprocessError);
+            expect(error.code).to.equal('ENOENT');
         });
 
         it('should reject promptly when the process fails to spawn', async () => {
@@ -344,14 +323,9 @@ describe('ProcessExecutor (unit)', () => {
                 exitCode: 42,
             });
 
-            try {
-                await promise;
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(e).to.be.instanceOf(Error);
-                expect((e as Error).message).to.include('42');
-                expect((e as Error).message).to.include('Failing Task');
-            }
+            const error: Error = await expect(promise).to.be.rejectedWith(Error);
+            expect(error.message).to.include('42');
+            expect(error.message).to.include('Failing Task');
         });
 
         it('should reject with CancellationError when cancelled', async () => {
@@ -375,12 +349,7 @@ describe('ProcessExecutor (unit)', () => {
             // Cancel
             emitter.fire();
 
-            try {
-                await promise;
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(CancellationError.test(e)).to.be.true;
-            }
+            await expect(promise).to.be.rejectedWith(CancellationError);
 
             // Verify terminate was called
             const terminate = (taskExecution as unknown as { terminate: Mock<() => void> }).terminate;
@@ -543,16 +512,10 @@ describe('ProcessExecutor (integration)', () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
-            try {
-                await executor.spawn({
-                    execution: 'background',
-                    ...evalNode('process.stderr.write("failure reason"); process.exit(1);'),
-                });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(e).to.be.instanceOf(SubprocessError);
-                expect((e as Error).message).to.include('failure reason');
-            }
+            await expect(executor.spawn({
+                execution: 'background',
+                ...evalNode('process.stderr.write("failure reason"); process.exit(1);'),
+            })).to.be.rejectedWith(SubprocessError, 'failure reason');
         });
 
         it('should throw CancellationError when cancelled', async () => {
@@ -574,12 +537,7 @@ describe('ProcessExecutor (integration)', () => {
             token.isCancellationRequested = true;
             emitter.fire();
 
-            try {
-                await promise;
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(CancellationError.test(e)).to.be.true;
-            }
+            await expect(promise).to.be.rejectedWith(CancellationError);
         });
 
         it('should stream JSON lines from stderr', async () => {
@@ -760,12 +718,7 @@ describe('ProcessExecutor (integration)', () => {
             token.isCancellationRequested = true;
             emitter.fire();
 
-            try {
-                await result.completed;
-                expect.fail('Expected cancellation');
-            } catch (e) {
-                expect(CancellationError.test(e)).to.be.true;
-            }
+            await expect(result.completed).to.be.rejectedWith(CancellationError);
 
             // Must not hang: the live stream terminates when the child dies.
             await drained;

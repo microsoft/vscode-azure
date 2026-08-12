@@ -178,12 +178,7 @@ describe('Wizard (unit)', () => {
             [new NameInputStep(ctx)],
         );
 
-        try {
-            await wizard.run();
-            expect.fail('Expected CancellationError');
-        } catch (e) {
-            expect(CancellationError.test(e)).to.be.true;
-        }
+        await expect(wizard.run()).to.be.rejectedWith(CancellationError);
     });
 
     it('should throw CancellationError when going back past the first step', async () => {
@@ -198,12 +193,7 @@ describe('Wizard (unit)', () => {
             [new NameInputStep(ctx)],
         );
 
-        try {
-            await wizard.run();
-            expect.fail('Expected CancellationError');
-        } catch (e) {
-            expect(CancellationError.test(e)).to.be.true;
-        }
+        await expect(wizard.run()).to.be.rejectedWith(CancellationError);
     });
 
     it('should re-prompt the previous step after going back', async () => {

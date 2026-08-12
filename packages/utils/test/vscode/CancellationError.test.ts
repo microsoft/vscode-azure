@@ -4,9 +4,42 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { CancellationError } from '../../src/vscode/CancellationError';
+import { CancellationError, throwIfCancelled } from '../../src/vscode/CancellationError';
 
 describe('CancellationError (unit)', () => {
+    describe('throwIfCancelled', () => {
+        it('does nothing when the token is not cancelled', () => {
+            expect(() => {
+                throwIfCancelled({
+                    isCancellationRequested: false,
+                    onCancellationRequested: () => ({ dispose: () => undefined }),
+                });
+            }).to.not.throw();
+        });
+
+        it('does nothing when there is no token', () => {
+            expect(() => { throwIfCancelled(undefined); }).to.not.throw();
+        });
+
+        it('throws CancellationError once the token is cancelled', () => {
+            expect(() => {
+                throwIfCancelled({
+                    isCancellationRequested: true,
+                    onCancellationRequested: () => ({ dispose: () => undefined }),
+                });
+            }).to.throw(CancellationError);
+        });
+
+        it('carries the step name onto the error', () => {
+            expect(() => {
+                throwIfCancelled({
+                    isCancellationRequested: true,
+                    onCancellationRequested: () => ({ dispose: () => undefined }),
+                }, 'WalkWorkspace');
+            }).to.throw(CancellationError).with.property('stepName', 'WalkWorkspace');
+        });
+    });
+
     it('should have the name "Canceled"', () => {
         const err = new CancellationError();
         expect(err.name).to.equal('Canceled');

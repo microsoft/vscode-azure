@@ -243,8 +243,8 @@ export function createMockSubscriptionClientProvider(locations: Location[] = [])
 /** Options for {@linkcode createMockWebAppClient}. */
 export interface MockWebAppClientOptions {
     /**
-     * Backing application-settings store. Mutated in place by
-     * `webApps.updateApplicationSettings` so later reads observe the change.
+     * Initial application settings. Copied into the mutable store backing the
+     * client, so mutating the returned settings never affects the caller's object.
      */
     readonly settings?: Record<string, string>;
     /** `defaultHostName` returned by `webApps.get`. */
@@ -254,12 +254,24 @@ export interface MockWebAppClientOptions {
 }
 
 /**
+ * An {@linkcode IWebAppClient} whose methods are `mock.fn()` instances, plus the
+ * mutable application-settings store backing them.
+ */
+export type MockWebAppClient = IWebAppClient & {
+    readonly settings: Record<string, string>;
+    readonly webApps: { [K in keyof IWebAppClient['webApps']]: Mock<IWebAppClient['webApps'][K]> };
+    readonly staticSites: { [K in keyof IWebAppClient['staticSites']]: Mock<IWebAppClient['staticSites'][K]> };
+};
+
+/**
  * Creates a mock {@linkcode IWebAppClient} whose methods are `mock.fn()` instances,
- * so tests can assert call counts and arguments via `client.webApps.get.mock`.
+ * so tests can assert call counts and arguments via
+ * `client.webApps.listApplicationSettings.mock`.
  *
  * Application settings are backed by a mutable store shared with the returned
- * {@linkcode MockWebAppClient.settings settings} object, letting tests exercise
- * read-modify-write flows without re-stubbing.
+ * {@linkcode MockWebAppClient.settings settings} object, so
+ * `updateApplicationSettings` is observable by later reads. This lets tests
+ * exercise read-modify-write flows without re-stubbing.
  */
 export function createMockWebAppClient(options?: MockWebAppClientOptions): MockWebAppClient {
     const settings: Record<string, string> = { ...options?.settings };
@@ -270,6 +282,7 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
             get: mock.fn(() => Promise.resolve({ location: 'eastus', defaultHostName: options?.defaultHostName })),
             listApplicationSettings: mock.fn(() => Promise.resolve({ properties: { ...settings } })),
             updateApplicationSettings: mock.fn((_resourceGroupName: string, _name: string, appSettings: { properties?: Record<string, string> }) => {
+                // Replace rather than merge: the ARM operation is a full write of the setting collection.
                 for (const key of Object.keys(settings)) {
                     Reflect.deleteProperty(settings, key);
                 }
@@ -282,13 +295,3 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
         },
     };
 }
-
-/**
- * An {@linkcode IWebAppClient} whose methods are `mock.fn()` instances, plus the
- * mutable application-settings store backing them.
- */
-export type MockWebAppClient = IWebAppClient & {
-    readonly settings: Record<string, string>;
-    readonly webApps: { [K in keyof IWebAppClient['webApps']]: Mock<IWebAppClient['webApps'][K]> };
-    readonly staticSites: { [K in keyof IWebAppClient['staticSites']]: Mock<IWebAppClient['staticSites'][K]> };
-};

@@ -136,12 +136,7 @@ describe('ViewItemTree (unit)', () => {
             // Unregister all providers so nothing matches
             viewTree.dispose();
 
-            try {
-                await viewTree.getTreeItem('item');
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('No view provider found');
-            }
+            await expect(viewTree.getTreeItem('item')).to.be.rejectedWith('No view provider found');
         });
     });
 
