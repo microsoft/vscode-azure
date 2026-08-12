@@ -93,12 +93,8 @@ describe('uiHelpers (unit)', () => {
             const { ctx, mock } = createMockCodeContext();
             respondToPrompts(mock, ['goBack']);
 
-            try {
-                await showSmartInputBox(ctx, { prompt: 'Enter value', showBack: true });
-                expect.fail('Expected GoBackError');
-            } catch (e) {
-                expect(GoBackError.test(e)).to.be.true;
-            }
+            const error = await expect(showSmartInputBox(ctx, { prompt: 'Enter value', showBack: true })).to.be.rejected;
+            expect(GoBackError.test(error)).to.be.true;
         });
 
         it('should restore recently entered value on subsequent calls', async () => {
@@ -137,6 +133,70 @@ describe('uiHelpers (unit)', () => {
             respondToPrompts(mock, ['acceptDefault']);
             const result = await showSmartInputBox(ctx, { prompt: 'Enter value', fallbackValue: 'default-val' });
             expect(result).to.equal('hello');
+        });
+
+        describe('rememberRecent', () => {
+            it('should not persist the value when rememberRecent is false', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ input: 'super-secret' }]);
+                await showSmartInputBox(ctx, { prompt: 'Enter value', rememberRecent: false });
+
+                // Nothing about the value may reach workspace state -- it is often a secret.
+                const state = ctx.extensionContext.workspaceState;
+                const stored = state.keys().map(key => String(state.get(key)));
+                expect(stored).to.not.include('super-secret');
+            });
+
+            it('should not restore a value from a prompt that opted out', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ input: 'super-secret' }]);
+                await showSmartInputBox(ctx, { prompt: 'Enter value', rememberRecent: false });
+
+                respondToPrompts(mock, ['acceptDefault']);
+                const result = await showSmartInputBox(ctx, { prompt: 'Enter value', rememberRecent: false });
+
+                expect(result).to.equal('');
+            });
+
+            it('should treat a password prompt as opted out even without the flag', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ input: 'super-secret' }]);
+                await showSmartInputBox(ctx, { prompt: 'Enter value', password: true });
+
+                respondToPrompts(mock, ['acceptDefault']);
+                const result = await showSmartInputBox(ctx, { prompt: 'Enter value', password: true });
+
+                expect(result).to.equal('');
+            });
+
+            it('should still apply fallbackValue when the prompt opted out', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, ['acceptDefault']);
+                const result = await showSmartInputBox(ctx, {
+                    prompt: 'Enter value',
+                    fallbackValue: 'default-val',
+                    rememberRecent: false,
+                });
+
+                expect(result).to.equal('default-val');
+            });
+
+            it('should still apply fallbackValue for a password prompt', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, ['acceptDefault']);
+                const result = await showSmartInputBox(ctx, {
+                    prompt: 'Enter value',
+                    fallbackValue: 'default-val',
+                    password: true,
+                });
+
+                expect(result).to.equal('default-val');
+            });
         });
     });
 
@@ -306,15 +366,11 @@ describe('uiHelpers (unit)', () => {
             const { ctx, mock } = createMockCodeContext();
             respondToPrompts(mock, ['goBack']);
 
-            try {
-                await showSmartQuickPick(ctx, [
-                    { label: 'A' },
-                    { label: 'B' },
-                ], { showBack: true });
-                expect.fail('Expected GoBackError');
-            } catch (e) {
-                expect(GoBackError.test(e)).to.be.true;
-            }
+            const error = await expect(showSmartQuickPick(ctx, [
+                { label: 'A' },
+                { label: 'B' },
+            ], { showBack: true })).to.be.rejected;
+            expect(GoBackError.test(error)).to.be.true;
         });
 
         describe('combo box (createItemFromValue)', () => {
@@ -668,12 +724,8 @@ describe('uiHelpers (unit)', () => {
             const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
             showPick.mock.mockImplementation(() => Promise.resolve(undefined));
 
-            try {
-                await getWorkspaceFolder(mockResult.vscode);
-                expect.fail('Expected CancellationError');
-            } catch (e) {
-                expect(CancellationError.test(e)).to.be.true;
-            }
+            const error = await expect(getWorkspaceFolder(mockResult.vscode)).to.be.rejected;
+            expect(CancellationError.test(error)).to.be.true;
         });
     });
 });

@@ -117,12 +117,7 @@ describe('AzdDown (unit)', () => {
         const { cmd, mockResult, azd } = createCommand({ workspaceFolders: false });
         mockResult.messageResponses.push('Delete');
 
-        try {
-            await cmd.execute();
-            expect.fail('Expected error');
-        } catch (e) {
-            expect((e as Error).message).to.include('workspace folder');
-        }
+        await expect(cmd.execute()).to.be.rejectedWith('workspace folder');
 
         expect(azd.down.mock.callCount()).to.equal(0);
     });
@@ -132,12 +127,7 @@ describe('AzdDown (unit)', () => {
         mockResult.messageResponses.push('Delete');
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([]));
 
-        try {
-            await cmd.execute();
-            expect.fail('Expected error');
-        } catch (e) {
-            expect((e as Error).message).to.include('azure.yaml');
-        }
+        await expect(cmd.execute()).to.be.rejectedWith('azure.yaml');
 
         expect(azd.down.mock.callCount()).to.equal(0);
     });

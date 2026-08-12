@@ -46,12 +46,8 @@ describe('ResourceSelector (unit)', () => {
         const cache = createMockDataItemTree([]);
         const selector = new ResourceSelector(ctx, output, cache, undefined as unknown as IAzureViewViewItemTree);
 
-        try {
-            await selector.select<GenericResource>('Microsoft.Web/sites', 'missing-key');
-            expect.fail('Expected select to throw');
-        } catch (error) {
-            expect((error as Error).message).to.match(/Resource not found/);
-        }
+        await expect(selector.select<GenericResource>('Microsoft.Web/sites', 'missing-key'))
+            .to.be.rejectedWith(/Resource not found/);
     });
 
     it('should prompt the user with a resource picker when no key is provided', async () => {

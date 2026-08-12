@@ -124,12 +124,8 @@ describe('AzdDeployStep (unit)', () => {
                 iacFolder: MockUri.file('/project'),
             } as AzdWizardContext;
 
-            try {
-                await step.execute(context);
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.equal('deploy failed');
-            }
+            const error = await expect(step.execute(context)).to.be.rejected;
+            expect((error as Error).message).to.equal('deploy failed');
 
             expect(completeFn.mock.callCount()).to.equal(1);
             expect(completeFn.mock.calls[0].arguments[0]).to.equal('Failed');

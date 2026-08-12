@@ -252,21 +252,17 @@ describe('AzdService (unit)', () => {
             const { service, executor } = createService(spawnFn);
 
             let suppress: string | boolean | undefined;
-            try {
-                await executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
-                    ctx.errorHandling.rethrow = true;
-                    try {
-                        await service.init(MockUri.file('/project'));
-                    } finally {
-                        suppress = ctx.errorHandling.suppress;
-                    }
-                });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('Azure Developer CLI (azd) was not found');
-                expect((e as Error).cause).to.equal(enoent);
-                expect(suppress).to.equal('display');
-            }
+            const error = await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
+                ctx.errorHandling.rethrow = true;
+                try {
+                    await service.init(MockUri.file('/project'));
+                } finally {
+                    suppress = ctx.errorHandling.suppress;
+                }
+            })).to.be.rejected;
+            expect((error as Error).message).to.include('Azure Developer CLI (azd) was not found');
+            expect((error as Error).cause).to.equal(enoent);
+            expect(suppress).to.equal('display');
         });
 
         it('should treat a non-ENOENT failure as not-installed when azd is unrunnable (Windows forced-shell)', async () => {
@@ -281,21 +277,17 @@ describe('AzdService (unit)', () => {
             const { service, executor } = createService(spawnFn);
 
             let suppress: string | boolean | undefined;
-            try {
-                await executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
-                    ctx.errorHandling.rethrow = true;
-                    try {
-                        await service.init(MockUri.file('/project'));
-                    } finally {
-                        suppress = ctx.errorHandling.suppress;
-                    }
-                });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('Azure Developer CLI (azd) was not found');
-                expect((e as Error).cause).to.equal(exitError);
-                expect(suppress).to.equal('display');
-            }
+            const error = await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
+                ctx.errorHandling.rethrow = true;
+                try {
+                    await service.init(MockUri.file('/project'));
+                } finally {
+                    suppress = ctx.errorHandling.suppress;
+                }
+            })).to.be.rejected;
+            expect((error as Error).message).to.include('Azure Developer CLI (azd) was not found');
+            expect((error as Error).cause).to.equal(exitError);
+            expect(suppress).to.equal('display');
         });
 
         it('should report outdated version and suppress display when azd is too old', async () => {
@@ -312,21 +304,17 @@ describe('AzdService (unit)', () => {
             const { service, executor } = createService(spawnFn);
 
             let suppress: string | boolean | undefined;
-            try {
-                await executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
-                    ctx.errorHandling.rethrow = true;
-                    try {
-                        await service.init(MockUri.file('/project'));
-                    } finally {
-                        suppress = ctx.errorHandling.suppress;
-                    }
-                });
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('version');
-                expect((e as Error).message).to.include(MinAzdVersion);
-                expect(suppress).to.equal('display');
-            }
+            const error = await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
+                ctx.errorHandling.rethrow = true;
+                try {
+                    await service.init(MockUri.file('/project'));
+                } finally {
+                    suppress = ctx.errorHandling.suppress;
+                }
+            })).to.be.rejected;
+            expect((error as Error).message).to.include('version');
+            expect((error as Error).message).to.include(MinAzdVersion);
+            expect(suppress).to.equal('display');
         });
 
         it('should rethrow non-ENOENT errors as-is when version is sufficient', async () => {
@@ -342,12 +330,8 @@ describe('AzdService (unit)', () => {
             });
             const { service } = createService(spawnFn);
 
-            try {
-                await service.init(MockUri.file('/project'));
-                expect.fail('Expected error');
-            } catch (e) {
-                expect(e).to.equal(other);
-            }
+            const error = await expect(service.init(MockUri.file('/project'))).to.be.rejected;
+            expect(error).to.equal(other);
         });
     });
 
@@ -389,12 +373,7 @@ describe('AzdService (unit)', () => {
             const { service, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            try {
-                await service.provision(MockUri.file('/project'));
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('Process exited with code 1');
-            }
+            await expect(service.provision(MockUri.file('/project'))).to.be.rejectedWith('Process exited with code 1');
         });
     });
 
@@ -423,12 +402,7 @@ describe('AzdService (unit)', () => {
             const { service, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            try {
-                await service.deploy(MockUri.file('/project'));
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('Process exited with code 2');
-            }
+            await expect(service.deploy(MockUri.file('/project'))).to.be.rejectedWith('Process exited with code 2');
         });
     });
 
@@ -475,12 +449,7 @@ describe('AzdService (unit)', () => {
             );
             const { service } = createService(spawnFn);
 
-            try {
-                await service.down(MockUri.file('/project'));
-                expect.fail('Expected error');
-            } catch (e) {
-                expect((e as Error).message).to.include('Process exited with code 3');
-            }
+            await expect(service.down(MockUri.file('/project'))).to.be.rejectedWith('Process exited with code 3');
         });
     });
 

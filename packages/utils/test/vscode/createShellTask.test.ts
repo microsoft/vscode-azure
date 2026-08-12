@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import assert from 'node:assert/strict';
 import type * as vscode from 'vscode';
 import { ShellQuoting, command } from '../../src/base/CommandLineBuilder';
 import { createShellTask } from '../../src/vscode/createShellTask';
@@ -75,9 +74,9 @@ describe('createShellTask (unit)', () => {
     it('rejects an empty command line', async () => {
         const m = createMockVsCode();
 
-        await assert.rejects(createShellTask(m.vscode, {
+        await expect(createShellTask(m.vscode, {
             command: [],
             name: 'Example task',
-        }), /A command line must include at least the executable/);
+        })).to.be.rejectedWith(/A command line must include at least the executable/);
     });
 });

@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider, type IWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
+import { createMockAccountDataProvider, createMockWebAppClient, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
@@ -50,31 +50,6 @@ describe('Function App Tree Integration (integration)', () => {
         subscription,
     });
 
-    // -- Mock WebAppClient ------------------------------------------------
-
-    function createMockWebAppClient(initialSettings?: Record<string, string>): { client: IWebAppClient; settings: Record<string, string> } {
-        // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
-        const settings = { ...initialSettings ?? { APP_KEY: 'app-value', DB_HOST: 'localhost' } };
-        const client: IWebAppClient = {
-            webApps: {
-                listApplicationSettings: mock.fn(
-                    () => Promise.resolve({ properties: { ...settings } }),
-                ),
-                updateApplicationSettings: mock.fn(
-                    (_rg: string, _name: string, body: { properties?: Record<string, string> }) => {
-                        // Synchronize the backing store so subsequent list calls reflect mutations
-                        for (const k of Object.keys(settings)) {
-                            Reflect.deleteProperty(settings, k);
-                        }
-                        Object.assign(settings, body.properties);
-                        return Promise.resolve({ properties: { ...settings } });
-                    },
-                ),
-            },
-        };
-        return { client, settings };
-    }
-
     // -- Pipeline factory -------------------------------------------------
 
     interface TestPipeline {
@@ -84,7 +59,7 @@ describe('Function App Tree Integration (integration)', () => {
         readonly funcDataProvider: FunctionAppDataProvider;
         readonly funcViewProvider: FunctionAppViewProvider;
         readonly genericViewProvider: GenericAzureViewProvider;
-        readonly webAppClient: IWebAppClient;
+        readonly webAppClient: MockWebAppClient;
         readonly backingSettings: Record<string, string>;
     }
 
@@ -97,7 +72,11 @@ describe('Function App Tree Integration (integration)', () => {
         const ctx = mockCtx.ctx;
         const code = ctx.code;
 
-        const { client: webAppClient, settings: backingSettings } = createMockWebAppClient(options?.initialSettings);
+        const webAppClient = createMockWebAppClient({
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- app setting keys use SCREAMING_SNAKE_CASE
+            settings: options?.initialSettings ?? { APP_KEY: 'app-value', DB_HOST: 'localhost' },
+        });
+        const backingSettings = webAppClient.settings;
         const webAppClientProvider = () => webAppClient;
 
         // Data layer

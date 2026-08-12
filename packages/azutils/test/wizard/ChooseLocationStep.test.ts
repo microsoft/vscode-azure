@@ -96,11 +96,7 @@ describe('ChooseLocationStep (unit)', () => {
             [new ChooseLocationStep(ctx, provider, output)],
         );
 
-        try {
-            await wizard.run();
-            expect.fail('Expected an error to be thrown');
-        } catch (e) {
-            expect((e as Error).message).to.equal('Subscription is required to choose location');
-        }
+        const error = await expect(wizard.run()).to.be.rejected;
+        expect((error as Error).message).to.equal('Subscription is required to choose location');
     });
 });
