@@ -4,15 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode, ManualDebounceScheduler, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
-import { expect, use } from 'chai';
-import chaiAsPromised from 'chai-as-promised';
+import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { watchPatterns, WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { StandardTagNames, tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
-
-use(chaiAsPromised);
 
 const functions = tagNamespace('functions');
 const FunctionsProject = functions.tag(StandardTagNames.projectRoot);

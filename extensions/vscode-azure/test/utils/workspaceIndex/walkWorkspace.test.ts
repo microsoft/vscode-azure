@@ -6,7 +6,6 @@
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import assert from 'node:assert/strict';
 import type * as vscode from 'vscode';
 import { defaultExcludedDirectories, walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from '../../../src/utils/workspaceIndex/walkWorkspace';
 
@@ -251,7 +250,7 @@ describe('walkWorkspace (unit)', () => {
             m.fs.readDirectory.mock.mockImplementationOnce(
                 () => Promise.reject(Object.assign(new Error('denied'), { code: 'NoPermissions' })));
 
-            await assert.rejects(collect(m), /denied/);
+            await expect(collect(m)).to.be.rejectedWith(/denied/);
         });
 
         it('throws CancellationError once the token is cancelled', async () => {
@@ -264,7 +263,7 @@ describe('walkWorkspace (unit)', () => {
                 onCancellationRequested: () => ({ dispose: () => undefined }),
             } satisfies vscode.CancellationToken;
 
-            await assert.rejects(collect(m, {}, token), CancellationError);
+            await expect(collect(m, {}, token)).to.be.rejectedWith(CancellationError);
         });
 
         it('yields nothing when no workspace folder is open', async () => {

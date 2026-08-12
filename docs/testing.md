@@ -165,6 +165,18 @@ it('(integration) should execute without error', async () => {
 
 All tests use **chai** for assertions (`expect` style).
 
+`chai-as-promised` is hoisted for every test package, so assert on rejections
+through `expect` rather than `try`/`catch` with `expect.fail()`, or
+`assert.rejects` from `node:assert`:
+
+```ts
+// Assert the rejection and its message
+await expect(command.execute()).to.be.rejectedWith(/no longer available/);
+
+// Or assert the error type
+await expect(walk(token)).to.be.rejectedWith(CancellationError);
+```
+
 ## Running Tests
 
 ```bash

@@ -9,6 +9,7 @@
         "types": [
             "node",
             "mocha",
+            "chai-as-promised",
         ],
         "sourceMap": true,
         "strict": true,

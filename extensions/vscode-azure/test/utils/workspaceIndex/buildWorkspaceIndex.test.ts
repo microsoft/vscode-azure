@@ -6,7 +6,6 @@
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import assert from 'node:assert/strict';
 import type * as vscode from 'vscode';
 import { buildWorkspaceIndex } from '../../../src/utils/workspaceIndex/buildWorkspaceIndex';
 import type { DetectorContext, WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
@@ -87,7 +86,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspace(m);
             addFile(m, '/repo/App.cs', '');
 
-            await assert.rejects(build(m, [forger]), /may only apply tags in namespace 'forger'/);
+            await expect(build(m, [forger])).to.be.rejectedWith(/may only apply tags in namespace 'forger'/);
         });
 
         it('rejects two detectors sharing a namespace', async () => {
@@ -95,7 +94,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspace(m);
             const other: WorkspaceDetector = { ...csharpDetector, id: 'csharp-2' };
 
-            await assert.rejects(build(m, [csharpDetector, other]), /both use the tag namespace/);
+            await expect(build(m, [csharpDetector, other])).to.be.rejectedWith(/both use the tag namespace/);
         });
 
         it('rejects namespace and tag names containing the qualifier separator', () => {
@@ -282,7 +281,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             const m = createMockVsCode();
             addWorkspace(m);
 
-            await assert.rejects(build(m, [detector]), /detector failed/);
+            await expect(build(m, [detector])).to.be.rejectedWith(/detector failed/);
         });
 
         it('throws CancellationError once the token is cancelled', async () => {
@@ -295,9 +294,8 @@ describe('buildWorkspaceIndex (unit)', () => {
                 onCancellationRequested: () => ({ dispose: () => undefined }),
             } satisfies vscode.CancellationToken;
 
-            await assert.rejects(
-                buildWorkspaceIndex(m.vscode, [csharpDetector], token),
-                CancellationError);
+            await expect(buildWorkspaceIndex(m.vscode, [csharpDetector], token))
+                .to.be.rejectedWith(CancellationError);
         });
     });
 });

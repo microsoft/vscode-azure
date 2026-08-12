@@ -392,11 +392,9 @@
     },
     "devDependencies": {
         "@azure/identity": "^4.13.1",
-        "@types/chai-as-promised": "^8.0.2",
         "@types/semver": "^7.7.1",
         "@vscode/test-cli": "catalog:",
         "@vscode/test-electron": "catalog:",
-        "chai-as-promised": "^8.0.2",
         "esbuild": "catalog:",
         "esbuild-plugin-copy": "catalog:",
         "tsx": "catalog:"
