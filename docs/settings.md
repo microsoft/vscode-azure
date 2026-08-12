@@ -1,9 +1,9 @@
 # Settings
 
-Application settings, connection strings, and similar name/value configuration on a deployed
-resource are a near-universal Azure concept. This document describes the shared framework that
-serves all of them, so a product gets settings by registering an adapter rather than by building a
-tree, a command set, and an editor of its own.
+Application settings and similar name/value configuration on a deployed resource are a near-universal
+Azure concept. This document describes the shared framework that serves them, so a product gets
+settings by registering an adapter rather than by building a tree, a command, and an editor of its
+own.
 
 ## Layers
 
@@ -11,23 +11,24 @@ tree, a command set, and an editor of its own.
 extensions/vscode-azure/src/settings/core/   Model, JSONC format, document FileSystemProvider
 extensions/vscode-azure/src/settings/        Adapter contract, registry, adapters, URI codec, registration
 extensions/vscode-azure/src/tree/resources/settings/   Data + view providers
-extensions/vscode-azure/src/commands/settings/         Commands
+extensions/vscode-azure/src/commands/settings/         The edit command
 ```
 
 **This all lives in the extension, not in `packages/`.** App settings are not a reusable primitive
-today — nothing outside this extension consumes any of it, and the document header ships strings that
+today -- nothing outside this extension consumes any of it, and the document header ships strings that
 name Azure directly, so the code could not honestly sit in a package documented as having "no
 Azure-specific knowledge". Move a piece into `utils` or `azutils` when a second consumer actually
 appears.
 
 `SettingsFileSystemProvider` is still written against a `SettingsDocumentSource` seam (resolve a URI,
 read a snapshot, write a map) rather than against ARM. That keeps it unit-testable with
-`createMockVsCode()` and no ARM mocking — the seam earns its keep for testing regardless of which
+`createMockVsCode()` and no ARM mocking -- the seam earns its keep for testing regardless of which
 package the file lives in.
 
-## The editor is the primary surface
+## One command, one surface
 
-Opening **Edit Settings** on a collection produces a JSONC document that *is* the collection:
+The tree shows a single leaf node per settings collection. Selecting it runs the one settings
+command, which opens the whole collection as an editable JSONC document:
 
 ```jsonc
 // Application settings for 'myFunctionApp'.
@@ -44,8 +45,9 @@ Opening **Edit Settings** on a collection produces a JSONC document that *is* th
 The header is regenerated on every read and stripped on parse, so edits to it are discarded rather
 than persisted somewhere they could go stale.
 
-The tree keeps an expandable collection node with per-setting add / edit / rename / delete / copy for
-one-off changes, but anything involving more than one setting is easier in the document.
+There are deliberately **no per-setting tree commands** -- no add, edit, rename, delete, or copy. One
+document editor covers all of them with the editor's own find, multi-cursor, and undo, and it means
+setting values never appear in the tree, which is frequently visible during screen shares.
 
 ### Save semantics: last-writer-wins
 
@@ -56,27 +58,15 @@ and no merge:
 - A key someone else added since you opened the document is **overwritten** (that is, removed).
 
 This is deliberate. It makes the document mean exactly what it appears to mean, and it matches ARM,
-which has no per-key patch for these collections — `updateApplicationSettings` replaces the whole
+which has no per-key patch for these collections -- `updateApplicationSettings` replaces the whole
 dictionary. The trade-off is real: two people editing the same collection in two windows will clobber
 each other silently. `SettingsAdapter.write` takes the full map, so adding etag / `If-Match` support
 later is additive rather than a redesign.
 
-The per-setting tree commands read, modify one key, and write, so keys they do not touch survive.
-
-### Keeping the tree and an open document in step
-
-A collection is visible in two independent places. A tree command that changed Azure but refreshed
-only the tree would leave an open document holding a stale snapshot, and last-writer-wins means that
-document would silently undo the change on its next save — the same user's own action, reverted in
-the same window.
-
-Every command that mutates settings outside the editor therefore calls `ISettingsChangeNotifier`,
-which invalidates both the tree subtree and the document, rather than touching the tree directly.
-
 ## Adapters
 
-A product supports settings by implementing `SettingsAdapter` and binding it to
-`ISettingsAdapter` in `products/registerSettings.ts`. Nothing else changes.
+A product supports settings by implementing `SettingsAdapter` and binding it to `ISettingsAdapter` in
+`products/registerSettings.ts`. Nothing else changes.
 
 ```typescript
 export interface SettingsAdapter {
@@ -84,7 +74,6 @@ export interface SettingsAdapter {
     getCollections(resource: GenericResource): readonly SettingsCollectionDescriptor[];
     read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot>;
     write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void>;
-    validateKey?(resource: GenericResource, collectionId: string, key: string): string | undefined;
 }
 ```
 
@@ -96,54 +85,28 @@ lists; an adapter that also inspected, say, the resource's location would be mem
 
 There is deliberately **no capability model**. Two existing mechanisms already cover it:
 
-- **What the user sees** is the tree's context values. A product that permits only a subset registers
-  its own view provider ahead of `SettingsViewProvider` and attaches only the context values it
-  wants; a command whose context value is absent never matches its `when` clause, so the menu item
+- **What the user sees** is the tree's context values. A product that wants a different presentation
+  registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values
+  it wants; a command whose context value is absent never matches its `when` clause, so the menu item
   never appears. This is the same mechanism every other tree node uses.
-- **What is actually allowed** is `SettingsAdapter.write`. It runs for the editor *and* every
-  per-setting command, so it is the one place a rule cannot be bypassed — including from the command
-  palette, which ignores context values entirely.
+- **What is actually allowed** is `SettingsAdapter.write`. The editor can save anything the user
+  types, and the command palette ignores context values, so this is the only place a rule can be
+  enforced.
 
 A collection the product will not let the user edit sets `writable: false` on the snapshot it returns
 from `read`, which makes the editor document read-only.
 
-`validateKey` is advisory: it exists only for live feedback while typing in an input box. `write`
-must reject an invalid name regardless, since an editor save never passes through a prompt.
-
-### Structured collections
-
-A collection is *structured* when its entries carry metadata that travels with the value but is not
-the value. App Service connection strings are the reference case: each has a database `type`.
-
-```jsonc
-{
-    "MyDatabase": { "value": "Server=tcp:...", "type": "SQLAzure" }
-}
-```
-
-Unstructured collections serialize as plain `"KEY": "value"`. The framework picks the shape from
-`SettingsCollectionDescriptor.structured`; nothing downstream special-cases connection strings.
-
-> **Not modeled:** services that refuse to return values on read. Every adapter today returns real
-> values, and a whole-collection `write` cannot express "preserve this key" without sending a
-> placeholder over the real secret. Model it alongside the first adapter that needs it, rather than
-> carrying unexercised machinery.
+> **Not modeled:** services that refuse to return values on read, and per-entry metadata (such as an
+> App Service connection string's database `type`). Every adapter today returns plain string values
+> for a single collection. Model these alongside the first adapter that actually needs them, rather
+> than carrying unexercised machinery.
 
 ## Secrets
 
-- **Values are hidden in the tree by default**, behind a persisted per-workspace show/hide toggle.
-  The resources tree is often visible during screen shares, and a connection string rendered in a
-  tree item description is a real disclosure risk.
-- A value the service will not return renders distinctly from one merely hidden, so "you may not see
-  this" and "nobody can" are not confused.
-- **Copy Value** exists so that reading one value does not require revealing every value.
-- **Settings keys and values must never reach telemetry or logs.** Notifications name the setting but
-  never echo its value.
-- **Value prompts opt out of "recent value" persistence** via `rememberRecent: false` on
-  `showSmartInputBox`. By default that helper writes the accepted input to workspace state in
-  cleartext and offers it back as the pre-filled default next time — which for a setting value would
-  both persist a secret to disk and replay one resource's secret into a prompt for another. Setting
-  `password: true` implies the same opt-out, so forgetting the flag fails safe.
+- **No values appear in the tree.** The collection node is a leaf, so there is nothing to mask and no
+  show/hide state to persist.
+- **Settings keys and values must never reach telemetry or logs.** Record counts and collection ids
+  only.
 - The document is memory-only. It never touches disk unless the user explicitly saves a copy, which
   the header warns about.
 
@@ -153,15 +116,15 @@ Unstructured collections serialize as plain `"KEY": "value"`. The framework pick
 azure-settings:/<nodeKey>/<resourceName>.<collectionId>.jsonc
 ```
 
-`<nodeKey>` is the hex-encoded `AzureNodeId` of the settings collection node — the data tree's own
+`<nodeKey>` is the hex-encoded `AzureNodeId` of the settings collection node -- the data tree's own
 primary key. `AzureSettingsDocumentSource` resolves a URI with a single `tree.get(nodeKey)`, so the
 resource passed to the adapter is always **the object the tree loaded from Azure**.
 
 Two alternatives were tried and rejected:
 
-- *Searching the tree by ARM id* — drilling account → tenant → subscription → group to find a
+- *Searching the tree by ARM id* -- drilling account -> tenant -> subscription -> group to find a
   resource is expensive and turns a lookup into a scan.
-- *Rebuilding a `GenericResource` from the URI* — cheap, but it fabricates a resource that was never
+- *Rebuilding a `GenericResource` from the URI* -- cheap, but it fabricates a resource that was never
   read from Azure, so it can silently disagree with reality.
 
 The trade-off of the current design: a document only resolves while its node is in the tree. That is
@@ -169,7 +132,7 @@ the normal case, since the document is opened from the tree and the tree caches 
 restored by the editor after a window reload will not resolve until that node has loaded, and fails
 with a message telling the user to reopen it from the Azure view.
 
-The file name is cosmetic — it makes the tab readable and selects the `jsonc` language mode. Nothing
+The file name is cosmetic -- it makes the tab readable and selects the `jsonc` language mode. Nothing
 parses meaning out of it.
 
 Two encoding details are load-bearing:
@@ -187,7 +150,7 @@ Two encoding details are load-bearing:
 one resource. The settings framework therefore splits along the resource/virtual-node boundary:
 
 - `SettingsDataProvider` and `SettingsViewProvider` register **first** and claim only the virtual
-  settings nodes (`settings.collection`, `settings.entry`).
+  settings collection nodes.
 - The collection nodes themselves are emitted by whichever provider owns the *resource*.
   `AzureResourceDataProvider` (the generic fallback) consults the registry and emits them for any
   resource with a registered adapter, so App Service and Logic App get settings with zero
@@ -197,21 +160,6 @@ A product provider that owns a resource in order to contribute its own children 
 `ISettingsDataProvider.getCollectionNodes(resource)` into what it returns, or that resource will lose
 its settings node.
 
-### Node keys
-
-An entry node's `virtualPath` is `{collectionId}/{key}`, not the bare key, because the same key can
-legitimately exist in two collections on one resource — an app setting and a connection string both
-named `Database`. `AzureNodeId` percent-encodes `virtualPath`, so the `/` round-trips as `%2F`
-rather than splitting the fragment.
-
-Entry nodes also carry their `value` and `metadata`. The data provider already has them from the
-collection read, so carrying them avoids a second round trip in the view provider and in the
-edit / copy commands. They are not part of the node key, so changing a value never orphans a node.
-
-`SettingsViewProvider.getParent` returns an entry's **collection**, not the owning resource;
-`AzureNodeId.parentNodeId` models the ARM hierarchy, in which a virtual node's parent is the
-resource, and would skip a level.
-
 ## Ownership boundary
 
 This framework edits the settings currently stored on the live Azure resource. It does not compare,
@@ -219,9 +167,10 @@ upload, download, or synchronize local configuration files such as `local.settin
 Those files belong to product development and deployment workflows, particularly azd and
 infrastructure-as-code.
 
-A successful edit here is therefore not a change to the application's declarative source of truth.
-The next deployment may overwrite it. The virtual document warns about this directly without adding
-a confirmation prompt to every save.
+In an azd project the declarative source of truth is the Bicep template under `infra/`, which sets
+`appSettings` from other resources' outputs. A successful edit here is therefore not a change to that
+source of truth: the next `azd provision` re-applies the template and may overwrite it. The virtual
+document warns about this directly without adding a confirmation prompt to every save.
 
 ## Adding a product
 
@@ -231,7 +180,7 @@ a confirmation prompt to every save.
 3. Bind it to `ISettingsAdapter` in the settings product entry point,
    `src/products/registerSettings.ts`.
 
-That is all. The tree nodes, editor, shared command set, and masking come for free.
+That is all. The tree node, the editor, and the command come for free.
 
 ## Testing
 

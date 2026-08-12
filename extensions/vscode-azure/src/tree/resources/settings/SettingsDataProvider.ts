@@ -3,14 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getNodeType, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
+import type { ConcreteAzureNode, GenericResource } from '@microsoft/vscode-azure-azutils';
+import type { DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { ISettingsRegistry } from '../../../settings/SettingsRegistry';
-import {
-    collectionIdOf, createCollectionNode, createEntryNode, isSettingsCollectionNode, isSettingsNode,
-    type SettingsCollectionNode,
-} from './SettingsNode';
+import { createCollectionNode, isSettingsCollectionNode, type SettingsCollectionNode } from './SettingsNode';
 
 export const ISettingsDataProvider: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('ISettingsDataProvider');
 export type ISettingsDataProvider = SettingsDataProvider;
@@ -25,22 +22,22 @@ export type ISettingsDataProvider = SettingsDataProvider;
  * match, so two providers cannot both serve one resource.
  *
  * The collection nodes are produced by {@linkcode getCollectionNodes}, which the resource-owning
- * provider calls. This provider expands a collection into one node per setting.
+ * provider calls. Collections are leaves -- the settings themselves are edited as a document, not
+ * expanded into the tree -- so this provider returns no children.
  *
  * @remarks
- * Must be registered **before** the generic and product providers in `registerTrees.ts`, so its
+ * Must be registered **before** the generic and product providers in `registerProducts.ts`, so its
  * narrower `canHandle` wins.
  */
 @injectable()
 export class SettingsDataProvider implements DataProvider<ConcreteAzureNode> {
     public constructor(
-        @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ISettingsRegistry) private readonly registry: ISettingsRegistry,
     ) { }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
-        return isSettingsNode(resource);
+        return isSettingsCollectionNode(resource);
     }
 
     /**
@@ -57,18 +54,8 @@ export class SettingsDataProvider implements DataProvider<ConcreteAzureNode> {
     }
 
     /** @inheritdoc */
-    public async getChildren(resource?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> {
-        // Only a collection node has children; individual settings are leaves.
-        if (!resource || !isSettingsCollectionNode(resource)) {
-            return [];
-        }
-
-        this.executor.setTelProp('nodeType', getNodeType(resource));
-
-        const collectionId = collectionIdOf(resource);
-        const snapshot = await this.registry.read(resource.azureResource, collectionId);
-
-        // Setting keys and values are user data and must never reach telemetry or logs.
-        return snapshot.entries.map(entry => createEntryNode(resource.azureResource, collectionId, entry));
+    public getChildren(): Promise<ConcreteAzureNode[]> {
+        // A settings collection is a leaf: its contents are edited as a document.
+        return Promise.resolve([]);
     }
 }

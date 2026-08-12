@@ -3,53 +3,61 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Node, parseTree, printParseErrorCode } from 'jsonc-parser';
+import { parseTree, printParseErrorCode } from 'jsonc-parser';
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
-import { type SettingsFormat, SettingsParseError } from './SettingsFormat';
 import type { SettingsEntry, SettingsMap, SettingsSnapshot } from './SettingsModel';
 
-/** Property name holding the value of a structured entry. */
-const ValueProperty = 'value' as const;
+/** File extension of a settings document. Selects the editor's `jsonc` language mode. */
+export const SettingsFileExtension = '.jsonc';
 
 /**
- * JSON-with-comments {@linkcode SettingsFormat}.
+ * A user-fixable problem in the settings document, carrying a 0-based offset and length so callers
+ * can surface it against the editor's text.
  *
- * Chosen over strict JSON so the document can carry a header explaining that saving writes to
- * Azure and that removing a key deletes the setting -- guidance that has nowhere else to live in a
- * plain editor. Comments are advisory only: they are stripped on parse and regenerated on
- * serialize, so user edits to the header are silently discarded rather than persisted somewhere
- * they could go stale.
- *
- * Unstructured collections serialize as `{ "KEY": "value" }`. Structured collections (those whose
- * entries carry {@linkcode SettingsEntry.metadata}) serialize as
- * `{ "KEY": { "value": "...", "type": "..." } }`, keeping the metadata visible and editable
- * alongside the value.
+ * Thrown rather than collected because a settings document that does not parse cannot be partially
+ * saved -- the first problem is the one the user needs to fix.
  */
-export class JsoncSettingsFormat implements SettingsFormat {
-    /** @inheritdoc */
-    public readonly fileExtension = '.jsonc';
+export class SettingsParseError extends Error {
+    public constructor(
+        message: string,
+        /** 0-based character offset into the document text. */
+        public readonly offset: number,
+        /** Length of the offending span, in characters. May be 0 for a point error. */
+        public readonly length: number = 0,
+    ) {
+        super(message);
+        this.name = 'SettingsParseError';
+    }
+}
 
+/**
+ * Renders a {@linkcode SettingsSnapshot} as JSON-with-comments and parses it back.
+ *
+ * JSONC rather than strict JSON so the document can carry a header explaining that saving writes to
+ * Azure and that removing a key deletes the setting -- guidance that has nowhere else to live in a
+ * plain editor. Comments are advisory only: they are stripped on parse and regenerated on serialize,
+ * so edits to the header are discarded rather than persisted somewhere they could go stale.
+ */
+export class JsoncSettingsFormat {
     public constructor(private readonly code: IVsCode) { }
 
-    /** @inheritdoc */
+    /** Render a snapshot as document text, including the explanatory header. */
     public serialize(snapshot: SettingsSnapshot): string {
-        const body: Record<string, unknown> = {};
-
+        const body: Record<string, string> = {};
         for (const entry of snapshot.entries) {
-            body[entry.key] = snapshot.structured
-                ? { [ValueProperty]: entry.value, ...entry.metadata }
-                : entry.value;
+            body[entry.key] = entry.value;
         }
 
         return `${this.buildHeader(snapshot)}\n${JSON.stringify(body, undefined, 4)}\n`;
     }
 
     /**
-     * @inheritdoc
+     * Parse document text back into settings.
+     *
      * @throws {@linkcode SettingsParseError} on malformed JSON, a non-object root, duplicate keys,
-     * or a value whose shape does not match the collection's `structured` flag.
+     * or a non-string value.
      */
-    public parse(text: string, snapshot: SettingsSnapshot): SettingsMap {
+    public parse(text: string): SettingsMap {
         const errors: { error: number; offset: number; length: number }[] = [];
         const root = parseTree(text, errors, { allowTrailingComma: true, disallowComments: false });
 
@@ -93,70 +101,18 @@ export class JsoncSettingsFormat implements SettingsFormat {
             }
             seen.add(key);
 
-            entries.push(snapshot.structured
-                ? this.readStructuredEntry(key, valueNode)
-                : this.readScalarEntry(key, valueNode));
-        }
-
-        return entries;
-    }
-
-    private readScalarEntry(key: string, valueNode: Node): SettingsEntry {
-        if (valueNode.type !== 'string') {
-            throw new SettingsParseError(
-                this.code.l10n.t('The value of \'{0}\' must be a quoted string. Numbers, booleans, and null are not valid setting values.', key),
-                valueNode.offset,
-                valueNode.length,
-            );
-        }
-
-        return { key, value: String(valueNode.value) };
-    }
-
-    private readStructuredEntry(key: string, valueNode: Node): SettingsEntry {
-        if (valueNode.type !== 'object') {
-            throw new SettingsParseError(
-                this.code.l10n.t('The value of \'{0}\' must be an object with a "{1}" property.', key, ValueProperty),
-                valueNode.offset,
-                valueNode.length,
-            );
-        }
-
-        let value: string | undefined;
-        const metadata: Record<string, string> = {};
-
-        for (const property of valueNode.children ?? []) {
-            const children = property.children ?? [];
-            if (children.length < 2) {
-                continue;
-            }
-
-            const [fieldNode, fieldValueNode] = children;
-            const field = String(fieldNode.value);
-            if (fieldValueNode.type !== 'string') {
+            if (valueNode.type !== 'string') {
                 throw new SettingsParseError(
-                    this.code.l10n.t('The "{0}" property of \'{1}\' must be a quoted string.', field, key),
-                    fieldValueNode.offset,
-                    fieldValueNode.length,
+                    this.code.l10n.t('The value of \'{0}\' must be a quoted string. Numbers, booleans, and null are not valid setting values.', key),
+                    valueNode.offset,
+                    valueNode.length,
                 );
             }
 
-            if (field === ValueProperty) {
-                value = String(fieldValueNode.value);
-            } else {
-                metadata[field] = String(fieldValueNode.value);
-            }
+            entries.push({ key, value: String(valueNode.value) });
         }
 
-        if (value === undefined) {
-            throw new SettingsParseError(
-                this.code.l10n.t('\'{0}\' is missing its "{1}" property.', key, ValueProperty),
-                valueNode.offset,
-                valueNode.length,
-            );
-        }
-
-        return { key, value, metadata };
+        return entries;
     }
 
     private buildHeader(snapshot: SettingsSnapshot): string {

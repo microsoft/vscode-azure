@@ -4,17 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType,
-    type ConnStringValueTypePair, type IWebAppClient,
+    AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, type IWebAppClient,
 } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import * as assert from 'node:assert';
 import { mock } from 'node:test';
-import {
-    AppSettingsCollectionId, ConnectionStringsCollectionId, WebAppSettingsAdapter,
-} from '../../../src/settings/adapters/WebAppSettingsAdapter';
+import { AppSettingsCollectionId, WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
 
 function makeSite(logicalType: string) {
     return makeGenericResource({
@@ -25,22 +22,17 @@ function makeSite(logicalType: string) {
     });
 }
 
-function createAdapter(options?: {
-    appSettings?: Record<string, string>;
-    connectionStrings?: Record<string, ConnStringValueTypePair>;
-}) {
+function createAdapter(options?: { appSettings?: Record<string, string> }) {
     const listApplicationSettings = mock.fn((_rg: string, _name: string) => Promise.resolve({ properties: options?.appSettings ?? {} }));
     const updateApplicationSettings = mock.fn((_rg: string, _name: string, _settings: unknown) => Promise.resolve({ properties: {} }));
-    const listConnectionStrings = mock.fn((_rg: string, _name: string) => Promise.resolve({ properties: options?.connectionStrings ?? {} }));
-    const updateConnectionStrings = mock.fn((_rg: string, _name: string, _settings: unknown) => Promise.resolve({ properties: {} }));
 
     const client = {
-        webApps: { listApplicationSettings, updateApplicationSettings, listConnectionStrings, updateConnectionStrings },
+        webApps: { listApplicationSettings, updateApplicationSettings },
     } as unknown as IWebAppClient;
 
     const adapter = new WebAppSettingsAdapter(createMockVsCode().vscode, () => client);
 
-    return { adapter, listApplicationSettings, updateApplicationSettings, listConnectionStrings, updateConnectionStrings };
+    return { adapter, listApplicationSettings, updateApplicationSettings };
 }
 
 describe('WebAppSettingsAdapter (unit)', () => {
@@ -65,19 +57,11 @@ describe('WebAppSettingsAdapter (unit)', () => {
     });
 
     describe('getCollections', () => {
-        it('exposes application settings and connection strings', () => {
+        it('exposes application settings', () => {
             const { adapter } = createAdapter();
+            const collections = adapter.getCollections(makeSite(FunctionAppLogicalType));
 
-            expect(adapter.getCollections(makeSite(FunctionAppLogicalType)).map(c => c.id))
-                .to.deep.equal([AppSettingsCollectionId, ConnectionStringsCollectionId]);
-        });
-
-        it('marks only connection strings as structured', () => {
-            const { adapter } = createAdapter();
-            const collections = adapter.getCollections(makeSite(AppServiceLogicalType));
-
-            expect(collections.find(c => c.id === AppSettingsCollectionId)?.structured).to.be.false;
-            expect(collections.find(c => c.id === ConnectionStringsCollectionId)?.structured).to.be.true;
+            expect(collections.map(collection => collection.id)).to.deep.equal([AppSettingsCollectionId]);
         });
 
         it('exposes nothing for an unsupported resource', () => {
@@ -86,28 +70,13 @@ describe('WebAppSettingsAdapter (unit)', () => {
         });
     });
 
-    describe('validateKey', () => {
-        it('rejects an empty setting name', () => {
-            const { adapter } = createAdapter();
-            const site = makeSite(FunctionAppLogicalType);
-
-            expect(adapter.validateKey(site, AppSettingsCollectionId, '  ')).to.be.a('string');
-            expect(adapter.validateKey(site, AppSettingsCollectionId, 'OK')).to.be.undefined;
-        });
-
-        it('throws for a collection it does not expose', () => {
-            const { adapter } = createAdapter();
-            expect(() => adapter.validateKey(makeSite(FunctionAppLogicalType), 'nope', 'A')).to.throw();
-        });
-    });
-
     describe('read', () => {
         it('returns application settings sorted by key, for a stable display order', async () => {
-            const { adapter } = createAdapter({ appSettings: { ZED: '1', ALPHA: '2', MIKE: '3' } });
+            const { adapter } = createAdapter({ appSettings: { ZED: '1', alpha: '2', Beta: '3' } });
 
             const snapshot = await adapter.read(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);
 
-            expect(snapshot.entries.map(e => e.key)).to.deep.equal(['ALPHA', 'MIKE', 'ZED']);
+            expect(snapshot.entries.map(setting => setting.key)).to.deep.equal(['Beta', 'ZED', 'alpha']);
         });
 
         it('describes the snapshot honestly', async () => {
@@ -117,26 +86,14 @@ describe('WebAppSettingsAdapter (unit)', () => {
 
             expect(snapshot.resourceName).to.equal('mysite');
             expect(snapshot.writable).to.be.true;
-            expect(snapshot.structured).to.be.false;
         });
 
         it('handles a collection with no properties at all', async () => {
-            const { adapter, listApplicationSettings } = createAdapter();
-            listApplicationSettings.mock.mockImplementation(() => Promise.resolve({ properties: undefined as unknown as Record<string, string> }));
+            const { adapter } = createAdapter();
+
             const snapshot = await adapter.read(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);
 
             expect(snapshot.entries).to.be.empty;
-        });
-
-        it('splits connection strings into value plus type metadata', async () => {
-            const { adapter } = createAdapter({
-                connectionStrings: { MyDb: { value: 'conn', type: 'SQLAzure' } },
-            });
-
-            const snapshot = await adapter.read(makeSite(AppServiceLogicalType), ConnectionStringsCollectionId);
-
-            expect(snapshot.structured).to.be.true;
-            expect(snapshot.entries).to.deep.equal([{ key: 'MyDb', value: 'conn', metadata: { type: 'SQLAzure' } }]);
         });
 
         it('passes the resource group parsed from the ARM id', async () => {
@@ -150,28 +107,39 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('fails clearly when the ARM id has no resource group', async () => {
             const { adapter } = createAdapter();
             const resource = makeGenericResource({
-                id: '/subscriptions/sub/providers/Microsoft.Web/sites/mysite',
+                id: '/subscriptions/sub',
                 name: 'mysite',
+                type: 'Microsoft.Web/sites',
                 logicalType: FunctionAppLogicalType,
             });
 
             await assert.rejects(adapter.read(resource, AppSettingsCollectionId), /resource group/);
         });
+
+        it('throws for a collection it does not expose', async () => {
+            const { adapter } = createAdapter();
+
+            await assert.rejects(adapter.read(makeSite(FunctionAppLogicalType), 'nope'), /nope/);
+        });
     });
 
     describe('write', () => {
         it('sends the entries verbatim as the whole dictionary', async () => {
-            const { adapter, updateApplicationSettings } = createAdapter({ appSettings: { A: '1', B: '2' } });
+            const { adapter, updateApplicationSettings } = createAdapter();
 
-            await adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, [{ key: 'A', value: 'new' }]);
+            await adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, [
+                { key: 'A', value: '1' },
+                { key: 'B', value: '2' },
+            ]);
 
-            // 'B' is absent, which is how a delete is expressed.
-            expect(updateApplicationSettings.mock.calls[0].arguments[2]).to.deep.equal({ properties: { A: 'new' } });
+            expect(updateApplicationSettings.mock.calls[0].arguments[2]).to.deep.equal({
+                properties: { A: '1', B: '2' },
+            });
         });
 
         it('does not merge with the remote state', async () => {
             const { adapter, updateApplicationSettings, listApplicationSettings } = createAdapter({
-                appSettings: { KEEP: 'x', DROP: 'y' },
+                appSettings: { EXISTING: 'keep-me' },
             });
 
             await adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, []);
@@ -181,67 +149,15 @@ describe('WebAppSettingsAdapter (unit)', () => {
             expect(listApplicationSettings.mock.callCount()).to.equal(0);
         });
 
-        it('reassembles connection strings from value plus metadata', async () => {
-            const { adapter, updateConnectionStrings } = createAdapter();
-
-            await adapter.write(makeSite(FunctionAppLogicalType), ConnectionStringsCollectionId, [
-                { key: 'MyDb', value: 'conn', metadata: { type: 'PostgreSQL' } },
-            ]);
-
-            expect(updateConnectionStrings.mock.calls[0].arguments[2]).to.deep.equal({
-                properties: { MyDb: { value: 'conn', type: 'PostgreSQL' } },
-            });
-        });
-
-        it('defaults a connection string with no type to Custom', async () => {
-            const { adapter, updateConnectionStrings } = createAdapter();
-
-            await adapter.write(makeSite(FunctionAppLogicalType), ConnectionStringsCollectionId, [
-                { key: 'MyDb', value: 'conn' },
-            ]);
-
-            expect(updateConnectionStrings.mock.calls[0].arguments[2]).to.deep.equal({
-                properties: { MyDb: { value: 'conn', type: 'Custom' } },
-            });
-        });
-
         it('rejects an invalid setting name before calling ARM, even from an editor save', async () => {
             const { adapter, updateApplicationSettings } = createAdapter();
 
             await assert.rejects(
-                adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, [
-                    { key: '  ', value: 'x' },
-                ]),
+                adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, [{ key: '  ', value: 'x' }]),
                 /cannot be empty/,
             );
 
             expect(updateApplicationSettings.mock.callCount()).to.equal(0);
-        });
-
-        it('rejects an invalid connection string type before calling ARM', async () => {
-            const { adapter, updateConnectionStrings } = createAdapter();
-
-            await assert.rejects(
-                adapter.write(makeSite(FunctionAppLogicalType), ConnectionStringsCollectionId, [
-                    { key: 'MyDb', value: 'conn', metadata: { type: 'Bogus' } },
-                ]),
-                /MyDb/,
-            );
-
-            expect(updateConnectionStrings.mock.callCount()).to.equal(0);
-        });
-
-        it('rejects unknown connection string metadata before calling ARM', async () => {
-            const { adapter, updateConnectionStrings } = createAdapter();
-
-            await assert.rejects(
-                adapter.write(makeSite(FunctionAppLogicalType), ConnectionStringsCollectionId, [
-                    { key: 'MyDb', value: 'conn', metadata: { typ: 'SQLAzure' } },
-                ]),
-                /typ/,
-            );
-
-            expect(updateConnectionStrings.mock.callCount()).to.equal(0);
         });
 
         it('throws for a collection it does not expose', async () => {

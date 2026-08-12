@@ -6,9 +6,8 @@
 import { expect } from 'chai';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { JsoncSettingsFormat } from '../../../src/settings/core/JsoncSettingsFormat';
 import { SettingsFileSystemProvider, type SettingsDocumentSource } from '../../../src/settings/core/SettingsFileSystemProvider';
-import { SettingsParseError } from '../../../src/settings/core/SettingsFormat';
+import { SettingsParseError } from '../../../src/settings/core/JsoncSettingsFormat';
 import type { SettingsMap, SettingsSnapshot } from '../../../src/settings/core/SettingsModel';
 import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 
@@ -20,7 +19,6 @@ function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot
         resourceName: 'myFunctionApp',
         collectionLabel: 'Application settings',
         writable: true,
-        structured: false,
         ...overrides,
     };
 }
@@ -47,11 +45,7 @@ function createHarness(initial?: SettingsSnapshot): Harness {
         write: (uri, entries) => write(uri, entries),
     };
 
-    const provider = new SettingsFileSystemProvider(
-        code.vscode,
-        source,
-        new JsoncSettingsFormat(code.vscode),
-    );
+    const provider = new SettingsFileSystemProvider(code.vscode, source);
 
     const uri = code.vscode.Uri.from({ scheme: Scheme, path: '/abc/myFunctionApp.appSettings.jsonc' });
 
@@ -127,7 +121,6 @@ describe('SettingsFileSystemProvider (unit)', () => {
             const provider = new SettingsFileSystemProvider(
                 code.vscode,
                 { read: () => read(), write: () => Promise.resolve() },
-                new JsoncSettingsFormat(code.vscode),
                 { freshnessWindowMs: 0 },
             );
             const uri = code.vscode.Uri.from({ scheme: Scheme, path: '/x/y.jsonc' });
@@ -258,22 +251,6 @@ describe('SettingsFileSystemProvider (unit)', () => {
 
         it('returns a disposable from watch', () => {
             expect(() => { harness.provider.watch().dispose(); }).to.not.throw();
-        });
-    });
-
-    describe('invalidate', () => {
-        it('drops the cache and fires a change event', async () => {
-            const events: vscode.FileChangeEvent[][] = [];
-            harness.provider.onDidChangeFile(e => events.push([...e]));
-
-            await harness.provider.readFile(harness.uri);
-            harness.setSnapshot(createSnapshot({ entries: [{ key: 'A', value: 'changed-elsewhere' }] }));
-            harness.provider.invalidate(harness.uri);
-
-            const text = await readText(harness.provider, harness.uri);
-
-            expect(events).to.have.lengthOf(1);
-            expect(text).to.contain('"A": "changed-elsewhere"');
         });
     });
 

@@ -112,19 +112,21 @@ a DI factory binding in `extension.ts`. Don't re-vendor the source's client code
 These are solved generically in the monorepo. If the source has them, **wire up the existing
 implementation** rather than re-vendoring the source's code:
 
-- **Application settings / connection strings** — there **is** a shared settings framework
-  (`docs/settings.md`). Do **not** build product-specific settings trees, commands, or an editor.
-  Implement a single `SettingsAdapter` (`canHandle` / `getCollections` / `read` / `write`) in
+- **Application settings** — there **is** a shared settings framework (`docs/settings.md`). Do **not**
+  build product-specific settings trees, commands, or an editor. Implement a single `SettingsAdapter`
+  (`canHandle` / `getCollections` / `read` / `write`) in
   `extensions/vscode-azure/src/settings/adapters/`, bind it to `ISettingsAdapter` in
-  `registerSettings.ts`, and stop. The collection tree node, the per-setting nodes, the JSONC editor,
-  shared commands, and value masking all come for free. Local configuration synchronization belongs
-  to azd or the product's deployment workflow, not this framework.
-  - There is no capability model. A product that permits only a subset of the commands registers its
-    own view provider and attaches only the context values it wants; a collection it will not let the
-    user edit returns `writable: false` on its snapshot. Enforcement lives in `write`, which runs for
-    both the editor and the commands.
-  - A collection whose entries carry side-channel data (e.g. a connection string's `type`) sets
-    `structured: true` and puts that data in each entry's `metadata`.
+  `products/registerSettings.ts`, and stop. The collection tree node, the JSONC editor, and the edit
+  command all come for free. Local configuration synchronization belongs to azd or the product's
+  deployment workflow, not this framework.
+  - There is one command and one surface: the whole collection is edited as a document. There are no
+    per-setting add/edit/rename/delete commands, and no values are shown in the tree.
+  - There is no capability model. A product that wants a different presentation registers its own view
+    provider and attaches only the context values it wants; a collection it will not let the user edit
+    returns `writable: false` on its snapshot. Enforcement lives in `write`, which is the only path a
+    save can take.
+  - Per-entry metadata (e.g. a connection string's `type`) is **not** modeled. Add it alongside the
+    first adapter that needs it.
   - (Note: the source likely uses the shared `@microsoft/vscode-azext-azureappsettings` package with
     `contextValuesToAdd: ['<product>']`. That azext package is **not** the monorepo pattern; the
     inventory should record which operations the product supports.)

@@ -10,20 +10,15 @@ import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 /**
  * Identifies one settings collection on a resource.
  *
- * A resource may expose several: an App Service has both application settings and connection
- * strings. The id is a stable, product-defined token that appears in the settings document's file
- * name and in tree node keys, so it must not be localized and must not change once shipped.
+ * A resource may expose more than one. The id is a stable, product-defined token that appears in the
+ * settings document's file name and in tree node keys, so it must not be localized and must not
+ * change once shipped.
  */
 export interface SettingsCollectionDescriptor {
     /** Stable identifier, e.g. `appSettings`. Appears in URIs and node keys; never localized. */
     readonly id: string;
     /** Localized display name, e.g. "Application settings". */
     readonly label: string;
-    /**
-     * Whether entries carry per-entry `metadata`. Structured collections serialize as
-     * `{ "KEY": { "value": "...", ... } }` instead of `{ "KEY": "..." }`.
-     */
-    readonly structured: boolean;
 }
 
 /**
@@ -59,23 +54,13 @@ export interface SettingsAdapter {
      * Replace a collection's entire contents with {@linkcode entries}.
      *
      * Implementations own enforcement: reject the write if the collection is read-only or any entry
-     * is invalid. This runs for both the editor and the per-setting commands, so it is the one place
-     * a product's rules cannot be bypassed.
+     * is invalid. The editor can save anything the user types, so this is the only place a product's
+     * rules can be applied.
      *
      * @throws if the collection is not writable, an entry is invalid, or the id is not one this
      * adapter exposes.
      */
     write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void>;
-
-    /**
-     * Validate a proposed setting name, for live feedback in an input box.
-     *
-     * Advisory only -- {@linkcode SettingsAdapter.write write} must reject an invalid name regardless,
-     * since the editor can save one without ever going through a prompt.
-     *
-     * @returns a localized error message, or `undefined` if the name is acceptable.
-     */
-    validateKey?(resource: GenericResource, collectionId: string, key: string): string | undefined;
 }
 
 /**

@@ -67,12 +67,12 @@ describe('SettingsRegistry (unit)', () => {
             const registry = createSettingsRegistry(createStubAdapter({
                 logicalTypes: [FunctionAppLogicalType],
                 collections: [
-                    { id: 'appSettings', label: 'Application Settings', structured: false },
-                    { id: 'connectionStrings', label: 'Connection Strings', structured: true },
+                    { id: 'appSettings', label: 'Application Settings' },
+                    { id: 'other', label: 'Other Settings' },
                 ],
             }));
 
-            expect(registry.getCollection(makeApp(FunctionAppLogicalType), 'connectionStrings')?.structured).to.be.true;
+            expect(registry.getCollection(makeApp(FunctionAppLogicalType), 'other')?.label).to.equal('Other Settings');
         });
 
         it('returns undefined for an unknown collection id', () => {
@@ -96,7 +96,7 @@ describe('SettingsRegistry (unit)', () => {
         });
     });
 
-    describe('single-key mutations', () => {
+    describe('write', () => {
         function setup(readOnlyCollections?: readonly string[]) {
             const adapter = createStubAdapter({
                 logicalTypes: [FunctionAppLogicalType],
@@ -106,83 +106,20 @@ describe('SettingsRegistry (unit)', () => {
             return { adapter, registry: createSettingsRegistry(adapter), resource: makeApp(FunctionAppLogicalType) };
         }
 
-        it('adds a new setting while preserving the others', async () => {
+        it('replaces the collection wholesale, so an omitted key is deleted', async () => {
             const { adapter, registry, resource } = setup();
 
-            await registry.upsert(resource, 'appSettings', entry('C', '3'));
+            await registry.write(resource, 'appSettings', [entry('A', 'updated'), entry('C', '3')]);
 
-            expect(adapter.contents('appSettings')).to.deep.equal([entry('A', '1'), entry('B', '2'), entry('C', '3')]);
+            expect(adapter.contents('appSettings')).to.deep.equal([entry('A', 'updated'), entry('C', '3')]);
         });
 
-        it('replaces an existing value in place, keeping order', async () => {
-            const { adapter, registry, resource } = setup();
+        it('surfaces the adapter\'s refusal without writing', async () => {
+            const { adapter, registry, resource } = setup(['appSettings']);
 
-            await registry.upsert(resource, 'appSettings', entry('A', 'updated'));
+            await assert.rejects(registry.write(resource, 'appSettings', [entry('A', '1')]), /read-only/);
 
-            expect(adapter.contents('appSettings')).to.deep.equal([entry('A', 'updated'), entry('B', '2')]);
-        });
-
-        it('deletes only the named setting', async () => {
-            const { adapter, registry, resource } = setup();
-
-            await registry.remove(resource, 'appSettings', 'A');
-
-            expect(adapter.contents('appSettings')).to.deep.equal([entry('B', '2')]);
-        });
-
-        it('treats deleting a missing key as a no-op', async () => {
-            const { adapter, registry, resource } = setup();
-
-            await registry.remove(resource, 'appSettings', 'MISSING');
-
-            expect(adapter.contents('appSettings')).to.deep.equal([entry('A', '1'), entry('B', '2')]);
-        });
-
-        it('renames while preserving value and position', async () => {
-            const { adapter, registry, resource } = setup();
-
-            await registry.rename(resource, 'appSettings', 'A', 'RENAMED');
-
-            expect(adapter.contents('appSettings')).to.deep.equal([entry('RENAMED', '1'), entry('B', '2')]);
-        });
-
-        it('refuses to rename onto an existing key, which would destroy it', async () => {
-            const { adapter, registry, resource } = setup();
-
-            await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'B'), /already exists/);
             expect(adapter.writes).to.be.empty;
-        });
-
-        it('refuses to rename a key that does not exist', async () => {
-            const { registry, resource } = setup();
-
-            await assert.rejects(registry.rename(resource, 'appSettings', 'MISSING', 'X'), /no setting named/i);
-        });
-
-        it('preserves structured metadata through a rename', async () => {
-            const adapter = createStubAdapter({
-                logicalTypes: [FunctionAppLogicalType],
-                collections: [{ id: 'connectionStrings', label: 'Connection Strings', structured: true }],
-                entries: { connectionStrings: [entry('DB', 'conn', { type: 'SQLAzure' })] },
-            });
-            const registry = createSettingsRegistry(adapter);
-
-            await registry.rename(makeApp(FunctionAppLogicalType), 'connectionStrings', 'DB', 'DB2');
-
-            expect(adapter.contents('connectionStrings')).to.deep.equal([entry('DB2', 'conn', { type: 'SQLAzure' })]);
-        });
-
-        describe('adapter enforcement', () => {
-            it('surfaces the adapter\'s refusal on every write path', async () => {
-                const { adapter, registry, resource } = setup(['appSettings']);
-
-                await assert.rejects(registry.write(resource, 'appSettings', [entry('A', '1')]), /read-only/);
-                await assert.rejects(registry.upsert(resource, 'appSettings', entry('C', '3')), /read-only/);
-                await assert.rejects(registry.remove(resource, 'appSettings', 'A'), /read-only/);
-                await assert.rejects(registry.rename(resource, 'appSettings', 'A', 'X'), /read-only/);
-
-                expect(adapter.writes).to.be.empty;
-            });
         });
     });
 });

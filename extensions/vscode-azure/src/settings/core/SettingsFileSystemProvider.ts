@@ -5,7 +5,7 @@
 
 import type * as vscode from 'vscode';
 import { EventEmitter, type Disposable, type IVsCode } from '@microsoft/vscode-azure-utils';
-import type { SettingsFormat } from './SettingsFormat';
+import { JsoncSettingsFormat } from './JsoncSettingsFormat';
 import type { SettingsMap, SettingsSnapshot } from './SettingsModel';
 
 /**
@@ -64,9 +64,9 @@ const DefaultFreshnessWindowMs = 3000;
  * complete new contents of the collection, so removing a key deletes that setting and a key changed
  * elsewhere since the document was opened is silently overwritten. This last-writer-wins behavior is
  * deliberate: it makes the document mean exactly what it appears to mean. The header rendered by
- * the {@linkcode SettingsFormat} states it.
+ * {@linkcode JsoncSettingsFormat} states it.
  *
- * The provider is format- and service-agnostic. It knows nothing about Azure; see
+ * The provider is service-agnostic. It knows nothing about Azure; see
  * {@linkcode SettingsDocumentSource}.
  *
  * @remarks
@@ -77,14 +77,15 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     private readonly changeEmitter = new EventEmitter<vscode.FileChangeEvent[]>();
     private readonly cache = new Map<string, CacheEntry>();
     private readonly freshnessWindowMs: number;
+    private readonly format: JsoncSettingsFormat;
 
     public constructor(
         private readonly code: IVsCode,
         private readonly source: SettingsDocumentSource,
-        private readonly format: SettingsFormat,
         options?: SettingsFileSystemProviderOptions,
     ) {
         this.freshnessWindowMs = options?.freshnessWindowMs ?? DefaultFreshnessWindowMs;
+        this.format = new JsoncSettingsFormat(code);
     }
 
     /** @inheritdoc */
@@ -147,7 +148,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
             throw this.code.FileSystemError.NoPermissions(uri);
         }
 
-        const parsed = this.format.parse(Buffer.from(content).toString('utf8'), entry.snapshot);
+        const parsed = this.format.parse(Buffer.from(content).toString('utf8'));
 
         await this.source.write(uri, parsed);
 
@@ -191,16 +192,6 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
      */
     public rename(oldUri: vscode.Uri): void {
         throw this.code.FileSystemError.NoPermissions(oldUri);
-    }
-
-    /**
-     * Drop any cached snapshot for {@linkcode uri} and notify the editor, so an open document
-     * re-reads from the service. Call this when settings were changed by some other path (e.g. the
-     * tree's add/edit/delete commands).
-     */
-    public invalidate(uri: vscode.Uri): void {
-        this.cache.delete(uri.toString());
-        this.changeEmitter.fire([{ type: this.code.FileChangeType.Changed, uri }]);
     }
 
     /** @inheritdoc */

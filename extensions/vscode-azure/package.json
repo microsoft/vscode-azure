@@ -77,33 +77,6 @@
                 "title": "%commands.vscode-azure/settings/edit%"
             },
             {
-                "command": "vscode-azure/settings/add",
-                "icon": "$(add)",
-                "title": "%commands.vscode-azure/settings/add%"
-            },
-            {
-                "command": "vscode-azure/settings/editValue",
-                "title": "%commands.vscode-azure/settings/editValue%"
-            },
-            {
-                "command": "vscode-azure/settings/rename",
-                "title": "%commands.vscode-azure/settings/rename%"
-            },
-            {
-                "command": "vscode-azure/settings/delete",
-                "icon": "$(trash)",
-                "title": "%commands.vscode-azure/settings/delete%"
-            },
-            {
-                "command": "vscode-azure/settings/copyValue",
-                "title": "%commands.vscode-azure/settings/copyValue%"
-            },
-            {
-                "command": "vscode-azure/settings/toggleValues",
-                "icon": "$(eye)",
-                "title": "%commands.vscode-azure/settings/toggleValues%"
-            },
-            {
                 "command": "vscode-azure/functions/createNew",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/functions/createNew%"
@@ -183,30 +156,6 @@
                 {
                     "command": "vscode-azure/settings/edit",
                     "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/add",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/editValue",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/rename",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/delete",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/copyValue",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/toggleValues",
-                    "when": "false"
                 }
             ],            "view/title": [
                 {
@@ -258,36 +207,6 @@
                     "command": "vscode-azure/settings/edit",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\beditSettings\\b/i",
                     "group": "inline@1"
-                },
-                {
-                    "command": "vscode-azure/settings/add",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\baddSetting\\b/i",
-                    "group": "inline@2"
-                },
-                {
-                    "command": "vscode-azure/settings/toggleValues",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\btoggleSettingValues\\b/i",
-                    "group": "inline@3"
-                },
-                {
-                    "command": "vscode-azure/settings/editValue",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\beditSettingValue\\b/i",
-                    "group": "settings@1"
-                },
-                {
-                    "command": "vscode-azure/settings/rename",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\brenameSetting\\b/i",
-                    "group": "settings@2"
-                },
-                {
-                    "command": "vscode-azure/settings/copyValue",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bcopySettingValue\\b/i",
-                    "group": "settings@3"
-                },
-                {
-                    "command": "vscode-azure/settings/delete",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteSetting\\b/i",
-                    "group": "settings@4"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",

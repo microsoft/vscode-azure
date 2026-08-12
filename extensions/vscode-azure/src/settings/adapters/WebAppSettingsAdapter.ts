@@ -4,27 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    AppServiceLogicalType, ConnectionStringTypes, FunctionAppLogicalType, IWebAppClientProvider,
+    AppServiceLogicalType, FunctionAppLogicalType, IWebAppClientProvider,
     LogicAppLogicalType, parseAzureResourceId,
-    type ConnectionStringType, type ConnStringValueTypePair, type GenericResource,
-    type IWebAppClient,
+    type GenericResource, type IWebAppClient,
 } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import type { SettingsAdapter, SettingsCollectionDescriptor } from '../SettingsAdapter';
 import type { SettingsMap, SettingsSnapshot } from '../core/SettingsModel';
-import { inject, injectable } from 'inversify';
 
 /** Stable id of the application settings collection. Appears in URIs and node keys. */
 export const AppSettingsCollectionId = 'appSettings';
-
-/** Stable id of the connection strings collection. Appears in URIs and node keys. */
-export const ConnectionStringsCollectionId = 'connectionStrings';
-
-/** Metadata field holding a connection string's database type. */
-const TypeField = 'type';
-
-/** Default type applied to a connection string added without one. */
-const DefaultConnectionStringType: ConnectionStringType = 'Custom';
 
 const supportedLogicalTypes = new Set<string>([
     FunctionAppLogicalType.toLowerCase(),
@@ -34,15 +24,13 @@ const supportedLogicalTypes = new Set<string>([
 
 /**
  * {@linkcode SettingsAdapter} for every `Microsoft.Web/sites` flavour -- Function App, App Service,
- * and Logic App -- exposing both application settings and connection strings.
+ * and Logic App -- exposing application settings.
  *
- * The three products share one ARM surface, so they are one adapter rather than three. Connection
- * strings are **structured** (each value carries a database `type`), which exercises the
- * framework's non-plain-string path.
+ * The three products share one ARM surface, so they are one adapter rather than three.
  *
  * @remarks
- * ARM has no per-key patch for either collection: `update*` replaces the whole dictionary. That is
- * why {@linkcode write} sends `entries` verbatim and omitting a key deletes it.
+ * ARM has no per-key patch: `updateApplicationSettings` replaces the whole dictionary. That is why
+ * {@linkcode write} sends `entries` verbatim and omitting a key deletes it.
  */
 @injectable()
 export class WebAppSettingsAdapter implements SettingsAdapter {
@@ -68,12 +56,6 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
             {
                 id: AppSettingsCollectionId,
                 label: this.code.l10n.t('Application Settings'),
-                structured: false,
-            },
-            {
-                id: ConnectionStringsCollectionId,
-                label: this.code.l10n.t('Connection Strings'),
-                structured: true,
             },
         ];
     }
@@ -83,17 +65,14 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
         const collection = this.requireCollection(resource, collectionId);
         const { client, resourceGroupName } = this.resolveClient(resource);
 
-        const entries = collectionId === ConnectionStringsCollectionId
-            ? toConnectionStringEntries((await client.webApps.listConnectionStrings(resourceGroupName, resource.name)).properties)
-            : toAppSettingEntries((await client.webApps.listApplicationSettings(resourceGroupName, resource.name)).properties);
+        const properties = (await client.webApps.listApplicationSettings(resourceGroupName, resource.name)).properties;
 
         return {
-            entries,
+            entries: toAppSettingEntries(properties),
             resourceName: resource.name,
             collectionLabel: collection.label,
-            // ARM permits editing every collection this adapter exposes.
+            // ARM permits editing application settings on all three site kinds.
             writable: true,
-            structured: collection.structured,
         };
     }
 
@@ -103,73 +82,19 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
         const { client, resourceGroupName } = this.resolveClient(resource);
         this.validateKeys(entries);
 
-        if (collectionId === ConnectionStringsCollectionId) {
-            this.validateConnectionStrings(entries);
-            await client.webApps.updateConnectionStrings(resourceGroupName, resource.name, {
-                properties: fromConnectionStringEntries(entries),
-            });
-            return;
-        }
-
         await client.webApps.updateApplicationSettings(resourceGroupName, resource.name, {
             properties: fromAppSettingEntries(entries),
         });
     }
 
-    /** @inheritdoc */
-    public validateKey(resource: GenericResource, collectionId: string, key: string): string | undefined {
-        this.requireCollection(resource, collectionId);
-        return this.validateSettingKey(key);
-    }
-
     /**
-     * Reject invalid names before the ARM call. Runs on every write, including editor saves, which
-     * never pass through the prompt-time {@linkcode validateKey}.
+     * Reject invalid names before the ARM call, so the user gets a message naming the offending
+     * setting rather than a bare service error.
      */
     private validateKeys(entries: SettingsMap): void {
         for (const entry of entries) {
-            const error = this.validateSettingKey(entry.key);
-            if (error) {
-                throw new Error(error);
-            }
-        }
-    }
-
-    private validateSettingKey(key: string): string | undefined {
-        if (!key.trim()) {
-            return this.code.l10n.t('The setting name cannot be empty.');
-        }
-        return undefined;
-    }
-
-    private validateConnectionStringMetadata(field: string, value: string): string | undefined {
-        if (field !== TypeField) {
-            return this.code.l10n.t('\'{0}\' is not a recognized connection string property. Only "{1}" is supported.', field, TypeField);
-        }
-
-        if (!ConnectionStringTypes.includes(value as ConnectionStringType)) {
-            return this.code.l10n.t('\'{0}\' is not a valid connection string type. Expected one of: {1}.', value, ConnectionStringTypes.join(', '));
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Reject invalid connection string metadata before the ARM call.
-     *
-     * An unrecognized *field* is the load-bearing case: {@linkcode fromConnectionStringEntries} reads
-     * only `type`, so a typo such as `typ` would be dropped silently and the entry would default to
-     * `Custom` -- ARM receives a well-formed payload and accepts it, changing the type on a live
-     * resource with no error anywhere. An invalid *value* would most likely be rejected by ARM as
-     * well; checking it here just names the offending setting instead of surfacing a bare 400.
-     */
-    private validateConnectionStrings(entries: SettingsMap): void {
-        for (const entry of entries) {
-            for (const [field, value] of Object.entries(entry.metadata ?? {})) {
-                const error = this.validateConnectionStringMetadata(field, value);
-                if (error) {
-                    throw new Error(this.code.l10n.t('Connection string \'{0}\': {1}', entry.key, error));
-                }
+            if (!entry.key.trim()) {
+                throw new Error(this.code.l10n.t('The setting name cannot be empty.'));
             }
         }
     }
@@ -198,26 +123,11 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
     }
 }
 
-/** Sorted so the tree and the document present settings in a stable, predictable order. */
+/** Sorted so the document presents settings in a stable, predictable order. */
 function toAppSettingEntries(properties: Record<string, string> | undefined): SettingsMap {
     return Object.keys(properties ?? {}).sort().map(key => ({ key, value: properties?.[key] ?? '' }));
 }
 
-function toConnectionStringEntries(properties: Record<string, ConnStringValueTypePair> | undefined): SettingsMap {
-    return Object.keys(properties ?? {}).sort().map(key => ({
-        key,
-        value: properties?.[key]?.value ?? '',
-        metadata: { [TypeField]: properties?.[key]?.type ?? DefaultConnectionStringType },
-    }));
-}
-
 function fromAppSettingEntries(entries: SettingsMap): Record<string, string> {
     return Object.fromEntries(entries.map(entry => [entry.key, entry.value]));
-}
-
-function fromConnectionStringEntries(entries: SettingsMap): Record<string, ConnStringValueTypePair> {
-    return Object.fromEntries(entries.map(entry => [entry.key, {
-        value: entry.value,
-        type: (entry.metadata?.[TypeField] ?? DefaultConnectionStringType) as ConnectionStringType,
-    }]));
 }

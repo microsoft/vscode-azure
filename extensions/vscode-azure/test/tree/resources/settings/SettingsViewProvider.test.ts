@@ -7,24 +7,19 @@ import { AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode } from '@mi
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import { AddOrEditSetting } from '../../../../src/commands/settings/AddOrEditSetting';
-import { CopySettingValue } from '../../../../src/commands/settings/CopySettingValue';
-import { DeleteSetting } from '../../../../src/commands/settings/DeleteSetting';
 import { EditSettings } from '../../../../src/commands/settings/EditSettings';
-import { RenameSetting } from '../../../../src/commands/settings/RenameSetting';
+import { createCollectionNode } from '../../../../src/tree/resources/settings/SettingsNode';
 import { SettingsViewProvider } from '../../../../src/tree/resources/settings/SettingsViewProvider';
-import {
-    createCollectionNode, createEntryNode,
-} from '../../../../src/tree/resources/settings/SettingsNode';
-import { createSettingsRegistry, createStubAdapter, entry } from '../../../settings/mockSettings';
+import { createSettingsRegistry, createStubAdapter } from '../../../settings/mockSettings';
 
 const resource = makeGenericResource({
     id: '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Web/sites/app',
     name: 'app',
+    type: 'Microsoft.Web/sites',
     logicalType: FunctionAppLogicalType,
 });
 
-function createProvider(options?: { showValues?: boolean }) {
+function createProvider() {
     const mockCtx = createMockCodeContext();
     const { executor } = createTestActionExecutor();
 
@@ -47,7 +42,6 @@ function createProvider(options?: { showValues?: boolean }) {
         executor,
         tree as never,
         createSettingsRegistry(adapter),
-        { showValues: options?.showValues ?? false, toggle: () => Promise.resolve(true) } as never,
     );
 
     return { provider, register };
@@ -62,73 +56,34 @@ describe('SettingsViewProvider (unit)', () => {
             expect(provider.getTreeItem(key).label).to.equal('Application Settings');
         });
 
-        it('is collapsible', () => {
+        it('is a leaf, since the settings are edited as a document', () => {
             const { provider, register } = createProvider();
             const key = register(createCollectionNode(resource, 'appSettings'));
-
-            expect(provider.getTreeItem(key).collapsibleState).to.equal(1);
-        });
-
-        it('offers edit, toggle, and add', () => {
-            const { provider, register } = createProvider();
-            const key = register(createCollectionNode(resource, 'appSettings'));
-
-            const contextValue = provider.getTreeItem(key).contextValue ?? '';
-            expect(contextValue).to.contain(EditSettings.ContextValue);
-            expect(contextValue).to.contain(AddOrEditSetting.AddContextValue);
-        });
-    });
-
-    describe('entry node', () => {
-        it('labels the node with the setting key', () => {
-            const { provider, register } = createProvider();
-            const key = register(createEntryNode(resource, 'appSettings', entry('MY_SETTING', 'secret')));
-
-            expect(provider.getTreeItem(key).label).to.equal('MY_SETTING');
-        });
-
-        it('is a leaf', () => {
-            const { provider, register } = createProvider();
-            const key = register(createEntryNode(resource, 'appSettings', entry('A', '1')));
 
             expect(provider.getTreeItem(key).collapsibleState).to.equal(0);
         });
 
-        it('masks the value by default', () => {
+        it('offers the edit command as its context value', () => {
             const { provider, register } = createProvider();
-            const key = register(createEntryNode(resource, 'appSettings', entry('A', 'super-secret')));
+            const key = register(createCollectionNode(resource, 'appSettings'));
 
-            const description = provider.getTreeItem(key).description;
-            expect(description).to.not.contain('super-secret');
-            expect(description).to.be.a('string').and.not.be.empty;
+            expect(provider.getTreeItem(key).contextValue ?? '').to.contain(EditSettings.ContextValue);
         });
 
-        it('shows the value once revealing is enabled', () => {
-            const { provider, register } = createProvider({ showValues: true });
-            const key = register(createEntryNode(resource, 'appSettings', entry('A', 'super-secret')));
+        it('opens the editor on click', () => {
+            const { provider, register } = createProvider();
+            const key = register(createCollectionNode(resource, 'appSettings'));
 
-            expect(provider.getTreeItem(key).description).to.equal('super-secret');
+            const command = provider.getTreeItem(key).command;
+            expect(command?.command).to.equal(EditSettings.CommandId);
+            expect(command?.arguments).to.deep.equal([key]);
         });
 
-        it('offers the full per-setting command set', () => {
+        it('shows no values, so nothing needs masking', () => {
             const { provider, register } = createProvider();
-            const key = register(createEntryNode(resource, 'appSettings', entry('A', '1')));
+            const key = register(createCollectionNode(resource, 'appSettings'));
 
-            const contextValue = provider.getTreeItem(key).contextValue ?? '';
-            expect(contextValue).to.contain(CopySettingValue.ContextValue);
-            expect(contextValue).to.contain(AddOrEditSetting.EditContextValue);
-            expect(contextValue).to.contain(RenameSetting.ContextValue);
-            expect(contextValue).to.contain(DeleteSetting.ContextValue);
-        });
-    });
-
-    describe('getParent', () => {
-        it('reports an entry\'s parent as its collection, not the owning resource', () => {
-            const { provider, register } = createProvider();
-            const collectionKey = register(createCollectionNode(resource, 'appSettings'));
-            const entryKey = register(createEntryNode(resource, 'appSettings', entry('A', '1')));
-
-            expect(provider.getParent(entryKey)).to.equal(collectionKey);
+            expect(provider.getTreeItem(key).description).to.be.undefined;
         });
     });
 

@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { expect } from 'chai';
-import { JsoncSettingsFormat } from '../../../src/settings/core/JsoncSettingsFormat';
-import { SettingsParseError } from '../../../src/settings/core/SettingsFormat';
+import { JsoncSettingsFormat, SettingsParseError } from '../../../src/settings/core/JsoncSettingsFormat';
 import type { SettingsMap, SettingsSnapshot } from '../../../src/settings/core/SettingsModel';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 
@@ -15,7 +14,6 @@ function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot
         resourceName: 'myFunctionApp',
         collectionLabel: 'Application settings',
         writable: true,
-        structured: false,
         ...overrides,
     };
 }
@@ -70,60 +68,49 @@ describe('JsoncSettingsFormat (unit)', () => {
 
             expect(text).to.contain('plain text');
         });
-
-        it('nests value and metadata for structured collections', () => {
-            const format = createFormat();
-            const text = format.serialize(createSnapshot({
-                structured: true,
-                entries: [{ key: 'DB', value: 'conn-string', metadata: { type: 'SQLAzure' } }],
-            }));
-
-            expect(text).to.contain('"value": "conn-string"');
-            expect(text).to.contain('"type": "SQLAzure"');
-        });
     });
 
     describe('parse', () => {
         it('reads a plain object of settings', () => {
             const format = createFormat();
-            const parsed = format.parse('{ "A": "1", "B": "2" }', createSnapshot());
+            const parsed = format.parse('{ "A": "1", "B": "2" }');
 
             expect(parsed).to.deep.equal([{ key: 'A', value: '1' }, { key: 'B', value: '2' }]);
         });
 
         it('ignores comments, including the generated header', () => {
             const format = createFormat();
-            const parsed = format.parse('// a header\n// another line\n{ "A": "1" }', createSnapshot());
+            const parsed = format.parse('// a header\n// another line\n{ "A": "1" }');
 
             expect(parsed).to.deep.equal([{ key: 'A', value: '1' }]);
         });
 
         it('preserves document order', () => {
             const format = createFormat();
-            const parsed = format.parse('{ "Z": "1", "A": "2" }', createSnapshot());
+            const parsed = format.parse('{ "Z": "1", "A": "2" }');
 
             expect(parsed.map(e => e.key)).to.deep.equal(['Z', 'A']);
         });
 
         it('accepts an empty object', () => {
             const format = createFormat();
-            expect(format.parse('{}', createSnapshot())).to.be.empty;
+            expect(format.parse('{}')).to.be.empty;
         });
 
         it('tolerates a trailing comma', () => {
             const format = createFormat();
-            expect(format.parse('{ "A": "1", }', createSnapshot())).to.deep.equal([{ key: 'A', value: '1' }]);
+            expect(format.parse('{ "A": "1", }')).to.deep.equal([{ key: 'A', value: '1' }]);
         });
 
         it('throws with a position for malformed JSON', () => {
             const format = createFormat();
-            expect(() => format.parse('{ "A": ', createSnapshot()))
+            expect(() => format.parse('{ "A": '))
                 .to.throw(SettingsParseError, /not valid JSON/);
         });
 
         it('throws when the root is not an object', () => {
             const format = createFormat();
-            expect(() => format.parse('["A"]', createSnapshot()))
+            expect(() => format.parse('["A"]'))
                 .to.throw(SettingsParseError, /single JSON object/);
         });
 
@@ -132,7 +119,7 @@ describe('JsoncSettingsFormat (unit)', () => {
             const text = '{ "A": "1", "A": "2" }';
 
             try {
-                format.parse(text, createSnapshot());
+                format.parse(text);
                 expect.fail('expected a SettingsParseError');
             } catch (error) {
                 expect(error).to.be.instanceOf(SettingsParseError);
@@ -145,14 +132,14 @@ describe('JsoncSettingsFormat (unit)', () => {
 
         it('rejects a non-string value', () => {
             const format = createFormat();
-            expect(() => format.parse('{ "PORT": 8080 }', createSnapshot()))
+            expect(() => format.parse('{ "PORT": 8080 }'))
                 .to.throw(SettingsParseError, /must be a quoted string/);
         });
 
         it('rejects null and boolean values', () => {
             const format = createFormat();
-            expect(() => format.parse('{ "A": null }', createSnapshot())).to.throw(SettingsParseError);
-            expect(() => format.parse('{ "A": true }', createSnapshot())).to.throw(SettingsParseError);
+            expect(() => format.parse('{ "A": null }')).to.throw(SettingsParseError);
+            expect(() => format.parse('{ "A": true }')).to.throw(SettingsParseError);
         });
 
         it('reports the offending span for a non-string value', () => {
@@ -160,46 +147,17 @@ describe('JsoncSettingsFormat (unit)', () => {
             const text = '{ "PORT": 8080 }';
 
             try {
-                format.parse(text, createSnapshot());
+                format.parse(text);
                 expect.fail('expected a SettingsParseError');
             } catch (error) {
                 const parseError = error as SettingsParseError;
                 expect(text.slice(parseError.offset, parseError.offset + parseError.length)).to.equal('8080');
             }
         });
-
-        describe('structured collections', () => {
-            const structured = createSnapshot({ structured: true });
-
-            it('splits value from metadata', () => {
-                const format = createFormat();
-                const parsed = format.parse('{ "DB": { "value": "conn", "type": "SQLAzure" } }', structured);
-
-                expect(parsed).to.deep.equal([{ key: 'DB', value: 'conn', metadata: { type: 'SQLAzure' } }]);
-            });
-
-            it('rejects a scalar value', () => {
-                const format = createFormat();
-                expect(() => format.parse('{ "DB": "conn" }', structured))
-                    .to.throw(SettingsParseError, /must be an object/);
-            });
-
-            it('rejects an object with no value property', () => {
-                const format = createFormat();
-                expect(() => format.parse('{ "DB": { "type": "SQLAzure" } }', structured))
-                    .to.throw(SettingsParseError, /missing its "value" property/);
-            });
-
-            it('rejects a non-string metadata field', () => {
-                const format = createFormat();
-                expect(() => format.parse('{ "DB": { "value": "conn", "type": 3 } }', structured))
-                    .to.throw(SettingsParseError, /must be a quoted string/);
-            });
-        });
     });
 
     describe('round-trip', () => {
-        it('preserves unstructured entries exactly', () => {
+        it('preserves entries exactly', () => {
             const format = createFormat();
             const entries: SettingsMap = [
                 { key: 'A', value: '1' },
@@ -210,15 +168,7 @@ describe('JsoncSettingsFormat (unit)', () => {
             ];
             const snapshot = createSnapshot({ entries });
 
-            expect(format.parse(format.serialize(snapshot), snapshot)).to.deep.equal(entries);
-        });
-
-        it('preserves structured entries exactly', () => {
-            const format = createFormat();
-            const entries: SettingsMap = [{ key: 'DB', value: 'conn', metadata: { type: 'SQLAzure' } }];
-            const snapshot = createSnapshot({ structured: true, entries });
-
-            expect(format.parse(format.serialize(snapshot), snapshot)).to.deep.equal(entries);
+            expect(format.parse(format.serialize(snapshot))).to.deep.equal(entries);
         });
     });
 });

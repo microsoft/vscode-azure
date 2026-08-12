@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import type { SettingsAdapter, SettingsCollectionDescriptor } from '../../src/settings/SettingsAdapter';
 import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '../../src/settings/core/SettingsModel';
 import { SettingsRegistry } from '../../src/settings/SettingsRegistry';
@@ -14,7 +13,7 @@ import { SettingsDataProvider } from '../../src/tree/resources/settings/Settings
 export interface StubAdapterOptions {
     /** Logical types the adapter claims. Compared case-insensitively. */
     readonly logicalTypes: readonly string[];
-    /** Collections the adapter exposes. Defaults to a single unstructured `appSettings`. */
+    /** Collections the adapter exposes. Defaults to a single `appSettings`. */
     readonly collections?: readonly SettingsCollectionDescriptor[];
     /** Collection ids the adapter refuses to write. Defaults to none. */
     readonly readOnlyCollections?: readonly string[];
@@ -38,7 +37,7 @@ export class StubAdapter implements SettingsAdapter {
 
     public constructor(private readonly options: StubAdapterOptions) {
         this.logicalTypes = new Set(options.logicalTypes.map(type => type.toLowerCase()));
-        this.collections = options.collections ?? [{ id: 'appSettings', label: 'Application Settings', structured: false }];
+        this.collections = options.collections ?? [{ id: 'appSettings', label: 'Application Settings' }];
 
         for (const [collectionId, entries] of Object.entries(options.entries ?? {})) {
             this.store.set(collectionId, entries);
@@ -67,7 +66,6 @@ export class StubAdapter implements SettingsAdapter {
             resourceName: resource.name,
             collectionLabel: collection.label,
             writable: !this.isReadOnly(collectionId),
-            structured: collection.structured,
         });
     }
 
@@ -109,11 +107,10 @@ export function createSettingsRegistry(...adapters: SettingsAdapter[]): Settings
  * providers want.
  */
 export function createSettingsDataProvider(...adapters: SettingsAdapter[]): SettingsDataProvider {
-    const { executor } = createTestActionExecutor();
-    return new SettingsDataProvider(executor, createSettingsRegistry(...adapters));
+    return new SettingsDataProvider(createSettingsRegistry(...adapters));
 }
 
 /** Shorthand for building a {@linkcode SettingsEntry}. */
-export function entry(key: string, value: string, metadata?: Record<string, string>): SettingsEntry {
-    return metadata ? { key, value, metadata } : { key, value };
+export function entry(key: string, value: string): SettingsEntry {
+    return { key, value };
 }

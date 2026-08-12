@@ -7,20 +7,25 @@ import { ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { SettingsUri } from '../../settings/SettingsUri';
-import { isSettingsNode, parentCollectionOf, isSettingsEntryNode } from '../../tree/resources/settings/SettingsNode';
+import { isSettingsCollectionNode } from '../../tree/resources/settings/SettingsNode';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
- * Opens a settings collection as an editable JSONC document.
+ * Opens a settings collection for editing.
  *
- * This is the primary way to view and change settings: the whole collection at once, with the
- * editor's own find, multi-cursor, and undo. The per-setting tree commands exist for one-off edits.
+ * This is the only settings command, and the fork point between the two editing experiences. Today
+ * it opens the collection as an in-memory JSONC document whose save writes straight to Azure.
  *
- * Invoked from a collection node, or from an individual setting (which opens the collection that
- * contains it).
+ * @remarks
+ * A second branch is planned: when the resource can be positively attributed to a local azd project,
+ * the project's Bicep template is the declarative source of truth and should be edited instead, with
+ * a prompt to re-provision on save. That branch depends on the azd association service being added
+ * by another change, so it is deliberately absent rather than half-built here.
  */
 @injectable()
 export class EditSettings implements ManagedCommand {
+    /** Command id, so the tree item can invoke it directly on click. */
+    public static readonly CommandId = 'vscode-azure/settings/edit';
     public static readonly ContextValue = 'editSettings';
 
     public constructor(
@@ -35,16 +40,13 @@ export class EditSettings implements ManagedCommand {
         }
 
         const node = this.tree.get(key);
-        if (!isSettingsNode(node)) {
+        if (!isSettingsCollectionNode(node)) {
             return;
         }
 
-        // An entry node opens its containing collection, so the command works from either level.
-        const collection = isSettingsEntryNode(node) ? parentCollectionOf(node) : node;
-
         // `preview: false` so the tab is not reused: the URI identifies the collection, and two
         // views of one collection could disagree after a save.
-        const document = await this.ctx.code.workspace.openTextDocument(SettingsUri.from(this.ctx.code, collection));
+        const document = await this.ctx.code.workspace.openTextDocument(SettingsUri.from(this.ctx.code, node));
         await this.ctx.code.window.showTextDocument(document, { preview: false });
     }
 }

@@ -5,7 +5,7 @@
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
 import { ISettingsAdapter, type SettingsAdapter, type SettingsCollectionDescriptor } from './SettingsAdapter';
-import type { SettingsEntry, SettingsMap, SettingsSnapshot } from './core/SettingsModel';
+import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 import { injectable, multiInject, optional, type ServiceIdentifier } from 'inversify';
 
 export const ISettingsRegistry: ServiceIdentifier<ISettingsRegistry> = Symbol.for('ISettingsRegistry');
@@ -63,16 +63,6 @@ export class SettingsRegistry {
     }
 
     /**
-     * Validate a proposed setting name, for live feedback in an input box.
-     *
-     * @returns a localized error message, or `undefined` if the name is acceptable or the adapter
-     * has no opinion.
-     */
-    public validateKey(resource: GenericResource, collectionId: string, key: string): string | undefined {
-        return this.getAdapter(resource)?.validateKey?.(resource, collectionId, key);
-    }
-
-    /**
      * Read a collection's current contents.
      *
      * @throws if no adapter handles the resource, or the collection id is unknown to it.
@@ -88,59 +78,6 @@ export class SettingsRegistry {
      */
     public async write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
         await this.require(resource, collectionId).write(resource, collectionId, entries);
-    }
-
-    /**
-     * Add a setting, or replace the value of an existing one.
-     *
-     * Implemented as read-modify-write because the underlying services replace whole dictionaries
-     * rather than patching keys. Like the editor, this is last-writer-wins over the keys it touches;
-     * unlike the editor, it re-reads immediately beforehand, so keys it does *not* touch are
-     * preserved.
-     *
-     * @throws if the adapter rejects the write.
-     */
-    public async upsert(resource: GenericResource, collectionId: string, entry: SettingsEntry): Promise<void> {
-        const current = (await this.read(resource, collectionId)).entries;
-        const existing = current.some(candidate => candidate.key === entry.key);
-
-        const next = existing
-            ? current.map(candidate => candidate.key === entry.key ? entry : candidate)
-            : [...current, entry];
-
-        await this.write(resource, collectionId, next);
-    }
-
-    /**
-     * Delete a setting by key. Deleting a key that is already absent is a no-op.
-     *
-     * @throws if the adapter rejects the write.
-     */
-    public async remove(resource: GenericResource, collectionId: string, key: string): Promise<void> {
-        const current = (await this.read(resource, collectionId)).entries;
-        await this.write(resource, collectionId, current.filter(entry => entry.key !== key));
-    }
-
-    /**
-     * Rename a setting, preserving its value, metadata, and position in the collection.
-     *
-     * @throws if the source key is missing, the target key already exists -- renaming onto an
-     * existing key would silently destroy it -- or the adapter rejects the write.
-     */
-    public async rename(resource: GenericResource, collectionId: string, fromKey: string, toKey: string): Promise<void> {
-        const current = (await this.read(resource, collectionId)).entries;
-        if (!current.some(entry => entry.key === fromKey)) {
-            throw new Error(`There is no setting named '${fromKey}' to rename.`);
-        }
-        if (current.some(entry => entry.key === toKey)) {
-            throw new Error(`A setting named '${toKey}' already exists.`);
-        }
-
-        await this.write(
-            resource,
-            collectionId,
-            current.map(entry => entry.key === fromKey ? { ...entry, key: toKey } : entry),
-        );
     }
 
     private require(resource: GenericResource, collectionId: string): SettingsAdapter {

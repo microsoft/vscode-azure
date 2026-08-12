@@ -3,26 +3,18 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/**
- * A single name/value setting.
- *
- * {@linkcode SettingsEntry.metadata metadata} carries service-specific side-channel fields that
- * travel with the value but are not the value -- e.g. an App Service connection string's `type`
- * (`SQLAzure`, `Custom`, ...). Collections that declare themselves unstructured leave it undefined.
- */
+/** A single name/value setting. */
 export interface SettingsEntry {
     /** The setting name. Unique within its collection; compared case-sensitively. */
     readonly key: string;
     /** The setting value. */
     readonly value: string;
-    /** Service-specific fields that accompany the value, if the collection is structured. */
-    readonly metadata?: Readonly<Record<string, string>>;
 }
 
 /**
  * An ordered, immutable collection of settings.
  *
- * Order is meaningful only for display and serialization; equality and diffing are by key.
+ * Order is meaningful only for display and serialization; equality is by key.
  */
 export type SettingsMap = readonly SettingsEntry[];
 
@@ -39,7 +31,4 @@ export interface SettingsSnapshot {
     readonly collectionLabel: string;
     /** When `false`, the document is opened read-only. */
     readonly writable: boolean;
-    /** Whether entries carry {@linkcode SettingsEntry.metadata}, which changes the serialized shape. */
-    readonly structured: boolean;
 }
-
