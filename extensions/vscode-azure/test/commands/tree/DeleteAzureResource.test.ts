@@ -5,8 +5,8 @@
 
 import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { CancellationError, createActionContext, IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockUri, respondToPrompts, type MockInputBox, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { CancellationError, createActionContext, IActionContext, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts, type MockCodeContextResult, type MockInputBox, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
@@ -73,6 +73,37 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.calls[0].arguments[0]).to.equal(resourceGroup);
         expect(shownToasts(setup)).to.deep.equal([`Deleted resource group '${resourceGroup.name}'.`]);
+    });
+
+    it('never pre-fills the typed confirmation from a previous deletion', async () => {
+        const first = makeResourceGroup();
+        const setup = createCommand(first);
+        respondToPrompts(setup.mockResult, [{ input: first.name }]);
+
+        await setup.command.execute(AzureNodeId.from(first).toString());
+        expect(setup.deleteResourceGroup.mock.callCount()).to.equal(1);
+
+        // Reuse only the persisted workspace state, so the second prompt is a
+        // genuinely fresh input box. No response is queued, so its value
+        // reflects only what the command pre-filled. A later group with the
+        // same name must not inherit the remembered value, or confirming a
+        // cascading delete becomes a single Enter.
+        const fresh = createMockCodeContext();
+        const second = makeResourceGroup();
+        const repeat = createCommand(second, {
+            codeContext: {
+                ctx: { code: fresh.ctx.code, extensionContext: setup.codeContext.ctx.extensionContext },
+                mock: fresh.mock,
+            },
+        });
+
+        const pending = repeat.command.execute(AzureNodeId.from(second).toString());
+        const inputBox = await waitForInputBox(repeat.mockResult);
+        expect(inputBox.value, 'the confirmation must start empty').to.equal('');
+
+        inputBox.triggerHide();
+        await expect(pending).to.be.rejected;
+        expect(repeat.deleteResourceGroup.mock.callCount()).to.equal(0);
     });
 
     it('blocks deletion while the typed name does not match the resource group', async () => {
@@ -148,7 +179,7 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.remove.mock.callCount()).to.equal(0);
     });
 
-    it('still allows deleting an azd-managed resource directly', async () => {
+    it('still allows deleting an azd-managed resource directly, after a second confirmation', async () => {
         const resource = makeGenericResource();
         const setup = createCommand(resource, {
             association: { azureYamlUri: MockUri.file('/project/azure.yaml'), environmentName: 'dev' },
@@ -157,6 +188,29 @@ describe('DeleteAzureResource (unit)', () => {
 
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
+        // Choosing to bypass azd must not also bypass the delete confirmation:
+        // one warning steers toward azd, a second confirms the deletion.
+        const warnings = setup.mockResult.window.showWarningMessage.mock.calls
+            .map(call => call.arguments[0]);
+        expect(warnings).to.have.length(2);
+        expect(warnings[1]).to.contain(resource.name);
+        expect(setup.mockResult.messageResponses, 'both responses should be consumed').to.be.empty;
+        expect(setup.executeAzdDown.mock.callCount()).to.equal(0);
+        expect(setup.deleteById.mock.callCount()).to.equal(1);
+        expect(setup.remove.mock.callCount()).to.equal(1);
+    });
+
+    it('still deletes when the azd lookup fails, e.g. azd is not installed', async () => {
+        const resource = makeGenericResource();
+        const setup = createCommand(resource, {
+            associationError: new Error('Azure Developer CLI (azd) was not found'),
+        });
+        setup.mockResult.messageResponses.push('Delete');
+
+        await setup.command.execute(AzureNodeId.from(resource).toString());
+
+        // A missing azd must not make the resource undeletable; it falls
+        // through to the normal confirm-and-delete path.
         expect(setup.executeAzdDown.mock.callCount()).to.equal(0);
         expect(setup.deleteById.mock.callCount()).to.equal(1);
         expect(setup.remove.mock.callCount()).to.equal(1);
@@ -196,12 +250,17 @@ describe('DeleteAzureResource (unit)', () => {
 interface CommandOptions {
     readonly deleteById?: Mock<(resourceId: string, resourceType: string) => Promise<void>>;
     readonly association?: AzdResourceAssociation;
+    /** Simulate an azd lookup that fails, e.g. because azd is not installed. */
+    readonly associationError?: Error;
     readonly extraNodes?: readonly ConcreteAzureNode[];
+    /** Reuse a context (and its workspace state) from an earlier invocation. */
+    readonly codeContext?: MockCodeContextResult;
 }
 
 interface CommandSetup {
     readonly command: DeleteAzureResource;
     readonly mockResult: MockVsCodeResult;
+    readonly codeContext: MockCodeContextResult;
     readonly deleteById: Mock<(resourceId: string, resourceType: string) => Promise<void>>;
     readonly deleteResourceGroup: Mock<(name: string) => Promise<void>>;
     readonly executeAzdDown: Mock<AzdDown['execute']>;
@@ -229,7 +288,9 @@ async function waitForInputBox(mockResult: MockVsCodeResult): Promise<MockInputB
     return mockResult.inputBoxes[0];
 }
 
-function createCommand(resource: GenericResource, options: CommandOptions = {}): CommandSetup {    const { ctx, mock: mockResult } = createMockCodeContext();
+function createCommand(resource: GenericResource, options: CommandOptions = {}): CommandSetup {
+    const codeContext = options.codeContext ?? createMockCodeContext();
+    const { ctx, mock: mockResult } = codeContext;
     const dataTree = createMockDataItemTree([resource, ...(options.extraNodes ?? [])]);
     const remove = (dataTree as unknown as { remove: Mock<(target: unknown) => void> }).remove;
 
@@ -237,12 +298,15 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
     const deleteResourceGroup = mock.fn((_name: string) => Promise.resolve());
     const executeAzdDown = mock.fn<AzdDown['execute']>(() => Promise.resolve());
     const azdAssociation: IAzdResourceAssociationService = {
-        find: mock.fn(() => Promise.resolve(options.association)),
+        find: mock.fn(() => options.associationError
+            ? Promise.reject(options.associationError)
+            : Promise.resolve(options.association)),
     };
 
     const container = new Container();
     container.bind(ICodeContext).toConstantValue(ctx);
     container.bind(IActionContext).toConstantValue(createActionContext('deleteAzureResource'));
+    container.bind(IOutputChannel).toConstantValue(new MockOutputChannel('test'));
     container.bind(IAzureViewDataTree).toConstantValue(dataTree);
     container.bind(IAzdResourceAssociationService).toConstantValue(azdAssociation);
     container.bind(IResourceClientProvider).toConstantValue(() => ({
@@ -256,6 +320,7 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
     return {
         command: container.get(DeleteAzureResource),
         mockResult,
+        codeContext,
         deleteById,
         deleteResourceGroup,
         executeAzdDown,

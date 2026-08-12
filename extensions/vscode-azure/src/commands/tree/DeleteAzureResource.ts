@@ -10,9 +10,9 @@ import {
     isResourceGroup,
     type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, IActionContext, ICodeContext, showSmartInputBox, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { CancellationError, IActionContext, ICodeContext, IOutputChannel, showSmartInputBox, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
-import { IAzdResourceAssociationService } from '../../azd/AzdResourceAssociationService';
+import { IAzdResourceAssociationService, type AzdResourceAssociation } from '../../azd/AzdResourceAssociationService';
 import { IAzureViewDataTree } from '../../services';
 import { AzdDown } from '../deploy/AzdDown';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -43,6 +43,7 @@ export class DeleteAzureResource implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionContext) private readonly context: IActionContext,
+        @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IAzdResourceAssociationService) private readonly azdAssociation: IAzdResourceAssociationService,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
@@ -106,7 +107,7 @@ export class DeleteAzureResource implements ManagedCommand {
      * @throws {@linkcode CancellationError} if the user dismisses the prompt.
      */
     private async steerToAzd(resource: GenericResource): Promise<boolean> {
-        const association = await this.azdAssociation.find(resource);
+        const association = await this.findAzdAssociation(resource);
         this.context.telemetry.properties.azdAssociated = String(!!association);
         if (!association) {
             this.context.telemetry.properties.deletionPath = 'direct';
@@ -142,6 +143,25 @@ export class DeleteAzureResource implements ManagedCommand {
     }
 
     /**
+     * Find the azd project owning {@linkcode resource}, treating a failed
+     * lookup as "not azd-managed".
+     *
+     * The lookup shells out to `azd`, which is optional -- an uninstalled or
+     * failing CLI must not make a resource undeletable. Falling through to the
+     * direct path is the safe default: it still requires its own confirmation
+     * and only ever deletes the selected target, never a whole deployment.
+     */
+    private async findAzdAssociation(resource: GenericResource): Promise<AzdResourceAssociation | undefined> {
+        try {
+            return await this.azdAssociation.find(resource);
+        } catch (error) {
+            this.context.telemetry.properties.azdLookupFailed = 'true';
+            this.output.debug(`[delete] azd association lookup failed: ${stringifyError(error)}`);
+            return undefined;
+        }
+    }
+
+    /**
      * Ask the user to confirm, requiring the typed name for cascading deletes.
      *
      * @throws {@linkcode CancellationError} if the user dismisses the prompt.
@@ -150,7 +170,14 @@ export class DeleteAzureResource implements ManagedCommand {
         if (isResourceGroup(resource)) {
             // Validation blocks acceptance until the name matches, so returning
             // at all means the user confirmed; cancelling rejects instead.
+            //
+            // `value` is set explicitly so the prompt never pre-fills from a
+            // previously remembered input -- a recalled name would satisfy the
+            // validation immediately and reduce this deliberate speed bump to a
+            // single Enter.
             await showSmartInputBox(this.ctx, {
+                value: '',
+                stepName: 'confirmResourceGroupDeletion',
                 prompt: this.ctx.code.l10n.t('Type \'{0}\' to confirm deletion of this resource group and everything in it.', resource.name),
                 validateInput: input => input === resource.name
                     ? undefined
