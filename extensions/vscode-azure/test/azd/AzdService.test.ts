@@ -252,15 +252,15 @@ describe('AzdService (unit)', () => {
             const { service, executor } = createService(spawnFn);
 
             let suppress: string | boolean | undefined;
-            const error: Error = await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
+            await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
                 ctx.errorHandling.rethrow = true;
                 try {
                     await service.init(MockUri.file('/project'));
                 } finally {
                     suppress = ctx.errorHandling.suppress;
                 }
-            })).to.be.rejectedWith(Error, 'Azure Developer CLI (azd) was not found');
-            expect(error.cause).to.equal(enoent);
+            })).to.be.rejectedWith(Error, 'Azure Developer CLI (azd) was not found')
+                .and.eventually.have.property('cause', enoent);
             expect(suppress).to.equal('display');
         });
 
@@ -276,15 +276,15 @@ describe('AzdService (unit)', () => {
             const { service, executor } = createService(spawnFn);
 
             let suppress: string | boolean | undefined;
-            const error: Error = await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
+            await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
                 ctx.errorHandling.rethrow = true;
                 try {
                     await service.init(MockUri.file('/project'));
                 } finally {
                     suppress = ctx.errorHandling.suppress;
                 }
-            })).to.be.rejectedWith(Error, 'Azure Developer CLI (azd) was not found');
-            expect(error.cause).to.equal(exitError);
+            })).to.be.rejectedWith(Error, 'Azure Developer CLI (azd) was not found')
+                .and.eventually.have.property('cause', exitError);
             expect(suppress).to.equal('display');
         });
 

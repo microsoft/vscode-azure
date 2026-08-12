@@ -127,11 +127,11 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ exitCode: 1, stderr: 'failure reason' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            const error: SubprocessError = await expect(executor.spawn({
+            await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
-            })).to.be.rejectedWith(SubprocessError, 'failure reason');
-            expect(error.exitCode).to.equal(1);
+            })).to.be.rejectedWith(SubprocessError, 'failure reason')
+                .and.eventually.have.property('exitCode', 1);
         });
 
         it('should throw SubprocessError when terminated by a signal', async () => {
@@ -139,11 +139,11 @@ describe('ProcessExecutor (unit)', () => {
             const spawnFn = createMockSpawn({ error: makeSubprocessError({ signalName: 'SIGTERM', stderr: 'killed' }) });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            const error: SubprocessError = await expect(executor.spawn({
+            await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
-            })).to.be.rejectedWith(SubprocessError, 'killed');
-            expect(error.signalName).to.equal('SIGTERM');
+            })).to.be.rejectedWith(SubprocessError, 'killed')
+                .and.eventually.have.property('signalName', 'SIGTERM');
         });
 
         it('should throw CancellationError when the subprocess reports isCanceled', async () => {
