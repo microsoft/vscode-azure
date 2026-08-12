@@ -194,12 +194,7 @@ describe('GenericPickStep (unit)', () => {
             responses: [],
         });
 
-        try {
-            await promise;
-            expect.fail('Expected error');
-        } catch (e) {
-            expect((e as Error).message).to.include('No items found');
-        }
+        await expect(promise).to.be.rejectedWith('No items found');
     });
 
     it('should support canPickMany when all items are terminal', async () => {

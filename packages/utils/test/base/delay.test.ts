@@ -19,12 +19,7 @@ describe('delay (unit)', () => {
         const controller = new AbortController();
         controller.abort();
 
-        try {
-            await delay(5000, controller.signal);
-            expect.fail('Expected CancellationError');
-        } catch (e) {
-            expect(CancellationError.test(e)).to.be.true;
-        }
+        await expect(delay(5000, controller.signal)).to.be.rejectedWith(CancellationError);
     });
 
     it('should reject with CancellationError when AbortSignal fires during delay', async () => {
@@ -33,12 +28,7 @@ describe('delay (unit)', () => {
         const promise = delay(5000, controller.signal);
         setTimeout(() => { controller.abort(); }, 30);
 
-        try {
-            await promise;
-            expect.fail('Expected CancellationError');
-        } catch (e) {
-            expect(CancellationError.test(e)).to.be.true;
-        }
+        await expect(promise).to.be.rejectedWith(CancellationError);
     });
 
     it('should reject with CancellationError when cancellationToken is already cancelled', async () => {
@@ -47,12 +37,7 @@ describe('delay (unit)', () => {
             onCancellationRequested: () => ({ dispose: () => { /* noop */ } }),
         };
 
-        try {
-            await delay(5000, token);
-            expect.fail('Expected CancellationError');
-        } catch (e) {
-            expect(CancellationError.test(e)).to.be.true;
-        }
+        await expect(delay(5000, token)).to.be.rejectedWith(CancellationError);
     });
 
     it('should reject with CancellationError when cancellationToken fires during delay', async () => {
@@ -65,12 +50,7 @@ describe('delay (unit)', () => {
         const promise = delay(5000, token);
         setTimeout(() => { emitter.fire(); }, 30);
 
-        try {
-            await promise;
-            expect.fail('Expected CancellationError');
-        } catch (e) {
-            expect(CancellationError.test(e)).to.be.true;
-        }
+        await expect(promise).to.be.rejectedWith(CancellationError);
     });
 
     it('should resolve without options', async () => {

@@ -5,7 +5,7 @@
 
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
 import { EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
-import { mock } from 'node:test';
+import { mock, type Mock } from 'node:test';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../src/auth/AzureSubscription';
 import { AzurePublicCloud, type EnvironmentLike } from '../src/auth/Environment';
 import { isAccount, isTenant, type ConcreteAzureNode } from '../src/models/AzureNode';
@@ -13,6 +13,7 @@ import type { GenericResource } from '../src/models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
 import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
+import type { IWebAppClient } from '../src/rest/clients/WebAppClient';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
 
@@ -237,4 +238,51 @@ export function createMockSubscriptionClient(options?: MockSubscriptionClientOpt
 export function createMockSubscriptionClientProvider(locations: Location[] = []): ISubscriptionClientProvider {
     const client = createMockSubscriptionClient({ locations });
     return () => client;
+}
+
+/** Options for {@linkcode createMockWebAppClient}. */
+export interface MockWebAppClientOptions {
+    /**
+     * Initial application settings. Copied into the mutable store backing the
+     * client, so mutating the returned settings never affects the caller's object.
+     */
+    readonly settings?: Record<string, string>;
+}
+
+/**
+ * An {@linkcode IWebAppClient} whose methods are `mock.fn()` instances, plus the
+ * mutable application-settings store backing them.
+ */
+export type MockWebAppClient = IWebAppClient & {
+    readonly settings: Record<string, string>;
+    readonly webApps: { [K in keyof IWebAppClient['webApps']]: Mock<IWebAppClient['webApps'][K]> };
+};
+
+/**
+ * Creates a mock {@linkcode IWebAppClient} whose methods are `mock.fn()` instances,
+ * so tests can assert call counts and arguments via
+ * `client.webApps.listApplicationSettings.mock`.
+ *
+ * Application settings are backed by a mutable store shared with the returned
+ * {@linkcode MockWebAppClient.settings settings} object, so
+ * `updateApplicationSettings` is observable by later reads. This lets tests
+ * exercise read-modify-write flows without re-stubbing.
+ */
+export function createMockWebAppClient(options?: MockWebAppClientOptions): MockWebAppClient {
+    const settings: Record<string, string> = { ...options?.settings };
+
+    return {
+        settings,
+        webApps: {
+            listApplicationSettings: mock.fn(() => Promise.resolve({ properties: { ...settings } })),
+            updateApplicationSettings: mock.fn((_resourceGroupName: string, _name: string, appSettings: { properties?: Record<string, string> }) => {
+                // Replace rather than merge: the ARM operation is a full write of the setting collection.
+                for (const key of Object.keys(settings)) {
+                    Reflect.deleteProperty(settings, key);
+                }
+                Object.assign(settings, appSettings.properties);
+                return Promise.resolve({ properties: { ...settings } });
+            }),
+        },
+    };
 }

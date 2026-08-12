@@ -62,25 +62,31 @@ it('(unit) should invalidate the cache', async () => {
 - `registeredCommands` — commands registered via `commands.registerCommand`
 - `fs` — a `MockFileSystem` (in-memory `workspace.fs`; see below)
 - `workspaceFolders` — mutable array backing `workspace.workspaceFolders`
-- `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`- `tasks` -- the mock `tasks` namespace (includes `executeTask` with call tracking)
-- `taskProcessEndEmitter` -- fire to simulate a task process ending with an exit code- `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
+- `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`
+- `tasks` — the mock `tasks` namespace (includes `executeTask` with call tracking)
+- `taskProcessEndEmitter` — fire to simulate a task process ending with an exit code
+- `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
+- `textDocuments` / `shownDocuments` — documents opened via `workspace.openTextDocument` and passed to `window.showTextDocument`, in order
 
 All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior. The namespace objects exposed on the result (`authentication`, `commands`, `env`, `window`, `workspace`, `tasks`) are typed so their methods expose `.mock` directly -- read `mockResult.window.showErrorMessage.mock.callCount()` with no cast. (Note: the namespaces on `mockResult.vscode` are typed as the real `IVsCode` module, so reach for the top-level handles when you need `.mock`.)
 
 #### MockFileSystem
 
-`MockFileSystem` is an in-memory implementation of `workspace.fs` with `stat`, `readFile`, `writeFile`, `createDirectory`, `copy`, and `delete`. Pre-populate files with `addFile()`:
+`MockFileSystem` is an in-memory implementation of `workspace.fs` with `stat`, `readFile`, `writeFile`, `createDirectory`, `readDirectory`, `copy`, and `delete`. Pre-populate entries with `addFile()`, `addDirectory()`, or `addSymbolicLink()`; parent directories are created implicitly:
 
 ```typescript
 const { vscode: code, fs } = createMockVsCode();
 fs.addFile(MockUri.file('/project/azure.yaml'));
 fs.addFile(MockUri.file('/project/config.json'), '{"key": "value"}');
 
-// code.workspace.fs.stat() now resolves for those paths
+// code.workspace.fs.stat() now resolves for those paths (and for /project)
 // code.workspace.fs.readFile() returns the content
+// code.workspace.fs.readDirectory('/project') lists both files
 ```
 
 Every method is a `mock.fn()` so you can assert call counts (e.g. `fs.createDirectory.mock.callCount()`).
+
+The same module also exports the `vscode` value types a `FileSystemProvider` under test needs: `MockFileType`, `MockFilePermission`, `MockFileChangeType`, and `MockFileSystemError` (whose static factories mirror the real API, and which is identified by `code` rather than class identity).
 
 #### Workspace Folders
 
@@ -147,9 +153,18 @@ Note: intermediate items in the pick step get ` $(chevron-right)` appended to th
 ### Shared Test Fixtures (azutils)
 
 `packages/azutils/test/` provides shared helpers, exported from the `@microsoft/vscode-azure-azutils/testing` barrel:
-- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()`, `makeCredential()`, `makeResourceGroup()`, `makeGenericResource()`, `makeVirtualGroup()`, `makeVirtualResource()` using the `AzurePublicCloud` preset; plus `createMockAccountDataProvider()`
+- `mockAzure.ts` — `makeAccount()`, `makeTenant()`, `makeSubscription()`, `makeCredential()`, `makeResourceGroup()`, `makeGenericResource()`, `makeVirtualGroup()`, `makeVirtualResource()` using the `AzurePublicCloud` preset; plus `createMockAccountDataProvider()`, `createMockSubscriptionClient()`, and `createMockWebAppClient()` (whose application settings are a mutable store, so read-modify-write flows work without re-stubbing)
 - `mockPipeline.ts` — `makeRequest()`, `makeResponse()` (using SDK's `createHttpHeaders`), and `MockHttpClient` for injecting into Azure SDK clients
 - `tree/mockTree.ts` — `createMockViewItemTree()`, `createMockDataItemTree()`, `createMockHierarchicalDataItemTree()` for testing `Choose*Step` classes and pick-based wizards
+
+### Debounced Work
+
+Code that debounces work should depend on `IDebounceScheduler` rather than
+timers directly. Tests inject `ManualDebounceScheduler` from
+`@microsoft/vscode-azure-utils/testing`, assert that work was scheduled
+(`hasPending`), and then `await scheduler.flush()` to run it to completion.
+This avoids interleaving fake timers with real promise continuations, which is
+a common source of flakiness.
 
 ### Integration Tests
 
@@ -164,6 +179,28 @@ it('(integration) should execute without error', async () => {
 ### Assertion Library
 
 All tests use **chai** for assertions (`expect` style).
+
+`chai-as-promised` is registered by `@microsoft/vscode-azext-eng` for every test
+package, so assert on rejections through `expect` rather than `try`/`catch` with
+`expect.fail()`, or `assert.rejects` from `node:assert`:
+```ts
+// Assert the rejection and its message
+await expect(command.execute()).to.be.rejectedWith(/no longer available/);
+
+// Capture the error when you need to assert more than the message
+const error = await expect(command.execute()).to.be.rejected;
+expect(CancellationError.test(error)).to.be.true;
+
+// Or assert the error type
+await expect(walk(token)).to.be.rejectedWith(CancellationError);
+
+// `.eventually` asserts on the RESOLVED value; it is not needed for rejections
+await expect(client.getVersion()).to.eventually.equal('1.2.3');
+```
+
+Always `await` these assertions -- including `.eventually` ones, which return a
+thenable rather than asserting synchronously. An un-awaited rejection assertion
+surfaces as an unhandled rejection rather than failing the test that created it.
 
 ## Running Tests
 

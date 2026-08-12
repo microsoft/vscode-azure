@@ -68,12 +68,7 @@ describe('ActivityViewProvider (unit)', () => {
 
         it('should throw for an unknown activity ID', async () => {
             const provider = createProvider();
-            try {
-                await provider.getChildren('unknown');
-                expect.fail('should have thrown');
-            } catch (e) {
-                expect((e as Error).message).to.include('not found');
-            }
+            await expect(provider.getChildren('unknown')).to.be.rejectedWith('not found');
         });
     });
 

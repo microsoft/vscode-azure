@@ -13,7 +13,7 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    Debouncer, EventEmitter, Everything, IActionExecutor, ICodeContext, Roots, stringifyError,
+    DebounceScheduler, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Event, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
@@ -48,42 +48,6 @@ const GetAccountsSuppressionMs = 1000;
 
 /** Debounce key for coalescing `onDidChangeSessions` bursts. */
 const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
-
-/**
- * Owns timing for authentication session-change handling.
- *
- * The production implementation debounces with wall-clock time. Tests can
- * inject a manually driven implementation and await the scheduled reconcile
- * directly, without coordinating fake timers with asynchronous work.
- */
-export interface IAzureAccountSessionChangeScheduler extends Disposable {
-    /** Current epoch time used to evaluate the self-induced suppression window. */
-    now(): number;
-
-    /**
-     * Replace any pending session-change callback and run the latest callback
-     * after the debounce window.
-     */
-    debounce(callback: () => Promise<void>): void;
-}
-
-class AzureAccountSessionChangeScheduler implements IAzureAccountSessionChangeScheduler {
-    private readonly debouncer = new Debouncer();
-
-    public now(): number {
-        return Date.now();
-    }
-
-    public debounce(callback: () => Promise<void>): void {
-        this.debouncer.debounce(SessionInvalidationKey, SessionChangeDebounceMs, () => {
-            void callback();
-        });
-    }
-
-    public dispose(): void {
-        this.debouncer.dispose();
-    }
-}
 
 /** Whether two sets contain exactly the same string ids. */
 function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
@@ -154,7 +118,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
-        @unmanaged() private readonly sessionChangeScheduler: IAzureAccountSessionChangeScheduler = new AzureAccountSessionChangeScheduler(),
+        @unmanaged() private readonly sessionChangeScheduler: IDebounceScheduler = new DebounceScheduler(SessionChangeDebounceMs, SessionInvalidationKey),
     ) {
         this.disposables = [this.changeEmitter, this.removeAccountsEmitter, this.sessionChangeScheduler];
         this.disposables.push(this.ctx.code.authentication.onDidChangeSessions(e => {
