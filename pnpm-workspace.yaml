@@ -19,7 +19,6 @@ overrides:
   # Force a non-vulnerable version of these dependencies
   serialize-javascript: ^7.0.0
   diff: ^8.0.3
-  js-yaml: ^4.3.1
 
 publicHoistPattern:
   # All of these are hoisted so they can be used by all packages without explicitly declaring them in each package.json
