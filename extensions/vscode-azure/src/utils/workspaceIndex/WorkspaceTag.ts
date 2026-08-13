@@ -93,10 +93,9 @@ export function tagNamespace(name: string): TagNamespace {
 /**
  * Conventional tag names.
  *
- * This is a shared vocabulary rather than a closed set: detectors may define
- * any name they need, but should reach for one of these when it fits so that a
- * cross-cutting query (`WorkspaceIndex.withTagName`) finds every detector's
- * take on the same concept.
+ * A shared vocabulary rather than a closed set: detectors may define any name
+ * they need, but should reach for one of these when it fits, so that unrelated
+ * detectors describe the same concept the same way.
  */
 export const StandardTagNames = {
     /** A directory that is the root of a project. */
