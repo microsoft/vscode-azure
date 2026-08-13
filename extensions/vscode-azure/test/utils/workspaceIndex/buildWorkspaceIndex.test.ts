@@ -9,7 +9,7 @@ import type * as vscode from 'vscode';
 import { buildWorkspaceIndex } from '../../../src/utils/workspaceIndex/buildWorkspaceIndex';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
-import { AnnotatedRoot, Annotation, annotationDetector, csharpDetector, CsProjectRoot, CsSourceFile, nodeDetector, NodeSourceFile } from './mockDetectors';
+import { Attribute, attributeDetector, AttributedRoot, csharpDetector, CsProjectRoot, CsSourceFile, nodeDetector, NodeSourceFile } from './mockDetectors';
 
 describe('buildWorkspaceIndex (unit)', () => {
     describe('namespacing', () => {
@@ -53,11 +53,11 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFile(m, '/repo/Api.csproj', '');
             addWorkspaceFile(m, '/repo/marker.txt', '');
 
-            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
             const root = m.vscode.Uri.file('/repo');
 
             expect(index.has(root, CsProjectRoot)).to.be.true;
-            expect(index.has(root, AnnotatedRoot)).to.be.true;
+            expect(index.has(root, AttributedRoot)).to.be.true;
         });
 
         it('accumulates repeated values for one tag', async () => {
@@ -67,8 +67,8 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFile(m, '/repo/Orders.cs',
                 '[Name("PlaceOrder")]\n[Name("CancelOrder")]');
 
-            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
-            const [file] = index.withTag(Annotation);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
+            const [file] = index.withTag(Attribute);
 
             expect(file.relativePath).to.equal('Orders.cs');
             expect(file.values).to.deep.equal(['PlaceOrder', 'CancelOrder']);
@@ -112,9 +112,9 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             // The functions detector only inspects files the C# detector has
             // already recognised as source.
-            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
 
-            expect(index.withTag(Annotation).flatMap(f => f.values)).to.deep.equal(['Ping']);
+            expect(index.withTag(Attribute).flatMap(f => f.values)).to.deep.equal(['Ping']);
         });
 
         it('resolves the nearest tagged ancestor across untagged directories', async () => {
@@ -123,9 +123,9 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFile(m, '/repo/marker.txt', '');
             addWorkspaceFile(m, '/repo/deeply/nested/App.cs', '[Name("Deep")]');
 
-            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
 
-            expect(index.withTag(Annotation).flatMap(f => f.values)).to.deep.equal(['Deep']);
+            expect(index.withTag(Attribute).flatMap(f => f.values)).to.deep.equal(['Deep']);
         });
 
         it('does not tag files outside the tagged ancestor', async () => {
@@ -135,9 +135,9 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFile(m, '/repo/api/Inside.cs', '[Name("Inside")]');
             addWorkspaceFile(m, '/repo/other/Outside.cs', '[Name("Outside")]');
 
-            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
 
-            expect(index.withTag(Annotation).flatMap(f => f.values)).to.deep.equal(['Inside']);
+            expect(index.withTag(Attribute).flatMap(f => f.values)).to.deep.equal(['Inside']);
         });
     });
 

@@ -50,6 +50,18 @@ type MockedNamespace<T> = {
  * {@linkcode MockVsCodeResult.vscode vscode} are typed as the real `IVsCode`
  * module, so reach for these top-level handles when you need `.mock`.)
  */
+/**
+ * A watcher created by the mock `workspace.createFileSystemWatcher`, exposing
+ * the glob it was created with and letting a test raise events on it.
+ */
+export interface MockFileSystemWatcher {
+    /** The pattern the watcher was created with. */
+    readonly pattern: vscode.GlobPattern;
+    fireCreate(uri: vscode.Uri): void;
+    fireChange(uri: vscode.Uri): void;
+    fireDelete(uri: vscode.Uri): void;
+}
+
 export interface MockVsCodeResult {
     /** The mock suitable for DI injection as {@linkcode IVsCode}. */
     readonly vscode: IVsCode;
@@ -73,6 +85,12 @@ export interface MockVsCodeResult {
 
     /** The in-memory file system backing `workspace.fs`. */
     readonly fs: MockFileSystem;
+
+    /**
+     * Every watcher created via `workspace.createFileSystemWatcher`, in
+     * creation order. Use {@linkcode fireFileSystemEvent} to drive them.
+     */
+    readonly fileSystemWatchers: readonly MockFileSystemWatcher[];
 
     /**
      * The workspace folders list backing `workspace.workspaceFolders`.
@@ -371,12 +389,13 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
     );
 
+    const fileSystemWatchers: MockFileSystemWatcher[] = [];
     const createFileSystemWatcher = mock.fn(
-        (): vscode.FileSystemWatcher => {
+        (pattern: vscode.GlobPattern): vscode.FileSystemWatcher => {
             const create = new EventEmitter<vscode.Uri>();
             const change = new EventEmitter<vscode.Uri>();
             const del = new EventEmitter<vscode.Uri>();
-            return {
+            const watcher = {
                 ignoreCreateEvents: false,
                 ignoreChangeEvents: false,
                 ignoreDeleteEvents: false,
@@ -385,6 +404,13 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
                 onDidDelete: del.event,
                 dispose: () => { create.dispose(); change.dispose(); del.dispose(); },
             };
+            fileSystemWatchers.push({
+                pattern,
+                fireCreate: uri => { create.fire(uri); },
+                fireChange: uri => { change.fire(uri); },
+                fireDelete: uri => { del.fire(uri); },
+            });
+            return watcher;
         },
     );
 
@@ -447,6 +473,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         settings,
         registeredCommands,
         fs,
+        fileSystemWatchers,
         workspaceFolders,
         authentication,
         commands,
@@ -552,6 +579,48 @@ export function addWorkspaceFile(mock: MockVsCodeResult, path: string, contents 
     const uri = mock.vscode.Uri.file(path);
     mock.fs.addFile(uri, contents);
     return uri;
+}
+
+/**
+ * Raises a file system event for `path` on every watcher whose glob matches it,
+ * mirroring the filtering VS Code does before waking an extension.
+ *
+ * Only the `**‍/{a,b}` and `**‍/a` shapes produced by simple watch globs are
+ * understood, which is enough to tell whether a watcher would have fired.
+ *
+ * @param kind - Which of the three watcher events to raise. Defaults to
+ *   `'change'`.
+ */
+export function fireFileSystemEvent(
+    mock: MockVsCodeResult,
+    path: string,
+    kind: 'create' | 'change' | 'delete' = 'change',
+): void {
+    const uri = mock.vscode.Uri.file(path);
+    const name = path.split('/').pop() ?? path;
+
+    for (const watcher of mock.fileSystemWatchers) {
+        if (typeof watcher.pattern !== 'string' || !matchesWatchGlob(watcher.pattern, name)) {
+            continue;
+        }
+        if (kind === 'create') {
+            watcher.fireCreate(uri);
+        } else if (kind === 'delete') {
+            watcher.fireDelete(uri);
+        } else {
+            watcher.fireChange(uri);
+        }
+    }
+}
+
+function matchesWatchGlob(pattern: string, fileName: string): boolean {
+    const alternatives = pattern.includes('{')
+        ? pattern.slice(pattern.indexOf('{') + 1, pattern.lastIndexOf('}')).split(',')
+        : [pattern.replace('**/', '')];
+
+    return alternatives.some(alternative => alternative.startsWith('*')
+        ? fileName.endsWith(alternative.slice(1))
+        : alternative === fileName);
 }
 
 /**

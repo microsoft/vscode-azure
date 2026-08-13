@@ -29,9 +29,9 @@ export const CsSourceFile = csharp.tag(StandardTagNames.sourceFile);
 const node = tagNamespace('node');
 export const NodeSourceFile = node.tag(StandardTagNames.sourceFile);
 
-const annotations = tagNamespace('annotations');
-export const AnnotatedRoot = annotations.tag(StandardTagNames.projectRoot);
-export const Annotation = annotations.tag<string>('annotation');
+const attributes = tagNamespace('attributes');
+export const AttributedRoot = attributes.tag(StandardTagNames.projectRoot);
+export const Attribute = attributes.tag<string>('Attribute');
 
 /** Tags `.cs` files, and the directories holding a `.csproj`. */
 export const csharpDetector: WorkspaceDetector = {
@@ -59,7 +59,7 @@ export const nodeDetector: WorkspaceDetector = {
 };
 
 /**
- * Records every `[Name("...")]` annotation in the C# sources under a directory
+ * Records every `[Name("...")]` attribute in the C# sources under a directory
  * holding `marker.txt`.
  *
  * Nothing ships in this shape yet, and it is the one that stresses the index
@@ -67,25 +67,25 @@ export const nodeDetector: WorkspaceDetector = {
  * called source), reads file contents, resolves a tagged ancestor, and records
  * several values for one tag on a single file.
  */
-export const annotationDetector: WorkspaceDetector = {
-    id: 'annotations',
-    namespace: annotations,
+export const attributeDetector: WorkspaceDetector = {
+    id: 'attributes',
+    namespace: attributes,
     directories: true,
     files: { suffixes: ['.cs'] },
     async inspect(item) {
         if (item.isDirectory) {
             if (item.fileNames.has('marker.txt')) {
-                item.tag(AnnotatedRoot);
+                item.tag(AttributedRoot);
             }
             return;
         }
 
-        if (!item.has(CsSourceFile) || !item.ancestor(AnnotatedRoot)) {
+        if (!item.has(CsSourceFile) || !item.ancestor(AttributedRoot)) {
             return;
         }
         const source = await item.text() ?? '';
         for (const match of source.matchAll(/\[Name\("([^"]+)"\)\]/g)) {
-            item.tag(Annotation, match[1]);
+            item.tag(Attribute, match[1]);
         }
     },
 };

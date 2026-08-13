@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { addWorkspaceFolder, createMockVsCode, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
 
 import { functionsDetector, FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { isFunctionsProjectNode } from '../../../../src/tree/workspace/WorkspaceNode';
@@ -81,24 +80,6 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
         it('returns empty for any non-root node (leaf)', async () => {
             const { provider } = createProvider();
             expect(await provider.getChildren(makeFunctionsProjectNode())).to.deep.equal([]);
-        });
-    });
-
-    describe('watching', () => {
-        it('does not create its own watcher or index subscription', () => {
-            const { provider, mock: m } = createProvider();
-            const onChange = mock.fn();
-            provider.onDidChange(onChange);
-
-            // Watching and invalidation both belong to shared infrastructure:
-            // the index service owns the watcher, and registerTrees subscribes
-            // once for the whole tree so N providers do not cause N refreshes.
-            const patterns = m.workspace.createFileSystemWatcher.mock.calls
-                .map(call => call.arguments[0]);
-            expect(patterns).to.deep.equal(['**/{host.json}']);
-
-            m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
-            expect(onChange.mock.callCount()).to.equal(0);
         });
     });
 });

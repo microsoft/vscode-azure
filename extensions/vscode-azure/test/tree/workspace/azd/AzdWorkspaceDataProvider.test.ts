@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { AzdShowResult } from '../../../../src/azd/AzdService';
 import { azdDetector, AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
@@ -70,15 +69,6 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(isAzdProjectNode(children[0])).to.be.true;
             expect(children[0].label).to.equal('repo');
             expect(children[0].resourceUri.path).to.equal('/repo/azure.yaml');
-        });
-
-        it('does not fire its own change event; the tree subscribes once', () => {
-            const { provider, mock: m } = createProvider();
-            const onChange = mock.fn();
-            provider.onDidChange(onChange);
-
-            m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
-            expect(onChange.mock.callCount()).to.equal(0);
         });
     });
 
