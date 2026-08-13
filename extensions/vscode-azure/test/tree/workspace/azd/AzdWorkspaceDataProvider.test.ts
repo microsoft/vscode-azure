@@ -31,8 +31,6 @@ function createProvider(options: ProviderOptions = {}) {
     return { provider, mock: m, azd };
 }
 
-/** Adds a workspace folder, optionally containing an `azure.yaml`. */
-
 describe('AzdWorkspaceDataProvider (unit)', () => {
     describe('canHandle', () => {
         it('returns true for azdProject and azdService nodes', () => {

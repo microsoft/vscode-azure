@@ -56,9 +56,8 @@ export interface TagNamespace {
 /**
  * Creates a {@linkcode TagNamespace}.
  *
- * The name should identify the producing feature (`functions`, `azd`,
- * `csharp`). Registering two detectors with the same namespace is rejected when
- * the index is built.
+ * The name should identify the producing feature (`functions`, `azd`, `csharp`)
+ * and should be used by exactly one detector.
  *
  * @throws {@linkcode RangeError} if `name` is empty or contains `:`, which
  *   separates the namespace from the name in

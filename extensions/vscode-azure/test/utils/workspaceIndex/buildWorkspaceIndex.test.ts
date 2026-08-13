@@ -4,13 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError } from '@microsoft/vscode-azure-utils';
-import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { buildWorkspaceIndex } from '../../../src/utils/workspaceIndex/buildWorkspaceIndex';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
-import type { WorkspaceIndex } from '../../../src/utils/workspaceIndex/WorkspaceIndex';
 import { tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
-import { csharpDetector, CsProjectRoot, CsSourceFile, functionsDetectorFor, nodeDetector, NodeSourceFile, TestFunctionName, TestFunctionsProject } from './mockDetectors';
+import { AnnotatedRoot, Annotation, annotationDetector, csharpDetector, CsProjectRoot, CsSourceFile, nodeDetector, NodeSourceFile } from './mockDetectors';
 
 describe('buildWorkspaceIndex (unit)', () => {
     describe('namespacing', () => {
@@ -20,7 +19,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFile(m, '/repo/App.cs', '');
             addWorkspaceFile(m, '/repo/app.js', '');
 
-            const index = await build(m, [csharpDetector, nodeDetector]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, nodeDetector]);
 
             expect(index.withTag(CsSourceFile).map(n => n.relativePath)).to.deep.equal(['App.cs']);
             expect(index.withTag(NodeSourceFile).map(n => n.relativePath)).to.deep.equal(['app.js']);
@@ -37,7 +36,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/App.cs', '');
 
-            await expect(build(m, [forger])).to.be.rejectedWith(/may only apply tags in namespace 'forger'/);
+            await expect(buildWorkspaceIndex(m.vscode, [forger])).to.be.rejectedWith(/may only apply tags in namespace 'forger'/);
         });
 
         it('rejects namespace and tag names containing the qualifier separator', () => {
@@ -52,24 +51,24 @@ describe('buildWorkspaceIndex (unit)', () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/Api.csproj', '');
-            addWorkspaceFile(m, '/repo/host.json', '{}');
+            addWorkspaceFile(m, '/repo/marker.txt', '');
 
-            const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
             const root = m.vscode.Uri.file('/repo');
 
             expect(index.has(root, CsProjectRoot)).to.be.true;
-            expect(index.has(root, TestFunctionsProject)).to.be.true;
+            expect(index.has(root, AnnotatedRoot)).to.be.true;
         });
 
         it('accumulates repeated values for one tag', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/host.json', '{}');
+            addWorkspaceFile(m, '/repo/marker.txt', '');
             addWorkspaceFile(m, '/repo/Orders.cs',
-                '[Function("PlaceOrder")]\n[Function("CancelOrder")]');
+                '[Name("PlaceOrder")]\n[Name("CancelOrder")]');
 
-            const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
-            const [file] = index.withTag(TestFunctionName);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
+            const [file] = index.withTag(Annotation);
 
             expect(file.relativePath).to.equal('Orders.cs');
             expect(file.values).to.deep.equal(['PlaceOrder', 'CancelOrder']);
@@ -80,7 +79,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/readme.md', '');
 
-            const index = await build(m, [csharpDetector]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector]);
 
             expect(index.has(m.vscode.Uri.file('/repo/readme.md'), CsSourceFile)).to.be.false;
         });
@@ -100,7 +99,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/src/App.cs', '');
 
-            await build(m, [recorder]);
+            await buildWorkspaceIndex(m.vscode, [recorder]);
 
             expect(seen).to.deep.equal(['.', 'src', 'src/App.cs']);
         });
@@ -108,37 +107,37 @@ describe('buildWorkspaceIndex (unit)', () => {
         it('runs detectors in registration order, so later ones see earlier tags', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/host.json', '{}');
-            addWorkspaceFile(m, '/repo/App.cs', '[Function("Ping")]');
+            addWorkspaceFile(m, '/repo/marker.txt', '');
+            addWorkspaceFile(m, '/repo/App.cs', '[Name("Ping")]');
 
             // The functions detector only inspects files the C# detector has
             // already recognised as source.
-            const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
 
-            expect(index.withTag(TestFunctionName).flatMap(f => f.values)).to.deep.equal(['Ping']);
+            expect(index.withTag(Annotation).flatMap(f => f.values)).to.deep.equal(['Ping']);
         });
 
         it('resolves the nearest tagged ancestor across untagged directories', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/host.json', '{}');
-            addWorkspaceFile(m, '/repo/deeply/nested/App.cs', '[Function("Deep")]');
+            addWorkspaceFile(m, '/repo/marker.txt', '');
+            addWorkspaceFile(m, '/repo/deeply/nested/App.cs', '[Name("Deep")]');
 
-            const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
 
-            expect(index.withTag(TestFunctionName).flatMap(f => f.values)).to.deep.equal(['Deep']);
+            expect(index.withTag(Annotation).flatMap(f => f.values)).to.deep.equal(['Deep']);
         });
 
         it('does not tag files outside the tagged ancestor', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/api/host.json', '{}');
-            addWorkspaceFile(m, '/repo/api/Inside.cs', '[Function("Inside")]');
-            addWorkspaceFile(m, '/repo/other/Outside.cs', '[Function("Outside")]');
+            addWorkspaceFile(m, '/repo/api/marker.txt', '');
+            addWorkspaceFile(m, '/repo/api/Inside.cs', '[Name("Inside")]');
+            addWorkspaceFile(m, '/repo/other/Outside.cs', '[Name("Outside")]');
 
-            const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, annotationDetector]);
 
-            expect(index.withTag(TestFunctionName).flatMap(f => f.values)).to.deep.equal(['Inside']);
+            expect(index.withTag(Annotation).flatMap(f => f.values)).to.deep.equal(['Inside']);
         });
     });
 
@@ -148,18 +147,18 @@ describe('buildWorkspaceIndex (unit)', () => {
             const detector: WorkspaceDetector = {
                 id: 'picky',
                 namespace: tagNamespace('picky'),
-                files: { names: ['host.json'], suffixes: ['.csproj'] },
+                files: { names: ['marker.txt'], suffixes: ['.csproj'] },
                 inspect(item) { inspected.push(item.name); },
             };
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/host.json', '{}');
+            addWorkspaceFile(m, '/repo/marker.txt', '');
             addWorkspaceFile(m, '/repo/Api.csproj', '');
             addWorkspaceFile(m, '/repo/readme.md', '');
 
-            await build(m, [detector]);
+            await buildWorkspaceIndex(m.vscode, [detector]);
 
-            expect(inspected.sort()).to.deep.equal(['Api.csproj', 'host.json']);
+            expect(inspected.sort()).to.deep.equal(['Api.csproj', 'marker.txt']);
         });
 
         it('exposes directory contents to directory detectors only', async () => {
@@ -175,7 +174,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/App.cs', '');
 
-            await build(m, [detector]);
+            await buildWorkspaceIndex(m.vscode, [detector]);
 
             expect(sizes.get('.')).to.equal(1);
             // A file node has no children of its own.
@@ -193,7 +192,7 @@ describe('buildWorkspaceIndex (unit)', () => {
                 inspect: async item => { await item.text(); },
             });
 
-            await build(m, [reader('a'), reader('b')]);
+            await buildWorkspaceIndex(m.vscode, [reader('a'), reader('b')]);
 
             // Reads are not cached: unrelated detectors rarely want the same
             // file, so a shared cache would cost more than it saves.
@@ -212,7 +211,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
 
-            await expect(build(m, [detector])).to.be.rejectedWith(/detector failed/);
+            await expect(buildWorkspaceIndex(m.vscode, [detector])).to.be.rejectedWith(/detector failed/);
         });
 
         it('throws CancellationError once the token is cancelled', async () => {
@@ -230,12 +229,3 @@ describe('buildWorkspaceIndex (unit)', () => {
         });
     });
 });
-
-function build(
-    m: MockVsCodeResult,
-    detectors: readonly WorkspaceDetector[],
-): Promise<WorkspaceIndex> {
-    return buildWorkspaceIndex(m.vscode, detectors);
-}
-
-

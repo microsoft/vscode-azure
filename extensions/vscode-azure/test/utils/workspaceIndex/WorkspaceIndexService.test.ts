@@ -235,4 +235,3 @@ function fire(watchers: readonly CapturedWatcher[], m: MockVsCodeResult, path: s
         }
     }
 }
-

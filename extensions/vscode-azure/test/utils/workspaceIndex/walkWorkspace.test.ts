@@ -49,7 +49,6 @@ describe('walkWorkspace (unit)', () => {
             expect(api.workspaceFolder?.name).to.equal('repo');
         });
 
-
         it('does not follow directory symlinks', async () => {
             const m = createMockVsCode();
             const folder = addWorkspaceFolder(m, '/repo');
@@ -126,10 +125,6 @@ describe('walkWorkspace (unit)', () => {
     });
 
     describe('limits and failures', () => {
-
-
-
-
         it('ignores directories that vanish mid-walk but surfaces other failures', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
@@ -169,6 +164,3 @@ async function collect(
     }
     return directories;
 }
-
-
-

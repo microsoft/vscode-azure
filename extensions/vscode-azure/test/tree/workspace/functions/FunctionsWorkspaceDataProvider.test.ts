@@ -24,7 +24,6 @@ function createProvider() {
     };
 }
 
-
 describe('FunctionsWorkspaceDataProvider (unit)', () => {
     describe('canHandle', () => {
         it('returns true only for functionsProject nodes', () => {

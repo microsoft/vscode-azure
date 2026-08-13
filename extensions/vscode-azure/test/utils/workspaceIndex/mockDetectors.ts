@@ -3,25 +3,23 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DetectorContext, WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
+import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { StandardTagNames, tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
 
-/**
- * Deliberately synthetic detectors, kept separate from the shipped ones in
- * {@linkcode functionsDetector} and {@linkcode azdDetector}.
+/*
+ * Deliberately synthetic detectors, kept separate from the shipped
+ * `functionsDetector` and `azdDetector`.
  *
  * Tests use the real detectors wherever they suffice. These exist because the
  * index has to support two shapes that no shipped detector exercises yet:
  *
- * - **Same tag name in two namespaces** -- {@linkcode CsSourceFile} and
- *   {@linkcode NodeSourceFile} are both `sourceFile`. Both shipped detectors use
- *   {@linkcode StandardTagNames.projectRoot}, so they cover namespace separation
- *   but not the language-vs-language case namespacing is really there for.
- * - **Many values on one file, layered across namespaces** -- the shape #178
- *   needs. Shipped detectors tag one directory per project and read nothing.
- *
- * Once real per-language detectors land, these should be deleted in favour of
- * them.
+ * - Same tag name in two namespaces -- `CsSourceFile` and `NodeSourceFile` are
+ *   both `sourceFile`. Both shipped detectors use `projectRoot`, so they cover
+ *   namespace separation but not the language-vs-language case namespacing is
+ *   really there for.
+ * - Many values on one file, layered across namespaces -- one detector reading
+ *   only what another already tagged, and recording several findings per file.
+ *   Shipped detectors tag one directory per project and read nothing.
  */
 
 const csharp = tagNamespace('csharp');
@@ -31,9 +29,9 @@ export const CsSourceFile = csharp.tag(StandardTagNames.sourceFile);
 const node = tagNamespace('node');
 export const NodeSourceFile = node.tag(StandardTagNames.sourceFile);
 
-const functions = tagNamespace('test-functions');
-export const TestFunctionsProject = functions.tag(StandardTagNames.projectRoot);
-export const TestFunctionName = functions.tag<string>('functionName');
+const annotations = tagNamespace('annotations');
+export const AnnotatedRoot = annotations.tag(StandardTagNames.projectRoot);
+export const Annotation = annotations.tag<string>('annotation');
 
 /** Tags `.cs` files, and the directories holding a `.csproj`. */
 export const csharpDetector: WorkspaceDetector = {
@@ -61,31 +59,33 @@ export const nodeDetector: WorkspaceDetector = {
 };
 
 /**
- * A Functions detector in the shape #178 needs: it tags the project directory,
- * then extracts many function names per source file, reading only files another
- * detector already recognised as source and that sit under a Functions project.
+ * Records every `[Name("...")]` annotation in the C# sources under a directory
+ * holding `marker.txt`.
+ *
+ * Nothing ships in this shape yet, and it is the one that stresses the index
+ * hardest: it layers on another namespace's tags (only files the C# detector
+ * called source), reads file contents, resolves a tagged ancestor, and records
+ * several values for one tag on a single file.
  */
-export function functionsDetectorFor(suffixes: readonly string[]): WorkspaceDetector {
-    return {
-        id: 'test-functions',
-        namespace: functions,
-        directories: true,
-        files: { suffixes: [...suffixes] },
-        async inspect(item: DetectorContext) {
-            if (item.isDirectory) {
-                if (item.fileNames.has('host.json')) {
-                    item.tag(TestFunctionsProject);
-                }
-                return;
+export const annotationDetector: WorkspaceDetector = {
+    id: 'annotations',
+    namespace: annotations,
+    directories: true,
+    files: { suffixes: ['.cs'] },
+    async inspect(item) {
+        if (item.isDirectory) {
+            if (item.fileNames.has('marker.txt')) {
+                item.tag(AnnotatedRoot);
             }
+            return;
+        }
 
-            if (!item.has(CsSourceFile) || !item.ancestor(TestFunctionsProject)) {
-                return;
-            }
-            const source = await item.text() ?? '';
-            for (const match of source.matchAll(/\[Function\("([^"]+)"\)\]/g)) {
-                item.tag(TestFunctionName, match[1]);
-            }
-        },
-    };
-}
+        if (!item.has(CsSourceFile) || !item.ancestor(AnnotatedRoot)) {
+            return;
+        }
+        const source = await item.text() ?? '';
+        for (const match of source.matchAll(/\[Name\("([^"]+)"\)\]/g)) {
+            item.tag(Annotation, match[1]);
+        }
+    },
+};
