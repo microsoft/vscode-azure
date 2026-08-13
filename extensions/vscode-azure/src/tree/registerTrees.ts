@@ -15,6 +15,7 @@ import {
     IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree,
     IWorkspaceTreeView, IWorkspaceViewDataTree, IWorkspaceViewViewItemTree, pushDisposable, type ProviderEntry,
 } from '../services';
+import { IWorkspaceIndexService } from '../utils/workspaceIndex/WorkspaceIndexService';
 import type { Activity } from './activity/Activity';
 import { ActivityViewProvider } from './activity/ActivityViewProvider';
 import { ArmDeploymentDataProvider, IArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
@@ -28,7 +29,6 @@ import { EmulatorsWorkspaceViewProvider } from './workspace/emulators/EmulatorsW
 import { FunctionsWorkspaceDataProvider } from './workspace/functions/FunctionsWorkspaceDataProvider';
 import { FunctionsWorkspaceViewProvider } from './workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from './workspace/WorkspaceNode';
-import { IWorkspaceIndexService } from '../utils/workspaceIndex/WorkspaceIndexService';
 
 /**
  * Bind the Azure resources tree, workspace tree, and activity tree into the
@@ -89,7 +89,8 @@ export function registerTrees(container: Container, products: ProductRegistrar):
     container.get(IExtensionContext).subscriptions.push(
         container.get(IWorkspaceIndexService).onDidChangeIndex(() => {
             workspaceDataTree.invalidate(Roots);
-        }));
+        })
+    );
 
     // Activity tree
     registerTree<Activity>(container, {

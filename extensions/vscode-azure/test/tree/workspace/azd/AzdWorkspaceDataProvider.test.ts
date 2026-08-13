@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { AzdShowResult } from '../../../../src/azd/AzdService';
-
 import { azdDetector, AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
 import { isAzdProjectNode, isAzdServiceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { WorkspaceIndexService } from '../../../../src/utils/workspaceIndex/WorkspaceIndexService';
@@ -33,14 +32,6 @@ function createProvider(options: ProviderOptions = {}) {
 }
 
 /** Adds a workspace folder, optionally containing an `azure.yaml`. */
-function addWorkspace(m: ReturnType<typeof createMockVsCode>, azureYaml = true): void {
-    const uri = m.vscode.Uri.file('/repo');
-    m.workspaceFolders.push({ uri, name: 'repo', index: 0 });
-    m.fs.addDirectory(uri);
-    if (azureYaml) {
-        m.fs.addFile(m.vscode.Uri.file('/repo/azure.yaml'), 'name: app');
-    }
-}
 
 describe('AzdWorkspaceDataProvider (unit)', () => {
     describe('canHandle', () => {
@@ -66,13 +57,14 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
 
         it('returns no projects when no azure.yaml is present', async () => {
             const { provider, mock: m } = createProvider();
-            addWorkspace(m, false);
+            addWorkspaceFolder(m, '/repo');
             expect(await provider.getChildren()).to.deep.equal([]);
         });
 
         it('discovers an azd project from the workspace index', async () => {
             const { provider, mock: m } = createProvider();
-            addWorkspace(m);
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/azure.yaml', 'name: app');
 
             const children = await provider.getChildren();
 

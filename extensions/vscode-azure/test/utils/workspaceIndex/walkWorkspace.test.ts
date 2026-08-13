@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { walkWorkspace, type ScannedDirectory } from '../../../src/utils/workspaceIndex/walkWorkspace';
 
@@ -12,11 +12,11 @@ describe('walkWorkspace (unit)', () => {
     describe('traversal', () => {
         it('yields directories breadth-first across every workspace folder', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/one', 0);
-            addWorkspace(m, '/two', 1);
-            addFile(m, '/one/deep/nested/file.txt', '');
-            addFile(m, '/one/top.txt', '');
-            addFile(m, '/two/only.txt', '');
+            addWorkspaceFolder(m, '/one');
+            addWorkspaceFolder(m, '/two');
+            addWorkspaceFile(m, '/one/deep/nested/file.txt', '');
+            addWorkspaceFile(m, '/one/top.txt', '');
+            addWorkspaceFile(m, '/two/only.txt', '');
 
             const paths = (await collect(m)).map(d => d.relativePath);
 
@@ -25,9 +25,9 @@ describe('walkWorkspace (unit)', () => {
 
         it('visits entries in name order regardless of filesystem order', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
+            addWorkspaceFolder(m, '/repo');
             for (const name of ['zeta', 'alpha', 'mid']) {
-                addFile(m, `/repo/${name}/file.txt`, '');
+                addWorkspaceFile(m, `/repo/${name}/file.txt`, '');
             }
 
             const paths = (await collect(m)).map(d => d.relativePath);
@@ -37,8 +37,8 @@ describe('walkWorkspace (unit)', () => {
 
         it('exposes file names, uris, and the containing workspace folder', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/api/host.json', '{}');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/api/host.json', '{}');
 
             const [, api] = await collect(m);
 
@@ -52,7 +52,7 @@ describe('walkWorkspace (unit)', () => {
 
         it('does not follow directory symlinks', async () => {
             const m = createMockVsCode();
-            const folder = addWorkspace(m, '/repo');
+            const folder = addWorkspaceFolder(m, '/repo');
             m.fs.addSymbolicLink(m.vscode.Uri.joinPath(folder.uri, 'linked'), m.vscode.FileType.Directory);
 
             const paths = (await collect(m)).map(d => d.relativePath);
@@ -62,8 +62,8 @@ describe('walkWorkspace (unit)', () => {
 
         it('still reads symlinked files, which cannot cause cycles', async () => {
             const m = createMockVsCode();
-            const folder = addWorkspace(m, '/repo');
-            addFile(m, '/repo/real.json', '{"linked":true}');
+            const folder = addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/real.json', '{"linked":true}');
             m.fs.addSymbolicLink(m.vscode.Uri.joinPath(folder.uri, 'link.json'), m.vscode.FileType.File);
 
             const [root] = await collect(m);
@@ -75,11 +75,11 @@ describe('walkWorkspace (unit)', () => {
     describe('exclusions', () => {
         it('skips generated and vendored directories by default', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
+            addWorkspaceFolder(m, '/repo');
             for (const name of ['node_modules', 'bin', 'obj', '.venv', '__pycache__', 'dist']) {
-                addFile(m, `/repo/${name}/thing.txt`, '');
+                addWorkspaceFile(m, `/repo/${name}/thing.txt`, '');
             }
-            addFile(m, '/repo/src/app.cs', '');
+            addWorkspaceFile(m, '/repo/src/app.cs', '');
 
             const paths = (await collect(m)).map(d => d.relativePath);
 
@@ -89,14 +89,14 @@ describe('walkWorkspace (unit)', () => {
 
         it('honours nested gitignore files, including re-inclusion', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/.gitignore', 'ignored/\napps/*\n!apps/keep/\n');
-            addFile(m, '/repo/apps/keep/file.txt', '');
-            addFile(m, '/repo/apps/drop/file.txt', '');
-            addFile(m, '/repo/ignored/file.txt', '');
-            addFile(m, '/repo/nested/.gitignore', 'skip/\n');
-            addFile(m, '/repo/nested/skip/file.txt', '');
-            addFile(m, '/repo/nested/take/file.txt', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/.gitignore', 'ignored/\napps/*\n!apps/keep/\n');
+            addWorkspaceFile(m, '/repo/apps/keep/file.txt', '');
+            addWorkspaceFile(m, '/repo/apps/drop/file.txt', '');
+            addWorkspaceFile(m, '/repo/ignored/file.txt', '');
+            addWorkspaceFile(m, '/repo/nested/.gitignore', 'skip/\n');
+            addWorkspaceFile(m, '/repo/nested/skip/file.txt', '');
+            addWorkspaceFile(m, '/repo/nested/take/file.txt', '');
 
             const paths = (await collect(m)).map(d => d.relativePath);
 
@@ -108,8 +108,8 @@ describe('walkWorkspace (unit)', () => {
     describe('reads', () => {
         it('reads text and json from the same file', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/package.json', '{"name":"app"}');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/package.json', '{"name":"app"}');
 
             const [root] = await collect(m);
 
@@ -119,8 +119,8 @@ describe('walkWorkspace (unit)', () => {
 
         it('reports absent and malformed files as undefined', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/broken.json', '{ nope');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/broken.json', '{ nope');
 
             const [root] = await collect(m);
 
@@ -131,9 +131,9 @@ describe('walkWorkspace (unit)', () => {
 
         it('reads a file of any size', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
+            addWorkspaceFolder(m, '/repo');
             const big = 'x'.repeat(4 * 1024 * 1024);
-            addFile(m, '/repo/big.txt', big);
+            addWorkspaceFile(m, '/repo/big.txt', big);
 
             const [root] = await collect(m);
 
@@ -150,8 +150,8 @@ describe('walkWorkspace (unit)', () => {
 
         it('ignores directories that vanish mid-walk but surfaces other failures', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/gone/file.txt', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/gone/file.txt', '');
             m.fs.readDirectory.mock.mockImplementationOnce(
                 () => Promise.reject(Object.assign(new Error('denied'), { code: 'NoPermissions' })));
 
@@ -160,8 +160,8 @@ describe('walkWorkspace (unit)', () => {
 
         it('throws CancellationError once the token is cancelled', async () => {
             const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/a/file.txt', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/a/file.txt', '');
             let checks = 0;
             const token = {
                 get isCancellationRequested() { return ++checks > 1; },
@@ -189,14 +189,4 @@ async function collect(
 }
 
 
-function addWorkspace(m: MockVsCodeResult, path: string, index = 0): vscode.WorkspaceFolder {
-    const uri = m.vscode.Uri.file(path);
-    const folder = { uri, name: path.split('/').pop() ?? path, index };
-    m.workspaceFolders.push(folder);
-    m.fs.addDirectory(uri);
-    return folder;
-}
 
-function addFile(m: MockVsCodeResult, path: string, contents: string): void {
-    m.fs.addFile(m.vscode.Uri.file(path), contents);
-}

@@ -518,6 +518,43 @@ export function createMockCodeContext(): MockCodeContextResult {
 }
 
 /**
+ * Adds a workspace folder rooted at `path`, along with the backing directory in
+ * the mock file system, and returns it.
+ *
+ * The folder name is the last path segment and the index is its position, so
+ * repeated calls build a multi-root workspace.
+ *
+ * @example
+ * ```ts
+ * const m = createMockVsCode();
+ * addWorkspaceFolder(m, '/repo');
+ * addWorkspaceFile(m, '/repo/package.json', '{}');
+ * ```
+ */
+export function addWorkspaceFolder(mock: MockVsCodeResult, path: string): vscode.WorkspaceFolder {
+    const uri = mock.vscode.Uri.file(path);
+    const folder: vscode.WorkspaceFolder = {
+        uri,
+        name: path.split('/').filter(Boolean).pop() ?? path,
+        index: mock.workspaceFolders.length,
+    };
+    mock.workspaceFolders.push(folder);
+    mock.fs.addDirectory(uri);
+    return folder;
+}
+
+/**
+ * Writes a file into the mock file system at `path`, creating the directories
+ * above it. Convenience wrapper over {@linkcode MockFileSystem.addFile} that
+ * saves building a `Uri` at each call site.
+ */
+export function addWorkspaceFile(mock: MockVsCodeResult, path: string, contents = ''): vscode.Uri {
+    const uri = mock.vscode.Uri.file(path);
+    mock.fs.addFile(uri, contents);
+    return uri;
+}
+
+/**
  * Run a callback with temporary configuration settings applied to the
  * mock. The original values are restored after the callback completes
  * (or throws), regardless of whether the callback is sync or async.

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor, ManualDebounceScheduler, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFolder, createMockVsCode, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 
 import { functionsDetector, FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
@@ -24,11 +24,6 @@ function createProvider() {
     };
 }
 
-function addWorkspace(m: MockVsCodeResult, path = '/repo'): void {
-    const uri = m.vscode.Uri.file(path);
-    m.workspaceFolders.push({ uri, name: path.slice(1), index: m.workspaceFolders.length });
-    m.fs.addDirectory(uri);
-}
 
 describe('FunctionsWorkspaceDataProvider (unit)', () => {
     describe('canHandle', () => {
@@ -48,13 +43,13 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
 
         it('returns empty when no host.json is present', async () => {
             const { provider, mock: m } = createProvider();
-            addWorkspace(m);
+            addWorkspaceFolder(m, '/repo');
             expect(await provider.getChildren()).to.deep.equal([]);
         });
 
         it('detects a Functions project from host.json', async () => {
             const { provider, mock: m } = createProvider();
-            addWorkspace(m);
+            addWorkspaceFolder(m, '/repo');
             m.fs.addFile(m.vscode.Uri.file('/repo/host.json'), '{}');
 
             const children = await provider.getChildren();
@@ -67,7 +62,7 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
 
         it('detects a nested Functions project', async () => {
             const { provider, mock: m } = createProvider();
-            addWorkspace(m);
+            addWorkspaceFolder(m, '/repo');
             m.fs.addFile(m.vscode.Uri.file('/repo/api/host.json'), '{}');
 
             const children = await provider.getChildren();
@@ -78,7 +73,7 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
 
         it('ignores a host.json inside an excluded directory', async () => {
             const { provider, mock: m } = createProvider();
-            addWorkspace(m);
+            addWorkspaceFolder(m, '/repo');
             m.fs.addFile(m.vscode.Uri.file('/repo/node_modules/pkg/host.json'), '{}');
 
             expect(await provider.getChildren()).to.deep.equal([]);

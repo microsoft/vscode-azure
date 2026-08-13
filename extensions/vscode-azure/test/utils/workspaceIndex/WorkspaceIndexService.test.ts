@@ -3,27 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, ManualDebounceScheduler, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFile, createMockVsCode, ManualDebounceScheduler, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { azdDetector } from '../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
+import { functionsDetector, FunctionsProject } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { watchPatterns, WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
-import { StandardTagNames, tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
-
-const functions = tagNamespace('functions');
-const FunctionsProject = functions.tag(StandardTagNames.projectRoot);
-
-const functionsDetector: WorkspaceDetector = {
-    id: 'functions',
-    namespace: functions,
-    directories: true,
-    files: { names: ['host.json'] },
-    inspect(node) {
-        if (node.isDirectory && node.fileNames.has('host.json')) {
-            node.tag(FunctionsProject);
-        }
-    },
-};
+import { tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
 
 describe('WorkspaceIndexService (unit)', () => {
     afterEach(() => {
@@ -63,7 +50,7 @@ describe('WorkspaceIndexService (unit)', () => {
         let changed = 0;
         service.onDidChangeIndex(() => { changed++; });
 
-        addFile(m, '/repo/api/host.json', '{}');
+        addWorkspaceFile(m, '/repo/api/host.json', '{}');
         fire(watchers, m, '/repo/api/host.json');
         await scheduler.flush();
 
@@ -156,15 +143,16 @@ describe('WorkspaceIndexService (unit)', () => {
 
     describe('watchPatterns', () => {
         it('merges every detector interest into one glob', () => {
-            const other: WorkspaceDetector = {
-                id: 'other',
-                namespace: tagNamespace('other'),
-                files: { names: ['azure.yaml'], suffixes: ['.csproj'] },
+            // No shipped detector declares suffixes yet, so this one stands in for that half.
+            const suffixes: WorkspaceDetector = {
+                id: 'suffixes',
+                namespace: tagNamespace('suffixes'),
+                files: { suffixes: ['.csproj'] },
                 inspect() { /* no-op */ },
             };
 
-            expect(watchPatterns([functionsDetector, other]))
-                .to.deep.equal(['**/{*.csproj,azure.yaml,host.json}', '**/.gitignore']);
+            expect(watchPatterns([functionsDetector, azdDetector, suffixes]))
+                .to.deep.equal(['**/{*.csproj,azure.yaml,azure.yml,host.json}', '**/.gitignore']);
         });
 
         it('still watches gitignore when no detector declares files', () => {
@@ -195,7 +183,7 @@ function createService() {
     const uri = m.vscode.Uri.file('/repo');
     m.workspaceFolders.push({ uri, name: 'repo', index: 0 });
     m.fs.addDirectory(uri);
-    addFile(m, '/repo/host.json', '{}');
+    addWorkspaceFile(m, '/repo/host.json', '{}');
 
     const scheduler = new ManualDebounceScheduler();
     return {
@@ -248,6 +236,3 @@ function fire(watchers: readonly CapturedWatcher[], m: MockVsCodeResult, path: s
     }
 }
 
-function addFile(m: MockVsCodeResult, path: string, contents: string): void {
-    m.fs.addFile(m.vscode.Uri.file(path), contents);
-}

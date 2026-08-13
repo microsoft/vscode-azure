@@ -4,57 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { buildWorkspaceIndex } from '../../../src/utils/workspaceIndex/buildWorkspaceIndex';
-import type { DetectorContext, WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
+import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import type { WorkspaceIndex } from '../../../src/utils/workspaceIndex/WorkspaceIndex';
-import { StandardTagNames, tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
-
-// Two independent products that both talk about "source files" -- the case
-// namespacing exists for.
-const csharp = tagNamespace('csharp');
-const CsProjectRoot = csharp.tag(StandardTagNames.projectRoot);
-const CsSourceFile = csharp.tag(StandardTagNames.sourceFile);
-
-const node = tagNamespace('node');
-const NodeSourceFile = node.tag(StandardTagNames.sourceFile);
-
-const functions = tagNamespace('functions');
-const FunctionsProject = functions.tag(StandardTagNames.projectRoot);
-const FunctionName = functions.tag<string>('functionName');
-
-/** Tags `.cs` files and the directories holding a `.csproj`. */
-const csharpDetector: WorkspaceDetector = {
-    id: 'csharp',
-    namespace: csharp,
-    directories: true,
-    files: { suffixes: ['.cs'] },
-    inspect(item) {
-        if (item.isDirectory) {
-            if ([...item.fileNames].some(name => name.endsWith('.csproj'))) {
-                item.tag(CsProjectRoot);
-            }
-        } else {
-            item.tag(CsSourceFile);
-        }
-    },
-};
-
-const nodeDetector: WorkspaceDetector = {
-    id: 'node',
-    namespace: node,
-    files: { suffixes: ['.js'] },
-    inspect(item) { item.tag(NodeSourceFile); },
-};
+import { tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
+import { csharpDetector, CsProjectRoot, CsSourceFile, functionsDetectorFor, nodeDetector, NodeSourceFile, TestFunctionName, TestFunctionsProject } from './mockDetectors';
 
 describe('buildWorkspaceIndex (unit)', () => {
     describe('namespacing', () => {
         it('keeps same-named tags from different namespaces apart', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/App.cs', '');
-            addFile(m, '/repo/app.js', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/App.cs', '');
+            addWorkspaceFile(m, '/repo/app.js', '');
 
             const index = await build(m, [csharpDetector, nodeDetector]);
 
@@ -70,15 +34,15 @@ describe('buildWorkspaceIndex (unit)', () => {
                 inspect(item) { item.tag(CsSourceFile); },
             };
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/App.cs', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/App.cs', '');
 
             await expect(build(m, [forger])).to.be.rejectedWith(/may only apply tags in namespace 'forger'/);
         });
 
         it('rejects two detectors sharing a namespace', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
+            addWorkspaceFolder(m, '/repo');
             const other: WorkspaceDetector = { ...csharpDetector, id: 'csharp-2' };
 
             await expect(build(m, [csharpDetector, other])).to.be.rejectedWith(/both use the tag namespace/);
@@ -94,26 +58,26 @@ describe('buildWorkspaceIndex (unit)', () => {
     describe('tags', () => {
         it('records many tags on one node', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/Api.csproj', '');
-            addFile(m, '/repo/host.json', '{}');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/Api.csproj', '');
+            addWorkspaceFile(m, '/repo/host.json', '{}');
 
             const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
             const root = m.vscode.Uri.file('/repo');
 
             expect(index.has(root, CsProjectRoot)).to.be.true;
-            expect(index.has(root, FunctionsProject)).to.be.true;
+            expect(index.has(root, TestFunctionsProject)).to.be.true;
         });
 
         it('accumulates repeated values for one tag', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/host.json', '{}');
-            addFile(m, '/repo/Orders.cs',
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/host.json', '{}');
+            addWorkspaceFile(m, '/repo/Orders.cs',
                 '[Function("PlaceOrder")]\n[Function("CancelOrder")]');
 
             const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
-            const [file] = index.withTag(FunctionName);
+            const [file] = index.withTag(TestFunctionName);
 
             expect(file.relativePath).to.equal('Orders.cs');
             expect(file.values).to.deep.equal(['PlaceOrder', 'CancelOrder']);
@@ -121,8 +85,8 @@ describe('buildWorkspaceIndex (unit)', () => {
 
         it('does not retain untagged nodes', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/readme.md', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/readme.md', '');
 
             const index = await build(m, [csharpDetector]);
 
@@ -141,8 +105,8 @@ describe('buildWorkspaceIndex (unit)', () => {
                 inspect(item) { seen.push(item.relativePath); },
             };
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/src/App.cs', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/src/App.cs', '');
 
             await build(m, [recorder]);
 
@@ -151,38 +115,38 @@ describe('buildWorkspaceIndex (unit)', () => {
 
         it('runs detectors in registration order, so later ones see earlier tags', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/host.json', '{}');
-            addFile(m, '/repo/App.cs', '[Function("Ping")]');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/host.json', '{}');
+            addWorkspaceFile(m, '/repo/App.cs', '[Function("Ping")]');
 
             // The functions detector only inspects files the C# detector has
             // already recognised as source.
             const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
 
-            expect(index.withTag(FunctionName).flatMap(f => f.values)).to.deep.equal(['Ping']);
+            expect(index.withTag(TestFunctionName).flatMap(f => f.values)).to.deep.equal(['Ping']);
         });
 
         it('resolves the nearest tagged ancestor across untagged directories', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/host.json', '{}');
-            addFile(m, '/repo/deeply/nested/App.cs', '[Function("Deep")]');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/host.json', '{}');
+            addWorkspaceFile(m, '/repo/deeply/nested/App.cs', '[Function("Deep")]');
 
             const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
 
-            expect(index.withTag(FunctionName).flatMap(f => f.values)).to.deep.equal(['Deep']);
+            expect(index.withTag(TestFunctionName).flatMap(f => f.values)).to.deep.equal(['Deep']);
         });
 
         it('does not tag files outside the tagged ancestor', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/api/host.json', '{}');
-            addFile(m, '/repo/api/Inside.cs', '[Function("Inside")]');
-            addFile(m, '/repo/other/Outside.cs', '[Function("Outside")]');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/api/host.json', '{}');
+            addWorkspaceFile(m, '/repo/api/Inside.cs', '[Function("Inside")]');
+            addWorkspaceFile(m, '/repo/other/Outside.cs', '[Function("Outside")]');
 
             const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
 
-            expect(index.withTag(FunctionName).flatMap(f => f.values)).to.deep.equal(['Inside']);
+            expect(index.withTag(TestFunctionName).flatMap(f => f.values)).to.deep.equal(['Inside']);
         });
     });
 
@@ -196,10 +160,10 @@ describe('buildWorkspaceIndex (unit)', () => {
                 inspect(item) { inspected.push(item.name); },
             };
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/host.json', '{}');
-            addFile(m, '/repo/Api.csproj', '');
-            addFile(m, '/repo/readme.md', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/host.json', '{}');
+            addWorkspaceFile(m, '/repo/Api.csproj', '');
+            addWorkspaceFile(m, '/repo/readme.md', '');
 
             await build(m, [detector]);
 
@@ -216,8 +180,8 @@ describe('buildWorkspaceIndex (unit)', () => {
                 inspect(item) { sizes.set(item.relativePath, item.fileNames.size); },
             };
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/App.cs', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/App.cs', '');
 
             await build(m, [detector]);
 
@@ -228,8 +192,8 @@ describe('buildWorkspaceIndex (unit)', () => {
 
         it('reads a file once per detector that asks for it', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/App.cs', 'contents');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/App.cs', 'contents');
             const reader = (id: string): WorkspaceDetector => ({
                 id,
                 namespace: tagNamespace(id),
@@ -254,15 +218,15 @@ describe('buildWorkspaceIndex (unit)', () => {
                 inspect() { throw new Error('detector failed'); },
             };
             const m = createMockVsCode();
-            addWorkspace(m);
+            addWorkspaceFolder(m, '/repo');
 
             await expect(build(m, [detector])).to.be.rejectedWith(/detector failed/);
         });
 
         it('throws CancellationError once the token is cancelled', async () => {
             const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/a/App.cs', '');
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/a/App.cs', '');
             let checks = 0;
             const token = {
                 get isCancellationRequested() { return ++checks > 1; },
@@ -275,36 +239,6 @@ describe('buildWorkspaceIndex (unit)', () => {
     });
 });
 
-/**
- * A Functions detector in the shape #178 needs: it tags the project directory,
- * then extracts many function names per source file, reading only files another
- * detector already recognised as source and that sit under a Functions project.
- */
-function functionsDetectorFor(suffixes: readonly string[]): WorkspaceDetector {
-    return {
-        id: 'functions',
-        namespace: functions,
-        directories: true,
-        files: { suffixes: [...suffixes] },
-        async inspect(item: DetectorContext) {
-            if (item.isDirectory) {
-                if (item.fileNames.has('host.json')) {
-                    item.tag(FunctionsProject);
-                }
-                return;
-            }
-
-            if (!item.has(CsSourceFile) || !item.ancestor(FunctionsProject)) {
-                return;
-            }
-            const source = await item.text() ?? '';
-            for (const match of source.matchAll(/\[Function\("([^"]+)"\)\]/g)) {
-                item.tag(FunctionName, match[1]);
-            }
-        },
-    };
-}
-
 function build(
     m: MockVsCodeResult,
     detectors: readonly WorkspaceDetector[],
@@ -312,12 +246,4 @@ function build(
     return buildWorkspaceIndex(m.vscode, detectors);
 }
 
-function addWorkspace(m: MockVsCodeResult, path = '/repo'): void {
-    const uri = m.vscode.Uri.file(path);
-    m.workspaceFolders.push({ uri, name: path.slice(1), index: m.workspaceFolders.length });
-    m.fs.addDirectory(uri);
-}
 
-function addFile(m: MockVsCodeResult, path: string, contents: string): void {
-    m.fs.addFile(m.vscode.Uri.file(path), contents);
-}
