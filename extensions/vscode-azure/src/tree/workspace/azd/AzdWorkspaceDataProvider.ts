@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode, Roots, fileExists,
-    type DataProvider, type DataProviderChangeEvent, type Disposable,
+    IActionExecutor, IVsCode, fileExists,
+    type DataProvider,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
@@ -29,30 +29,21 @@ import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServic
  * `DataItemTree` so `azd` is only re-invoked when the data layer's TTL expires
  * or an explicit invalidate fires.
  *
- * Fires {@linkcode onDidChange} when the index changes -- covering both new /
- * removed `azure.yaml` files and workspace folder changes, which the index
- * watches on everyone's behalf.
+ * This provider has no {@linkcode DataProvider.onDidChange}: index changes
+ * refresh the workspace tree through the single subscription in `registerTrees`,
+ * so that one file change refreshes the tree once rather than once per provider
+ * reading from the index.
  */
 @injectable()
-export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
+export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode> {
     public readonly isRoot = true;
-
-    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
-    private readonly disposables: Disposable[] = [this.changeEmitter];
-
-    public readonly onDidChange = this.changeEmitter.event;
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IWorkspaceDataService) private readonly workspaceData: IWorkspaceDataService,
-    ) {
-        this.disposables.push(workspaceData.onDidChange(() => {
-            this.executor.output.debug('[data] azd workspace: index changed');
-            this.changeEmitter.fire({ target: Roots });
-        }));
-    }
+    ) { }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is AzdProjectNode | AzdServiceNode {
@@ -148,10 +139,5 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
             });
         }
         return result;
-    }
-
-    /** @inheritdoc */
-    public dispose(): void {
-        this.disposables.forEach(d => void d.dispose());
     }
 }

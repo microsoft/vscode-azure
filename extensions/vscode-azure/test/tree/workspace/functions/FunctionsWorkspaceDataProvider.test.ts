@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
 import { FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { isFunctionsProjectNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { createFunctionsProjectDetector } from '../../../../src/workspace/detectors/functionsProjectDetector';
@@ -71,13 +70,12 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
             expect(await provider.getChildren(makeFunctionsProjectNode())).to.deep.equal([]);
         });
 
-        it('fires onDidChange when the workspace index changes', () => {
-            const { provider, mock: m } = createProvider();
-            const onChange = mock.fn();
-            provider.onDidChange(onChange);
-
-            m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
-            expect(onChange.mock.callCount()).to.equal(1);
+        it('does not subscribe to the index itself', () => {
+            // Refreshing on index changes is the single subscription in
+            // registerTrees; a per-provider subscription would refresh the
+            // workspace tree once per provider for one file change.
+            const { provider } = createProvider();
+            expect(provider).to.not.have.property('onDidChange');
         });
 
         it('watches host.json through the shared index rather than its own watcher', () => {

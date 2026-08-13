@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createTestActionExecutor, ManualDebounceScheduler, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { AzdShowResult } from '../../../../src/azd/AzdService';
 import { AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
@@ -82,13 +81,12 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(children[0].resourceUri.toString()).to.equal(yamlUri.toString());
         });
 
-        it('emits onDidChange when the workspace index changes', () => {
-            const { provider, mock: m } = createProvider();
-            const onChange = mock.fn();
-            provider.onDidChange(onChange);
-
-            m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
-            expect(onChange.mock.callCount()).to.equal(1);
+        it('does not subscribe to the index itself', () => {
+            // Refreshing on index changes is the single subscription in
+            // registerTrees; a per-provider subscription would refresh the
+            // workspace tree once per provider for one file change.
+            const { provider } = createProvider();
+            expect(provider).to.not.have.property('onDidChange');
         });
     });
 

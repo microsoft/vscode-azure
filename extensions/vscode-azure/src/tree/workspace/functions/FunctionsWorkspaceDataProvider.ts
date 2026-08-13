@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, Roots,
-    type DataProvider, type DataProviderChangeEvent, type Disposable,
+    IActionExecutor,
+    type DataProvider,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { FunctionsProjectTag } from '../../../workspace/detectors/functionsProjectDetector';
@@ -24,28 +24,19 @@ import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../WorkspaceN
  * definitions, deployed function apps, ...) are out of scope for this initial
  * pass.
  *
- * Fires {@linkcode onDidChange} when the index changes -- covering both new /
- * removed `host.json` files and workspace folder changes, which the index
- * watches on everyone's behalf.
+ * This provider has no {@linkcode DataProvider.onDidChange}: index changes
+ * refresh the workspace tree through the single subscription in `registerTrees`,
+ * so that one file change refreshes the tree once rather than once per provider
+ * reading from the index.
  */
 @injectable()
-export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
+export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode> {
     public readonly isRoot = true;
-
-    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
-    private readonly disposables: Disposable[] = [this.changeEmitter];
-
-    public readonly onDidChange = this.changeEmitter.event;
 
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IWorkspaceDataService) private readonly workspaceData: IWorkspaceDataService,
-    ) {
-        this.disposables.push(workspaceData.onDidChange(() => {
-            this.executor.output.debug('[data] functions workspace: index changed');
-            this.changeEmitter.fire({ target: Roots });
-        }));
-    }
+    ) { }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is FunctionsProjectNode {
@@ -80,10 +71,5 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         }
         this.executor.output.debug(`[data] functions workspace: discovered=${projects.length}`);
         return projects;
-    }
-
-    /** @inheritdoc */
-    public dispose(): void {
-        this.disposables.forEach(d => void d.dispose());
     }
 }

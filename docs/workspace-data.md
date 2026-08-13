@@ -86,6 +86,25 @@ single scan. Returned entries are the index's own objects -- treat them as
 read-only, but note their identity is stable across enrichment, so holding one
 and awaiting `whenEnriched` on it later is safe.
 
+### Subscribe once per consumer surface, not per provider
+
+The workspace tree subscribes to `onDidChange` **once**, in `registerTrees`,
+which invalidates the tree's roots:
+
+```ts
+const workspaceDataTree = container.get(IWorkspaceViewDataTree);
+container.get(IWorkspaceDataService).onDidChange(() => {
+    workspaceDataTree.invalidate(Roots);
+});
+```
+
+The workspace data providers therefore have no `onDidChange` of their own. If
+each provider subscribed instead, a single file change would refresh the tree
+once per provider reading from the index -- three refreshes today, more with
+every product added. Anything else consuming the index (a wizard step, a
+command) should follow the same rule: one subscription per surface that needs
+to react, not one per component.
+
 ## Writing a detector
 
 Implement `WorkspaceDetector`. Detection is deliberately unconstrained: read

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, IActionExecutor, IVsCode, type LoadMoreOptions, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, IActionExecutor, IExtensionContext, IVsCode, type LoadMoreOptions, Roots, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ResolutionContext, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/tree/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId, WorkspaceTreeViewId } from '../constants';
@@ -15,8 +15,8 @@ import {
     IAzureResourceTreeView, IAzureViewDataTree, IAzureViewViewItemTree,
     IWorkspaceTreeView, IWorkspaceViewDataTree, IWorkspaceViewViewItemTree, pushDisposable, type ProviderEntry,
 } from '../services';
-import type { Activity } from './activity/Activity';
-import { ActivityViewProvider } from './activity/ActivityViewProvider';
+import { IWorkspaceDataService } from '../workspace/WorkspaceDataService';
+import type { Activity } from './activity/Activity';import { ActivityViewProvider } from './activity/ActivityViewProvider';
 import { ArmDeploymentDataProvider, IArmDeploymentDataProvider } from './activity/ArmDeploymentDataProvider';
 import { ArmDeploymentViewProvider } from './activity/ArmDeploymentViewProvider';
 import { CodeDeploymentDataProvider, ICodeDeploymentDataProvider } from './activity/CodeDeploymentDataProvider';
@@ -80,6 +80,16 @@ export function registerTrees(container: Container, products: ProductRegistrar):
             EmulatorsWorkspaceViewProvider,
         ],
     });
+
+    // Refresh the whole workspace tree when the index changes. Subscribed here,
+    // once, rather than by each provider -- otherwise a single workspace change
+    // would refresh the tree once per provider reading from the index.
+    const workspaceDataTree = container.get(IWorkspaceViewDataTree);
+    container.get(IExtensionContext).subscriptions.push(
+        container.get(IWorkspaceDataService).onDidChange(() => {
+            workspaceDataTree.invalidate(Roots);
+        }),
+    );
 
     // Activity tree
     registerTree<Activity>(container, {
