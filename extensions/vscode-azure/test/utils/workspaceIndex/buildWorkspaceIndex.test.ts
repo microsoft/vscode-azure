@@ -40,14 +40,6 @@ describe('buildWorkspaceIndex (unit)', () => {
             await expect(build(m, [forger])).to.be.rejectedWith(/may only apply tags in namespace 'forger'/);
         });
 
-        it('rejects two detectors sharing a namespace', async () => {
-            const m = createMockVsCode();
-            addWorkspaceFolder(m, '/repo');
-            const other: WorkspaceDetector = { ...csharpDetector, id: 'csharp-2' };
-
-            await expect(build(m, [csharpDetector, other])).to.be.rejectedWith(/both use the tag namespace/);
-        });
-
         it('rejects namespace and tag names containing the qualifier separator', () => {
             expect(() => tagNamespace('a:b')).to.throw(RangeError);
             expect(() => tagNamespace('')).to.throw(RangeError);

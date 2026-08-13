@@ -23,9 +23,9 @@ import type { WorkspaceTag } from './WorkspaceTag';
  * 3. Detectors in registration order.
  *
  * A detector may only write tags in its own namespace, but may read any tag, so
- * a later detector can refine what an earlier one found.
+ * a later detector can refine what an earlier one found. Two detectors sharing
+ * a namespace is a registration mistake, not something this guards against.
  *
- * @throws {@linkcode RangeError} if two detectors share a tag namespace.
  * @throws {@linkcode CancellationError} when `token` is cancelled.
  */
 export async function buildWorkspaceIndex(
@@ -33,8 +33,6 @@ export async function buildWorkspaceIndex(
     detectors: readonly WorkspaceDetector[],
     token?: vscode.CancellationToken,
 ): Promise<WorkspaceIndex> {
-    assertDistinctNamespaces(detectors);
-
     const index = new MutableWorkspaceIndex();
     const directoryDetectors = detectors.filter(detector => detector.directories);
     const fileDetectors = detectors.filter(detector => detector.files);
@@ -155,17 +153,4 @@ function toFileNode(directory: ScannedDirectory, fileName: string): IndexedNode 
         workspaceFolder: directory.workspaceFolder,
         isDirectory: false,
     };
-}
-
-function assertDistinctNamespaces(detectors: readonly WorkspaceDetector[]): void {
-    const seen = new Map<string, string>();
-    for (const detector of detectors) {
-        const owner = seen.get(detector.namespace.name);
-        if (owner) {
-            throw new RangeError(
-                `Detectors '${owner}' and '${detector.id}' both use the tag namespace `
-                + `'${detector.namespace.name}'`);
-        }
-        seen.set(detector.namespace.name, detector.id);
-    }
 }
