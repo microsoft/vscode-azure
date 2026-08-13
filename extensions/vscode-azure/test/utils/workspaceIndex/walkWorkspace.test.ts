@@ -85,24 +85,6 @@ describe('walkWorkspace (unit)', () => {
 
             expect(paths).to.deep.equal(['.', 'src']);
         });
-
-
-        it('honours nested gitignore files, including re-inclusion', async () => {
-            const m = createMockVsCode();
-            addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/.gitignore', 'ignored/\napps/*\n!apps/keep/\n');
-            addWorkspaceFile(m, '/repo/apps/keep/file.txt', '');
-            addWorkspaceFile(m, '/repo/apps/drop/file.txt', '');
-            addWorkspaceFile(m, '/repo/ignored/file.txt', '');
-            addWorkspaceFile(m, '/repo/nested/.gitignore', 'skip/\n');
-            addWorkspaceFile(m, '/repo/nested/skip/file.txt', '');
-            addWorkspaceFile(m, '/repo/nested/take/file.txt', '');
-
-            const paths = (await collect(m)).map(d => d.relativePath);
-
-            expect(paths).to.deep.equal(['.', 'apps', 'nested', 'apps/keep', 'nested/take']);
-        });
-
     });
 
     describe('reads', () => {

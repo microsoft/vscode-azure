@@ -39,7 +39,7 @@ export interface IWorkspaceIndexService {
  * covering only the files detectors declared interest in, which VS Code
  * satisfies from the recursive watch it already runs per workspace folder
  * rather than starting another one. Events are then filtered against the
- * exclusions and `.gitignore` rules the last build saw, because a glob like
+ * exclusions the last build used, because a glob like
  * `**‍/package.json` also matches everything under `node_modules` -- without
  * that filter one `npm install` would rebuild the index thousands of times.
  *
@@ -122,8 +122,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
      * Whether an event can be ignored without consulting the index.
      *
      * Only the cheap, synchronous checks live here: the path segments the walk
-     * would never descend into. Anything the walk skipped for a `.gitignore`
-     * reason costs at most one redundant rebuild.
+     * would never descend into.
      */
     private isExcluded(uri: vscode.Uri): boolean {
         const folder = this.code.workspace.getWorkspaceFolder(uri);
@@ -148,6 +147,10 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
  *
  * Kept as narrow as the declared interests allow so VS Code discards most
  * events before the extension is woken for them.
+ *
+ * A detector that declares no file interest contributes nothing: it is asking
+ * to see directories, and a directory only appears or disappears along with the
+ * files inside it, which some other detector's interest covers.
  */
 export function watchPatterns(detectors: readonly WorkspaceDetector[]): readonly string[] {
     const alternatives = new Set<string>();
@@ -160,12 +163,7 @@ export function watchPatterns(detectors: readonly WorkspaceDetector[]): readonly
         }
     }
 
-    const patterns: string[] = [];
-    if (alternatives.size > 0) {
-        patterns.push(`**/{${[...alternatives].sort().join(',')}}`);
-    }
-    // A changed `.gitignore` can add or remove whole subtrees, and directory
-    // detectors have no file interest that would otherwise cover it.
-    patterns.push('**/.gitignore');
-    return patterns;
+    return alternatives.size > 0
+        ? [`**/{${[...alternatives].sort().join(',')}}`]
+        : [];
 }

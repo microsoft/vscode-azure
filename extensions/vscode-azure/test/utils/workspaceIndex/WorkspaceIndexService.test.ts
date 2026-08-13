@@ -37,7 +37,7 @@ describe('WorkspaceIndexService (unit)', () => {
         const { service, mock: m } = createService();
 
         const patterns = m.workspace.createFileSystemWatcher.mock.calls.map(call => call.arguments[0]);
-        expect(patterns).to.deep.equal(['**/{host.json}', '**/.gitignore']);
+        expect(patterns).to.deep.equal(['**/{host.json}']);
         // Strings only: a RelativePattern would start a second recursive watch.
         expect(patterns.every(pattern => typeof pattern === 'string')).to.be.true;
         service.dispose();
@@ -152,10 +152,10 @@ describe('WorkspaceIndexService (unit)', () => {
             };
 
             expect(watchPatterns([functionsDetector, azdDetector, suffixes]))
-                .to.deep.equal(['**/{*.csproj,azure.yaml,azure.yml,host.json}', '**/.gitignore']);
+                .to.deep.equal(['**/{*.csproj,azure.yaml,azure.yml,host.json}']);
         });
 
-        it('still watches gitignore when no detector declares files', () => {
+        it('watches nothing when no detector declares files', () => {
             const directoriesOnly: WorkspaceDetector = {
                 id: 'dirs',
                 namespace: tagNamespace('dirs'),
@@ -163,7 +163,7 @@ describe('WorkspaceIndexService (unit)', () => {
                 inspect() { /* no-op */ },
             };
 
-            expect(watchPatterns([directoriesOnly])).to.deep.equal(['**/.gitignore']);
+            expect(watchPatterns([directoriesOnly])).to.be.empty;
         });
     });
 });

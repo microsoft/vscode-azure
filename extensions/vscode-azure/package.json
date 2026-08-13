@@ -403,7 +403,6 @@
         "@microsoft/vscode-azure-azutils": "workspace:*",
         "@microsoft/vscode-azure-utils": "workspace:*",
         "@vscode/extension-telemetry": "catalog:",
-        "ignore": "^7.0.5",
         "inversify": "catalog:",
         "semver": "^7.8.4"
     }

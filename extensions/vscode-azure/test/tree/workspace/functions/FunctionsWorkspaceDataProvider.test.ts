@@ -96,7 +96,7 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
             // once for the whole tree so N providers do not cause N refreshes.
             const patterns = m.workspace.createFileSystemWatcher.mock.calls
                 .map(call => call.arguments[0]);
-            expect(patterns).to.deep.equal(['**/{host.json}', '**/.gitignore']);
+            expect(patterns).to.deep.equal(['**/{host.json}']);
 
             m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
             expect(onChange.mock.callCount()).to.equal(0);
