@@ -155,7 +155,9 @@ export class WorkspaceDataService implements IWorkspaceDataService {
         private readonly scheduler: IDebounceScheduler = new DebounceScheduler(
             WatchDebounceMs,
             Symbol('WorkspaceDataService'),
-            error => { executor.output.debug(`[workspace] rescan failed: ${stringifyError(error)}`); },
+            error => {
+                executor.output.warn(code.l10n.t('[workspace] rescan failed: {0}', stringifyError(error)));
+            },
         ),
         ttlMs: number = DefaultIndexTtlMs,
     ) {

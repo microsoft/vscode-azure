@@ -330,16 +330,40 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     // pure `path.matchesGlob` (no real filesystem access). VS Code resolves a
     // relative glob against workspace folders, so a pattern without a path
     // separator matches by basename anywhere; we mirror that with a `**/`
-    // prefix. A `RelativePattern` additionally scopes results to its base, and
-    // an `exclude` glob drops matches, so that callers relying on either (e.g.
-    // the workspace index) are exercised faithfully.
+    // prefix, applied to the include and exclude globs alike. An exclude also
+    // prunes whole directories in VS Code, so it is tested against each ancestor
+    // directory as well as the file itself -- that way a bare `node_modules`
+    // excludes everything beneath it, as it would in real VS Code, instead of
+    // only a file named `node_modules`. A `RelativePattern` additionally scopes
+    // results to its base, so callers relying on any of this (e.g. the workspace
+    // index) are exercised faithfully.
+    const toGlobPattern = (pattern: vscode.GlobPattern): string => {
+        const raw = typeof pattern === 'string' ? pattern : pattern.pattern;
+        return raw.includes('/') ? raw : `**/${raw}`;
+    };
+
+    const isExcluded = (filePath: string, excludePattern: string): boolean => {
+        if (matchesGlob(filePath, excludePattern)) {
+            return true;
+        }
+        // Walk up the ancestors so an excluded directory prunes its subtree.
+        const segments = filePath.split('/');
+        for (let i = segments.length - 1; i > 1; i--) {
+            if (matchesGlob(segments.slice(0, i).join('/'), excludePattern)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     const findFiles = mock.fn(
         (include: vscode.GlobPattern, exclude?: vscode.GlobPattern | null, maxResults?: number) => {
-            const raw = typeof include === 'string' ? include : include.pattern;
-            const pattern = raw.includes('/') ? raw : `**/${raw}`;
+            const pattern = toGlobPattern(include);
             const baseUri = typeof include === 'string' ? undefined : include.baseUri;
             const basePath = baseUri?.path.replace(/\/+$/, '');
-            const excludePattern = typeof exclude === 'string' ? exclude : exclude?.pattern;
+            const excludePattern = exclude === undefined || exclude === null
+                ? undefined
+                : toGlobPattern(exclude);
 
             const matched: vscode.Uri[] = [];
             for (const filePath of fs.files.keys()) {
@@ -352,7 +376,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
                 if (!matchesGlob(filePath, pattern)) {
                     continue;
                 }
-                if (excludePattern !== undefined && matchesGlob(filePath, excludePattern)) {
+                if (excludePattern !== undefined && isExcluded(filePath, excludePattern)) {
                     continue;
                 }
                 // `fs.files` is keyed by `uri.path`, so rehydrate from URI

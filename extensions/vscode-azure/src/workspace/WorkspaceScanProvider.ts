@@ -87,7 +87,8 @@ export class WorkspaceScanProvider implements DataProvider<WorkspaceIndexNode> {
             try {
                 await detector.enrich!(resource, context); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- filtered on `detector.enrich` above
             } catch (error) {
-                this.executor.output.debug(`[workspace] detector '${detector.namespace}' enrich failed: ${stringifyError(error)}`);
+                this.executor.output.warn(this.code.l10n.t(
+                    '[workspace] detector {0} enrich failed: {1}', detector.namespace, stringifyError(error)));
             }
         })));
 
@@ -118,7 +119,8 @@ export class WorkspaceScanProvider implements DataProvider<WorkspaceIndexNode> {
                 const taggings = await detector.detect(context);
                 return this.filterToNamespace(detector, taggings);
             } catch (error) {
-                this.executor.output.debug(`[workspace] detector '${detector.namespace}' failed: ${stringifyError(error)}`);
+                this.executor.output.warn(this.code.l10n.t(
+                    '[workspace] detector {0} failed: {1}', detector.namespace, stringifyError(error)));
                 return [];
             }
         })));
@@ -139,7 +141,9 @@ export class WorkspaceScanProvider implements DataProvider<WorkspaceIndexNode> {
                 if (applied.tag.namespace === detector.namespace) {
                     return true;
                 }
-                this.executor.output.debug(`[workspace] detector '${detector.namespace}' tried to apply foreign tag '${applied.tag.name}'; ignoring`);
+                this.executor.output.warn(this.code.l10n.t(
+                    '[workspace] detector {0} tried to apply foreign tag {1}; ignoring',
+                    detector.namespace, applied.tag.name));
                 return false;
             });
             if (tags.length > 0) {

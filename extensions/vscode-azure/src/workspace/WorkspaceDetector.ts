@@ -69,17 +69,17 @@ export interface WorkspaceScanContext {
  * files) into {@linkcode enrich}, which runs in the background after the index
  * is already queryable.
  *
- * A detector that throws is logged and skipped for that folder; the rest of the
- * index still loads.
+ * A detector that throws is logged at warning level and skipped for that folder;
+ * the rest of the index still loads.
  */
 export interface WorkspaceDetector {
     /**
      * Namespace this detector owns, e.g. `azd`.
      *
      * Every tag the detector applies must be defined in this namespace --
-     * applications of tags from another namespace are dropped with a warning, so
-     * that the owner of a tag is always the detector that can be asked to
-     * refresh it.
+     * applications of tags from another namespace are dropped and logged at
+     * warning level, so that the owner of a tag is always the detector that can
+     * be asked to refresh it.
      */
     readonly namespace: string;
 
