@@ -57,6 +57,7 @@ The VS Code extension that wires everything together:
   - Workspace (local): `AzdWorkspaceDataProvider`/`ViewProvider`, `FunctionsWorkspaceDataProvider`/`ViewProvider`, `EmulatorsWorkspaceDataProvider`/`ViewProvider`
   - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`
 - **Services**: Extension-scoped DI identifiers (`ICredentialFactory`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)
+- **Workspace index** (`src/workspace/`): `IWorkspaceDataService` — a single shared, tag-queryable index of the open workspace, populated by `WorkspaceDetector`s. See [Workspace Data](workspace-data.md).
 
 ## Activation Flow
 
@@ -77,3 +78,4 @@ The VS Code extension that wires everything together:
 - **Automatic telemetry**: Every command is wrapped in `callWithTelemetryAndErrorHandling`, which captures duration, result, and errors. See [Telemetry](telemetry.md).
 - **Localization**: All user-facing strings use `IVsCode.l10n.t()`. Debug/trace output is exempt. See [Conventions](conventions.md).
 - **Azure client wrappers**: Typed wrappers around Azure SDK clients with custom pipeline policies, lazy SDK imports, and `AsyncIterable<Page<T>>` return types. See [Azure Clients](azure-clients.md).
+- **One workspace scan**: Workspace discovery goes through the shared tag-based index rather than per-feature `findFiles` calls and watchers. See [Workspace Data](workspace-data.md).

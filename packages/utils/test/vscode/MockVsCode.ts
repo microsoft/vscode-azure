@@ -32,6 +32,26 @@ type MockedNamespace<T> = {
 };
 
 /**
+ * A watcher created via `workspace.createFileSystemWatcher`, captured so tests
+ * can assert on the pattern it watches and fire file events at the code under
+ * test.
+ */
+export interface MockFileSystemWatcher {
+    /** The glob the watcher was created for. */
+    readonly pattern: vscode.GlobPattern;
+    /** The watcher handed to the code under test. */
+    readonly watcher: vscode.FileSystemWatcher;
+    /** Fire to simulate a file being created. */
+    readonly createEmitter: EventEmitter<vscode.Uri>;
+    /** Fire to simulate a file being changed. */
+    readonly changeEmitter: EventEmitter<vscode.Uri>;
+    /** Fire to simulate a file being deleted. */
+    readonly deleteEmitter: EventEmitter<vscode.Uri>;
+    /** Whether the code under test has disposed this watcher. */
+    disposed: boolean;
+}
+
+/**
  * Result of {@linkcode createMockVsCode}. Provides both the injectable
  * `IVsCode` value and test-inspection surfaces.
  *
@@ -152,6 +172,20 @@ export interface MockVsCodeResult {
      * ```
      */
     readonly workspaceFoldersChangeEmitter: EventEmitter<vscode.WorkspaceFoldersChangeEvent>;
+
+    /**
+     * Watchers created via `workspace.createFileSystemWatcher`, in creation
+     * order, each paired with the pattern it was created for and emitters the
+     * test can fire to simulate file events.
+     *
+     * @example
+     * ```ts
+     * const m = createMockVsCode();
+     * // code under test calls createFileSystemWatcher('**\/host.json')
+     * m.fileSystemWatchers[0].createEmitter.fire(m.vscode.Uri.file('/repo/host.json'));
+     * ```
+     */
+    readonly fileSystemWatchers: readonly MockFileSystemWatcher[];
 
     /** The mock `tasks` namespace. */
     readonly tasks: MockedNamespace<typeof vscode.tasks>;
@@ -296,23 +330,35 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     // pure `path.matchesGlob` (no real filesystem access). VS Code resolves a
     // relative glob against workspace folders, so a pattern without a path
     // separator matches by basename anywhere; we mirror that with a `**/`
-    // prefix. The RelativePattern base is not scoped.
+    // prefix. A `RelativePattern` additionally scopes results to its base, and
+    // an `exclude` glob drops matches, so that callers relying on either (e.g.
+    // the workspace index) are exercised faithfully.
     const findFiles = mock.fn(
-        (include: vscode.GlobPattern, _exclude?: unknown, maxResults?: number) => {
+        (include: vscode.GlobPattern, exclude?: vscode.GlobPattern | null, maxResults?: number) => {
             const raw = typeof include === 'string' ? include : include.pattern;
             const pattern = raw.includes('/') ? raw : `**/${raw}`;
+            const baseUri = typeof include === 'string' ? undefined : include.baseUri;
+            const basePath = baseUri?.path.replace(/\/+$/, '');
+            const excludePattern = typeof exclude === 'string' ? exclude : exclude?.pattern;
 
             const matched: vscode.Uri[] = [];
             for (const filePath of fs.files.keys()) {
                 if (maxResults !== undefined && matched.length >= maxResults) {
                     break;
                 }
-                if (matchesGlob(filePath, pattern)) {
-                    // `fs.files` is keyed by `uri.path`, so rehydrate from URI
-                    // components rather than treating the key as a filesystem
-                    // path (which would mishandle drive letters / schemes).
-                    matched.push(MockUri.from({ scheme: 'file', path: filePath }));
+                if (basePath !== undefined && filePath !== basePath && !filePath.startsWith(`${basePath}/`)) {
+                    continue;
                 }
+                if (!matchesGlob(filePath, pattern)) {
+                    continue;
+                }
+                if (excludePattern !== undefined && matchesGlob(filePath, excludePattern)) {
+                    continue;
+                }
+                // `fs.files` is keyed by `uri.path`, so rehydrate from URI
+                // components rather than treating the key as a filesystem
+                // path (which would mishandle drive letters / schemes).
+                matched.push(MockUri.from({ scheme: 'file', path: filePath }));
             }
             return Promise.resolve(matched);
         },
@@ -363,6 +409,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         (_scheme: string, _provider: vscode.FileSystemProvider) => ({ dispose: () => undefined }),
     );
 
+    const fileSystemWatchers: MockFileSystemWatcher[] = [];
+
     const openTextDocument = mock.fn(
         (uri: vscode.Uri): Promise<vscode.TextDocument> => {
             const document = { uri } as vscode.TextDocument;
@@ -372,19 +420,34 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     );
 
     const createFileSystemWatcher = mock.fn(
-        (): vscode.FileSystemWatcher => {
+        (pattern: vscode.GlobPattern): vscode.FileSystemWatcher => {
             const create = new EventEmitter<vscode.Uri>();
             const change = new EventEmitter<vscode.Uri>();
             const del = new EventEmitter<vscode.Uri>();
-            return {
+            const watcher: vscode.FileSystemWatcher = {
                 ignoreCreateEvents: false,
                 ignoreChangeEvents: false,
                 ignoreDeleteEvents: false,
                 onDidCreate: create.event,
                 onDidChange: change.event,
                 onDidDelete: del.event,
-                dispose: () => { create.dispose(); change.dispose(); del.dispose(); },
+                dispose: () => {
+                    create.dispose(); change.dispose(); del.dispose();
+                    const entry = fileSystemWatchers.find(candidate => candidate.watcher === watcher);
+                    if (entry) {
+                        entry.disposed = true;
+                    }
+                },
             };
+            fileSystemWatchers.push({
+                pattern,
+                watcher,
+                createEmitter: create,
+                changeEmitter: change,
+                deleteEmitter: del,
+                disposed: false,
+            });
+            return watcher;
         },
     );
 
@@ -457,6 +520,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         configChangeEmitter,
         sessionsChangeEmitter,
         workspaceFoldersChangeEmitter,
+        fileSystemWatchers,
         tasks,
         taskProcessEndEmitter,
         textDocuments,

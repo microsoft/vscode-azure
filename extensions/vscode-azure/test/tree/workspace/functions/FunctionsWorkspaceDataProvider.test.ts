@@ -3,16 +3,31 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { isFunctionsProjectNode } from '../../../../src/tree/workspace/WorkspaceNode';
+import { createFunctionsProjectDetector } from '../../../../src/workspace/detectors/functionsProjectDetector';
+import { WorkspaceDataService } from '../../../../src/workspace/WorkspaceDataService';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
+/**
+ * Wires the provider to a real {@linkcode WorkspaceDataService} carrying the
+ * real Functions detector, so these tests cover the discovery path end to end
+ * rather than a stubbed index.
+ */
 function createProvider() {
-    const m = createMockVsCode();
-    const { executor } = createTestActionExecutor();
-    return { provider: new FunctionsWorkspaceDataProvider(m.vscode, executor), mock: m };
+    const { executor, mockVsCode: m } = createTestActionExecutor();
+    const scheduler = new ManualDebounceScheduler();
+    const workspaceData = new WorkspaceDataService(
+        m.vscode, executor, [createFunctionsProjectDetector()], scheduler);
+
+    return {
+        provider: new FunctionsWorkspaceDataProvider(executor, workspaceData),
+        mock: m,
+        workspaceData,
+        scheduler,
+    };
 }
 
 describe('FunctionsWorkspaceDataProvider (unit)', () => {
@@ -46,6 +61,9 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
             expect(children).to.have.length(1);
             expect(isFunctionsProjectNode(children[0])).to.be.true;
             expect(children[0].label).to.equal('repo');
+            // The node still points at host.json itself, so "Reveal in Explorer"
+            // opens the file rather than its folder.
+            expect(children[0].resourceUri.path).to.equal('/repo/host.json');
         });
 
         it('returns empty for any non-root node (leaf)', async () => {
@@ -53,7 +71,7 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
             expect(await provider.getChildren(makeFunctionsProjectNode())).to.deep.equal([]);
         });
 
-        it('fires onDidChange when workspace folders change', () => {
+        it('fires onDidChange when the workspace index changes', () => {
             const { provider, mock: m } = createProvider();
             const onChange = mock.fn();
             provider.onDidChange(onChange);
@@ -62,10 +80,10 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
             expect(onChange.mock.callCount()).to.equal(1);
         });
 
-        it('creates a file system watcher for host.json', () => {
+        it('watches host.json through the shared index rather than its own watcher', () => {
+            // A private watcher here would mean duplicate scans on every change.
             const { mock: m } = createProvider();
-            expect(m.workspace.createFileSystemWatcher.mock.calls.length).to.equal(1);
-            expect(m.workspace.createFileSystemWatcher.mock.calls[0].arguments[0]).to.equal('host.json');
+            expect(m.fileSystemWatchers.map(w => w.pattern)).to.deep.equal(['**/host.json']);
         });
     });
 });

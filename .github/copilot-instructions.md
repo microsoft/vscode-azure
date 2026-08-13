@@ -3,6 +3,7 @@
 For detailed documentation on the project architecture and patterns, see the `docs/` folder:
 * `docs/architecture.md` -- Package organization, dependency graph, activation flow
 * `docs/tree-views.md` -- Data/view layer separation, providers, enrichment, caching, pagination, activity tree, resource icons
+* `docs/workspace-data.md` -- Workspace index, tags and namespacing, writing detectors, scan caching/invalidation
 * `docs/dependency-injection.md` -- Container setup, service identifiers, scoped execution, factory bindings
 * `docs/commands.md` -- ManagedCommand pattern, registration, context values, prefixArgs
 * `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers

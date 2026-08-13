@@ -33,6 +33,7 @@ import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
+import { registerWorkspaceData } from './workspace/registerWorkspaceData';
 
 /**
  * Public API surface returned from {@linkcode activateInternal} (and thus from
@@ -150,6 +151,11 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
+
+    // Bound before product bindings so a product binding may depend on the
+    // workspace index; detectors themselves are collected during
+    // registerProducts, which has already run.
+    registerWorkspaceData(container, products);
 
     products.applyBindings(container);
 

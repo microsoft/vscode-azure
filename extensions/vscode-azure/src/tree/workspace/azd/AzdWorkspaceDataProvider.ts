@@ -9,7 +9,10 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { AzureYamlGlobPattern, IAzdService } from '../../../azd/AzdService';
+import { IAzdService } from '../../../azd/AzdService';
+import { AzdProjectTag } from '../../../workspace/detectors/azdProjectDetector';
+import { IWorkspaceDataService } from '../../../workspace/WorkspaceDataService';
+import { getTagMetadata } from '../../../workspace/WorkspaceEntry';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
 
@@ -17,16 +20,18 @@ import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServic
  * Data-layer provider for {@linkcode AzdProjectNode}s and their
  * {@linkcode AzdServiceNode} children.
  *
- * Discovers azd projects via a single {@linkcode IAzdService.findAzureYaml}
- * call across the workspace, then maps each result to its containing
- * workspace folder. Enumerates services by invoking
- * {@linkcode IAzdService.show} (which shells out to `azd show --output json`).
- * Caching is handled by the surrounding `DataItemTree` so `azd` is only
- * re-invoked when the data layer's TTL expires or an explicit invalidate
- * fires.
+ * Projects come from the shared workspace index rather than a private search:
+ * {@linkcode AzdProjectTag} is contributed by the azd detector, so discovery is
+ * scanned once and shared with wizards and any other consumer. Services are
+ * enumerated by invoking {@linkcode IAzdService.show} (which shells out to
+ * `azd show --output json`); that stays here because it is expensive and only
+ * needed when a project node is expanded. Caching is handled by the surrounding
+ * `DataItemTree` so `azd` is only re-invoked when the data layer's TTL expires
+ * or an explicit invalidate fires.
  *
- * Fires {@linkcode onDidChange} when the set of workspace folders
- * changes so the tree re-discovers projects.
+ * Fires {@linkcode onDidChange} when the index changes -- covering both new /
+ * removed `azure.yaml` files and workspace folder changes, which the index
+ * watches on everyone's behalf.
  */
 @injectable()
 export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
@@ -41,24 +46,12 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(IWorkspaceDataService) private readonly workspaceData: IWorkspaceDataService,
     ) {
-        const invalidateRoots = (reason: string) => {
-            this.executor.output.debug(`[data] azd workspace: ${reason}`);
+        this.disposables.push(workspaceData.onDidChange(() => {
+            this.executor.output.debug('[data] azd workspace: index changed');
             this.changeEmitter.fire({ target: Roots });
-        };
-
-        this.disposables.push(code.workspace.onDidChangeWorkspaceFolders(() => { invalidateRoots('folders changed'); }));
-
-        // When passed a plain string glob (not a RelativePattern), VS Code
-        // filters events from its existing recursive workspace watcher rather
-        // than creating a new OS-level file watcher, so this is essentially free.
-        const watcher = code.workspace.createFileSystemWatcher(AzureYamlGlobPattern);
-        this.disposables.push(
-            watcher,
-            watcher.onDidCreate(() => { invalidateRoots('azure.yaml created'); }),
-            watcher.onDidChange(() => { invalidateRoots('azure.yaml changed'); }),
-            watcher.onDidDelete(() => { invalidateRoots('azure.yaml deleted'); }),
-        );
+        }));
     }
 
     /** @inheritdoc */
@@ -100,19 +93,20 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
     }
 
     /**
-     * Discover azd projects by searching for `azure.yaml` / `azure.yml`
-     * across all open workspace folders via {@linkcode IAzdService.findAzureYaml}.
+     * Discover azd projects from the shared workspace index.
      */
     private async discoverProjects(): Promise<AzdProjectNode[]> {
-        const azureYamls = await this.azd.findAzureYaml(undefined, 5);
+        const entries = await this.workspaceData.getEntries(AzdProjectTag);
         const projects: AzdProjectNode[] = [];
-        for (const azureYamlUri of azureYamls) {
-            const folder = this.code.workspace.getWorkspaceFolder(azureYamlUri);
-            if (folder) {
+        for (const entry of entries) {
+            // The node is keyed and revealed by the `azure.yaml` itself, which
+            // the tag carries as metadata; the entry is the containing folder.
+            const azureYamlUri = getTagMetadata(entry, AzdProjectTag)?.manifestUri;
+            if (azureYamlUri) {
                 projects.push({
                     id: `${AzdProjectKeyPrefix}${azureYamlUri.toString()}`,
                     type: 'azdProject',
-                    label: folder.name,
+                    label: entry.folder.name,
                     resourceUri: azureYamlUri,
                 });
             }

@@ -31,12 +31,16 @@ import { AzureResourceDataProvider } from '../tree/resources/AzureResourceDataPr
 import { GenericAzureViewProvider } from '../tree/resources/GenericAzureViewProvider';
 import { IResourceSelector, ResourceSelector } from '../tree/resources/ResourceSelector';
 import { CredentialOptionsScope, ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
+import { createAzdProjectDetector } from '../workspace/detectors/azdProjectDetector';
 
 /**
  * Contribute the generic Azure clients and fallback resource presentation
  * shared by every product.
  */
 export function registerGenericAzure(registrar: ProductRegistrar): void {
+    // azd is not tied to a single product, so its detector lives here.
+    registrar.registerWorkspaceDetector(createAzdProjectDetector());
+
     registrar.registerBinding(container => {
         container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
         container.bind(ICredentialFactory).toDynamicValue(context => {

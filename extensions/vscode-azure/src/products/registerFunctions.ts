@@ -10,9 +10,12 @@ import { DeleteAppSetting } from '../commands/functions/DeleteAppSetting';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { FunctionAppDataProvider, IFunctionAppDataProvider } from '../tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../tree/resources/functions/FunctionAppViewProvider';
+import { createFunctionsProjectDetector } from '../workspace/detectors/functionsProjectDetector';
 
 /** Contribute all Azure Functions services and UI integrations. */
 export function registerFunctions(registrar: ProductRegistrar): void {
+    registrar.registerWorkspaceDetector(createFunctionsProjectDetector());
+
     registrar.registerAzureClientProvider(IWebAppClientProvider, (context, executor, credential, subscription) => {
         return WebAppClient.create(context, executor, credential, subscription);
     });

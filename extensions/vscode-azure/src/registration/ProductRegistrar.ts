@@ -7,6 +7,7 @@ import type { AzureSubscription, ConcreteAzureNode } from '@microsoft/vscode-azu
 import type { DataProvider, ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import type { ManagedCommand } from '../commands/ManagedCommand';
+import type { WorkspaceDetector } from '../workspace/WorkspaceDetector';
 import { bindAzureClientProvider, type AzureClientCreate, type ProviderEntry } from '../services';
 
 /** A constructor for a command resolved in a command-scoped DI container. */
@@ -31,6 +32,7 @@ export class ProductRegistrar {
     private readonly managedCommands: ManagedCommandRegistration[] = [];
     private readonly resourceDataProviders: ProviderEntry<DataProvider<ConcreteAzureNode>>[] = [];
     private readonly resourceViewProviders: ProviderEntry<ViewProvider<string>>[] = [];
+    private readonly workspaceDetectors: WorkspaceDetector[] = [];
 
     /** Add arbitrary product-owned DI bindings. */
     public registerBinding(binding: ProductBinding): void {
@@ -54,6 +56,17 @@ export class ProductRegistrar {
     /** Add a product-specific Azure resource view provider. */
     public registerResourceViewProvider(provider: ProviderEntry<ViewProvider<string>>): void {
         this.resourceViewProviders.push(provider);
+    }
+
+    /**
+     * Add a detector that contributes tags to the shared workspace index.
+     *
+     * Products register detection here rather than scanning the workspace
+     * themselves, so that one scan serves every consumer (tree providers,
+     * wizard steps) and the results are cached and invalidated centrally.
+     */
+    public registerWorkspaceDetector(detector: WorkspaceDetector): void {
+        this.workspaceDetectors.push(detector);
     }
 
     /**
@@ -91,5 +104,10 @@ export class ProductRegistrar {
     /** Return Azure resource view providers in dispatch order. */
     public getResourceViewProviders(): readonly ProviderEntry<ViewProvider<string>>[] {
         return this.resourceViewProviders;
+    }
+
+    /** Return workspace detectors in product registration order. */
+    public getWorkspaceDetectors(): readonly WorkspaceDetector[] {
+        return this.workspaceDetectors;
     }
 }
