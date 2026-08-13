@@ -87,26 +87,22 @@ describe('walkWorkspace (unit)', () => {
     });
 
     describe('reads', () => {
-        it('reads text and json from the same file', async () => {
+        it('reads the contents of a file in the directory', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/package.json', '{"name":"app"}');
 
             const [root] = await collect(m);
 
-            expect(await root.json('package.json')).to.deep.equal({ name: 'app' });
             expect(await root.text('package.json')).to.equal('{"name":"app"}');
         });
 
-        it('reports absent and malformed files as undefined', async () => {
+        it('reports absent files as undefined', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/broken.json', '{ nope');
 
             const [root] = await collect(m);
 
-            expect(await root.json('broken.json')).to.be.undefined;
-            expect(await root.json('missing.json')).to.be.undefined;
             expect(await root.text('missing.txt')).to.be.undefined;
         });
 

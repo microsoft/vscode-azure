@@ -44,13 +44,6 @@ export interface DetectorContext extends IndexedNode {
     text(): Promise<string | undefined>;
 
     /**
-     * This node's parsed JSON contents, or `undefined` if it is a directory,
-     * too large, or malformed. Malformed files read as absent so a broken
-     * manifest cannot abort an index build.
-     */
-    json(): Promise<unknown>;
-
-    /**
      * Whether this node already carries `tag`. Any namespace may be read, which
      * is how a detector builds on an earlier one's findings.
      */

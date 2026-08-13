@@ -7,9 +7,9 @@ import { addWorkspaceFile, createMockVsCode, ManualDebounceScheduler, type MockV
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { azdDetector } from '../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
-import { functionsDetector, FunctionsProject } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { functionsDetector, FunctionsHostFile } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
-import { watchPatterns, WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
+import { watchPattern, WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
 
 describe('WorkspaceIndexService (unit)', () => {
@@ -56,8 +56,8 @@ describe('WorkspaceIndexService (unit)', () => {
 
         expect(changed).to.equal(1);
         const index = await service.getIndex();
-        expect(index.withTag(FunctionsProject).map(n => n.relativePath))
-            .to.deep.equal(['.', 'api']);
+        expect(index.withTag(FunctionsHostFile).map(n => n.relativePath))
+            .to.deep.equal(['host.json', 'api/host.json']);
         service.dispose();
     });
 
@@ -123,7 +123,7 @@ describe('WorkspaceIndexService (unit)', () => {
         await expect(service.getIndex()).to.be.rejectedWith('denied');
         const index = await service.getIndex();
 
-        expect(index.withTag(FunctionsProject)).to.have.length(1);
+        expect(index.withTag(FunctionsHostFile)).to.have.length(1);
         service.dispose();
     });
 
@@ -141,7 +141,7 @@ describe('WorkspaceIndexService (unit)', () => {
         expect(changed).to.equal(0);
     });
 
-    describe('watchPatterns', () => {
+    describe('watchPattern', () => {
         it('merges every detector interest into one glob', () => {
             // No shipped detector declares suffixes yet, so this one stands in for that half.
             const suffixes: WorkspaceDetector = {
@@ -151,8 +151,8 @@ describe('WorkspaceIndexService (unit)', () => {
                 inspect() { /* no-op */ },
             };
 
-            expect(watchPatterns([functionsDetector, azdDetector, suffixes]))
-                .to.deep.equal(['**/{*.csproj,azure.yaml,azure.yml,host.json}']);
+            expect(watchPattern([functionsDetector, azdDetector, suffixes]))
+                .to.equal('**/{*.csproj,azure.yaml,azure.yml,host.json}');
         });
 
         it('watches nothing when no detector declares files', () => {
@@ -163,7 +163,7 @@ describe('WorkspaceIndexService (unit)', () => {
                 inspect() { /* no-op */ },
             };
 
-            expect(watchPatterns([directoriesOnly])).to.be.empty;
+            expect(watchPattern([directoriesOnly])).to.be.undefined;
         });
     });
 });

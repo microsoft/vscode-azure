@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isFileNotFoundError, readJson, readText, relativePath, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { isFileNotFoundError, readText, relativePath, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
@@ -43,13 +43,6 @@ export interface ScannedDirectory {
 
     /** Full contents of a file here, or `undefined` if it is not present. */
     text(name: string): Promise<string | undefined>;
-
-    /**
-     * Parsed JSON contents of a file here, or `undefined` if absent or
-     * malformed. Malformed files read as absent so a broken manifest cannot
-     * abort a walk.
-     */
-    json(name: string): Promise<unknown>;
 }
 
 /**
@@ -163,6 +156,5 @@ function createScannedDirectory(
         fileNames,
         fileUri,
         text: name => read(name, target => readText(code, target)),
-        json: name => read(name, target => readJson(code, target)),
     };
 }

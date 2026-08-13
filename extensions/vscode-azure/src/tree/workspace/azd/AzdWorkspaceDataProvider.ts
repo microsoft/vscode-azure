@@ -21,27 +21,15 @@ export const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 const azd = tagNamespace('azd');
 
-/** A directory containing an `azure.yaml` / `azure.yml`. */
-export const AzdProject = azd.tag(StandardTagNames.projectRoot);
-
-/** The `azure.yaml` / `azure.yml` file itself. */
+/** The `azure.yaml` / `azure.yml` file that marks an azd project. */
 export const AzdProjectFile = azd.tag(StandardTagNames.projectFile);
 
-/** Tags azd projects and their `azure.yaml`. */
+/** Tags the `azure.yaml` of every azd project. */
 export const azdDetector: WorkspaceDetector = {
     id: 'azd',
     namespace: azd,
-    directories: true,
     files: { names: AzureYamlFileNames },
-    inspect(node) {
-        if (node.isDirectory) {
-            if (AzureYamlFileNames.some(name => node.fileNames.has(name))) {
-                node.tag(AzdProject);
-            }
-        } else {
-            node.tag(AzdProjectFile);
-        }
-    },
+    inspect(node) { node.tag(AzdProjectFile); },
 };
 
 /**

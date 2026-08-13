@@ -83,9 +83,6 @@ function createContext(
         text: () => fileName === undefined
             ? Promise.resolve(undefined)
             : directory.text(fileName),
-        json: () => fileName === undefined
-            ? Promise.resolve(undefined)
-            : directory.json(fileName),
         has: tag => index.has(node.uri, tag),
         ancestor: tag => findAncestor(code, node, directoriesByUri, index, tag),
         tag: (tag, value) => {

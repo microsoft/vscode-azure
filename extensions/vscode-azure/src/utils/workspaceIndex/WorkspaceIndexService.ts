@@ -63,7 +63,8 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
     ) {
         this.disposables.push(scheduler);
 
-        for (const pattern of watchPatterns(detectors)) {
+        const pattern = watchPattern(detectors);
+        if (pattern) {
             this.disposables.push(this.watch(pattern));
         }
         this.disposables.push(
@@ -143,7 +144,8 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
 }
 
 /**
- * Glob patterns covering everything the detectors asked to see.
+ * A single glob covering every file the detectors asked to see, or `undefined`
+ * if none did.
  *
  * Kept as narrow as the declared interests allow so VS Code discards most
  * events before the extension is woken for them.
@@ -152,7 +154,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
  * to see directories, and a directory only appears or disappears along with the
  * files inside it, which some other detector's interest covers.
  */
-export function watchPatterns(detectors: readonly WorkspaceDetector[]): readonly string[] {
+export function watchPattern(detectors: readonly WorkspaceDetector[]): string | undefined {
     const alternatives = new Set<string>();
     for (const detector of detectors) {
         for (const name of detector.files?.names ?? []) {
@@ -164,6 +166,6 @@ export function watchPatterns(detectors: readonly WorkspaceDetector[]): readonly
     }
 
     return alternatives.size > 0
-        ? [`**/{${[...alternatives].sort().join(',')}}`]
-        : [];
+        ? `**/{${[...alternatives].sort().join(',')}}`
+        : undefined;
 }

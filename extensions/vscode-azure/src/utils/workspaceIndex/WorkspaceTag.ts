@@ -94,7 +94,8 @@ export function tagNamespace(name: string): TagNamespace {
  *
  * A shared vocabulary rather than a closed set: detectors may define any name
  * they need, but should reach for one of these when it fits, so that unrelated
- * detectors describe the same concept the same way.
+ * detectors describe the same concept the same way. Add a name here once a
+ * second detector wants it, rather than in anticipation.
  */
 export const StandardTagNames = {
     /** A directory that is the root of a project. */
@@ -103,10 +104,4 @@ export const StandardTagNames = {
     projectFile: 'projectFile',
     /** A file containing code the project builds or runs. */
     sourceFile: 'sourceFile',
-    /** A file declaring dependencies or metadata. */
-    manifest: 'manifest',
-    /** A resolved dependency lock file. */
-    lockFile: 'lockFile',
-    /** A file configuring tooling or runtime behaviour. */
-    configFile: 'configFile',
 } as const;

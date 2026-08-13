@@ -19,14 +19,11 @@ export const FunctionsHostFileName = 'host.json';
 
 const functions = tagNamespace('functions');
 
-/** A directory containing a Functions `host.json`. */
-export const FunctionsProject = functions.tag(StandardTagNames.projectRoot);
-
-/** The `host.json` file itself. */
+/** The `host.json` that marks an Azure Functions project. */
 export const FunctionsHostFile = functions.tag(StandardTagNames.projectFile);
 
 /**
- * Tags Azure Functions projects and their `host.json`.
+ * Tags the `host.json` of every Azure Functions project.
  *
  * Listing the individual functions inside a project is tracked by
  * https://github.com/microsoft/vscode-azure/issues/178; it fits here as a
@@ -35,17 +32,8 @@ export const FunctionsHostFile = functions.tag(StandardTagNames.projectFile);
 export const functionsDetector: WorkspaceDetector = {
     id: 'functions',
     namespace: functions,
-    directories: true,
     files: { names: [FunctionsHostFileName] },
-    inspect(node) {
-        if (node.isDirectory) {
-            if (node.fileNames.has(FunctionsHostFileName)) {
-                node.tag(FunctionsProject);
-            }
-        } else {
-            node.tag(FunctionsHostFile);
-        }
-    },
+    inspect(node) { node.tag(FunctionsHostFile); },
 };
 
 /**
