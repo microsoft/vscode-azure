@@ -5,9 +5,8 @@
 
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type * as vscode from 'vscode';
-import { defaultExcludedDirectories, walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from '../../../src/utils/workspaceIndex/walkWorkspace';
+import { walkWorkspace, type ScannedDirectory } from '../../../src/utils/workspaceIndex/walkWorkspace';
 
 describe('walkWorkspace (unit)', () => {
     describe('traversal', () => {
@@ -50,18 +49,6 @@ describe('walkWorkspace (unit)', () => {
             expect(api.workspaceFolder?.name).to.equal('repo');
         });
 
-        it('scopes the walk to a single subtree when given a uri', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/api/src/app.cs', '');
-            addFile(m, '/repo/web/index.html', '');
-
-            const paths = (await collect(m, { scope: m.vscode.Uri.file('/repo/api') }))
-                .map(d => d.relativePath);
-
-            // Relative paths are relative to the scope root, not the folder.
-            expect(paths).to.deep.equal(['.', 'src']);
-        });
 
         it('does not follow directory symlinks', async () => {
             const m = createMockVsCode();
@@ -99,18 +86,6 @@ describe('walkWorkspace (unit)', () => {
             expect(paths).to.deep.equal(['.', 'src']);
         });
 
-        it('accepts a caller-supplied exclusion set', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/dist/out.js', '');
-            addFile(m, '/repo/custom/thing.txt', '');
-
-            const paths = (await collect(m, {
-                excludeDirectories: new Set([...defaultExcludedDirectories, 'custom']),
-            })).map(d => d.relativePath);
-
-            expect(paths).to.deep.equal(['.']);
-        });
 
         it('honours nested gitignore files, including re-inclusion', async () => {
             const m = createMockVsCode();
@@ -128,16 +103,6 @@ describe('walkWorkspace (unit)', () => {
             expect(paths).to.deep.equal(['.', 'apps', 'nested', 'apps/keep', 'nested/take']);
         });
 
-        it('can be told to ignore gitignore files', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/.gitignore', 'secret/\n');
-            addFile(m, '/repo/secret/file.txt', '');
-
-            const paths = (await collect(m, { respectGitignore: false })).map(d => d.relativePath);
-
-            expect(paths).to.deep.equal(['.', 'secret']);
-        });
     });
 
     describe('reads', () => {
@@ -179,69 +144,9 @@ describe('walkWorkspace (unit)', () => {
     });
 
     describe('limits and failures', () => {
-        it('reports truncation instead of walking past the entry budget', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/package.json', '{"name":"app"}');
-            for (let i = 0; i < 20; i++) {
-                addFile(m, `/repo/dir${i}/file.txt`, '');
-            }
 
-            const walk = walkWorkspace(m.vscode, undefined, { maxEntries: 5 });
-            const seen: ScannedDirectory[] = [];
-            for await (const directory of walk) {
-                seen.push(directory);
-            }
 
-            expect(walk.truncated).to.be.true;
-            expect(seen.length).to.be.lessThan(20);
-            // A directory that has already been read must still be reported: the
-            // budget bounds how far the walk descends, it does not discard work
-            // already done. Dropping it would hide the root's own manifests.
-            expect(seen.map(d => d.relativePath)).to.include('.');
-            expect(await seen[0].json('package.json')).to.deep.equal({ name: 'app' });
-        });
 
-        it('does not report truncation when the budget is exactly met', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/a.txt', '');
-            addFile(m, '/repo/b.txt', '');
-
-            const walk = walkWorkspace(m.vscode, undefined, { maxEntries: 2 });
-            await drain(walk);
-
-            expect(walk.truncated).to.be.false;
-        });
-
-        it('reports truncation per iteration rather than latching', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m, '/repo');
-            addFile(m, '/repo/a/file.txt', '');
-            addFile(m, '/repo/b/file.txt', '');
-
-            const walk = walkWorkspace(m.vscode, undefined, { maxEntries: 2 });
-            await drain(walk);
-            expect(walk.truncated).to.be.true;
-
-            // The tree shrinks under the budget, so re-iterating the same walk
-            // must report this run's outcome rather than the earlier one.
-            await m.fs.delete(m.vscode.Uri.file('/repo/b/file.txt'));
-            await m.fs.delete(m.vscode.Uri.file('/repo/b'));
-
-            const paths: string[] = [];
-            for await (const directory of walk) {
-                paths.push(directory.relativePath);
-            }
-
-            expect(paths).to.deep.equal(['.', 'a']);
-            expect(walk.truncated).to.be.false;
-        });
-
-        it('rejects an invalid entry budget', () => {
-            const m = createMockVsCode();
-            expect(() => walkWorkspace(m.vscode, undefined, { maxEntries: 0 })).to.throw(RangeError);
-        });
 
         it('ignores directories that vanish mid-walk but surfaces other failures', async () => {
             const m = createMockVsCode();
@@ -263,7 +168,7 @@ describe('walkWorkspace (unit)', () => {
                 onCancellationRequested: () => ({ dispose: () => undefined }),
             } satisfies vscode.CancellationToken;
 
-            await expect(collect(m, {}, token)).to.be.rejectedWith(CancellationError);
+            await expect(collect(m, token)).to.be.rejectedWith(CancellationError);
         });
 
         it('yields nothing when no workspace folder is open', async () => {
@@ -274,22 +179,15 @@ describe('walkWorkspace (unit)', () => {
 
 async function collect(
     m: MockVsCodeResult,
-    options?: WalkWorkspaceOptions,
     token?: vscode.CancellationToken,
 ): Promise<ScannedDirectory[]> {
     const directories: ScannedDirectory[] = [];
-    for await (const directory of walkWorkspace(m.vscode, token, options)) {
+    for await (const directory of walkWorkspace(m.vscode, token)) {
         directories.push(directory);
     }
     return directories;
 }
 
-/** Iterates a walk to completion, discarding the directories. */
-async function drain(walk: AsyncIterable<ScannedDirectory>): Promise<void> {
-    for await (const directory of walk) {
-        void directory;
-    }
-}
 
 function addWorkspace(m: MockVsCodeResult, path: string, index = 0): vscode.WorkspaceFolder {
     const uri = m.vscode.Uri.file(path);

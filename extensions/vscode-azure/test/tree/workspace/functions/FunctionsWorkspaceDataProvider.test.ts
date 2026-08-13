@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode, createTestActionExecutor, ManualDebounceScheduler, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 
 import { functionsDetector, FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';

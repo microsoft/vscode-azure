@@ -5,7 +5,6 @@
 
 import { FunctionAppLogicalType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { getAzureIconUri, getResourceTypeIconUri } from '../../src/tree/iconPath';
 import { AcrResourceType } from '../../src/tree/resources/acr/AcrRegistry';
 

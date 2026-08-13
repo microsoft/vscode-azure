@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { createActionContext } from '../../src/base/IActionContext';
 
 describe('createActionContext (unit)', () => {

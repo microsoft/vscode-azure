@@ -5,13 +5,10 @@
 
 import { basename, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import { walkWorkspace, type ScannedDirectory, type WalkWorkspaceOptions } from './walkWorkspace';
+import { walkWorkspace, type ScannedDirectory } from './walkWorkspace';
 import { MutableWorkspaceIndex, type WorkspaceIndex } from './WorkspaceIndex';
 import { wantsFile, type DetectorContext, type IndexedNode, type WorkspaceDetector } from './WorkspaceDetector';
 import type { WorkspaceTag } from './WorkspaceTag';
-
-/** Options for {@linkcode buildWorkspaceIndex}. */
-export type BuildWorkspaceIndexOptions = WalkWorkspaceOptions;
 
 /**
  * Walks the workspace once, letting every detector tag the nodes it recognises,
@@ -35,7 +32,6 @@ export async function buildWorkspaceIndex(
     code: IVsCode,
     detectors: readonly WorkspaceDetector[],
     token?: vscode.CancellationToken,
-    options: BuildWorkspaceIndexOptions = {},
 ): Promise<WorkspaceIndex> {
     assertDistinctNamespaces(detectors);
 
@@ -46,8 +42,7 @@ export async function buildWorkspaceIndex(
     // because a directory is always recorded before its descendants are visited.
     const directoriesByUri = new Map<string, IndexedNode>();
 
-    const walk = walkWorkspace(code, token, options);
-    for await (const directory of walk) {
+    for await (const directory of walkWorkspace(code, token)) {
         const directoryNode = toIndexedNode(code, directory);
         directoriesByUri.set(directory.uri.toString(), directoryNode);
 
@@ -70,7 +65,6 @@ export async function buildWorkspaceIndex(
         }
     }
 
-    index.truncated = walk.truncated;
     return index;
 }
 
@@ -95,7 +89,6 @@ function createContext(
             ? Promise.resolve(undefined)
             : directory.json(fileName),
         has: tag => index.has(node.uri, tag),
-        valuesOf: tag => index.valuesOf(node.uri, tag),
         ancestor: tag => findAncestor(code, node, directoriesByUri, index, tag),
         tag: (tag, value) => {
             if (tag.namespace !== detector.namespace.name) {

@@ -7,7 +7,6 @@ import { AzureNodeId, type ConcreteAzureNode, type IAcrClientProvider, type IRes
 import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import * as vscode from 'vscode';
 import { AcrDataProvider } from '../../../../src/tree/resources/acr/AcrDataProvider';
 import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry';

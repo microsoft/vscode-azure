@@ -56,9 +56,6 @@ export interface DetectorContext extends IndexedNode {
      */
     has<T>(tag: WorkspaceTag<T>): boolean;
 
-    /** Values already recorded for `tag` on this node, in application order. */
-    valuesOf<T>(tag: WorkspaceTag<T>): readonly T[];
-
     /**
      * The nearest enclosing directory carrying `tag`, if any.
      *

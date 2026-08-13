@@ -31,60 +31,34 @@ export interface WorkspaceIndex {
      */
     withTag<T>(tag: WorkspaceTag<T>): readonly TaggedNode<T>[];
 
-    /**
-     * Nodes carrying a tag with `name` in **any** namespace, in discovery
-     * order.
-     *
-     * The deliberately cross-cutting counterpart to {@linkcode withTag}: use it
-     * to ask "every source file, whoever recognised it". Values from different
-     * namespaces are merged, so prefer {@linkcode withTag} unless the query is
-     * genuinely namespace-agnostic.
-     */
-    withTagName(name: string): readonly TaggedNode<unknown>[];
-
     /** Whether the node at `uri` carries `tag`. */
     has<T>(uri: vscode.Uri, tag: WorkspaceTag<T>): boolean;
-
-    /** Every tag on the node at `uri`, across all namespaces. */
-    tagsOf(uri: vscode.Uri): readonly WorkspaceTag[];
-
-    /**
-     * `true` when a scan limit stopped the walk, so the index may be
-     * incomplete. Consumers should avoid presenting results as exhaustive.
-     */
-    readonly truncated: boolean;
 }
 
 interface IndexEntry {
     readonly node: IndexedNode;
     /** Values per qualified tag name, in application order. */
     readonly tags: Map<string, unknown[]>;
-    /** Position in discovery order, so query results are stable. */
-    readonly sequence: number;
 }
 
 /**
  * Mutable {@linkcode WorkspaceIndex} used while building.
  *
- * Backed by three maps: entries by URI, URIs by qualified tag name (so
- * {@linkcode WorkspaceIndex.withTag} is proportional to the number of matches),
- * and qualified names by bare name (so {@linkcode WorkspaceIndex.withTagName}
- * fans out over the few namespaces that use it).
+ * Backed by two maps: entries by URI, and URIs by qualified tag name so
+ * {@linkcode withTag} is proportional to the number of matches rather than to
+ * the size of the index. Insertion order gives discovery order for free, since
+ * the walk reports shallower directories first.
  */
 export class MutableWorkspaceIndex implements WorkspaceIndex {
     private readonly entries = new Map<string, IndexEntry>();
     private readonly byQualifiedName = new Map<string, Set<string>>();
-    private readonly qualifiedNamesByName = new Map<string, Set<string>>();
-    private sequence = 0;
-
-    public truncated = false;
 
     /** Records `tag` on `node`, creating its entry on first use. */
     public add<T>(node: IndexedNode, tag: WorkspaceTag<T>, value: T | undefined): void {
         const key = node.uri.toString();
         let entry = this.entries.get(key);
         if (!entry) {
-            entry = { node, tags: new Map(), sequence: this.sequence++ };
+            entry = { node, tags: new Map() };
             this.entries.set(key, entry);
         }
 
@@ -99,83 +73,28 @@ export class MutableWorkspaceIndex implements WorkspaceIndex {
             values.push(value);
         }
 
-        addTo(this.byQualifiedName, tag.qualifiedName, key);
-        addTo(this.qualifiedNamesByName, tag.name, tag.qualifiedName);
+        let tagged = this.byQualifiedName.get(tag.qualifiedName);
+        if (!tagged) {
+            tagged = new Set();
+            this.byQualifiedName.set(tag.qualifiedName, tagged);
+        }
+        tagged.add(key);
     }
 
     /** @inheritdoc */
     public withTag<T>(tag: WorkspaceTag<T>): readonly TaggedNode<T>[] {
-        return this.collect([tag.qualifiedName]) as TaggedNode<T>[];
-    }
-
-    /** @inheritdoc */
-    public withTagName(name: string): readonly TaggedNode<unknown>[] {
-        return this.collect([...this.qualifiedNamesByName.get(name) ?? []]);
+        const matches: TaggedNode<T>[] = [];
+        for (const key of this.byQualifiedName.get(tag.qualifiedName) ?? []) {
+            const entry = this.entries.get(key);
+            if (entry) {
+                matches.push({ ...entry.node, values: (entry.tags.get(tag.qualifiedName) ?? []) as T[] });
+            }
+        }
+        return matches;
     }
 
     /** @inheritdoc */
     public has<T>(uri: vscode.Uri, tag: WorkspaceTag<T>): boolean {
         return this.entries.get(uri.toString())?.tags.has(tag.qualifiedName) ?? false;
     }
-
-    /** @inheritdoc */
-    public tagsOf(uri: vscode.Uri): readonly WorkspaceTag[] {
-        const entry = this.entries.get(uri.toString());
-        if (!entry) {
-            return [];
-        }
-        return [...entry.tags.keys()].map(qualifiedName => {
-            const separator = qualifiedName.indexOf(':');
-            return {
-                namespace: qualifiedName.slice(0, separator),
-                name: qualifiedName.slice(separator + 1),
-                qualifiedName,
-            } satisfies WorkspaceTag;
-        });
-    }
-
-    /** Values recorded for `tag` on `node`, used by detectors mid-build. */
-    public valuesOf<T>(uri: vscode.Uri, tag: WorkspaceTag<T>): readonly T[] {
-        return (this.entries.get(uri.toString())?.tags.get(tag.qualifiedName) ?? []) as T[];
-    }
-
-    private collect(qualifiedNames: readonly string[]): TaggedNode<unknown>[] {
-        const matches = new Map<string, TaggedNode<unknown>>();
-
-        for (const qualifiedName of qualifiedNames) {
-            for (const key of this.byQualifiedName.get(qualifiedName) ?? []) {
-                const entry = this.entries.get(key);
-                if (!entry) {
-                    continue;
-                }
-                const values = entry.tags.get(qualifiedName) ?? [];
-                const existing = matches.get(key);
-                if (existing) {
-                    // Same node matched under several namespaces: merge rather
-                    // than reporting it twice.
-                    matches.set(key, { ...existing, values: [...existing.values, ...values] });
-                } else {
-                    matches.set(key, { ...entry.node, values: [...values] });
-                }
-            }
-        }
-
-        return [...matches.keys()]
-            .sort((left, right) => sequenceOf(this.entries, left) - sequenceOf(this.entries, right))
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- keys come from `matches`
-            .map(key => matches.get(key)!);
-    }
-}
-
-function addTo(map: Map<string, Set<string>>, key: string, value: string): void {
-    let values = map.get(key);
-    if (!values) {
-        values = new Set();
-        map.set(key, values);
-    }
-    values.add(value);
-}
-
-function sequenceOf(entries: ReadonlyMap<string, IndexEntry>, key: string): number {
-    return entries.get(key)?.sequence ?? 0;
 }

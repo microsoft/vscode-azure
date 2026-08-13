@@ -6,7 +6,6 @@
 import type { PipelineRequest } from '@azure/core-rest-pipeline';
 import { createHttpHeaders } from '@azure/core-rest-pipeline';
 import { delay } from '@microsoft/vscode-azure-utils';
-import { expect } from 'chai';
 import { DedupeRequestPolicy } from '../../../src/rest/pipeline/DedupeRequestPolicy';
 import { makeRequest, makeResponse } from '../../mockPipeline';
 

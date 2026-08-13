@@ -5,7 +5,6 @@
 
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import { buildWorkspaceIndex } from '../../../src/utils/workspaceIndex/buildWorkspaceIndex';
 import type { DetectorContext, WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
@@ -59,20 +58,8 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             const index = await build(m, [csharpDetector, nodeDetector]);
 
-            expect(paths(index.withTag(CsSourceFile))).to.deep.equal(['App.cs']);
-            expect(paths(index.withTag(NodeSourceFile))).to.deep.equal(['app.js']);
-        });
-
-        it('finds every namespace with withTagName', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m);
-            addFile(m, '/repo/App.cs', '');
-            addFile(m, '/repo/app.js', '');
-
-            const index = await build(m, [csharpDetector, nodeDetector]);
-
-            expect(paths(index.withTagName(StandardTagNames.sourceFile)))
-                .to.deep.equal(['App.cs', 'app.js']);
+            expect(index.withTag(CsSourceFile).map(n => n.relativePath)).to.deep.equal(['App.cs']);
+            expect(index.withTag(NodeSourceFile).map(n => n.relativePath)).to.deep.equal(['app.js']);
         });
 
         it('rejects a detector applying another namespace\'s tag', async () => {
@@ -112,9 +99,10 @@ describe('buildWorkspaceIndex (unit)', () => {
             addFile(m, '/repo/host.json', '{}');
 
             const index = await build(m, [csharpDetector, functionsDetectorFor(['.cs'])]);
-            const root = index.tagsOf(m.vscode.Uri.file('/repo')).map(tag => tag.qualifiedName);
+            const root = m.vscode.Uri.file('/repo');
 
-            expect(root).to.have.members(['csharp:projectRoot', 'functions:projectRoot']);
+            expect(index.has(root, CsProjectRoot)).to.be.true;
+            expect(index.has(root, FunctionsProject)).to.be.true;
         });
 
         it('accumulates repeated values for one tag', async () => {
@@ -138,20 +126,7 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             const index = await build(m, [csharpDetector]);
 
-            expect(index.tagsOf(m.vscode.Uri.file('/repo/readme.md'))).to.be.empty;
             expect(index.has(m.vscode.Uri.file('/repo/readme.md'), CsSourceFile)).to.be.false;
-        });
-
-        it('reports truncation from the underlying walk', async () => {
-            const m = createMockVsCode();
-            addWorkspace(m);
-            for (let i = 0; i < 20; i++) {
-                addFile(m, `/repo/dir${i}/App.cs`, '');
-            }
-
-            const index = await build(m, [csharpDetector], { maxEntries: 5 });
-
-            expect(index.truncated).to.be.true;
         });
     });
 
@@ -333,13 +308,8 @@ function functionsDetectorFor(suffixes: readonly string[]): WorkspaceDetector {
 function build(
     m: MockVsCodeResult,
     detectors: readonly WorkspaceDetector[],
-    options?: Parameters<typeof buildWorkspaceIndex>[3],
 ): Promise<WorkspaceIndex> {
-    return buildWorkspaceIndex(m.vscode, detectors, undefined, options);
-}
-
-function paths(nodes: readonly { relativePath: string }[]): string[] {
-    return nodes.map(item => item.relativePath);
+    return buildWorkspaceIndex(m.vscode, detectors);
 }
 
 function addWorkspace(m: MockVsCodeResult, path = '/repo'): void {

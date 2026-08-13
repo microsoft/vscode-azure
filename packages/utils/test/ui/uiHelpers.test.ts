@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { getWorkspaceFolder, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../src/ui/uiHelpers';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import type { IVsCode } from '../../src/vscode/IVsCode';

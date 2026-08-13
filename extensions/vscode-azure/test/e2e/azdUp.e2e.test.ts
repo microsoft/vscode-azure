@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describeLongRunning } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';

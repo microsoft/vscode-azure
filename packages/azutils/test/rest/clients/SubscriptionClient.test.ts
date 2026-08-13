@@ -5,7 +5,6 @@
 
 import { collectPageItems } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { SubscriptionClient } from '../../../src/rest/clients/SubscriptionClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';

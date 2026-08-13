@@ -5,7 +5,6 @@
 
 import { FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { expect } from 'chai';
 import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from '../../../../src/tree/resources/functions/FunctionApp';
 import { makeFunctionApp } from './mockFunctionApp';
 
