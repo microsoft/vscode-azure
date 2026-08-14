@@ -9,10 +9,6 @@ import type * as vscode from 'vscode';
 /**
  * Directories never descended into: generated output, dependency caches, and
  * VCS metadata. Skipping these is most of what makes a walk affordable.
- *
- * Plain names rather than globs, because this is tested once per directory
- * entry: a `Set` lookup is ~3000x faster than `matchesGlob`, which recompiles
- * its pattern on every call. Nothing here needs more than a name match.
  */
 export const defaultExcludedDirectories: ReadonlySet<string> = new Set([
     '.git', '.hg', '.svn',
