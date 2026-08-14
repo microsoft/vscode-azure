@@ -8,8 +8,8 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    delay, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
-    type DataProvider, type DataProviderChangeEvent, type Disposable
+    delay, Disposable, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
+    type DataProvider, type DataProviderChangeEvent
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { ISubscriptionResolver } from '../../services';
@@ -425,7 +425,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
         }
         this.knownDeployments.clear();
         this.activePolls.clear();
-        this.disposables.forEach(disposable => void disposable.dispose());
+        Disposable.disposeAll(this.disposables);
     }
 
     /**

@@ -214,7 +214,7 @@ export class WorkspaceDataService implements IWorkspaceDataService {
 
     /** @inheritdoc */
     public dispose(): void {
-        Disposable.from(...this.disposables).dispose();
+        Disposable.disposeAll(this.disposables);
     }
 
     /**
