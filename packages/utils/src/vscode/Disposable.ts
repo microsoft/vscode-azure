@@ -38,14 +38,8 @@ export namespace Disposable {
      * Disposable.disposeAll(this.subscription, this.disposables, maybeUndefined);
      */
     export function disposeAll(...disposables: readonly unknown[]): void {
-        disposeEach(disposables);
-    }
-
-    function disposeEach(disposables: readonly unknown[]): void {
-        for (const disposable of disposables) {
-            if (Array.isArray(disposable)) {
-                disposeEach(disposable as readonly unknown[]);
-            } else if (test(disposable)) {
+        for (const disposable of disposables.flat(Infinity)) {
+            if (test(disposable)) {
                 try {
                     disposable.dispose();
                 } catch {
