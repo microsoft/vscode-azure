@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { basename } from '@microsoft/vscode-azure-utils';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { createTag, StandardTagNames } from '../../../src/utils/workspaceIndex/tags';
 
@@ -22,60 +23,60 @@ import { createTag, StandardTagNames } from '../../../src/utils/workspaceIndex/t
  *   Shipped detectors tag one file per project and read nothing.
  */
 
-export const CsProjectRoot = createTag('csharp', StandardTagNames.projectRoot);
+export const CsProjectFile = createTag('csharp', StandardTagNames.projectFile);
 export const CsSourceFile = createTag('csharp', StandardTagNames.sourceFile);
+export const NodeProjectFile = createTag('node', StandardTagNames.projectFile);
 export const NodeSourceFile = createTag('node', StandardTagNames.sourceFile);
-export const AttributedRoot = createTag('attributes', StandardTagNames.projectRoot);
 export const Attribute = createTag('attributes', 'Attribute');
 
-/** Tags `.cs` files, and the directories holding a `.csproj`. */
+/** Tags `.csproj` project files and the `.cs` sources they build. */
 export const csharpDetector: WorkspaceDetector = {
     id: 'csharp',
     namespace: 'csharp',
-    directories: true,
-    files: { suffixes: ['.cs'] },
+    files: { suffixes: ['.csproj', '.cs'] },
     inspect(item) {
-        if (item.isDirectory) {
-            if ([...item.fileNames].some(name => name.endsWith('.csproj'))) {
-                item.tag(CsProjectRoot);
-            }
+        if (item.uri.path.endsWith('.csproj')) {
+            item.tag(CsProjectFile);
         } else {
             item.tag(CsSourceFile);
         }
     },
 };
 
-/** Tags `.js` files, so that `node:sourceFile` and `csharp:sourceFile` coexist. */
+/**
+ * Tags `package.json` and the sources beside it, so that `node:sourceFile` and
+ * `csharp:sourceFile` coexist without colliding.
+ */
 export const nodeDetector: WorkspaceDetector = {
     id: 'node',
     namespace: 'node',
-    files: { suffixes: ['.js'] },
-    inspect(item) { item.tag(NodeSourceFile); },
+    files: {
+        names: ['package.json'],
+        suffixes: ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts'],
+    },
+    inspect(item) {
+        if (basename(item.uri) === 'package.json') {
+            item.tag(NodeProjectFile);
+        } else {
+            item.tag(NodeSourceFile);
+        }
+    },
 };
 
 /**
- * Records every `[Name("...")]` attribute in the C# sources of a directory
- * holding `marker.txt`.
+ * Records every `[Name("...")]` attribute in each file the C# detector
+ * recognised as source.
  *
  * Nothing ships in this shape yet, and it is the one that stresses the index
- * hardest: it layers on another namespace's tags (only files the C# detector
- * called source), reads file contents, looks at a node's neighbours, and
+ * hardest: it layers on another namespace's tags, reads file contents, and
  * records several values for one tag on a single file.
  */
 export const attributeDetector: WorkspaceDetector = {
     id: 'attributes',
     namespace: 'attributes',
-    directories: true,
     files: { suffixes: ['.cs'] },
     async inspect(item) {
-        if (item.isDirectory) {
-            if (item.fileNames.has('marker.txt')) {
-                item.tag(AttributedRoot);
-            }
-            return;
-        }
-
-        if (!item.has(CsSourceFile) || !item.fileNames.has('marker.txt')) {
+        if (!item.has(CsSourceFile)) {
             return;
         }
         const source = await item.text() ?? '';

@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable, EventEmitter, IDebounceScheduler, IVsCode, relativePath } from '@microsoft/vscode-azure-utils';
-import { inject, injectable, multiInject, type ServiceIdentifier } from 'inversify';
+import { DebounceScheduler, Disposable, EventEmitter, IDebounceScheduler, IVsCode, relativePath } from '@microsoft/vscode-azure-utils';
+import { inject, injectable, multiInject, unmanaged, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { defaultExcludedDirectories } from './walkWorkspace';
 import { buildWorkspaceIndex } from './buildWorkspaceIndex';
@@ -12,7 +12,7 @@ import { IWorkspaceDetector, type WorkspaceDetector } from './WorkspaceDetector'
 import type { WorkspaceIndex } from './WorkspaceIndex';
 
 /** Quiet period before a burst of file events triggers a rebuild. */
-export const rebuildDebounceMs = 500;
+const rebuildDebounceMs = 500;
 
 export const IWorkspaceIndexService: ServiceIdentifier<IWorkspaceIndexService> = Symbol.for('IWorkspaceIndexService');
 
@@ -52,14 +52,14 @@ export interface IWorkspaceIndexService {
 export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable {
     private readonly changeEmitter = new EventEmitter<void>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
-    private index: Promise<WorkspaceIndex> | undefined;
+    private indexPromise: Promise<WorkspaceIndex> | undefined;
 
     public readonly onDidChangeIndex = this.changeEmitter.event;
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @multiInject(IWorkspaceDetector) private readonly detectors: readonly WorkspaceDetector[],
-        @inject(IDebounceScheduler) private readonly scheduler: IDebounceScheduler,
+        @unmanaged() private readonly scheduler: IDebounceScheduler = new DebounceScheduler(rebuildDebounceMs),
     ) {
         this.disposables.push(scheduler);
 
@@ -83,12 +83,12 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
 
     /** @inheritdoc */
     public async getIndex(token?: vscode.CancellationToken): Promise<WorkspaceIndex> {
-        this.index ??= buildWorkspaceIndex(this.code, this.detectors, token);
+        this.indexPromise ??= buildWorkspaceIndex(this.code, this.detectors, token);
         try {
-            return await this.index;
+            return await this.indexPromise;
         } catch (error) {
             // Never retain a failed or cancelled build, so the next caller retries.
-            this.index = undefined;
+            this.indexPromise = undefined;
             throw error;
         }
     }
@@ -98,7 +98,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
     }
 
     private onFileEvent(uri: vscode.Uri): void {
-        if (!this.index || this.isExcluded(uri)) {
+        if (!this.indexPromise || this.isExcluded(uri)) {
             return;
         }
         this.scheduler.debounce(() => { this.invalidate(); });
@@ -123,7 +123,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
     }
 
     private invalidate(): void {
-        this.index = undefined;
+        this.indexPromise = undefined;
         this.changeEmitter.fire();
     }
 }
@@ -133,7 +133,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
  * if none did.
  *
  * Kept as narrow as the declared interests allow so VS Code discards most
- * events before the extension is woken for them. A detector that declares no
+ * events before the extension is notified of them. A detector that declares no
  * file interest contributes nothing: it is asking to see directories, and a
  * directory only appears or disappears along with the files inside it.
  */
@@ -148,7 +148,11 @@ export function watchPattern(detectors: readonly WorkspaceDetector[]): string | 
         }
     }
 
-    return alternatives.size > 0
-        ? `**/{${[...alternatives].sort().join(',')}}`
-        : undefined;
+    const sorted = [...alternatives].sort();
+    if (sorted.length === 0) {
+        return undefined;
+    }
+    // A one-element brace list is not an alternation -- `{host.json}` matches
+    // that literal name, braces included -- so only brace two or more.
+    return sorted.length === 1 ? `**/${sorted[0]}` : `**/{${sorted.join(',')}}`;
 }

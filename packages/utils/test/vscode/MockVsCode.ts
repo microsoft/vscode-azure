@@ -598,10 +598,11 @@ export function fireFileSystemEvent(
     kind: 'create' | 'change' | 'delete' = 'change',
 ): void {
     const uri = mock.vscode.Uri.file(path);
-    const name = path.split('/').pop() ?? path;
 
     for (const watcher of mock.fileSystemWatchers) {
-        if (typeof watcher.pattern !== 'string' || !matchesWatchGlob(watcher.pattern, name)) {
+        // Node's own glob matcher, rather than a hand-rolled approximation of
+        // the brace/star syntax VS Code accepts.
+        if (typeof watcher.pattern !== 'string' || !matchesGlob(path, watcher.pattern)) {
             continue;
         }
         if (kind === 'create') {
@@ -612,16 +613,6 @@ export function fireFileSystemEvent(
             watcher.fireChange(uri);
         }
     }
-}
-
-function matchesWatchGlob(pattern: string, fileName: string): boolean {
-    const alternatives = pattern.includes('{')
-        ? pattern.slice(pattern.indexOf('{') + 1, pattern.lastIndexOf('}')).split(',')
-        : [pattern.replace('**/', '')];
-
-    return alternatives.some(alternative => alternative.startsWith('*')
-        ? fileName.endsWith(alternative.slice(1))
-        : alternative === fileName);
 }
 
 /**

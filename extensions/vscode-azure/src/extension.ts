@@ -11,11 +11,9 @@ import {
     CommandRegistry,
     createOutputChannel,
     createTelemetryReporter,
-    DebounceScheduler,
     IActionExecutor,
     ICodeContext,
     ICommandRegistry,
-    IDebounceScheduler,
     IExtensionContext,
     IOutputChannel,
     IProcessExecutor,
@@ -35,7 +33,7 @@ import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
 import { registerTrees } from './tree/registerTrees';
-import { IWorkspaceIndexService, rebuildDebounceMs, WorkspaceIndexService } from './utils/workspaceIndex/WorkspaceIndexService';
+import { IWorkspaceIndexService, WorkspaceIndexService } from './utils/workspaceIndex/WorkspaceIndexService';
 
 /**
  * Public API surface returned from {@linkcode activateInternal} (and thus from
@@ -151,9 +149,6 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
 
     // Detectors are contributed by products and gathered here, so adding a
     // product adds a detector to the one shared walk rather than a second pass.
-    container.bind(IDebounceScheduler).toDynamicValue(() => {
-        return new DebounceScheduler(rebuildDebounceMs);
-    }).inSingletonScope().onActivation(pushDisposable);
     container.bind(IWorkspaceIndexService).to(WorkspaceIndexService)
         .inSingletonScope().onActivation(pushDisposable);
 

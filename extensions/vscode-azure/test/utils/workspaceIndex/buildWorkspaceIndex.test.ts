@@ -3,26 +3,44 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError } from '@microsoft/vscode-azure-utils';
+import { basename, CancellationError } from '@microsoft/vscode-azure-utils';
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { buildWorkspaceIndex } from '../../../src/utils/workspaceIndex/buildWorkspaceIndex';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { createTag } from '../../../src/utils/workspaceIndex/tags';
-import { Attribute, attributeDetector, AttributedRoot, csharpDetector, CsProjectRoot, CsSourceFile, nodeDetector, NodeSourceFile } from './mockDetectors';
+import { Attribute, attributeDetector, csharpDetector, CsProjectFile, CsSourceFile, nodeDetector, NodeProjectFile, NodeSourceFile } from './mockDetectors';
 
 describe('buildWorkspaceIndex (unit)', () => {
     describe('namespacing', () => {
         it('keeps same-named tags from different namespaces apart', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/Api.csproj', '');
             addWorkspaceFile(m, '/repo/App.cs', '');
+            addWorkspaceFile(m, '/repo/package.json', '');
             addWorkspaceFile(m, '/repo/app.js', '');
 
             const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, nodeDetector]);
 
+            expect(index.withTag(CsProjectFile).map(u => u.path)).to.deep.equal(['/repo/Api.csproj']);
             expect(index.withTag(CsSourceFile).map(u => u.path)).to.deep.equal(['/repo/App.cs']);
+            expect(index.withTag(NodeProjectFile).map(u => u.path)).to.deep.equal(['/repo/package.json']);
             expect(index.withTag(NodeSourceFile).map(u => u.path)).to.deep.equal(['/repo/app.js']);
+        });
+
+        it('tags every flavour of Node source file', async () => {
+            const m = createMockVsCode();
+            addWorkspaceFolder(m, '/repo');
+            const names = ['a.js', 'b.mjs', 'c.cjs', 'd.ts', 'e.mts', 'f.cts'];
+            for (const name of names) {
+                addWorkspaceFile(m, `/repo/${name}`, '');
+            }
+
+            const index = await buildWorkspaceIndex(m.vscode, [nodeDetector]);
+
+            expect(index.withTag(NodeSourceFile).map(u => basename(u)).sort())
+                .to.deep.equal([...names].sort());
         });
 
         it('rejects a detector applying another namespace\'s tag', async () => {
@@ -50,20 +68,18 @@ describe('buildWorkspaceIndex (unit)', () => {
         it('records many tags on one node', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/Api.csproj', '');
-            addWorkspaceFile(m, '/repo/marker.txt', '');
+            addWorkspaceFile(m, '/repo/Orders.cs', '[Name("PlaceOrder")]');
 
             const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
-            const root = m.vscode.Uri.file('/repo');
+            const file = m.vscode.Uri.file('/repo/Orders.cs');
 
-            expect(index.has(root, CsProjectRoot)).to.be.true;
-            expect(index.has(root, AttributedRoot)).to.be.true;
+            expect(index.has(file, CsSourceFile)).to.be.true;
+            expect(index.has(file, Attribute)).to.be.true;
         });
 
         it('accumulates repeated values for one tag', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/marker.txt', '');
             addWorkspaceFile(m, '/repo/Orders.cs',
                 '[Name("PlaceOrder")]\n[Name("CancelOrder")]');
 
@@ -119,7 +135,6 @@ describe('buildWorkspaceIndex (unit)', () => {
         it('runs detectors in registration order, so later ones see earlier tags', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/marker.txt', '');
             addWorkspaceFile(m, '/repo/App.cs', '[Name("Ping")]');
 
             // The attribute detector only inspects files the C# detector has
@@ -130,16 +145,14 @@ describe('buildWorkspaceIndex (unit)', () => {
             expect(index.valuesOf(file, Attribute)).to.deep.equal(['Ping']);
         });
 
-        it('does not tag files in a directory without the marker', async () => {
+        it('tags nothing when the detector it layers on did not run', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/api/marker.txt', '');
-            addWorkspaceFile(m, '/repo/api/Inside.cs', '[Name("Inside")]');
-            addWorkspaceFile(m, '/repo/other/Outside.cs', '[Name("Outside")]');
+            addWorkspaceFile(m, '/repo/App.cs', '[Name("Ping")]');
 
-            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
+            const index = await buildWorkspaceIndex(m.vscode, [attributeDetector]);
 
-            expect(index.withTag(Attribute).map(u => u.path)).to.deep.equal(['/repo/api/Inside.cs']);
+            expect(index.withTag(Attribute)).to.be.empty;
         });
     });
 

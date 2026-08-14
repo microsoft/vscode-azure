@@ -35,7 +35,7 @@ describe('WorkspaceIndexService (unit)', () => {
         const { service, mock: m } = createService();
 
         const patterns = m.workspace.createFileSystemWatcher.mock.calls.map(call => call.arguments[0]);
-        expect(patterns).to.deep.equal(['**/{host.json}']);
+        expect(patterns).to.deep.equal(['**/host.json']);
         // Strings only: a RelativePattern would start a second recursive watch.
         expect(patterns.every(pattern => typeof pattern === 'string')).to.be.true;
         service.dispose();
@@ -151,6 +151,10 @@ describe('WorkspaceIndexService (unit)', () => {
 
             expect(watchPattern([functionsDetector, azdDetector, suffixes]))
                 .to.equal('**/{*.csproj,azure.yaml,azure.yml,host.json}');
+        });
+
+        it('does not brace a single interest, which would match literally', () => {
+            expect(watchPattern([functionsDetector])).to.equal('**/host.json');
         });
 
         it('watches nothing when no detector declares files', () => {
