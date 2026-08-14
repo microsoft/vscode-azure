@@ -48,13 +48,30 @@ describe('websiteUrl (unit)', () => {
         expect(getWebsiteUrl(resource)).to.be.undefined;
     });
 
-    it('should not overwrite an existing url with an unusable one', () => {
+    it('should preserve a host that carries a port', () => {
+        const resource = makeGenericResource();
+
+        setWebsiteUrl(resource, 'contoso.example.com:8080');
+
+        expect(getWebsiteUrl(resource)).to.equal('https://contoso.example.com:8080/');
+    });
+
+    it('should clear a stale url when the resource no longer exposes one', () => {
         const resource = makeGenericResource();
 
         setWebsiteUrl(resource, 'contoso.azurewebsites.net');
         setWebsiteUrl(resource, undefined);
 
-        expect(getWebsiteUrl(resource)).to.equal('https://contoso.azurewebsites.net/');
+        expect(getWebsiteUrl(resource)).to.be.undefined;
+    });
+
+    it('should clear a stale url when the new endpoint is unusable', () => {
+        const resource = makeGenericResource();
+
+        setWebsiteUrl(resource, 'contoso.azurewebsites.net');
+        setWebsiteUrl(resource, 'ftp://contoso.example.com');
+
+        expect(getWebsiteUrl(resource)).to.be.undefined;
     });
 
     it('should return undefined for resources without a website', () => {

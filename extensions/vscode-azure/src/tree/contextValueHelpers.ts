@@ -27,6 +27,12 @@ export function combineContextValues(...contextValues: string[]): string {
  * lacks the context value; the data layer fires a change event when
  * enrichment lands, which re-renders the node with it.
  *
+ * Today only `FunctionAppDataProvider` attaches a website URL, so Function Apps
+ * are the only nodes that can currently carry the Browse Website context value.
+ * Dedicated App Service and Static Web Apps providers will attach one too when
+ * those products move into the monorepo; no change to this helper, the command,
+ * or the view providers is needed when they do.
+ *
  * @param additional - Product-specific context values for this node.
  */
 export function resourceContextValue(resource: GenericResource, ...additional: string[]): string {

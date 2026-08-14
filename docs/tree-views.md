@@ -118,7 +118,9 @@ Enrichment is also how a resource advertises a *capability* that is not derivabl
 
 A symbol is used as the property key so the capability can never collide with an ARM property, and so it can be detected exactly instead of by re-checking the resource type. Making any new resource type browsable therefore requires no change to the command or to the generic view provider — only that its data provider call `setWebsiteUrl()` during `enrich()`. A resource type with a dedicated view provider must add the context value itself (via the shared `resourceContextValue()` helper in `src/tree/contextValueHelpers.ts`); everything else is covered by `GenericAzureViewProvider`.
 
-Because the context value is derived from enriched state, a node rendered before enrichment lands simply lacks it; the `onDidChange` fired at step 4 re-renders the node with the capability present.
+Because the context value is derived from enriched state, a node rendered before enrichment lands simply lacks it; the `onDidChange` fired at step 4 re-renders the node with the capability present. `setWebsiteUrl()` also *clears* a previously attached URL when the resource stops reporting one, so a node cannot keep advertising a website that no longer resolves.
+
+At present `FunctionAppDataProvider` is the only provider that attaches a website URL; dedicated App Service and Static Web Apps providers will do the same when those products move into the monorepo.
 
 ## View Layer
 

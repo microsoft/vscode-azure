@@ -47,8 +47,9 @@ export class BrowseWebsite implements ManagedCommand {
             throw new Error(this.code.l10n.t('Select an Azure resource with a website.'));
         }
 
-        // The context value only appears once enrichment has attached the URL,
-        // but the command can also be invoked programmatically before then.
+        // Enrichment attaches the URL in the background, so a node can be acted
+        // on before it lands. Awaiting the in-flight enrichment (a no-op when
+        // none is pending) closes the common race.
         const url = getWebsiteUrl(await this.dataTree.whenEnriched(resource));
         if (!url) {
             throw new Error(this.code.l10n.t('The selected resource does not have a website.'));
