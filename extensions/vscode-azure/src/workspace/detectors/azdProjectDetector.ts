@@ -32,6 +32,6 @@ export const AzdProjectTag: WorkspaceTag<MarkerFileMetadata> =
  */
 export function createAzdProjectDetector(): WorkspaceDetector {
     return createMarkerFileDetector(AzdNamespace, [
-        { tag: AzdProjectTag, patterns: ['**/azure.yaml', '**/azure.yml'] },
+        { tag: AzdProjectTag, fileNames: ['azure.yaml', 'azure.yml'] },
     ]);
 }

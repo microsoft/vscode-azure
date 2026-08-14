@@ -3,23 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as vscode from 'vscode';
+
 /**
- * Directories never worth scanning: dependency caches, build output, and VCS
- * metadata. Marker files inside these are almost always vendored copies of
- * someone else's project rather than the user's own.
+ * Directories the scan never descends into: dependency caches, build output,
+ * and VCS metadata. Marker files inside these are almost always vendored copies
+ * of someone else's project rather than the user's own.
  *
- * This exists because stable
- * {@linkcode vscode.workspace.findFiles findFiles} cannot honor `.gitignore` --
- * it hard-codes `useIgnoreFiles: { local: false }` internally -- and it drops
- * the user's `files.exclude` as soon as an explicit `exclude` argument is
- * passed. A curated list is therefore the only exclusion mechanism available.
- *
- * When `findFiles2` (which accepts `useIgnoreFiles`) leaves proposed API and
- * lands in our `@types/vscode` baseline, this constant and
- * {@linkcode DefaultScanMaxResults} should be replaced by real ignore-file
- * handling. Keeping both here means that swap touches one file.
+ * A curated list rather than `.gitignore`: honoring ignore files needs
+ * `findFiles2`, which is still proposed API and absent from our
+ * `@types/vscode` baseline. Keeping the list here means that swap touches one
+ * file.
  */
-export const ExcludedScanDirectories: readonly string[] = [
+export const ExcludedScanDirectories: ReadonlySet<string> = new Set([
     '.git',
     '.hg',
     '.svn',
@@ -40,23 +36,24 @@ export const ExcludedScanDirectories: readonly string[] = [
     'target',
     'venv',
     '__pycache__',
-];
+]);
 
 /**
- * Glob passed as the `exclude` argument of every index scan, built from
+ * Cap on files and folders visited per workspace folder per scan.
+ *
+ * Scans run inside interactive wizard steps and tree refreshes, so an unbounded
+ * walk of a pathological tree is not acceptable. Generous enough that a
+ * realistic repository is fully indexed.
+ */
+export const MaxScanEntries = 20_000;
+
+/**
+ * Whether {@linkcode uri} lies inside one of
  * {@linkcode ExcludedScanDirectories}.
  *
- * Matches the excluded directories at any depth, so a marker file nested
- * anywhere beneath one is skipped.
+ * Used to drop file-change events from directories the scan would not have
+ * walked (an `npm install` churning `node_modules` must not trigger rescans).
  */
-export const DefaultScanExcludeGlob = `**/{${ExcludedScanDirectories.join(',')}}/**`;
-
-/**
- * Cap on results per glob per workspace folder during a scan.
- *
- * Scans run inside interactive wizard steps and tree refreshes, so an
- * unbounded walk of a monorepo is not acceptable. The bound is generous enough
- * that a realistic repository is fully indexed, and acts purely as a safety
- * valve on pathological trees.
- */
-export const DefaultScanMaxResults = 512;
+export function isExcludedPath(uri: vscode.Uri): boolean {
+    return uri.path.split('/').some(segment => ExcludedScanDirectories.has(segment));
+}

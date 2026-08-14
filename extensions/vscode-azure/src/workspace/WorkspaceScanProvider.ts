@@ -8,13 +8,13 @@ import {
     type DataProvider, type IActionExecutor, type IVsCode,
 } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import type { WorkspaceDetector, WorkspaceScanContext, WorkspaceTagging } from './WorkspaceDetector';
+import type { WorkspaceCandidate, WorkspaceDetector, WorkspaceTagging } from './WorkspaceDetector';
 import { entryNodeId, folderNodeId, isWorkspaceEntry, isWorkspaceFolderIndexNode, type WorkspaceEntry, type WorkspaceFolderIndexNode, type WorkspaceIndexNode } from './WorkspaceEntry';
-import { DefaultScanExcludeGlob, DefaultScanMaxResults } from './workspaceExclusions';
+import { ExcludedScanDirectories, MaxScanEntries } from './workspaceExclusions';
 import type { AppliedTag } from './WorkspaceTag';
 
-/** Max detectors scanned concurrently within a single workspace folder. */
-const DetectorConcurrency = 5;
+/** Directories read concurrently while walking a workspace folder. */
+const ReadDirectoryConcurrency = 8;
 
 /**
  * The single {@linkcode DataProvider} backing the workspace index.
@@ -25,11 +25,15 @@ const DetectorConcurrency = 5;
  * TTL-based staleness, keyed eviction, and background enrichment without any
  * bespoke caching code.
  *
+ * Scanning a folder is one breadth-first walk whose every file and folder is
+ * offered to every detector, so the cost of a scan is the cost of listing the
+ * workspace once, independent of how many detectors are registered.
+ *
  * `DataItemTree` dispatches each node to the *first* provider whose `canHandle`
  * matches, which would let only one detector ever tag a given folder. So this
- * one provider handles every node and fans out to the registered detectors
- * itself, merging their taggings by URI. Detector failures are contained per
- * detector, so a broken detector cannot blank the index.
+ * one provider handles every node and fans out to the detectors itself, merging
+ * their taggings by URI. Detector failures are contained per detector, so a
+ * broken detector cannot blank the index.
  *
  * @internal Owned by {@linkcode WorkspaceDataService}; not part of the public surface.
  */
@@ -77,20 +81,15 @@ export class WorkspaceScanProvider implements DataProvider<WorkspaceIndexNode> {
         const contributors = this.detectors.filter(
             detector => detector.enrich && resource.tags.some(applied => applied.tag.namespace === detector.namespace),
         );
-        if (contributors.length === 0) {
-            return false;
-        }
 
-        const context = this.createScanContext(resource.folder);
-        const limiter = new Limiter<void>(DetectorConcurrency);
-        await Promise.all(contributors.map(detector => limiter.queue(async () => {
+        await Promise.all(contributors.map(async detector => {
             try {
-                await detector.enrich!(resource, context); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- filtered on `detector.enrich` above
+                await detector.enrich!(resource, this.code); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- filtered on `detector.enrich` above
             } catch (error) {
                 this.executor.output.warn(this.code.l10n.t(
                     '[workspace] detector {0} enrich failed: {1}', detector.namespace, stringifyError(error)));
             }
-        })));
+        }));
 
         return false;
     }
@@ -105,29 +104,89 @@ export class WorkspaceScanProvider implements DataProvider<WorkspaceIndexNode> {
     }
 
     /**
-     * Scan one workspace folder with every detector and merge the results.
-     *
-     * Each detector is isolated: a rejection is logged and treated as "no
-     * taggings" so the remaining detectors' entries still land in the index.
+     * Walk one workspace folder breadth-first, offering everything found to
+     * every detector, and merge the resulting taggings into entries.
      */
     private async scanFolder(node: WorkspaceFolderIndexNode): Promise<WorkspaceEntry[]> {
-        const context = this.createScanContext(node.folder);
-        const limiter = new Limiter<readonly WorkspaceTagging[]>(DetectorConcurrency);
+        const taggings: WorkspaceTagging[] = [];
+        // Detectors that already threw during this scan. Dropped for the rest of
+        // the folder so one broken detector cannot log once per file.
+        const faulted = new Set<string>();
+        const limiter = new Limiter<[string, vscode.FileType][]>(ReadDirectoryConcurrency);
 
-        const results = await Promise.all(this.detectors.map(detector => limiter.queue(async () => {
+        let visited = 0;
+        let truncated = false;
+        let level = [node.folder.uri];
+
+        while (level.length > 0 && !truncated) {
+            const listings = await Promise.all(level.map(dir => limiter.queue(() => this.readDirectory(dir))));
+            const next: vscode.Uri[] = [];
+
+            for (let i = 0; i < level.length && !truncated; i++) {
+                for (const [name, type] of listings[i]) {
+                    if (++visited > MaxScanEntries) {
+                        truncated = true;
+                        break;
+                    }
+
+                    const isDirectory = (type & this.code.FileType.Directory) !== 0;
+                    if (isDirectory && ExcludedScanDirectories.has(name)) {
+                        continue;
+                    }
+
+                    const uri = this.code.Uri.joinPath(level[i], name);
+                    this.visitCandidate({ uri, name, isDirectory, folder: node.folder }, taggings, faulted);
+
+                    // Symlinked directories are not followed, to avoid cycles.
+                    if (isDirectory && (type & this.code.FileType.SymbolicLink) === 0) {
+                        next.push(uri);
+                    }
+                }
+            }
+
+            level = next;
+        }
+
+        if (truncated) {
+            this.executor.output.warn(this.code.l10n.t(
+                '[workspace] stopped scanning {0} after {1} entries; some projects may be missing',
+                node.folder.name, MaxScanEntries));
+        }
+
+        const entries = this.mergeTaggings(node, taggings);
+        this.executor.output.debug(`[workspace] scanned ${node.folder.name}: visited=${visited} entries=${entries.length}`);
+        return entries;
+    }
+
+    /** List a directory, treating an unreadable one as empty. */
+    private async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
+        try {
+            return await this.code.workspace.fs.readDirectory(uri);
+        } catch (error) {
+            // Permissions, a race with a delete, a broken remote mount: skip the
+            // directory rather than failing the whole scan.
+            this.executor.output.debug(`[workspace] could not read ${uri.toString()}: ${stringifyError(error)}`);
+            return [];
+        }
+    }
+
+    /** Offer one candidate to every detector that has not already faulted. */
+    private visitCandidate(candidate: WorkspaceCandidate, into: WorkspaceTagging[], faulted: Set<string>): void {
+        for (const detector of this.detectors) {
+            if (faulted.has(detector.namespace)) {
+                continue;
+            }
             try {
-                const taggings = await detector.detect(context);
-                return this.filterToNamespace(detector, taggings);
+                const results = detector.visit(candidate);
+                if (results && results.length > 0) {
+                    into.push(...this.filterToNamespace(detector, results));
+                }
             } catch (error) {
+                faulted.add(detector.namespace);
                 this.executor.output.warn(this.code.l10n.t(
                     '[workspace] detector {0} failed: {1}', detector.namespace, stringifyError(error)));
-                return [];
             }
-        })));
-
-        const entries = this.mergeTaggings(node, results.flat());
-        this.executor.output.debug(`[workspace] scanned ${node.folder.name}: entries=${entries.length} detectors=${this.detectors.length}`);
-        return entries;
+        }
     }
 
     /**
@@ -176,30 +235,5 @@ export class WorkspaceScanProvider implements DataProvider<WorkspaceIndexNode> {
             }
         }
         return [...byUri.values()];
-    }
-
-    /**
-     * Build the per-scan context. The `findFiles` cache lives on the context, so
-     * repeated globs are coalesced within a single folder scan but never reused
-     * across scans (which would defeat invalidation).
-     */
-    private createScanContext(folder: vscode.WorkspaceFolder): WorkspaceScanContext {
-        const inFlight = new Map<string, Promise<readonly vscode.Uri[]>>();
-
-        return {
-            code: this.code,
-            folder,
-            findFiles: (pattern: string) => {
-                let search = inFlight.get(pattern);
-                if (!search) {
-                    const relative = new this.code.RelativePattern(folder, pattern);
-                    search = Promise.resolve(
-                        this.code.workspace.findFiles(relative, DefaultScanExcludeGlob, DefaultScanMaxResults),
-                    );
-                    inFlight.set(pattern, search);
-                }
-                return search;
-            },
-        };
     }
 }

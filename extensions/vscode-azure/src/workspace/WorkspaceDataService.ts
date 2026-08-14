@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    DataItemTree, DebounceScheduler, Disposable, EventEmitter, InflightMap, Roots, stringifyError, subtreeOf,
+    DataItemTree, DebounceScheduler, Disposable, EventEmitter, InflightMap, Roots, basename, stringifyError, subtreeOf,
     type Event, type IActionExecutor, type IDebounceScheduler, type IVsCode,
 } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import type { WorkspaceDetector } from './WorkspaceDetector';
 import { folderNodeId, isWorkspaceEntry, type WorkspaceEntry, type WorkspaceFolderIndexNode, type WorkspaceIndexNode } from './WorkspaceEntry';
+import { isExcludedPath } from './workspaceExclusions';
 import { WorkspaceScanProvider } from './WorkspaceScanProvider';
 import type { WorkspaceTag } from './WorkspaceTag';
 
@@ -20,7 +21,7 @@ const WatchDebounceMs = 500;
 /**
  * How long a folder's scan results stay fresh.
  *
- * Watchers catch the changes that matter, so this is only a backstop for
+ * The watcher catches the changes that matter, so this is only a backstop for
  * changes VS Code's watcher misses (files arriving outside the workspace's
  * watched scope, external tooling on some remotes). Long enough that repeated
  * wizard queries hit the cache.
@@ -103,16 +104,14 @@ export interface IWorkspaceDataService extends Disposable {
  *
  * Storage is a private two-level {@linkcode DataItemTree} (workspace folders ->
  * tagged entries) driven by a single {@linkcode WorkspaceScanProvider}; see that
- * class for why the fan-out to detectors lives there rather than in several
- * providers. Because the tree is entirely private, the storage strategy can
- * change without affecting consumers.
+ * class for how one walk feeds every detector. Because the tree is entirely
+ * private, the storage strategy can change without affecting consumers.
  *
  * **Cancellation.** Queries are not cancelable: `DataItemTree.getChildren` takes
  * no cancellation token, and threading one through it would be a large change to
  * shared tree infrastructure. Scans are instead kept bounded
- * ({@linkcode DefaultScanMaxResults}) and shared, so a wizard step that
- * abandons a query merely leaves a scan running that warms the cache for the
- * next caller.
+ * ({@linkcode MaxScanEntries}) and shared, so a wizard step that abandons a
+ * query merely leaves a scan running that warms the cache for the next caller.
  */
 export class WorkspaceDataService implements IWorkspaceDataService {
     private readonly tree: DataItemTree<WorkspaceIndexNode>;
@@ -136,14 +135,20 @@ export class WorkspaceDataService implements IWorkspaceDataService {
      */
     private readonly indexBuilds = new InflightMap<Map<string, WorkspaceEntry[]>>();
 
+    /**
+     * The most recent index, kept so a file-change event can be tested against
+     * what is currently indexed without awaiting (and so triggering) a scan.
+     */
+    private lastIndex: Map<string, WorkspaceEntry[]> | undefined;
+
     public readonly onDidChange = this.changeEmitter.event;
 
     /**
-     * @param code - VS Code API, used for folder enumeration and watchers.
+     * @param code - VS Code API, used for folder enumeration and the watcher.
      * @param executor - Wraps scans in telemetry scopes, and provides the output channel.
      * @param detectors - Contributing detectors. Order determines the order of
      *   tags within an entry; it carries no dispatch meaning, since every
-     *   detector sees every folder.
+     *   detector sees every file.
      * @param scheduler - Debounces file-change bursts. Injectable so tests can
      *   drive rescans deterministically instead of waiting on timers.
      * @param ttlMs - How long scan results stay fresh.
@@ -170,20 +175,28 @@ export class WorkspaceDataService implements IWorkspaceDataService {
         );
         this.tree.registerProvider(new WorkspaceScanProvider(code, executor, detectors));
 
+        // One watcher for the whole workspace. VS Code already watches the
+        // workspace recursively, so a `**/*` watcher is filtered off that
+        // existing watcher rather than costing an OS-level watch -- and it means
+        // detectors never have to declare what they care about twice.
+        const watcher = code.workspace.createFileSystemWatcher('**/*');
+
         this.disposables.push(
             this.tree,
             this.changeEmitter,
             this.scheduler,
+            watcher,
+            watcher.onDidCreate(uri => { this.onFileEvent(uri); }),
+            watcher.onDidChange(uri => { this.onFileEvent(uri); }),
+            watcher.onDidDelete(uri => { this.onFileEvent(uri); }),
             // The set of roots changed; re-list folders but keep the scans of
-            // folders that are still open. The invalidate fires the tree's own
+            // folders that are still open. Invalidation already fires the tree's
             // change event, which is forwarded below -- firing here as well
             // would notify consumers (and so refresh trees) twice per change.
             code.workspace.onDidChangeWorkspaceFolders(() => { this.tree.invalidate(Roots); }),
             // Forward index changes (including background enrichment) to consumers.
             this.tree.onDidChange(() => { this.changeEmitter.fire(); }),
         );
-
-        this.createWatchers();
     }
 
     /** @inheritdoc */
@@ -267,48 +280,78 @@ export class WorkspaceDataService implements IWorkspaceDataService {
                 }
             }
         }
+
+        this.lastIndex = index;
         return index;
     }
 
     /**
-     * Create one watcher per distinct pattern declared by any detector.
+     * Decide whether a watched file change is worth a rescan.
      *
-     * Passing a plain string glob makes VS Code filter events off its existing
-     * recursive workspace watcher instead of creating an OS-level watcher, so
-     * the cost is roughly independent of how many patterns are declared -- and
-     * VS Code does the glob matching, which we would otherwise have to
-     * reimplement.
-     *
-     * A detector that declares no patterns cannot be invalidated by file
-     * changes; it relies on the TTL and explicit {@linkcode refresh} calls.
+     * The workspace watcher sees every keystroke-save in the workspace, so the
+     * filter has to be cheap: a change matters only if some detector recognizes
+     * the name (so a scan would now tag it, or previously did), or if it lands
+     * on something already indexed (so deleting a project folder drops it).
      */
-    private createWatchers(): void {
-        const patterns = new Set(this.detectors.flatMap(detector => detector.watchPatterns ?? []));
-
-        for (const pattern of patterns) {
-            const watcher = this.code.workspace.createFileSystemWatcher(pattern);
-            this.disposables.push(
-                watcher,
-                watcher.onDidCreate(uri => { this.scheduleRescan(uri); }),
-                watcher.onDidChange(uri => { this.scheduleRescan(uri); }),
-                watcher.onDidDelete(uri => { this.scheduleRescan(uri); }),
-            );
+    private onFileEvent(uri: vscode.Uri): void {
+        if (isExcludedPath(uri)) {
+            return;
         }
+
+        const folder = this.code.workspace.getWorkspaceFolder(uri);
+        if (folder && !this.isInteresting(uri, folder) && !this.isIndexed(uri)) {
+            return;
+        }
+
+        this.scheduleRescan(folder);
     }
 
     /**
-     * Queue a rescan of the workspace folder containing {@linkcode uri}.
+     * Whether any detector recognizes {@linkcode uri} by name.
      *
-     * Invalidation is folder-granular: a scan is a handful of searches, and
-     * per-detector partitions would buy little for the extra machinery. Bursts
-     * (a branch switch, an `npm install`) collapse into one rescan.
+     * Asked as both a file and a directory, since a watcher event does not say
+     * which it was (and for a delete, it no longer exists to `stat`).
      */
-    private scheduleRescan(uri: vscode.Uri): void {
-        const folder = this.code.workspace.getWorkspaceFolder(uri);
+    private isInteresting(uri: vscode.Uri, folder: vscode.WorkspaceFolder): boolean {
+        const name = basename(uri);
+        return this.detectors.some(detector => {
+            try {
+                return [false, true].some(isDirectory =>
+                    (detector.visit({ uri, name, isDirectory, folder })?.length ?? 0) > 0);
+            } catch {
+                // A detector that throws here will be reported by the scan; do
+                // not let it suppress rescans in the meantime.
+                return true;
+            }
+        });
+    }
+
+    /** Whether {@linkcode uri} is, or contains, something currently indexed. */
+    private isIndexed(uri: vscode.Uri): boolean {
+        const prefix = uri.toString();
+        for (const entries of this.lastIndex?.values() ?? []) {
+            if (entries.some(entry => {
+                const target = entry.uri.toString();
+                return target === prefix || target.startsWith(`${prefix}/`);
+            })) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Queue a rescan of {@linkcode folder}, or of everything when the change
+     * could not be attributed to a folder.
+     *
+     * Invalidation is folder-granular: a scan is a single walk, and per-detector
+     * partitions would buy little for the extra machinery. Bursts (a branch
+     * switch, an `npm install`) collapse into one rescan.
+     */
+    private scheduleRescan(folder: vscode.WorkspaceFolder | undefined): void {
         if (folder) {
             this.pendingFolders.add(folderNodeId(folder));
         } else {
-            // Can't attribute the change; refresh everything rather than miss it.
             this.pendingAllFolders = true;
         }
 

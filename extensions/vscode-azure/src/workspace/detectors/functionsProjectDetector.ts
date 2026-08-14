@@ -27,6 +27,6 @@ export const FunctionsProjectTag: WorkspaceTag<MarkerFileMetadata> =
  */
 export function createFunctionsProjectDetector(): WorkspaceDetector {
     return createMarkerFileDetector(FunctionsNamespace, [
-        { tag: FunctionsProjectTag, patterns: ['**/host.json'] },
+        { tag: FunctionsProjectTag, fileNames: ['host.json'] },
     ]);
 }

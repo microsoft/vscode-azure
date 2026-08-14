@@ -78,10 +78,11 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
             expect(provider).to.not.have.property('onDidChange');
         });
 
-        it('watches host.json through the shared index rather than its own watcher', () => {
-            // A private watcher here would mean duplicate scans on every change.
+        it('relies on the shared index watcher rather than its own', () => {
+            // A private watcher here would mean duplicate scans on every change:
+            // the index already has one watcher for the whole workspace.
             const { mock: m } = createProvider();
-            expect(m.fileSystemWatchers.map(w => w.pattern)).to.deep.equal(['**/host.json']);
+            expect(m.fileSystemWatchers.map(w => w.pattern)).to.deep.equal(['**/*']);
         });
     });
 });

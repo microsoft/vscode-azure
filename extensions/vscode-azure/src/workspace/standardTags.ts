@@ -46,19 +46,19 @@ export const ComposeTag: WorkspaceTag<MarkerFileMetadata> = defineWorkspaceTag<M
  */
 export function createStandardProjectDetector(): WorkspaceDetector {
     return createMarkerFileDetector(ProjectNamespace, [
-        { tag: NodeProjectTag, patterns: ['**/package.json'] },
-        { tag: DotnetProjectTag, patterns: ['**/*.csproj', '**/*.fsproj', '**/*.vbproj', '**/*.sln'] },
-        { tag: PythonProjectTag, patterns: ['**/pyproject.toml', '**/requirements.txt', '**/setup.py'] },
-        { tag: JavaProjectTag, patterns: ['**/pom.xml', '**/build.gradle', '**/build.gradle.kts'] },
-        { tag: GoProjectTag, patterns: ['**/go.mod'] },
+        { tag: NodeProjectTag, fileNames: ['package.json'] },
+        { tag: DotnetProjectTag, suffixes: ['.csproj', '.fsproj', '.vbproj', '.sln'] },
+        { tag: PythonProjectTag, fileNames: ['pyproject.toml', 'requirements.txt', 'setup.py'] },
+        { tag: JavaProjectTag, fileNames: ['pom.xml', 'build.gradle', 'build.gradle.kts'] },
+        { tag: GoProjectTag, fileNames: ['go.mod'] },
     ]);
 }
 
 /** Detector for container tooling files shared across products. */
 export function createStandardContainerDetector(): WorkspaceDetector {
     return createMarkerFileDetector(ContainerNamespace, [
-        { tag: DockerfileTag, patterns: ['**/Dockerfile'] },
-        { tag: ComposeTag, patterns: ['**/docker-compose.yml', '**/docker-compose.yaml', '**/compose.yml', '**/compose.yaml'] },
+        { tag: DockerfileTag, fileNames: ['Dockerfile'] },
+        { tag: ComposeTag, fileNames: ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'] },
     ]);
 }
 

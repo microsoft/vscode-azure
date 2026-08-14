@@ -10,19 +10,25 @@ import {
 import type * as vscode from 'vscode';
 import { createMarkerFileDetector, type MarkerFileMetadata } from '../../src/workspace/createMarkerFileDetector';
 import { WorkspaceDataService } from '../../src/workspace/WorkspaceDataService';
-import type { WorkspaceDetector, WorkspaceScanContext, WorkspaceTagging } from '../../src/workspace/WorkspaceDetector';
+import type { WorkspaceCandidate, WorkspaceDetector, WorkspaceTagging } from '../../src/workspace/WorkspaceDetector';
 import { getTagMetadata, hasTag, type WorkspaceEntry } from '../../src/workspace/WorkspaceEntry';
-import { DefaultScanExcludeGlob } from '../../src/workspace/workspaceExclusions';
 import { applyTag, defineWorkspaceTag } from '../../src/workspace/WorkspaceTag';
 
 const AzdProjectTag = defineWorkspaceTag<MarkerFileMetadata>('azd', 'project');
 const FunctionsProjectTag = defineWorkspaceTag<MarkerFileMetadata>('functions', 'project');
 const BareTag = defineWorkspaceTag('test', 'bare');
 
+/** The detector every scanning test uses: `azure.yaml` marks an azd project. */
+function createAzdDetector(): WorkspaceDetector {
+    return createMarkerFileDetector('azd', [{ tag: AzdProjectTag, fileNames: ['azure.yaml'] }]);
+}
+
 interface TestHarness {
     readonly service: WorkspaceDataService;
     readonly mock: MockVsCodeResult;
     readonly scheduler: ManualDebounceScheduler;
+    /** How many directories the walk has listed, i.e. how much scanning happened. */
+    readonly scans: () => number;
 }
 
 function createService(detectors: readonly WorkspaceDetector[], files: string[] = []): TestHarness {
@@ -36,25 +42,27 @@ function createService(detectors: readonly WorkspaceDetector[], files: string[] 
     const scheduler = new ManualDebounceScheduler();
     const service = new WorkspaceDataService(mockVsCode.vscode, executor, detectors, scheduler);
 
-    return { service, mock: mockVsCode, scheduler };
+    return {
+        service,
+        mock: mockVsCode,
+        scheduler,
+        scans: () => mockVsCode.fs.readDirectory.mock.callCount(),
+    };
 }
 
-/** A detector that tags exactly the URIs it is told to, for merge/failure tests. */
+/** A detector that tags exactly what it is told to, for merge/failure tests. */
 function createStubDetector(
     namespace: string,
-    detect: (context: WorkspaceScanContext) => Promise<readonly WorkspaceTagging[]>,
+    visit: (candidate: WorkspaceCandidate) => readonly WorkspaceTagging[] | undefined,
     extra?: Partial<WorkspaceDetector>,
 ): WorkspaceDetector {
-    return { namespace, detect, ...extra };
+    return { namespace, visit, ...extra };
 }
 
 describe('WorkspaceDataService (unit)', () => {
     describe('scanning and querying', () => {
         it('returns entries tagged by a marker file detector', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service } = createService([detector], ['/repo/src/azure.yaml']);
+            const { service } = createService([createAzdDetector()], ['/repo/src/azure.yaml']);
 
             const entries = await service.getEntries(AzdProjectTag);
 
@@ -65,11 +73,20 @@ describe('WorkspaceDataService (unit)', () => {
             service.dispose();
         });
 
+        it('finds marker files at any depth', async () => {
+            const { service } = createService(
+                [createAzdDetector()],
+                ['/repo/azure.yaml', '/repo/a/b/c/azure.yaml'],
+            );
+
+            const entries = await service.getEntries(AzdProjectTag);
+
+            expect(entries.map(e => e.uri.path).sort()).to.deep.equal(['/repo', '/repo/a/b/c']);
+            service.dispose();
+        });
+
         it('exposes the marker file through typed tag metadata', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service } = createService([detector], ['/repo/azure.yaml']);
+            const { service } = createService([createAzdDetector()], ['/repo/azure.yaml']);
 
             const [entry] = await service.getEntries(AzdProjectTag);
 
@@ -78,20 +95,14 @@ describe('WorkspaceDataService (unit)', () => {
         });
 
         it('returns an empty array for a tag nothing carries', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service } = createService([detector], ['/repo/azure.yaml']);
+            const { service } = createService([createAzdDetector()], ['/repo/azure.yaml']);
 
             expect(await service.getEntries(FunctionsProjectTag)).to.deep.equal([]);
             service.dispose();
         });
 
         it('returns an empty array when no workspace is open', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector], ['/repo/azure.yaml']);
+            const { service, mock } = createService([createAzdDetector()], ['/repo/azure.yaml']);
             mock.workspaceFolders.length = 0;
 
             expect(await service.getEntries(AzdProjectTag)).to.deep.equal([]);
@@ -99,10 +110,7 @@ describe('WorkspaceDataService (unit)', () => {
         });
 
         it('looks up a single entry by uri', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service } = createService([detector], ['/repo/api/azure.yaml']);
+            const { service } = createService([createAzdDetector()], ['/repo/api/azure.yaml']);
 
             const entry = await service.getEntry(MockUri.file('/repo/api'));
             expect(entry && hasTag(entry, AzdProjectTag)).to.equal(true);
@@ -111,26 +119,25 @@ describe('WorkspaceDataService (unit)', () => {
             service.dispose();
         });
 
-        it('applies the shared exclusion glob and a result bound to every search', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector], ['/repo/azure.yaml']);
+        it('offers directories to detectors as well as files', async () => {
+            const seen: string[] = [];
+            const detector = createStubDetector('test', candidate => {
+                if (candidate.isDirectory) {
+                    seen.push(candidate.name);
+                }
+                return undefined;
+            });
+            const { service } = createService([detector], ['/repo/api/index.js']);
 
-            await service.getEntries(AzdProjectTag);
+            await service.getEntries(BareTag);
 
-            const [, exclude, maxResults] = mock.workspace.findFiles.mock.calls[0].arguments;
-            expect(exclude).to.equal(DefaultScanExcludeGlob);
-            expect(maxResults).to.be.a('number');
+            expect(seen).to.deep.equal(['api']);
             service.dispose();
         });
 
-        it('does not tag marker files inside excluded directories', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
+        it('does not descend into excluded directories', async () => {
             const { service } = createService(
-                [detector],
+                [createAzdDetector()],
                 ['/repo/azure.yaml', '/repo/node_modules/pkg/azure.yaml'],
             );
 
@@ -140,28 +147,42 @@ describe('WorkspaceDataService (unit)', () => {
             service.dispose();
         });
 
-        it('scopes each search to the workspace folder being scanned', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector], ['/repo/azure.yaml', '/elsewhere/azure.yaml']);
+        it('does not follow symlinked directories', async () => {
+            const { service, mock } = createService(
+                [createAzdDetector()],
+                ['/repo/azure.yaml', '/repo/link/azure.yaml'],
+            );
+            mock.fs.addSymbolicLink(MockUri.file('/repo/link'), mock.vscode.FileType.Directory);
 
             const entries = await service.getEntries(AzdProjectTag);
 
             expect(entries.map(e => e.uri.path)).to.deep.equal(['/repo']);
-            const [include] = mock.workspace.findFiles.mock.calls[0].arguments;
-            expect(include).to.have.property('pattern', '**/azure.yaml');
+            service.dispose();
+        });
+
+        it('scopes the walk to open workspace folders', async () => {
+            const { service } = createService([createAzdDetector()], ['/repo/azure.yaml', '/elsewhere/azure.yaml']);
+
+            const entries = await service.getEntries(AzdProjectTag);
+
+            expect(entries.map(e => e.uri.path)).to.deep.equal(['/repo']);
+            service.dispose();
+        });
+
+        it('survives a directory it cannot read', async () => {
+            const { service, mock } = createService([createAzdDetector()], ['/repo/azure.yaml']);
+            mock.fs.readDirectory.mock.mockImplementation(() => Promise.reject(new Error('EACCES')));
+
+            expect(await service.getEntries(AzdProjectTag)).to.deep.equal([]);
             service.dispose();
         });
     });
 
     describe('multiple detectors', () => {
         it('merges tags from different detectors onto a single entry', async () => {
-            const azd = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
+            const azd = createAzdDetector();
             const functions = createMarkerFileDetector('functions', [
-                { tag: FunctionsProjectTag, patterns: ['**/host.json'] },
+                { tag: FunctionsProjectTag, fileNames: ['host.json'] },
             ]);
             const { service } = createService([azd, functions], ['/repo/app/azure.yaml', '/repo/app/host.json']);
 
@@ -171,39 +192,34 @@ describe('WorkspaceDataService (unit)', () => {
             expect(azdEntries).to.have.length(1);
             // Same folder, so the two detectors must converge on one entry object.
             expect(functionsEntries[0]).to.equal(azdEntries[0]);
-            expect(hasTag(azdEntries[0], AzdProjectTag)).to.equal(true);
             expect(hasTag(azdEntries[0], FunctionsProjectTag)).to.equal(true);
             service.dispose();
         });
 
         it('keeps the index usable when one detector throws', async () => {
-            const broken = createStubDetector('broken', () => Promise.reject(new Error('boom')));
-            const working = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service } = createService([broken, working], ['/repo/azure.yaml']);
+            const broken = createStubDetector('broken', () => { throw new Error('boom'); });
+            const { service } = createService([broken, createAzdDetector()], ['/repo/azure.yaml']);
 
             expect(await service.getEntries(AzdProjectTag)).to.have.length(1);
             service.dispose();
         });
 
         it('ignores tags a detector applies outside its own namespace', async () => {
-            const rogue = createStubDetector('rogue', context => Promise.resolve([{
-                uri: context.folder.uri,
-                tags: [applyTag(AzdProjectTag, { manifestUri: context.folder.uri })],
-            }]));
-            const { service } = createService([rogue]);
+            const rogue = createStubDetector('rogue', candidate => [{
+                uri: candidate.folder.uri,
+                tags: [applyTag(AzdProjectTag, { manifestUri: candidate.uri })],
+            }]);
+            const { service } = createService([rogue], ['/repo/azure.yaml']);
 
             expect(await service.getEntries(AzdProjectTag)).to.deep.equal([]);
             service.dispose();
         });
 
         it('supports tags applied without metadata', async () => {
-            const detector = createStubDetector('test', context => Promise.resolve([{
-                uri: context.folder.uri,
-                tags: [applyTag(BareTag)],
-            }]));
-            const { service } = createService([detector]);
+            const detector = createStubDetector('test', candidate => candidate.name === 'azure.yaml'
+                ? [{ uri: candidate.folder.uri, tags: [applyTag(BareTag)] }]
+                : undefined);
+            const { service } = createService([detector], ['/repo/azure.yaml']);
 
             const [entry] = await service.getEntries(BareTag);
             expect(hasTag(entry, BareTag)).to.equal(true);
@@ -211,43 +227,37 @@ describe('WorkspaceDataService (unit)', () => {
             service.dispose();
         });
 
-        it('runs one search per distinct glob no matter how many detectors ask', async () => {
-            const first = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const second = createStubDetector('functions', async context => {
-                await context.findFiles('**/azure.yaml');
-                return [];
-            });
-            const { service, mock } = createService([first, second], ['/repo/azure.yaml']);
+        it('walks the workspace once no matter how many detectors are registered', async () => {
+            const files = ['/repo/a/azure.yaml', '/repo/b/c/host.json'];
+            const one = createService([createAzdDetector()], files);
+            await one.service.getEntries(AzdProjectTag);
 
-            await service.getEntries(AzdProjectTag);
+            const many = createService(
+                [createAzdDetector(), createStubDetector('x', () => undefined), createStubDetector('y', () => undefined)],
+                files,
+            );
+            await many.service.getEntries(AzdProjectTag);
 
-            expect(mock.workspace.findFiles.mock.callCount()).to.equal(1);
-            service.dispose();
+            expect(many.scans()).to.equal(one.scans());
+            one.service.dispose();
+            many.service.dispose();
         });
     });
 
     describe('caching', () => {
         it('serves repeated queries from cache without rescanning', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector], ['/repo/azure.yaml']);
+            const { service, scans } = createService([createAzdDetector()], ['/repo/azure.yaml']);
 
             await service.getEntries(AzdProjectTag);
-            const afterFirst = mock.workspace.findFiles.mock.callCount();
+            const afterFirst = scans();
             await service.getEntries(AzdProjectTag);
 
-            expect(mock.workspace.findFiles.mock.callCount()).to.equal(afterFirst);
+            expect(scans()).to.equal(afterFirst);
             service.dispose();
         });
 
         it('collapses concurrent queries into a single scan', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector], ['/repo/azure.yaml']);
+            const { service, scans } = createService([createAzdDetector()], ['/repo/azure.yaml']);
 
             await Promise.all([
                 service.getEntries(AzdProjectTag),
@@ -255,15 +265,13 @@ describe('WorkspaceDataService (unit)', () => {
                 service.getEntries(FunctionsProjectTag),
             ]);
 
-            expect(mock.workspace.findFiles.mock.callCount()).to.equal(1);
+            // One listing of `/repo`, and no folder was listed twice.
+            expect(scans()).to.equal(1);
             service.dispose();
         });
 
         it('rescans after an explicit refresh', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector], ['/repo/azure.yaml']);
+            const { service, mock } = createService([createAzdDetector()], ['/repo/azure.yaml']);
 
             await service.getEntries(AzdProjectTag);
             mock.fs.addFile(MockUri.file('/repo/api/azure.yaml'), '{}');
@@ -274,16 +282,13 @@ describe('WorkspaceDataService (unit)', () => {
         });
 
         it('rescans stale results once the ttl elapses', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
             const { executor, mockVsCode } = createTestActionExecutor();
             mockVsCode.workspaceFolders.push({ uri: MockUri.file('/repo'), name: 'repo', index: 0 });
             mockVsCode.fs.addFile(MockUri.file('/repo/azure.yaml'), '{}');
 
             // A zero TTL makes every cached listing immediately stale.
             const service = new WorkspaceDataService(
-                mockVsCode.vscode, executor, [detector], new ManualDebounceScheduler(), 0);
+                mockVsCode.vscode, executor, [createAzdDetector()], new ManualDebounceScheduler(), 0);
 
             await service.getEntries(AzdProjectTag);
             mockVsCode.fs.addFile(MockUri.file('/repo/api/azure.yaml'), '{}');
@@ -294,31 +299,18 @@ describe('WorkspaceDataService (unit)', () => {
     });
 
     describe('change detection', () => {
-        it('creates one watcher per distinct declared pattern', () => {
-            const azd = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
+        it('creates exactly one watcher for the whole workspace', () => {
+            const { service, mock } = createService([
+                createAzdDetector(),
+                createMarkerFileDetector('functions', [{ tag: FunctionsProjectTag, fileNames: ['host.json'] }]),
             ]);
-            const alsoAzureYaml = createMarkerFileDetector('functions', [
-                { tag: FunctionsProjectTag, patterns: ['**/azure.yaml', '**/host.json'] },
-            ]);
-            const { service, mock } = createService([azd, alsoAzureYaml]);
 
-            expect(mock.fileSystemWatchers.map(w => w.pattern)).to.deep.equal(['**/azure.yaml', '**/host.json']);
+            expect(mock.fileSystemWatchers.map(w => w.pattern)).to.deep.equal(['**/*']);
             service.dispose();
         });
 
-        it('does not create a watcher for a detector that declares no patterns', () => {
-            const { service, mock } = createService([createStubDetector('test', () => Promise.resolve([]))]);
-
-            expect(mock.fileSystemWatchers).to.have.length(0);
-            service.dispose();
-        });
-
-        it('rescans the affected folder after a watched file appears', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock, scheduler } = createService([detector], ['/repo/azure.yaml']);
+        it('rescans the affected folder after a file a detector recognizes appears', async () => {
+            const { service, mock, scheduler } = createService([createAzdDetector()], ['/repo/azure.yaml']);
 
             expect(await service.getEntries(AzdProjectTag)).to.have.length(1);
 
@@ -330,13 +322,55 @@ describe('WorkspaceDataService (unit)', () => {
             service.dispose();
         });
 
-        it('debounces a burst of file events into a single rescan', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock, scheduler } = createService([detector], ['/repo/azure.yaml']);
+        it('ignores changes to files no detector recognizes', async () => {
+            const { service, mock, scheduler, scans } = createService([createAzdDetector()], ['/repo/azure.yaml']);
             await service.getEntries(AzdProjectTag);
-            const afterFirst = mock.workspace.findFiles.mock.callCount();
+            const afterFirst = scans();
+
+            mock.fileSystemWatchers[0].changeEmitter.fire(MockUri.file('/repo/src/index.ts'));
+            expect(scheduler.hasPending).to.equal(false);
+            await service.getEntries(AzdProjectTag);
+
+            expect(scans()).to.equal(afterFirst);
+            service.dispose();
+        });
+
+        it('ignores changes inside excluded directories', async () => {
+            const { service, mock, scheduler, scans } = createService([createAzdDetector()], ['/repo/azure.yaml']);
+            await service.getEntries(AzdProjectTag);
+            const afterFirst = scans();
+
+            // An `npm install` writing a vendored marker file must not rescan.
+            mock.fileSystemWatchers[0].createEmitter.fire(MockUri.file('/repo/node_modules/pkg/azure.yaml'));
+            expect(scheduler.hasPending).to.equal(false);
+            await service.getEntries(AzdProjectTag);
+
+            expect(scans()).to.equal(afterFirst);
+            service.dispose();
+        });
+
+        it('rescans when an indexed folder is deleted', async () => {
+            const { service, mock, scheduler } = createService(
+                [createAzdDetector()],
+                ['/repo/azure.yaml', '/repo/api/azure.yaml'],
+            );
+            expect(await service.getEntries(AzdProjectTag)).to.have.length(2);
+
+            await mock.fs.delete(MockUri.file('/repo/api/azure.yaml'));
+            await mock.fs.delete(MockUri.file('/repo/api'));
+            // The watcher reports the folder, whose name no detector recognizes;
+            // it still matters because the index has an entry underneath it.
+            mock.fileSystemWatchers[0].deleteEmitter.fire(MockUri.file('/repo/api'));
+            await scheduler.flush();
+
+            expect(await service.getEntries(AzdProjectTag)).to.have.length(1);
+            service.dispose();
+        });
+
+        it('debounces a burst of file events into a single rescan', async () => {
+            const { service, mock, scheduler, scans } = createService([createAzdDetector()], ['/repo/azure.yaml']);
+            await service.getEntries(AzdProjectTag);
+            const afterFirst = scans();
 
             const watcher = mock.fileSystemWatchers[0];
             watcher.createEmitter.fire(MockUri.file('/repo/a/azure.yaml'));
@@ -345,15 +379,13 @@ describe('WorkspaceDataService (unit)', () => {
             await scheduler.flush();
             await service.getEntries(AzdProjectTag);
 
-            expect(mock.workspace.findFiles.mock.callCount()).to.equal(afterFirst + 1);
+            // One extra listing of `/repo`, not three.
+            expect(scans()).to.equal(afterFirst + 1);
             service.dispose();
         });
 
         it('fires onDidChange after a rescan', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock, scheduler } = createService([detector], ['/repo/azure.yaml']);
+            const { service, mock, scheduler } = createService([createAzdDetector()], ['/repo/azure.yaml']);
             await service.getEntries(AzdProjectTag);
 
             let fired = 0;
@@ -367,10 +399,7 @@ describe('WorkspaceDataService (unit)', () => {
         });
 
         it('picks up a workspace folder added after the first scan', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector], ['/repo/azure.yaml', '/other/azure.yaml']);
+            const { service, mock } = createService([createAzdDetector()], ['/repo/azure.yaml', '/other/azure.yaml']);
 
             expect(await service.getEntries(AzdProjectTag)).to.have.length(1);
 
@@ -383,10 +412,7 @@ describe('WorkspaceDataService (unit)', () => {
         });
 
         it('drops entries from a removed workspace folder', async () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector], ['/repo/azure.yaml']);
+            const { service, mock } = createService([createAzdDetector()], ['/repo/azure.yaml']);
             expect(await service.getEntries(AzdProjectTag)).to.have.length(1);
 
             const [removed] = mock.workspaceFolders.splice(0, 1);
@@ -396,11 +422,8 @@ describe('WorkspaceDataService (unit)', () => {
             service.dispose();
         });
 
-        it('disposes its watchers', () => {
-            const detector = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const { service, mock } = createService([detector]);
+        it('disposes its watcher', () => {
+            const { service, mock } = createService([createAzdDetector()]);
 
             service.dispose();
 
@@ -412,7 +435,7 @@ describe('WorkspaceDataService (unit)', () => {
         it('applies detector enrichment in place and exposes it via whenEnriched', async () => {
             const LateTag = defineWorkspaceTag<{ environment: string }>('azd', 'environment');
             const detector: WorkspaceDetector = {
-                ...createMarkerFileDetector('azd', [{ tag: AzdProjectTag, patterns: ['**/azure.yaml'] }]),
+                ...createAzdDetector(),
                 enrich: (entry: WorkspaceEntry) => {
                     entry.tags.push(applyTag(LateTag, { environment: 'dev' }));
                     return Promise.resolve();
@@ -431,7 +454,7 @@ describe('WorkspaceDataService (unit)', () => {
 
         it('does not reject when enrichment fails', async () => {
             const detector: WorkspaceDetector = {
-                ...createMarkerFileDetector('azd', [{ tag: AzdProjectTag, patterns: ['**/azure.yaml'] }]),
+                ...createAzdDetector(),
                 enrich: () => Promise.reject(new Error('boom')),
             };
             const { service } = createService([detector], ['/repo/azure.yaml']);
@@ -444,13 +467,10 @@ describe('WorkspaceDataService (unit)', () => {
 
         it('only enriches through detectors that contributed to the entry', async () => {
             let called = false;
-            const azd = createMarkerFileDetector('azd', [
-                { tag: AzdProjectTag, patterns: ['**/azure.yaml'] },
-            ]);
-            const other = createStubDetector('functions', () => Promise.resolve([]), {
+            const other = createStubDetector('functions', () => undefined, {
                 enrich: () => { called = true; return Promise.resolve(); },
             });
-            const { service } = createService([azd, other], ['/repo/azure.yaml']);
+            const { service } = createService([createAzdDetector(), other], ['/repo/azure.yaml']);
 
             const [entry] = await service.getEntries(AzdProjectTag);
             await service.whenEnriched(entry);

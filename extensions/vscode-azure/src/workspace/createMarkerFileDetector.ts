@@ -5,7 +5,7 @@
 
 import { dirname } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import type { WorkspaceDetector, WorkspaceScanContext, WorkspaceTagging } from './WorkspaceDetector';
+import type { WorkspaceCandidate, WorkspaceDetector, WorkspaceTagging } from './WorkspaceDetector';
 import { applyTag, type WorkspaceTag } from './WorkspaceTag';
 
 /**
@@ -25,13 +25,10 @@ export interface MarkerFileMetadata {
 export interface MarkerFileRule {
     /** Tag to apply to the folder containing a matched file. */
     readonly tag: WorkspaceTag<MarkerFileMetadata>;
-    /**
-     * Globs, relative to a workspace folder, whose matches trigger the tag.
-     *
-     * Prefer specific patterns (`**\/host.json`) over broad ones; every pattern
-     * becomes both a search and a watcher.
-     */
-    readonly patterns: readonly string[];
+    /** Exact file names that trigger the tag, e.g. `host.json`. Case-sensitive. */
+    readonly fileNames?: readonly string[];
+    /** File name suffixes that trigger the tag, e.g. `.csproj`. Case-sensitive. */
+    readonly suffixes?: readonly string[];
 }
 
 /**
@@ -40,14 +37,9 @@ export interface MarkerFileRule {
  * presence of a file.
  *
  * Rules are declarative so that adding a project type is a table entry rather
- * than a new detection code path -- the extensible rule set the shared service
- * is meant to provide. Detectors that need real logic (parsing a manifest,
- * probing a CLI) should implement {@linkcode WorkspaceDetector} directly, or use
- * this for discovery and add an `enrich` step.
- *
- * The rules' {@linkcode MarkerFileRule.patterns patterns} become the detector's
- * {@linkcode WorkspaceDetector.watchPatterns}, so the index refreshes when a
- * marker file is added or removed.
+ * than a new detection code path. Detectors that need real logic (parsing a
+ * manifest, probing a CLI) should implement {@linkcode WorkspaceDetector}
+ * directly, or use this for discovery and add an `enrich` step.
  *
  * @param namespace - Namespace owning every tag in {@linkcode rules}.
  * @param rules - The rule table.
@@ -60,7 +52,7 @@ export interface MarkerFileRule {
  * export const AzdProjectTag = defineWorkspaceTag<MarkerFileMetadata>('azd', 'project');
  *
  * const detector = createMarkerFileDetector('azd', [
- *     { tag: AzdProjectTag, patterns: ['**\/azure.yaml', '**\/azure.yml'] },
+ *     { tag: AzdProjectTag, fileNames: ['azure.yaml', 'azure.yml'] },
  * ]);
  * ```
  */
@@ -73,22 +65,28 @@ export function createMarkerFileDetector(namespace: string, rules: readonly Mark
 
     return {
         namespace,
-        watchPatterns: [...new Set(rules.flatMap(rule => rule.patterns))],
-        detect: async (context: WorkspaceScanContext): Promise<readonly WorkspaceTagging[]> => {
-            const taggings: WorkspaceTagging[] = [];
+        visit: (candidate: WorkspaceCandidate): WorkspaceTagging[] | undefined => {
+            if (candidate.isDirectory) {
+                return undefined;
+            }
 
+            let taggings: WorkspaceTagging[] | undefined;
             for (const rule of rules) {
-                const matches = await Promise.all(rule.patterns.map(pattern => context.findFiles(pattern)));
-                for (const manifestUri of matches.flat()) {
+                if (matches(rule, candidate.name)) {
+                    taggings ??= [];
                     taggings.push({
-                        uri: dirname(manifestUri),
+                        uri: dirname(candidate.uri),
                         isDirectory: true,
-                        tags: [applyTag(rule.tag, { manifestUri })],
+                        tags: [applyTag(rule.tag, { manifestUri: candidate.uri })],
                     });
                 }
             }
-
             return taggings;
         },
     };
+}
+
+function matches(rule: MarkerFileRule, name: string): boolean {
+    return (rule.fileNames?.includes(name) ?? false)
+        || (rule.suffixes?.some(suffix => name.endsWith(suffix)) ?? false);
 }
