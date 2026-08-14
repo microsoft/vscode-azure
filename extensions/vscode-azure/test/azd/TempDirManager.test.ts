@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { TempDirManager } from '../../src/azd/TempDirManager';
 
 describe('TempDirManager (unit)', () => {

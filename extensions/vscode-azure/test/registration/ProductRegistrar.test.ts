@@ -17,7 +17,6 @@ import {
     ICommandRegistry,
 } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { Container, injectable, type ServiceIdentifier } from 'inversify';
 import { mock } from 'node:test';
 import { registerCommands } from '../../src/commands/registerCommands';

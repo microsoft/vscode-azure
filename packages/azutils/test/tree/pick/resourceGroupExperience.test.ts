@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type { ConcreteAzureNode } from '../../../src/models/AzureNode';
 import { resourceGroupExperience } from '../../../src/tree/pick/resourceGroupExperience';
 import { makeResourceGroup, makeSubscription } from '../../mockAzure';

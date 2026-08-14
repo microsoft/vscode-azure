@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { GroupBy } from '../../../src/commands/tree/GroupBy';
 
 describe('GroupBy (unit)', () => {

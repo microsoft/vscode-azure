@@ -5,7 +5,6 @@
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockPagedDataItemTree, makeAccount, makeSubscription, makeTenant, pagedChildren } from '@microsoft/vscode-azure-azutils/testing';
-import { expect } from 'chai';
 import { listReachableSubscriptions } from '../../../src/commands/auth/listReachableAuthNodes';
 
 describe('listReachableAuthNodes (unit)', () => {

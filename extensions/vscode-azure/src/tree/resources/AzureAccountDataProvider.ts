@@ -13,8 +13,8 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    DebounceScheduler, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
-    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type Event, type Page, type ProviderResult,
+    DebounceScheduler, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../constants';
@@ -482,6 +482,6 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
 
     /** @inheritdoc */
     public dispose(): void {
-        this.disposables.forEach(d => void d.dispose());
+        Disposable.disposeAll(this.disposables);
     }
 }

@@ -5,7 +5,6 @@
 
 import { AzureLogger, createClientLogger, getLogLevel, setLogLevel } from '@azure/logger';
 import { MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import { setUpAzureSdkLogging } from '../../src/rest/azureLoggerSetup';
 

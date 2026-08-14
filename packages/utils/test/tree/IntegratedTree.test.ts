@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import type { ActionExecutor } from '../../src/base/IActionExecutor';
 import type { Page } from '../../src/data/Page';
@@ -14,7 +13,6 @@ import { createDefaultLoadMoreOptions, ViewItemTree, type LoadMoreOptions, type 
 import type { ViewProvider } from '../../src/tree/ViewProvider';
 import { createTestActionExecutor } from '../createTestActionExecutor';
 import { createMockVsCode } from '../vscode/MockVsCode';
-
 
 // ---------------------------------------------------------------------------
 // Test resource model

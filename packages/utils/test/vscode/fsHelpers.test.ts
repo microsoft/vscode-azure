@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { basename, dirname, fileExists, isFileNotFoundError, readJson, readText, relativePath } from '../../src/vscode/fsHelpers';
 import { MockFileSystem } from './MockFileSystem';
 import { MockUri } from './MockUri';

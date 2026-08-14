@@ -5,7 +5,6 @@
 
 import { createMockWebAppClient, makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../src/tree/resources/functions/FunctionApp';
 import { FunctionAppDataProvider } from '../../../../src/tree/resources/functions/FunctionAppDataProvider';

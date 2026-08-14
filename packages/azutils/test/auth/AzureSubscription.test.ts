@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { isAzureSubscription } from '../../src/auth/AzureSubscription';
 import { makeSubscription } from '../mockAzure';
 
