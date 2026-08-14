@@ -7,7 +7,6 @@ import { createDefaultCredentialFactory, type ConcreteAzureNode, type ICredentia
 import { makeAccount, makeTenant, createMockHierarchicalDataItemTree } from '@microsoft/vscode-azure-azutils/testing';
 import { Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock, type Mock } from 'node:test';
 import { pickTenantOrEnterId, SignIn } from '../../../src/commands/auth/SignIn';
 import type { ReachableTenant } from '../../../src/commands/auth/listReachableAuthNodes';

@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { ConfirmProvisionStep } from '../../../src/azd/wizard/ConfirmProvisionStep';
 

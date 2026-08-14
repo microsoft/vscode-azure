@@ -5,7 +5,6 @@
 
 import { Wizard } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type { ConcreteAzureNode } from '../../src/models/AzureNode';
 import { type ChooseResourceGroupContext, ChooseResourceGroupStep } from '../../src/wizard/ChooseResourceGroupStep';
 import { makeAccount, makeResourceGroup, makeSubscription, makeTenant } from '../mockAzure';

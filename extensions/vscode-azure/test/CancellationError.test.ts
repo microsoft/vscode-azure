@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError } from '@microsoft/vscode-azure-utils';
-import { expect } from 'chai';
 import * as vscode from 'vscode';
 
 describe('CancellationError (integration)', () => {

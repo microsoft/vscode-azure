@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { expect } from 'chai';
 import { appSettingsParentKey } from '../../../../src/tree/resources/functions/appSettingsParentKey';
 import { FunctionAppVirtualTypes } from '../../../../src/tree/resources/functions/FunctionApp';
 import { makeFunctionApp } from './mockFunctionApp';

@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { Container } from 'inversify';
 import { rejects } from 'node:assert';
 import { mock } from 'node:test';

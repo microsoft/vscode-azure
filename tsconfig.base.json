@@ -8,8 +8,7 @@
         ],
         "types": [
             "node",
-            "mocha",
-            "chai-as-promised",
+            "@microsoft/vscode-azext-eng/mocha/test-globals",
         ],
         "sourceMap": true,
         "strict": true,

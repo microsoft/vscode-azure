@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { DataItemTree } from '../../src/tree/DataItemTree';
 import type { DataProviderChangeEvent } from '../../src/tree/DataProvider';

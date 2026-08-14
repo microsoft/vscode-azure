@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import type { Disposable } from '../../src/vscode/Disposable';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 

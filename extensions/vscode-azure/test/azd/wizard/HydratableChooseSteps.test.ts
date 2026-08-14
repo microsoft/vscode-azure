@@ -7,7 +7,6 @@ import type { ChooseLocationContext, ChooseSubscriptionContext, ISubscriptionCli
 import { createMockPagedDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import type { IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { HydratableChooseLocationStep, HydratableChooseSubscriptionStep } from '../../../src/azd/wizard/HydratableChooseSteps';
 import type { IAzureViewViewItemTree } from '../../../src/services';

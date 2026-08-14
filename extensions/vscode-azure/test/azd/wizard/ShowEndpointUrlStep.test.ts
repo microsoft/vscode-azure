@@ -5,7 +5,6 @@
 
 import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { ShowEndpointUrlStep } from '../../../src/azd/wizard/ShowEndpointUrlStep';
 import { createMockAzdService } from '../MockAzdService';
