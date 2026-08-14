@@ -3,7 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { WebsiteUrl } from '../../constants';
+/**
+ * Property key under which a data provider attaches a resource's browsable
+ * website URL during enrichment.
+ *
+ * A symbol is used so the property cannot collide with an ARM property, and so
+ * the capability can be detected exactly rather than by inspecting the resource
+ * type. It is module-private: everything goes through the accessors below,
+ * which keeps the stored shape an implementation detail.
+ */
+const WebsiteUrl = Symbol('vscode-azure.websiteUrl');
 
 /**
  * Attaches a browsable website URL to a resource, in place, replacing any
