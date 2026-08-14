@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor, IVsCode,
-    type DataProvider, type DataProviderChangeEvent, type Disposable,
+    Disposable, EventEmitter, IActionExecutor, IVsCode,
+    type DataProvider, type DataProviderChangeEvent,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
@@ -99,6 +99,6 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
 
     /** @inheritdoc */
     public dispose(): void {
-        this.disposables.forEach(d => void d.dispose());
+        Disposable.disposeAll(this.disposables);
     }
 }

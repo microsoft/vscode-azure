@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { EventEmitter, IDebounceScheduler, IVsCode, relativePath } from '@microsoft/vscode-azure-utils';
+import { Disposable, EventEmitter, IDebounceScheduler, IVsCode, relativePath } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { defaultExcludedDirectories } from './walkWorkspace';
@@ -49,9 +49,9 @@ export interface IWorkspaceIndexService {
  * outside the directory that changed.
  */
 @injectable()
-export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Disposable {
+export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable {
     private readonly changeEmitter = new EventEmitter<void>();
-    private readonly disposables: vscode.Disposable[] = [this.changeEmitter];
+    private readonly disposables: Disposable[] = [this.changeEmitter];
     private index: Promise<WorkspaceIndex> | undefined;
 
     public readonly onDidChangeIndex = this.changeEmitter.event;
@@ -94,9 +94,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
     }
 
     public dispose(): void {
-        for (const disposable of this.disposables) {
-            disposable.dispose();
-        }
+        Disposable.disposeAll(this.disposables);
     }
 
     private onFileEvent(uri: vscode.Uri): void {

@@ -6,6 +6,7 @@
 import { matchesGlob } from 'node:path/posix';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { Disposable } from '../../src/vscode/Disposable';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../src/vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
@@ -402,7 +403,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
                 onDidCreate: create.event,
                 onDidChange: change.event,
                 onDidDelete: del.event,
-                dispose: () => { create.dispose(); change.dispose(); del.dispose(); },
+                dispose: () => { Disposable.disposeAll(create, change, del); },
             };
             fileSystemWatchers.push({
                 pattern,
