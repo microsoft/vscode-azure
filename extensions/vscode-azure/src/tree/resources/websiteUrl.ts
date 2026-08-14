@@ -58,6 +58,19 @@ export function getWebsiteUrl(resource: unknown): string | undefined {
     return typeof url === 'string' ? url : undefined;
 }
 
+/**
+ * Normalizes an endpoint into an absolute http(s) URL, or `undefined` when it
+ * is unusable.
+ *
+ * Deliberately uses {@linkcode URL} rather than {@linkcode vscode.Uri.parse
+ * Uri.parse}, despite the repo's general preference for `vscode.Uri` -- that
+ * preference is about filesystem paths, and `Uri.parse` is a syntactic splitter
+ * with no notion of which schemes are safe. It accepts `javascript:` and
+ * `mailto:` even in strict mode, and in its default loose mode it turns a bare
+ * host into a `file:` URI. Since {@linkcode OpenUrl} hands its result straight
+ * to `openExternal`, this function is the only thing standing between an
+ * endpoint and the user's browser.
+ */
 function normalizeEndpoint(endpoint: string | undefined): string | undefined {
     const value = endpoint?.trim();
     if (!value) {
