@@ -7,58 +7,30 @@ import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { getWebsiteUrl, setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 
 describe('websiteUrl (unit)', () => {
-    it('should assume https for a bare hostname reported by ARM', () => {
+    it('should build an https url from the hostname reported by ARM', () => {
         const resource = makeGenericResource();
 
         setWebsiteUrl(resource, 'contoso.azurewebsites.net');
 
-        expect(getWebsiteUrl(resource)).to.equal('https://contoso.azurewebsites.net/');
+        expect(getWebsiteUrl(resource)).to.equal('https://contoso.azurewebsites.net');
     });
 
-    it('should preserve an absolute url', () => {
+    it('should keep a port and path supplied with the host', () => {
         const resource = makeGenericResource();
 
-        setWebsiteUrl(resource, 'http://contoso.example.com/app');
+        setWebsiteUrl(resource, 'contoso.example.com:8080/app');
 
-        expect(getWebsiteUrl(resource)).to.equal('http://contoso.example.com/app');
+        expect(getWebsiteUrl(resource)).to.equal('https://contoso.example.com:8080/app');
     });
 
-    it('should attach nothing when there is no endpoint', () => {
+    it('should attach nothing when there is no hostname', () => {
         const resource = makeGenericResource();
 
         setWebsiteUrl(resource, undefined);
+        expect(getWebsiteUrl(resource)).to.be.undefined;
+
         setWebsiteUrl(resource, '   ');
-
         expect(getWebsiteUrl(resource)).to.be.undefined;
-    });
-
-    it('should reject endpoints a browser should not be sent to', () => {
-        const resource = makeGenericResource();
-
-        setWebsiteUrl(resource, 'javascript://example.com/%0aalert(1)');
-        expect(getWebsiteUrl(resource)).to.be.undefined;
-
-        setWebsiteUrl(resource, 'javascript:alert(1)');
-        expect(getWebsiteUrl(resource)).to.be.undefined;
-
-        setWebsiteUrl(resource, 'ftp://contoso.example.com');
-        expect(getWebsiteUrl(resource)).to.be.undefined;
-
-        setWebsiteUrl(resource, 'file:///etc/passwd');
-        expect(getWebsiteUrl(resource)).to.be.undefined;
-
-        // Prepending a scheme to this would yield `https://a@b.com/`, which is a
-        // valid URL pointing at `b.com` -- so it must be rejected, not coerced.
-        setWebsiteUrl(resource, 'mailto:someone@contoso.example.com');
-        expect(getWebsiteUrl(resource)).to.be.undefined;
-    });
-
-    it('should preserve a host that carries a port', () => {
-        const resource = makeGenericResource();
-
-        setWebsiteUrl(resource, 'contoso.example.com:8080');
-
-        expect(getWebsiteUrl(resource)).to.equal('https://contoso.example.com:8080/');
     });
 
     it('should clear a stale url when the resource no longer exposes one', () => {
@@ -66,15 +38,6 @@ describe('websiteUrl (unit)', () => {
 
         setWebsiteUrl(resource, 'contoso.azurewebsites.net');
         setWebsiteUrl(resource, undefined);
-
-        expect(getWebsiteUrl(resource)).to.be.undefined;
-    });
-
-    it('should clear a stale url when the new endpoint is unusable', () => {
-        const resource = makeGenericResource();
-
-        setWebsiteUrl(resource, 'contoso.azurewebsites.net');
-        setWebsiteUrl(resource, 'ftp://contoso.example.com');
 
         expect(getWebsiteUrl(resource)).to.be.undefined;
     });

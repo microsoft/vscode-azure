@@ -61,7 +61,7 @@ describe('FunctionAppDataProvider (unit)', () => {
 
             await provider.enrich(app);
 
-            expect(getWebsiteUrl(app)).to.equal('https://myfunc.azurewebsites.net/');
+            expect(getWebsiteUrl(app)).to.equal('https://myfunc.azurewebsites.net');
         });
 
         it('should ignore virtual nodes', async () => {

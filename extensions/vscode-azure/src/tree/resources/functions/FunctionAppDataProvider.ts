@@ -54,13 +54,6 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
      * Attaches the Function App's public website URL so the Browse Website
      * command becomes available on the node.
      *
-     * The hostname is not present on the resource-list payload that produced
-     * this node, and it cannot be derived from the app's name (custom domains
-     * and sovereign clouds both change it), so it costs one `webApps.get` per
-     * Function App per listing. That is the same per-resource enrichment cost
-     * `AcrDataProvider` already pays, and it runs in the background under the
-     * tree's concurrency limit rather than blocking the first render.
-     *
      * @throws if the resource's ARM ID does not contain a resource group segment.
      */
     public async enrich(resource: ConcreteAzureNode): Promise<boolean> {

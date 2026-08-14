@@ -12,10 +12,10 @@ import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 
 describe('BrowseWebsite (unit)', () => {
-    function createCommand(endpoint?: string) {
+    function createCommand(hostname?: string) {
         const mockResult = createMockVsCode({ Uri: vscode.Uri });
         const resource = makeGenericResource();
-        setWebsiteUrl(resource, endpoint);
+        setWebsiteUrl(resource, hostname);
         const dataTree = createMockDataItemTree([resource]);
         const command = new BrowseWebsite(mockResult.vscode, dataTree, new OpenUrl(mockResult.vscode));
         return { command, openExternal: mockResult.env.openExternal, key: AzureNodeId.from(resource).toString() };
@@ -27,6 +27,7 @@ describe('BrowseWebsite (unit)', () => {
         await command.execute(key);
 
         expect(openExternal.mock.callCount()).to.equal(1);
+        // The stored value has no trailing slash; Uri.toString() normalizes one in.
         expect(String(openExternal.mock.calls[0].arguments[0])).to.equal('https://contoso.azurewebsites.net/');
     });
 
@@ -38,7 +39,7 @@ describe('BrowseWebsite (unit)', () => {
     });
 
     it('should reject an invalid tree selection', async () => {
-        const { command, openExternal } = createCommand('https://example.com/');
+        const { command, openExternal } = createCommand('contoso.azurewebsites.net');
 
         await expect(command.execute('missing')).to.be.rejectedWith('Select an Azure resource with a website.');
         expect(openExternal.mock.callCount()).to.equal(0);
