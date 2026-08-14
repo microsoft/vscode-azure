@@ -8,8 +8,8 @@ import {
     type ConcreteAzureNode
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, Everything, IActionExecutor, IVsCode,
-    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Disposable, type ProviderResult
+    Disposable, EventEmitter, Everything, IActionExecutor, IVsCode,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type ProviderResult
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection } from '../../constants';
@@ -106,6 +106,6 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
 
     /** @inheritdoc */
     public dispose(): void {
-        this.disposables.forEach(d => void d.dispose());
+        Disposable.disposeAll(this.disposables);
     }
 }
