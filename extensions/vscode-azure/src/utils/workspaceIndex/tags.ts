@@ -45,8 +45,6 @@ function validate(kind: string, value: string): void {
  * once a second detector wants it, rather than in anticipation.
  */
 export const StandardTagNames = {
-    /** A directory that is the root of a project. */
-    projectRoot: 'projectRoot',
     /** A file that defines a project (`*.csproj`, `package.json`, `host.json`). */
     projectFile: 'projectFile',
     /** A file containing code the project builds or runs. */
