@@ -12,9 +12,8 @@ import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
-import { combineContextValues } from '../combineContextValues';
+import { combineContextValues, resourceContextValue } from '../contextValueHelpers';
 import { getResourceTypeIconUri } from '../iconPath';
-import { resourceContextValue } from './resourceContextValue';
 import { AcrResourceType } from './acr/AcrRegistry';
 
 /**

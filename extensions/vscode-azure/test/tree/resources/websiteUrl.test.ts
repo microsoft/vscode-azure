@@ -36,8 +36,25 @@ describe('websiteUrl (unit)', () => {
         const resource = makeGenericResource();
 
         setWebsiteUrl(resource, 'javascript://example.com/%0aalert(1)');
-
         expect(getWebsiteUrl(resource)).to.be.undefined;
+
+        setWebsiteUrl(resource, 'javascript:alert(1)');
+        expect(getWebsiteUrl(resource)).to.be.undefined;
+
+        setWebsiteUrl(resource, 'ftp://contoso.example.com');
+        expect(getWebsiteUrl(resource)).to.be.undefined;
+
+        setWebsiteUrl(resource, 'file:///etc/passwd');
+        expect(getWebsiteUrl(resource)).to.be.undefined;
+    });
+
+    it('should not overwrite an existing url with an unusable one', () => {
+        const resource = makeGenericResource();
+
+        setWebsiteUrl(resource, 'contoso.azurewebsites.net');
+        setWebsiteUrl(resource, undefined);
+
+        expect(getWebsiteUrl(resource)).to.equal('https://contoso.azurewebsites.net/');
     });
 
     it('should return undefined for resources without a website', () => {

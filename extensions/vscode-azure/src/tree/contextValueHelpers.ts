@@ -4,10 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import { BrowseWebsite } from '../../commands/tree/BrowseWebsite';
-import { OpenInPortal } from '../../commands/tree/OpenInPortal';
-import { combineContextValues } from '../combineContextValues';
-import { getWebsiteUrl } from './websiteUrl';
+import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
+import { OpenInPortal } from '../commands/tree/OpenInPortal';
+import { getWebsiteUrl } from './resources/websiteUrl';
+
+/**
+ * Combines context values into a single string by sorting and then joining with `;`.
+ */
+export function combineContextValues(...contextValues: string[]): string {
+    return contextValues.sort().join(';');
+}
 
 /**
  * Builds the context value for an Azure resource tree item.

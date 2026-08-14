@@ -10,7 +10,7 @@ import { inject, injectable } from 'inversify';
 import { DisableAcrAdminUser } from '../../../commands/acr/DisableAcrAdminUser';
 import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IAzureViewDataTree } from '../../../services';
-import { combineContextValues } from '../../combineContextValues';
+import { combineContextValues } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { isAcrRegistry } from './AcrRegistry';
 

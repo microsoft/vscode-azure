@@ -10,9 +10,8 @@ import { inject, injectable } from 'inversify';
 import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../commands/functions/DeleteAppSetting';
 import { IAzureViewDataTree } from '../../../services';
-import { combineContextValues } from '../../combineContextValues';
+import { combineContextValues, resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
-import { resourceContextValue } from '../resourceContextValue';
 import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './FunctionApp';
 
 /**

@@ -17,7 +17,7 @@ Coding conventions and best practices established in this project.
 
 - **`I`-prefix** for DI service identifier interfaces: `IVsCode`, `IActionExecutor`, `IOutputChannel`
 - **PascalCase** for files containing classes/interfaces: `DataItemTree.ts`, `GenericResource.ts`
-- **camelCase** for function-oriented files: `combineContextValues.ts`, `registerCommands.ts`
+- **camelCase** for function-oriented files: `contextValueHelpers.ts`, `registerCommands.ts`
 
 ## VS Code API
 

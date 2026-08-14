@@ -5,17 +5,19 @@
 
 import { WebsiteUrl } from '../../constants';
 
+/** Matches the only schemes a website URL is allowed to carry. */
+const HttpSchemePattern = /^https?:\/\//i;
+
 /**
  * Attaches a browsable website URL to a resource, in place.
  *
  * Intended to be called from a data provider's `enrich` implementation, which
  * mutates the resource without replacing it. Normalization happens here so
- * every provider contributes a consistent, browser-safe URL: ARM reports bare
- * hostnames, so a value without a scheme is assumed to be HTTPS, and anything
- * that is not HTTP(S) is discarded.
+ * every provider contributes a consistent, browser-safe URL.
  *
- * @param endpoint - The endpoint reported by the product API, if any. When it
- *   is missing or unusable, no property is attached.
+ * @param endpoint - A bare hostname (as ARM reports it) or an absolute
+ *   `http(s)` URL. When it is missing, or carries any other scheme, no
+ *   property is attached.
  */
 export function setWebsiteUrl(resource: object, endpoint: string | undefined): void {
     const url = normalizeEndpoint(endpoint);
@@ -45,9 +47,16 @@ function normalizeEndpoint(endpoint: string | undefined): string | undefined {
         return undefined;
     }
 
+    // ARM reports bare hostnames (`contoso.azurewebsites.net`), so a value with
+    // no scheme is assumed to be HTTPS. A value that carries any other scheme is
+    // rejected outright rather than coerced, so nothing but http(s) can reach a
+    // browser -- which also makes the parse below http(s) by construction.
+    if (value.includes(':') && !HttpSchemePattern.test(value)) {
+        return undefined;
+    }
+
     try {
-        const url = new URL(value.includes('://') ? value : `https://${value}`);
-        return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+        return new URL(HttpSchemePattern.test(value) ? value : `https://${value}`).toString();
     } catch {
         return undefined;
     }

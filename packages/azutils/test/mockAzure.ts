@@ -249,8 +249,6 @@ export interface MockWebAppClientOptions {
     readonly settings?: Record<string, string>;
     /** `defaultHostName` returned by `webApps.get`. */
     readonly defaultHostName?: string;
-    /** `defaultHostname` returned by `staticSites.getStaticSite`. */
-    readonly staticSiteHostname?: string;
 }
 
 /**
@@ -260,7 +258,6 @@ export interface MockWebAppClientOptions {
 export type MockWebAppClient = IWebAppClient & {
     readonly settings: Record<string, string>;
     readonly webApps: { [K in keyof IWebAppClient['webApps']]: Mock<IWebAppClient['webApps'][K]> };
-    readonly staticSites: { [K in keyof IWebAppClient['staticSites']]: Mock<IWebAppClient['staticSites'][K]> };
 };
 
 /**
@@ -289,9 +286,6 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
                 Object.assign(settings, appSettings.properties);
                 return Promise.resolve({ properties: { ...settings } });
             }),
-        },
-        staticSites: {
-            getStaticSite: mock.fn(() => Promise.resolve({ location: 'eastus', defaultHostname: options?.staticSiteHostname })),
         },
     };
 }

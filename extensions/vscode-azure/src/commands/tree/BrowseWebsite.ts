@@ -8,10 +8,8 @@ import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { getWebsiteUrl } from '../../tree/resources/websiteUrl';
-import type { UrlProvider, UrlProviderIdentifier } from '../OpenUrl';
-
-/** Identifier for the {@linkcode BrowseWebsite} URL provider binding. */
-export const IBrowseWebsite: UrlProviderIdentifier = Symbol.for('IBrowseWebsite');
+import type { ManagedCommand } from '../ManagedCommand';
+import { OpenUrl } from '../OpenUrl';
 
 /**
  * Opens the website of the selected Azure resource tree node.
@@ -20,17 +18,20 @@ export const IBrowseWebsite: UrlProviderIdentifier = Symbol.for('IBrowseWebsite'
  * enrichment, so this only has to read it back; any resource type can become
  * browsable simply by having its provider attach one.
  *
- * Registered as a URL source for {@linkcode OpenUrl} rather than as its own
- * command, so browsing shares the standard URL-command behavior.
+ * Unlike {@linkcode OpenInPortal}, this cannot be a bare {@linkcode OpenUrl}
+ * resolver: the URL is not derivable from the node key alone, so the resource
+ * has to be looked up in the data tree. Opening is still delegated to
+ * {@linkcode OpenUrl} so browsing shares the standard URL-command behavior.
  */
 @injectable()
-export class BrowseWebsite implements UrlProvider {
+export class BrowseWebsite implements ManagedCommand {
     /** Context value gating this command's visibility in the resource tree. */
     public static readonly ContextValue = 'browseWebsite';
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
+        @inject(OpenUrl) private readonly openUrl: OpenUrl,
     ) { }
 
     /**
@@ -39,7 +40,7 @@ export class BrowseWebsite implements UrlProvider {
      *   website (either because its type has none, or because it has not been
      *   deployed yet).
      */
-    public async getUrl(...args: unknown[]): Promise<string | undefined> {
+    public async execute(...args: unknown[]): Promise<void> {
         const [key] = args;
         const resource = typeof key === 'string' ? this.dataTree.get(key) : undefined;
         if (!resource || !isGenericResource(resource)) {
@@ -53,6 +54,6 @@ export class BrowseWebsite implements UrlProvider {
             throw new Error(this.code.l10n.t('The selected resource does not have a website.'));
         }
 
-        return url;
+        await this.openUrl.execute(url);
     }
 }

@@ -6,34 +6,41 @@
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import * as vscode from 'vscode';
+import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 
 describe('BrowseWebsite (unit)', () => {
-    function createProvider(endpoint?: string) {
-        const mockResult = createMockVsCode();
+    function createCommand(endpoint?: string) {
+        const mockResult = createMockVsCode({ Uri: vscode.Uri });
         const resource = makeGenericResource();
         setWebsiteUrl(resource, endpoint);
         const dataTree = createMockDataItemTree([resource]);
-        const provider = new BrowseWebsite(mockResult.vscode, dataTree);
-        return { provider, key: AzureNodeId.from(resource).toString() };
+        const command = new BrowseWebsite(mockResult.vscode, dataTree, new OpenUrl(mockResult.vscode));
+        return { command, openExternal: mockResult.env.openExternal, key: AzureNodeId.from(resource).toString() };
     }
 
-    it('should return the website url attached by enrichment', async () => {
-        const { provider, key } = createProvider('contoso.azurewebsites.net');
+    it('should open the website url attached by enrichment', async () => {
+        const { command, openExternal, key } = createCommand('contoso.azurewebsites.net');
 
-        expect(await provider.getUrl(key)).to.equal('https://contoso.azurewebsites.net/');
+        await command.execute(key);
+
+        expect(openExternal.mock.callCount()).to.equal(1);
+        expect(String(openExternal.mock.calls[0].arguments[0])).to.equal('https://contoso.azurewebsites.net/');
     });
 
     it('should report when the selected resource has no website', async () => {
-        const { provider, key } = createProvider();
+        const { command, openExternal, key } = createCommand();
 
-        await expect(provider.getUrl(key)).to.be.rejectedWith('The selected resource does not have a website.');
+        await expect(command.execute(key)).to.be.rejectedWith('The selected resource does not have a website.');
+        expect(openExternal.mock.callCount()).to.equal(0);
     });
 
     it('should reject an invalid tree selection', async () => {
-        const { provider } = createProvider('https://example.com/');
+        const { command, openExternal } = createCommand('https://example.com/');
 
-        await expect(provider.getUrl('missing')).to.be.rejectedWith('Select an Azure resource with a website.');
+        await expect(command.execute('missing')).to.be.rejectedWith('Select an Azure resource with a website.');
+        expect(openExternal.mock.callCount()).to.equal(0);
     });
 });
