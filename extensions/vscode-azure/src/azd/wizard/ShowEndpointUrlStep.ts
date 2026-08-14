@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, ICodeContext, IOutputChannel, stringifyError } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { OpenUrl } from '../../commands/OpenUrl';
 import { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
@@ -20,6 +21,8 @@ export class ShowEndpointUrlStep<TContext extends AzdWizardContext> extends Exec
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(IOutputChannel) private readonly output: IOutputChannel,
+        @inject(OpenUrl) private readonly openUrl: OpenUrl,
     ) {
         super();
     }
@@ -45,15 +48,28 @@ export class ShowEndpointUrlStep<TContext extends AzdWizardContext> extends Exec
             return;
         }
 
-        const url = urls[0];
+        // Deliberately not awaited: the notification stays up until the user acts
+        // on it, which must not hold up the rest of the wizard.
+        void this.promptToOpen(urls[0]);
+    }
+
+    private async promptToOpen(url: string): Promise<void> {
         const openAction = this.ctx.code.l10n.t('Open in Browser');
-        void this.ctx.code.window.showInformationMessage(
+        const selection = await this.ctx.code.window.showInformationMessage(
             this.ctx.code.l10n.t('Application deployed: {0}', url),
             openAction,
-        ).then((selection) => {
-            if (selection === openAction) {
-                void this.ctx.code.env.openExternal(this.ctx.code.Uri.parse(url));
-            }
-        });
+        );
+
+        if (selection !== openAction) {
+            return;
+        }
+
+        try {
+            // The URL comes from azd's output, so it is opened through OpenUrl
+            // rather than openExternal directly, to pick up its scheme check.
+            await this.openUrl.execute(url);
+        } catch (error: unknown) {
+            this.output.warn(this.ctx.code.l10n.t('Could not open the deployed endpoint: {0}', stringifyError(error)));
+        }
     }
 }
