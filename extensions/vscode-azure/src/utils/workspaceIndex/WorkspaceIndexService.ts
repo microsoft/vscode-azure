@@ -35,7 +35,8 @@ const excludedPathPattern = new RegExp(
     `(?:^|/)(?:${[...defaultExcludedDirectories]
         .map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
         .join('|')})/`,
-    'i');
+    'i'
+);
 
 export const IWorkspaceIndexService: ServiceIdentifier<IWorkspaceIndexService> = Symbol.for('IWorkspaceIndexService');
 
