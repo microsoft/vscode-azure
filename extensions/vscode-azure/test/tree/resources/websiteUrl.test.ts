@@ -46,6 +46,11 @@ describe('websiteUrl (unit)', () => {
 
         setWebsiteUrl(resource, 'file:///etc/passwd');
         expect(getWebsiteUrl(resource)).to.be.undefined;
+
+        // Prepending a scheme to this would yield `https://a@b.com/`, which is a
+        // valid URL pointing at `b.com` -- so it must be rejected, not coerced.
+        setWebsiteUrl(resource, 'mailto:someone@contoso.example.com');
+        expect(getWebsiteUrl(resource)).to.be.undefined;
     });
 
     it('should preserve a host that carries a port', () => {

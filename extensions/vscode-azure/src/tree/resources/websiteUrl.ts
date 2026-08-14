@@ -17,7 +17,6 @@ const HttpSchemePattern = /^https?:\/\//i;
  * colon must be followed by something other than a digit to count as a scheme.
  */
 const ForeignSchemePattern = /^[a-z][a-z0-9+.-]*:(?!\d)/i;
-
 /**
  * Attaches a browsable website URL to a resource, in place, replacing any
  * previously attached URL.
@@ -65,10 +64,14 @@ function normalizeEndpoint(endpoint: string | undefined): string | undefined {
         return undefined;
     }
 
-    // ARM reports bare hostnames (`contoso.azurewebsites.net`), so a value with
-    // no scheme is assumed to be HTTPS. A value that carries any other scheme is
-    // rejected outright rather than coerced, so nothing but http(s) can reach a
-    // browser -- which also makes the parse below http(s) by construction.
+    // ARM reports bare hosts (`contoso.azurewebsites.net`), which the URL parser
+    // rejects outright -- it requires an absolute URL, and supplying a base only
+    // makes the host parse as a *path*. So a scheme-less value gets HTTPS
+    // prepended. Any other scheme must be rejected *before* that, because
+    // prepending does not fail on them, it silently rewrites them into valid but
+    // wrong URLs (`mailto:a@b.com` -> `https://a@b.com/`, which navigates to
+    // `b.com`). Rejecting first also makes the parse below http(s) by
+    // construction.
     if (!HttpSchemePattern.test(value) && ForeignSchemePattern.test(value)) {
         return undefined;
     }
