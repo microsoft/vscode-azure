@@ -69,6 +69,22 @@ describe('OpenUrl (unit)', () => {
         }
     });
 
+    it('should not repeat the rejected URL in the error', async () => {
+        // The message reaches the output channel and telemetry, so it must not
+        // echo a value that could carry credentials or a SAS token -- nor the
+        // scheme, which for a scheme-less `host:port` value is the host itself.
+        const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const command = new OpenUrl(mockResult.vscode);
+
+        const error = await command.execute('ftp://user:hunter2@contoso-internal.example.com/x?sig=SECRET')
+            .then(() => undefined, (e: unknown) => e as Error);
+
+        expect(error).to.be.instanceOf(Error);
+        for (const secret of ['hunter2', 'SECRET', 'contoso-internal', 'ftp']) {
+            expect(error?.message, `expected the message to omit ${secret}`).to.not.contain(secret);
+        }
+    });
+
     it('opens http and https regardless of scheme casing', async () => {
         for (const url of ['http://contoso.example.com/', 'https://contoso.example.com/', 'HTTPS://contoso.example.com/']) {
             const mockResult = createMockVsCode({ Uri: vscode.Uri });

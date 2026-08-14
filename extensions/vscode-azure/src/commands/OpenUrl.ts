@@ -50,7 +50,12 @@ export class OpenUrl implements ManagedCommand {
         // not rejected by Uri.parse, it is silently reinterpreted as a file path.
         const uri = this.code.Uri.parse(url);
         if (!AllowedSchemes.includes(uri.scheme.toLowerCase())) {
-            throw new Error(this.code.l10n.t('Only http and https links can be opened. Got: {0}', url));
+            // Deliberately reports nothing about the rejected value. This message
+            // reaches the output channel and telemetry, and a URL can carry
+            // credentials or a SAS token. Even the scheme is unsafe to include:
+            // for a scheme-less `host:port` value, Uri.parse reads the host
+            // itself as the scheme.
+            throw new Error(this.code.l10n.t('Only http and https links can be opened.'));
         }
 
         await this.code.env.openExternal(uri);
