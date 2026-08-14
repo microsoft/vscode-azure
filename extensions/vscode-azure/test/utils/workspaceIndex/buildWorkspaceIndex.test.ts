@@ -8,7 +8,7 @@ import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode } from '@microso
 import type * as vscode from 'vscode';
 import { buildWorkspaceIndex } from '../../../src/utils/workspaceIndex/buildWorkspaceIndex';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
-import { tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
+import { createTag } from '../../../src/utils/workspaceIndex/tags';
 import { Attribute, attributeDetector, AttributedRoot, csharpDetector, CsProjectRoot, CsSourceFile, nodeDetector, NodeSourceFile } from './mockDetectors';
 
 describe('buildWorkspaceIndex (unit)', () => {
@@ -21,14 +21,14 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, nodeDetector]);
 
-            expect(index.withTag(CsSourceFile).map(n => n.relativePath)).to.deep.equal(['App.cs']);
-            expect(index.withTag(NodeSourceFile).map(n => n.relativePath)).to.deep.equal(['app.js']);
+            expect(index.withTag(CsSourceFile).map(u => u.path)).to.deep.equal(['/repo/App.cs']);
+            expect(index.withTag(NodeSourceFile).map(u => u.path)).to.deep.equal(['/repo/app.js']);
         });
 
         it('rejects a detector applying another namespace\'s tag', async () => {
             const forger: WorkspaceDetector = {
                 id: 'forger',
-                namespace: tagNamespace('forger'),
+                namespace: 'forger',
                 files: { suffixes: ['.cs'] },
                 inspect(item) { item.tag(CsSourceFile); },
             };
@@ -40,9 +40,9 @@ describe('buildWorkspaceIndex (unit)', () => {
         });
 
         it('rejects namespace and tag names containing the qualifier separator', () => {
-            expect(() => tagNamespace('a:b')).to.throw(RangeError);
-            expect(() => tagNamespace('')).to.throw(RangeError);
-            expect(() => tagNamespace('ok').tag('a:b')).to.throw(RangeError);
+            expect(() => createTag('a:b', 'ok')).to.throw(RangeError);
+            expect(() => createTag('', 'ok')).to.throw(RangeError);
+            expect(() => createTag('ok', 'a:b')).to.throw(RangeError);
         });
     });
 
@@ -70,8 +70,20 @@ describe('buildWorkspaceIndex (unit)', () => {
             const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
             const [file] = index.withTag(Attribute);
 
-            expect(file.relativePath).to.equal('Orders.cs');
-            expect(file.values).to.deep.equal(['PlaceOrder', 'CancelOrder']);
+            expect(file.path).to.equal('/repo/Orders.cs');
+            expect(index.valuesOf(file, Attribute)).to.deep.equal(['PlaceOrder', 'CancelOrder']);
+        });
+
+        it('reports no values for a valueless or absent tag', async () => {
+            const m = createMockVsCode();
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/App.cs', '');
+
+            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector]);
+            const file = m.vscode.Uri.file('/repo/App.cs');
+
+            expect(index.valuesOf(file, CsSourceFile)).to.be.empty;
+            expect(index.valuesOf(file, Attribute)).to.be.empty;
         });
 
         it('does not retain untagged nodes', async () => {
@@ -86,14 +98,14 @@ describe('buildWorkspaceIndex (unit)', () => {
     });
 
     describe('ordering', () => {
-        it('indexes a directory before its contents so ancestors resolve', async () => {
+        it('indexes a directory before its contents', async () => {
             const seen: string[] = [];
             const recorder: WorkspaceDetector = {
                 id: 'recorder',
-                namespace: tagNamespace('recorder'),
+                namespace: 'recorder',
                 directories: true,
                 files: { suffixes: ['.cs'] },
-                inspect(item) { seen.push(item.relativePath); },
+                inspect(item) { seen.push(item.uri.path); },
             };
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
@@ -101,7 +113,7 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             await buildWorkspaceIndex(m.vscode, [recorder]);
 
-            expect(seen).to.deep.equal(['.', 'src', 'src/App.cs']);
+            expect(seen).to.deep.equal(['/repo', '/repo/src', '/repo/src/App.cs']);
         });
 
         it('runs detectors in registration order, so later ones see earlier tags', async () => {
@@ -110,11 +122,12 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFile(m, '/repo/marker.txt', '');
             addWorkspaceFile(m, '/repo/App.cs', '[Name("Ping")]');
 
-            // The functions detector only inspects files the C# detector has
+            // The attribute detector only inspects files the C# detector has
             // already recognised as source.
             const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
+            const [file] = index.withTag(Attribute);
 
-            expect(index.withTag(Attribute).flatMap(f => f.values)).to.deep.equal(['Ping']);
+            expect(index.valuesOf(file, Attribute)).to.deep.equal(['Ping']);
         });
 
         it('does not tag files in a directory without the marker', async () => {
@@ -126,7 +139,7 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
 
-            expect(index.withTag(Attribute).flatMap(f => f.values)).to.deep.equal(['Inside']);
+            expect(index.withTag(Attribute).map(u => u.path)).to.deep.equal(['/repo/api/Inside.cs']);
         });
     });
 
@@ -135,9 +148,9 @@ describe('buildWorkspaceIndex (unit)', () => {
             const inspected: string[] = [];
             const detector: WorkspaceDetector = {
                 id: 'picky',
-                namespace: tagNamespace('picky'),
+                namespace: 'picky',
                 files: { names: ['marker.txt'], suffixes: ['.csproj'] },
-                inspect(item) { inspected.push(item.name); },
+                inspect(item) { inspected.push(item.uri.path); },
             };
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
@@ -147,17 +160,17 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             await buildWorkspaceIndex(m.vscode, [detector]);
 
-            expect(inspected.sort()).to.deep.equal(['Api.csproj', 'marker.txt']);
+            expect(inspected.sort()).to.deep.equal(['/repo/Api.csproj', '/repo/marker.txt']);
         });
 
         it('exposes the containing directory\'s file names to every detector', async () => {
             const sizes = new Map<string, number>();
             const detector: WorkspaceDetector = {
                 id: 'sizes',
-                namespace: tagNamespace('sizes'),
+                namespace: 'sizes',
                 directories: true,
                 files: { suffixes: ['.cs'] },
-                inspect(item) { sizes.set(item.relativePath, item.fileNames.size); },
+                inspect(item) { sizes.set(item.uri.path, item.fileNames.size); },
             };
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
@@ -166,9 +179,9 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             await buildWorkspaceIndex(m.vscode, [detector]);
 
-            expect(sizes.get('.')).to.equal(2);
+            expect(sizes.get('/repo')).to.equal(2);
             // A file sees its own siblings, itself included.
-            expect(sizes.get('App.cs')).to.equal(2);
+            expect(sizes.get('/repo/App.cs')).to.equal(2);
         });
 
         it('reads a file once per detector that asks for it', async () => {
@@ -177,7 +190,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             addWorkspaceFile(m, '/repo/App.cs', 'contents');
             const reader = (id: string): WorkspaceDetector => ({
                 id,
-                namespace: tagNamespace(id),
+                namespace: id,
                 files: { suffixes: ['.cs'] },
                 inspect: async item => { await item.text(); },
             });
@@ -194,7 +207,7 @@ describe('buildWorkspaceIndex (unit)', () => {
         it('surfaces a detector error', async () => {
             const detector: WorkspaceDetector = {
                 id: 'boom',
-                namespace: tagNamespace('boom'),
+                namespace: 'boom',
                 directories: true,
                 inspect() { throw new Error('detector failed'); },
             };

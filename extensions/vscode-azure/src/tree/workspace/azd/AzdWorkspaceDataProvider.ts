@@ -12,17 +12,17 @@ import type * as vscode from 'vscode';
 import { IAzdService } from '../../../azd/AzdService';
 import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
-import { StandardTagNames, tagNamespace } from '../../../utils/workspaceIndex/WorkspaceTag';
+import { createTag, StandardTagNames } from '../../../utils/workspaceIndex/tags';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
 
 /** File names that mark an azd project. */
 export const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
-const azd = tagNamespace('azd');
+const azd = 'azd';
 
 /** The `azure.yaml` / `azure.yml` file that marks an azd project. */
-export const AzdProjectFile = azd.tag(StandardTagNames.projectFile);
+export const AzdProjectFile = createTag(azd, StandardTagNames.projectFile);
 
 /** Tags the `azure.yaml` of every azd project. */
 export const azdDetector: WorkspaceDetector = {
@@ -102,15 +102,16 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Di
     private async discoverProjects(): Promise<AzdProjectNode[]> {
         const index = await this.indexService.getIndex();
         const projects: AzdProjectNode[] = [];
-        for (const projectFile of index.withTag(AzdProjectFile)) {
-            if (!projectFile.workspaceFolder) {
+        for (const uri of index.withTag(AzdProjectFile)) {
+            const folder = this.code.workspace.getWorkspaceFolder(uri);
+            if (!folder) {
                 continue;
             }
             projects.push({
-                id: `${AzdProjectKeyPrefix}${projectFile.uri.toString()}`,
+                id: `${AzdProjectKeyPrefix}${uri.toString()}`,
                 type: 'azdProject',
-                label: projectFile.workspaceFolder.name,
-                resourceUri: projectFile.uri,
+                label: folder.name,
+                resourceUri: uri,
             });
         }
         this.executor.output.debug(`[data] azd workspace: discovered=${projects.length}`);

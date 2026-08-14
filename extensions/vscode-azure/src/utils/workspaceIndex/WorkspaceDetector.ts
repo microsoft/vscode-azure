@@ -5,7 +5,6 @@
 
 import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import type { TagNamespace, WorkspaceTag } from './WorkspaceTag';
 
 /**
  * Collection identifier every product binds its detectors to.
@@ -15,22 +14,15 @@ import type { TagNamespace, WorkspaceTag } from './WorkspaceTag';
  */
 export const IWorkspaceDetector: ServiceIdentifier<WorkspaceDetector> = Symbol.for('IWorkspaceDetector');
 
-/** A file or directory the index knows about. */
-export interface IndexedNode {
-    readonly uri: vscode.Uri;
-    /** Final path segment: the file or directory name. */
-    readonly name: string;
-    /** POSIX-style path relative to the workspace folder, or `.` for its root. */
-    readonly relativePath: string;
-    readonly workspaceFolder: vscode.WorkspaceFolder | undefined;
-    readonly isDirectory: boolean;
-}
-
 /**
- * A node presented to a {@linkcode WorkspaceDetector} for inspection, with the
+ * A file or directory presented to a {@linkcode WorkspaceDetector}, with the
  * reads and lookups needed to decide what to tag it with.
  */
-export interface DetectorContext extends IndexedNode {
+export interface DetectorContext {
+    readonly uri: vscode.Uri;
+
+    readonly isDirectory: boolean;
+
     /**
      * Names of the files in this directory, or alongside this file. Lets a
      * detector decide from a node's neighbours without a further read.
@@ -44,7 +36,7 @@ export interface DetectorContext extends IndexedNode {
      * Whether this node already carries `tag`. Any namespace may be read, which
      * is how a detector builds on an earlier one's findings.
      */
-    has<T>(tag: WorkspaceTag<T>): boolean;
+    has(tag: string): boolean;
 
     /**
      * Attaches `tag` to this node. Applying the same tag repeatedly with
@@ -54,7 +46,7 @@ export interface DetectorContext extends IndexedNode {
      * @throws {@linkcode RangeError} if `tag` is outside the detector's own
      *   namespace, so no detector can forge another's tags.
      */
-    tag<T>(tag: WorkspaceTag<T>, value?: T): void;
+    tag(tag: string, value?: string): void;
 }
 
 /** The files a detector wants to inspect. */
@@ -76,8 +68,8 @@ export interface WorkspaceDetector {
     /** Stable identifier, used in diagnostics. */
     readonly id: string;
 
-    /** The only namespace this detector may write tags in. */
-    readonly namespace: TagNamespace;
+    /** The only namespace this detector may apply tags in. */
+    readonly namespace: string;
 
     /** Files to inspect. Omit if the detector only looks at directories. */
     readonly files?: DetectorFileInterest;

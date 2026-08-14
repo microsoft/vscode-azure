@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
-import { StandardTagNames, tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
+import { createTag, StandardTagNames } from '../../../src/utils/workspaceIndex/tags';
 
 /*
  * Deliberately synthetic detectors, kept separate from the shipped
@@ -14,29 +14,24 @@ import { StandardTagNames, tagNamespace } from '../../../src/utils/workspaceInde
  * index has to support two shapes that no shipped detector exercises yet:
  *
  * - Same tag name in two namespaces -- `CsSourceFile` and `NodeSourceFile` are
- *   both `sourceFile`. Both shipped detectors use `projectRoot`, so they cover
+ *   both `sourceFile`. Both shipped detectors use `projectFile`, so they cover
  *   namespace separation but not the language-vs-language case namespacing is
  *   really there for.
  * - Many values on one file, layered across namespaces -- one detector reading
  *   only what another already tagged, and recording several findings per file.
- *   Shipped detectors tag one directory per project and read nothing.
+ *   Shipped detectors tag one file per project and read nothing.
  */
 
-const csharp = tagNamespace('csharp');
-export const CsProjectRoot = csharp.tag(StandardTagNames.projectRoot);
-export const CsSourceFile = csharp.tag(StandardTagNames.sourceFile);
-
-const node = tagNamespace('node');
-export const NodeSourceFile = node.tag(StandardTagNames.sourceFile);
-
-const attributes = tagNamespace('attributes');
-export const AttributedRoot = attributes.tag(StandardTagNames.projectRoot);
-export const Attribute = attributes.tag<string>('Attribute');
+export const CsProjectRoot = createTag('csharp', StandardTagNames.projectRoot);
+export const CsSourceFile = createTag('csharp', StandardTagNames.sourceFile);
+export const NodeSourceFile = createTag('node', StandardTagNames.sourceFile);
+export const AttributedRoot = createTag('attributes', StandardTagNames.projectRoot);
+export const Attribute = createTag('attributes', 'Attribute');
 
 /** Tags `.cs` files, and the directories holding a `.csproj`. */
 export const csharpDetector: WorkspaceDetector = {
     id: 'csharp',
-    namespace: csharp,
+    namespace: 'csharp',
     directories: true,
     files: { suffixes: ['.cs'] },
     inspect(item) {
@@ -53,7 +48,7 @@ export const csharpDetector: WorkspaceDetector = {
 /** Tags `.js` files, so that `node:sourceFile` and `csharp:sourceFile` coexist. */
 export const nodeDetector: WorkspaceDetector = {
     id: 'node',
-    namespace: node,
+    namespace: 'node',
     files: { suffixes: ['.js'] },
     inspect(item) { item.tag(NodeSourceFile); },
 };
@@ -69,7 +64,7 @@ export const nodeDetector: WorkspaceDetector = {
  */
 export const attributeDetector: WorkspaceDetector = {
     id: 'attributes',
-    namespace: attributes,
+    namespace: 'attributes',
     directories: true,
     files: { suffixes: ['.cs'] },
     async inspect(item) {

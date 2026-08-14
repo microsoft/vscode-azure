@@ -97,7 +97,6 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
-        this.disposables.length = 0;
     }
 
     private onFileEvent(uri: vscode.Uri): void {

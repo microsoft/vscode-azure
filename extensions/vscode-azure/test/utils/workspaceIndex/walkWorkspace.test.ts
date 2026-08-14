@@ -18,9 +18,9 @@ describe('walkWorkspace (unit)', () => {
             addWorkspaceFile(m, '/one/top.txt', '');
             addWorkspaceFile(m, '/two/only.txt', '');
 
-            const paths = (await collect(m)).map(d => d.relativePath);
+            const paths = (await collect(m)).map(d => d.uri.path);
 
-            expect(paths).to.deep.equal(['.', 'deep', 'deep/nested', '.']);
+            expect(paths).to.deep.equal(['/one', '/one/deep', '/one/deep/nested', '/two']);
         });
 
         it('visits entries in name order regardless of filesystem order', async () => {
@@ -30,22 +30,20 @@ describe('walkWorkspace (unit)', () => {
                 addWorkspaceFile(m, `/repo/${name}/file.txt`, '');
             }
 
-            const paths = (await collect(m)).map(d => d.relativePath);
+            const paths = (await collect(m)).map(d => d.uri.path);
 
-            expect(paths).to.deep.equal(['.', 'alpha', 'mid', 'zeta']);
+            expect(paths).to.deep.equal(['/repo', '/repo/alpha', '/repo/mid', '/repo/zeta']);
         });
 
-        it('exposes file names, uris, and the containing workspace folder', async () => {
+        it('exposes each directory\'s uri and file names', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/api/host.json', '{}');
 
             const [, api] = await collect(m);
 
-            expect(api.relativePath).to.equal('api');
             expect(api.uri.path).to.equal('/repo/api');
             expect([...api.fileNames]).to.deep.equal(['host.json']);
-            expect(api.workspaceFolder?.name).to.equal('repo');
         });
 
         it('does not follow directory symlinks', async () => {
@@ -53,12 +51,12 @@ describe('walkWorkspace (unit)', () => {
             const folder = addWorkspaceFolder(m, '/repo');
             m.fs.addSymbolicLink(m.vscode.Uri.joinPath(folder.uri, 'linked'), m.vscode.FileType.Directory);
 
-            const paths = (await collect(m)).map(d => d.relativePath);
+            const paths = (await collect(m)).map(d => d.uri.path);
 
-            expect(paths).to.deep.equal(['.']);
+            expect(paths).to.deep.equal(['/repo']);
         });
 
-        it('still reads symlinked files, which cannot cause cycles', async () => {
+        it('still lists symlinked files, which cannot cause cycles', async () => {
             const m = createMockVsCode();
             const folder = addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/real.json', '{"linked":true}');
@@ -79,9 +77,9 @@ describe('walkWorkspace (unit)', () => {
             }
             addWorkspaceFile(m, '/repo/src/app.cs', '');
 
-            const paths = (await collect(m)).map(d => d.relativePath);
+            const paths = (await collect(m)).map(d => d.uri.path);
 
-            expect(paths).to.deep.equal(['.', 'src']);
+            expect(paths).to.deep.equal(['/repo', '/repo/src']);
         });
     });
 

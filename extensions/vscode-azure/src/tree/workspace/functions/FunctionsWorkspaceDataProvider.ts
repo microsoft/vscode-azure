@@ -4,23 +4,23 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    EventEmitter, IActionExecutor,
+    EventEmitter, IActionExecutor, IVsCode,
     type DataProvider, type DataProviderChangeEvent, type Disposable,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
-import { StandardTagNames, tagNamespace } from '../../../utils/workspaceIndex/WorkspaceTag';
+import { createTag, StandardTagNames } from '../../../utils/workspaceIndex/tags';
 import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../WorkspaceNode';
 
 /** File name that marks an Azure Functions project. */
 export const FunctionsHostFileName = 'host.json';
 
-const functions = tagNamespace('functions');
+const functions = 'functions';
 
 /** The `host.json` that marks an Azure Functions project. */
-export const FunctionsHostFile = functions.tag(StandardTagNames.projectFile);
+export const FunctionsHostFile = createTag(functions, StandardTagNames.projectFile);
 
 /**
  * Tags the `host.json` of every Azure Functions project.
@@ -56,6 +56,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
     public readonly onDidChange = this.changeEmitter.event;
 
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
     ) { }
@@ -79,15 +80,16 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         // The tagged node is the `host.json` file, matching the `resourceUri`
         // this tree has always exposed to "Reveal in Explorer".
         const projects: FunctionsProjectNode[] = [];
-        for (const hostFile of index.withTag(FunctionsHostFile)) {
-            if (!hostFile.workspaceFolder) {
+        for (const uri of index.withTag(FunctionsHostFile)) {
+            const folder = this.code.workspace.getWorkspaceFolder(uri);
+            if (!folder) {
                 continue;
             }
             projects.push({
-                id: `${FunctionsProjectKeyPrefix}${hostFile.uri.toString()}`,
+                id: `${FunctionsProjectKeyPrefix}${uri.toString()}`,
                 type: 'functionsProject',
-                label: hostFile.workspaceFolder.name,
-                resourceUri: hostFile.uri,
+                label: folder.name,
+                resourceUri: uri,
             });
         }
 

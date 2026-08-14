@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { basename, isFileNotFoundError, relativePath, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { isFileNotFoundError, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import type { IndexedNode } from './WorkspaceDetector';
 
 /**
  * Directories never descended into: generated output, dependency caches, and
@@ -28,8 +27,8 @@ export const defaultExcludedDirectories: ReadonlySet<string> = new Set([
 const maxEntriesPerFolder = 5000;
 
 /** One directory reached by {@linkcode walkWorkspace}. */
-export interface ScannedDirectory extends IndexedNode {
-    readonly isDirectory: true;
+export interface ScannedDirectory {
+    readonly uri: vscode.Uri;
     /** Names of the files directly inside this directory. */
     readonly fileNames: ReadonlySet<string>;
 }
@@ -106,14 +105,7 @@ async function* walkFolder(
         // Reported before the budget check below, so a directory that was
         // already read is never discarded -- a wide root would otherwise yield
         // nothing at all.
-        yield {
-            uri,
-            name: basename(uri),
-            relativePath: relativePath(root, uri) || '.',
-            workspaceFolder: code.workspace.getWorkspaceFolder(uri),
-            isDirectory: true,
-            fileNames,
-        };
+        yield { uri, fileNames };
 
         if (entriesVisited >= maxEntriesPerFolder) {
             return;

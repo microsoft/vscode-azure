@@ -17,7 +17,7 @@ function createProvider() {
     // provider's use of it rather than a hand-rolled stand-in.
     const indexService = new WorkspaceIndexService(m.vscode, [functionsDetector], new ManualDebounceScheduler());
     return {
-        provider: new FunctionsWorkspaceDataProvider(indexService, executor),
+        provider: new FunctionsWorkspaceDataProvider(m.vscode, indexService, executor),
         indexService,
         mock: m,
     };

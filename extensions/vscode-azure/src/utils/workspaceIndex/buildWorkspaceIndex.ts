@@ -7,7 +7,7 @@ import { readText, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import { walkWorkspace } from './walkWorkspace';
 import { MutableWorkspaceIndex, type WorkspaceIndex } from './WorkspaceIndex';
-import type { DetectorContext, IndexedNode, WorkspaceDetector } from './WorkspaceDetector';
+import type { DetectorContext, WorkspaceDetector } from './WorkspaceDetector';
 
 /**
  * Walks the workspace once, letting every detector tag the nodes it recognises,
@@ -17,7 +17,7 @@ import type { DetectorContext, IndexedNode, WorkspaceDetector } from './Workspac
  * without any dependency machinery: directories breadth-first, each directory
  * before its own files, and detectors in registration order.
  *
- * A detector may only write tags in its own namespace, but may read any tag, so
+ * A detector may only apply tags in its own namespace, but may read any tag, so
  * a later detector can refine what an earlier one found. Two detectors sharing
  * a namespace is a registration mistake, not something this guards against.
  *
@@ -33,23 +33,14 @@ export async function buildWorkspaceIndex(
     const fileDetectors = detectors.filter(detector => detector.files);
 
     for await (const directory of walkWorkspace(code, token)) {
-        await inspectAll(code, directoryDetectors, directory, directory.fileNames, index);
+        await inspectAll(code, directoryDetectors, directory.uri, true, directory.fileNames, index);
 
         for (const fileName of directory.fileNames) {
             const interested = fileDetectors.filter(detector => wantsFile(detector, fileName));
-            if (interested.length === 0) {
-                continue;
+            if (interested.length > 0) {
+                const uri = code.Uri.joinPath(directory.uri, fileName);
+                await inspectAll(code, interested, uri, false, directory.fileNames, index);
             }
-
-            await inspectAll(code, interested, {
-                uri: code.Uri.joinPath(directory.uri, fileName),
-                name: fileName,
-                relativePath: directory.relativePath === '.'
-                    ? fileName
-                    : `${directory.relativePath}/${fileName}`,
-                workspaceFolder: directory.workspaceFolder,
-                isDirectory: false,
-            }, directory.fileNames, index);
         }
     }
 
@@ -63,29 +54,29 @@ function wantsFile(detector: WorkspaceDetector, fileName: string): boolean {
         || (files?.suffixes?.some(suffix => fileName.endsWith(suffix)) ?? false);
 }
 
-/** Offers `node` to each detector in turn, one at a time. */
+/** Offers one node to each detector in turn, one at a time. */
 async function inspectAll(
     code: IVsCode,
     detectors: readonly WorkspaceDetector[],
-    node: IndexedNode,
+    uri: vscode.Uri,
+    isDirectory: boolean,
     fileNames: ReadonlySet<string>,
     index: MutableWorkspaceIndex,
 ): Promise<void> {
     for (const detector of detectors) {
         const context: DetectorContext = {
-            ...node,
+            uri,
+            isDirectory,
             fileNames,
-            text: () => node.isDirectory
-                ? Promise.resolve(undefined)
-                : readText(code, node.uri),
-            has: tag => index.has(node.uri, tag),
+            text: () => isDirectory ? Promise.resolve(undefined) : readText(code, uri),
+            has: tag => index.has(uri, tag),
             tag: (tag, value) => {
-                if (tag.namespace !== detector.namespace.name) {
+                if (!tag.startsWith(`${detector.namespace}:`)) {
                     throw new RangeError(
                         `Detector '${detector.id}' may only apply tags in namespace `
-                        + `'${detector.namespace.name}', not '${tag.qualifiedName}'`);
+                        + `'${detector.namespace}', not '${tag}'`);
                 }
-                index.add(node, tag, value);
+                index.add(uri, tag, value);
             },
         };
         await detector.inspect(context);

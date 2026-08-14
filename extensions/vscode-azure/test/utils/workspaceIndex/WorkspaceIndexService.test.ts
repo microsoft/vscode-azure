@@ -9,7 +9,6 @@ import { azdDetector } from '../../../src/tree/workspace/azd/AzdWorkspaceDataPro
 import { functionsDetector, FunctionsHostFile } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { watchPattern, WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
-import { tagNamespace } from '../../../src/utils/workspaceIndex/WorkspaceTag';
 
 describe('WorkspaceIndexService (unit)', () => {
     afterEach(() => {
@@ -55,8 +54,8 @@ describe('WorkspaceIndexService (unit)', () => {
 
         expect(changed).to.equal(1);
         const index = await service.getIndex();
-        expect(index.withTag(FunctionsHostFile).map(n => n.relativePath))
-            .to.deep.equal(['host.json', 'api/host.json']);
+        expect(index.withTag(FunctionsHostFile).map(u => u.path))
+            .to.deep.equal(['/repo/host.json', '/repo/api/host.json']);
         service.dispose();
     });
 
@@ -145,7 +144,7 @@ describe('WorkspaceIndexService (unit)', () => {
             // No shipped detector declares suffixes yet, so this one stands in for that half.
             const suffixes: WorkspaceDetector = {
                 id: 'suffixes',
-                namespace: tagNamespace('suffixes'),
+                namespace: 'suffixes',
                 files: { suffixes: ['.csproj'] },
                 inspect() { /* no-op */ },
             };
@@ -157,7 +156,7 @@ describe('WorkspaceIndexService (unit)', () => {
         it('watches nothing when no detector declares files', () => {
             const directoriesOnly: WorkspaceDetector = {
                 id: 'dirs',
-                namespace: tagNamespace('dirs'),
+                namespace: 'dirs',
                 directories: true,
                 inspect() { /* no-op */ },
             };

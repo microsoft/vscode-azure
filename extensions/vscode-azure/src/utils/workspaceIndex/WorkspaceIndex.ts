@@ -4,79 +4,81 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import type { IndexedNode } from './WorkspaceDetector';
-import type { WorkspaceTag } from './WorkspaceTag';
-
-/** A node carrying a queried tag, with the values recorded for it. */
-export interface TaggedNode<T> extends IndexedNode {
-    /**
-     * Values recorded for the queried tag, in application order. Empty for a
-     * tag that carries no value.
-     */
-    readonly values: readonly T[];
-}
 
 /**
- * Queryable result of an index build: which workspace nodes carry which tags.
+ * Queryable result of an index build: which files and directories carry which
+ * tags.
  *
  * Only tagged nodes are retained, so the index is proportional to what
- * detectors found rather than to the size of the workspace.
+ * detectors found rather than to the size of the workspace. Everything else a
+ * caller might want -- the name, the containing workspace folder -- is derived
+ * from the {@linkcode vscode.Uri Uri}, so the index stores nothing but tags.
  */
 export interface WorkspaceIndex {
     /**
-     * Nodes carrying `tag`, in discovery order (shallowest first).
+     * Files and directories carrying `tag`, in discovery order (shallowest
+     * first).
      *
-     * Namespaced: `withTag(node.sourceFile)` never returns files tagged by the
-     * C# detector, even though both use the name `sourceFile`.
+     * Namespaced: `withTag(createTag('node', 'sourceFile'))` never returns
+     * files tagged by the C# detector, even though both use the name
+     * `sourceFile`.
      */
-    withTag<T>(tag: WorkspaceTag<T>): readonly TaggedNode<T>[];
+    withTag(tag: string): readonly vscode.Uri[];
 
     /** Whether the node at `uri` carries `tag`. */
-    has<T>(uri: vscode.Uri, tag: WorkspaceTag<T>): boolean;
-}
+    has(uri: vscode.Uri, tag: string): boolean;
 
-interface MutableTaggedNode extends IndexedNode {
-    readonly values: unknown[];
+    /**
+     * Values recorded for `tag` at `uri`, in application order. Empty when the
+     * tag is absent or carries no values.
+     */
+    valuesOf(uri: vscode.Uri, tag: string): readonly string[];
 }
 
 /**
  * Mutable {@linkcode WorkspaceIndex} used while building.
  *
- * Backed by one map of qualified tag name to the nodes carrying it, keyed by
- * URI, which makes both queries direct lookups. Insertion order gives discovery
- * order for free, since the walk reports shallower directories first.
- */export class MutableWorkspaceIndex implements WorkspaceIndex {
-    private readonly byTag = new Map<string, Map<string, MutableTaggedNode>>();
+ * Backed by one map of tag to the nodes carrying it, keyed by URI, which makes
+ * every query a direct lookup. Insertion order gives discovery order for free,
+ * since the walk reports shallower directories first.
+ */
+export class MutableWorkspaceIndex implements WorkspaceIndex {
+    private readonly byTag = new Map<string, Map<string, { uri: vscode.Uri; values: string[] }>>();
 
-    /** Records `tag` on `node`, creating its entry on first use. */
-    public add<T>(node: IndexedNode, tag: WorkspaceTag<T>, value: T | undefined): void {
-        let nodes = this.byTag.get(tag.qualifiedName);
-        if (!nodes) {
-            nodes = new Map();
-            this.byTag.set(tag.qualifiedName, nodes);
+    /** Records `tag` on `uri`, creating its entry on first use. */
+    public add(uri: vscode.Uri, tag: string, value: string | undefined): void {
+        let tagged = this.byTag.get(tag);
+        if (!tagged) {
+            tagged = new Map();
+            this.byTag.set(tag, tagged);
         }
 
-        const key = node.uri.toString();
-        let tagged = nodes.get(key);
-        if (!tagged) {
-            tagged = { ...node, values: [] };
-            nodes.set(key, tagged);
+        const key = uri.toString();
+        let entry = tagged.get(key);
+        if (!entry) {
+            entry = { uri, values: [] };
+            tagged.set(key, entry);
         }
 
         // A valueless tag records its presence only, so repeated application is
         // idempotent rather than accumulating a run of `undefined`.
         if (value !== undefined) {
-            tagged.values.push(value);
+            entry.values.push(value);
         }
     }
 
     /** @inheritdoc */
-    public withTag<T>(tag: WorkspaceTag<T>): readonly TaggedNode<T>[] {
-        return [...this.byTag.get(tag.qualifiedName)?.values() ?? []] as TaggedNode<T>[];
+    public withTag(tag: string): readonly vscode.Uri[] {
+        return [...this.byTag.get(tag)?.values() ?? []].map(entry => entry.uri);
     }
 
     /** @inheritdoc */
-    public has<T>(uri: vscode.Uri, tag: WorkspaceTag<T>): boolean {
-        return this.byTag.get(tag.qualifiedName)?.has(uri.toString()) ?? false;
+    public has(uri: vscode.Uri, tag: string): boolean {
+        return this.byTag.get(tag)?.has(uri.toString()) ?? false;
+    }
+
+    /** @inheritdoc */
+    public valuesOf(uri: vscode.Uri, tag: string): readonly string[] {
+        return this.byTag.get(tag)?.get(uri.toString())?.values ?? [];
     }
 }
