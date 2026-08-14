@@ -84,6 +84,25 @@ describe('WorkspaceIndexService (unit)', () => {
         service.dispose();
     });
 
+    it('does not exclude a workspace folder whose own path looks excluded', async () => {
+        const m = createMockVsCode();
+        addWorkspaceFolder(m, '/home/me/build/site');
+        addWorkspaceFile(m, '/home/me/build/site/host.json', '{}');
+        const scheduler = new ManualDebounceScheduler();
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector], scheduler);
+        await service.getIndex();
+
+        let changed = 0;
+        service.onDidChangeIndex(() => { changed++; });
+
+        // 'build' is excluded, but only as a segment *within* the folder.
+        fireFileSystemEvent(m, '/home/me/build/site/host.json');
+        await scheduler.flush();
+
+        expect(changed).to.equal(1);
+        service.dispose();
+    });
+
     it('coalesces a burst of events into a single rebuild', async () => {
         const { service, mock: m, scheduler } = createService();
         await service.getIndex();

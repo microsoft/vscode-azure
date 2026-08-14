@@ -23,6 +23,20 @@ const rebuildDebounceMs = 500;
  */
 const watchPattern = '**';
 
+/**
+ * Matches a relative path that passes *through* an excluded directory.
+ *
+ * Derived from {@linkcode defaultExcludedDirectories} so the walk and the event
+ * filter cannot disagree. The trailing `/` is what restricts this to
+ * intermediate segments: an event for an excluded directory itself still counts,
+ * because that directory appearing or disappearing does change the walk.
+ */
+const excludedPathPattern = new RegExp(
+    `(?:^|/)(?:${[...defaultExcludedDirectories]
+        .map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|')})/`,
+    'i');
+
 export const IWorkspaceIndexService: ServiceIdentifier<IWorkspaceIndexService> = Symbol.for('IWorkspaceIndexService');
 
 /** Keeps a {@linkcode WorkspaceIndex} current as the workspace changes. */
@@ -118,11 +132,9 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
         if (!folder) {
             return true;
         }
-        const path = relativePath(folder.uri, uri) ?? '';
-        return path
-            .split('/')
-            .slice(0, -1)
-            .some(segment => defaultExcludedDirectories.has(segment.toLowerCase()));
+        // Matched against the path *relative* to the folder, so a workspace
+        // opened at, say, `~/build/site` is not excluded by its own path.
+        return excludedPathPattern.test(relativePath(folder.uri, uri) ?? '');
     }
 
     private invalidate(): void {
