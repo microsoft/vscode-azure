@@ -120,8 +120,6 @@ A symbol is used as the property key so the capability can never collide with an
 
 Because the context value is derived from enriched state, a node rendered before enrichment lands simply lacks it; the `onDidChange` fired at step 4 re-renders the node with the capability present. `setWebsiteUrl()` also *clears* a previously attached URL when the resource stops reporting one, so a node cannot keep advertising a website that no longer resolves.
 
-At present `FunctionAppDataProvider` is the only provider that attaches a website URL; dedicated App Service and Static Web Apps providers will do the same when those products move into the monorepo.
-
 ## View Layer
 
 ### `ViewItemTree<TViewItem, TResource>`
