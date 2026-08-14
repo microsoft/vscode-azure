@@ -4,13 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type WebSiteManagementClientOptionalParams, type WebSiteManagementContext, createWebSiteManagement } from '@azure/arm-appservice/api';
-import { listApplicationSettings as sdkListApplicationSettings, updateApplicationSettings as sdkUpdateApplicationSettings } from '@azure/arm-appservice/api/webApps';
-import type { StringDictionary } from '@azure/arm-appservice/models';
+import { get as sdkGetWebApp, listApplicationSettings as sdkListApplicationSettings, updateApplicationSettings as sdkUpdateApplicationSettings, type WebAppsGetOptionalParams } from '@azure/arm-appservice/api/webApps';
+import type { Site, StringDictionary } from '@azure/arm-appservice/models';
 import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
 import { createArmRestSubscriptionClient } from '../createAzureClient';
+
+export type { Site, StringDictionary, WebAppsGetOptionalParams };
 
 /** Factory that creates an {@linkcode IWebAppClient} for a given subscription. */
 export const IWebAppClientProvider: ServiceIdentifier<IWebAppClientProvider> = Symbol.for('IWebAppClientProvider');
@@ -21,6 +23,7 @@ export type IWebAppClientProvider = SyncFactory<IWebAppClient, [AzureSubscriptio
  */
 export interface IWebAppClient {
     readonly webApps: {
+        get(resourceGroupName: string, name: string, options?: WebAppsGetOptionalParams): Promise<Site>;
         listApplicationSettings(resourceGroupName: string, name: string): Promise<StringDictionary>;
         updateApplicationSettings(resourceGroupName: string, name: string, appSettings: StringDictionary): Promise<StringDictionary>;
     };
@@ -60,6 +63,8 @@ export class WebAppClient implements IWebAppClient {
 
     public get webApps(): IWebAppClient['webApps'] {
         return {
+            get: (resourceGroupName, name, options) =>
+                sdkGetWebApp(this.inner, resourceGroupName, name, options),
             listApplicationSettings: (resourceGroupName, name) =>
                 sdkListApplicationSettings(this.inner, resourceGroupName, name),
             updateApplicationSettings: (resourceGroupName, name, appSettings) =>

@@ -4,16 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { delay } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { ShowEndpointUrlStep } from '../../../src/azd/wizard/ShowEndpointUrlStep';
+import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { createMockAzdService } from '../MockAzdService';
 
 function createStep() {
     const { ctx, mock: mockResult } = createMockCodeContext();
     const azd = createMockAzdService();
-    const step = new ShowEndpointUrlStep(ctx, azd);
-    return { step, azd, mockResult, ctx };
+    const output = new MockOutputChannel('test');
+    const step = new ShowEndpointUrlStep(ctx, azd, output, new OpenUrl(ctx.code));
+    return { step, azd, mockResult, ctx, output };
 }
 
 describe('ShowEndpointUrlStep (unit)', () => {

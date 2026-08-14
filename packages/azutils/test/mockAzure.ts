@@ -247,6 +247,8 @@ export interface MockWebAppClientOptions {
      * client, so mutating the returned settings never affects the caller's object.
      */
     readonly settings?: Record<string, string>;
+    /** `defaultHostName` returned by `webApps.get`. */
+    readonly defaultHostName?: string;
 }
 
 /**
@@ -274,6 +276,7 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
     return {
         settings,
         webApps: {
+            get: mock.fn(() => Promise.resolve({ location: 'eastus', defaultHostName: options?.defaultHostName })),
             listApplicationSettings: mock.fn(() => Promise.resolve({ properties: { ...settings } })),
             updateApplicationSettings: mock.fn((_resourceGroupName: string, _name: string, appSettings: { properties?: Record<string, string> }) => {
                 // Replace rather than merge: the ARM operation is a full write of the setting collection.
