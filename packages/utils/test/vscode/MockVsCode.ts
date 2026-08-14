@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { matchesGlob } from 'node:path/posix';
+import { minimatch } from 'minimatch';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { Disposable } from '../../src/vscode/Disposable';
@@ -311,11 +311,12 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
     );
 
-    // Matches files in the mock file system against a glob, using Node's
-    // pure `path.matchesGlob` (no real filesystem access). VS Code resolves a
-    // relative glob against workspace folders, so a pattern without a path
-    // separator matches by basename anywhere; we mirror that with a `**/`
-    // prefix. The RelativePattern base is not scoped.
+    // Matches files in the mock file system against a glob, with no real
+    // filesystem access. VS Code resolves a relative glob against workspace
+    // folders, so a pattern without a path separator matches by basename
+    // anywhere; we mirror that with a `**/` prefix. `dot: true` because VS
+    // Code's glob matches dot-directories. The RelativePattern base is not
+    // scoped.
     const findFiles = mock.fn(
         (include: vscode.GlobPattern, _exclude?: unknown, maxResults?: number) => {
             const raw = typeof include === 'string' ? include : include.pattern;
@@ -326,7 +327,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
                 if (maxResults !== undefined && matched.length >= maxResults) {
                     break;
                 }
-                if (matchesGlob(filePath, pattern)) {
+                if (minimatch(filePath, pattern, { dot: true })) {
                     // `fs.files` is keyed by `uri.path`, so rehydrate from URI
                     // components rather than treating the key as a filesystem
                     // path (which would mishandle drive letters / schemes).
@@ -584,10 +585,12 @@ export function addWorkspaceFile(mock: MockVsCodeResult, path: string, contents 
 
 /**
  * Raises a file system event for `path` on every watcher whose glob matches it,
- * mirroring the filtering VS Code does before waking an extension.
+ * mirroring the filtering VS Code does before delivering to a watcher.
  *
- * Only the `**‍/{a,b}` and `**‍/a` shapes produced by simple watch globs are
- * understood, which is enough to tell whether a watcher would have fired.
+ * Matching uses `dot: true`, because VS Code reports changes to dot-directories
+ * (its default `files.watcherExclude` excludes `**‍/.git/objects/**`, which only
+ * makes sense if `.git` paths are otherwise reported). Node's built-in
+ * `matchesGlob` has no such option and silently drops them.
  *
  * @param kind - Which of the three watcher events to raise. Defaults to
  *   `'change'`.
@@ -600,7 +603,7 @@ export function fireFileSystemEvent(
     const uri = mock.vscode.Uri.file(path);
 
     for (const watcher of mock.fileSystemWatchers) {
-        if (typeof watcher.pattern !== 'string' || !matchesGlob(path, watcher.pattern)) {
+        if (typeof watcher.pattern !== 'string' || !minimatch(path, watcher.pattern, { dot: true })) {
             continue;
         }
         if (kind === 'create') {

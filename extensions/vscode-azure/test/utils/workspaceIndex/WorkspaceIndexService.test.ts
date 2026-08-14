@@ -84,6 +84,40 @@ describe('WorkspaceIndexService (unit)', () => {
         service.dispose();
     });
 
+    describe('exclusion boundaries', () => {
+        // Paths relative to the `/repo` workspace folder, and whether an event
+        // for each should reach the index. An excluded name only counts as a
+        // whole path segment, and only as an intermediate one.
+        const cases: readonly (readonly [path: string, rebuilds: boolean])[] = [
+            ['host.json', true],
+            ['api/host.json', true],
+            // Excluded names must match a whole segment, not a prefix or suffix.
+            ['.github/workflows/ci.yml', true],
+            ['binaries/host.json', true],
+            ['my-bin/host.json', true],
+            // The excluded directory itself appearing or disappearing does
+            // change what the walk would find, so it is not ignored.
+            ['node_modules', true],
+            ['node_modules/left-pad/host.json', false],
+            ['a/node_modules/b/host.json', false],
+            ['NODE_MODULES/x/host.json', false],
+            ['src/bin/host.json', false],
+            ['.git/HEAD', false],
+        ];
+
+        for (const [path, rebuilds] of cases) {
+            it(`${rebuilds ? 'rebuilds for' : 'ignores'} ${path}`, async () => {
+                const { service, mock: m, scheduler } = createService();
+                await service.getIndex();
+
+                fireFileSystemEvent(m, `/repo/${path}`);
+
+                expect(scheduler.hasPending).to.equal(rebuilds);
+                service.dispose();
+            });
+        }
+    });
+
     it('does not exclude a workspace folder whose own path looks excluded', async () => {
         const m = createMockVsCode();
         addWorkspaceFolder(m, '/home/me/build/site');
