@@ -23,20 +23,48 @@ export namespace Disposable {
     }
 
     /**
+     * Dispose everything that looks like a {@linkcode Disposable}, in the order given.
+     *
+     * Inputs are deliberately permissive: each argument may be a single disposable,
+     * an array (nested arrays are flattened), `undefined`/`null`, or a value that has
+     * no `dispose()` method at all. Anything that fails {@linkcode Disposable.test test}
+     * is skipped rather than throwing, so callers can hand over loosely typed
+     * collections without pre-filtering them.
+     *
+     * Errors thrown by an individual `dispose()` are swallowed so that one bad
+     * disposable cannot prevent the rest from being torn down.
+     *
+     * @example
+     * Disposable.disposeAll(this.subscription, this.disposables, maybeUndefined);
+     */
+    export function disposeAll(...disposables: readonly unknown[]): void {
+        disposeEach(disposables);
+    }
+
+    function disposeEach(disposables: readonly unknown[]): void {
+        for (const disposable of disposables) {
+            if (Array.isArray(disposable)) {
+                disposeEach(disposable as readonly unknown[]);
+            } else if (test(disposable)) {
+                try {
+                    disposable.dispose();
+                } catch {
+                    // noop
+                }
+            }
+        }
+    }
+
+    /**
      * Combine multiple disposables into one. Disposing the result
-     * disposes each input in order; any errors thrown by individual
+     * disposes each input in order via {@linkcode Disposable.disposeAll disposeAll},
+     * so `undefined` entries are ignored and any errors thrown by individual
      * `dispose()` calls are swallowed.
      */
-    export function from(...disposables: Disposable[]): Disposable {
+    export function from(...disposables: readonly (Disposable | undefined)[]): Disposable {
         return {
             dispose: () => {
-                for (const disposable of disposables) {
-                    try {
-                        disposable.dispose();
-                    } catch {
-                        // noop
-                    }
-                }
+                disposeAll(...disposables);
             },
         };
     }

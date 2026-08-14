@@ -6,7 +6,7 @@
 import type { ServiceIdentifier } from 'inversify';
 import type { IActionContext } from '../base/IActionContext';
 import type { ActionCallback, IActionExecutor } from '../base/IActionExecutor';
-import type { Disposable } from '../vscode/Disposable';
+import { Disposable } from '../vscode/Disposable';
 import type { IVsCode } from '../vscode/IVsCode';
 
 export const ICommandRegistry: ServiceIdentifier<ICommandRegistry> = Symbol.for('ICommandRegistry');
@@ -47,8 +47,6 @@ export class CommandRegistry implements ICommandRegistry {
 
     /** @inheritdoc */
     public dispose(): void {
-        for (const disposable of this.disposables) {
-            disposable.dispose();
-        }
+        Disposable.disposeAll(this.disposables);
     }
 }

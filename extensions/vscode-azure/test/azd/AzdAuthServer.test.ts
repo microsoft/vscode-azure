@@ -5,6 +5,7 @@
 
 import { createDefaultCredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { makeCredential } from '@microsoft/vscode-azure-azutils/testing';
+import { Disposable } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { request as httpsRequest } from 'node:https';
 import { mock } from 'node:test';
@@ -78,9 +79,7 @@ describe('AzdAuthServer (unit)', () => {
         const servers: AzdAuthServer[] = [];
 
         afterEach(() => {
-            for (const s of servers) {
-                s.dispose();
-            }
+            Disposable.disposeAll(servers);
             servers.length = 0;
         });
 
