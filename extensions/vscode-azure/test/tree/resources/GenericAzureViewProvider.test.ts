@@ -12,7 +12,7 @@ import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
-import { createMockEndpointResolver } from '../../endpoints/mockEndpointResolver';
+import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 
 describe('GenericAzureViewProvider (unit)', () => {
     const mockCodeContext = createMockCodeContext();
@@ -42,8 +42,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        const endpointResolver = createMockEndpointResolver(resource => resource.type.toLowerCase() === 'microsoft.web/sites');
-        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never, endpointResolver);
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
@@ -330,6 +329,18 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             expect(item.label).to.equal('site1');
             expect(item.description).to.equal('Microsoft.Web/sites');
+            expect(item.contextValue).to.include(OpenInPortal.ContextValue);
+            expect(item.contextValue).to.not.include(BrowseWebsite.ContextValue);
+        });
+
+        it('should offer browsing once enrichment attaches a website url', () => {
+            const resource = makeGenericResource();
+            setWebsiteUrl(resource, 'site1.azurewebsites.net');
+            const key = AzureNodeId.from(resource).toString();
+            const provider = createProvider([resource]);
+
+            const item = provider.getTreeItem(key);
+
             expect(item.contextValue).to.include(BrowseWebsite.ContextValue);
         });
 

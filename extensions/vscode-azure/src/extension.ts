@@ -29,7 +29,6 @@ import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
-import { IResourceEndpointResolver, ResourceEndpointResolver } from './endpoints/ResourceEndpointResolver';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
@@ -153,7 +152,6 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 
     products.applyBindings(container);
-    container.bind(IResourceEndpointResolver).to(ResourceEndpointResolver).inSingletonScope();
 
     return container;
 }

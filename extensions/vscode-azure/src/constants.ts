@@ -43,6 +43,16 @@ export const SignedInTenantsConfigurationKey = 'signedInTenants';
 export const AzdEnvNameTag = 'azd-env-name';
 
 /**
+ * Property key under which a data provider attaches a resource's browsable
+ * website URL during enrichment.
+ *
+ * A symbol is used so the property cannot collide with an ARM property and so
+ * view providers can detect it exactly, without inspecting the resource type.
+ * Read and write it through the helpers in `tree/resources/websiteUrl.ts`.
+ */
+export const WebsiteUrl: unique symbol = Symbol.for('vscode-azure.websiteUrl');
+
+/**
  * Matches a canonical GUID (e.g. `aaaabbbb-cccc-dddd-eeee-ffff00001111`),
  * anchored and case-insensitive.
  */

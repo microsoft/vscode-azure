@@ -8,6 +8,7 @@ import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing'
 import { mock } from 'node:test';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../src/tree/resources/functions/FunctionApp';
 import { FunctionAppDataProvider } from '../../../../src/tree/resources/functions/FunctionAppDataProvider';
+import { getWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
 import { makeFunctionApp } from './mockFunctionApp';
 
 describe('FunctionAppDataProvider (unit)', () => {
@@ -48,6 +49,32 @@ describe('FunctionAppDataProvider (unit)', () => {
             expect(provider.canHandle(null)).to.be.false;
             expect(provider.canHandle('string')).to.be.false;
             expect(provider.canHandle(42)).to.be.false;
+        });
+    });
+
+    describe('enrich', () => {
+        it('should attach the function app website url', async () => {
+            const { executor } = createTestActionExecutor();
+            const mockClient = createMockWebAppClient({ defaultHostName: 'myfunc.azurewebsites.net' });
+            const provider = new FunctionAppDataProvider(executor, mock.fn(() => mockClient));
+            const app = makeFunctionApp();
+
+            await provider.enrich(app);
+
+            expect(getWebsiteUrl(app)).to.equal('https://myfunc.azurewebsites.net/');
+        });
+
+        it('should ignore virtual nodes', async () => {
+            const { provider, mockClient } = createProvider();
+            const category = makeVirtualResource({
+                virtualType: FunctionAppVirtualTypes.AppSettings,
+                virtualPath: FunctionAppVirtualPaths.AppSettings,
+                azureResource: makeFunctionApp(),
+            });
+
+            await provider.enrich(category);
+
+            expect(mockClient.webApps.get.mock.callCount()).to.equal(0);
         });
     });
 

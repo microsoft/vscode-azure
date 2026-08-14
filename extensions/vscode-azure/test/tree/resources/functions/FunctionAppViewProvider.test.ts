@@ -13,8 +13,8 @@ import { BrowseWebsite } from '../../../../src/commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../src/tree/resources/functions/FunctionApp';
 import { FunctionAppViewProvider } from '../../../../src/tree/resources/functions/FunctionAppViewProvider';
+import { setWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
 import { makeFunctionApp } from './mockFunctionApp';
-import { createMockEndpointResolver } from '../../../endpoints/mockEndpointResolver';
 
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {
     return makeVirtualResource({
@@ -36,7 +36,7 @@ describe('FunctionAppViewProvider (unit)', () => {
             get: (key: string) => cacheMap.get(key),
             getChildren: (node: ConcreteAzureNode) => Promise.resolve([] as ConcreteAzureNode[]),
         };
-        return new FunctionAppViewProvider(ctx, executor, mockCache as never, createMockEndpointResolver(true));
+        return new FunctionAppViewProvider(ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
@@ -81,6 +81,7 @@ describe('FunctionAppViewProvider (unit)', () => {
     describe('getTreeItem', () => {
         it('should render a Function App with Collapsed state', () => {
             const app = makeFunctionApp();
+            setWebsiteUrl(app, 'myfunc.azurewebsites.net');
             const key = AzureNodeId.from(app).toString();
             const cache = new Map<string, ConcreteAzureNode>([[key, app]]);
             const provider = createProvider(cache);

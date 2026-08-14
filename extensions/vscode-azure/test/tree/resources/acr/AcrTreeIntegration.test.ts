@@ -14,7 +14,6 @@ import { AcrViewProvider } from '../../../../src/tree/resources/acr/AcrViewProvi
 import { AzureResourceDataProvider } from '../../../../src/tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../../../../src/tree/resources/GenericAzureViewProvider';
 import { createMockResourceClient } from '../mockResourceClient';
-import { createMockEndpointResolver } from '../../../endpoints/mockEndpointResolver';
 import { createMockAcrClient } from './mockAcr';
 
 /**
@@ -133,7 +132,6 @@ describe('ACR Tree Integration (integration)', () => {
             mockCtx.ctx,
             executor,
             dataTree,
-            createMockEndpointResolver(false),
         );
 
         // Register in correct order: ACR first, generic fallback second

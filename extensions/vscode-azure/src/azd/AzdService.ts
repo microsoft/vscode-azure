@@ -32,7 +32,7 @@ export interface IAzdService {
      * folders using {@linkcode vscode.workspace.findFiles findFiles}.
      *
      * @param directory - Scope the search to a single folder.
-     * @param maxResults - Optional cap when searching across open workspace folders.
+     * @param maxResults - Cap the number of results. Defaults to `1`.
      */
     findAzureYaml(directory?: vscode.Uri, maxResults?: number): Promise<vscode.Uri[]>;
 
@@ -65,7 +65,7 @@ export interface IAzdService {
      * metadata, or `undefined` when the call fails (typically because
      * there is no `azure.yaml` in {@linkcode cwd}).
      */
-    show(cwd: vscode.Uri, environmentName?: string): Promise<AzdShowResult | undefined>;
+    show(cwd: vscode.Uri): Promise<AzdShowResult | undefined>;
 
     /**
      * Runs `azd provision` as a visible VS Code task.
@@ -140,13 +140,6 @@ export interface AzdShowResult {
 export interface AzdServiceDescriptor extends Record<string, unknown> {
     /** Ingress URL for the deployed service, if available. */
     readonly ingressUrl?: string;
-    /** Historical misspelling emitted by older azd versions. */
-    readonly ingresUrl?: string;
-    /** ARM resources associated with the deployed service. */
-    readonly target?: {
-        /** Full ARM IDs for the service's deployment targets. */
-        readonly resourceIds?: readonly string[];
-    };
     /** Project containing the source code for this service. */
     readonly project?: {
         /** Absolute filesystem path to the service's project folder. */
@@ -154,11 +147,6 @@ export interface AzdServiceDescriptor extends Record<string, unknown> {
         /** Programming language of the service. */
         readonly language?: string;
     };
-}
-
-/** Return a service ingress URL across the current and legacy azd JSON spellings. */
-export function getAzdServiceIngressUrl(service: AzdServiceDescriptor): string | undefined {
-    return service.ingressUrl ?? service.ingresUrl;
 }
 
 /** Result of `azd version --output json`. */
@@ -184,7 +172,7 @@ export class AzdService implements IAzdService {
     ) { }
 
     /** @inheritdoc */
-    public async findAzureYaml(directory?: vscode.Uri, maxResults?: number): Promise<vscode.Uri[]> {
+    public async findAzureYaml(directory?: vscode.Uri, maxResults: number = 1): Promise<vscode.Uri[]> {
         if (directory) {
             for (const name of AzureYamlFileNames) {
                 const fileUri = this.code.Uri.joinPath(directory, name);
@@ -278,19 +266,13 @@ export class AzdService implements IAzdService {
     }
 
     /** @inheritdoc */
-    public async show(cwd: vscode.Uri, environmentName?: string): Promise<AzdShowResult | undefined> {
+    public async show(cwd: vscode.Uri): Promise<AzdShowResult | undefined> {
         try {
-            const showCommand = environmentName
-                ? command(AzdCommand)
-                    .arg('show')
-                    .namedArg('--environment', environmentName)
-                    .namedArg('--output', 'json')
-                : command(AzdCommand)
-                    .arg('show')
-                    .namedArg('--output', 'json');
             const result = await this.processExecutor.spawn<AzdShowResult>({
                 execution: 'background',
-                command: showCommand,
+                command: command(AzdCommand)
+                    .arg('show')
+                    .namedArg('--output', 'json'),
                 cwd,
                 parseJson: true,
             });

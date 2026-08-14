@@ -12,6 +12,7 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import { setWebsiteUrl } from '../websiteUrl';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes, isFunctionApp } from './FunctionApp';
 
 export const IFunctionAppDataProvider: ServiceIdentifier<DataProvider<ConcreteAzureNode>> = Symbol.for('IFunctionAppDataProvider');
@@ -21,6 +22,7 @@ export type IFunctionAppDataProvider = FunctionAppDataProvider;
  * Data-layer provider for Azure Function Apps.
  *
  * - **`canHandle`**: matches Function App resources and their virtual children
+ * - **`enrich`**: attaches the app's website URL to the resource
  * - **`getChildren`**: returns virtual category nodes (App Settings) and
  *   individual app setting leaf nodes fetched from the ARM API
  *
@@ -44,6 +46,27 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
         return isFunctionApp(resource) || isFunctionAppVirtualResource(resource);
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Attaches the Function App's public website URL so the Browse Website
+     * command becomes available on the node.
+     *
+     * @throws if the resource's ARM ID does not contain a resource group segment.
+     */
+    public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
+        if (!isFunctionApp(resource)) {
+            return false;
+        }
+
+        this.executor.setTelProp('nodeType', getNodeType(resource));
+
+        const { client, resourceGroupName } = this.resolveClient(resource);
+        setWebsiteUrl(resource, (await client.webApps.get(resourceGroupName, resource.name)).defaultHostName);
+
+        return false;
     }
 
     /** @inheritdoc */

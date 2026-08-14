@@ -81,21 +81,6 @@ describe('AzdService (unit)', () => {
 
             expect(result).to.deep.equal([]);
         });
-
-        it('should return all projects when searching across the workspace without a cap', async () => {
-            const { service, fs } = createService();
-            fs.addFile(MockUri.file('/workspace/one/azure.yaml'));
-            fs.addFile(MockUri.file('/workspace/two/azure.yml'));
-            fs.addFile(MockUri.file('/workspace/three/azure.yaml'));
-
-            const result = await service.findAzureYaml();
-
-            expect(result.map(uri => uri.path)).to.have.members([
-                '/workspace/one/azure.yaml',
-                '/workspace/two/azure.yml',
-                '/workspace/three/azure.yaml',
-            ]);
-        });
     });
 
     describe('init', () => {
@@ -256,16 +241,6 @@ describe('AzdService (unit)', () => {
             const result = await service.show(MockUri.file('/project'));
 
             expect(result).to.be.undefined;
-        });
-
-        it('should pass an explicit environment to azd show', async () => {
-            const spawnFn = mock.fn(() => Promise.resolve({ json: { services: {} } }));
-            const { service, spawnMock } = createService(spawnFn);
-
-            await service.show(MockUri.file('/project'), 'dev');
-
-            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
-            expect(argsToStrings(opts.command.slice(1))).to.include.members(['--environment', 'dev']);
         });
     });
 

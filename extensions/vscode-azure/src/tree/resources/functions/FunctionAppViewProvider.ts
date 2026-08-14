@@ -9,7 +9,6 @@ import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../commands/functions/DeleteAppSetting';
-import { IResourceEndpointResolver } from '../../../endpoints/ResourceEndpointResolver';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../combineContextValues';
 import { getResourceTypeIconUri } from '../../iconPath';
@@ -32,7 +31,6 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(IResourceEndpointResolver) private readonly endpointResolver: IResourceEndpointResolver,
     ) { }
 
     // #region ViewProvider
@@ -71,7 +69,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         // Function App resource node
         const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
-        item.contextValue = resourceContextValue(this.endpointResolver, resource, FunctionAppViewProvider.ContextValue);
+        item.contextValue = resourceContextValue(resource, FunctionAppViewProvider.ContextValue);
         item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
         item.description = resource.logicalType;
 

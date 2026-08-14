@@ -6,15 +6,19 @@
 import { isGenericResource } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IResourceEndpointResolver } from '../../endpoints/ResourceEndpointResolver';
 import { IAzureViewDataTree } from '../../services';
+import { getWebsiteUrl } from '../../tree/resources/websiteUrl';
 import type { UrlProvider, UrlProviderIdentifier } from '../OpenUrl';
 
 /** Identifier for the {@linkcode BrowseWebsite} URL provider binding. */
 export const IBrowseWebsite: UrlProviderIdentifier = Symbol.for('IBrowseWebsite');
 
 /**
- * Resolves the website endpoint of the selected Azure resource tree node.
+ * Opens the website of the selected Azure resource tree node.
+ *
+ * The URL itself is attached to the resource by its data provider during
+ * enrichment, so this only has to read it back; any resource type can become
+ * browsable simply by having its provider attach one.
  *
  * Registered as a URL source for {@linkcode OpenUrl} rather than as its own
  * command, so browsing shares the standard URL-command behavior.
@@ -27,30 +31,28 @@ export class BrowseWebsite implements UrlProvider {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
-        @inject(IResourceEndpointResolver) private readonly endpointResolver: IResourceEndpointResolver,
     ) { }
 
     /**
      * @inheritdoc
-     * @throws if the selection is not an Azure resource, its type has no
-     *   endpoint support, or it has not been deployed yet.
+     * @throws if the selection is not an Azure resource, or if it has no
+     *   website (either because its type has none, or because it has not been
+     *   deployed yet).
      */
     public async getUrl(...args: unknown[]): Promise<string | undefined> {
         const [key] = args;
         const resource = typeof key === 'string' ? this.dataTree.get(key) : undefined;
         if (!resource || !isGenericResource(resource)) {
-            throw new Error(this.code.l10n.t('Select an Azure resource with a website endpoint.'));
+            throw new Error(this.code.l10n.t('Select an Azure resource with a website.'));
         }
 
-        if (!this.endpointResolver.canHandle(resource)) {
-            throw new Error(this.code.l10n.t('The selected resource type does not support website browsing.'));
+        // The context value only appears once enrichment has attached the URL,
+        // but the command can also be invoked programmatically before then.
+        const url = getWebsiteUrl(await this.dataTree.whenEnriched(resource));
+        if (!url) {
+            throw new Error(this.code.l10n.t('The selected resource does not have a website.'));
         }
 
-        const endpoint = await this.endpointResolver.resolve(resource);
-        if (!endpoint) {
-            throw new Error(this.code.l10n.t('The selected resource does not have a website endpoint yet.'));
-        }
-
-        return endpoint;
+        return url;
     }
 }
