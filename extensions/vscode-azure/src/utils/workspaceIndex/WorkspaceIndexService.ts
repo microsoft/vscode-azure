@@ -38,15 +38,15 @@ export interface IWorkspaceIndexService {
  * Watching is deliberately cheap. The watcher is created from a **string** glob
  * covering only the files detectors declared interest in, which VS Code
  * satisfies from the recursive watch it already runs per workspace folder
- * rather than starting another one. Events are then filtered against the
- * exclusions the last build used, because a glob like
- * `**‍/package.json` also matches everything under `node_modules` -- without
- * that filter one `npm install` would rebuild the index thousands of times.
+ * rather than starting another one. Events are then filtered against the same
+ * exclusions the walk uses, because a glob like `**‍/package.json` also matches
+ * everything under `node_modules` -- without that filter one `npm install`
+ * would rebuild the index thousands of times.
  *
  * Surviving events are debounced into a single **full** rebuild. Re-indexing
  * only the affected directory would be faster but is not sound in general:
- * `DetectorContext.ancestor` and cross-namespace reads let a tag depend on
- * state outside the directory that changed.
+ * cross-namespace reads let one detector's tag depend on another's findings
+ * outside the directory that changed.
  */
 @injectable()
 export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Disposable {
@@ -65,7 +65,16 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
 
         const pattern = watchPattern(detectors);
         if (pattern) {
-            this.disposables.push(this.watch(pattern));
+            // A string pattern reuses VS Code's existing workspace watch; a
+            // RelativePattern would start an additional recursive watcher.
+            const watcher = code.workspace.createFileSystemWatcher(pattern);
+            const handle = (uri: vscode.Uri) => { this.onFileEvent(uri); };
+            this.disposables.push(
+                watcher.onDidCreate(handle),
+                watcher.onDidChange(handle),
+                watcher.onDidDelete(handle),
+                watcher,
+            );
         }
         this.disposables.push(
             code.workspace.onDidChangeWorkspaceFolders(() => { this.invalidate(); }),
@@ -89,27 +98,6 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
             disposable.dispose();
         }
         this.disposables.length = 0;
-    }
-
-    private watch(pattern: string): vscode.Disposable {
-        // A string pattern reuses VS Code's existing workspace watch; a
-        // RelativePattern would start an additional recursive watcher.
-        const watcher = this.code.workspace.createFileSystemWatcher(pattern);
-        const handle = (uri: vscode.Uri) => { this.onFileEvent(uri); };
-        const subscriptions = [
-            watcher.onDidCreate(handle),
-            watcher.onDidChange(handle),
-            watcher.onDidDelete(handle),
-        ];
-
-        return {
-            dispose: () => {
-                for (const subscription of subscriptions) {
-                    subscription.dispose();
-                }
-                watcher.dispose();
-            },
-        };
     }
 
     private onFileEvent(uri: vscode.Uri): void {
@@ -148,11 +136,9 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, vscode.Dis
  * if none did.
  *
  * Kept as narrow as the declared interests allow so VS Code discards most
- * events before the extension is woken for them.
- *
- * A detector that declares no file interest contributes nothing: it is asking
- * to see directories, and a directory only appears or disappears along with the
- * files inside it, which some other detector's interest covers.
+ * events before the extension is woken for them. A detector that declares no
+ * file interest contributes nothing: it is asking to see directories, and a
+ * directory only appears or disappears along with the files inside it.
  */
 export function watchPattern(detectors: readonly WorkspaceDetector[]): string | undefined {
     const alternatives = new Set<string>();

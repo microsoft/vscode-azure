@@ -3,14 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isFileNotFoundError, readText, relativePath, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { basename, isFileNotFoundError, relativePath, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
+import type { IndexedNode } from './WorkspaceDetector';
 
 /**
  * Directories never descended into: generated output, dependency caches, and
- * VCS metadata. Skipping these is most of what makes a walk affordable, and it
- * matters most when scanning source files -- a `.cs` sweep would otherwise hit
- * `bin`/`obj`, and a `.py` sweep would hit `.venv`.
+ * VCS metadata. Skipping these is most of what makes a walk affordable.
  */
 export const defaultExcludedDirectories: ReadonlySet<string> = new Set([
     '.git', '.hg', '.svn',
@@ -29,38 +28,25 @@ export const defaultExcludedDirectories: ReadonlySet<string> = new Set([
 const maxEntriesPerFolder = 5000;
 
 /** One directory reached by {@linkcode walkWorkspace}. */
-export interface ScannedDirectory {
-    readonly uri: vscode.Uri;
-    /** The containing workspace folder, if this directory is inside one. */
-    readonly workspaceFolder: vscode.WorkspaceFolder | undefined;
-    /** POSIX-style path relative to the workspace folder, or `.` for its root. */
-    readonly relativePath: string;
+export interface ScannedDirectory extends IndexedNode {
+    readonly isDirectory: true;
     /** Names of the files directly inside this directory. */
     readonly fileNames: ReadonlySet<string>;
-
-    /** The {@linkcode vscode.Uri Uri} of a file in this directory. */
-    fileUri(name: string): vscode.Uri;
-
-    /** Full contents of a file here, or `undefined` if it is not present. */
-    text(name: string): Promise<string | undefined>;
 }
 
 /**
- * Walks the open workspace folders, yielding each directory with its file names
- * and reads.
+ * Walks the open workspace folders, yielding each directory with its file names.
  *
- * **Internal to the workspace index.** It is the traversal engine behind
- * `buildWorkspaceIndex` -- owning exclusions and cancellation -- and is kept
- * separate because those concerns are testable independently of tagging.
- * Product code should go through `IWorkspaceIndexService`, so one walk and one
- * watcher serve every consumer.
+ * **Internal to the workspace index**: it is the traversal engine behind
+ * `buildWorkspaceIndex`. Product code should go through
+ * `IWorkspaceIndexService`, so one walk and one watcher serve every consumer.
  *
  * Breadth-first, so shallower directories arrive first, and entries within a
  * directory are visited in name order so repeated walks agree.
  *
  * Symlinked *directories* are not descended into, since they can form cycles or
- * point outside the workspace; symlinked *files* are still listed and readable,
- * because reading one cannot loop.
+ * point outside the workspace; symlinked *files* are still listed, because
+ * reading one cannot loop.
  *
  * @throws {@linkcode CancellationError} when `token` is cancelled.
  */
@@ -78,20 +64,17 @@ async function* walkFolder(
     root: vscode.Uri,
     token: vscode.CancellationToken | undefined,
 ): AsyncIterable<ScannedDirectory> {
+    // Breadth-first: appending to the queue being iterated reports every
+    // directory at one depth before any of their children.
     const pending: vscode.Uri[] = [root];
     let entriesVisited = 0;
 
-    while (pending.length > 0) {
+    for (const uri of pending) {
         throwIfCancelled(token, 'walkWorkspace');
-        // Breadth-first: shallower directories are reported before deeper ones.
-        const directoryUri = pending.shift();
-        if (!directoryUri) {
-            break;
-        }
 
         let entries: [string, vscode.FileType][];
         try {
-            entries = await code.workspace.fs.readDirectory(directoryUri);
+            entries = await code.workspace.fs.readDirectory(uri);
         } catch (error) {
             // A directory disappearing mid-walk is an expected race; anything
             // else (permissions, provider failure) is worth surfacing.
@@ -110,11 +93,10 @@ async function* walkFolder(
         const subdirectories: vscode.Uri[] = [];
 
         for (const [name, type] of entries) {
-            const entryUri = code.Uri.joinPath(directoryUri, name);
             if ((type & code.FileType.Directory) !== 0) {
                 const isSymbolicLink = (type & code.FileType.SymbolicLink) !== 0;
                 if (!isSymbolicLink && !defaultExcludedDirectories.has(name.toLowerCase())) {
-                    subdirectories.push(entryUri);
+                    subdirectories.push(code.Uri.joinPath(uri, name));
                 }
             } else if ((type & code.FileType.File) !== 0) {
                 fileNames.add(name);
@@ -124,37 +106,18 @@ async function* walkFolder(
         // Reported before the budget check below, so a directory that was
         // already read is never discarded -- a wide root would otherwise yield
         // nothing at all.
-        yield createScannedDirectory(code, directoryUri, root, fileNames, token);
+        yield {
+            uri,
+            name: basename(uri),
+            relativePath: relativePath(root, uri) || '.',
+            workspaceFolder: code.workspace.getWorkspaceFolder(uri),
+            isDirectory: true,
+            fileNames,
+        };
 
         if (entriesVisited >= maxEntriesPerFolder) {
             return;
         }
         pending.push(...subdirectories);
     }
-}
-
-function createScannedDirectory(
-    code: IVsCode,
-    uri: vscode.Uri,
-    root: vscode.Uri,
-    fileNames: ReadonlySet<string>,
-    token: vscode.CancellationToken | undefined,
-): ScannedDirectory {
-    const fileUri = (name: string) => code.Uri.joinPath(uri, name);
-    const read = async <T>(name: string, reader: (target: vscode.Uri) => Promise<T>) => {
-        if (!fileNames.has(name)) {
-            return undefined;
-        }
-        throwIfCancelled(token, 'walkWorkspace');
-        return reader(fileUri(name));
-    };
-
-    return {
-        uri,
-        workspaceFolder: code.workspace.getWorkspaceFolder(uri),
-        relativePath: relativePath(root, uri) || '.',
-        fileNames,
-        fileUri,
-        text: name => read(name, target => readText(code, target)),
-    };
 }

@@ -35,66 +35,48 @@ export interface WorkspaceIndex {
     has<T>(uri: vscode.Uri, tag: WorkspaceTag<T>): boolean;
 }
 
-interface IndexEntry {
-    readonly node: IndexedNode;
-    /** Values per qualified tag name, in application order. */
-    readonly tags: Map<string, unknown[]>;
+interface MutableTaggedNode extends IndexedNode {
+    readonly values: unknown[];
 }
 
 /**
  * Mutable {@linkcode WorkspaceIndex} used while building.
  *
- * Backed by two maps: entries by URI, and URIs by qualified tag name so
- * {@linkcode withTag} is proportional to the number of matches rather than to
- * the size of the index. Insertion order gives discovery order for free, since
- * the walk reports shallower directories first.
- */
-export class MutableWorkspaceIndex implements WorkspaceIndex {
-    private readonly entries = new Map<string, IndexEntry>();
-    private readonly byQualifiedName = new Map<string, Set<string>>();
+ * Backed by one map of qualified tag name to the nodes carrying it, keyed by
+ * URI, which makes both queries direct lookups. Insertion order gives discovery
+ * order for free, since the walk reports shallower directories first.
+ */export class MutableWorkspaceIndex implements WorkspaceIndex {
+    private readonly byTag = new Map<string, Map<string, MutableTaggedNode>>();
 
     /** Records `tag` on `node`, creating its entry on first use. */
     public add<T>(node: IndexedNode, tag: WorkspaceTag<T>, value: T | undefined): void {
-        const key = node.uri.toString();
-        let entry = this.entries.get(key);
-        if (!entry) {
-            entry = { node, tags: new Map() };
-            this.entries.set(key, entry);
+        let nodes = this.byTag.get(tag.qualifiedName);
+        if (!nodes) {
+            nodes = new Map();
+            this.byTag.set(tag.qualifiedName, nodes);
         }
 
-        let values = entry.tags.get(tag.qualifiedName);
-        if (!values) {
-            values = [];
-            entry.tags.set(tag.qualifiedName, values);
+        const key = node.uri.toString();
+        let tagged = nodes.get(key);
+        if (!tagged) {
+            tagged = { ...node, values: [] };
+            nodes.set(key, tagged);
         }
+
         // A valueless tag records its presence only, so repeated application is
         // idempotent rather than accumulating a run of `undefined`.
         if (value !== undefined) {
-            values.push(value);
+            tagged.values.push(value);
         }
-
-        let tagged = this.byQualifiedName.get(tag.qualifiedName);
-        if (!tagged) {
-            tagged = new Set();
-            this.byQualifiedName.set(tag.qualifiedName, tagged);
-        }
-        tagged.add(key);
     }
 
     /** @inheritdoc */
     public withTag<T>(tag: WorkspaceTag<T>): readonly TaggedNode<T>[] {
-        const matches: TaggedNode<T>[] = [];
-        for (const key of this.byQualifiedName.get(tag.qualifiedName) ?? []) {
-            const entry = this.entries.get(key);
-            if (entry) {
-                matches.push({ ...entry.node, values: (entry.tags.get(tag.qualifiedName) ?? []) as T[] });
-            }
-        }
-        return matches;
+        return [...this.byTag.get(tag.qualifiedName)?.values() ?? []] as TaggedNode<T>[];
     }
 
     /** @inheritdoc */
     public has<T>(uri: vscode.Uri, tag: WorkspaceTag<T>): boolean {
-        return this.entries.get(uri.toString())?.tags.has(tag.qualifiedName) ?? false;
+        return this.byTag.get(tag.qualifiedName)?.has(uri.toString()) ?? false;
     }
 }

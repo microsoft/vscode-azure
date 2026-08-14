@@ -117,18 +117,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             expect(index.withTag(Attribute).flatMap(f => f.values)).to.deep.equal(['Ping']);
         });
 
-        it('resolves the nearest tagged ancestor across untagged directories', async () => {
-            const m = createMockVsCode();
-            addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/marker.txt', '');
-            addWorkspaceFile(m, '/repo/deeply/nested/App.cs', '[Name("Deep")]');
-
-            const index = await buildWorkspaceIndex(m.vscode, [csharpDetector, attributeDetector]);
-
-            expect(index.withTag(Attribute).flatMap(f => f.values)).to.deep.equal(['Deep']);
-        });
-
-        it('does not tag files outside the tagged ancestor', async () => {
+        it('does not tag files in a directory without the marker', async () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/api/marker.txt', '');
@@ -161,7 +150,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             expect(inspected.sort()).to.deep.equal(['Api.csproj', 'marker.txt']);
         });
 
-        it('exposes directory contents to directory detectors only', async () => {
+        it('exposes the containing directory\'s file names to every detector', async () => {
             const sizes = new Map<string, number>();
             const detector: WorkspaceDetector = {
                 id: 'sizes',
@@ -173,12 +162,13 @@ describe('buildWorkspaceIndex (unit)', () => {
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
             addWorkspaceFile(m, '/repo/App.cs', '');
+            addWorkspaceFile(m, '/repo/readme.md', '');
 
             await buildWorkspaceIndex(m.vscode, [detector]);
 
-            expect(sizes.get('.')).to.equal(1);
-            // A file node has no children of its own.
-            expect(sizes.get('App.cs')).to.equal(0);
+            expect(sizes.get('.')).to.equal(2);
+            // A file sees its own siblings, itself included.
+            expect(sizes.get('App.cs')).to.equal(2);
         });
 
         it('reads a file once per detector that asks for it', async () => {

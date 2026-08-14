@@ -59,13 +59,13 @@ export const nodeDetector: WorkspaceDetector = {
 };
 
 /**
- * Records every `[Name("...")]` attribute in the C# sources under a directory
+ * Records every `[Name("...")]` attribute in the C# sources of a directory
  * holding `marker.txt`.
  *
  * Nothing ships in this shape yet, and it is the one that stresses the index
  * hardest: it layers on another namespace's tags (only files the C# detector
- * called source), reads file contents, resolves a tagged ancestor, and records
- * several values for one tag on a single file.
+ * called source), reads file contents, looks at a node's neighbours, and
+ * records several values for one tag on a single file.
  */
 export const attributeDetector: WorkspaceDetector = {
     id: 'attributes',
@@ -80,7 +80,7 @@ export const attributeDetector: WorkspaceDetector = {
             return;
         }
 
-        if (!item.has(CsSourceFile) || !item.ancestor(AttributedRoot)) {
+        if (!item.has(CsSourceFile) || !item.fileNames.has('marker.txt')) {
             return;
         }
         const source = await item.text() ?? '';

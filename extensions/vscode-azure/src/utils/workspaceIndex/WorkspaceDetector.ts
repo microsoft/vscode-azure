@@ -20,7 +20,7 @@ export interface IndexedNode {
     readonly uri: vscode.Uri;
     /** Final path segment: the file or directory name. */
     readonly name: string;
-    /** POSIX-style path relative to the scope root, or `.` for the root itself. */
+    /** POSIX-style path relative to the workspace folder, or `.` for its root. */
     readonly relativePath: string;
     readonly workspaceFolder: vscode.WorkspaceFolder | undefined;
     readonly isDirectory: boolean;
@@ -29,18 +29,15 @@ export interface IndexedNode {
 /**
  * A node presented to a {@linkcode WorkspaceDetector} for inspection, with the
  * reads and lookups needed to decide what to tag it with.
- *
- * Reads are memoized for the duration of one index build, so several detectors
- * inspecting the same manifest cost a single read.
  */
 export interface DetectorContext extends IndexedNode {
     /**
-     * Names of the files directly inside this directory. Empty for file nodes,
-     * whose siblings are reached by inspecting their parent directory instead.
+     * Names of the files in this directory, or alongside this file. Lets a
+     * detector decide from a node's neighbours without a further read.
      */
     readonly fileNames: ReadonlySet<string>;
 
-    /** This node's contents, or `undefined` if it is a directory or too large. */
+    /** This node's contents, or `undefined` if it is a directory or missing. */
     text(): Promise<string | undefined>;
 
     /**
@@ -48,14 +45,6 @@ export interface DetectorContext extends IndexedNode {
      * is how a detector builds on an earlier one's findings.
      */
     has<T>(tag: WorkspaceTag<T>): boolean;
-
-    /**
-     * The nearest enclosing directory carrying `tag`, if any.
-     *
-     * Well-defined because directories are indexed before their contents, so an
-     * ancestor's tags are always settled by the time descendants are inspected.
-     */
-    ancestor<T>(tag: WorkspaceTag<T>): IndexedNode | undefined;
 
     /**
      * Attaches `tag` to this node. Applying the same tag repeatedly with
@@ -101,14 +90,4 @@ export interface WorkspaceDetector {
      * declared interest, and never concurrently for the same node.
      */
     inspect(node: DetectorContext): void | Promise<void>;
-}
-
-/** Whether `detector` wants to inspect a file called `fileName`. */
-export function wantsFile(detector: WorkspaceDetector, fileName: string): boolean {
-    const files = detector.files;
-    if (!files) {
-        return false;
-    }
-    return (files.names?.includes(fileName) ?? false)
-        || (files.suffixes?.some(suffix => fileName.endsWith(suffix)) ?? false);
 }

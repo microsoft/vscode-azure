@@ -45,7 +45,6 @@ describe('walkWorkspace (unit)', () => {
             expect(api.relativePath).to.equal('api');
             expect(api.uri.path).to.equal('/repo/api');
             expect([...api.fileNames]).to.deep.equal(['host.json']);
-            expect(api.fileUri('host.json').path).to.equal('/repo/api/host.json');
             expect(api.workspaceFolder?.name).to.equal('repo');
         });
 
@@ -83,40 +82,6 @@ describe('walkWorkspace (unit)', () => {
             const paths = (await collect(m)).map(d => d.relativePath);
 
             expect(paths).to.deep.equal(['.', 'src']);
-        });
-    });
-
-    describe('reads', () => {
-        it('reads the contents of a file in the directory', async () => {
-            const m = createMockVsCode();
-            addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/package.json', '{"name":"app"}');
-
-            const [root] = await collect(m);
-
-            expect(await root.text('package.json')).to.equal('{"name":"app"}');
-        });
-
-        it('reports absent files as undefined', async () => {
-            const m = createMockVsCode();
-            addWorkspaceFolder(m, '/repo');
-
-            const [root] = await collect(m);
-
-            expect(await root.text('missing.txt')).to.be.undefined;
-        });
-
-        it('reads a file of any size', async () => {
-            const m = createMockVsCode();
-            addWorkspaceFolder(m, '/repo');
-            const big = 'x'.repeat(4 * 1024 * 1024);
-            addWorkspaceFile(m, '/repo/big.txt', big);
-
-            const [root] = await collect(m);
-
-            // Consumers decide what is worth reading; the walk does not
-            // silently withhold data from an interested detector.
-            expect((await root.text('big.txt'))?.length).to.equal(big.length);
         });
     });
 

@@ -10,10 +10,8 @@
  * can use the same name without colliding: a Node detector querying its own
  * `sourceFile` never sees the C# detector's `.cs` files.
  *
- * The type parameter is the value type carried by each application of the tag.
- * It exists only to keep call sites typed -- a `WorkspaceTag<string>` can only
- * be applied with a `string` and only yields `string` values back -- and has no
- * runtime representation.
+ * `T` is the value type carried by each application of the tag. It exists only
+ * to keep call sites typed and has no runtime representation.
  *
  * Create tags through {@linkcode tagNamespace}; they are meant to be
  * module-level constants so producers and consumers share one identity.
@@ -24,9 +22,8 @@ export interface WorkspaceTag<T = void> {
     /** `namespace:name`. The key this tag is indexed under. */
     readonly qualifiedName: string;
     /**
-     * Phantom marker that keeps {@linkcode WorkspaceTag} from being assignable
-     * across value types, so a `WorkspaceTag<string>` cannot be passed where a
-     * `WorkspaceTag<void>` is expected. Never read, and never present at
+     * Phantom marker that keeps a `WorkspaceTag<string>` from being assignable
+     * where a `WorkspaceTag<void>` is expected. Never read, never present at
      * runtime.
      */
     readonly valueMarker?: (value: T) => T;
@@ -64,38 +61,32 @@ export interface TagNamespace {
  *   {@linkcode WorkspaceTag.qualifiedName}.
  */
 export function tagNamespace(name: string): TagNamespace {
-    if (!name) {
-        throw new RangeError('A tag namespace must not be empty');
-    }
-    if (name.includes(':')) {
-        throw new RangeError(`A tag namespace must not contain ':': ${name}`);
-    }
+    validatePart('namespace', name);
 
     return {
         name,
         tag<T = void>(tagName: string): WorkspaceTag<T> {
-            if (!tagName) {
-                throw new RangeError('A tag name must not be empty');
-            }
-            if (tagName.includes(':')) {
-                throw new RangeError(`A tag name must not contain ':': ${tagName}`);
-            }
-            return {
-                namespace: name,
-                name: tagName,
-                qualifiedName: `${name}:${tagName}`,
-            };
+            validatePart('name', tagName);
+            return { namespace: name, name: tagName, qualifiedName: `${name}:${tagName}` };
         },
     };
+}
+
+function validatePart(kind: string, value: string): void {
+    if (!value) {
+        throw new RangeError(`A tag ${kind} must not be empty`);
+    }
+    if (value.includes(':')) {
+        throw new RangeError(`A tag ${kind} must not contain ':': ${value}`);
+    }
 }
 
 /**
  * Conventional tag names.
  *
  * A shared vocabulary rather than a closed set: detectors may define any name
- * they need, but should reach for one of these when it fits, so that unrelated
- * detectors describe the same concept the same way. Add a name here once a
- * second detector wants it, rather than in anticipation.
+ * they need, but should reach for one of these when it fits. Add a name here
+ * once a second detector wants it, rather than in anticipation.
  */
 export const StandardTagNames = {
     /** A directory that is the root of a project. */
