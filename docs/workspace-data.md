@@ -38,21 +38,13 @@ AzdProjectTag.name; // 'azd:project'
 - **Namespaced.** The namespace identifies the detector that owns the tag. A
   detector may only apply tags in its own namespace; foreign tags are dropped
   with a warning, so a tag's owner is always the detector that can refresh it.
+  The namespace is the thing that *owns* the tag (a product, or a language) and
+  the local name is the noun -- `azd:project`, not `project:azd`. `ProjectTagName`
+  is shared so "the project tag for X" is spelled the same way everywhere.
 - **Typed metadata.** The type parameter threads from `applyTag` (where a
   mismatch is a compile error) through to `getTagMetadata` at the query site.
   Use `undefined` (the default) for a bare marker tag.
 - **Compared by qualified name**, not object identity.
-
-### Standard tags
-
-There are none yet, deliberately. Each product's detector defines its own tags
-alongside itself: `azd:project`, `functions:project`. A shared vocabulary
-(`node:project`, `python:project`, ...) should be added when something actually
-consumes it, not in advance.
-
-Note the direction: the **namespace** is the thing that owns the tag (a product,
-or a language), and the **local name** is the noun. `ProjectTagName` is shared
-so "the project tag for X" is spelled the same way everywhere.
 
 ### Convention: tag the project folder
 
