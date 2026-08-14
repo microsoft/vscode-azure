@@ -33,11 +33,6 @@ export const azdDetector: WorkspaceDetector = {
 /**
  * Data-layer provider for {@linkcode AzdProjectNode}s and their
  * {@linkcode AzdServiceNode} children.
- *
- * Projects come from the shared workspace index rather than a private search,
- * so one walk serves every workspace provider. Services are enumerated by
- * invoking {@linkcode IAzdService.show} (which shells out to
- * `azd show --output json`).
  */
 @injectable()
 export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode> {

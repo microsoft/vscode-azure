@@ -39,15 +39,7 @@ export const functionsDetector: WorkspaceDetector = {
     },
 };
 
-/**
- * Data-layer provider for {@linkcode FunctionsProjectNode}s.
- *
- * Projects come from the shared workspace index rather than a private search,
- * so one walk serves every workspace provider. Function-app children inside
- * the project (individual function trigger definitions, deployed function
- * apps, ...) are tracked by
- * https://github.com/microsoft/vscode-azure/issues/178.
- */
+/** Data-layer provider for {@linkcode FunctionsProjectNode}s. */
 @injectable()
 export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode> {
     public readonly isRoot = true;

@@ -147,10 +147,7 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
         return new ProcessExecutor(context.get(IVsCode));
     }).inSingletonScope().onActivation(pushDisposable);
 
-    // Detectors are contributed by products and gathered here, so adding a
-    // product adds a detector to the one shared walk rather than a second pass.
-    container.bind(IWorkspaceIndexService).to(WorkspaceIndexService)
-        .inSingletonScope().onActivation(pushDisposable);
+    container.bind(IWorkspaceIndexService).to(WorkspaceIndexService).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
     container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
