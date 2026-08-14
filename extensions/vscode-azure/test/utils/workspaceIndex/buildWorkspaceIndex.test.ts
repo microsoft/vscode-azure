@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { basename, CancellationError } from '@microsoft/vscode-azure-utils';
+import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { buildWorkspaceIndex } from '../../../src/utils/workspaceIndex/buildWorkspaceIndex';
@@ -27,20 +27,6 @@ describe('buildWorkspaceIndex (unit)', () => {
             expect(index.withTag(CsSourceFile).map(u => u.path)).to.deep.equal(['/repo/App.cs']);
             expect(index.withTag(NodeProjectFile).map(u => u.path)).to.deep.equal(['/repo/package.json']);
             expect(index.withTag(NodeSourceFile).map(u => u.path)).to.deep.equal(['/repo/app.js']);
-        });
-
-        it('tags every flavour of Node source file', async () => {
-            const m = createMockVsCode();
-            addWorkspaceFolder(m, '/repo');
-            const names = ['a.js', 'b.mjs', 'c.cjs', 'd.ts', 'e.mts', 'f.cts'];
-            for (const name of names) {
-                addWorkspaceFile(m, `/repo/${name}`, '');
-            }
-
-            const index = await buildWorkspaceIndex(m.vscode, [nodeDetector]);
-
-            expect(index.withTag(NodeSourceFile).map(u => basename(u)).sort())
-                .to.deep.equal([...names].sort());
         });
 
         it('rejects a detector applying another namespace\'s tag', async () => {

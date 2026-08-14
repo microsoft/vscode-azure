@@ -600,8 +600,6 @@ export function fireFileSystemEvent(
     const uri = mock.vscode.Uri.file(path);
 
     for (const watcher of mock.fileSystemWatchers) {
-        // Node's own glob matcher, rather than a hand-rolled approximation of
-        // the brace/star syntax VS Code accepts.
         if (typeof watcher.pattern !== 'string' || !matchesGlob(path, watcher.pattern)) {
             continue;
         }
