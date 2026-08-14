@@ -7,9 +7,9 @@ import { DebounceScheduler, Disposable, EventEmitter, IDebounceScheduler, IVsCod
 import { inject, injectable, multiInject, unmanaged, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { defaultExcludedDirectories } from './walkWorkspace';
-import { buildWorkspaceIndex } from './buildWorkspaceIndex';
+import { buildWorkspaceIndex, updateWorkspaceIndex } from './buildWorkspaceIndex';
 import { IWorkspaceDetector, type WorkspaceDetector } from './WorkspaceDetector';
-import type { WorkspaceIndex } from './WorkspaceIndex';
+import type { MutableWorkspaceIndex, WorkspaceIndex } from './WorkspaceIndex';
 
 /** Quiet period before a burst of file events triggers a rebuild. */
 const rebuildDebounceMs = 500;
@@ -69,12 +69,23 @@ export interface IWorkspaceIndexService {
  *
  * Events are instead filtered here against the same exclusions the walk uses,
  * so one `npm install` does not rebuild the index thousands of times.
+ *
+ * Surviving events are debounced and then applied **incrementally**: each one
+ * evicts the node it names -- its whole subtree, when it names a directory --
+ * along with its parent, and re-inspects only what was evicted. A full rebuild
+ * would be simpler, but the watcher fires for every file in the workspace, so
+ * an ordinary edit would cost a whole walk.
+ *
+ * The pending set is drained under the debounce, so a burst that touches the
+ * same directory repeatedly costs one update, and `onDidChangeIndex` only fires
+ * when something the index records actually changed.
  */
 @injectable()
 export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable {
     private readonly changeEmitter = new EventEmitter<void>();
     private readonly disposables: Disposable[] = [this.changeEmitter];
-    private indexPromise: Promise<WorkspaceIndex> | undefined;
+    private readonly pending = new Map<string, vscode.Uri>();
+    private indexPromise: Promise<MutableWorkspaceIndex> | undefined;
 
     public readonly onDidChangeIndex = this.changeEmitter.event;
 
@@ -118,7 +129,38 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
         if (!this.indexPromise || this.isExcluded(uri)) {
             return;
         }
-        this.scheduler.debounce(() => { this.invalidate(); });
+        // Keyed by URI, so a burst of writes to one file costs one update.
+        this.pending.set(uri.toString(), uri);
+        this.scheduler.debounce(() => this.applyPending());
+    }
+
+    /**
+     * Re-inspects everything the pending events touched.
+     *
+     * Failures discard the index rather than leaving it half-updated; the next
+     * {@linkcode getIndex} rebuilds from scratch.
+     */
+    private async applyPending(): Promise<void> {
+        const index = await this.indexPromise;
+        const changes = [...this.pending.values()];
+        this.pending.clear();
+        if (!index || changes.length === 0) {
+            return;
+        }
+
+        let changed = false;
+        try {
+            for (const uri of changes) {
+                changed = await updateWorkspaceIndex(this.code, this.detectors, index, uri) || changed;
+            }
+        } catch {
+            this.invalidate();
+            return;
+        }
+
+        if (changed) {
+            this.changeEmitter.fire();
+        }
     }
 
     /**
@@ -137,8 +179,10 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
         return excludedPathPattern.test(relativePath(folder.uri, uri) ?? '');
     }
 
+    /** Discards the index entirely, so the next read rebuilds from scratch. */
     private invalidate(): void {
         this.indexPromise = undefined;
+        this.pending.clear();
         this.changeEmitter.fire();
     }
 }

@@ -7,6 +7,7 @@ import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, fireFileSystemE
 import { mock } from 'node:test';
 import { functionsDetector, FunctionsHostFile } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
+import { Attribute, attributeDetector, csharpDetector } from './mockDetectors';
 
 describe('WorkspaceIndexService (unit)', () => {
     afterEach(() => {
@@ -193,19 +194,76 @@ describe('WorkspaceIndexService (unit)', () => {
         expect(changed).to.equal(0);
     });
 
-    it('rebuilds when a watched folder is deleted', async () => {
+    it('evicts a deleted folder and everything under it', async () => {
+        const m = createMockVsCode();
+        addWorkspaceFolder(m, '/repo');
+        addWorkspaceFile(m, '/repo/host.json', '{}');
+        addWorkspaceFile(m, '/repo/api/host.json', '{}');
+        const scheduler = new ManualDebounceScheduler();
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector], scheduler);
+
+        const index = await service.getIndex();
+        expect(index.withTag(FunctionsHostFile).map(u => u.path))
+            .to.deep.equal(['/repo/host.json', '/repo/api/host.json']);
+
+        // Deleting a folder reports one event for the folder itself, never one
+        // per file inside it, so the subtree has to be swept from that alone.
+        await m.fs.delete(m.vscode.Uri.file('/repo/api/host.json'));
+        await m.fs.delete(m.vscode.Uri.file('/repo/api'));
+        fireFileSystemEvent(m, '/repo/api', 'delete');
+        await scheduler.flush();
+
+        expect((await service.getIndex()).withTag(FunctionsHostFile).map(u => u.path))
+            .to.deep.equal(['/repo/host.json']);
+        service.dispose();
+    });
+
+    it('does not double a tag\'s values when a file is re-inspected', async () => {
+        const m = createMockVsCode();
+        addWorkspaceFolder(m, '/repo');
+        addWorkspaceFile(m, '/repo/Orders.cs', '[Name("PlaceOrder")]');
+        const scheduler = new ManualDebounceScheduler();
+        const service = new WorkspaceIndexService(
+            m.vscode, [csharpDetector, attributeDetector], scheduler);
+
+        const index = await service.getIndex();
+        const orders = m.vscode.Uri.file('/repo/Orders.cs');
+        expect(index.valuesOf(orders, Attribute)).to.deep.equal(['PlaceOrder']);
+
+        // The node must be evicted before it is inspected again, or its values
+        // accumulate on top of the ones already recorded.
+        fireFileSystemEvent(m, '/repo/Orders.cs');
+        await scheduler.flush();
+
+        expect((await service.getIndex()).valuesOf(orders, Attribute)).to.deep.equal(['PlaceOrder']);
+        service.dispose();
+    });
+
+    it('picks up a file added after the first build', async () => {
+        const { service, mock: m, scheduler } = createService();
+        await service.getIndex();
+
+        addWorkspaceFile(m, '/repo/api/host.json', '{}');
+        fireFileSystemEvent(m, '/repo/api/host.json', 'create');
+        await scheduler.flush();
+
+        expect((await service.getIndex()).withTag(FunctionsHostFile).map(u => u.path))
+            .to.deep.equal(['/repo/host.json', '/repo/api/host.json']);
+        service.dispose();
+    });
+
+    it('does not announce a change when nothing tagged was touched', async () => {
         const { service, mock: m, scheduler } = createService();
         await service.getIndex();
 
         let changed = 0;
         service.onDidChangeIndex(() => { changed++; });
 
-        // Deleting a folder reports one event for the folder itself, not one
-        // per file inside it, so the index must react to the folder.
-        fireFileSystemEvent(m, '/repo/api', 'delete');
+        addWorkspaceFile(m, '/repo/readme.md', '');
+        fireFileSystemEvent(m, '/repo/readme.md', 'create');
         await scheduler.flush();
 
-        expect(changed).to.equal(1);
+        expect(changed).to.equal(0);
         service.dispose();
     });
 });

@@ -54,14 +54,23 @@ export async function* walkWorkspace(
     token?: vscode.CancellationToken,
 ): AsyncIterable<ScannedDirectory> {
     for (const folder of code.workspace.workspaceFolders ?? []) {
-        yield* walkFolder(code, folder.uri, token);
+        yield* walkDirectory(code, folder.uri, token);
     }
 }
 
-async function* walkFolder(
+/**
+ * Walks a single directory and everything beneath it, with the same exclusions,
+ * ordering, and budget as {@linkcode walkWorkspace}.
+ *
+ * Used to re-scan just the subtree an event touched, rather than the whole
+ * workspace.
+ *
+ * @throws {@linkcode CancellationError} when `token` is cancelled.
+ */
+export async function* walkDirectory(
     code: IVsCode,
     root: vscode.Uri,
-    token: vscode.CancellationToken | undefined,
+    token?: vscode.CancellationToken,
 ): AsyncIterable<ScannedDirectory> {
     // Breadth-first: appending to the queue being iterated reports every
     // directory at one depth before any of their children.

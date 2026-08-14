@@ -181,7 +181,7 @@ describe('buildWorkspaceIndex (unit)', () => {
             expect(names.get('/repo/src/App.cs')).to.equal('App.cs');
         });
 
-        it('exposes the containing directory\'s file names to every detector', async () => {
+        it('shows a directory its file names, and a file none', async () => {
             const sizes = new Map<string, number>();
             const detector: WorkspaceDetector = {
                 id: 'sizes',
@@ -196,8 +196,9 @@ describe('buildWorkspaceIndex (unit)', () => {
             await buildWorkspaceIndex(m.vscode, [detector]);
 
             expect(sizes.get('/repo')).to.equal(2);
-            // A file sees its own siblings, itself included.
-            expect(sizes.get('/repo/App.cs')).to.equal(2);
+            // A file is not shown its siblings, so that an incremental update
+            // never has to re-inspect them.
+            expect(sizes.get('/repo/App.cs')).to.equal(0);
         });
 
         it('reads a file once per detector that asks for it', async () => {
