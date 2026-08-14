@@ -6,11 +6,9 @@
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { EditSettings } from '../commands/settings/EditSettings';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
 import { AzureSettingsDocumentSource } from '../settings/AzureSettingsDocumentSource';
 import { SettingsFileSystemProvider } from '../settings/core/SettingsFileSystemProvider';
 import { ISettingsFileSystem } from '../settings/registerSettings';
-import { ISettingsAdapter } from '../settings/SettingsAdapter';
 import { ISettingsRegistry, SettingsRegistry } from '../settings/SettingsRegistry';
 import { ISettingsDataProvider, SettingsDataProvider } from '../tree/resources/settings/SettingsDataProvider';
 import { SettingsViewProvider } from '../tree/resources/settings/SettingsViewProvider';
@@ -24,9 +22,6 @@ import { SettingsViewProvider } from '../tree/resources/settings/SettingsViewPro
  */
 export function registerSettings(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
-        // Adapters are multi-injected into the registry, so adding a product is one line here.
-        container.bind(ISettingsAdapter).to(WebAppSettingsAdapter).inSingletonScope();
-
         container.bind(ISettingsRegistry).to(SettingsRegistry).inSingletonScope();
         container.bind(AzureSettingsDocumentSource).toSelf().inSingletonScope();
 

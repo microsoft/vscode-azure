@@ -14,12 +14,6 @@ extensions/vscode-azure/src/tree/resources/settings/   Data + view providers
 extensions/vscode-azure/src/commands/settings/         The edit command
 ```
 
-**This all lives in the extension, not in `packages/`.** App settings are not a reusable primitive
-today -- nothing outside this extension consumes any of it, and the document header ships strings that
-name Azure directly, so the code could not honestly sit in a package documented as having "no
-Azure-specific knowledge". Move a piece into `utils` or `azutils` when a second consumer actually
-appears.
-
 `SettingsFileSystemProvider` is still written against a `SettingsDocumentSource` seam (resolve a URI,
 read a snapshot, write a map) rather than against ARM. That keeps it unit-testable with
 `createMockVsCode()` and no ARM mocking -- the seam earns its keep for testing regardless of which
@@ -35,7 +29,6 @@ command, which opens the whole collection as an editable JSONC document:
 // Saving this file writes these settings to Azure. Removing a setting deletes it.
 // The file is saved to Azure as-is: it overwrites any changes made elsewhere since it was opened.
 // Deployments and infrastructure-as-code tools may overwrite edits made here.
-// This file lives only in the editor. Saving a copy to disk would store its values in plain text.
 {
     "AzureWebJobsStorage": "...",
     "FUNCTIONS_WORKER_RUNTIME": "node"
@@ -127,11 +120,6 @@ Two alternatives were tried and rejected:
 - *Rebuilding a `GenericResource` from the URI* -- cheap, but it fabricates a resource that was never
   read from Azure, so it can silently disagree with reality.
 
-The trade-off of the current design: a document only resolves while its node is in the tree. That is
-the normal case, since the document is opened from the tree and the tree caches it. A document
-restored by the editor after a window reload will not resolve until that node has loaded, and fails
-with a message telling the user to reopen it from the Azure view.
-
 The file name is cosmetic -- it makes the tab readable and selects the `jsonc` language mode. Nothing
 parses meaning out of it.
 
@@ -188,6 +176,3 @@ That is all. The tree node, the editor, and the command come for free.
 that retains writes for assertion, and refuses writes to any collection listed in
 `readOnlyCollections`), `createSettingsRegistry`, and `createSettingsDataProvider`. Prefer these over
 hand-rolled fixtures.
-
-Use Node's `assert.rejects` when testing rejected promises rather than a hand-written
-`try { await ...; expect.fail(); } catch { ... }` shape.

@@ -34,8 +34,6 @@ const supportedLogicalTypes = new Set<string>([
  */
 @injectable()
 export class WebAppSettingsAdapter implements SettingsAdapter {
-    private readonly clients = new Map<string, IWebAppClient>();
-
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IWebAppClientProvider) private readonly createClient: IWebAppClientProvider,
@@ -113,13 +111,7 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
             throw new Error(`Cannot extract resource group name from resource ID: ${resource.id}`);
         }
 
-        let client = this.clients.get(resource.subscription.subscriptionId);
-        if (!client) {
-            client = this.createClient(resource.subscription);
-            this.clients.set(resource.subscription.subscriptionId, client);
-        }
-
-        return { client, resourceGroupName };
+        return { client: this.createClient(resource.subscription), resourceGroupName };
     }
 }
 

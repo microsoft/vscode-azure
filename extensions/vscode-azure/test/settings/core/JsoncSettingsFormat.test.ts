@@ -61,13 +61,6 @@ describe('JsoncSettingsFormat (unit)', () => {
             expect(text).to.contain('read-only');
             expect(text).to.not.contain('Removing a setting deletes it.');
         });
-
-        it('warns that saving a copy to disk stores plaintext values', () => {
-            const format = createFormat();
-            const text = format.serialize(createSnapshot());
-
-            expect(text).to.contain('plain text');
-        });
     });
 
     describe('parse', () => {

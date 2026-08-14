@@ -128,8 +128,6 @@ export class JsoncSettingsFormat {
             lines.push(this.code.l10n.t('These settings are read-only and cannot be edited here.'));
         }
 
-        lines.push(this.code.l10n.t('This file lives only in the editor. Saving a copy to disk would store its values in plain text.'));
-
         return lines.map(line => `// ${line}`).join('\n');
     }
 }

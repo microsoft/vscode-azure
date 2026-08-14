@@ -6,6 +6,8 @@
 import { IWebAppClientProvider, WebAppClient } from '@microsoft/vscode-azure-azutils';
 import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
+import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
+import { ISettingsAdapter } from '../settings/SettingsAdapter';
 
 /** Contribute all Azure Functions services and UI integrations. */
 export function registerFunctions(registrar: ProductRegistrar): void {
@@ -13,10 +15,11 @@ export function registerFunctions(registrar: ProductRegistrar): void {
         return WebAppClient.create(context, executor, credential, subscription);
     });
 
+    // Adapters are multi-injected into the settings registry, so adding a product is one line.
+    registrar.registerBinding(container => {
+        container.bind(ISettingsAdapter).to(WebAppSettingsAdapter).inSingletonScope();
+    });
+
     registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registrar.registerCommand('vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
-
-    // No tree providers: a Function App's only children are its settings, which the shared settings
-    // product contributes generically. Adding a provider here would claim the resource and take it
-    // away from the generic path -- see docs/tree-views.md.
 }

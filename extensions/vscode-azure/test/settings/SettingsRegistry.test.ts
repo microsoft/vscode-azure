@@ -5,7 +5,6 @@
 
 import { AppServiceLogicalType, FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import * as assert from 'node:assert';
 import { expect } from 'chai';
 import { createSettingsRegistry, createStubAdapter, entry } from './mockSettings';
 
@@ -86,13 +85,13 @@ describe('SettingsRegistry (unit)', () => {
         it('throws when reading a resource with no adapter', async () => {
             const registry = createSettingsRegistry();
 
-            await assert.rejects(registry.read(makeApp('Microsoft.Storage/storageAccounts'), 'appSettings'), /No settings adapter/);
+            await expect(registry.read(makeApp('Microsoft.Storage/storageAccounts'), 'appSettings')).to.be.rejectedWith(/No settings adapter/);
         });
 
         it('throws when reading an unknown collection', async () => {
             const registry = createSettingsRegistry(createStubAdapter({ logicalTypes: [FunctionAppLogicalType] }));
 
-            await assert.rejects(registry.read(makeApp(FunctionAppLogicalType), 'nope'), /does not expose a settings collection/);
+            await expect(registry.read(makeApp(FunctionAppLogicalType), 'nope')).to.be.rejectedWith(/does not expose a settings collection/);
         });
     });
 
@@ -117,7 +116,7 @@ describe('SettingsRegistry (unit)', () => {
         it('surfaces the adapter\'s refusal without writing', async () => {
             const { adapter, registry, resource } = setup(['appSettings']);
 
-            await assert.rejects(registry.write(resource, 'appSettings', [entry('A', '1')]), /read-only/);
+            await expect(registry.write(resource, 'appSettings', [entry('A', '1')])).to.be.rejectedWith(/read-only/);
 
             expect(adapter.writes).to.be.empty;
         });

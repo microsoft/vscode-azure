@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { EventEmitter, type Disposable, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { Disposable, EventEmitter, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { JsoncSettingsFormat } from './JsoncSettingsFormat';
 import type { SettingsMap, SettingsSnapshot } from './SettingsModel';
 
@@ -91,14 +91,9 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     /** @inheritdoc */
     public readonly onDidChangeFile = this.changeEmitter.event;
 
-    /**
-     * @inheritdoc
-     * @remarks No-op. Settings change only through this provider or an explicit tree refresh; there
-     * is nothing to subscribe to on the service side, and returning a disposable satisfies the
-     * editor's contract.
-     */
+    /** @inheritdoc */
     public watch(): Disposable {
-        return { dispose: () => { /* nothing to unwatch */ } };
+        return Disposable.None;
     }
 
     /**

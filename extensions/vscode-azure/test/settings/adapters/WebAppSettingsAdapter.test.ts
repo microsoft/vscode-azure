@@ -9,7 +9,6 @@ import {
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import * as assert from 'node:assert';
 import { mock } from 'node:test';
 import { AppSettingsCollectionId, WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
 
@@ -113,13 +112,13 @@ describe('WebAppSettingsAdapter (unit)', () => {
                 logicalType: FunctionAppLogicalType,
             });
 
-            await assert.rejects(adapter.read(resource, AppSettingsCollectionId), /resource group/);
+            await expect(adapter.read(resource, AppSettingsCollectionId)).to.be.rejectedWith(/resource group/);
         });
 
         it('throws for a collection it does not expose', async () => {
             const { adapter } = createAdapter();
 
-            await assert.rejects(adapter.read(makeSite(FunctionAppLogicalType), 'nope'), /nope/);
+            await expect(adapter.read(makeSite(FunctionAppLogicalType), 'nope')).to.be.rejectedWith(/nope/);
         });
     });
 
@@ -152,10 +151,9 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('rejects an invalid setting name before calling ARM, even from an editor save', async () => {
             const { adapter, updateApplicationSettings } = createAdapter();
 
-            await assert.rejects(
+            await expect(
                 adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, [{ key: '  ', value: 'x' }]),
-                /cannot be empty/,
-            );
+            ).to.be.rejectedWith(/cannot be empty/);
 
             expect(updateApplicationSettings.mock.callCount()).to.equal(0);
         });
@@ -163,7 +161,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('throws for a collection it does not expose', async () => {
             const { adapter } = createAdapter();
 
-            await assert.rejects(adapter.write(makeSite(FunctionAppLogicalType), 'nope', []), /nope/);
+            await expect(adapter.write(makeSite(FunctionAppLogicalType), 'nope', [])).to.be.rejectedWith(/nope/);
         });
     });
 });

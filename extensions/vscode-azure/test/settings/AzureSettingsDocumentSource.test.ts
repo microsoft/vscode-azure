@@ -7,7 +7,6 @@ import { AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode, type Gener
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { expect } from 'chai';
-import * as assert from 'node:assert';
 import { mock } from 'node:test';
 import { AzureSettingsDocumentSource } from '../../src/settings/AzureSettingsDocumentSource';
 import { SettingsUri } from '../../src/settings/SettingsUri';
@@ -74,7 +73,7 @@ describe('AzureSettingsDocumentSource (unit)', () => {
     it('fails clearly when the node is no longer in the tree', async () => {
         const { source, uri, read } = createSource({ populateTree: false });
 
-        await assert.rejects(source.read(uri), /no longer available/);
+        await expect(source.read(uri)).to.be.rejectedWith(/no longer available/);
         expect(read.mock.callCount()).to.equal(0);
     });
 });
