@@ -5,7 +5,7 @@
 
 import { AppServiceLogicalType, FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { collectionIdOf, createCollectionNode } from '../../../../src/tree/resources/settings/SettingsNode';
+import { createSettingsNode } from '../../../../src/tree/resources/settings/SettingsNode';
 import { createSettingsDataProvider, createStubAdapter } from '../../../settings/mockSettings';
 
 function makeApp(logicalType: string) {
@@ -19,10 +19,10 @@ function makeApp(logicalType: string) {
 
 describe('SettingsDataProvider (unit)', () => {
     describe('canHandle', () => {
-        it('claims settings collection nodes', () => {
+        it('claims settings nodes', () => {
             const provider = createSettingsDataProvider();
 
-            expect(provider.canHandle(createCollectionNode(makeApp(FunctionAppLogicalType), 'appSettings'))).to.be.true;
+            expect(provider.canHandle(createSettingsNode(makeApp(FunctionAppLogicalType)))).to.be.true;
         });
 
         it('does not claim the owning resource, which stays with its own provider', () => {
@@ -39,39 +39,34 @@ describe('SettingsDataProvider (unit)', () => {
         });
     });
 
-    describe('getCollectionNodes', () => {
-        it('returns one node per collection the adapter exposes', () => {
-            const provider = createSettingsDataProvider(createStubAdapter({
-                logicalTypes: [FunctionAppLogicalType],
-                collections: [
-                    { id: 'appSettings', label: 'Application Settings' },
-                    { id: 'other', label: 'Other Settings' },
-                ],
-            }));
+    describe('getSettingsNodes', () => {
+        it('returns one node for a resource whose product has an adapter', () => {
+            const provider = createSettingsDataProvider(createStubAdapter({ logicalTypes: [FunctionAppLogicalType] }));
 
-            const nodes = provider.getCollectionNodes(makeApp(FunctionAppLogicalType));
+            const nodes = provider.getSettingsNodes(makeApp(FunctionAppLogicalType));
 
-            expect(nodes.map(collectionIdOf)).to.deep.equal(['appSettings', 'other']);
+            expect(nodes).to.have.lengthOf(1);
+            expect(nodes[0].azureResource.logicalType).to.equal(FunctionAppLogicalType);
         });
 
         it('returns nothing for a resource whose product has no adapter', () => {
             const provider = createSettingsDataProvider(createStubAdapter({ logicalTypes: [FunctionAppLogicalType] }));
 
-            expect(provider.getCollectionNodes(makeApp(AppServiceLogicalType))).to.be.empty;
+            expect(provider.getSettingsNodes(makeApp(AppServiceLogicalType))).to.be.empty;
         });
 
         it('returns nothing when no adapters are registered at all', () => {
             const provider = createSettingsDataProvider();
 
-            expect(provider.getCollectionNodes(makeApp(FunctionAppLogicalType))).to.be.empty;
+            expect(provider.getSettingsNodes(makeApp(FunctionAppLogicalType))).to.be.empty;
         });
     });
 
     describe('getChildren', () => {
-        it('reports a collection as a leaf, since its contents are edited as a document', async () => {
+        it('reports settings as a leaf, since their contents are edited as a document', async () => {
             const provider = createSettingsDataProvider(createStubAdapter({
                 logicalTypes: [FunctionAppLogicalType],
-                entries: { appSettings: [{ key: 'A', value: '1' }] },
+                entries: [{ key: 'A', value: '1' }],
             }));
 
             expect(await provider.getChildren()).to.be.empty;

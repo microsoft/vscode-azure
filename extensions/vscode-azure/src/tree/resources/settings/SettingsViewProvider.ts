@@ -10,18 +10,18 @@ import { EditSettings } from '../../../commands/settings/EditSettings';
 import { IAzureViewDataTree } from '../../../services';
 import { ISettingsRegistry } from '../../../settings/SettingsRegistry';
 import { combineContextValues } from '../../combineContextValues';
-import { collectionIdOf, isSettingsCollectionNode, type SettingsCollectionNode } from './SettingsNode';
+import { isSettingsNode, type SettingsNode } from './SettingsNode';
 
 /**
  * View-layer provider for settings nodes.
  *
- * Renders the collection as a leaf whose single action opens it for editing. No values appear in
+ * Renders the settings as a leaf whose single action opens them for editing. No values appear in
  * the tree, so nothing here needs masking.
  *
  * A product that permits only a subset registers its **own** view provider ahead of this one and
  * attaches only the context values it wants: a command whose context value is absent never matches
  * its `when` clause, so the menu item never appears. Enforcement lives in
- * {@linkcode SettingsAdapter.write}, so a restricted collection is safe even if a command is invoked
+ * {@linkcode SettingsAdapter.write}, so a restricted resource is safe even if a command is invoked
  * from the palette.
  *
  * @remarks
@@ -42,19 +42,19 @@ export class SettingsViewProvider implements ViewProvider<string> {
             return false;
         }
 
-        return isSettingsCollectionNode(this.tree.get(resource));
+        return isSettingsNode(this.tree.get(resource));
     }
 
     /** @inheritdoc */
     public getTreeItem(key: string): ITreeItem {
         const node = this.tree.get(key);
-        if (!isSettingsCollectionNode(node)) {
+        if (!isSettingsNode(node)) {
             return new this.ctx.code.TreeItem(key);
         }
 
         this.executor.setTelProp('nodeType', getNodeType(node));
 
-        return this.getCollectionTreeItem(key, node);
+        return this.getSettingsTreeItem(key, node);
     }
 
     /** @inheritdoc */
@@ -67,20 +67,18 @@ export class SettingsViewProvider implements ViewProvider<string> {
         return AzureNodeId.parse(key).parentNodeId()?.toString();
     }
 
-    private getCollectionTreeItem(key: string, node: SettingsCollectionNode): ITreeItem {
-        const collectionId = collectionIdOf(node);
-        const descriptor = this.registry.getCollection(node.azureResource, collectionId);
+    private getSettingsTreeItem(key: string, node: SettingsNode): ITreeItem {
+        // The adapter names the node, so a product can call these something other than
+        // "Application Settings". Falls back only if the node outlived its adapter.
+        const label = this.registry.getAdapter(node.azureResource)?.label ?? this.ctx.code.l10n.t('Settings');
 
-        const item = new this.ctx.code.TreeItem(
-            descriptor?.label ?? collectionId,
-            this.ctx.code.TreeItemCollapsibleState.None,
-        );
+        const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.None);
         item.id = key;
         item.iconPath = new this.ctx.code.ThemeIcon('settings');
         item.contextValue = combineContextValues(EditSettings.ContextValue);
         item.command = {
             command: EditSettings.CommandId,
-            title: descriptor?.label ?? collectionId,
+            title: label,
             arguments: [key],
         };
 

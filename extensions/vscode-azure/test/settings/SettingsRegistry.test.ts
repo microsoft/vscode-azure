@@ -35,7 +35,6 @@ describe('SettingsRegistry (unit)', () => {
             const registry = createSettingsRegistry();
 
             expect(registry.hasSettings(makeApp('Microsoft.Storage/storageAccounts'))).to.be.false;
-            expect(registry.getCollections(makeApp('Microsoft.Storage/storageAccounts'))).to.be.empty;
         });
 
         it('matches logical types case-insensitively', () => {
@@ -60,62 +59,42 @@ describe('SettingsRegistry (unit)', () => {
         });
     });
 
-    describe('getCollection', () => {
-        it('finds a collection by id', () => {
-            const registry = createSettingsRegistry(createStubAdapter({
-                logicalTypes: [FunctionAppLogicalType],
-                collections: [
-                    { id: 'appSettings', label: 'Application Settings' },
-                    { id: 'other', label: 'Other Settings' },
-                ],
-            }));
-
-            expect(registry.getCollection(makeApp(FunctionAppLogicalType), 'other')?.label).to.equal('Other Settings');
-        });
-
-        it('returns undefined for an unknown collection id', () => {
-            const registry = createSettingsRegistry(createStubAdapter({ logicalTypes: [FunctionAppLogicalType] }));
-
-            expect(registry.getCollection(makeApp(FunctionAppLogicalType), 'nope')).to.be.undefined;
-        });
-    });
-
     describe('validation', () => {
         it('throws when reading a resource with no adapter', async () => {
             const registry = createSettingsRegistry();
 
-            await expect(registry.read(makeApp('Microsoft.Storage/storageAccounts'), 'appSettings')).to.be.rejectedWith(/No settings adapter/);
+            await expect(registry.read(makeApp('Microsoft.Storage/storageAccounts'))).to.be.rejectedWith(/No settings adapter/);
         });
 
-        it('throws when reading an unknown collection', async () => {
-            const registry = createSettingsRegistry(createStubAdapter({ logicalTypes: [FunctionAppLogicalType] }));
+        it('throws when writing a resource with no adapter', async () => {
+            const registry = createSettingsRegistry();
 
-            await expect(registry.read(makeApp(FunctionAppLogicalType), 'nope')).to.be.rejectedWith(/does not expose a settings collection/);
+            await expect(registry.write(makeApp('Microsoft.Storage/storageAccounts'), [])).to.be.rejectedWith(/No settings adapter/);
         });
     });
 
     describe('write', () => {
-        function setup(readOnlyCollections?: readonly string[]) {
+        function setup(readOnly?: boolean) {
             const adapter = createStubAdapter({
                 logicalTypes: [FunctionAppLogicalType],
-                readOnlyCollections,
-                entries: { appSettings: [entry('A', '1'), entry('B', '2')] },
+                readOnly,
+                entries: [entry('A', '1'), entry('B', '2')],
             });
             return { adapter, registry: createSettingsRegistry(adapter), resource: makeApp(FunctionAppLogicalType) };
         }
 
-        it('replaces the collection wholesale, so an omitted key is deleted', async () => {
+        it('replaces the settings wholesale, so an omitted key is deleted', async () => {
             const { adapter, registry, resource } = setup();
 
-            await registry.write(resource, 'appSettings', [entry('A', 'updated'), entry('C', '3')]);
+            await registry.write(resource, [entry('A', 'updated'), entry('C', '3')]);
 
-            expect(adapter.contents('appSettings')).to.deep.equal([entry('A', 'updated'), entry('C', '3')]);
+            expect(adapter.contents()).to.deep.equal([entry('A', 'updated'), entry('C', '3')]);
         });
 
         it('surfaces the adapter\'s refusal without writing', async () => {
-            const { adapter, registry, resource } = setup(['appSettings']);
+            const { adapter, registry, resource } = setup(true);
 
-            await expect(registry.write(resource, 'appSettings', [entry('A', '1')])).to.be.rejectedWith(/read-only/);
+            await expect(registry.write(resource, [entry('A', '1')])).to.be.rejectedWith(/read-only/);
 
             expect(adapter.writes).to.be.empty;
         });

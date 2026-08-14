@@ -117,7 +117,7 @@ export class JsoncSettingsFormat {
 
     private buildHeader(snapshot: SettingsSnapshot): string {
         const lines = [
-            this.code.l10n.t('{0} for \'{1}\'.', snapshot.collectionLabel, snapshot.resourceName),
+            this.code.l10n.t('{0} for \'{1}\'.', snapshot.label, snapshot.resourceName),
         ];
 
         if (snapshot.writable) {

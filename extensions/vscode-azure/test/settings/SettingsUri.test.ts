@@ -7,7 +7,7 @@ import { AzureNodeId, FunctionAppLogicalType } from '@microsoft/vscode-azure-azu
 import { makeGenericResource, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { SettingsScheme, SettingsUri } from '../../src/settings/SettingsUri';
-import { createCollectionNode } from '../../src/tree/resources/settings/SettingsNode';
+import { createSettingsNode } from '../../src/tree/resources/settings/SettingsNode';
 
 function makeApp(overrides?: Parameters<typeof makeGenericResource>[0]) {
     return makeGenericResource({
@@ -24,42 +24,41 @@ describe('SettingsUri (unit)', () => {
 
     describe('from / parseNodeKey', () => {
         it('round-trips the node key the tree uses', () => {
-            const node = createCollectionNode(makeApp(), 'appSettings');
+            const node = createSettingsNode(makeApp());
             const uri = SettingsUri.from(code, node);
 
             expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(node).toString());
         });
 
         it('uses the azure-settings scheme', () => {
-            const uri = SettingsUri.from(code, createCollectionNode(makeApp(), 'appSettings'));
+            const uri = SettingsUri.from(code, createSettingsNode(makeApp()));
             expect(uri.scheme).to.equal(SettingsScheme);
         });
 
-        it('names the file after the resource and collection, so tabs are readable', () => {
-            const uri = SettingsUri.from(code, createCollectionNode(makeApp(), 'appSettings'));
-            expect(uri.path.endsWith('/MyFuncApp.appSettings.jsonc')).to.equal(true, uri.path);
+        it('names the file after the resource, so tabs are readable', () => {
+            const uri = SettingsUri.from(code, createSettingsNode(makeApp()));
+            expect(uri.path.endsWith('/MyFuncApp.settings.jsonc')).to.equal(true, uri.path);
         });
 
         it('uses a .jsonc extension so the editor picks the jsonc language mode', () => {
-            const uri = SettingsUri.from(code, createCollectionNode(makeApp(), 'connectionStrings'));
+            const uri = SettingsUri.from(code, createSettingsNode(makeApp()));
             expect(uri.path.endsWith('.jsonc')).to.be.true;
         });
 
-        it('distinguishes two collections on the same resource', () => {
-            const resource = makeApp();
-            const appSettings = SettingsUri.from(code, createCollectionNode(resource, 'appSettings'));
-            const connectionStrings = SettingsUri.from(code, createCollectionNode(resource, 'connectionStrings'));
+        it('distinguishes settings on two different resources', () => {
+            const first = SettingsUri.from(code, createSettingsNode(makeApp({ name: 'first' })));
+            const second = SettingsUri.from(code, createSettingsNode(makeApp({ name: 'second' })));
 
-            expect(appSettings.toString()).to.not.equal(connectionStrings.toString());
+            expect(first.toString()).to.not.equal(second.toString());
         });
 
         it('survives a full serialize / re-parse cycle, as it must after a window reload', () => {
-            const node = createCollectionNode(makeApp({
+            const node = createSettingsNode(makeApp({
                 subscription: makeSubscription({
                     accountId: 'User@Contoso.com',
                     tenantId: '72F988BF-86F1-41AF-91AB-2D7CD011DB47',
                 }),
-            }), 'appSettings');
+            }));
 
             const original = SettingsUri.from(code, node);
             // Exactly what the editor does when it restores a tab.
@@ -70,7 +69,7 @@ describe('SettingsUri (unit)', () => {
 
         it('preserves a case-sensitive account id through serialize / re-parse', () => {
             const accountId = 'MixedCase@Contoso.com';
-            const node = createCollectionNode(makeApp({ subscription: makeSubscription({ accountId }) }), 'appSettings');
+            const node = createSettingsNode(makeApp({ subscription: makeSubscription({ accountId }) }));
 
             const uri = code.Uri.parse(SettingsUri.from(code, node).toString());
 
@@ -78,10 +77,10 @@ describe('SettingsUri (unit)', () => {
         });
 
         it('handles a resource name containing dots', () => {
-            const node = createCollectionNode(makeApp({
+            const node = createSettingsNode(makeApp({
                 id: '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Web/sites/my.dotted.app',
                 name: 'my.dotted.app',
-            }), 'appSettings');
+            }));
 
             const uri = SettingsUri.from(code, node);
 
@@ -108,7 +107,7 @@ describe('SettingsUri (unit)', () => {
         });
 
         it('rejects a non-jsonc file name', () => {
-            const valid = SettingsUri.from(code, createCollectionNode(makeApp(), 'appSettings'));
+            const valid = SettingsUri.from(code, createSettingsNode(makeApp()));
             const uri = code.Uri.from({ scheme: SettingsScheme, path: valid.path.replace(/\.jsonc$/, '.txt') });
 
             expect(() => SettingsUri.parseNodeKey(uri)).to.throw(/jsonc/);

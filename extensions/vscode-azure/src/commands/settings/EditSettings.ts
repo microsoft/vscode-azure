@@ -7,14 +7,14 @@ import { ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { SettingsUri } from '../../settings/SettingsUri';
-import { isSettingsCollectionNode } from '../../tree/resources/settings/SettingsNode';
+import { isSettingsNode } from '../../tree/resources/settings/SettingsNode';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
- * Opens a settings collection for editing.
+ * Opens a resource's settings for editing.
  *
  * This is the only settings command, and the fork point between the two editing experiences. Today
- * it opens the collection as an in-memory JSONC document whose save writes straight to Azure.
+ * it opens the settings as an in-memory JSONC document whose save writes straight to Azure.
  *
  * @remarks
  * A second branch is planned: when the resource can be positively attributed to a local azd project,
@@ -40,12 +40,12 @@ export class EditSettings implements ManagedCommand {
         }
 
         const node = this.tree.get(key);
-        if (!isSettingsCollectionNode(node)) {
+        if (!isSettingsNode(node)) {
             return;
         }
 
-        // `preview: false` so the tab is not reused: the URI identifies the collection, and two
-        // views of one collection could disagree after a save.
+        // `preview: false` so the tab is not reused: the URI identifies the resource, and two views
+        // of one resource's settings could disagree after a save.
         const document = await this.ctx.code.workspace.openTextDocument(SettingsUri.from(this.ctx.code, node));
         await this.ctx.code.window.showTextDocument(document, { preview: false });
     }

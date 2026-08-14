@@ -114,16 +114,20 @@ implementation** rather than re-vendoring the source's code:
 
 - **Application settings** — there **is** a shared settings framework (`docs/settings.md`). Do **not**
   build product-specific settings trees, commands, or an editor. Implement a single `SettingsAdapter`
-  (`canHandle` / `getCollections` / `read` / `write`) in
-  `extensions/vscode-azure/src/settings/adapters/`, bind it to `ISettingsAdapter` in
-  `products/registerSettings.ts`, and stop. The collection tree node, the JSONC editor, and the edit
-  command all come for free. Local configuration synchronization belongs to azd or the product's
-  deployment workflow, not this framework.
-  - There is one command and one surface: the whole collection is edited as a document. There are no
-    per-setting add/edit/rename/delete commands, and no values are shown in the tree.
+  (`label` / `canHandle` / `read` / `write`) in
+  `extensions/vscode-azure/src/settings/adapters/`, bind it to `ISettingsAdapter` in that product's
+  registrar, and stop. The settings tree node, the JSONC editor, and the edit command all come for
+  free. Local configuration synchronization belongs to azd or the product's deployment workflow, not
+  this framework.
+  - There is one command and one surface: a resource's settings are edited as a single document.
+    There are no per-setting add/edit/rename/delete commands, and no values are shown in the tree.
+  - **One resource has at most one settings document.** There is no "collection id" for several named
+    dictionaries per resource, matching `@microsoft/vscode-azext-azureappsettings`. App Service
+    connection strings (`listConnectionStrings`) are not surfaced by any shipping extension and are
+    not modeled here.
   - There is no capability model. A product that wants a different presentation registers its own view
-    provider and attaches only the context values it wants; a collection it will not let the user edit
-    returns `writable: false` on its snapshot. Enforcement lives in `write`, which is the only path a
+    provider and attaches only the context values it wants; settings it will not let the user edit
+    return `writable: false` on the snapshot. Enforcement lives in `write`, which is the only path a
     save can take.
   - Per-entry metadata (e.g. a connection string's `type`) is **not** modeled. Add it alongside the
     first adapter that needs it.
@@ -142,7 +146,7 @@ implementation** rather than re-vendoring the source's code:
 > **Tree dispatch caveat.** `ProviderRegistry` dispatches to the first `canHandle` match, so a
 > product `DataProvider` that claims a resource in order to add its own children takes that resource
 > away from the generic provider that would otherwise emit its settings node. Such a provider must
-> compose `ISettingsDataProvider.getCollectionNodes(resource)` into what it returns. A product with
+> compose `ISettingsDataProvider.getSettingsNodes(resource)` into what it returns. A product with
 > no children beyond settings needs **no** data or view provider at all.
 
 ---

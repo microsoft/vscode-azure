@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import type { SettingsAdapter, SettingsCollectionDescriptor } from '../../src/settings/SettingsAdapter';
+import type { SettingsAdapter } from '../../src/settings/SettingsAdapter';
 import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '../../src/settings/core/SettingsModel';
 import { SettingsRegistry } from '../../src/settings/SettingsRegistry';
 import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
@@ -13,12 +13,12 @@ import { SettingsDataProvider } from '../../src/tree/resources/settings/Settings
 export interface StubAdapterOptions {
     /** Logical types the adapter claims. Compared case-insensitively. */
     readonly logicalTypes: readonly string[];
-    /** Collections the adapter exposes. Defaults to a single `appSettings`. */
-    readonly collections?: readonly SettingsCollectionDescriptor[];
-    /** Collection ids the adapter refuses to write. Defaults to none. */
-    readonly readOnlyCollections?: readonly string[];
-    /** Seed contents per collection id. Defaults to empty. */
-    readonly entries?: Readonly<Record<string, SettingsMap>>;
+    /** Display name the adapter reports. Defaults to `Application Settings`. */
+    readonly label?: string;
+    /** When true, the adapter refuses writes and reports itself read-only. Defaults to false. */
+    readonly readOnly?: boolean;
+    /** Seed contents. Defaults to empty. */
+    readonly entries?: SettingsMap;
 }
 
 /**
@@ -28,20 +28,19 @@ export interface StubAdapterOptions {
  * {@linkcode StubAdapter.writes} to assert exactly what the framework sent.
  */
 export class StubAdapter implements SettingsAdapter {
-    /** Every `write` call, in order, as `[collectionId, entries]`. */
-    public readonly writes: [string, SettingsMap][] = [];
+    /** Every `write` call, in order. */
+    public readonly writes: SettingsMap[] = [];
 
-    private readonly store = new Map<string, SettingsMap>();
+    /** @inheritdoc */
+    public readonly label: string;
+
+    private entries: SettingsMap;
     private readonly logicalTypes: Set<string>;
-    private readonly collections: readonly SettingsCollectionDescriptor[];
 
     public constructor(private readonly options: StubAdapterOptions) {
         this.logicalTypes = new Set(options.logicalTypes.map(type => type.toLowerCase()));
-        this.collections = options.collections ?? [{ id: 'appSettings', label: 'Application Settings' }];
-
-        for (const [collectionId, entries] of Object.entries(options.entries ?? {})) {
-            this.store.set(collectionId, entries);
-        }
+        this.label = options.label ?? 'Application Settings';
+        this.entries = options.entries ?? [];
     }
 
     /** @inheritdoc */
@@ -50,43 +49,29 @@ export class StubAdapter implements SettingsAdapter {
     }
 
     /** @inheritdoc */
-    public getCollections(resource: GenericResource): readonly SettingsCollectionDescriptor[] {
-        return this.canHandle(resource) ? this.collections : [];
-    }
-
-    /** @inheritdoc */
-    public read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot> {
-        const collection = this.collections.find(candidate => candidate.id === collectionId);
-        if (!collection) {
-            return Promise.reject(new Error(`Unknown collection '${collectionId}'`));
-        }
-
+    public read(resource: GenericResource): Promise<SettingsSnapshot> {
         return Promise.resolve({
-            entries: this.store.get(collectionId) ?? [],
+            entries: this.entries,
             resourceName: resource.name,
-            collectionLabel: collection.label,
-            writable: !this.isReadOnly(collectionId),
+            label: this.label,
+            writable: !this.options.readOnly,
         });
     }
 
     /** @inheritdoc */
-    public write(_resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
-        if (this.isReadOnly(collectionId)) {
-            return Promise.reject(new Error(`Settings in '${collectionId}' are read-only.`));
+    public write(_resource: GenericResource, entries: SettingsMap): Promise<void> {
+        if (this.options.readOnly) {
+            return Promise.reject(new Error('These settings are read-only.'));
         }
 
-        this.writes.push([collectionId, entries]);
-        this.store.set(collectionId, entries);
+        this.writes.push(entries);
+        this.entries = entries;
         return Promise.resolve();
     }
 
-    private isReadOnly(collectionId: string): boolean {
-        return this.options.readOnlyCollections?.includes(collectionId) ?? false;
-    }
-
-    /** Current contents of a collection, as the stub sees them. */
-    public contents(collectionId: string): SettingsMap {
-        return this.store.get(collectionId) ?? [];
+    /** Current contents, as the stub sees them. */
+    public contents(): SettingsMap {
+        return this.entries;
     }
 }
 

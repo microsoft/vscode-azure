@@ -7,7 +7,7 @@ import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzureViewDataTree } from '../services';
-import { collectionIdOf, isSettingsCollectionNode, type SettingsCollectionNode } from '../tree/resources/settings/SettingsNode';
+import { isSettingsNode, type SettingsNode } from '../tree/resources/settings/SettingsNode';
 import type { SettingsDocumentSource } from './core/SettingsFileSystemProvider';
 import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 import { ISettingsRegistry } from './SettingsRegistry';
@@ -16,7 +16,7 @@ import { SettingsUri } from './SettingsUri';
 /**
  * Bridges settings document URIs to the {@linkcode ISettingsRegistry}.
  *
- * A settings URI carries the collection node's tree key, so resolving one is a direct lookup in the
+ * A settings URI carries the settings node's tree key, so resolving one is a direct lookup in the
  * data tree. The resource handed to the adapter is therefore always the same object the tree loaded
  * from Azure -- never one rebuilt from the URI, which could disagree with reality.
  *
@@ -34,30 +34,26 @@ export class AzureSettingsDocumentSource implements SettingsDocumentSource {
 
     /** @inheritdoc */
     public async read(uri: vscode.Uri): Promise<SettingsSnapshot> {
-        const node = this.resolve(uri);
-        return await this.registry.read(node.azureResource, collectionIdOf(node));
+        return await this.registry.read(this.resolve(uri).azureResource);
     }
 
     /** @inheritdoc */
     public async write(uri: vscode.Uri, entries: SettingsMap): Promise<void> {
         const node = this.resolve(uri);
-        await this.registry.write(node.azureResource, collectionIdOf(node), entries);
+        await this.registry.write(node.azureResource, entries);
 
-        // The tree renders one node per setting, so a save that added or removed keys changes the
-        // node set. Invalidate just the collection subtree, so sibling collections on the same
-        // resource keep their cached children.
         this.tree.invalidate(node);
     }
 
     /**
-     * Resolve the settings collection node a URI addresses.
+     * Resolve the settings node a URI addresses.
      *
      * @throws if the URI is malformed, or its node is not currently in the tree.
      */
-    private resolve(uri: vscode.Uri): SettingsCollectionNode {
+    private resolve(uri: vscode.Uri): SettingsNode {
         const node = this.tree.get(SettingsUri.parseNodeKey(uri));
 
-        if (!isSettingsCollectionNode(node)) {
+        if (!isSettingsNode(node)) {
             throw new Error(this.code.l10n.t('These settings are no longer available. Open them again from the Azure view.'));
         }
 

@@ -9,40 +9,33 @@ import { isVirtualResource, type GenericResource, type VirtualResource } from '@
  * Virtual-type discriminator for the settings tree node.
  *
  * A structural identifier, not display text. Shared by the data provider, the view provider, and
- * the edit command so none of them duplicates a string literal.
+ * the edit command so none of them duplicates a string literal. It is also the node's
+ * `virtualPath`, which is what makes the node's key distinct from its owning resource's.
  */
-export const SettingsCollectionVirtualType = 'settings.collection';
+export const SettingsVirtualType = 'settings';
 
 /**
- * A settings collection node, e.g. the "Application Settings" node under a Function App.
+ * A resource's settings node, e.g. the "Application Settings" node under a Function App.
  *
- * This is a leaf: individual settings are not shown in the tree, because the whole collection is
- * edited as a document. That also keeps setting values -- frequently secrets -- out of a tree that
- * is often visible during screen shares.
- *
- * `virtualPath` carries the collection id, which is what distinguishes one settings node from
- * another on the same resource.
+ * This is a leaf: individual settings are not shown in the tree, because they are edited as a
+ * single document. That also keeps setting values -- frequently secrets -- out of a tree that is
+ * often visible during screen shares.
  */
-export type SettingsCollectionNode = VirtualResource;
+export type SettingsNode = VirtualResource;
 
-/** Build the collection node for {@linkcode collectionId} on {@linkcode resource}. */
-export function createCollectionNode(resource: GenericResource, collectionId: string): SettingsCollectionNode {
+/** Build the settings node for {@linkcode resource}. */
+export function createSettingsNode(resource: GenericResource): SettingsNode {
     return {
-        virtualType: SettingsCollectionVirtualType,
-        virtualPath: collectionId,
+        virtualType: SettingsVirtualType,
+        virtualPath: SettingsVirtualType,
         azureResource: resource,
     };
 }
 
-/** Type guard for a settings collection node. */
-export function isSettingsCollectionNode(node: unknown): node is SettingsCollectionNode {
+/** Type guard for a settings node. */
+export function isSettingsNode(node: unknown): node is SettingsNode {
     return !!node
         && typeof node === 'object'
         && isVirtualResource(node as VirtualResource)
-        && (node as VirtualResource).virtualType === SettingsCollectionVirtualType;
-}
-
-/** The collection id a settings node names. */
-export function collectionIdOf(node: SettingsCollectionNode): string {
-    return node.virtualPath;
+        && (node as VirtualResource).virtualType === SettingsVirtualType;
 }

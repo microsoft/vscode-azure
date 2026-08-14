@@ -9,7 +9,7 @@ import {
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { AppSettingsCollectionId, WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
+import { WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
 
 function makeSite(logicalType: string) {
     return makeGenericResource({
@@ -54,17 +54,10 @@ describe('WebAppSettingsAdapter (unit)', () => {
         });
     });
 
-    describe('getCollections', () => {
-        it('exposes application settings', () => {
+    describe('label', () => {
+        it('names the settings for the tree and the document header', () => {
             const { adapter } = createAdapter();
-            const collections = adapter.getCollections(makeSite(FunctionAppLogicalType));
-
-            expect(collections.map(collection => collection.id)).to.deep.equal([AppSettingsCollectionId]);
-        });
-
-        it('exposes nothing for an unsupported resource', () => {
-            const { adapter } = createAdapter();
-            expect(adapter.getCollections(makeSite('Microsoft.Storage/storageAccounts'))).to.be.empty;
+            expect(adapter.label).to.equal('Application Settings');
         });
     });
 
@@ -72,7 +65,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('returns application settings sorted by key, for a stable display order', async () => {
             const { adapter } = createAdapter({ appSettings: { ZED: '1', alpha: '2', Beta: '3' } });
 
-            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);
+            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType));
 
             expect(snapshot.entries.map(setting => setting.key)).to.deep.equal(['Beta', 'ZED', 'alpha']);
         });
@@ -80,7 +73,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('describes the snapshot honestly', async () => {
             const { adapter } = createAdapter({ appSettings: { A: '1' } });
 
-            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);
+            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType));
 
             expect(snapshot.resourceName).to.equal('mysite');
             expect(snapshot.writable).to.be.true;
@@ -89,7 +82,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('handles a collection with no properties at all', async () => {
             const { adapter } = createAdapter();
 
-            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);
+            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType));
 
             expect(snapshot.entries).to.be.empty;
         });
@@ -97,7 +90,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('passes the resource group parsed from the ARM id', async () => {
             const { adapter, listApplicationSettings } = createAdapter();
 
-            await adapter.read(makeSite(FunctionAppLogicalType), AppSettingsCollectionId);
+            await adapter.read(makeSite(FunctionAppLogicalType));
 
             expect(listApplicationSettings.mock.calls[0].arguments).to.deep.equal(['rg1', 'mysite']);
         });
@@ -111,13 +104,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
                 logicalType: FunctionAppLogicalType,
             });
 
-            await expect(adapter.read(resource, AppSettingsCollectionId)).to.be.rejectedWith(/resource group/);
-        });
-
-        it('throws for a collection it does not expose', async () => {
-            const { adapter } = createAdapter();
-
-            await expect(adapter.read(makeSite(FunctionAppLogicalType), 'nope')).to.be.rejectedWith(/nope/);
+            await expect(adapter.read(resource)).to.be.rejectedWith(/resource group/);
         });
     });
 
@@ -125,7 +112,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('sends the entries verbatim as the whole dictionary', async () => {
             const { adapter, updateApplicationSettings } = createAdapter();
 
-            await adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, [
+            await adapter.write(makeSite(FunctionAppLogicalType), [
                 { key: 'A', value: '1' },
                 { key: 'B', value: '2' },
             ]);
@@ -140,7 +127,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
                 appSettings: { EXISTING: 'keep-me' },
             });
 
-            await adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, []);
+            await adapter.write(makeSite(FunctionAppLogicalType), []);
 
             expect(updateApplicationSettings.mock.calls[0].arguments[2]).to.deep.equal({ properties: {} });
             // Last-writer-wins: no read-before-write on the editor path.
@@ -151,16 +138,10 @@ describe('WebAppSettingsAdapter (unit)', () => {
             const { adapter, updateApplicationSettings } = createAdapter();
 
             await expect(
-                adapter.write(makeSite(FunctionAppLogicalType), AppSettingsCollectionId, [{ key: '  ', value: 'x' }]),
+                adapter.write(makeSite(FunctionAppLogicalType), [{ key: '  ', value: 'x' }]),
             ).to.be.rejectedWith(/cannot be empty/);
 
             expect(updateApplicationSettings.mock.callCount()).to.equal(0);
-        });
-
-        it('throws for a collection it does not expose', async () => {
-            const { adapter } = createAdapter();
-
-            await expect(adapter.write(makeSite(FunctionAppLogicalType), 'nope', [])).to.be.rejectedWith(/nope/);
         });
     });
 });

@@ -8,59 +8,47 @@ import type { ServiceIdentifier } from 'inversify';
 import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 
 /**
- * Identifies one settings collection on a resource.
+ * Per-product access to the settings on a resource.
  *
- * A resource may expose more than one. The id is a stable, product-defined token that appears in the
- * settings document's file name and in tree node keys, so it must not be localized and must not
- * change once shipped.
- */
-export interface SettingsCollectionDescriptor {
-    /** Stable identifier, e.g. `appSettings`. Appears in URIs and node keys; never localized. */
-    readonly id: string;
-    /** Localized display name, e.g. "Application settings". */
-    readonly label: string;
-}
-
-/**
- * Per-product access to settings on a resource.
- *
- * Implementations own everything product-specific: which collections exist, how to read and write
- * them, and what a valid setting name looks like. The shared model, tree, editor, and commands
- * consult this interface and never branch on resource type themselves.
+ * A resource has at most one settings document, served by at most one adapter. Implementations own
+ * everything product-specific: how to read and write the settings, and what a valid setting name
+ * looks like. The shared model, tree, editor, and command consult this interface and never branch
+ * on resource type themselves.
  *
  * @remarks
- * {@linkcode SettingsAdapter.write write} receives the collection's **complete** new contents. Keys
- * absent from `entries` must be deleted. This matches ARM's whole-dictionary PUT semantics and the
- * editor's last-writer-wins save behavior; implementations must not merge with remote state.
+ * {@linkcode SettingsAdapter.write write} receives the **complete** new contents. Keys absent from
+ * `entries` must be deleted. This matches ARM's whole-dictionary PUT semantics and the editor's
+ * last-writer-wins save behavior; implementations must not merge with remote state.
  */
 export interface SettingsAdapter {
+    /**
+     * Localized display name for the tree node and the document header, e.g. "Application Settings".
+     *
+     * A getter rather than a fixed string so it is resolved in the active display language.
+     */
+    readonly label: string;
+
     /** Whether this adapter serves the given resource. */
     canHandle(resource: GenericResource): boolean;
 
-    /** The collections this adapter exposes on {@linkcode resource}. May be empty. */
-    getCollections(resource: GenericResource): readonly SettingsCollectionDescriptor[];
-
     /**
-     * Read the current contents of a collection.
+     * Read the resource's current settings.
      *
-     * Set {@linkcode SettingsSnapshot.writable writable} on the returned snapshot to `false` for a
-     * collection this product will not let the user edit; the editor then opens it read-only.
-     *
-     * @throws if the collection id is not one this adapter exposes for the resource.
+     * Set {@linkcode SettingsSnapshot.writable writable} on the returned snapshot to `false` when
+     * this product will not let the user edit them; the editor then opens the document read-only.
      */
-    read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot>;
+    read(resource: GenericResource): Promise<SettingsSnapshot>;
 
     /**
-     * Replace a collection's entire contents with {@linkcode entries}.
+     * Replace the resource's settings with {@linkcode entries} in their entirety.
      *
-     * Implementations own enforcement: reject the write if the collection is read-only or any entry
+     * Implementations own enforcement: reject the write if the settings are read-only or any entry
      * is invalid. The editor can save anything the user types, so this is the only place a product's
      * rules can be applied.
      *
-     * @throws if the collection is not writable, an entry is invalid, or the id is not one this
-     * adapter exposes.
+     * @throws if the settings are not writable or an entry is invalid.
      */
-    write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void>;
+    write(resource: GenericResource, entries: SettingsMap): Promise<void>;
 }
 
 /**

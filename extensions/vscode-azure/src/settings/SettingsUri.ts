@@ -11,7 +11,7 @@ import type * as vscode from 'vscode';
 export const SettingsScheme = 'azure-settings';
 
 /** Extension of a settings document. Selects the editor's `jsonc` language mode. */
-const SettingsFileExtension = '.jsonc';
+const SettingsFileExtension = '.settings.jsonc';
 
 const HexPattern = /^[0-9a-f]+$/i;
 
@@ -20,14 +20,14 @@ const HexPattern = /^[0-9a-f]+$/i;
  *
  * Shape:
  * ```
- * azure-settings:/<nodeKey>/<resourceName>.<collectionId>.jsonc
+ * azure-settings:/<nodeKey>/<resourceName>.settings.jsonc
  * ```
  *
- * `<nodeKey>` is the hex-encoded {@linkcode AzureNodeId} of the settings **collection node** -- the
- * tree's own primary key. The document source therefore resolves a URI with an O(1) tree lookup,
- * rather than searching the tree by ARM id or rebuilding a resource out of the URI's parts. The
- * trailing file name exists only so the editor tab is readable and picks the `jsonc` language mode;
- * nothing parses meaning out of it.
+ * `<nodeKey>` is the hex-encoded {@linkcode AzureNodeId} of the **settings node** -- the tree's own
+ * primary key. The document source therefore resolves a URI with an O(1) tree lookup, rather than
+ * searching the tree by ARM id or rebuilding a resource out of the URI's parts. The trailing file
+ * name exists only so the editor tab is readable and picks the `jsonc` language mode; nothing
+ * parses meaning out of it.
  *
  * @remarks
  * The key is packed into the **path**, never the authority. VS Code lowercases a URI's authority
@@ -36,10 +36,10 @@ const HexPattern = /^[0-9a-f]+$/i;
  * same reason: it survives case normalization regardless.
  */
 export const SettingsUri = {
-    /** Build the document URI for a settings collection virtual node. */
+    /** Build the document URI for a settings node. */
     from(code: IVsCode, node: VirtualResource): vscode.Uri {
         const nodeKey = Buffer.from(AzureNodeId.from(node).toString(), 'utf8').toString('hex');
-        const fileName = `${node.azureResource.name}.${node.virtualPath}${SettingsFileExtension}`;
+        const fileName = `${node.azureResource.name}${SettingsFileExtension}`;
 
         return code.Uri.from({ scheme: SettingsScheme, path: `/${nodeKey}/${fileName}` });
     },

@@ -9,7 +9,7 @@ import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { AzureSettingsDocumentSource } from '../../src/settings/AzureSettingsDocumentSource';
 import { SettingsUri } from '../../src/settings/SettingsUri';
-import { createCollectionNode } from '../../src/tree/resources/settings/SettingsNode';
+import { createSettingsNode } from '../../src/tree/resources/settings/SettingsNode';
 
 const resource = makeGenericResource({
     id: '/subscriptions/test-sub/resourceGroups/rg/providers/Microsoft.Web/sites/app',
@@ -21,19 +21,18 @@ const resource = makeGenericResource({
 
 function createSource(options?: { populateTree?: boolean }) {
     const { vscode } = createMockVsCode();
-    const node = createCollectionNode(resource, 'appSettings');
+    const node = createSettingsNode(resource);
 
     const nodes = new Map<string, ConcreteAzureNode>();
     if (options?.populateTree ?? true) {
         nodes.set(AzureNodeId.from(node).toString(), node);
     }
 
-    const read = mock.fn((_resource: GenericResource, _collectionId: string) => Promise.resolve({
+    const read = mock.fn((_resource: GenericResource) => Promise.resolve({
         entries: [],
         resourceName: resource.name,
-        collectionLabel: 'Application Settings',
+        label: 'Application Settings',
         writable: true,
-        structured: false,
     }));
     const write = mock.fn(() => Promise.resolve());
     const invalidate = mock.fn();
@@ -54,13 +53,11 @@ describe('AzureSettingsDocumentSource (unit)', () => {
         await source.read(uri);
 
         expect(read.mock.callCount()).to.equal(1);
-        const [resolved, collectionId] = read.mock.calls[0].arguments;
-        expect(collectionId).to.equal('appSettings');
         // The very object the tree holds, not a copy rebuilt from the URI.
-        expect(resolved).to.equal(resource);
+        expect(read.mock.calls[0].arguments[0]).to.equal(resource);
     });
 
-    it('invalidates the collection subtree after a write', async () => {
+    it('invalidates the settings node after a write', async () => {
         const { source, uri, node, write, invalidate } = createSource();
 
         await source.write(uri, [{ key: 'A', value: '1' }]);

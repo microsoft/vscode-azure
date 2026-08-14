@@ -11,7 +11,7 @@ function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot
     return {
         entries: [],
         resourceName: 'myFunctionApp',
-        collectionLabel: 'Application settings',
+        label: 'Application settings',
         writable: true,
         ...overrides,
     };

@@ -10,11 +10,8 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import type { SettingsAdapter, SettingsCollectionDescriptor } from '../SettingsAdapter';
+import type { SettingsAdapter } from '../SettingsAdapter';
 import type { SettingsMap, SettingsSnapshot } from '../core/SettingsModel';
-
-/** Stable id of the application settings collection. Appears in URIs and node keys. */
-export const AppSettingsCollectionId = 'appSettings';
 
 const supportedLogicalTypes = new Set<string>([
     FunctionAppLogicalType.toLowerCase(),
@@ -31,6 +28,9 @@ const supportedLogicalTypes = new Set<string>([
  * @remarks
  * ARM has no per-key patch: `updateApplicationSettings` replaces the whole dictionary. That is why
  * {@linkcode write} sends `entries` verbatim and omitting a key deletes it.
+ *
+ * Connection strings (`listConnectionStrings`) are deliberately not exposed. They are a separate
+ * ARM dictionary, and no shipping Azure extension surfaces them.
  */
 @injectable()
 export class WebAppSettingsAdapter implements SettingsAdapter {
@@ -40,27 +40,17 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
     ) { }
 
     /** @inheritdoc */
+    public get label(): string {
+        return this.code.l10n.t('Application Settings');
+    }
+
+    /** @inheritdoc */
     public canHandle(resource: GenericResource): boolean {
         return supportedLogicalTypes.has(resource.logicalType.toLowerCase());
     }
 
     /** @inheritdoc */
-    public getCollections(resource: GenericResource): readonly SettingsCollectionDescriptor[] {
-        if (!this.canHandle(resource)) {
-            return [];
-        }
-
-        return [
-            {
-                id: AppSettingsCollectionId,
-                label: this.code.l10n.t('Application Settings'),
-            },
-        ];
-    }
-
-    /** @inheritdoc */
-    public async read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot> {
-        const collection = this.requireCollection(resource, collectionId);
+    public async read(resource: GenericResource): Promise<SettingsSnapshot> {
         const { client, resourceGroupName } = this.resolveClient(resource);
 
         const properties = (await client.webApps.listApplicationSettings(resourceGroupName, resource.name)).properties;
@@ -68,15 +58,14 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
         return {
             entries: toAppSettingEntries(properties),
             resourceName: resource.name,
-            collectionLabel: collection.label,
+            label: this.label,
             // ARM permits editing application settings on all three site kinds.
             writable: true,
         };
     }
 
     /** @inheritdoc */
-    public async write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
-        this.requireCollection(resource, collectionId);
+    public async write(resource: GenericResource, entries: SettingsMap): Promise<void> {
         const { client, resourceGroupName } = this.resolveClient(resource);
         this.validateKeys(entries);
 
@@ -95,14 +84,6 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
                 throw new Error(this.code.l10n.t('The setting name cannot be empty.'));
             }
         }
-    }
-
-    private requireCollection(resource: GenericResource, collectionId: string): SettingsCollectionDescriptor {
-        const collection = this.getCollections(resource).find(candidate => candidate.id === collectionId);
-        if (!collection) {
-            throw new Error(`'${resource.logicalType}' does not expose a settings collection named '${collectionId}'`);
-        }
-        return collection;
     }
 
     private resolveClient(resource: GenericResource): { client: IWebAppClient; resourceGroupName: string } {

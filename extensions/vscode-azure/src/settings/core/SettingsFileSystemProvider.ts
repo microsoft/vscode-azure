@@ -19,15 +19,14 @@ export interface SettingsDocumentSource {
     /**
      * Read the current settings for {@linkcode uri}.
      *
-     * @throws if the URI does not name a settings collection this source can serve. The provider
-     * translates such failures into `FileNotFound`.
+     * @throws if the URI does not name settings this source can serve. The provider translates such
+     * failures into `FileNotFound`.
      */
     read(uri: vscode.Uri): Promise<SettingsSnapshot>;
 
     /**
-     * Persist {@linkcode entries} as the complete contents of the collection named by
-     * {@linkcode uri}, replacing whatever is stored remotely. Keys absent from `entries` are
-     * deleted.
+     * Persist {@linkcode entries} as the complete settings named by {@linkcode uri}, replacing
+     * whatever is stored remotely. Keys absent from `entries` are deleted.
      */
     write(uri: vscode.Uri, entries: SettingsMap): Promise<void>;
 }

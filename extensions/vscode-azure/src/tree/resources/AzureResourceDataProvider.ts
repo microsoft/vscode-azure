@@ -63,7 +63,7 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
         // Resources are claimed too (not just subscriptions and groups) so that any resource with a
         // registered settings adapter grows a settings node without needing a product-specific
         // provider. A product provider that wants its own children registers ahead of this one and
-        // composes `ISettingsDataProvider.getCollectionNodes` itself.
+        // composes `ISettingsDataProvider.getSettingsNodes` itself.
         return isSubscription(node) || isResourceGroup(node) || isGenericResource(node);
     }
 
@@ -93,7 +93,7 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
 
             case isGenericResource(resource):
                 // Empty for the vast majority of resource types, which have no settings adapter.
-                return this.settings.getCollectionNodes(resource);
+                return this.settings.getSettingsNodes(resource);
 
             default:
                 throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);

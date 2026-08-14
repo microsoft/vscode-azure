@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import { ISettingsAdapter, type SettingsAdapter, type SettingsCollectionDescriptor } from './SettingsAdapter';
+import { ISettingsAdapter, type SettingsAdapter } from './SettingsAdapter';
 import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
 import { injectable, multiInject, optional, type ServiceIdentifier } from 'inversify';
 
@@ -14,16 +14,15 @@ export type ISettingsRegistry = SettingsRegistry;
 /**
  * Dispatches settings operations to the {@linkcode SettingsAdapter} that owns a resource.
  *
- * Every settings surface -- tree, editor, and commands -- goes through this type, so none of them
+ * Every settings surface -- tree, editor, and command -- goes through this type, so none of them
  * needs to know which products support settings. Adding a product is a matter of registering an
  * adapter; no shared code changes.
  *
  * @remarks
  * Adapter lookup is memoized by the resource's `logicalType`, because
- * {@linkcode SettingsRegistry.getCollections getCollections} is called for **every** resource the
- * generic data provider lists. Adapters must therefore decide `canHandle` from the logical type
- * alone; an adapter that also inspected, say, the resource's location would be memoized
- * incorrectly.
+ * {@linkcode SettingsRegistry.hasSettings hasSettings} is called for **every** resource the generic
+ * data provider lists. Adapters must therefore decide `canHandle` from the logical type alone; an
+ * adapter that also inspected, say, the resource's location would be memoized incorrectly.
  */
 @injectable()
 export class SettingsRegistry {
@@ -47,47 +46,34 @@ export class SettingsRegistry {
         return adapter ?? undefined;
     }
 
-    /** Whether {@linkcode resource} exposes any settings at all. */
+    /** Whether {@linkcode resource} exposes settings. */
     public hasSettings(resource: GenericResource): boolean {
-        return this.getCollections(resource).length > 0;
-    }
-
-    /** Every settings collection on {@linkcode resource}, in display order. Empty if unsupported. */
-    public getCollections(resource: GenericResource): readonly SettingsCollectionDescriptor[] {
-        return this.getAdapter(resource)?.getCollections(resource) ?? [];
-    }
-
-    /** One collection by id, or `undefined` if the resource does not expose it. */
-    public getCollection(resource: GenericResource, collectionId: string): SettingsCollectionDescriptor | undefined {
-        return this.getCollections(resource).find(collection => collection.id === collectionId);
+        return !!this.getAdapter(resource);
     }
 
     /**
-     * Read a collection's current contents.
+     * Read a resource's current settings.
      *
-     * @throws if no adapter handles the resource, or the collection id is unknown to it.
+     * @throws if no adapter handles the resource.
      */
-    public async read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot> {
-        return await this.require(resource, collectionId).read(resource, collectionId);
+    public async read(resource: GenericResource): Promise<SettingsSnapshot> {
+        return await this.require(resource).read(resource);
     }
 
     /**
-     * Replace a collection's entire contents. Keys absent from {@linkcode entries} are deleted.
+     * Replace a resource's settings in their entirety. Keys absent from {@linkcode entries} are
+     * deleted.
      *
      * @throws if no adapter handles the resource, or the adapter rejects the write.
      */
-    public async write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void> {
-        await this.require(resource, collectionId).write(resource, collectionId, entries);
+    public async write(resource: GenericResource, entries: SettingsMap): Promise<void> {
+        await this.require(resource).write(resource, entries);
     }
 
-    private require(resource: GenericResource, collectionId: string): SettingsAdapter {
+    private require(resource: GenericResource): SettingsAdapter {
         const adapter = this.getAdapter(resource);
         if (!adapter) {
             throw new Error(`No settings adapter is registered for resources of type '${resource.logicalType}'`);
-        }
-
-        if (!adapter.getCollections(resource).some(collection => collection.id === collectionId)) {
-            throw new Error(`'${resource.logicalType}' does not expose a settings collection named '${collectionId}'`);
         }
 
         return adapter;

@@ -21,8 +21,8 @@ package the file lives in.
 
 ## One command, one surface
 
-The tree shows a single leaf node per settings collection. Selecting it runs the one settings
-command, which opens the whole collection as an editable JSONC document:
+The tree shows a single leaf settings node per resource. Selecting it runs the one settings command,
+which opens the settings as an editable JSONC document:
 
 ```jsonc
 // Application settings for 'myFunctionApp'.
@@ -44,34 +44,40 @@ setting values never appear in the tree, which is frequently visible during scre
 
 ### Save semantics: last-writer-wins
 
-Saving sends the parsed document as the collection's **complete** new contents. There is no re-read
+Saving sends the parsed document as the resource's **complete** new settings. There is no re-read
 and no merge:
 
 - A key you removed is deleted.
 - A key someone else added since you opened the document is **overwritten** (that is, removed).
 
 This is deliberate. It makes the document mean exactly what it appears to mean, and it matches ARM,
-which has no per-key patch for these collections -- `updateApplicationSettings` replaces the whole
-dictionary. The trade-off is real: two people editing the same collection in two windows will clobber
-each other silently. `SettingsAdapter.write` takes the full map, so adding etag / `If-Match` support
-later is additive rather than a redesign.
+which has no per-key patch -- `updateApplicationSettings` replaces the whole dictionary. The
+trade-off is real: two people editing the same settings in two windows will clobber each other
+silently. `SettingsAdapter.write` takes the full map, so adding etag / `If-Match` support later is
+additive rather than a redesign.
 
 ## Adapters
 
-A product supports settings by implementing `SettingsAdapter` and binding it to `ISettingsAdapter` in
-`products/registerSettings.ts`. Nothing else changes.
+A product supports settings by implementing `SettingsAdapter` and binding it to `ISettingsAdapter`
+in its own product registrar. Nothing else changes.
 
 ```typescript
 export interface SettingsAdapter {
+    readonly label: string;
     canHandle(resource: GenericResource): boolean;
-    getCollections(resource: GenericResource): readonly SettingsCollectionDescriptor[];
-    read(resource: GenericResource, collectionId: string): Promise<SettingsSnapshot>;
-    write(resource: GenericResource, collectionId: string, entries: SettingsMap): Promise<void>;
+    read(resource: GenericResource): Promise<SettingsSnapshot>;
+    write(resource: GenericResource, entries: SettingsMap): Promise<void>;
 }
 ```
 
+**One resource has at most one settings document.** There is no "collection id" discriminating
+several named dictionaries on a resource, because nothing needs one: the shared
+`@microsoft/vscode-azext-azureappsettings` package is likewise strictly one dictionary per resource,
+and no shipping Azure extension surfaces App Service connection strings (`listConnectionStrings`) at
+all. `label` exists so a product can name its node something other than "Application Settings".
+
 **`canHandle` must depend only on the resource's `logicalType`.** `SettingsRegistry` memoizes adapter
-lookup by logical type because `getCollections` runs for every resource the generic data provider
+lookup by logical type because `hasSettings` runs for every resource the generic data provider
 lists; an adapter that also inspected, say, the resource's location would be memoized incorrectly.
 
 ### Restricting what a product permits
@@ -86,32 +92,30 @@ There is deliberately **no capability model**. Two existing mechanisms already c
   types, and the command palette ignores context values, so this is the only place a rule can be
   enforced.
 
-A collection the product will not let the user edit sets `writable: false` on the snapshot it returns
-from `read`, which makes the editor document read-only.
+Settings the product will not let the user edit set `writable: false` on the snapshot returned from
+`read`, which makes the editor document read-only.
 
-> **Not modeled:** services that refuse to return values on read, and per-entry metadata (such as an
-> App Service connection string's database `type`). Every adapter today returns plain string values
-> for a single collection. Model these alongside the first adapter that actually needs them, rather
-> than carrying unexercised machinery.
+> **Not modeled:** services that refuse to return values on read, per-entry metadata (such as an
+> App Service connection string's database `type`), and more than one settings document per resource.
+> Model these alongside the first adapter that actually needs them, rather than carrying unexercised
+> machinery.
 
 ## Secrets
 
-- **No values appear in the tree.** The collection node is a leaf, so there is nothing to mask and no
+- **No values appear in the tree.** The settings node is a leaf, so there is nothing to mask and no
   show/hide state to persist.
-- **Settings keys and values must never reach telemetry or logs.** Record counts and collection ids
-  only.
-- The document is memory-only. It never touches disk unless the user explicitly saves a copy, which
-  the header warns about.
+- **Settings keys and values must never reach telemetry or logs.** Record counts only.
+- The document is memory-only. It never touches disk unless the user explicitly saves a copy.
 
 ## Document URIs
 
 ```
-azure-settings:/<nodeKey>/<resourceName>.<collectionId>.jsonc
+azure-settings:/<nodeKey>/<resourceName>.settings.jsonc
 ```
 
-`<nodeKey>` is the hex-encoded `AzureNodeId` of the settings collection node -- the data tree's own
-primary key. `AzureSettingsDocumentSource` resolves a URI with a single `tree.get(nodeKey)`, so the
-resource passed to the adapter is always **the object the tree loaded from Azure**.
+`<nodeKey>` is the hex-encoded `AzureNodeId` of the settings node -- the data tree's own primary key.
+`AzureSettingsDocumentSource` resolves a URI with a single `tree.get(nodeKey)`, so the resource
+passed to the adapter is always **the object the tree loaded from Azure**.
 
 Two alternatives were tried and rejected:
 
@@ -138,14 +142,14 @@ Two encoding details are load-bearing:
 one resource. The settings framework therefore splits along the resource/virtual-node boundary:
 
 - `SettingsDataProvider` and `SettingsViewProvider` register **first** and claim only the virtual
-  settings collection nodes.
-- The collection nodes themselves are emitted by whichever provider owns the *resource*.
+  settings nodes.
+- The settings nodes themselves are emitted by whichever provider owns the *resource*.
   `AzureResourceDataProvider` (the generic fallback) consults the registry and emits them for any
   resource with a registered adapter, so App Service and Logic App get settings with zero
   product-specific code.
 
 A product provider that owns a resource in order to contribute its own children must compose
-`ISettingsDataProvider.getCollectionNodes(resource)` into what it returns, or that resource will lose
+`ISettingsDataProvider.getSettingsNodes(resource)` into what it returns, or that resource will lose
 its settings node.
 
 ## Ownership boundary
@@ -165,14 +169,12 @@ document warns about this directly without adding a confirmation prompt to every
 1. Add a client wrapper in `packages/azutils/src/rest/clients/` if the product needs one, re-exporting
    any SDK types from the wrapper.
 2. Implement `SettingsAdapter` in `extensions/vscode-azure/src/settings/adapters/`.
-3. Bind it to `ISettingsAdapter` in the settings product entry point,
-   `src/products/registerSettings.ts`.
+3. Bind it to `ISettingsAdapter` in that product's registrar (e.g. `src/products/registerFunctions.ts`).
 
 That is all. The tree node, the editor, and the command come for free.
 
 ## Testing
 
 `extensions/vscode-azure/test/settings/mockSettings.ts` provides `StubAdapter` (an in-memory adapter
-that retains writes for assertion, and refuses writes to any collection listed in
-`readOnlyCollections`), `createSettingsRegistry`, and `createSettingsDataProvider`. Prefer these over
-hand-rolled fixtures.
+that retains writes for assertion, and refuses writes when constructed with `readOnly`),
+`createSettingsRegistry`, and `createSettingsDataProvider`. Prefer these over hand-rolled fixtures.
