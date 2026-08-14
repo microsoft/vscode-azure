@@ -24,7 +24,7 @@ export const azdDetector: WorkspaceDetector = {
     id: AzdCommand,
     namespace: AzdCommand,
     inspect(node) {
-        if (!node.isDirectory && AzureYamlFileNames.some(name => node.uri.path.endsWith(`/${name}`))) {
+        if (!node.isDirectory && AzureYamlFileNames.includes(node.name)) {
             node.tag(AzdProjectFile);
         }
     },

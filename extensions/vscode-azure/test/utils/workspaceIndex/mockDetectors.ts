@@ -38,9 +38,9 @@ export const csharpDetector: WorkspaceDetector = {
         if (item.isDirectory) {
             return;
         }
-        if (item.uri.path.endsWith('.csproj')) {
+        if (item.name.endsWith('.csproj')) {
             item.tag(CsProjectFile);
-        } else if (item.uri.path.endsWith('.cs')) {
+        } else if (item.name.endsWith('.cs')) {
             item.tag(CsSourceFile);
         }
     },
@@ -57,9 +57,9 @@ export const nodeDetector: WorkspaceDetector = {
         if (item.isDirectory) {
             return;
         }
-        if (item.uri.path.endsWith('/package.json')) {
+        if (item.name === 'package.json') {
             item.tag(NodeProjectFile);
-        } else if (nodeSourceSuffixes.some(suffix => item.uri.path.endsWith(suffix))) {
+        } else if (nodeSourceSuffixes.some(suffix => item.name.endsWith(suffix))) {
             item.tag(NodeSourceFile);
         }
     },

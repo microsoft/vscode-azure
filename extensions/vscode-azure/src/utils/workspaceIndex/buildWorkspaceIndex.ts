@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { readText, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { basename, readText, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import { walkWorkspace } from './walkWorkspace';
 import { MutableWorkspaceIndex, type WorkspaceIndex } from './WorkspaceIndex';
@@ -31,11 +31,11 @@ export async function buildWorkspaceIndex(
     const index = new MutableWorkspaceIndex();
 
     for await (const directory of walkWorkspace(code, token)) {
-        await inspectAll(code, detectors, directory.uri, true, directory.fileNames, index);
+        await inspectAll(code, detectors, directory.uri, basename(directory.uri), true, directory.fileNames, index);
 
         for (const fileName of directory.fileNames) {
             const uri = code.Uri.joinPath(directory.uri, fileName);
-            await inspectAll(code, detectors, uri, false, directory.fileNames, index);
+            await inspectAll(code, detectors, uri, fileName, false, directory.fileNames, index);
         }
     }
 
@@ -47,6 +47,7 @@ async function inspectAll(
     code: IVsCode,
     detectors: readonly WorkspaceDetector[],
     uri: vscode.Uri,
+    name: string,
     isDirectory: boolean,
     fileNames: ReadonlySet<string>,
     index: MutableWorkspaceIndex,
@@ -54,6 +55,7 @@ async function inspectAll(
     for (const detector of detectors) {
         const context: DetectorContext = {
             uri,
+            name,
             isDirectory,
             fileNames,
             text: () => isDirectory ? Promise.resolve(undefined) : readText(code, uri),

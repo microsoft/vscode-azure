@@ -21,6 +21,14 @@ export const IWorkspaceDetector: ServiceIdentifier<WorkspaceDetector> = Symbol.f
 export interface DetectorContext {
     readonly uri: vscode.Uri;
 
+    /**
+     * Final path segment: the file or directory name.
+     *
+     * Computed once per node and shared by every detector, since matching on
+     * the name is the first thing nearly all of them do.
+     */
+    readonly name: string;
+
     readonly isDirectory: boolean;
 
     /**
@@ -58,7 +66,7 @@ export interface DetectorContext {
  * files says so once, by returning early for everything else.
  *
  * {@linkcode inspect} is therefore on the hot path of the walk. Test the cheap
- * things first -- the name via {@linkcode DetectorContext.uri uri}, or
+ * things first -- {@linkcode DetectorContext.name name} or
  * {@linkcode DetectorContext.isDirectory isDirectory} -- and only then read
  * {@linkcode DetectorContext.text text}, which is what actually costs.
  */

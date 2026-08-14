@@ -33,7 +33,7 @@ export const functionsDetector: WorkspaceDetector = {
     id: 'functions',
     namespace: functions,
     inspect(node) {
-        if (!node.isDirectory && node.uri.path.endsWith(`/${FunctionsHostFileName}`)) {
+        if (!node.isDirectory && node.name === FunctionsHostFileName) {
             node.tag(FunctionsHostFile);
         }
     },

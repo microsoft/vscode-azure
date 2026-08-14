@@ -34,7 +34,7 @@ describe('buildWorkspaceIndex (unit)', () => {
                 id: 'forger',
                 namespace: 'forger',
                 inspect(item) {
-                    if (item.uri.path.endsWith('.cs')) {
+                    if (item.name.endsWith('.cs')) {
                         item.tag(CsSourceFile);
                     }
                 },
@@ -161,6 +161,24 @@ describe('buildWorkspaceIndex (unit)', () => {
 
             expect(inspected.sort()).to.deep.equal(
                 ['/repo', '/repo/Api.csproj', '/repo/readme.md', '/repo/src', '/repo/src/App.cs']);
+        });
+
+        it('names both files and directories by their final path segment', async () => {
+            const names = new Map<string, string>();
+            const detector: WorkspaceDetector = {
+                id: 'names',
+                namespace: 'names',
+                inspect(item) { names.set(item.uri.path, item.name); },
+            };
+            const m = createMockVsCode();
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/src/App.cs', '');
+
+            await buildWorkspaceIndex(m.vscode, [detector]);
+
+            expect(names.get('/repo')).to.equal('repo');
+            expect(names.get('/repo/src')).to.equal('src');
+            expect(names.get('/repo/src/App.cs')).to.equal('App.cs');
         });
 
         it('exposes the containing directory\'s file names to every detector', async () => {
