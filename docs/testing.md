@@ -256,8 +256,58 @@ surfaces as an unhandled rejection rather than failing the test that created it.
 
 ## What Not to Test
 
-Tests are a maintenance cost. A test earns its keep only if it can fail for a
-reason that matters. Avoid these categories:
+Tests exist to catch **regressions** — changes that break behavior nobody meant
+to break. A test that can only fail when someone deliberately changes something
+catches no mistakes; it just converts intentional edits into mechanical churn.
+Every such test is a permanent maintenance cost with no offsetting benefit.
+Avoid these categories:
+
+### Don't test that a constant is still what it currently is
+
+Nobody accidentally edits the value of a constant, so a test that pins one to its
+current value can never catch a mistake. It fails only when someone deliberately
+changes the value, at which point the test is already stale and the failure is
+pure noise: the author updates the expected literal to match the new declaration
+and learns nothing.
+
+```typescript
+// BAD -- restates the declaration
+expect(AcrResourceType).to.equal('Microsoft.ContainerRegistry/registries');
+
+// BAD -- same thing, one level removed
+expect(command.id).to.equal('vscode-azure/resources/refresh');
+expect(getDefaultSettings()).to.deep.equal({ pageSize: 50, autoRefresh: true });
+
+// BAD -- a snapshot of the current shape, with nothing asserted about behavior
+expect(Object.keys(iconsByType)).to.have.members(['acr', 'functionapp', /* ... */]);
+```
+
+The same reasoning rules out snapshot-style assertions that freeze a literal
+structure without exercising any behavior. Both change only when someone means to
+change them, and both turn intentional edits into mechanical test churn.
+
+Test what the constant *does* instead. Assert behavior that would break by
+accident:
+
+```typescript
+// GOOD -- exercises the logic that consumes the constant
+const item = provider.getTreeItem(makeGenericResource({ logicalType: AcrResourceType }));
+expect(item.iconPath).to.not.be.undefined;
+
+// GOOD -- catches a real mistake: paging that ignores the configured size
+const pages = await collectPages(provider.getChildren(resource));
+expect(pages[0].items).to.have.lengthOf(configuredPageSize);
+```
+
+Note that referencing the constant (rather than its literal) in an assertion is
+fine and encouraged — the problem is when the constant *is* the subject.
+
+The exception is a value that is a genuine cross-boundary **contract**, where two
+independent sources must agree and can drift apart: a command ID declared in
+`package.json` and registered in code, an icon filename derived from a logical
+type, a serialized format that persisted state must still parse. Those tests are
+valuable, but write them as consistency checks between the two sources — read
+both sides and compare — not as an assertion against a hardcoded literal.
 
 ### Don't test that removed behavior stays removed
 
@@ -309,11 +359,6 @@ fail. The exception is a fixture with real, non-trivial logic of its own that
 tests depend on subtly (e.g. `respondToPrompts()`'s back-navigation handling or
 `MockHttpClient`'s request matching) — behavior complex enough that a bug in it
 would silently produce false passes. Test that logic, not the plain factories.
-
-### Don't test constants against their literal values
-
-`expect(SomeConstant).to.equal('some-constant')` restates the declaration and
-fails only when someone intentionally changes it.
 
 ## Running Tests
 
