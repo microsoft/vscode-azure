@@ -31,7 +31,7 @@ both tags.
 A tag is defined once with `defineWorkspaceTag` and exported:
 
 ```ts
-export const AzdProjectTag = defineWorkspaceTag<MarkerFileMetadata>('azd', 'project');
+export const AzdProjectTag = defineWorkspaceTag<AzdProjectMetadata>('azd', ProjectTagName);
 AzdProjectTag.name; // 'azd:project'
 ```
 
@@ -45,30 +45,24 @@ AzdProjectTag.name; // 'azd:project'
 
 ### Standard tags
 
-[`standardTags.ts`](../extensions/vscode-azure/src/workspace/standardTags.ts) defines
-the product-agnostic vocabulary, registered ahead of product detectors:
+There are none yet, deliberately. Each product's detector defines its own tags
+alongside itself: `azd:project`, `functions:project`. A shared vocabulary
+(`node:project`, `python:project`, ...) should be added when something actually
+consumes it, not in advance.
 
-| Tag | Marker |
-| --- | --- |
-| `project:node` | `package.json` |
-| `project:dotnet` | `*.csproj`, `*.fsproj`, `*.vbproj`, `*.sln` |
-| `project:python` | `pyproject.toml`, `requirements.txt`, `setup.py` |
-| `project:java` | `pom.xml`, `build.gradle`, `build.gradle.kts` |
-| `project:go` | `go.mod` |
-| `container:dockerfile` | `Dockerfile` |
-| `container:compose` | `docker-compose.yml`, `compose.yml`, ... |
-
-Product tags live with their detector: `azd:project`, `functions:project`.
+Note the direction: the **namespace** is the thing that owns the tag (a product,
+or a language), and the **local name** is the noun. `ProjectTagName` is shared
+so "the project tag for X" is spelled the same way everywhere.
 
 ### Convention: tag the project folder
 
-Marker-file detection tags the folder **containing** the marker and puts the
-marker file in the tag's metadata. Consumers almost always want "where does this
+Detection tags the folder **containing** the marker file and puts the marker
+file in the tag's metadata. Consumers almost always want "where does this
 project live", and the manifest stays reachable:
 
 ```ts
 const entries = await workspaceData.getEntries(AzdProjectTag);
-entries[0].uri;                                      // the project folder
+entries[0].uri;                                        // the project folder
 getTagMetadata(entries[0], AzdProjectTag)?.manifestUri; // the azure.yaml
 ```
 
@@ -78,7 +72,6 @@ getTagMetadata(entries[0], AzdProjectTag)?.manifestUri; // the azure.yaml
 const projects = await workspaceData.getEntries(FunctionsProjectTag);
 const entry = await workspaceData.getEntry(someUri);   // what do we know about this?
 const ready = await workspaceData.whenEnriched(entry); // wait for background work
-workspaceData.refresh();                               // force a rescan
 workspaceData.onDidChange(() => { /* re-query */ });
 ```
 
@@ -117,32 +110,23 @@ I/O.
 so it must be a name check, not I/O.
 
 ```ts
-const MyTag = defineWorkspaceTag<{ framework: string }>('myproduct', 'app');
+const MyTag = defineWorkspaceTag<{ manifestUri: vscode.Uri }>('myproduct', ProjectTagName);
 
 export function createMyDetector(): WorkspaceDetector {
     return {
         namespace: 'myproduct',
-        visit(candidate) {
+        visit: candidate => {
             if (candidate.isDirectory || candidate.name !== 'my.config.json') {
                 return undefined;
             }
             return [{
                 uri: dirname(candidate.uri),
                 isDirectory: true,
-                tags: [applyTag(MyTag, { framework: 'whatever' })],
+                tags: [applyTag(MyTag, { manifestUri: candidate.uri })],
             }];
         },
     };
 }
-```
-
-For the common "a marker file means this tag" case, use the declarative helper
-instead -- adding a project type is then a table entry, not a code path:
-
-```ts
-createMarkerFileDetector('myproduct', [
-    { tag: MyTag, fileNames: ['my.config.json'] },   // or: suffixes: ['.csproj']
-]);
 ```
 
 Register it from the product's entry point:
@@ -150,6 +134,9 @@ Register it from the product's entry point:
 ```ts
 registrar.registerWorkspaceDetector(createMyDetector());
 ```
+
+If several detectors end up with the same shape, factor out a helper *then* --
+with two detectors it is not worth the indirection.
 
 ### Put anything expensive in `enrich`
 
@@ -190,8 +177,6 @@ Invalidation:
 - **Workspace folders.** Handled centrally; folders that are still open keep
   their cached scans.
 - **TTL.** A five-minute backstop for changes the watcher misses.
-- **`refresh()`.** For changes the service cannot observe, e.g. after a tool the
-  extension invoked wrote project files.
 
 ## Known limitations
 

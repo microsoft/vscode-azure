@@ -26,7 +26,7 @@ const WatchDebounceMs = 500;
  * watched scope, external tooling on some remotes). Long enough that repeated
  * wizard queries hit the cache.
  */
-const DefaultIndexTtlMs = 5 * 60 * 1000;
+const IndexTtlMs = 5 * 60 * 1000;
 
 export const IWorkspaceDataService: ServiceIdentifier<IWorkspaceDataService> = Symbol.for('IWorkspaceDataService');
 
@@ -75,26 +75,11 @@ export interface IWorkspaceDataService extends Disposable {
     whenEnriched(entry: WorkspaceEntry): Promise<WorkspaceEntry>;
 
     /**
-     * Discard cached results so the next query rescans.
-     *
-     * The service already refreshes itself on file and workspace-folder changes;
-     * call this only for changes it cannot observe (e.g. after a tool the
-     * extension invoked wrote project files).
-     *
-     * @param folder - Limit the refresh to one workspace folder. Omit to
-     *   refresh everything.
-     */
-    refresh(folder?: vscode.WorkspaceFolder): void;
-
-    /**
      * Fired when the index changes -- a rescan triggered by a file or
-     * workspace-folder change, background enrichment landing, or an explicit
-     * {@linkcode refresh}.
+     * workspace-folder change, or background enrichment landing.
      *
      * Consumers should re-query rather than assume what changed. The event is
-     * already debounced against bursts of file events. Invalidating something
-     * that was never cached fires nothing, since there is no stale result for a
-     * consumer to discard.
+     * already debounced against bursts of file events.
      */
     readonly onDidChange: Event<void>;
 }
@@ -151,7 +136,6 @@ export class WorkspaceDataService implements IWorkspaceDataService {
      *   detector sees every file.
      * @param scheduler - Debounces file-change bursts. Injectable so tests can
      *   drive rescans deterministically instead of waiting on timers.
-     * @param ttlMs - How long scan results stay fresh.
      */
     public constructor(
         private readonly code: IVsCode,
@@ -164,14 +148,13 @@ export class WorkspaceDataService implements IWorkspaceDataService {
                 executor.output.warn(code.l10n.t('[workspace] rescan failed: {0}', stringifyError(error)));
             },
         ),
-        ttlMs: number = DefaultIndexTtlMs,
     ) {
         this.tree = new DataItemTree<WorkspaceIndexNode>(
             code,
             'workspace-index',
             executor,
             node => node.id,
-            ttlMs,
+            IndexTtlMs,
         );
         this.tree.registerProvider(new WorkspaceScanProvider(code, executor, detectors));
 
@@ -226,17 +209,6 @@ export class WorkspaceDataService implements IWorkspaceDataService {
             // caller waiting on it should still get the un-enriched entry rather
             // than an error.
             return entry;
-        }
-    }
-
-    /** @inheritdoc */
-    public refresh(folder?: vscode.WorkspaceFolder): void {
-        // Invalidation fires the tree's change event, which is forwarded to
-        // consumers; firing again here would notify twice.
-        if (folder) {
-            this.tree.invalidate(subtreeOf<WorkspaceIndexNode>(folderNodeId(folder)));
-        } else {
-            this.tree.invalidate(node => isWorkspaceEntry(node) ? undefined : 'subtree');
         }
     }
 
@@ -362,7 +334,10 @@ export class WorkspaceDataService implements IWorkspaceDataService {
             this.pendingAllFolders = false;
 
             if (all) {
-                this.refresh();
+                // Invalidating the roots' subtrees rescans every folder.
+                // Invalidation fires the tree's change event, which is
+                // forwarded to consumers; firing again would notify twice.
+                this.tree.invalidate(node => isWorkspaceEntry(node) ? undefined : 'subtree');
             } else if (folderIds.length > 0) {
                 this.tree.invalidate(subtreeOf<WorkspaceIndexNode>(...folderIds));
             }

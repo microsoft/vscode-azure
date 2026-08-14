@@ -80,14 +80,6 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(children[0].label).to.equal('repo');
             expect(children[0].resourceUri.toString()).to.equal(yamlUri.toString());
         });
-
-        it('does not subscribe to the index itself', () => {
-            // Refreshing on index changes is the single subscription in
-            // registerTrees; a per-provider subscription would refresh the
-            // workspace tree once per provider for one file change.
-            const { provider } = createProvider();
-            expect(provider).to.not.have.property('onDidChange');
-        });
     });
 
     describe('getChildren (services)', () => {

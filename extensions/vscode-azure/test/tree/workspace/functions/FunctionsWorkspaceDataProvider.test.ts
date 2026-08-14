@@ -69,20 +69,5 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
             const { provider } = createProvider();
             expect(await provider.getChildren(makeFunctionsProjectNode())).to.deep.equal([]);
         });
-
-        it('does not subscribe to the index itself', () => {
-            // Refreshing on index changes is the single subscription in
-            // registerTrees; a per-provider subscription would refresh the
-            // workspace tree once per provider for one file change.
-            const { provider } = createProvider();
-            expect(provider).to.not.have.property('onDidChange');
-        });
-
-        it('relies on the shared index watcher rather than its own', () => {
-            // A private watcher here would mean duplicate scans on every change:
-            // the index already has one watcher for the whole workspace.
-            const { mock: m } = createProvider();
-            expect(m.fileSystemWatchers.map(w => w.pattern)).to.deep.equal(['**/*']);
-        });
     });
 });

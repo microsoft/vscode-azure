@@ -7,20 +7,42 @@ import {
     createTestActionExecutor, ManualDebounceScheduler, MockUri,
     type MockVsCodeResult,
 } from '@microsoft/vscode-azure-utils/testing';
+import { dirname } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import { createMarkerFileDetector, type MarkerFileMetadata } from '../../src/workspace/createMarkerFileDetector';
 import { WorkspaceDataService } from '../../src/workspace/WorkspaceDataService';
 import type { WorkspaceCandidate, WorkspaceDetector, WorkspaceTagging } from '../../src/workspace/WorkspaceDetector';
 import { getTagMetadata, hasTag, type WorkspaceEntry } from '../../src/workspace/WorkspaceEntry';
-import { applyTag, defineWorkspaceTag } from '../../src/workspace/WorkspaceTag';
+import { applyTag, defineWorkspaceTag, type WorkspaceTag } from '../../src/workspace/WorkspaceTag';
 
-const AzdProjectTag = defineWorkspaceTag<MarkerFileMetadata>('azd', 'project');
-const FunctionsProjectTag = defineWorkspaceTag<MarkerFileMetadata>('functions', 'project');
+interface ManifestMetadata {
+    readonly manifestUri: vscode.Uri;
+}
+
+const AzdProjectTag = defineWorkspaceTag<ManifestMetadata>('azd', 'project');
+const FunctionsProjectTag = defineWorkspaceTag<ManifestMetadata>('functions', 'project');
 const BareTag = defineWorkspaceTag('test', 'bare');
+
+/** A detector that tags the folder containing a file of the given name. */
+function createFileNameDetector(
+    namespace: string,
+    fileName: string,
+    tag: WorkspaceTag<ManifestMetadata>,
+): WorkspaceDetector {
+    return {
+        namespace,
+        visit: candidate => candidate.isDirectory || candidate.name !== fileName
+            ? undefined
+            : [{
+                uri: dirname(candidate.uri),
+                isDirectory: true,
+                tags: [applyTag(tag, { manifestUri: candidate.uri })],
+            }],
+    };
+}
 
 /** The detector every scanning test uses: `azure.yaml` marks an azd project. */
 function createAzdDetector(): WorkspaceDetector {
-    return createMarkerFileDetector('azd', [{ tag: AzdProjectTag, fileNames: ['azure.yaml'] }]);
+    return createFileNameDetector('azd', 'azure.yaml', AzdProjectTag);
 }
 
 interface TestHarness {
@@ -181,9 +203,7 @@ describe('WorkspaceDataService (unit)', () => {
     describe('multiple detectors', () => {
         it('merges tags from different detectors onto a single entry', async () => {
             const azd = createAzdDetector();
-            const functions = createMarkerFileDetector('functions', [
-                { tag: FunctionsProjectTag, fileNames: ['host.json'] },
-            ]);
+            const functions = createFileNameDetector('functions', 'host.json', FunctionsProjectTag);
             const { service } = createService([azd, functions], ['/repo/app/azure.yaml', '/repo/app/host.json']);
 
             const azdEntries = await service.getEntries(AzdProjectTag);
@@ -269,40 +289,13 @@ describe('WorkspaceDataService (unit)', () => {
             expect(scans()).to.equal(1);
             service.dispose();
         });
-
-        it('rescans after an explicit refresh', async () => {
-            const { service, mock } = createService([createAzdDetector()], ['/repo/azure.yaml']);
-
-            await service.getEntries(AzdProjectTag);
-            mock.fs.addFile(MockUri.file('/repo/api/azure.yaml'), '{}');
-            service.refresh();
-
-            expect(await service.getEntries(AzdProjectTag)).to.have.length(2);
-            service.dispose();
-        });
-
-        it('rescans stale results once the ttl elapses', async () => {
-            const { executor, mockVsCode } = createTestActionExecutor();
-            mockVsCode.workspaceFolders.push({ uri: MockUri.file('/repo'), name: 'repo', index: 0 });
-            mockVsCode.fs.addFile(MockUri.file('/repo/azure.yaml'), '{}');
-
-            // A zero TTL makes every cached listing immediately stale.
-            const service = new WorkspaceDataService(
-                mockVsCode.vscode, executor, [createAzdDetector()], new ManualDebounceScheduler(), 0);
-
-            await service.getEntries(AzdProjectTag);
-            mockVsCode.fs.addFile(MockUri.file('/repo/api/azure.yaml'), '{}');
-
-            expect(await service.getEntries(AzdProjectTag)).to.have.length(2);
-            service.dispose();
-        });
     });
 
     describe('change detection', () => {
         it('creates exactly one watcher for the whole workspace', () => {
             const { service, mock } = createService([
                 createAzdDetector(),
-                createMarkerFileDetector('functions', [{ tag: FunctionsProjectTag, fileNames: ['host.json'] }]),
+                createFileNameDetector('functions', 'host.json', FunctionsProjectTag),
             ]);
 
             expect(mock.fileSystemWatchers.map(w => w.pattern)).to.deep.equal(['**/*']);

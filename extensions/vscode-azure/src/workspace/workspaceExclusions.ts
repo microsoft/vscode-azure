@@ -31,6 +31,7 @@ export const ExcludedScanDirectories: ReadonlySet<string> = new Set([
     'bin',
     'obj',
     'dist',
+    'lib',
     'out',
     'build',
     'target',

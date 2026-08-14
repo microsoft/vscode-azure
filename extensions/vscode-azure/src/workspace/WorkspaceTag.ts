@@ -68,6 +68,16 @@ function assertTagPart(what: string, value: string): void {
 }
 
 /**
+ * Local name for "this folder is the root of a project of the owning
+ * namespace's kind", e.g. `azd:project`, `functions:project`.
+ *
+ * Shared so that "the project tag for product X" is spelled the same way
+ * everywhere, and so a consumer can recognize the shape of a project tag
+ * without knowing the product.
+ */
+export const ProjectTagName = 'project';
+
+/**
  * One tag applied to one entry, as produced by {@linkcode applyTag} and stored
  * on a workspace index entry.
  *
@@ -83,7 +93,7 @@ export interface AppliedTag {
 /**
  * Apply a tag that carries no metadata.
  *
- * @see {@linkcode WorkspaceDetector.detect}, which returns these.
+ * @see {@linkcode WorkspaceDetector.visit}, which returns these.
  */
 export function applyTag(tag: WorkspaceTag): AppliedTag;
 /**

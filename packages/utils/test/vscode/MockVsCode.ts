@@ -39,8 +39,6 @@ type MockedNamespace<T> = {
 export interface MockFileSystemWatcher {
     /** The glob the watcher was created for. */
     readonly pattern: vscode.GlobPattern;
-    /** The watcher handed to the code under test. */
-    readonly watcher: vscode.FileSystemWatcher;
     /** Fire to simulate a file being created. */
     readonly createEmitter: EventEmitter<vscode.Uri>;
     /** Fire to simulate a file being changed. */
@@ -330,59 +328,23 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     // pure `path.matchesGlob` (no real filesystem access). VS Code resolves a
     // relative glob against workspace folders, so a pattern without a path
     // separator matches by basename anywhere; we mirror that with a `**/`
-    // prefix, applied to the include and exclude globs alike. An exclude also
-    // prunes whole directories in VS Code, so it is tested against each ancestor
-    // directory as well as the file itself -- that way a bare `node_modules`
-    // excludes everything beneath it, as it would in real VS Code, instead of
-    // only a file named `node_modules`. A `RelativePattern` additionally scopes
-    // results to its base, so callers relying on any of this (e.g. the workspace
-    // index) are exercised faithfully.
-    const toGlobPattern = (pattern: vscode.GlobPattern): string => {
-        const raw = typeof pattern === 'string' ? pattern : pattern.pattern;
-        return raw.includes('/') ? raw : `**/${raw}`;
-    };
-
-    const isExcluded = (filePath: string, excludePattern: string): boolean => {
-        if (matchesGlob(filePath, excludePattern)) {
-            return true;
-        }
-        // Walk up the ancestors so an excluded directory prunes its subtree.
-        const segments = filePath.split('/');
-        for (let i = segments.length - 1; i > 1; i--) {
-            if (matchesGlob(segments.slice(0, i).join('/'), excludePattern)) {
-                return true;
-            }
-        }
-        return false;
-    };
-
+    // prefix. The RelativePattern base is not scoped.
     const findFiles = mock.fn(
-        (include: vscode.GlobPattern, exclude?: vscode.GlobPattern | null, maxResults?: number) => {
-            const pattern = toGlobPattern(include);
-            const baseUri = typeof include === 'string' ? undefined : include.baseUri;
-            const basePath = baseUri?.path.replace(/\/+$/, '');
-            const excludePattern = exclude === undefined || exclude === null
-                ? undefined
-                : toGlobPattern(exclude);
+        (include: vscode.GlobPattern, _exclude?: unknown, maxResults?: number) => {
+            const raw = typeof include === 'string' ? include : include.pattern;
+            const pattern = raw.includes('/') ? raw : `**/${raw}`;
 
             const matched: vscode.Uri[] = [];
             for (const filePath of fs.files.keys()) {
                 if (maxResults !== undefined && matched.length >= maxResults) {
                     break;
                 }
-                if (basePath !== undefined && filePath !== basePath && !filePath.startsWith(`${basePath}/`)) {
-                    continue;
+                if (matchesGlob(filePath, pattern)) {
+                    // `fs.files` is keyed by `uri.path`, so rehydrate from URI
+                    // components rather than treating the key as a filesystem
+                    // path (which would mishandle drive letters / schemes).
+                    matched.push(MockUri.from({ scheme: 'file', path: filePath }));
                 }
-                if (!matchesGlob(filePath, pattern)) {
-                    continue;
-                }
-                if (excludePattern !== undefined && isExcluded(filePath, excludePattern)) {
-                    continue;
-                }
-                // `fs.files` is keyed by `uri.path`, so rehydrate from URI
-                // components rather than treating the key as a filesystem
-                // path (which would mishandle drive letters / schemes).
-                matched.push(MockUri.from({ scheme: 'file', path: filePath }));
             }
             return Promise.resolve(matched);
         },
@@ -448,7 +410,16 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
             const create = new EventEmitter<vscode.Uri>();
             const change = new EventEmitter<vscode.Uri>();
             const del = new EventEmitter<vscode.Uri>();
-            const watcher: vscode.FileSystemWatcher = {
+            const entry: MockFileSystemWatcher = {
+                pattern,
+                createEmitter: create,
+                changeEmitter: change,
+                deleteEmitter: del,
+                disposed: false,
+            };
+            fileSystemWatchers.push(entry);
+
+            return {
                 ignoreCreateEvents: false,
                 ignoreChangeEvents: false,
                 ignoreDeleteEvents: false,
@@ -457,21 +428,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
                 onDidDelete: del.event,
                 dispose: () => {
                     create.dispose(); change.dispose(); del.dispose();
-                    const entry = fileSystemWatchers.find(candidate => candidate.watcher === watcher);
-                    if (entry) {
-                        entry.disposed = true;
-                    }
+                    entry.disposed = true;
                 },
             };
-            fileSystemWatchers.push({
-                pattern,
-                watcher,
-                createEmitter: create,
-                changeEmitter: change,
-                deleteEmitter: del,
-                disposed: false,
-            });
-            return watcher;
         },
     );
 
