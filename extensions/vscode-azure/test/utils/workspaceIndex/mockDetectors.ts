@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { basename } from '@microsoft/vscode-azure-utils';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { createTag, StandardTagNames } from '../../../src/utils/workspaceIndex/tags';
 
@@ -29,15 +28,19 @@ export const NodeProjectFile = createTag('node', StandardTagNames.projectFile);
 export const NodeSourceFile = createTag('node', StandardTagNames.sourceFile);
 export const Attribute = createTag('attributes', 'Attribute');
 
+const nodeSourceSuffixes = ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts'];
+
 /** Tags `.csproj` project files and the `.cs` sources they build. */
 export const csharpDetector: WorkspaceDetector = {
     id: 'csharp',
     namespace: 'csharp',
-    files: { suffixes: ['.csproj', '.cs'] },
     inspect(item) {
+        if (item.isDirectory) {
+            return;
+        }
         if (item.uri.path.endsWith('.csproj')) {
             item.tag(CsProjectFile);
-        } else {
+        } else if (item.uri.path.endsWith('.cs')) {
             item.tag(CsSourceFile);
         }
     },
@@ -50,14 +53,13 @@ export const csharpDetector: WorkspaceDetector = {
 export const nodeDetector: WorkspaceDetector = {
     id: 'node',
     namespace: 'node',
-    files: {
-        names: ['package.json'],
-        suffixes: ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts'],
-    },
     inspect(item) {
-        if (basename(item.uri) === 'package.json') {
+        if (item.isDirectory) {
+            return;
+        }
+        if (item.uri.path.endsWith('/package.json')) {
             item.tag(NodeProjectFile);
-        } else {
+        } else if (nodeSourceSuffixes.some(suffix => item.uri.path.endsWith(suffix))) {
             item.tag(NodeSourceFile);
         }
     },
@@ -74,7 +76,6 @@ export const nodeDetector: WorkspaceDetector = {
 export const attributeDetector: WorkspaceDetector = {
     id: 'attributes',
     namespace: 'attributes',
-    files: { suffixes: ['.cs'] },
     async inspect(item) {
         if (!item.has(CsSourceFile)) {
             return;

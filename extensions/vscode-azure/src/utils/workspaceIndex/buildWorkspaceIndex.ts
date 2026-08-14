@@ -10,8 +10,8 @@ import { MutableWorkspaceIndex, type WorkspaceIndex } from './WorkspaceIndex';
 import type { DetectorContext, WorkspaceDetector } from './WorkspaceDetector';
 
 /**
- * Walks the workspace once, letting every detector tag the nodes it recognises,
- * and returns the resulting {@linkcode WorkspaceIndex}.
+ * Walks the workspace once, offering every file and directory to every
+ * detector, and returns the resulting {@linkcode WorkspaceIndex}.
  *
  * Nodes are visited in a fixed order so detectors can build on each other
  * without any dependency machinery: directories breadth-first, each directory
@@ -29,29 +29,17 @@ export async function buildWorkspaceIndex(
     token?: vscode.CancellationToken,
 ): Promise<WorkspaceIndex> {
     const index = new MutableWorkspaceIndex();
-    const directoryDetectors = detectors.filter(detector => detector.directories);
-    const fileDetectors = detectors.filter(detector => detector.files);
 
     for await (const directory of walkWorkspace(code, token)) {
-        await inspectAll(code, directoryDetectors, directory.uri, true, directory.fileNames, index);
+        await inspectAll(code, detectors, directory.uri, true, directory.fileNames, index);
 
         for (const fileName of directory.fileNames) {
-            const interested = fileDetectors.filter(detector => wantsFile(detector, fileName));
-            if (interested.length > 0) {
-                const uri = code.Uri.joinPath(directory.uri, fileName);
-                await inspectAll(code, interested, uri, false, directory.fileNames, index);
-            }
+            const uri = code.Uri.joinPath(directory.uri, fileName);
+            await inspectAll(code, detectors, uri, false, directory.fileNames, index);
         }
     }
 
     return index;
-}
-
-/** Whether `detector` wants to inspect a file called `fileName`. */
-function wantsFile(detector: WorkspaceDetector, fileName: string): boolean {
-    const files = detector.files;
-    return (files?.names?.includes(fileName) ?? false)
-        || (files?.suffixes?.some(suffix => fileName.endsWith(suffix)) ?? false);
 }
 
 /** Offers one node to each detector in turn, one at a time. */
@@ -79,6 +67,13 @@ async function inspectAll(
                 index.add(uri, tag, value);
             },
         };
-        await detector.inspect(context);
+
+        // Every detector sees every node, so the common case is a detector that
+        // recognises nothing and returns synchronously. Awaiting that would
+        // cost a microtask per detector per node for nothing.
+        const result = detector.inspect(context);
+        if (result) {
+            await result;
+        }
     }
 }

@@ -49,20 +49,18 @@ export interface DetectorContext {
     tag(tag: string, value?: string): void;
 }
 
-/** The files a detector wants to inspect. */
-export interface DetectorFileInterest {
-    /** Exact file names, e.g. `host.json`. */
-    readonly names?: readonly string[];
-    /** File name suffixes, e.g. `.csproj`. */
-    readonly suffixes?: readonly string[];
-}
-
 /**
  * Recognises something in the workspace and records it as tags.
  *
- * A detector declares up front which nodes it cares about, which keeps the
- * per-node cost of an unrelated detector to a set lookup and lets the index
- * service watch only the files that could change an answer.
+ * Every detector is offered every file and directory, and decides for itself
+ * what is interesting. There is no separate declaration of interest to keep in
+ * sync with the code that acts on it: a detector that only wants `.csproj`
+ * files says so once, by returning early for everything else.
+ *
+ * {@linkcode inspect} is therefore on the hot path of the walk. Test the cheap
+ * things first -- the name via {@linkcode DetectorContext.uri uri}, or
+ * {@linkcode DetectorContext.isDirectory isDirectory} -- and only then read
+ * {@linkcode DetectorContext.text text}, which is what actually costs.
  */
 export interface WorkspaceDetector {
     /** Stable identifier, used in diagnostics. */
@@ -71,15 +69,12 @@ export interface WorkspaceDetector {
     /** The only namespace this detector may apply tags in. */
     readonly namespace: string;
 
-    /** Files to inspect. Omit if the detector only looks at directories. */
-    readonly files?: DetectorFileInterest;
-
-    /** Whether every directory should be inspected. Defaults to `false`. */
-    readonly directories?: boolean;
-
     /**
-     * Inspects one node and tags it. Called only for nodes matching the
-     * declared interest, and never concurrently for the same node.
+     * Inspects one file or directory and tags whatever it recognises. Never
+     * called concurrently for the same node.
+     *
+     * Return synchronously when nothing needs reading; the walk only pays for
+     * an `await` when a detector actually returns a promise.
      */
     inspect(node: DetectorContext): void | Promise<void>;
 }

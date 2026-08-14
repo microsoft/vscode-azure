@@ -14,6 +14,15 @@ import type { WorkspaceIndex } from './WorkspaceIndex';
 /** Quiet period before a burst of file events triggers a rebuild. */
 const rebuildDebounceMs = 500;
 
+/**
+ * Everything, because a narrower glob is not cheaper and is less correct.
+ *
+ * VS Code only forwards a *string* glob's filtering to the extension host, so
+ * the pattern does not reduce what crosses the process boundary, and deleting a
+ * folder reports one event for the folder rather than one per file inside it.
+ */
+const watchPattern = '**';
+
 export const IWorkspaceIndexService: ServiceIdentifier<IWorkspaceIndexService> = Symbol.for('IWorkspaceIndexService');
 
 /** Keeps a {@linkcode WorkspaceIndex} current as the workspace changes. */
@@ -35,18 +44,17 @@ export interface IWorkspaceIndexService {
  * Nothing is scanned until the first {@linkcode getIndex} call, so registering
  * detectors costs nothing at activation.
  *
- * Watching is deliberately cheap. The watcher is created from a **string** glob
- * covering only the files detectors declared interest in, which VS Code
- * satisfies from the recursive watch it already runs per workspace folder
- * rather than starting another one. Events are then filtered against the same
- * exclusions the walk uses, because a glob like `**‍/package.json` also matches
- * everything under `node_modules` -- without that filter one `npm install`
- * would rebuild the index thousands of times.
+ * Watching is deliberately cheap, and deliberately broad. The watcher is
+ * created from a **string** glob, which VS Code satisfies from the recursive
+ * watch it already runs per workspace folder rather than starting another one.
+ * A string glob is never sent to the main process, so every workspace event
+ * reaches the extension host whatever pattern is passed -- a narrower pattern
+ * would only change which of those events reach *us*, while risking missed
+ * deletions, because VS Code folds a deleted folder's contents into a single
+ * event for the folder itself.
  *
- * Surviving events are debounced into a single **full** rebuild. Re-indexing
- * only the affected directory would be faster but is not sound in general:
- * cross-namespace reads let one detector's tag depend on another's findings
- * outside the directory that changed.
+ * Events are instead filtered here against the same exclusions the walk uses,
+ * so one `npm install` does not rebuild the index thousands of times.
  */
 @injectable()
 export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable {
@@ -63,20 +71,15 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
     ) {
         this.disposables.push(scheduler);
 
-        const pattern = watchPattern(detectors);
-        if (pattern) {
-            // A string pattern reuses VS Code's existing workspace watch; a
-            // RelativePattern would start an additional recursive watcher.
-            const watcher = code.workspace.createFileSystemWatcher(pattern);
-            const handle = (uri: vscode.Uri) => { this.onFileEvent(uri); };
-            this.disposables.push(
-                watcher.onDidCreate(handle),
-                watcher.onDidChange(handle),
-                watcher.onDidDelete(handle),
-                watcher,
-            );
-        }
+        // A string pattern reuses VS Code's existing workspace watch; a
+        // RelativePattern would start an additional recursive watcher.
+        const watcher = code.workspace.createFileSystemWatcher(watchPattern);
+        const handle = (uri: vscode.Uri) => { this.onFileEvent(uri); };
         this.disposables.push(
+            watcher.onDidCreate(handle),
+            watcher.onDidChange(handle),
+            watcher.onDidDelete(handle),
+            watcher,
             code.workspace.onDidChangeWorkspaceFolders(() => { this.invalidate(); }),
         );
     }
@@ -126,33 +129,4 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
         this.indexPromise = undefined;
         this.changeEmitter.fire();
     }
-}
-
-/**
- * A single glob covering every file the detectors asked to see, or `undefined`
- * if none did.
- *
- * Kept as narrow as the declared interests allow so VS Code discards most
- * events before the extension is notified of them. A detector that declares no
- * file interest contributes nothing: it is asking to see directories, and a
- * directory only appears or disappears along with the files inside it.
- */
-export function watchPattern(detectors: readonly WorkspaceDetector[]): string | undefined {
-    const alternatives = new Set<string>();
-    for (const detector of detectors) {
-        for (const name of detector.files?.names ?? []) {
-            alternatives.add(name);
-        }
-        for (const suffix of detector.files?.suffixes ?? []) {
-            alternatives.add(`*${suffix}`);
-        }
-    }
-
-    const sorted = [...alternatives].sort();
-    if (sorted.length === 0) {
-        return undefined;
-    }
-    // A one-element brace list is not an alternation -- `{host.json}` matches
-    // that literal name, braces included -- so only brace two or more.
-    return sorted.length === 1 ? `**/${sorted[0]}` : `**/{${sorted.join(',')}}`;
 }

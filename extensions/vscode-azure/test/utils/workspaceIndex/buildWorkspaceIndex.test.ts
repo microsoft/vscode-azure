@@ -33,8 +33,11 @@ describe('buildWorkspaceIndex (unit)', () => {
             const forger: WorkspaceDetector = {
                 id: 'forger',
                 namespace: 'forger',
-                files: { suffixes: ['.cs'] },
-                inspect(item) { item.tag(CsSourceFile); },
+                inspect(item) {
+                    if (item.uri.path.endsWith('.cs')) {
+                        item.tag(CsSourceFile);
+                    }
+                },
             };
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
@@ -105,8 +108,6 @@ describe('buildWorkspaceIndex (unit)', () => {
             const recorder: WorkspaceDetector = {
                 id: 'recorder',
                 namespace: 'recorder',
-                directories: true,
-                files: { suffixes: ['.cs'] },
                 inspect(item) { seen.push(item.uri.path); },
             };
             const m = createMockVsCode();
@@ -143,23 +144,23 @@ describe('buildWorkspaceIndex (unit)', () => {
     });
 
     describe('dispatch', () => {
-        it('only inspects nodes matching the declared interest', async () => {
+        it('offers every file and directory to every detector', async () => {
             const inspected: string[] = [];
             const detector: WorkspaceDetector = {
-                id: 'picky',
-                namespace: 'picky',
-                files: { names: ['marker.txt'], suffixes: ['.csproj'] },
+                id: 'recorder',
+                namespace: 'recorder',
                 inspect(item) { inspected.push(item.uri.path); },
             };
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
-            addWorkspaceFile(m, '/repo/marker.txt', '');
             addWorkspaceFile(m, '/repo/Api.csproj', '');
             addWorkspaceFile(m, '/repo/readme.md', '');
+            addWorkspaceFile(m, '/repo/src/App.cs', '');
 
             await buildWorkspaceIndex(m.vscode, [detector]);
 
-            expect(inspected.sort()).to.deep.equal(['/repo/Api.csproj', '/repo/marker.txt']);
+            expect(inspected.sort()).to.deep.equal(
+                ['/repo', '/repo/Api.csproj', '/repo/readme.md', '/repo/src', '/repo/src/App.cs']);
         });
 
         it('exposes the containing directory\'s file names to every detector', async () => {
@@ -167,8 +168,6 @@ describe('buildWorkspaceIndex (unit)', () => {
             const detector: WorkspaceDetector = {
                 id: 'sizes',
                 namespace: 'sizes',
-                directories: true,
-                files: { suffixes: ['.cs'] },
                 inspect(item) { sizes.set(item.uri.path, item.fileNames.size); },
             };
             const m = createMockVsCode();
@@ -190,8 +189,11 @@ describe('buildWorkspaceIndex (unit)', () => {
             const reader = (id: string): WorkspaceDetector => ({
                 id,
                 namespace: id,
-                files: { suffixes: ['.cs'] },
-                inspect: async item => { await item.text(); },
+                inspect: async item => {
+                    if (!item.isDirectory) {
+                        await item.text();
+                    }
+                },
             });
 
             await buildWorkspaceIndex(m.vscode, [reader('a'), reader('b')]);
@@ -207,7 +209,6 @@ describe('buildWorkspaceIndex (unit)', () => {
             const detector: WorkspaceDetector = {
                 id: 'boom',
                 namespace: 'boom',
-                directories: true,
                 inspect() { throw new Error('detector failed'); },
             };
             const m = createMockVsCode();

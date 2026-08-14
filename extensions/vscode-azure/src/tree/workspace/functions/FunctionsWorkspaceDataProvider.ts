@@ -32,8 +32,11 @@ export const FunctionsHostFile = createTag(functions, StandardTagNames.projectFi
 export const functionsDetector: WorkspaceDetector = {
     id: 'functions',
     namespace: functions,
-    files: { names: [FunctionsHostFileName] },
-    inspect(node) { node.tag(FunctionsHostFile); },
+    inspect(node) {
+        if (!node.isDirectory && node.uri.path.endsWith(`/${FunctionsHostFileName}`)) {
+            node.tag(FunctionsHostFile);
+        }
+    },
 };
 
 /**

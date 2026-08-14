@@ -23,8 +23,11 @@ export const AzdProjectFile = createTag(AzdCommand, StandardTagNames.projectFile
 export const azdDetector: WorkspaceDetector = {
     id: AzdCommand,
     namespace: AzdCommand,
-    files: { names: AzureYamlFileNames },
-    inspect(node) { node.tag(AzdProjectFile); },
+    inspect(node) {
+        if (!node.isDirectory && AzureYamlFileNames.some(name => node.uri.path.endsWith(`/${name}`))) {
+            node.tag(AzdProjectFile);
+        }
+    },
 };
 
 /**

@@ -5,10 +5,8 @@
 
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, fireFileSystemEvent, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { azdDetector } from '../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
 import { functionsDetector, FunctionsHostFile } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
-import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
-import { watchPattern, WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
+import { WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
 
 describe('WorkspaceIndexService (unit)', () => {
     afterEach(() => {
@@ -31,11 +29,14 @@ describe('WorkspaceIndexService (unit)', () => {
         service.dispose();
     });
 
-    it('watches only the declared files, with string globs', () => {
+    it('watches everything, with a single string glob', () => {
         const { service, mock: m } = createService();
 
         const patterns = m.workspace.createFileSystemWatcher.mock.calls.map(call => call.arguments[0]);
-        expect(patterns).to.deep.equal(['**/host.json']);
+        // A narrower pattern would not reduce what crosses into the extension
+        // host, and would miss a deleted folder, which is reported as one event
+        // for the folder rather than one per file inside it.
+        expect(patterns).to.deep.equal(['**']);
         // Strings only: a RelativePattern would start a second recursive watch.
         expect(patterns.every(pattern => typeof pattern === 'string')).to.be.true;
         service.dispose();
@@ -139,34 +140,20 @@ describe('WorkspaceIndexService (unit)', () => {
         expect(changed).to.equal(0);
     });
 
-    describe('watchPattern', () => {
-        it('merges every detector interest into one glob', () => {
-            // No shipped detector declares suffixes yet, so this one stands in for that half.
-            const suffixes: WorkspaceDetector = {
-                id: 'suffixes',
-                namespace: 'suffixes',
-                files: { suffixes: ['.csproj'] },
-                inspect() { /* no-op */ },
-            };
+    it('rebuilds when a watched folder is deleted', async () => {
+        const { service, mock: m, scheduler } = createService();
+        await service.getIndex();
 
-            expect(watchPattern([functionsDetector, azdDetector, suffixes]))
-                .to.equal('**/{*.csproj,azure.yaml,azure.yml,host.json}');
-        });
+        let changed = 0;
+        service.onDidChangeIndex(() => { changed++; });
 
-        it('does not brace a single interest, which would match literally', () => {
-            expect(watchPattern([functionsDetector])).to.equal('**/host.json');
-        });
+        // Deleting a folder reports one event for the folder itself, not one
+        // per file inside it, so the index must react to the folder.
+        fireFileSystemEvent(m, '/repo/api', 'delete');
+        await scheduler.flush();
 
-        it('watches nothing when no detector declares files', () => {
-            const directoriesOnly: WorkspaceDetector = {
-                id: 'dirs',
-                namespace: 'dirs',
-                directories: true,
-                inspect() { /* no-op */ },
-            };
-
-            expect(watchPattern([directoriesOnly])).to.be.undefined;
-        });
+        expect(changed).to.equal(1);
+        service.dispose();
     });
 });
 
