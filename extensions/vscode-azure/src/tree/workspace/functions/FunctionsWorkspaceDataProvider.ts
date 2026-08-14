@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    Disposable, EventEmitter, IActionExecutor, IVsCode,
-    type DataProvider, type DataProviderChangeEvent,
+    IActionExecutor, IVsCode,
+    type DataProvider,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
@@ -40,20 +40,14 @@ export const functionsDetector: WorkspaceDetector = {
  * Data-layer provider for {@linkcode FunctionsProjectNode}s.
  *
  * Projects come from the shared workspace index rather than a private search,
- * so one walk serves every workspace provider. Invalidation is wired up once
- * for the whole tree in `registerTrees`, not per provider. Function-app
- * children inside the project (individual function trigger definitions,
- * deployed function apps, ...) are tracked by
+ * so one walk serves every workspace provider. Function-app children inside
+ * the project (individual function trigger definitions, deployed function
+ * apps, ...) are tracked by
  * https://github.com/microsoft/vscode-azure/issues/178.
  */
 @injectable()
-export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
+export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode> {
     public readonly isRoot = true;
-
-    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
-    private readonly disposables: Disposable[] = [this.changeEmitter];
-
-    public readonly onDidChange = this.changeEmitter.event;
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
@@ -95,10 +89,5 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
 
         this.executor.output.debug(`[data] functions workspace: discovered=${projects.length}`);
         return projects;
-    }
-
-    /** @inheritdoc */
-    public dispose(): void {
-        Disposable.disposeAll(this.disposables);
     }
 }
