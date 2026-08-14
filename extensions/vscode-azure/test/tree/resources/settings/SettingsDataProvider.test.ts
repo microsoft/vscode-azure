@@ -5,7 +5,6 @@
 
 import { AppServiceLogicalType, FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { expect } from 'chai';
 import { collectionIdOf, createCollectionNode } from '../../../../src/tree/resources/settings/SettingsNode';
 import { createSettingsDataProvider, createStubAdapter } from '../../../settings/mockSettings';
 

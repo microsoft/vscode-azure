@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { expect } from 'chai';
 import { AcrResourceType, isAcrRegistry } from '../../../../src/tree/resources/acr/AcrRegistry';
 
 describe('AcrRegistry (unit)', () => {

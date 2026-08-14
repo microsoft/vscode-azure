@@ -6,7 +6,6 @@
 import { AzureNodeId, FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { SettingsScheme, SettingsUri } from '../../src/settings/SettingsUri';
 import { createCollectionNode } from '../../src/tree/resources/settings/SettingsNode';
 

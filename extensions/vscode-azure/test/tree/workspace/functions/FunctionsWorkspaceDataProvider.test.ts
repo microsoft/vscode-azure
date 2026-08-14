@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { isFunctionsProjectNode } from '../../../../src/tree/workspace/WorkspaceNode';

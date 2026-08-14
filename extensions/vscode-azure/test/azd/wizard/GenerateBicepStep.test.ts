@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { GenerateBicepStep } from '../../../src/azd/wizard/GenerateBicepStep';

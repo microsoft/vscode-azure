@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { AzureNodeId } from '../../src/models/AzureNodeId';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, makeVirtualGroup, makeVirtualResource } from '../mockAzure';
 

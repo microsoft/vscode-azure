@@ -5,7 +5,6 @@
 
 import { createMockAccountDataProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { ArmDeploymentDataProvider, isNestedDeploymentOp, isVisibleOperation, parseDeploymentId } from '../../../src/tree/activity/ArmDeploymentDataProvider';
 import { makeActivity, makeOperationActivity } from './mockActivity';

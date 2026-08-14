@@ -6,7 +6,6 @@
 import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import * as vscode from 'vscode';
 import { DisableAcrAdminUser } from '../../../../src/commands/acr/DisableAcrAdminUser';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';

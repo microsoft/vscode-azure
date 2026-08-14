@@ -6,7 +6,6 @@
 import { AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { EditSettings } from '../../../../src/commands/settings/EditSettings';
 import { createCollectionNode } from '../../../../src/tree/resources/settings/SettingsNode';
 import { SettingsViewProvider } from '../../../../src/tree/resources/settings/SettingsViewProvider';

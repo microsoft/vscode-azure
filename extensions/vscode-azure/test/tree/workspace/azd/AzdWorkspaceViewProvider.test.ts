@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import type * as vscode from 'vscode';
 import { AzdWorkspaceViewProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../src/tree/workspace/WorkspaceNode';

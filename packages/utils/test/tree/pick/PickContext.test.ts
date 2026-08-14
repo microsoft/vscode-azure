@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { getLastPick, type PickContext } from '../../../src/tree/pick/PickContext';
 
 describe('getLastPick (unit)', () => {

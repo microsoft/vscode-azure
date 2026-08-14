@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { ClearActivities } from '../../../src/commands/deploy/ClearActivities';
 import { CodeDeploymentDataProvider } from '../../../src/tree/activity/CodeDeploymentDataProvider';

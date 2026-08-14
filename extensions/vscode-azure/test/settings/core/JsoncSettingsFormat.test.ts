@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { JsoncSettingsFormat, SettingsParseError } from '../../../src/settings/core/JsoncSettingsFormat';
 import type { SettingsMap, SettingsSnapshot } from '../../../src/settings/core/SettingsModel';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';

@@ -6,7 +6,6 @@
 import { AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzureSettingsDocumentSource } from '../../src/settings/AzureSettingsDocumentSource';
 import { SettingsUri } from '../../src/settings/SettingsUri';

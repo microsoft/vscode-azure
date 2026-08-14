@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import { defaultLoadMoreOptions, LoadMore } from '../../../src/commands/tree/LoadMore';
