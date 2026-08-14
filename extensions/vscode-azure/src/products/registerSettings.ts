@@ -10,6 +10,7 @@ import { AzureSettingsDocumentSource } from '../settings/AzureSettingsDocumentSo
 import { SettingsFileSystemProvider } from '../settings/core/SettingsFileSystemProvider';
 import { ISettingsFileSystem } from '../settings/registerSettings';
 import { ISettingsRegistry, SettingsRegistry } from '../settings/SettingsRegistry';
+import { pushDisposable } from '../services';
 import { ISettingsDataProvider, SettingsDataProvider } from '../tree/resources/settings/SettingsDataProvider';
 import { SettingsViewProvider } from '../tree/resources/settings/SettingsViewProvider';
 
@@ -25,11 +26,11 @@ export function registerSettings(registrar: ProductRegistrar): void {
         container.bind(ISettingsRegistry).to(SettingsRegistry).inSingletonScope();
         container.bind(AzureSettingsDocumentSource).toSelf().inSingletonScope();
 
-        // Bound rather than constructed inline so it stays reachable for disposal.
+        // Bound rather than constructed inline so `pushDisposable` handles its disposal.
         container.bind(ISettingsFileSystem).toDynamicValue(context => new SettingsFileSystemProvider(
             context.get(IVsCode),
             context.get(AzureSettingsDocumentSource),
-        )).inSingletonScope();
+        )).inSingletonScope().onActivation(pushDisposable);
     });
 
     registrar.registerCommand(EditSettings.CommandId, EditSettings);
