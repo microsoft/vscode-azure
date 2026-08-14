@@ -7,7 +7,6 @@ import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type Gene
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, createActionContext, IActionContext, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts, type MockCodeContextResult, type MockInputBox, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import type { AzdResourceAssociation } from '../../../src/azd/AzdResourceAssociationService';

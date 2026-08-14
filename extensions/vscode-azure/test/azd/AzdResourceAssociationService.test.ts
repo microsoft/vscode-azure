@@ -5,7 +5,6 @@
 
 import { makeGenericResource, makeResourceGroup } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { AzdResourceAssociationService } from '../../src/azd/AzdResourceAssociationService';
 import { createMockAzdService, type MockAzdService } from './MockAzdService';
