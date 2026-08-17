@@ -662,6 +662,9 @@ export interface ResponseTracker {
  * Responses are consumed in order: the first response answers the
  * first supported UI shown, the second answers the next, etc.
  *
+ * Notifications shown without any buttons are fire-and-forget and do not
+ * consume a response, since there is nothing for a test to answer.
+ *
  * @example
  * ```ts
  * const { ctx, mock } = createMockCodeContext();
@@ -724,6 +727,15 @@ export function respondToPrompts(
     });
 
     const respondToMessage = (...args: unknown[]): Promise<string | undefined> => {
+        const buttons = args.slice(1).filter((arg): arg is string => typeof arg === 'string');
+        if (buttons.length === 0) {
+            // A notification with no buttons is fire-and-forget: there is
+            // nothing for the caller to answer, so it must not consume a
+            // queued response. Otherwise adding a toast to product code would
+            // break every test that drives unrelated UI through this queue.
+            return Promise.resolve(undefined);
+        }
+
         const response = nextResponse('message');
         if (response === 'cancel') {
             return Promise.resolve(undefined);
@@ -732,7 +744,6 @@ export function respondToPrompts(
             throw new Error('Got a non-button response but a message was shown');
         }
 
-        const buttons = args.slice(1).filter((arg): arg is string => typeof arg === 'string');
         if (!buttons.includes(response.button)) {
             throw new Error(`Message does not have a '${response.button}' button`);
         }

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { BrowseStaticWebApp } from '../../../src/commands/staticWebApps/BrowseStaticWebApp';
 import { CloneRepository } from '../../../src/commands/staticWebApps/CloneRepository';
@@ -122,7 +122,7 @@ describe('Static Web Apps resource commands (unit)', () => {
             displayLabel: 'PR 42',
         });
         const { mockResult, resolver, remove } = createResolver(environment);
-        mockResult.messageResponses.push('Delete');
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
         const deleteBuild = mock.fn(() => Promise.resolve());
         const command = new DeleteStaticWebAppEnvironment(
             createActionContext('test'),
@@ -154,7 +154,7 @@ describe('Static Web Apps resource commands (unit)', () => {
         expect(CancellationError.test(error)).to.equal(true);
         expect(new TextDecoder().decode(mockResult.fs.files.get(configUri.path))).to.equal('existing');
 
-        mockResult.messageResponses.push('Overwrite');
+        respondToPrompts(mockResult, [{ button: 'Overwrite' }]);
         await command.execute();
         expect(new TextDecoder().decode(mockResult.fs.files.get(configUri.path))).to.equal(staticWebAppExampleConfig);
     });
