@@ -17,29 +17,57 @@ export type MessageSeverity = 'info' | 'warning' | 'error';
 export interface ShowMessageOptions extends vscode.MessageOptions {
     /** Message severity. Defaults to `info`. */
     readonly severity?: MessageSeverity;
+
+    /** Optional name of the operation, included in a modal cancellation error for diagnostics. */
+    readonly stepName?: string;
 }
 
 /**
  * Shows a message using the VS Code API selected by {@linkcode ShowMessageOptions.severity}.
  *
- * Dismissing the message resolves to `undefined`, matching the underlying VS Code APIs.
+ * Dismissing a modal message rejects with {@linkcode CancellationError}. Dismissing a
+ * non-modal message resolves to `undefined`, matching the underlying VS Code APIs.
  */
+export function showMessage<T extends string>(
+    code: IVsCode,
+    message: string,
+    options: ShowMessageOptions & { readonly modal: true },
+    ...items: T[]
+): Promise<T>;
+export function showMessage<T extends string>(
+    code: IVsCode,
+    message: string,
+    options?: ShowMessageOptions,
+    ...items: T[]
+): Promise<T | undefined>;
 export async function showMessage<T extends string>(
     code: IVsCode,
     message: string,
     options: ShowMessageOptions = {},
     ...items: T[]
 ): Promise<T | undefined> {
-    const { severity = 'info', ...messageOptions } = options;
+    const { severity = 'info', stepName, ...messageOptions } = options;
+    let result: T | undefined;
 
     switch (severity) {
         case 'error':
-            return code.window.showErrorMessage(message, messageOptions, ...items);
+            result = await code.window.showErrorMessage(message, messageOptions, ...items);
+            break;
         case 'warning':
-            return code.window.showWarningMessage(message, messageOptions, ...items);
+            result = await code.window.showWarningMessage(message, messageOptions, ...items);
+            break;
         case 'info':
-            return code.window.showInformationMessage(message, messageOptions, ...items);
+            result = await code.window.showInformationMessage(message, messageOptions, ...items);
+            break;
+        default:
+            throw new Error(`Unsupported message severity: ${String(severity)}`);
     }
+
+    if (messageOptions.modal && result === undefined) {
+        throw new CancellationError(undefined, stepName);
+    }
+
+    return result;
 }
 
 /** A {@linkcode vscode.QuickPickItem} with associated underlying data */

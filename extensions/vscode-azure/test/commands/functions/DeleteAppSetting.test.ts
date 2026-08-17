@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
+import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { DeleteAppSetting } from '../../../src/commands/functions/DeleteAppSetting';
@@ -69,9 +70,9 @@ describe('DeleteAppSetting (unit)', () => {
         expect(deleteSetting.mock.calls[0].arguments[1]).to.equal('MY_SETTING');
     });
 
-    it('should not delete when user cancels confirmation', async () => {
+    it('should cancel without deleting when confirmation is dismissed', async () => {
         const { cmd, deleteSetting } = createCmd({ confirmResponse: undefined });
-        await cmd.execute('test-key');
+        await expect(cmd.execute('test-key')).to.be.rejectedWith(CancellationError);
         expect(deleteSetting.mock.callCount()).to.equal(0);
     });
 

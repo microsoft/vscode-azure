@@ -158,13 +158,13 @@ export class SignIn implements ManagedCommand {
     private async confirmTenantSignIn(): Promise<boolean> {
         const code = this.ctx.code;
         const enterTenantId = code.l10n.t('Enter Tenant ID');
-        const choice = await showMessage(
+        await showMessage(
             code,
             code.l10n.t('Could not sign in to your default Azure account. Do you want to sign in to a specific tenant by ID instead?'),
-            { modal: true, severity: 'warning' },
+            { modal: true, severity: 'warning', stepName: this.constructor.name },
             enterTenantId,
         );
-        return choice === enterTenantId;
+        return true;
     }
 
     /**

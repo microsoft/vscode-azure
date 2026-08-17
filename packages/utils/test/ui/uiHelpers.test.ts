@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getWorkspaceFolder, showMessage, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../src/ui/uiHelpers';
+import { getWorkspaceFolder, showMessage, showSmartInputBox, showSmartQuickPick, withDelayedProgress, type MessageSeverity } from '../../src/ui/uiHelpers';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import type { IVsCode } from '../../src/vscode/IVsCode';
 import { GoBackError } from '../../src/wizard/GoBackError';
@@ -49,6 +49,36 @@ describe('uiHelpers (unit)', () => {
                 'Failed',
                 {},
             ]);
+        });
+
+        it('should return undefined when a non-modal message is dismissed', async () => {
+            const mockResult = createMockVsCode();
+
+            const result = await showMessage(mockResult.vscode, 'Status', {});
+
+            expect(result).to.be.undefined;
+        });
+
+        it('should throw CancellationError with the step name when a modal message is dismissed', async () => {
+            const mockResult = createMockVsCode();
+
+            const error = await showMessage(
+                mockResult.vscode,
+                'Continue?',
+                { modal: true, stepName: 'confirmOperation' },
+                'Continue',
+            ).then(() => undefined, (reason: unknown) => reason);
+
+            expect(error).to.be.instanceOf(CancellationError);
+            expect((error as CancellationError).stepName).to.equal('confirmOperation');
+        });
+
+        it('should reject an unsupported severity', async () => {
+            const mockResult = createMockVsCode();
+
+            await expect(showMessage(mockResult.vscode, 'Status', {
+                severity: 'unsupported' as MessageSeverity,
+            })).to.be.rejectedWith(Error, 'Unsupported message severity: unsupported');
         });
     });
 

@@ -40,16 +40,12 @@ export class DeleteAppSetting implements ManagedCommand {
         const settingKey = resource.virtualPath;
 
         const deleteLabel = this.code.l10n.t('Delete');
-        const confirm = await showMessage(
+        await showMessage(
             this.code,
             this.code.l10n.t('Are you sure you want to delete app setting \'{0}\'?', settingKey),
-            { modal: true, severity: 'warning' },
+            { modal: true, severity: 'warning', stepName: this.constructor.name },
             deleteLabel,
         );
-
-        if (confirm !== deleteLabel) {
-            return;
-        }
 
         try {
             await this.dataProvider.deleteSetting(resource.azureResource, settingKey);

@@ -5,7 +5,7 @@
 
 import { createDefaultCredentialFactory, type ConcreteAzureNode, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeTenant, createMockHierarchicalDataItemTree } from '@microsoft/vscode-azure-azutils/testing';
-import { Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
 import { pickTenantOrEnterId, SignIn } from '../../../src/commands/auth/SignIn';
@@ -341,7 +341,7 @@ describe('SignIn (unit)', () => {
         ]);
     });
 
-    it('should do nothing more when the user declines the tenant sign-in fallback', async () => {
+    it('should cancel without another sign-in attempt when the fallback is dismissed', async () => {
         const { cache, invalidate } = createTree([]);
         const { ctx, mock: mockResult } = createMockCodeContext();
 
@@ -350,7 +350,7 @@ describe('SignIn (unit)', () => {
         const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);
-        await command.execute();
+        await expect(command.execute()).to.be.rejectedWith(CancellationError);
 
         // Only the failed default sign-in was attempted.
         expect(mockResult.authentication.getSession.mock.calls.length).to.equal(1);

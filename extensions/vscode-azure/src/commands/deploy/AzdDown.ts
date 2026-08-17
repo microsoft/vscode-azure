@@ -58,15 +58,12 @@ export class AzdDown implements ManagedCommand {
         // unless the caller has opted out (e.g. a headless E2E host).
         if (!options?.skipConfirmation) {
             const deleteLabel = this.ctx.code.l10n.t('Delete');
-            const confirmation = await showMessage(
+            await showMessage(
                 this.ctx.code,
                 this.ctx.code.l10n.t('Are you sure you want to delete all resources provisioned for this project\'s default environment? This cannot be undone.'),
-                { modal: true, severity: 'warning' },
+                { modal: true, severity: 'warning', stepName: this.constructor.name },
                 deleteLabel,
             );
-            if (confirmation !== deleteLabel) {
-                return;
-            }
         }
 
         const get = this.container.get.bind(this.container);
