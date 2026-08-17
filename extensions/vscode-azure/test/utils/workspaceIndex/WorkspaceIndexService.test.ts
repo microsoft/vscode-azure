@@ -5,6 +5,7 @@
 
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, fireFileSystemEvent, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
+import type * as vscode from 'vscode';
 import { functionsDetector, FunctionsHostFileTag } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { Attribute, attributeDetector, csharpDetector } from './mockDetectors';
@@ -85,6 +86,21 @@ describe('WorkspaceIndexService (unit)', () => {
         service.dispose();
     });
 
+    it('does not scan an excluded directory when the directory itself changes', async () => {
+        const { service, mock: m, scheduler } = createService();
+        await service.getIndex();
+        addWorkspaceFile(m, '/repo/node_modules/dependency/host.json', '{}');
+        const readsBeforeUpdate = m.fs.readDirectory.mock.callCount();
+
+        fireFileSystemEvent(m, '/repo/node_modules', 'create');
+        await scheduler.flush();
+
+        expect(m.fs.readDirectory.mock.callCount() - readsBeforeUpdate).to.equal(1);
+        expect((await service.getIndex()).withTag(FunctionsHostFileTag).map(uri => uri.path))
+            .to.deep.equal(['/repo/host.json']);
+        service.dispose();
+    });
+
     describe('exclusion boundaries', () => {
         // Paths relative to the `/repo` workspace folder, and whether an event
         // for each should reach the index. An excluded name only counts as a
@@ -153,6 +169,36 @@ describe('WorkspaceIndexService (unit)', () => {
         // The burst collapsed to a single scheduled callback.
         expect(changed).to.equal(1);
         expect(scheduler.hasPending).to.be.false;
+        service.dispose();
+    });
+
+    it('serializes an event batch behind an update already in progress', async () => {
+        const m = createMockVsCode();
+        addWorkspaceFolder(m, '/repo');
+        addWorkspaceFile(m, '/repo/api/host.json', '{}');
+        const scheduler = new ManualDebounceScheduler();
+        const service = new WorkspaceIndexService(m.vscode, [functionsDetector], scheduler);
+        await service.getIndex();
+
+        const statStarted = Promise.withResolvers<boolean>();
+        const releaseStat = Promise.withResolvers<vscode.FileStat>();
+        m.fs.stat.mock.mockImplementationOnce(() => {
+            statStarted.resolve(true);
+            return releaseStat.promise;
+        });
+
+        fireFileSystemEvent(m, '/repo/api/host.json');
+        const firstUpdate = scheduler.flush();
+        await statStarted.promise;
+
+        await m.fs.delete(m.vscode.Uri.file('/repo/api/host.json'));
+        fireFileSystemEvent(m, '/repo/api/host.json', 'delete');
+        const secondUpdate = scheduler.flush();
+
+        releaseStat.resolve({ type: m.vscode.FileType.File, ctime: 0, mtime: 0, size: 0 });
+        await Promise.all([firstUpdate, secondUpdate]);
+
+        expect((await service.getIndex()).withTag(FunctionsHostFileTag)).to.deep.equal([]);
         service.dispose();
     });
 

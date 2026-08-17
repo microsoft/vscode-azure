@@ -87,6 +87,7 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
     private readonly disposables: Disposable[] = [this.changeEmitter];
     private readonly pending = new Map<string, vscode.Uri>();
     private indexPromise: Promise<MutableWorkspaceIndex> | undefined;
+    private updateTail = Promise.resolve();
 
     public readonly onDidChangeIndex = this.changeEmitter.event;
 
@@ -132,7 +133,16 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
         }
         // Keyed by URI, so a burst of writes to one file costs one update.
         this.pending.set(uri.toString(), uri);
-        this.scheduler.debounce(() => this.applyPending());
+        this.scheduler.debounce(() => this.enqueuePending());
+    }
+
+    /** Queues one batch behind any update already mutating the index. */
+    private enqueuePending(): Promise<void> {
+        const update = this.updateTail.then(() => this.applyPending());
+        // Keep the tail usable after a rejected batch while returning the
+        // original rejection to the scheduler's error handler.
+        this.updateTail = update.then(() => undefined, () => undefined);
+        return update;
     }
 
     /**

@@ -5,7 +5,7 @@
 
 import { basename, isFileNotFoundError, readText, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
-import { walkDirectory, walkWorkspace, type ScannedDirectory } from './walkWorkspace';
+import { defaultExcludedDirectories, walkDirectory, walkWorkspace, type ScannedDirectory } from './walkWorkspace';
 import { MutableWorkspaceIndex } from './WorkspaceIndex';
 import type { DetectorContext, WorkspaceDetector } from './WorkspaceDetector';
 
@@ -70,7 +70,7 @@ export async function updateWorkspaceIndex(
     changed = index.evict(parent) || changed;
 
     const type = await statType(code, uri);
-    if (type === 'directory') {
+    if (type === 'directory' && !defaultExcludedDirectories.has(basename(uri).toLowerCase())) {
         for await (const directory of walkDirectory(code, uri, token)) {
             changed = await inspectDirectory(code, detectors, directory, index) || changed;
         }
