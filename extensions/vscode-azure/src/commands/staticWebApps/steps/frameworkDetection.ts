@@ -54,6 +54,14 @@ const maximumFiles = 5000;
 /**
  * Detects retained framework presets, Function API roots, and existing Git
  * metadata using only VS Code workspace APIs.
+ *
+ * @remarks
+ * The workspace walk below is Static Web Apps-specific by necessity: the
+ * monorepo has no shared project-scanning service yet. Once the shared,
+ * bounded workspace project detection service lands (see
+ * https://github.com/microsoft/vscode-azure/issues/255), replace
+ * {@linkcode scanWorkspace} and the exclusion/budget constants with that
+ * service and keep only the Static Web Apps-specific preset mapping here.
  */
 export async function detectStaticWebAppProject(
     code: IVsCode,

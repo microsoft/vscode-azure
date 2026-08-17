@@ -14,6 +14,12 @@ export const StaticWebAppDatabaseConfigFileName = 'staticwebapp.database.config.
  *
  * `node_modules` is never searched. The containing directory URI is returned
  * because that is the value expected by the SWA CLI's `--data-api-location`.
+ *
+ * @remarks
+ * This hand-rolled one-level walk exists only because the monorepo has no
+ * shared workspace scanning service yet; replace it with the shared, bounded
+ * project detection service once it lands (see
+ * https://github.com/microsoft/vscode-azure/issues/255).
  */
 export async function getFolderContainingDatabaseConfig(
     code: IVsCode,

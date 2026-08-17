@@ -31,6 +31,11 @@ import { AzureResourceDataProvider } from '../../src/tree/resources/AzureResourc
 import { GenericAzureViewProvider } from '../../src/tree/resources/GenericAzureViewProvider';
 import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
 import { SettingsViewProvider } from '../../src/tree/resources/settings/SettingsViewProvider';
+import {
+    IStaticWebAppDataProvider,
+    StaticWebAppDataProvider,
+} from '../../src/tree/resources/staticWebApps/StaticWebAppDataProvider';
+import { StaticWebAppViewProvider } from '../../src/tree/resources/staticWebApps/StaticWebAppViewProvider';
 import { WebAppDataProvider } from '../../src/tree/resources/webApp/WebAppDataProvider';
 import { WebAppViewProvider } from '../../src/tree/resources/webApp/WebAppViewProvider';
 
@@ -57,12 +62,14 @@ describe('ProductRegistrar (unit)', () => {
         const dataProviders = registrar.getResourceDataProviders();
         const viewProviders = registrar.getResourceViewProviders();
         expect(dataProviders[0]).to.equal(SettingsDataProvider);
-        expect(dataProviders[1]).to.equal(AcrDataProvider);
-        expect(dataProviders[2]).to.equal(WebAppDataProvider);
-        expect(dataProviders[3]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
-        expect(dataProviders[4]).to.equal(AzureResourceDataProvider);
+        expect(dataProviders[1]).to.deep.equal([IStaticWebAppDataProvider, StaticWebAppDataProvider]);
+        expect(dataProviders[2]).to.equal(AcrDataProvider);
+        expect(dataProviders[3]).to.equal(WebAppDataProvider);
+        expect(dataProviders[4]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
+        expect(dataProviders[5]).to.equal(AzureResourceDataProvider);
         expect(viewProviders).to.deep.equal([
             SettingsViewProvider,
+            StaticWebAppViewProvider,
             AcrViewProvider,
             WebAppViewProvider,
             GenericAzureViewProvider,
