@@ -4,18 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { JsoncSettingsFormat, SettingsParseError } from '../../src/settings/JsoncSettingsFormat';
-import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
+import type { SettingsMap } from '../../src/settings/SettingsModel';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-
-function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot {
-    return {
-        entries: [],
-        resourceName: 'myFunctionApp',
-        label: 'Application settings',
-        writable: true,
-        ...overrides,
-    };
-}
+import { makeSettingsSnapshot } from './mockSettings';
 
 function createFormat(): JsoncSettingsFormat {
     return new JsoncSettingsFormat(createMockVsCode().vscode);
@@ -25,7 +16,9 @@ describe('JsoncSettingsFormat (unit)', () => {
     describe('serialize', () => {
         it('renders entries as a JSON object', () => {
             const format = createFormat();
-            const text = format.serialize(createSnapshot({
+            const text = format.serialize(makeSettingsSnapshot({
+                resourceName: 'myFunctionApp',
+                label: 'Application settings',
                 entries: [{ key: 'FUNCTIONS_WORKER_RUNTIME', value: 'node' }],
             }));
 
@@ -34,28 +27,31 @@ describe('JsoncSettingsFormat (unit)', () => {
 
         it('names the resource and collection in the header', () => {
             const format = createFormat();
-            const text = format.serialize(createSnapshot());
+            const text = format.serialize(makeSettingsSnapshot({
+                resourceName: 'myFunctionApp',
+                label: 'Application settings',
+            }));
 
             expect(text).to.contain('// Application settings for \'myFunctionApp\'.');
         });
 
         it('explains last-writer-wins save semantics when writable', () => {
             const format = createFormat();
-            const text = format.serialize(createSnapshot());
+            const text = format.serialize(makeSettingsSnapshot());
 
             expect(text).to.contain('overwrites any changes made elsewhere');
         });
 
         it('warns that deployments may overwrite live edits', () => {
             const format = createFormat();
-            const text = format.serialize(createSnapshot());
+            const text = format.serialize(makeSettingsSnapshot());
 
             expect(text).to.contain('Deployments and infrastructure-as-code tools may overwrite edits made here.');
         });
 
         it('says the document is read-only instead when it is not writable', () => {
             const format = createFormat();
-            const text = format.serialize(createSnapshot({ writable: false }));
+            const text = format.serialize(makeSettingsSnapshot({ writable: false }));
 
             expect(text).to.contain('read-only');
             expect(text).to.not.contain('Removing a setting deletes it.');
@@ -186,7 +182,7 @@ describe('JsoncSettingsFormat (unit)', () => {
                 { key: 'MULTILINE', value: 'line1\nline2' },
                 { key: 'UNICODE', value: 'caf\u00e9' },
             ];
-            const snapshot = createSnapshot({ entries });
+            const snapshot = makeSettingsSnapshot({ entries });
 
             expect(format.parse(format.serialize(snapshot))).to.deep.equal(entries);
         });

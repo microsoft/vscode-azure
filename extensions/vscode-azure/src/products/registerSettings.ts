@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { EditSettings } from '../commands/settings/EditSettings';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { IAzureViewDataTree, pushDisposable } from '../services';
-import { ISettingsAdapter } from '../settings/SettingsAdapter';
+import { pushDisposable } from '../services';
 import { SettingsFileSystemProvider } from '../settings/SettingsFileSystemProvider';
+import { SettingsScheme } from '../settings/SettingsUri';
 import { ISettingsDataProvider, SettingsDataProvider } from '../tree/resources/settings/SettingsDataProvider';
 import { SettingsViewProvider } from '../tree/resources/settings/SettingsViewProvider';
 
@@ -21,13 +21,18 @@ import { SettingsViewProvider } from '../tree/resources/settings/SettingsViewPro
  */
 export function registerSettings(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
-        // Constructed explicitly rather than `toSelf()` so the optional freshness window stays a
-        // plain constructor argument instead of becoming an injectable of its own.
-        container.bind(SettingsFileSystemProvider).toDynamicValue(context => new SettingsFileSystemProvider(
-            context.get(IVsCode),
-            context.get(IAzureViewDataTree),
-            context.getAll(ISettingsAdapter, { optional: true }),
-        )).inSingletonScope().onActivation(pushDisposable);
+        container.bind(SettingsFileSystemProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
+    });
+
+    registrar.registerActivation(container => {
+        const code = container.get(IVsCode);
+        const provider = container.get(SettingsFileSystemProvider);
+
+        container.get(IExtensionContext).subscriptions.push(
+            code.workspace.registerFileSystemProvider(SettingsScheme, provider, {
+                isCaseSensitive: true,
+            }),
+        );
     });
 
     registrar.registerCommand(EditSettings.CommandId, EditSettings);

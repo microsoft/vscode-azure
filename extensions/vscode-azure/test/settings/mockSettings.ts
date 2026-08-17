@@ -89,3 +89,14 @@ export function makeSettingsResource(overrides?: Parameters<typeof makeGenericRe
         ...overrides,
     });
 }
+
+/** A settings snapshot with sensible defaults for editor and format tests. */
+export function makeSettingsSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot {
+    return {
+        entries: [],
+        resourceName: 'MyFuncApp',
+        label: 'Application Settings',
+        writable: true,
+        ...overrides,
+    };
+}

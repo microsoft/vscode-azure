@@ -13,17 +13,7 @@ import { SettingsFileSystemProvider } from '../../src/settings/SettingsFileSyste
 import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
 import { SettingsUri } from '../../src/settings/SettingsUri';
 import { createSettingsNode } from '../../src/tree/resources/settings/SettingsNode';
-import { makeSettingsResource } from './mockSettings';
-
-function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot {
-    return {
-        entries: [{ key: 'A', value: '1' }],
-        resourceName: 'MyFuncApp',
-        label: 'Application Settings',
-        writable: true,
-        ...overrides,
-    };
-}
+import { makeSettingsResource, makeSettingsSnapshot } from './mockSettings';
 
 interface HarnessOptions {
     readonly freshnessWindowMs?: number;
@@ -48,7 +38,7 @@ interface Harness {
 
 function createHarness(options?: HarnessOptions): Harness {
     const code = createMockVsCode();
-    let snapshot = createSnapshot();
+    let snapshot = makeSettingsSnapshot({ entries: [{ key: 'A', value: '1' }] });
 
     const read = mock.fn((_resource: GenericResource) => Promise.resolve(snapshot));
     const write = mock.fn((_resource: GenericResource, _entries: SettingsMap) => Promise.resolve());
@@ -137,7 +127,7 @@ describe('SettingsFileSystemProvider (unit)', () => {
         });
 
         it('marks non-writable settings read-only', async () => {
-            harness.setSnapshot(createSnapshot({ writable: false }));
+            harness.setSnapshot(makeSettingsSnapshot({ writable: false }));
 
             const stat = await harness.provider.stat(harness.uri);
             expect(stat.permissions).to.equal(harness.code.vscode.FilePermission.Readonly);
@@ -170,7 +160,7 @@ describe('SettingsFileSystemProvider (unit)', () => {
             const h = createHarness({ freshnessWindowMs: 0 });
 
             await h.provider.readFile(h.uri);
-            h.setSnapshot(createSnapshot({ entries: [{ key: 'A', value: 'updated' }] }));
+            h.setSnapshot(makeSettingsSnapshot({ entries: [{ key: 'A', value: 'updated' }] }));
             const text = await readText(h.provider, h.uri);
 
             expect(h.read.mock.callCount()).to.equal(2);
@@ -196,7 +186,7 @@ describe('SettingsFileSystemProvider (unit)', () => {
         });
 
         it('deletes a setting by omitting it, rather than merging', async () => {
-            harness.setSnapshot(createSnapshot({ entries: [{ key: 'A', value: '1' }, { key: 'B', value: '2' }] }));
+            harness.setSnapshot(makeSettingsSnapshot({ entries: [{ key: 'A', value: '1' }, { key: 'B', value: '2' }] }));
             await harness.provider.readFile(harness.uri);
 
             await harness.provider.writeFile(harness.uri, Buffer.from('{ "A": "1" }', 'utf8'), { create: false, overwrite: true });
@@ -212,7 +202,7 @@ describe('SettingsFileSystemProvider (unit)', () => {
         });
 
         it('refuses to write read-only settings', async () => {
-            harness.setSnapshot(createSnapshot({ writable: false }));
+            harness.setSnapshot(makeSettingsSnapshot({ writable: false }));
 
             const error: Error = await expect(harness.provider.writeFile(
                 harness.uri,

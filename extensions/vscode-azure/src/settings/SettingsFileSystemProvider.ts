@@ -4,11 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { Disposable, EventEmitter, stringifyError, type IVsCode } from '@microsoft/vscode-azure-utils';
-import type { IAzureViewDataTree } from '../services';
+import { Disposable, EventEmitter, IVsCode, stringifyError } from '@microsoft/vscode-azure-utils';
+import { inject, injectable, multiInject, optional, unmanaged } from 'inversify';
+import { IAzureViewDataTree, type IAzureViewDataTree as AzureViewDataTree } from '../services';
 import { isSettingsNode, type SettingsNode } from '../tree/resources/settings/SettingsNode';
 import { JsoncSettingsFormat } from './JsoncSettingsFormat';
-import type { SettingsAdapter } from './SettingsAdapter';
+import { ISettingsAdapter, type SettingsAdapter } from './SettingsAdapter';
 import type { SettingsSnapshot } from './SettingsModel';
 import { SettingsUri } from './SettingsUri';
 
@@ -57,6 +58,7 @@ const DefaultFreshnessWindowMs = 3000;
  * Documents exist only in memory. Nothing is written to disk unless the user explicitly saves a
  * copy, which would store the values in plain text.
  */
+@injectable()
 export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Disposable {
     private readonly changeEmitter = new EventEmitter<vscode.FileChangeEvent[]>();
     private readonly cache = new Map<string, CacheEntry>();
@@ -64,10 +66,10 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     private readonly format: JsoncSettingsFormat;
 
     public constructor(
-        private readonly code: IVsCode,
-        private readonly tree: IAzureViewDataTree,
-        private readonly adapters: readonly SettingsAdapter[],
-        options?: SettingsFileSystemProviderOptions,
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IAzureViewDataTree) private readonly tree: AzureViewDataTree,
+        @multiInject(ISettingsAdapter) @optional() private readonly adapters: readonly SettingsAdapter[] = [],
+        @unmanaged() options?: SettingsFileSystemProviderOptions,
     ) {
         this.freshnessWindowMs = options?.freshnessWindowMs ?? DefaultFreshnessWindowMs;
         this.format = new JsoncSettingsFormat(code);

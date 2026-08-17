@@ -4,24 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, type IWebAppClient,
+    AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType,
 } from '@microsoft/vscode-azure-azutils';
+import { createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
 import { WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
 import { makeSettingsResource } from '../mockSettings';
 
 function createAdapter(options?: { appSettings?: Record<string, string> }) {
-    const listApplicationSettings = mock.fn((_rg: string, _name: string) => Promise.resolve({ properties: options?.appSettings ?? {} }));
-    const updateApplicationSettings = mock.fn((_rg: string, _name: string, _settings: unknown) => Promise.resolve({ properties: {} }));
-
-    const client = {
-        webApps: { listApplicationSettings, updateApplicationSettings },
-    } as unknown as IWebAppClient;
-
+    const client = createMockWebAppClient({ settings: options?.appSettings });
     const adapter = new WebAppSettingsAdapter(createMockVsCode().vscode, () => client);
 
-    return { adapter, listApplicationSettings, updateApplicationSettings };
+    return { adapter, client };
 }
 
 describe('WebAppSettingsAdapter (unit)', () => {
@@ -79,11 +73,11 @@ describe('WebAppSettingsAdapter (unit)', () => {
         });
 
         it('passes the resource group parsed from the ARM id', async () => {
-            const { adapter, listApplicationSettings } = createAdapter();
+            const { adapter, client } = createAdapter();
 
             await adapter.read(makeSettingsResource());
 
-            expect(listApplicationSettings.mock.calls[0].arguments).to.deep.equal(['MyRG', 'MyFuncApp']);
+            expect(client.webApps.listApplicationSettings.mock.calls[0].arguments).to.deep.equal(['MyRG', 'MyFuncApp']);
         });
 
         it('fails clearly when the ARM id has no resource group', async () => {
@@ -96,38 +90,38 @@ describe('WebAppSettingsAdapter (unit)', () => {
 
     describe('write', () => {
         it('sends the entries verbatim as the whole dictionary', async () => {
-            const { adapter, updateApplicationSettings } = createAdapter();
+            const { adapter, client } = createAdapter();
 
             await adapter.write(makeSettingsResource(), [
                 { key: 'A', value: '1' },
                 { key: 'B', value: '2' },
             ]);
 
-            expect(updateApplicationSettings.mock.calls[0].arguments[2]).to.deep.equal({
+            expect(client.webApps.updateApplicationSettings.mock.calls[0].arguments[2]).to.deep.equal({
                 properties: { A: '1', B: '2' },
             });
         });
 
         it('does not merge with the remote state', async () => {
-            const { adapter, updateApplicationSettings, listApplicationSettings } = createAdapter({
+            const { adapter, client } = createAdapter({
                 appSettings: { EXISTING: 'keep-me' },
             });
 
             await adapter.write(makeSettingsResource(), []);
 
-            expect(updateApplicationSettings.mock.calls[0].arguments[2]).to.deep.equal({ properties: {} });
+            expect(client.webApps.updateApplicationSettings.mock.calls[0].arguments[2]).to.deep.equal({ properties: {} });
             // Last-writer-wins: no read-before-write on the editor path.
-            expect(listApplicationSettings.mock.callCount()).to.equal(0);
+            expect(client.webApps.listApplicationSettings.mock.callCount()).to.equal(0);
         });
 
         it('rejects an invalid setting name before calling ARM, even from an editor save', async () => {
-            const { adapter, updateApplicationSettings } = createAdapter();
+            const { adapter, client } = createAdapter();
 
             await expect(
                 adapter.write(makeSettingsResource(), [{ key: '  ', value: 'x' }]),
             ).to.be.rejectedWith(/cannot be empty/);
 
-            expect(updateApplicationSettings.mock.callCount()).to.equal(0);
+            expect(client.webApps.updateApplicationSettings.mock.callCount()).to.equal(0);
         });
     });
 });

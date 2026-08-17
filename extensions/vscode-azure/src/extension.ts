@@ -32,7 +32,6 @@ import { registerCommands } from './commands/registerCommands';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
-import { registerSettingsFileSystem } from './settings/registerSettingsFileSystem';
 import { registerTrees } from './tree/registerTrees';
 
 /**
@@ -80,8 +79,7 @@ export async function activateInternal(
 
         registerCommands(container, products.getCommands());
         registerTrees(container, products);
-        // After the trees, because the provider resolves a document URI against the resource tree.
-        registerSettingsFileSystem(container);
+        products.activate(container);
     });
 
     // Expose the DI container to E2E tests so they can resolve services (e.g.
