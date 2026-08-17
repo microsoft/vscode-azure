@@ -193,7 +193,11 @@ describe('DeleteAzureResource (unit)', () => {
         tracker.assertAllConsumed();
         expect(setup.executeCommand.mock.callCount()).to.equal(1);
         expect(setup.executeCommand.mock.calls[0].arguments[0]).to.equal(AzdDownCommandId);
-        expect(setup.executeCommand.mock.calls[0].arguments[2]).to.deep.include({ environmentName: 'dev' });
+        expect(setup.executeCommand.mock.calls[0].arguments[2]).to.deep.equal({ environmentName: 'dev' });
+
+        // AzdDown must be left to run its own destructive confirmation: tearing
+        // down the deployment is broader than the resource the user selected.
+        expect(setup.executeCommand.mock.calls[0].arguments[2]).to.not.have.property('skipConfirmation');
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.callCount()).to.equal(0);
     });

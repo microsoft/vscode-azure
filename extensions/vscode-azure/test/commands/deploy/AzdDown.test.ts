@@ -113,6 +113,18 @@ describe('AzdDown (unit)', () => {
         expect(azd.down.mock.calls[0].arguments[1]).to.equal('staging');
     });
 
+    it('should name the target environment in the confirmation', async () => {
+        const { cmd, mockResult, azd } = createCommand();
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
+
+        await cmd.execute(MockUri.file('/workspace/azure.yaml'), { environmentName: 'staging' });
+
+        // The user must be told which environment is about to be purged, not
+        // just that "the default" is, or they cannot judge the blast radius.
+        expect(mockResult.window.showWarningMessage.mock.calls[0].arguments[0]).to.include('staging');
+        expect(azd.down.mock.calls[0].arguments[1]).to.equal('staging');
+    });
+
     it('should resolve cwd from workspace folder when invoked from the command palette', async () => {
         const { cmd, mockResult, azd } = createCommand();
         respondToPrompts(mockResult, [{ button: 'Delete' }]);

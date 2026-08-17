@@ -130,10 +130,11 @@ export class DeleteAzureResource implements ManagedCommand {
 
         if (choice === deleteDeployment) {
             this.context.telemetry.properties.deletionPath = 'azdDown';
-            const options: AzdDownOptions = {
-                skipConfirmation: true,
-                environmentName: association.environmentName,
-            };
+            // Deliberately not skipping the confirmation: tearing down the whole
+            // deployment is broader than what the user selected, so AzdDown must
+            // state that scope before --force --purge runs. This mirrors the
+            // direct path, which also confirms after this steering prompt.
+            const options: AzdDownOptions = { environmentName: association.environmentName };
             await this.ctx.code.commands.executeCommand(AzdDownCommandId, association.azureYamlUri, options);
             return true;
         }
@@ -200,3 +201,5 @@ export class DeleteAzureResource implements ManagedCommand {
             ? client.resourceGroups.delete(resource.name)
             : client.resources.deleteById(resource.id, resource.type);
     }}
+
+
