@@ -88,7 +88,6 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
                 candidates.push({ label: folder.name, uri: folder.uri });
             }
         }
-
         if (candidates.length === 0) {
             this.actionContext.errorHandling.suppress = 'reportIssue';
             throw new Error(this.ctx.code.l10n.t('No azure.yaml file found in the workspace.'));
@@ -105,4 +104,3 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
         return { iacFolder: picked.uri } as Partial<TContext>;
     }
 }
-
