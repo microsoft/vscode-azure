@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ConcreteAzureNode, StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, type ConcreteAzureNode, type StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { GitHubJob, GitHubWorkflowRun } from '../../../../src/services/StaticWebAppsGitHubService';
@@ -124,6 +124,47 @@ describe('StaticWebAppDataProvider (unit)', () => {
         ]);
         expect(mockClient.staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(1);
         expect(mockClient.staticSites.listStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(0);
+    });
+
+    it('should point the Functions node at the build\'s own portal page', async () => {
+        const { provider } = createProvider();
+        const environment = makeStaticWebAppEnvironment();
+        const children = await provider.getChildren(environment);
+
+        const functions = children.find(node => isStaticWebAppVirtualNode(node)
+            && node.virtualType === StaticWebAppVirtualTypes.Functions);
+
+        // The portal has a distinct page for a build's functions, so this node
+        // must not fall back to the parent site's page.
+        expect(AzureNodeId.from(functions!).toPortalUrl()).to.equal(
+            'https://portal.azure.com/#@test-tenant'
+            + '/resource/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/staticSites/mySwa/builds/default/functions'
+        );
+        expect(AzureNodeId.from(environment.azureResource).toPortalUrl()).to.equal(
+            'https://portal.azure.com/#@test-tenant'
+            + '/resource/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/staticSites/mySwa'
+        );
+    });
+
+    it('should derive the Functions portal page from the build id for a preview environment', async () => {
+        const { provider } = createProvider();
+        const environment = makeStaticWebAppEnvironment({
+            virtualPath: 'environments/42',
+            buildId: '42',
+            isProduction: false,
+            displayLabel: 'PR 42',
+            data: { name: '42', buildId: '42', sourceBranch: 'feature' },
+        });
+
+        const children = await provider.getChildren(environment);
+        const functions = children.find(node => isStaticWebAppVirtualNode(node)
+            && node.virtualType === StaticWebAppVirtualTypes.Functions);
+
+        // No ARM id on the build payload, so the id is reconstructed from the site.
+        expect(AzureNodeId.from(functions!).toPortalUrl()).to.equal(
+            'https://portal.azure.com/#@test-tenant'
+            + '/resource/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/staticSites/mySwa/builds/42/functions'
+        );
     });
 
     it('should use the build probe for preview environments', async () => {
