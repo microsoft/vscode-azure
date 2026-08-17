@@ -10,17 +10,6 @@ import { MutableWorkspaceIndex } from './WorkspaceIndex';
 import type { DetectorContext, WorkspaceDetector } from './WorkspaceDetector';
 
 /**
- * A file node sees no file names.
- *
- * Its siblings belong to the directory that contains them, and a detector that
- * wants them should inspect that directory instead. Keeping this empty is what
- * bounds an incremental update to the changed node and its parent: if a file's
- * tags could depend on its siblings, every sibling would have to be evicted and
- * re-inspected whenever any one of them changed.
- */
-const noFileNames: ReadonlySet<string> = new Set<string>();
-
-/**
  * Walks the workspace once, offering every file and directory to every
  * detector, and returns the resulting index.
  *
@@ -56,7 +45,8 @@ export async function buildWorkspaceIndex(
  * directory, since deleting a directory reports one event for the directory
  * rather than one per file inside it -- plus its parent directory, whose own
  * tags depend on the set of file names it contains. Siblings are deliberately
- * untouched; {@linkcode noFileNames} is what makes that sound.
+ * untouched; file contexts do not expose sibling names, which is what makes
+ * that sound.
  *
  * Everything affected is evicted before anything is re-inspected, and nothing
  * is re-inspected that was not evicted, so a tag carrying values cannot
@@ -85,7 +75,7 @@ export async function updateWorkspaceIndex(
             changed = await inspectDirectory(code, detectors, directory, index) || changed;
         }
     } else if (type === 'file') {
-        changed = await inspectNode(code, detectors, uri, false, noFileNames, index) || changed;
+        changed = await inspectNode(code, detectors, uri, { isDirectory: false }, index) || changed;
     }
 
     // The parent is re-read rather than remembered, so its file names reflect
@@ -93,7 +83,7 @@ export async function updateWorkspaceIndex(
     // evicted, and re-inspecting them would double their tag values.
     const fileNames = await readFileNames(code, parent);
     if (fileNames) {
-        changed = await inspectNode(code, detectors, parent, true, fileNames, index) || changed;
+        changed = await inspectNode(code, detectors, parent, { isDirectory: true, fileNames }, index) || changed;
     }
 
     return changed;
@@ -106,11 +96,17 @@ async function inspectDirectory(
     directory: ScannedDirectory,
     index: MutableWorkspaceIndex,
 ): Promise<boolean> {
-    let tagged = await inspectNode(code, detectors, directory.uri, true, directory.fileNames, index);
+    let tagged = await inspectNode(
+        code,
+        detectors,
+        directory.uri,
+        { isDirectory: true, fileNames: directory.fileNames },
+        index,
+    );
 
     for (const fileName of directory.fileNames) {
         const uri = code.Uri.joinPath(directory.uri, fileName);
-        tagged = await inspectNode(code, detectors, uri, false, noFileNames, index) || tagged;
+        tagged = await inspectNode(code, detectors, uri, { isDirectory: false }, index) || tagged;
     }
 
     return tagged;
@@ -121,19 +117,18 @@ async function inspectNode(
     code: IVsCode,
     detectors: readonly WorkspaceDetector[],
     uri: vscode.Uri,
-    isDirectory: boolean,
-    fileNames: ReadonlySet<string>,
+    node: { readonly isDirectory: false } | {
+        readonly isDirectory: true;
+        readonly fileNames: ReadonlySet<string>;
+    },
     index: MutableWorkspaceIndex,
 ): Promise<boolean> {
     let tagged = false;
 
     for (const detector of detectors) {
-        const context: DetectorContext = {
+        const shared: Pick<DetectorContext, 'uri' | 'name' | 'has' | 'tag'> = {
             uri,
             name: basename(uri),
-            isDirectory,
-            fileNames,
-            text: () => isDirectory ? Promise.resolve(undefined) : readText(code, uri),
             has: tag => index.has(uri, tag),
             tag: (tag, value) => {
                 if (!tag.startsWith(`${detector.namespace}:`)) {
@@ -145,6 +140,9 @@ async function inspectNode(
                 tagged = true;
             },
         };
+        const context: DetectorContext = node.isDirectory
+            ? { ...shared, isDirectory: true, fileNames: node.fileNames }
+            : { ...shared, isDirectory: false, text: () => readText(code, uri) };
 
         // Every detector sees every node, so the common case is a detector that
         // recognises nothing and returns synchronously. Awaiting that would

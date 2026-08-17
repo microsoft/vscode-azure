@@ -77,7 +77,7 @@ export const attributeDetector: WorkspaceDetector = {
     id: 'attributes',
     namespace: 'attributes',
     async inspect(item) {
-        if (!item.has(CsSourceFile)) {
+        if (item.isDirectory || !item.has(CsSourceFile)) {
             return;
         }
         const source = await item.text() ?? '';

@@ -5,12 +5,9 @@
 
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, fireFileSystemEvent, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { functionsDetector } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { functionsDetector, FunctionsHostFileTag } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
-import { createTag, StandardTagNames } from '../../../src/utils/workspaceIndex/tags';
 import { Attribute, attributeDetector, csharpDetector } from './mockDetectors';
-
-const FunctionsHostFileTag = createTag('functions', StandardTagNames.projectFile);
 
 describe('WorkspaceIndexService (unit)', () => {
     afterEach(() => {

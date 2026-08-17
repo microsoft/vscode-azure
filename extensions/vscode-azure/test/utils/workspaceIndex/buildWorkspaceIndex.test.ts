@@ -181,12 +181,21 @@ describe('buildWorkspaceIndex (unit)', () => {
             expect(names.get('/repo/src/App.cs')).to.equal('App.cs');
         });
 
-        it('shows a directory its file names, and a file none', async () => {
+        it('exposes only the properties valid for each node kind', async () => {
             const sizes = new Map<string, number>();
+            const properties = new Map<string, { fileNames: boolean; text: boolean }>();
             const detector: WorkspaceDetector = {
                 id: 'sizes',
                 namespace: 'sizes',
-                inspect(item) { sizes.set(item.uri.path, item.fileNames.size); },
+                inspect(item) {
+                    properties.set(item.uri.path, {
+                        fileNames: 'fileNames' in item,
+                        text: 'text' in item,
+                    });
+                    if (item.isDirectory) {
+                        sizes.set(item.uri.path, item.fileNames.size);
+                    }
+                },
             };
             const m = createMockVsCode();
             addWorkspaceFolder(m, '/repo');
@@ -196,9 +205,8 @@ describe('buildWorkspaceIndex (unit)', () => {
             await buildWorkspaceIndex(m.vscode, [detector]);
 
             expect(sizes.get('/repo')).to.equal(2);
-            // A file is not shown its siblings, so that an incremental update
-            // never has to re-inspect them.
-            expect(sizes.get('/repo/App.cs')).to.equal(0);
+            expect(properties.get('/repo')).to.deep.equal({ fileNames: true, text: false });
+            expect(properties.get('/repo/App.cs')).to.deep.equal({ fileNames: false, text: true });
         });
 
         it('reads a file once per detector that asks for it', async () => {

@@ -14,11 +14,7 @@ import type * as vscode from 'vscode';
  */
 export const IWorkspaceDetector: ServiceIdentifier<WorkspaceDetector> = Symbol.for('IWorkspaceDetector');
 
-/**
- * A file or directory presented to a {@linkcode WorkspaceDetector}, with the
- * reads and lookups needed to decide what to tag it with.
- */
-export interface DetectorContext {
+interface DetectorContextBase {
     readonly uri: vscode.Uri;
 
     /**
@@ -28,17 +24,6 @@ export interface DetectorContext {
      * the name is the first thing nearly all of them do.
      */
     readonly name: string;
-
-    readonly isDirectory: boolean;
-
-    /**
-     * Names of the files in this directory, or alongside this file. Lets a
-     * detector decide from a node's neighbours without a further read.
-     */
-    readonly fileNames: ReadonlySet<string>;
-
-    /** This node's contents, or `undefined` if it is a directory or missing. */
-    text(): Promise<string | undefined>;
 
     /**
      * Whether this node already carries `tag`. Any namespace may be read, which
@@ -57,6 +42,32 @@ export interface DetectorContext {
     tag(tag: string, value?: string): void;
 }
 
+/** A file presented to a {@linkcode WorkspaceDetector}. */
+export interface FileDetectorContext extends DetectorContextBase {
+    readonly isDirectory: false;
+    readonly fileNames?: never;
+
+    /** This file's contents, or `undefined` if it disappeared. */
+    text(): Promise<string | undefined>;
+}
+
+/** A directory presented to a {@linkcode WorkspaceDetector}. */
+export interface DirectoryDetectorContext extends DetectorContextBase {
+    readonly isDirectory: true;
+
+    /** Names of the files directly inside this directory. */
+    readonly fileNames: ReadonlySet<string>;
+
+    readonly text?: never;
+}
+
+/**
+ * A file or directory presented to a {@linkcode WorkspaceDetector}, with only
+ * the node-kind-specific reads valid for its {@linkcode isDirectory}
+ * discriminant.
+ */
+export type DetectorContext = FileDetectorContext | DirectoryDetectorContext;
+
 /**
  * Recognises something in the workspace and records it as tags.
  *
@@ -68,7 +79,7 @@ export interface DetectorContext {
  * {@linkcode inspect} is therefore on the hot path of the walk. Test the cheap
  * things first -- {@linkcode DetectorContext.name name} or
  * {@linkcode DetectorContext.isDirectory isDirectory} -- and only then read
- * {@linkcode DetectorContext.text text}, which is what actually costs.
+ * {@linkcode FileDetectorContext.text text}, which is what actually costs.
  */
 export interface WorkspaceDetector {
     /** Stable identifier, used in diagnostics. */

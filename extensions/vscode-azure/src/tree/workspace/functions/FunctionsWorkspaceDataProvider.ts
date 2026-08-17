@@ -15,12 +15,12 @@ import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../WorkspaceNode';
 
 /** File name that marks an Azure Functions project. */
-export const FunctionsHostFileName = 'host.json';
+const FunctionsHostFileName = 'host.json';
 
 const functions = 'functions';
 
 /** The `host.json` that marks an Azure Functions project. */
-const FunctionsHostFileTag = createTag(functions, StandardTagNames.projectFile);
+export const FunctionsHostFileTag = createTag(functions, StandardTagNames.projectFile);
 
 /**
  * Tags the `host.json` of every Azure Functions project.
