@@ -75,9 +75,10 @@ describe('AzureNodeId (unit)', () => {
             expect(nodeId.isVirtualResourceNodeId()).to.be.true;
         });
 
-        it('should round-trip a virtual resource node ID carrying a portal resource id', () => {
+        it('should round-trip a virtual resource node ID carrying a portal URL', () => {
             const uri = 'azr://user1@portal.azure.com/tenants/t1/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Web/staticSites/site1'
-                + '?portal=%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1%2Fproviders%2FMicrosoft.Web%2FstaticSites%2Fsite1%2Fbuilds%2Fdefault%2Ffunctions'
+                + '?portal=https%3A%2F%2Fportal.azure.com%2F%23%40t1%2Fresource%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1'
+                + '%2Fproviders%2FMicrosoft.Web%2FstaticSites%2Fsite1%2Fbuilds%2Fdefault%2Ffunctions'
                 + '#/functions/environments%2Fdefault%2Ffunctions';
             const nodeId = AzureNodeId.parse(uri);
             expect(nodeId.toString()).to.equal(uri);
@@ -87,7 +88,8 @@ describe('AzureNodeId (unit)', () => {
         it('should keep the portal query string out of the parent ARM resource id', () => {
             const nodeId = AzureNodeId.parse(
                 'azr://user1@portal.azure.com/tenants/t1/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Web/staticSites/site1'
-                + '?portal=%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1%2Fproviders%2FMicrosoft.Web%2FstaticSites%2Fsite1%2Fbuilds%2Fdefault%2Ffunctions'
+                + '?portal=https%3A%2F%2Fportal.azure.com%2F%23%40t1%2Fresource%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1'
+                + '%2Fproviders%2FMicrosoft.Web%2FstaticSites%2Fsite1%2Fbuilds%2Fdefault%2Ffunctions'
                 + '#/functions/environments%2Fdefault%2Ffunctions'
             );
             expect(nodeId.parentNodeId()!.toString()).to.equal(
@@ -187,10 +189,12 @@ describe('AzureNodeId (unit)', () => {
             expect(nodeId.toString()).to.contain('#/repository/');
         });
 
-        it('should carry a virtual resource portal resource id into the node ID', () => {
+        it('should carry a virtual resource portal URL into the node ID', () => {
+            const portalUrl = 'https://portal.azure.com/#@test-tenant/resource'
+                + '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/staticSites/site1/builds/default/functions';
             const vr = makeVirtualResource({
                 virtualPath: 'environments/default/functions',
-                portalResourceId: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/staticSites/site1/builds/default/functions',
+                portalUrl,
                 azureResource: makeGenericResource({
                     id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/staticSites/site1',
                     name: 'site1',
@@ -202,16 +206,25 @@ describe('AzureNodeId (unit)', () => {
             const nodeId = AzureNodeId.from(vr);
 
             expect(AzureNodeId.parse(nodeId.toString()).toPortalUrl()).to.equal(nodeId.toPortalUrl());
-            expect(nodeId.toPortalUrl()).to.equal(
-                'https://portal.azure.com/#@test-tenant'
-                + '/resource/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/staticSites/site1/builds/default/functions'
-            );
+            expect(nodeId.toPortalUrl()).to.equal(portalUrl);
         });
 
-        it('should reject a portal resource id that is not an absolute ARM id', () => {
-            const vr = makeVirtualResource({ portalResourceId: 'builds/default/functions' });
+        it('should reject a portal URL that is not an absolute URL', () => {
+            const vr = makeVirtualResource({ portalUrl: 'builds/default/functions' });
 
-            expect(() => AzureNodeId.from(vr)).to.throw('expected an absolute ARM resource id');
+            expect(() => AzureNodeId.from(vr)).to.throw('expected an absolute URL');
+        });
+
+        it('should reject a portal URL that is not https', () => {
+            const vr = makeVirtualResource({ portalUrl: 'http://portal.azure.com/#@test-tenant/resource/foo' });
+
+            expect(() => AzureNodeId.from(vr)).to.throw('expected the "https:" protocol');
+        });
+
+        it('should reject a portal URL pointing at a different portal host', () => {
+            const vr = makeVirtualResource({ portalUrl: 'https://portal.azure.us/#@test-tenant/resource/foo' });
+
+            expect(() => AzureNodeId.from(vr)).to.throw('expected the host to be "portal.azure.com"');
         });
 
         it('should populate the parse cache so parse() returns the same instance', () => {
@@ -313,7 +326,7 @@ describe('AzureNodeId (unit)', () => {
             );
         });
 
-        it('should use the parent resource for a virtual node with no portal resource id', () => {
+        it('should use the parent resource for a virtual node with no portal URL', () => {
             const nodeId = AzureNodeId.parse(
                 'azr://u@portal.azure.com/tenants/t1/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.ContainerRegistry/registries/myReg#/repository/myrepo'
             );
@@ -322,10 +335,11 @@ describe('AzureNodeId (unit)', () => {
             );
         });
 
-        it('should use the declared portal resource id for a virtual node that has one', () => {
+        it('should use the declared portal URL for a virtual node that has one', () => {
             const nodeId = AzureNodeId.parse(
                 'azr://u@portal.azure.com/tenants/t1/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Web/staticSites/site1'
-                + '?portal=%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1%2Fproviders%2FMicrosoft.Web%2FstaticSites%2Fsite1%2Fbuilds%2Fdefault%2Ffunctions'
+                + '?portal=https%3A%2F%2Fportal.azure.com%2F%23%40t1%2Fresource%2Fsubscriptions%2Fsub-1%2FresourceGroups%2Frg1'
+                + '%2Fproviders%2FMicrosoft.Web%2FstaticSites%2Fsite1%2Fbuilds%2Fdefault%2Ffunctions'
                 + '#/functions/environments%2Fdefault%2Ffunctions'
             );
             expect(nodeId.toPortalUrl()).to.equal(
