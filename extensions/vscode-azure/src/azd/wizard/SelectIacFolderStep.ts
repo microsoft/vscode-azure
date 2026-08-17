@@ -42,6 +42,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
         super();
     }
 
+
     public override shouldPrompt(context: Readonly<TContext>): boolean {
         return !context.iacFolder;
     }
