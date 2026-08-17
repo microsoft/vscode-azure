@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    AzureNodeId,
     getNodeType,
     IStaticWebAppClientProvider,
     parseAzureResourceId,
@@ -26,8 +25,6 @@ import {
     type StaticWebApp,
     type StaticWebAppAction,
     type StaticWebAppActions,
-    type StaticWebAppAppSetting,
-    type StaticWebAppAppSettingsGroup,
     type StaticWebAppEnvironment,
     type StaticWebAppFunction,
     type StaticWebAppFunctions,
@@ -39,7 +36,6 @@ import {
     type StaticWebAppWorkflowGroup,
     type StaticWebAppWorkflowParseError,
 } from './StaticWebApp';
-import { StaticWebAppAppSettings } from './StaticWebAppAppSettings';
 import { scanStaticWebAppWorkflows, type ParsedWorkflow } from './workflowParser';
 
 /** DI identifier for direct Static Web Apps cache mutation and command access. */
@@ -78,17 +74,13 @@ const actionStatuses = new Set(['queued', 'in_progress', 'completed']);
 @injectable()
 export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode> {
     private readonly clients = new Map<string, IStaticWebAppClient>();
-    private readonly appSettings: StaticWebAppAppSettings;
-    private readonly visibleAppSettings = new Set<string>();
 
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IStaticWebAppClientProvider) private readonly createClient: IStaticWebAppClientProvider,
         @inject(IStaticWebAppsGitHubService) private readonly github: IStaticWebAppsGitHubService,
-    ) {
-        this.appSettings = new StaticWebAppAppSettings(createClient);
-    }
+    ) { }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is ConcreteAzureNode {
@@ -141,58 +133,11 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
                 return this.listSteps(resource);
             case StaticWebAppVirtualTypes.Functions:
                 return this.listFunctions(resource);
-            case StaticWebAppVirtualTypes.AppSettings:
-                return this.listAppSettings(resource);
             case StaticWebAppVirtualTypes.WorkflowGroup:
                 return this.getWorkflowChildren(resource);
             default:
                 return [];
         }
-    }
-
-    /** Returns a cached app-setting value for a command-facing group handle. */
-    public getAppSettingValue(group: StaticWebAppAppSettingsGroup, key: string): string | undefined {
-        return this.appSettings.getValue(group, key);
-    }
-
-    /** Adds or replaces one Static Web Apps function app setting. */
-    public addOrUpdateAppSetting(group: StaticWebAppAppSettingsGroup, key: string, value: string): Promise<void> {
-        return this.appSettings.addOrUpdate(group, key, value);
-    }
-
-    /** Reads all current app settings without storing values on tree resources. */
-    public getAppSettings(group: StaticWebAppAppSettingsGroup): Promise<Record<string, string>> {
-        return this.appSettings.getAll(group);
-    }
-
-    /** Deletes one Static Web Apps function app setting. */
-    public deleteAppSetting(group: StaticWebAppAppSettingsGroup, key: string): Promise<void> {
-        return this.appSettings.delete(group, key);
-    }
-
-    /** Renames one Static Web Apps function app setting. */
-    public renameAppSetting(group: StaticWebAppAppSettingsGroup, oldKey: string, newKey: string): Promise<boolean> {
-        return this.appSettings.rename(group, oldKey, newKey);
-    }
-
-    /** Replaces all Static Web Apps function app settings. */
-    public replaceAppSettings(group: StaticWebAppAppSettingsGroup, settings: Record<string, string>): Promise<void> {
-        return this.appSettings.replace(group, settings);
-    }
-
-    /** Returns whether a setting value is currently visible in the tree. */
-    public isAppSettingVisible(group: StaticWebAppAppSettingsGroup, key: string): boolean {
-        return this.visibleAppSettings.has(this.appSettingVisibilityKey(group, key));
-    }
-
-    /** Toggles value visibility synchronously so rapid inline clicks cannot race. */
-    public toggleAppSettingVisibility(group: StaticWebAppAppSettingsGroup, key: string): boolean {
-        const visibilityKey = this.appSettingVisibilityKey(group, key);
-        if (this.visibleAppSettings.delete(visibilityKey)) {
-            return false;
-        }
-        this.visibleAppSettings.add(visibilityKey);
-        return true;
     }
 
     private async listEnvironments(site: StaticWebApp): Promise<ConcreteAzureNode[]> {
@@ -218,10 +163,7 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
 
         const children: ConcreteAzureNode[] = [actions];
         if (await this.hasFunctionsApi(environment)) {
-            children.push(
-                this.createAppSettingsGroup(environment),
-                this.createFunctionsGroup(environment),
-            );
+            children.push(this.createFunctionsGroup(environment));
         } else {
             children.push(this.createNoFunctions(environment, 'help'));
         }
@@ -265,20 +207,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         const functions = await collectPages(pages);
         const children = functions.map(func => this.createFunctionOrInvalid(group, func));
         return children.length ? children : [this.createNoFunctions(group, 'empty')];
-    }
-
-    private async listAppSettings(group: StaticWebAppAppSettingsGroup): Promise<ConcreteAzureNode[]> {
-        const keys = await this.appSettings.list(group);
-        return keys.map(key => ({
-            virtualType: StaticWebAppVirtualTypes.AppSetting,
-            virtualPath: `${group.virtualPath}/${key}`,
-            azureResource: group.azureResource,
-            environmentBuildId: group.environmentBuildId,
-            isProduction: group.isProduction,
-            branch: group.branch,
-            settingName: key,
-            appSettingsGroup: group,
-        } satisfies StaticWebAppAppSetting));
     }
 
     private getWorkflowChildren(group: StaticWebAppWorkflowGroup): ConcreteAzureNode[] {
@@ -435,20 +363,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         };
     }
 
-    private createAppSettingsGroup(environment: StaticWebAppEnvironment): StaticWebAppAppSettingsGroup {
-        const environmentResourceId = environment.data.id
-            ?? `${environment.azureResource.id}/builds/${environment.buildId}`;
-        return {
-            virtualType: StaticWebAppVirtualTypes.AppSettings,
-            virtualPath: `${environment.virtualPath}/appSettings`,
-            azureResource: environment.azureResource,
-            portalResourceId: `${environmentResourceId}/configurations`,
-            environmentBuildId: environment.buildId,
-            isProduction: environment.isProduction,
-            branch: environment.branch,
-        };
-    }
-
     private createFunctionsGroup(environment: StaticWebAppEnvironment): StaticWebAppFunctions {
         const environmentResourceId = environment.data.id
             ?? `${environment.azureResource.id}/builds/${environment.buildId}`;
@@ -561,9 +475,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         return client;
     }
 
-    private appSettingVisibilityKey(group: StaticWebAppAppSettingsGroup, key: string): string {
-        return `${AzureNodeId.from(group).toString()}\0${key}`;
-    }
 }
 
 async function collectPages<T>(pages: AsyncIterable<Page<T>>): Promise<T[]> {

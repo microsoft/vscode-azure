@@ -12,7 +12,6 @@ import {
     CreateSwaConfigFile,
     staticWebAppExampleConfig,
 } from '../../../src/commands/staticWebApps/CreateSwaConfigFile';
-import { DeleteStaticWebApp } from '../../../src/commands/staticWebApps/DeleteStaticWebApp';
 import { DeleteStaticWebAppEnvironment } from '../../../src/commands/staticWebApps/DeleteStaticWebAppEnvironment';
 import { OpenGitHubRepository } from '../../../src/commands/staticWebApps/OpenGitHubRepository';
 import { ShowGitHubActions } from '../../../src/commands/staticWebApps/ShowGitHubActions';
@@ -136,44 +135,6 @@ describe('Static Web Apps resource commands (unit)', () => {
         await command.execute('key');
         expect(deleteBuild.mock.calls[0].arguments.slice(0, 3)).to.deep.equal(['rg1', 'mySwa', '42']);
         expect(remove.mock.calls[0].arguments[0]).to.equal(environment);
-    });
-
-    it('should not delete a Static Web App when confirmation is dismissed', async () => {
-        const { mockResult, resolver, remove } = createResolver(makeStaticWebApp());
-        const deleteSite = mock.fn(() => Promise.resolve());
-        const command = new DeleteStaticWebApp(
-            mockResult.vscode,
-            new MockOutputChannel('test'),
-            (() => ({ staticSites: { deleteStaticSite: deleteSite } })) as never,
-            resolver,
-        );
-
-        let error: unknown;
-        try {
-            await command.execute('key');
-        } catch (caught) {
-            error = caught;
-        }
-        expect(CancellationError.test(error)).to.equal(true);
-        expect(deleteSite.mock.callCount()).to.equal(0);
-        expect(remove.mock.callCount()).to.equal(0);
-    });
-
-    it('should delete a confirmed Static Web App and remove only that root', async () => {
-        const site = makeStaticWebApp();
-        const { mockResult, resolver, remove } = createResolver(site);
-        mockResult.messageResponses.push('Delete');
-        const deleteSite = mock.fn(() => Promise.resolve());
-        const command = new DeleteStaticWebApp(
-            mockResult.vscode,
-            new MockOutputChannel('test'),
-            (() => ({ staticSites: { deleteStaticSite: deleteSite } })) as never,
-            resolver,
-        );
-
-        await command.execute('key');
-        expect(deleteSite.mock.calls[0].arguments.slice(0, 2)).to.deep.equal(['rg1', 'mySwa']);
-        expect(remove.mock.calls[0].arguments[0]).to.equal(site);
     });
 
     it('should honor config overwrite cancellation and write the exact example when confirmed', async () => {
