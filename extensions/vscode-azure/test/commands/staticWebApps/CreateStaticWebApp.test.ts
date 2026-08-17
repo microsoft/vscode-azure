@@ -11,6 +11,7 @@ import { mock as nodeMock } from 'node:test';
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import { CreateStaticWebApp } from '../../../src/commands/staticWebApps/CreateStaticWebApp';
+import { DeployStaticWebAppCommandId } from '../../../src/constants';
 import { StaticWebAppsGitHubService } from '../../../src/services/StaticWebAppsGitHubService';
 import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
 import { createMockAzdService } from '../../azd/MockAzdService';
@@ -19,6 +20,15 @@ import { createWizardCommandContainer } from '../createWizardCommandContainer';
 
 describe('CreateStaticWebApp (unit)', () => {
     const subscription = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
+
+    /**
+     * Counts only launches of the Static Web Apps deployment follow-up command.
+     * Unrelated commands (for example the activity view focus issued by
+     * {@linkcode AzdDeployStep}) must never be mistaken for a routing decision.
+     */
+    function deployLaunchCount(mock: { readonly commands: { readonly executeCommand: { readonly mock: { readonly calls: readonly { readonly arguments: readonly unknown[] }[] } } } }): number {
+        return mock.commands.executeCommand.mock.calls.filter(call => call.arguments[0] === DeployStaticWebAppCommandId).length;
+    }
 
     function createCommand(workspace: boolean, options: { readonly remote?: GitRemoteInfo; readonly azdVersionOk?: boolean } = {}) {
         const { ctx, mock } = createMockCodeContext();
@@ -134,9 +144,11 @@ describe('CreateStaticWebApp (unit)', () => {
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0); // launched command is separate/mocked, not this azd instance's method directly
             // ShowEndpointUrlStep is gated on deploy===true, so a CI-routed flow (deploy:false)
             // never claims "Application deployed" -- the launched CI command owns its own messaging.
-            expect(azd.show.mock.callCount()).to.equal(0);
-            expect(mock.commands.executeCommand.mock.callCount()).to.equal(1);
-            const [commandId, args] = mock.commands.executeCommand.mock.calls[0].arguments as [string, { readonly provider: string; readonly artifactSupportsAutoDeploy: boolean }];
+            expect(mock.window.showInformationMessage.mock.calls.some(call =>
+                typeof call.arguments[0] === 'string' && call.arguments[0].includes('Application deployed'))).to.be.false;
+            expect(deployLaunchCount(mock)).to.equal(1);
+            const launch = mock.commands.executeCommand.mock.calls.find(call => call.arguments[0] === DeployStaticWebAppCommandId);
+            const [commandId, args] = launch!.arguments as [string, { readonly provider: string; readonly artifactSupportsAutoDeploy: boolean }];
             expect(commandId).to.equal('vscode-azure/staticWebApps/deploy');
             expect(args.provider).to.equal('github');
             // Creation already confirmed the artifact supports auto-deploy (that's why
@@ -178,7 +190,7 @@ describe('CreateStaticWebApp (unit)', () => {
             await command.execute('basic');
 
             expect(azd.deploy.mock.callCount()).to.equal(1);
-            expect(mock.commands.executeCommand.mock.callCount()).to.equal(0);
+            expect(deployLaunchCount(mock)).to.equal(0);
         });
 
         it('should show blocked guidance (never claiming success) for hybrid/SSR output with no remote', async () => {
@@ -195,7 +207,7 @@ describe('CreateStaticWebApp (unit)', () => {
             await command.execute('basic');
 
             expect(azd.deploy.mock.callCount()).to.equal(0);
-            expect(mock.commands.executeCommand.mock.callCount()).to.equal(0);
+            expect(deployLaunchCount(mock)).to.equal(0);
             // OutputLocationStep already warns during prompting for unsupported direct-deploy
             // shapes; our post-wizard guidance is an additional, final call.
             expect(mock.window.showWarningMessage.mock.callCount()).to.be.greaterThanOrEqual(2);
@@ -220,7 +232,7 @@ describe('CreateStaticWebApp (unit)', () => {
 
             expect(azd.deploy.mock.callCount()).to.equal(0);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
-            expect(mock.commands.executeCommand.mock.callCount()).to.equal(0);
+            expect(deployLaunchCount(mock)).to.equal(0);
             const lastCall = mock.window.showWarningMessage.mock.calls.at(-1);
             const [message] = lastCall!.arguments as unknown as [string];
             expect(message).to.include('cannot currently be deployed');

@@ -132,7 +132,7 @@ describe('DeployStaticWebApp (unit)', () => {
             expect(gitRemote.getRemoteInfo.mock.callCount()).to.equal(0); // short-circuits before any remote check
             expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
             const [message] = mockResult.window.showErrorMessage.mock.calls[0].arguments as unknown as [string];
-            expect(message).to.not.include('deployed');
+            expect(message).to.include('cannot be deployed'); // never claims a deployment happened
             expect(message).to.include('Next.js');
         });
 

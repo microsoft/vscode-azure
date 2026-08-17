@@ -31,6 +31,11 @@ import {
     IFunctionAppDataProvider,
 } from '../../src/tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../../src/tree/resources/functions/FunctionAppViewProvider';
+import {
+    IStaticWebAppDataProvider,
+    StaticWebAppDataProvider,
+} from '../../src/tree/resources/staticWebApps/StaticWebAppDataProvider';
+import { StaticWebAppViewProvider } from '../../src/tree/resources/staticWebApps/StaticWebAppViewProvider';
 import { AzureAccountDataProvider, IAzureAccountDataProvider } from '../../src/tree/resources/AzureAccountDataProvider';
 import { AzureResourceDataProvider } from '../../src/tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../../src/tree/resources/GenericAzureViewProvider';
@@ -59,9 +64,15 @@ describe('ProductRegistrar (unit)', () => {
         const viewProviders = registrar.getResourceViewProviders();
         expect(dataProviders[0]).to.equal(AcrDataProvider);
         expect(dataProviders[1]).to.deep.equal([IFunctionAppDataProvider, FunctionAppDataProvider]);
-        expect(dataProviders[2]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
-        expect(dataProviders[3]).to.equal(AzureResourceDataProvider);
-        expect(viewProviders).to.deep.equal([AcrViewProvider, FunctionAppViewProvider, GenericAzureViewProvider]);
+        expect(dataProviders[2]).to.deep.equal([IStaticWebAppDataProvider, StaticWebAppDataProvider]);
+        expect(dataProviders[3]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
+        expect(dataProviders[4]).to.equal(AzureResourceDataProvider);
+        expect(viewProviders).to.deep.equal([
+            AcrViewProvider,
+            FunctionAppViewProvider,
+            StaticWebAppViewProvider,
+            GenericAzureViewProvider,
+        ]);
     });
 
     it('binds primary provider identifiers as singleton collection aliases', () => {

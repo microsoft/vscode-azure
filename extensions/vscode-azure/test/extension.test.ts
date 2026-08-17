@@ -20,6 +20,7 @@ const retainedSwaCommands = [
     `${swaCommandPrefix}action/cancel`,
     `${swaCommandPrefix}action/rerun`,
     `${swaCommandPrefix}deleteEnvironment`,
+    `${swaCommandPrefix}deploy`,
     `${swaCommandPrefix}createSwaConfigFile`,
     `${swaCommandPrefix}openWorkflowConfigFile`,
     `${swaCommandPrefix}showDocumentation`,

@@ -11,8 +11,8 @@ import { registerStaticWebApps } from './registerStaticWebApps';
 
 /** Apply each product's single registration entry point in dispatch order. */
 export function registerProducts(registrar: ProductRegistrar): void {
-    registerStaticWebApps(registrar);
     registerAcr(registrar);
     registerFunctions(registrar);
+    registerStaticWebApps(registrar);
     registerGenericAzure(registrar);
 }
