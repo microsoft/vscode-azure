@@ -20,7 +20,7 @@ export const FunctionsHostFileName = 'host.json';
 const functions = 'functions';
 
 /** The `host.json` that marks an Azure Functions project. */
-export const FunctionsHostFile = createTag(functions, StandardTagNames.projectFile);
+const FunctionsHostFileTag = createTag(functions, StandardTagNames.projectFile);
 
 /**
  * Tags the `host.json` of every Azure Functions project.
@@ -34,7 +34,7 @@ export const functionsDetector: WorkspaceDetector = {
     namespace: functions,
     inspect(node) {
         if (!node.isDirectory && node.name === FunctionsHostFileName) {
-            node.tag(FunctionsHostFile);
+            node.tag(FunctionsHostFileTag);
         }
     },
 };
@@ -69,7 +69,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         // The tagged node is the `host.json` file, matching the `resourceUri`
         // this tree has always exposed to "Reveal in Explorer".
         const projects: FunctionsProjectNode[] = [];
-        for (const uri of index.withTag(FunctionsHostFile)) {
+        for (const uri of index.withTag(FunctionsHostFileTag)) {
             const folder = this.code.workspace.getWorkspaceFolder(uri);
             if (!folder) {
                 continue;

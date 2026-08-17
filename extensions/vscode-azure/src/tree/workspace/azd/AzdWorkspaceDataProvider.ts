@@ -9,23 +9,26 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { AzdCommand, AzureYamlFileNames, IAzdService } from '../../../azd/AzdService';
+import { AzureYamlFileNames, IAzdService } from '../../../azd/AzdService';
 import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import { createTag, StandardTagNames } from '../../../utils/workspaceIndex/tags';
 import type { AzdProjectNode, AzdServiceNode, WorkspaceNode } from '../WorkspaceNode';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode } from '../WorkspaceNode';
 
+const azdDetectorId = 'azd';
+const azdTagNamespace = 'azd';
+
 /** The `azure.yaml` / `azure.yml` file that marks an azd project. */
-export const AzdProjectFile = createTag(AzdCommand, StandardTagNames.projectFile);
+const AzdProjectFileTag = createTag(azdTagNamespace, StandardTagNames.projectFile);
 
 /** Tags the `azure.yaml` of every azd project. */
 export const azdDetector: WorkspaceDetector = {
-    id: AzdCommand,
-    namespace: AzdCommand,
+    id: azdDetectorId,
+    namespace: azdTagNamespace,
     inspect(node) {
         if (!node.isDirectory && AzureYamlFileNames.includes(node.name)) {
-            node.tag(AzdProjectFile);
+            node.tag(AzdProjectFileTag);
         }
     },
 };
@@ -87,7 +90,7 @@ export class AzdWorkspaceDataProvider implements DataProvider<WorkspaceNode> {
     private async discoverProjects(): Promise<AzdProjectNode[]> {
         const index = await this.indexService.getIndex();
         const projects: AzdProjectNode[] = [];
-        for (const uri of index.withTag(AzdProjectFile)) {
+        for (const uri of index.withTag(AzdProjectFileTag)) {
             const folder = this.code.workspace.getWorkspaceFolder(uri);
             if (!folder) {
                 continue;

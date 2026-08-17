@@ -5,9 +5,12 @@
 
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, fireFileSystemEvent, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { functionsDetector, FunctionsHostFile } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { functionsDetector } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
+import { createTag, StandardTagNames } from '../../../src/utils/workspaceIndex/tags';
 import { Attribute, attributeDetector, csharpDetector } from './mockDetectors';
+
+const FunctionsHostFileTag = createTag('functions', StandardTagNames.projectFile);
 
 describe('WorkspaceIndexService (unit)', () => {
     afterEach(() => {
@@ -56,7 +59,7 @@ describe('WorkspaceIndexService (unit)', () => {
 
         expect(changed).to.equal(1);
         const index = await service.getIndex();
-        expect(index.withTag(FunctionsHostFile).map(u => u.path))
+        expect(index.withTag(FunctionsHostFileTag).map(u => u.path))
             .to.deep.equal(['/repo/host.json', '/repo/api/host.json']);
         service.dispose();
     });
@@ -176,7 +179,7 @@ describe('WorkspaceIndexService (unit)', () => {
         await expect(service.getIndex()).to.be.rejectedWith('denied');
         const index = await service.getIndex();
 
-        expect(index.withTag(FunctionsHostFile)).to.have.length(1);
+        expect(index.withTag(FunctionsHostFileTag)).to.have.length(1);
         service.dispose();
     });
 
@@ -203,7 +206,7 @@ describe('WorkspaceIndexService (unit)', () => {
         const service = new WorkspaceIndexService(m.vscode, [functionsDetector], scheduler);
 
         const index = await service.getIndex();
-        expect(index.withTag(FunctionsHostFile).map(u => u.path))
+        expect(index.withTag(FunctionsHostFileTag).map(u => u.path))
             .to.deep.equal(['/repo/host.json', '/repo/api/host.json']);
 
         // Deleting a folder reports one event for the folder itself, never one
@@ -213,7 +216,7 @@ describe('WorkspaceIndexService (unit)', () => {
         fireFileSystemEvent(m, '/repo/api', 'delete');
         await scheduler.flush();
 
-        expect((await service.getIndex()).withTag(FunctionsHostFile).map(u => u.path))
+        expect((await service.getIndex()).withTag(FunctionsHostFileTag).map(u => u.path))
             .to.deep.equal(['/repo/host.json']);
         service.dispose();
     });
@@ -247,7 +250,7 @@ describe('WorkspaceIndexService (unit)', () => {
         fireFileSystemEvent(m, '/repo/api/host.json', 'create');
         await scheduler.flush();
 
-        expect((await service.getIndex()).withTag(FunctionsHostFile).map(u => u.path))
+        expect((await service.getIndex()).withTag(FunctionsHostFileTag).map(u => u.path))
             .to.deep.equal(['/repo/host.json', '/repo/api/host.json']);
         service.dispose();
     });
