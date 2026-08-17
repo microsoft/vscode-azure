@@ -6,7 +6,7 @@
 import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, createActionContext, IActionContext, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts, type MockCodeContextResult, type MockInputBox, type MockVsCodeResult, type WizardResponse } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts, type MockCodeContextResult, type MockVsCodeResult, type WizardResponse } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import type { AzdResourceAssociation } from '../../../src/azd/AzdResourceAssociationService';
@@ -98,9 +98,9 @@ describe('DeleteAzureResource (unit)', () => {
         expect(workspaceState.keys().filter(key => key.startsWith('recentInput:')), 'the name must not be persisted').to.be.empty;
 
         // Reuse only the persisted workspace state, so the second prompt is a
-        // genuinely fresh input box. No response is queued, so its value
-        // reflects only what the command pre-filled. A later group with the
-        // same name must not inherit the remembered value, or confirming a
+        // genuinely fresh input box. Cancelling hides it without typing, so its
+        // value reflects only what the command pre-filled. A later group with
+        // the same name must not inherit the remembered value, or confirming a
         // cascading delete becomes a single Enter.
         const fresh = createMockCodeContext();
         const second = makeResourceGroup();
@@ -110,13 +110,11 @@ describe('DeleteAzureResource (unit)', () => {
                 mock: fresh.mock,
             },
         });
+        respondToPrompts(repeat.mockResult, ['cancel']);
 
-        const pending = repeat.command.execute(AzureNodeId.from(second).toString());
-        const inputBox = await waitForInputBox(repeat.mockResult);
-        expect(inputBox.value, 'the confirmation must start empty').to.equal('');
+        await expect(repeat.command.execute(AzureNodeId.from(second).toString())).to.be.rejected;
 
-        inputBox.triggerHide();
-        await expect(pending).to.be.rejected;
+        expect(repeat.mockResult.inputBoxes[0].value, 'the confirmation must start empty').to.equal('');
         expect(repeat.deleteResourceGroup.mock.callCount()).to.equal(0);
     });
 
@@ -126,9 +124,13 @@ describe('DeleteAzureResource (unit)', () => {
         respondToPrompts(setup.mockResult, [{ input: 'not-the-name' }]);
 
         const pending = setup.command.execute(AzureNodeId.from(resourceGroup).toString());
-        const inputBox = await waitForInputBox(setup.mockResult);
 
-        // Validation refused the accept, so the prompt stays open and nothing is deleted.
+        // The queue types the wrong name and accepts, but validation refuses the
+        // accept, so the prompt is still open and must be dismissed by hand --
+        // respondToPrompts only drives a prompt that actually closes.
+        await waitFor(() => setup.mockResult.inputBoxes.length > 0);
+        const inputBox = setup.mockResult.inputBoxes[0];
+
         expect(inputBox.validationMessage).to.be.a('string').that.includes(resourceGroup.name);
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
 
@@ -302,12 +304,6 @@ async function waitFor(condition: () => boolean): Promise<void> {
 function shownToasts(setup: CommandSetup): string[] {
     return setup.mockResult.window.showInformationMessage.mock.calls
         .map(call => call.arguments[0]);
-}
-
-/** Wait for the command to open its confirmation prompt. */
-async function waitForInputBox(mockResult: MockVsCodeResult): Promise<MockInputBox> {
-    await waitFor(() => mockResult.inputBoxes.length > 0);
-    return mockResult.inputBoxes[0];
 }
 
 function createCommand(resource: GenericResource, options: CommandOptions = {}): CommandSetup {
