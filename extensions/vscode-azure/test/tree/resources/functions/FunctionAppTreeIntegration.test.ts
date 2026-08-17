@@ -284,7 +284,7 @@ describe('Function App Tree Integration (integration)', () => {
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
 
             // Mock the confirmation dialog to return 'Delete'
-            mockCtx.mock.messageResponses.push('Delete');
+            respondToPrompts(mockCtx.mock, [{ button: 'Delete' }]);
 
             const command = new DeleteAppSetting(code, dataTree, funcDataProvider);
             await command.execute(appKeyNode.key);
@@ -307,6 +307,7 @@ describe('Function App Tree Integration (integration)', () => {
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
 
             // Simulate dismissal (no button clicked)
+            respondToPrompts(mockCtx.mock, ['cancel']);
 
             const command = new DeleteAppSetting(code, dataTree, funcDataProvider);
             await expect(command.execute(appKeyNode.key)).to.be.rejectedWith(CancellationError);

@@ -317,8 +317,10 @@ describe('SignIn (unit)', () => {
         // The user accepts the "enter tenant ID" recovery prompt and pastes a
         // tenant GUID.
         const manualTenantId = 'bbbbbbbb-1111-2222-3333-444455556666';
-        mockResult.messageResponses.push('Enter Tenant ID');
-        respondToPrompts(mockResult, [{ value: manualTenantId }]);
+        respondToPrompts(mockResult, [
+            { button: 'Enter Tenant ID' },
+            { value: manualTenantId },
+        ]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
         const command = new SignIn(ctx, cache, credentialFactory);

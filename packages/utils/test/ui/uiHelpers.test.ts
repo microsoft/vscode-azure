@@ -14,7 +14,7 @@ describe('uiHelpers (unit)', () => {
     describe('showMessage', () => {
         it('should show an information message by default', async () => {
             const mockResult = createMockVsCode();
-            mockResult.messageResponses.push('Open');
+            const responses = respondToPrompts(mockResult, [{ button: 'Open' }]);
 
             const result = await showMessage(mockResult.vscode, 'Deployed', { modal: true }, 'Open');
 
@@ -25,6 +25,7 @@ describe('uiHelpers (unit)', () => {
                 { modal: true },
                 'Open',
             ]);
+            responses.assertAllConsumed();
         });
 
         it('should show a warning message', async () => {
@@ -61,6 +62,7 @@ describe('uiHelpers (unit)', () => {
 
         it('should throw CancellationError with the step name when a modal message is dismissed', async () => {
             const mockResult = createMockVsCode();
+            respondToPrompts(mockResult, ['cancel']);
 
             const error = await showMessage(
                 mockResult.vscode,
@@ -79,6 +81,18 @@ describe('uiHelpers (unit)', () => {
             await expect(showMessage(mockResult.vscode, 'Status', {
                 severity: 'unsupported' as MessageSeverity,
             })).to.be.rejectedWith(Error, 'Unsupported message severity: unsupported');
+        });
+
+        it('should reject a response for a button the message does not offer', async () => {
+            const mockResult = createMockVsCode();
+            respondToPrompts(mockResult, [{ button: 'Retry' }]);
+
+            await expect(showMessage(
+                mockResult.vscode,
+                'Continue?',
+                { modal: true },
+                'Continue',
+            )).to.be.rejectedWith(Error, 'Message does not have a \'Retry\' button');
         });
     });
 

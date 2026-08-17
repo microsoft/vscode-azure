@@ -5,7 +5,7 @@
 
 import { makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { DeleteAppSetting } from '../../../src/commands/functions/DeleteAppSetting';
 import { FunctionAppVirtualTypes } from '../../../src/tree/resources/functions/FunctionApp';
@@ -21,7 +21,9 @@ describe('DeleteAppSetting (unit)', () => {
         const { vscode: code } = mockResult;
 
         if (options.confirmResponse !== undefined) {
-            mockResult.messageResponses.push(options.confirmResponse);
+            respondToPrompts(mockResult, [{ button: options.confirmResponse }]);
+        } else {
+            respondToPrompts(mockResult, ['cancel']);
         }
 
         const appSettingResource = makeVirtualResource({
@@ -88,7 +90,7 @@ describe('DeleteAppSetting (unit)', () => {
 
         const mockResult = createMockVsCode();
         const { vscode: code } = mockResult;
-        mockResult.messageResponses.push('Delete');
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
 
         const cache = {
             get: mock.fn((key: string) => key === 'test-key' ? appSettingResource : parentResource),

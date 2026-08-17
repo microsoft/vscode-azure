@@ -5,7 +5,7 @@
 
 import { createMockDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, Everything } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { AzdDown } from '../../../src/commands/deploy/AzdDown';
@@ -54,7 +54,7 @@ describe('AzdDown (unit)', () => {
 
     it('should prompt for confirmation with a modal warning', async () => {
         const { cmd, mockResult } = createCommand();
-        mockResult.messageResponses.push('Delete');
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
 
         await cmd.execute(MockUri.file('/workspace/azure.yaml'));
 
@@ -66,7 +66,7 @@ describe('AzdDown (unit)', () => {
 
     it('should run azd down against the resolved folder when confirmed', async () => {
         const { cmd, mockResult, azd, invalidate } = createCommand();
-        mockResult.messageResponses.push('Delete');
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
 
         await cmd.execute(MockUri.file('/workspace/azure.yaml'));
 
@@ -80,8 +80,8 @@ describe('AzdDown (unit)', () => {
     });
 
     it('should cancel without running azd down when confirmation is dismissed', async () => {
-        const { cmd, azd, invalidate } = createCommand();
-        // No queued message response -> showWarningMessage resolves undefined (dismissed)
+        const { cmd, mockResult, azd, invalidate } = createCommand();
+        respondToPrompts(mockResult, ['cancel']);
 
         await expect(cmd.execute(MockUri.file('/workspace/azure.yaml'))).to.be.rejectedWith(CancellationError);
 
@@ -104,7 +104,7 @@ describe('AzdDown (unit)', () => {
 
     it('should resolve cwd from workspace folder when invoked from the command palette', async () => {
         const { cmd, mockResult, azd } = createCommand();
-        mockResult.messageResponses.push('Delete');
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
 
         await cmd.execute();
 
@@ -114,7 +114,7 @@ describe('AzdDown (unit)', () => {
 
     it('should show error when no workspace folders are open', async () => {
         const { cmd, mockResult, azd } = createCommand({ workspaceFolders: false });
-        mockResult.messageResponses.push('Delete');
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
 
         await expect(cmd.execute()).to.be.rejectedWith('workspace folder');
 
@@ -123,7 +123,7 @@ describe('AzdDown (unit)', () => {
 
     it('should show error when no azure.yaml found in workspace', async () => {
         const { cmd, mockResult, azd } = createCommand();
-        mockResult.messageResponses.push('Delete');
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([]));
 
         await expect(cmd.execute()).to.be.rejectedWith('azure.yaml');
