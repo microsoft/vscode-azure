@@ -13,6 +13,7 @@
     "commands.vscode-azure/resources/openInPortal": "Open in Azure Portal",
     "commands.vscode-azure/resources/delete": "Delete Resource...",
     "commands.vscode-azure/resourceGroups/delete": "Delete Resource Group...",
+    "commands.vscode-azure/resources/browseWebsite": "Browse Website",
     "commands.vscode-azure/resources/loadMore": "Load More...",
     "commands.vscode-azure/resources/groupBy": "Group By...",
     "commands.vscode-azure/activity/clearSuccessful": "Clear Successful",

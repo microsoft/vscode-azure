@@ -206,7 +206,8 @@ describe('ActionExecutor (unit)', () => {
 
             expect(showErrorMessage.mock.callCount()).to.equal(1);
             expect(showErrorMessage.mock.calls[0].arguments[0]).to.equal('something broke');
-            expect(showErrorMessage.mock.calls[0].arguments[1]).to.equal('Report Issue');
+            expect(showErrorMessage.mock.calls[0].arguments[1]).to.deep.equal({});
+            expect(showErrorMessage.mock.calls[0].arguments[2]).to.equal('Report Issue');
         });
 
         it('should not show error message when suppress is display', async () => {
@@ -232,8 +233,8 @@ describe('ActionExecutor (unit)', () => {
 
             expect(showErrorMessage.mock.callCount()).to.equal(1);
             expect(showErrorMessage.mock.calls[0].arguments[0]).to.equal('no report button');
-            // No additional arguments (no button)
-            expect(showErrorMessage.mock.calls[0].arguments.length).to.equal(1);
+            expect(showErrorMessage.mock.calls[0].arguments[1]).to.deep.equal({});
+            expect(showErrorMessage.mock.calls[0].arguments.length).to.equal(2);
         });
 
         it('should open issue reporter with extensionId and data when Report Issue is clicked', async () => {
@@ -243,7 +244,7 @@ describe('ActionExecutor (unit)', () => {
 
             // Simulate user clicking "Report Issue"
             showErrorMessage.mock.mockImplementation(
-                ((...args: unknown[]) => Promise.resolve(args[1])),
+                ((...args: unknown[]) => Promise.resolve(args[2])),
             );
 
             await executor.callWithTelemetryAndErrorHandling('test', () => {

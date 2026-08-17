@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { isVirtualResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
-import { ICodeContext, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, showMessage, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { IFunctionAppDataProvider } from '../../tree/resources/functions/FunctionAppDataProvider';
@@ -72,7 +72,8 @@ export class AddOrEditAppSetting implements ManagedCommand {
         await this.dataProvider.addOrUpdateSetting(resource.azureResource, settingKey, settingValue);
         this.cache.invalidate(resource);
 
-        void this.ctx.code.window.showInformationMessage(
+        void showMessage(
+            this.ctx.code,
             this.ctx.code.l10n.t('Added app setting \'{0}\'.', settingKey)
         );
     }
@@ -98,7 +99,8 @@ export class AddOrEditAppSetting implements ManagedCommand {
             this.cache.invalidate(parentResource);
         }
 
-        void this.ctx.code.window.showInformationMessage(
+        void showMessage(
+            this.ctx.code,
             this.ctx.code.l10n.t('Updated app setting \'{0}\'.', settingKey)
         );
     }

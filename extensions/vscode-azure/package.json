@@ -48,6 +48,11 @@
                 "title": "%commands.vscode-azure/resourceGroups/delete%"
             },
             {
+                "command": "vscode-azure/resources/browseWebsite",
+                "icon": "$(globe)",
+                "title": "%commands.vscode-azure/resources/browseWebsite%"
+            },
+            {
                 "command": "vscode-azure/installAzd",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/installAzd%"
@@ -162,6 +167,10 @@
                     "when": "false"
                 },
                 {
+                    "command": "vscode-azure/resources/browseWebsite",
+                    "when": "false"
+                },
+                {
                     "command": "vscode-azure/resources/loadMore",
                     "when": "false"
                 },
@@ -247,6 +256,10 @@
                 {
                     "command": "vscode-azure/resourceGroups/delete",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResourceGroup\\b/i"
+                },
+                {
+                    "command": "vscode-azure/resources/browseWebsite",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bbrowseWebsite\\b/i"
                 },
                 {
                     "command": "vscode-azure/functionApp/appSettings/add",

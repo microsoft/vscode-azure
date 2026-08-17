@@ -20,6 +20,7 @@ import { SignIn } from '../commands/auth/SignIn';
 import { OpenUrl } from '../commands/OpenUrl';
 import { DeleteAzureResource } from '../commands/tree/DeleteAzureResource';
 import { GroupBy } from '../commands/tree/GroupBy';
+import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
@@ -84,6 +85,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
 
     registrar.registerCommand('vscode-azure/resources/refresh', RefreshResourcesView);
     registrar.registerCommand('vscode-azure/resources/groupBy', GroupBy);
+    registrar.registerCommand('vscode-azure/resources/browseWebsite', BrowseWebsite);
     registrar.registerCommand('vscode-azure/resources/openInPortal', OpenUrl, OpenInPortal.getUrl);
     registrar.registerCommand('vscode-azure/resources/delete', DeleteAzureResource);
     registrar.registerCommand('vscode-azure/resourceGroups/delete', DeleteAzureResource);

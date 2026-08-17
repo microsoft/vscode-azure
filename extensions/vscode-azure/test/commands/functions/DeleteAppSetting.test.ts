@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { CancellationError } from '@microsoft/vscode-azure-utils';
+import { createMockVsCode, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { DeleteAppSetting } from '../../../src/commands/functions/DeleteAppSetting';
 import { FunctionAppVirtualTypes } from '../../../src/tree/resources/functions/FunctionApp';
@@ -20,7 +21,9 @@ describe('DeleteAppSetting (unit)', () => {
         const { vscode: code } = mockResult;
 
         if (options.confirmResponse !== undefined) {
-            mockResult.messageResponses.push(options.confirmResponse);
+            respondToPrompts(mockResult, [{ button: options.confirmResponse }]);
+        } else {
+            respondToPrompts(mockResult, ['cancel']);
         }
 
         const appSettingResource = makeVirtualResource({
@@ -69,9 +72,9 @@ describe('DeleteAppSetting (unit)', () => {
         expect(deleteSetting.mock.calls[0].arguments[1]).to.equal('MY_SETTING');
     });
 
-    it('should not delete when user cancels confirmation', async () => {
+    it('should cancel without deleting when confirmation is dismissed', async () => {
         const { cmd, deleteSetting } = createCmd({ confirmResponse: undefined });
-        await cmd.execute('test-key');
+        await expect(cmd.execute('test-key')).to.be.rejectedWith(CancellationError);
         expect(deleteSetting.mock.callCount()).to.equal(0);
     });
 
@@ -87,7 +90,7 @@ describe('DeleteAppSetting (unit)', () => {
 
         const mockResult = createMockVsCode();
         const { vscode: code } = mockResult;
-        mockResult.messageResponses.push('Delete');
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
 
         const cache = {
             get: mock.fn((key: string) => key === 'test-key' ? appSettingResource : parentResource),

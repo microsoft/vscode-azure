@@ -124,7 +124,10 @@ describe('SelectSubscriptions (unit)', () => {
         );
 
         const { command, mockResult } = createCommand(cache);
-        respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)', 'Sub Two (sub-2)'] }]);
+        respondToPrompts(mockResult, [
+            'cancel',
+            { pickMany: ['Sub One (sub-1)', 'Sub Two (sub-2)'] },
+        ]);
 
         await command.execute();
 

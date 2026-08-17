@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, type CommandLineArgs } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, showMessage, type CommandLineArgs } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
@@ -465,7 +465,7 @@ export class AzdService implements IAzdService {
         }
 
         const installLabel = this.code.l10n.t('Install');
-        void this.code.window.showWarningMessage(message, installLabel).then(choice => {
+        void showMessage(this.code, message, { severity: 'warning' }, installLabel).then(choice => {
             if (choice === installLabel) {
                 void this.code.commands.executeCommand('vscode-azure/installAzd');
             }

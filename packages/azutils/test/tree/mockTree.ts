@@ -26,7 +26,7 @@ export function createMockViewItemTree(tree: Record<string, string[]>) {
 
 /**
  * Creates a mock {@linkcode DataItemTree} backed by a flat list of
- * nodes. Supports `get()` only (no `getChildren()`).
+ * nodes. Supports `get()` and `whenEnriched()` only (no `getChildren()`).
  */
 export function createMockDataItemTree(nodes: ConcreteAzureNode[]): DataItemTree<ConcreteAzureNode> {
     const keyMap = new Map<string, ConcreteAzureNode>();
@@ -36,6 +36,9 @@ export function createMockDataItemTree(nodes: ConcreteAzureNode[]): DataItemTree
     return {
         get(key: string): ConcreteAzureNode | undefined {
             return keyMap.get(key);
+        },
+        whenEnriched(node: ConcreteAzureNode): Promise<ConcreteAzureNode> {
+            return Promise.resolve(node);
         },
         invalidate: mock.fn(),
         remove: mock.fn(),
@@ -75,6 +78,9 @@ export function createMockHierarchicalDataItemTree(
         },
         get(key: string): ConcreteAzureNode | undefined {
             return keyMap.get(key);
+        },
+        whenEnriched(node: ConcreteAzureNode): Promise<ConcreteAzureNode> {
+            return Promise.resolve(node);
         },
         // Non-paged mock: every resource's children fit in a single page.
         hasMore(): boolean {

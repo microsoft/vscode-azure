@@ -5,7 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider, createMockWebAppClient, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
-import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
+import { CancellationError, DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
@@ -284,7 +284,7 @@ describe('Function App Tree Integration (integration)', () => {
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
 
             // Mock the confirmation dialog to return 'Delete'
-            mockCtx.mock.messageResponses.push('Delete');
+            respondToPrompts(mockCtx.mock, [{ button: 'Delete' }]);
 
             const command = new DeleteAppSetting(code, dataTree, funcDataProvider);
             await command.execute(appKeyNode.key);
@@ -299,7 +299,7 @@ describe('Function App Tree Integration (integration)', () => {
             expect(findByLabel(treeAfter, 'DB_HOST')).to.exist;
         });
 
-        it('should not delete when user cancels confirmation', async () => {
+        it('should cancel without deleting when confirmation is dismissed', async () => {
             const { viewTree, dataTree, mockCtx, funcDataProvider, backingSettings } = createTestPipeline();
             const code = mockCtx.ctx.code;
 
@@ -307,9 +307,10 @@ describe('Function App Tree Integration (integration)', () => {
             const appKeyNode = findByLabel(treeBefore, 'APP_KEY')!;
 
             // Simulate dismissal (no button clicked)
+            respondToPrompts(mockCtx.mock, ['cancel']);
 
             const command = new DeleteAppSetting(code, dataTree, funcDataProvider);
-            await command.execute(appKeyNode.key);
+            await expect(command.execute(appKeyNode.key)).to.be.rejectedWith(CancellationError);
 
             // Setting should still exist
             expect(backingSettings).to.have.property('APP_KEY');
