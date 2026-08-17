@@ -30,7 +30,7 @@ export interface VirtualResource {
      * `{staticSiteId}/builds/{buildId}/functions` rather than the site itself.
      *
      * Must be an absolute ARM resource id (leading `/`). It is carried in the
-     * node's `AzureNodeId`, so it must be derived deterministically
+     * node's {@linkcode AzureNodeId}, so it must be derived deterministically
      * from the node's own data -- a value that varies between refreshes would
      * change the node's identity.
      */
