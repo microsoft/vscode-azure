@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { SwaDebugConfigurationProvider } from '../../src/debug/staticWebApps/SwaDebugConfigurationProvider';
@@ -111,7 +111,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         mockResult.settings.set('launch.configurations', [
             { name: 'Attach to Node Functions', request: 'attach', type: 'node' },
         ]);
-        mockResult.messageResponses.push('Fix');
+        respondToPrompts(mockResult, [{ button: 'Fix' }]);
         const sendTelemetryErrorEvent = mock.fn();
         const { executor } = createTestActionExecutor({
             reporter: {

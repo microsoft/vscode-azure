@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import * as path from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
@@ -498,7 +498,7 @@ describe('DeployStaticWebApp (unit)', () => {
 
         it('should explain and offer a direct-deploy fallback when the branch is not pushed', async () => {
             const { command, azd, mockResult } = createResolvedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: false } });
-            mockResult.messageResponses.push('Deploy Directly Instead');
+            respondToPrompts(mockResult, [{ button: 'Deploy Directly Instead' }]);
 
             await command.execute();
 
@@ -509,7 +509,7 @@ describe('DeployStaticWebApp (unit)', () => {
 
         it('should not deploy at all when the not-pushed fallback is declined', async () => {
             const { command, azd, mockResult } = createResolvedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: false } });
-            mockResult.messageResponses.push(undefined);
+            respondToPrompts(mockResult, ['cancel']);
 
             await command.execute();
 
@@ -522,7 +522,7 @@ describe('DeployStaticWebApp (unit)', () => {
                 remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true },
                 azdVersionOk: false,
             });
-            mockResult.messageResponses.push('Deploy Directly Instead');
+            respondToPrompts(mockResult, [{ button: 'Deploy Directly Instead' }]);
 
             await command.execute();
 
@@ -588,7 +588,7 @@ describe('DeployStaticWebApp (unit)', () => {
         it('should require confirmation when the other provider workflow already exists, and abort on cancel', async () => {
             const { command, azd, mockResult } = createGuardedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
             mockResult.fs.addFile(MockUri.file('/workspace/.azdo/pipelines/azure-dev.yml'), 'trigger: none');
-            mockResult.messageResponses.push(undefined);
+            respondToPrompts(mockResult, ['cancel']);
 
             await command.execute();
 
@@ -600,7 +600,7 @@ describe('DeployStaticWebApp (unit)', () => {
         it('should proceed when the user confirms the provider switch', async () => {
             const { command, azd, mockResult } = createGuardedCommand({ remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true } });
             mockResult.fs.addFile(MockUri.file('/workspace/.azuredevops/pipelines/azure-dev.yaml'), 'trigger: none');
-            mockResult.messageResponses.push('Continue');
+            respondToPrompts(mockResult, [{ button: 'Continue' }]);
 
             await command.execute();
 
