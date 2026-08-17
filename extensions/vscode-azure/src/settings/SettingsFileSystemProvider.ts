@@ -4,32 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { Disposable, EventEmitter, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { Disposable, EventEmitter, stringifyError, type IVsCode } from '@microsoft/vscode-azure-utils';
+import type { IAzureViewDataTree } from '../services';
+import { isSettingsNode, type SettingsNode } from '../tree/resources/settings/SettingsNode';
 import { JsoncSettingsFormat } from './JsoncSettingsFormat';
-import type { SettingsMap, SettingsSnapshot } from './SettingsModel';
-
-/**
- * Supplies and persists the settings behind a settings document URI.
- *
- * This is the seam that keeps {@linkcode SettingsFileSystemProvider} free of any Azure knowledge:
- * the provider handles editor protocol (stat/read/write, read-only signalling, change events) and
- * delegates every question about *what* a URI means to the source.
- */
-export interface SettingsDocumentSource {
-    /**
-     * Read the current settings for {@linkcode uri}.
-     *
-     * @throws if the URI does not name settings this source can serve. The provider translates such
-     * failures into `FileNotFound`.
-     */
-    read(uri: vscode.Uri): Promise<SettingsSnapshot>;
-
-    /**
-     * Persist {@linkcode entries} as the complete settings named by {@linkcode uri}, replacing
-     * whatever is stored remotely. Keys absent from `entries` are deleted.
-     */
-    write(uri: vscode.Uri, entries: SettingsMap): Promise<void>;
-}
+import type { SettingsAdapter } from './SettingsAdapter';
+import type { SettingsSnapshot } from './SettingsModel';
+import { SettingsUri } from './SettingsUri';
 
 /** Options for {@linkcode SettingsFileSystemProvider}. */
 export interface SettingsFileSystemProviderOptions {
@@ -56,17 +37,21 @@ interface CacheEntry {
 const DefaultFreshnessWindowMs = 3000;
 
 /**
- * A {@linkcode vscode.FileSystemProvider} that presents a remote settings collection as a single
- * editable text document.
+ * A {@linkcode vscode.FileSystemProvider} that presents a resource's settings as a single editable
+ * text document.
  *
- * Saving the document writes it to the backing service **as-is** -- the parsed document becomes the
- * complete new contents of the collection, so removing a key deletes that setting and a key changed
- * elsewhere since the document was opened is silently overwritten. This last-writer-wins behavior is
- * deliberate: it makes the document mean exactly what it appears to mean. The header rendered by
+ * A settings URI carries the settings node's tree key, so the provider resolves one with a direct
+ * lookup in the data tree and hands the adapter **the object the tree loaded from Azure** -- never
+ * one rebuilt from the URI, which could silently disagree with reality. The consequence is that a
+ * document only resolves while its node is in the tree: that covers the ordinary case, since the
+ * document is opened from the tree and the tree caches it, but a document restored by the editor
+ * after a window reload will not resolve until that node has loaded.
+ *
+ * Saving writes to the backing service **as-is** -- the parsed document becomes the complete new
+ * contents, so removing a key deletes that setting and a key changed elsewhere since the document
+ * was opened is silently overwritten. This last-writer-wins behavior is deliberate: it makes the
+ * document mean exactly what it appears to mean. The header rendered by
  * {@linkcode JsoncSettingsFormat} states it.
- *
- * The provider is service-agnostic. It knows nothing about Azure; see
- * {@linkcode SettingsDocumentSource}.
  *
  * @remarks
  * Documents exist only in memory. Nothing is written to disk unless the user explicitly saves a
@@ -80,7 +65,8 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
     public constructor(
         private readonly code: IVsCode,
-        private readonly source: SettingsDocumentSource,
+        private readonly tree: IAzureViewDataTree,
+        private readonly adapters: readonly SettingsAdapter[],
         options?: SettingsFileSystemProviderOptions,
     ) {
         this.freshnessWindowMs = options?.freshnessWindowMs ?? DefaultFreshnessWindowMs;
@@ -97,7 +83,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
     /**
      * @inheritdoc
-     * @throws `FileNotFound` if the source cannot resolve the URI.
+     * @throws `FileNotFound` if the URI cannot be resolved to a settings node and adapter.
      */
     public async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
         const entry = await this.load(uri, { allowReuse: false });
@@ -107,7 +93,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
             ctime: entry.mtime,
             mtime: entry.mtime,
             size: Buffer.byteLength(entry.text, 'utf8'),
-            // Per-file, rather than provider-wide, so a read-only collection on one resource does
+            // Per-file, rather than provider-wide, so read-only settings on one resource do
             // not make every settings document read-only.
             permissions: entry.snapshot.writable ? undefined : this.code.FilePermission.Readonly,
         };
@@ -115,7 +101,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
     /**
      * @inheritdoc
-     * @throws `FileNotFound` if the source cannot resolve the URI.
+     * @throws `FileNotFound` if the URI cannot be resolved to a settings node and adapter.
      */
     public async readFile(uri: vscode.Uri): Promise<Uint8Array> {
         const entry = await this.load(uri, { allowReuse: true });
@@ -125,9 +111,9 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     /**
      * @inheritdoc
      *
-     * Parses the document and writes it as the collection's complete new contents.
+     * Parses the document and writes it as the resource's complete new settings.
      *
-     * @throws `NoPermissions` if the collection is not writable, or the
+     * @throws `NoPermissions` if the settings are not writable, or the
      * {@linkcode SettingsParseError} raised by the format if the document is not valid. Parse errors
      * are surfaced unchanged so the caller can point the user at the offending span.
      *
@@ -144,7 +130,12 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
         const parsed = this.format.parse(Buffer.from(content).toString('utf8'));
 
-        await this.source.write(uri, parsed);
+        const { node, adapter } = this.resolve(uri);
+        await adapter.write(node.azureResource, parsed);
+
+        // The node itself is a leaf today, so this is cheap insurance rather than a visible refresh:
+        // it keeps the data layer honest if a resource ever grows children derived from its settings.
+        this.tree.invalidate(node);
 
         // Reflect what was just written rather than re-reading. A re-read would cost a round trip
         // and, under last-writer-wins, could only differ by a concurrent change that this write has
@@ -194,6 +185,27 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
         this.changeEmitter.dispose();
     }
 
+    /**
+     * Resolve the settings node a URI addresses, and the adapter that serves it.
+     *
+     * @throws if the URI is malformed, its node is not currently in the tree, or no adapter claims
+     * the node's resource.
+     */
+    private resolve(uri: vscode.Uri): { node: SettingsNode; adapter: SettingsAdapter } {
+        const node = this.tree.get(SettingsUri.parseNodeKey(uri));
+
+        if (!isSettingsNode(node)) {
+            throw new Error(this.code.l10n.t('These settings are no longer available. Open them again from the Azure view.'));
+        }
+
+        const adapter = this.adapters.find(candidate => candidate.canHandle(node.azureResource));
+        if (!adapter) {
+            throw new Error(`No settings adapter is registered for resources of type '${node.azureResource.logicalType}'`);
+        }
+
+        return { node, adapter };
+    }
+
     private async load(uri: vscode.Uri, options: { allowReuse: boolean }): Promise<CacheEntry> {
         const cached = this.cache.get(uri.toString());
         if (cached && options.allowReuse && Date.now() - cached.loadedAt < this.freshnessWindowMs) {
@@ -202,13 +214,12 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
         let snapshot: SettingsSnapshot;
         try {
-            snapshot = await this.source.read(uri);
+            const { node, adapter } = this.resolve(uri);
+            snapshot = await adapter.read(node.azureResource);
         } catch (error) {
             // The editor only acts on `FileNotFound`; anything else surfaces as an opaque failure.
             // Preserve the original message so the cause is not lost.
-            throw this.code.FileSystemError.FileNotFound(
-                error instanceof Error ? error.message : uri.toString(),
-            );
+            throw this.code.FileSystemError.FileNotFound(stringifyError(error));
         }
 
         return this.store(uri, snapshot);

@@ -4,31 +4,23 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
-import type { Container, ServiceIdentifier } from 'inversify';
-import type { SettingsFileSystemProvider } from './core/SettingsFileSystemProvider';
+import type { Container } from 'inversify';
+import { SettingsFileSystemProvider } from './SettingsFileSystemProvider';
 import { SettingsScheme } from './SettingsUri';
 
 /**
- * The file system provider serving `azure-settings:` documents.
+ * Attach the settings file system provider to the workspace.
  *
- * Bound by the settings product registration, which also arranges the provider's own disposal via
- * `pushDisposable`. Resolved during activation to attach it to the workspace.
- */
-export const ISettingsFileSystem: ServiceIdentifier<SettingsFileSystemProvider> = Symbol.for('ISettingsFileSystem');
-
-/**
- * Register the file system provider that serves settings documents.
- *
- * Separate from the product's declarative bindings because it must run during activation, *after*
- * the trees are registered: resolving the provider constructs the document source, which resolves a
- * URI against the resource tree.
+ * Separate from the product's declarative bindings (`products/registerSettings.ts`, which binds
+ * {@linkcode SettingsFileSystemProvider}) because it must run during activation, *after* the trees
+ * are registered: the provider resolves a document URI against the resource tree.
  */
 export function registerSettingsFileSystem(container: Container): void {
     const code = container.get(IVsCode);
 
     // Resolving the provider is what pushes it onto the extension's subscriptions, via the
     // binding's `onActivation(pushDisposable)`. Only the registration itself is pushed here.
-    const provider = container.get(ISettingsFileSystem);
+    const provider = container.get(SettingsFileSystemProvider);
 
     container.get(IExtensionContext).subscriptions.push(
         code.workspace.registerFileSystemProvider(SettingsScheme, provider, {

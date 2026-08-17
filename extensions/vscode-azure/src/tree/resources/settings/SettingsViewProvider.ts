@@ -8,9 +8,9 @@ import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from
 import { inject, injectable } from 'inversify';
 import { EditSettings } from '../../../commands/settings/EditSettings';
 import { IAzureViewDataTree } from '../../../services';
-import { ISettingsRegistry } from '../../../settings/SettingsRegistry';
 import { combineContextValues } from '../../combineContextValues';
-import { isSettingsNode, type SettingsNode } from './SettingsNode';
+import { ISettingsDataProvider } from './SettingsDataProvider';
+import { isSettingsNode } from './SettingsNode';
 
 /**
  * View-layer provider for settings nodes.
@@ -33,7 +33,7 @@ export class SettingsViewProvider implements ViewProvider<string> {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
-        @inject(ISettingsRegistry) private readonly registry: ISettingsRegistry,
+        @inject(ISettingsDataProvider) private readonly settings: ISettingsDataProvider,
     ) { }
 
     /** @inheritdoc */
@@ -54,23 +54,9 @@ export class SettingsViewProvider implements ViewProvider<string> {
 
         this.executor.setTelProp('nodeType', getNodeType(node));
 
-        return this.getSettingsTreeItem(key, node);
-    }
-
-    /** @inheritdoc */
-    public getChildren(): Promise<string[]> {
-        return Promise.resolve([]);
-    }
-
-    /** @inheritdoc */
-    public getParent(key: string): string | undefined {
-        return AzureNodeId.parse(key).parentNodeId()?.toString();
-    }
-
-    private getSettingsTreeItem(key: string, node: SettingsNode): ITreeItem {
         // The adapter names the node, so a product can call these something other than
         // "Application Settings". Falls back only if the node outlived its adapter.
-        const label = this.registry.getAdapter(node.azureResource)?.label ?? this.ctx.code.l10n.t('Settings');
+        const label = this.settings.getAdapter(node.azureResource)?.label ?? this.ctx.code.l10n.t('Settings');
 
         const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.None);
         item.id = key;
@@ -83,5 +69,15 @@ export class SettingsViewProvider implements ViewProvider<string> {
         };
 
         return item;
+    }
+
+    /** @inheritdoc */
+    public getChildren(): Promise<string[]> {
+        return Promise.resolve([]);
+    }
+
+    /** @inheritdoc */
+    public getParent(key: string): string | undefined {
+        return AzureNodeId.parse(key).parentNodeId()?.toString();
     }
 }

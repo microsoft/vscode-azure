@@ -8,16 +8,21 @@ own.
 ## Layers
 
 ```
-extensions/vscode-azure/src/settings/core/   Model, JSONC format, document FileSystemProvider
-extensions/vscode-azure/src/settings/        Adapter contract, registry, adapters, URI codec, registration
+extensions/vscode-azure/src/settings/                  Adapter contract, adapters, model, JSONC format,
+                                                       document FileSystemProvider, URI codec
 extensions/vscode-azure/src/tree/resources/settings/   Data + view providers
 extensions/vscode-azure/src/commands/settings/         The edit command
 ```
 
-`SettingsFileSystemProvider` is still written against a `SettingsDocumentSource` seam (resolve a URI,
-read a snapshot, write a map) rather than against ARM. That keeps it unit-testable with
-`createMockVsCode()` and no ARM mocking -- the seam earns its keep for testing regardless of which
-package the file lives in.
+There is deliberately **no indirection between the file system provider and the adapter**.
+`SettingsFileSystemProvider` resolves a document URI to a tree node itself, picks the adapter that
+claims that node's resource, and calls `read`/`write` on it. Earlier revisions routed this through a
+`SettingsDocumentSource` seam and a `SettingsRegistry`; both were pure pass-through and are gone.
+
+Adapter dispatch is one line (`adapters.find(a => a.canHandle(resource))`) and lives in the two
+places that need it: the file system provider, and `SettingsDataProvider` for the tree. It is
+deliberately not memoized -- there are a handful of adapters and `canHandle` is a set lookup, so
+caching would buy nothing and would force adapters to key off `logicalType` alone.
 
 ## One command, one surface
 
@@ -76,9 +81,8 @@ several named dictionaries on a resource, because nothing needs one: the shared
 and no shipping Azure extension surfaces App Service connection strings (`listConnectionStrings`) at
 all. `label` exists so a product can name its node something other than "Application Settings".
 
-**`canHandle` must depend only on the resource's `logicalType`.** `SettingsRegistry` memoizes adapter
-lookup by logical type because `hasSettings` runs for every resource the generic data provider
-lists; an adapter that also inspected, say, the resource's location would be memoized incorrectly.
+**`canHandle` runs for every resource the generic data provider lists**, so keep it cheap -- a set
+lookup on `logicalType` is the norm. It is free to inspect any field, since dispatch is not cached.
 
 ### Restricting what a product permits
 
@@ -114,7 +118,7 @@ azure-settings:/<nodeKey>/<resourceName>.settings.jsonc
 ```
 
 `<nodeKey>` is the hex-encoded `AzureNodeId` of the settings node -- the data tree's own primary key.
-`AzureSettingsDocumentSource` resolves a URI with a single `tree.get(nodeKey)`, so the resource
+`SettingsFileSystemProvider` resolves a URI with a single `tree.get(nodeKey)`, so the resource
 passed to the adapter is always **the object the tree loaded from Azure**.
 
 Two alternatives were tried and rejected:
@@ -144,8 +148,8 @@ one resource. The settings framework therefore splits along the resource/virtual
 - `SettingsDataProvider` and `SettingsViewProvider` register **first** and claim only the virtual
   settings nodes.
 - The settings nodes themselves are emitted by whichever provider owns the *resource*.
-  `AzureResourceDataProvider` (the generic fallback) consults the registry and emits them for any
-  resource with a registered adapter, so App Service and Logic App get settings with zero
+  `AzureResourceDataProvider` (the generic fallback) asks `SettingsDataProvider` and emits them for
+  any resource with a registered adapter, so App Service and Logic App get settings with zero
   product-specific code.
 
 A product provider that owns a resource in order to contribute its own children must compose
@@ -176,5 +180,7 @@ That is all. The tree node, the editor, and the command come for free.
 ## Testing
 
 `extensions/vscode-azure/test/settings/mockSettings.ts` provides `StubAdapter` (an in-memory adapter
-that retains writes for assertion, and refuses writes when constructed with `readOnly`),
-`createSettingsRegistry`, and `createSettingsDataProvider`. Prefer these over hand-rolled fixtures.
+that retains writes for assertion, and refuses writes when constructed with `readOnly`) and
+`makeSettingsResource` (a `Microsoft.Web/sites` fixture, Function App by default). Prefer these over
+hand-rolled fixtures. Construct `SettingsDataProvider` directly with an array of adapters -- it takes
+no other dependency.

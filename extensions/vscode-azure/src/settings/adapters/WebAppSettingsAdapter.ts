@@ -11,7 +11,7 @@ import {
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { SettingsAdapter } from '../SettingsAdapter';
-import type { SettingsMap, SettingsSnapshot } from '../core/SettingsModel';
+import type { SettingsMap, SettingsSnapshot } from '../SettingsModel';
 
 const supportedLogicalTypes = new Set<string>([
     FunctionAppLogicalType.toLowerCase(),

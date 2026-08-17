@@ -4,18 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { EditSettings } from '../../../../src/commands/settings/EditSettings';
 import { createSettingsNode } from '../../../../src/tree/resources/settings/SettingsNode';
+import { SettingsDataProvider } from '../../../../src/tree/resources/settings/SettingsDataProvider';
 import { SettingsViewProvider } from '../../../../src/tree/resources/settings/SettingsViewProvider';
-import { createSettingsRegistry, createStubAdapter } from '../../../settings/mockSettings';
+import { makeSettingsResource, StubAdapter } from '../../../settings/mockSettings';
 
-const resource = makeGenericResource({
+const resource = makeSettingsResource({
     id: '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Web/sites/app',
     name: 'app',
-    type: 'Microsoft.Web/sites',
-    logicalType: FunctionAppLogicalType,
 });
 
 function createProvider() {
@@ -34,13 +32,13 @@ function createProvider() {
         getChildren: () => Promise.resolve([]),
     };
 
-    const adapter = createStubAdapter({ logicalTypes: [FunctionAppLogicalType] });
+    const adapter = new StubAdapter({ logicalTypes: [FunctionAppLogicalType] });
 
     const provider = new SettingsViewProvider(
         mockCtx.ctx,
         executor,
         tree as never,
-        createSettingsRegistry(adapter),
+        new SettingsDataProvider([adapter]),
     );
 
     return { provider, register };

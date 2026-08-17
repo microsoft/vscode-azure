@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { GenericResource } from '@microsoft/vscode-azure-azutils';
+import { FunctionAppLogicalType, type GenericResource } from '@microsoft/vscode-azure-azutils';
+import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import type { SettingsAdapter } from '../../src/settings/SettingsAdapter';
-import type { SettingsEntry, SettingsMap, SettingsSnapshot } from '../../src/settings/core/SettingsModel';
-import { SettingsRegistry } from '../../src/settings/SettingsRegistry';
-import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
+import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
 
-/** Options for {@linkcode createStubAdapter}. */
+/** Options for {@linkcode StubAdapter}. */
 export interface StubAdapterOptions {
     /** Logical types the adapter claims. Compared case-insensitively. */
     readonly logicalTypes: readonly string[];
@@ -75,27 +74,18 @@ export class StubAdapter implements SettingsAdapter {
     }
 }
 
-/** Build a {@linkcode StubAdapter}. */
-export function createStubAdapter(options: StubAdapterOptions): StubAdapter {
-    return new StubAdapter(options);
-}
-
-/** A {@linkcode SettingsRegistry} over the given adapters (none by default). */
-export function createSettingsRegistry(...adapters: SettingsAdapter[]): SettingsRegistry {
-    return new SettingsRegistry(adapters);
-}
-
 /**
- * A {@linkcode SettingsDataProvider} over the given adapters.
+ * A `Microsoft.Web/sites` resource, the shape every settings test needs.
  *
- * With no adapters it reports no settings for every resource, which is what tests of unrelated
- * providers want.
+ * Defaults to a Function App, since that is the only product with an adapter today. Pass
+ * `logicalType` to exercise dispatch, or any other field to vary the ARM id or name.
  */
-export function createSettingsDataProvider(...adapters: SettingsAdapter[]): SettingsDataProvider {
-    return new SettingsDataProvider(createSettingsRegistry(...adapters));
-}
-
-/** Shorthand for building a {@linkcode SettingsEntry}. */
-export function entry(key: string, value: string): SettingsEntry {
-    return { key, value };
+export function makeSettingsResource(overrides?: Parameters<typeof makeGenericResource>[0]): GenericResource {
+    return makeGenericResource({
+        id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.Web/sites/MyFuncApp',
+        name: 'MyFuncApp',
+        type: 'Microsoft.Web/sites',
+        logicalType: FunctionAppLogicalType,
+        ...overrides,
+    });
 }

@@ -3,53 +3,83 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AzureNodeId, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
+import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { SettingsFileSystemProvider, type SettingsDocumentSource } from '../../../src/settings/core/SettingsFileSystemProvider';
-import { SettingsParseError } from '../../../src/settings/core/JsoncSettingsFormat';
-import type { SettingsMap, SettingsSnapshot } from '../../../src/settings/core/SettingsModel';
-import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
-
-const Scheme = 'azure-settings';
+import { SettingsParseError } from '../../src/settings/JsoncSettingsFormat';
+import type { SettingsAdapter } from '../../src/settings/SettingsAdapter';
+import { SettingsFileSystemProvider } from '../../src/settings/SettingsFileSystemProvider';
+import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
+import { SettingsUri } from '../../src/settings/SettingsUri';
+import { createSettingsNode } from '../../src/tree/resources/settings/SettingsNode';
+import { makeSettingsResource } from './mockSettings';
 
 function createSnapshot(overrides?: Partial<SettingsSnapshot>): SettingsSnapshot {
     return {
         entries: [{ key: 'A', value: '1' }],
-        resourceName: 'myFunctionApp',
-        label: 'Application settings',
+        resourceName: 'MyFuncApp',
+        label: 'Application Settings',
         writable: true,
         ...overrides,
     };
+}
+
+interface HarnessOptions {
+    readonly freshnessWindowMs?: number;
+    /** When false, the tree resolves nothing -- the window-reload case. */
+    readonly inTree?: boolean;
+    /** When false, no adapter claims the node's resource. */
+    readonly hasAdapter?: boolean;
 }
 
 interface Harness {
     readonly code: MockVsCodeResult;
     readonly provider: SettingsFileSystemProvider;
     readonly uri: vscode.Uri;
+    readonly node: ConcreteAzureNode;
+    readonly resource: GenericResource;
     readonly read: ReturnType<typeof mock.fn>;
     readonly write: ReturnType<typeof mock.fn>;
-    /** Swap the snapshot the source will return on its next read. */
+    readonly invalidate: ReturnType<typeof mock.fn>;
+    /** Swap the snapshot the adapter will return on its next read. */
     setSnapshot(snapshot: SettingsSnapshot): void;
 }
 
-function createHarness(initial?: SettingsSnapshot): Harness {
+function createHarness(options?: HarnessOptions): Harness {
     const code = createMockVsCode();
-    let snapshot = initial ?? createSnapshot();
+    let snapshot = createSnapshot();
 
-    const read = mock.fn((_uri: vscode.Uri) => Promise.resolve(snapshot));
-    const write = mock.fn((_uri: vscode.Uri, _entries: SettingsMap) => Promise.resolve());
+    const read = mock.fn((_resource: GenericResource) => Promise.resolve(snapshot));
+    const write = mock.fn((_resource: GenericResource, _entries: SettingsMap) => Promise.resolve());
 
-    const source: SettingsDocumentSource = {
-        read: uri => read(uri),
-        write: (uri, entries) => write(uri, entries),
+    const adapter: SettingsAdapter = {
+        label: 'Application Settings',
+        canHandle: () => options?.hasAdapter ?? true,
+        read: resource => read(resource),
+        write: (resource, entries) => write(resource, entries),
     };
 
-    const provider = new SettingsFileSystemProvider(code.vscode, source);
+    const resource = makeSettingsResource();
+    const node = createSettingsNode(resource);
+    const key = AzureNodeId.from(node).toString();
 
-    const uri = code.vscode.Uri.from({ scheme: Scheme, path: '/abc/myFunctionApp.appSettings.jsonc' });
+    const invalidate = mock.fn();
+    const tree = {
+        get: (requested: string) => ((options?.inTree ?? true) && requested === key ? node : undefined),
+        invalidate,
+    };
+
+    const provider = new SettingsFileSystemProvider(
+        code.vscode,
+        tree as never,
+        [adapter],
+        options?.freshnessWindowMs === undefined ? undefined : { freshnessWindowMs: options.freshnessWindowMs },
+    );
 
     return {
-        code, provider, uri, read, write,
+        code, provider, node, resource, read, write, invalidate,
+        uri: SettingsUri.from(code.vscode, node),
         setSnapshot: next => { snapshot = next; },
     };
 }
@@ -65,6 +95,33 @@ describe('SettingsFileSystemProvider (unit)', () => {
         harness = createHarness();
     });
 
+    describe('resolving a URI', () => {
+        it('hands the adapter the resource the tree already loaded, not a copy', async () => {
+            await harness.provider.readFile(harness.uri);
+
+            expect(harness.read.mock.callCount()).to.equal(1);
+            expect(harness.read.mock.calls[0].arguments[0]).to.equal(harness.resource);
+        });
+
+        it('fails clearly when the node is no longer in the tree', async () => {
+            const h = createHarness({ inTree: false });
+
+            const error: Error = await expect(h.provider.stat(h.uri)).to.be.rejectedWith(Error, /no longer available/);
+
+            expect(error).to.have.property('code', 'FileNotFound');
+            expect(h.read.mock.callCount()).to.equal(0);
+        });
+
+        it('fails clearly when no adapter claims the resource', async () => {
+            const h = createHarness({ hasAdapter: false });
+
+            const error: Error = await expect(h.provider.stat(h.uri)).to.be.rejectedWith(Error, /No settings adapter/);
+
+            expect(error).to.have.property('code', 'FileNotFound');
+            expect(h.read.mock.callCount()).to.equal(0);
+        });
+    });
+
     describe('stat', () => {
         it('reports a file whose size matches the serialized text', async () => {
             const stat = await harness.provider.stat(harness.uri);
@@ -74,29 +131,25 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(stat.size).to.equal(Buffer.byteLength(text, 'utf8'));
         });
 
-        it('leaves permissions undefined for a writable collection', async () => {
+        it('leaves permissions undefined for writable settings', async () => {
             const stat = await harness.provider.stat(harness.uri);
             expect(stat.permissions).to.be.undefined;
         });
 
-        it('marks a non-writable collection read-only', async () => {
+        it('marks non-writable settings read-only', async () => {
             harness.setSnapshot(createSnapshot({ writable: false }));
 
             const stat = await harness.provider.stat(harness.uri);
             expect(stat.permissions).to.equal(harness.code.vscode.FilePermission.Readonly);
         });
 
-        it('translates an unresolvable URI into FileNotFound', async () => {
-            const h = createHarness();
-            h.read.mock.mockImplementation(() => Promise.reject(new Error('no such resource')));
+        it('translates an adapter failure into FileNotFound, preserving the cause', async () => {
+            harness.read.mock.mockImplementation(() => Promise.reject(new Error('no such resource')));
 
-            try {
-                await h.provider.stat(h.uri);
-                expect.fail('expected a FileSystemError');
-            } catch (error) {
-                expect((error as vscode.FileSystemError).code).to.equal('FileNotFound');
-                expect((error as Error).message).to.contain('no such resource');
-            }
+            const error: Error = await expect(harness.provider.stat(harness.uri))
+                .to.be.rejectedWith(Error, /no such resource/);
+
+            expect(error).to.have.property('code', 'FileNotFound');
         });
     });
 
@@ -114,27 +167,19 @@ describe('SettingsFileSystemProvider (unit)', () => {
         });
 
         it('fetches fresh data once the freshness window has elapsed', async () => {
-            const code = createMockVsCode();
-            let snapshot = createSnapshot();
-            const read = mock.fn(() => Promise.resolve(snapshot));
-            const provider = new SettingsFileSystemProvider(
-                code.vscode,
-                { read: () => read(), write: () => Promise.resolve() },
-                { freshnessWindowMs: 0 },
-            );
-            const uri = code.vscode.Uri.from({ scheme: Scheme, path: '/x/y.jsonc' });
+            const h = createHarness({ freshnessWindowMs: 0 });
 
-            await provider.readFile(uri);
-            snapshot = createSnapshot({ entries: [{ key: 'A', value: 'updated' }] });
-            const text = Buffer.from(await provider.readFile(uri)).toString('utf8');
+            await h.provider.readFile(h.uri);
+            h.setSnapshot(createSnapshot({ entries: [{ key: 'A', value: 'updated' }] }));
+            const text = await readText(h.provider, h.uri);
 
-            expect(read.mock.callCount()).to.equal(2);
+            expect(h.read.mock.callCount()).to.equal(2);
             expect(text).to.contain('"A": "updated"');
         });
     });
 
     describe('writeFile', () => {
-        it('writes the parsed document as the complete new contents', async () => {
+        it('writes the parsed document as the complete new settings', async () => {
             await harness.provider.readFile(harness.uri);
             await harness.provider.writeFile(
                 harness.uri,
@@ -143,6 +188,7 @@ describe('SettingsFileSystemProvider (unit)', () => {
             );
 
             expect(harness.write.mock.callCount()).to.equal(1);
+            expect(harness.write.mock.calls[0].arguments[0]).to.equal(harness.resource);
             expect(harness.write.mock.calls[0].arguments[1]).to.deep.equal([
                 { key: 'A', value: '1' },
                 { key: 'B', value: '2' },
@@ -158,27 +204,35 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(harness.write.mock.calls[0].arguments[1]).to.deep.equal([{ key: 'A', value: '1' }]);
         });
 
-        it('refuses to write a read-only collection', async () => {
+        it('invalidates the settings node so the tree reflects the write', async () => {
+            await harness.provider.readFile(harness.uri);
+            await harness.provider.writeFile(harness.uri, Buffer.from('{ "A": "2" }', 'utf8'), { create: false, overwrite: true });
+
+            expect(harness.invalidate.mock.calls[0].arguments[0]).to.equal(harness.node);
+        });
+
+        it('refuses to write read-only settings', async () => {
             harness.setSnapshot(createSnapshot({ writable: false }));
 
-            try {
-                await harness.provider.writeFile(harness.uri, Buffer.from('{}', 'utf8'), { create: false, overwrite: true });
-                expect.fail('expected a FileSystemError');
-            } catch (error) {
-                expect((error as vscode.FileSystemError).code).to.equal('NoPermissions');
-            }
+            const error: Error = await expect(harness.provider.writeFile(
+                harness.uri,
+                Buffer.from('{ "A": "brand-new" }', 'utf8'),
+                { create: false, overwrite: true },
+            )).to.be.rejectedWith(Error);
+
+            expect(error).to.have.property('code', 'NoPermissions');
             expect(harness.write.mock.callCount()).to.equal(0);
         });
 
         it('surfaces a parse error without writing anything', async () => {
             await harness.provider.readFile(harness.uri);
 
-            try {
-                await harness.provider.writeFile(harness.uri, Buffer.from('{ "A": ', 'utf8'), { create: false, overwrite: true });
-                expect.fail('expected a SettingsParseError');
-            } catch (error) {
-                expect(error).to.be.instanceOf(SettingsParseError);
-            }
+            await expect(harness.provider.writeFile(
+                harness.uri,
+                Buffer.from('{ "A": ', 'utf8'),
+                { create: false, overwrite: true },
+            )).to.be.rejectedWith(SettingsParseError);
+
             expect(harness.write.mock.callCount()).to.equal(0);
         });
 
@@ -203,34 +257,6 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(text).to.contain('"A": "2"');
             expect(harness.read.mock.callCount()).to.equal(1);
         });
-
-        describe('read-only collections', () => {
-            beforeEach(() => {
-                harness.setSnapshot(createSnapshot({ writable: false }));
-            });
-
-            it('reports the document as read-only', async () => {
-                const stat = await harness.provider.stat(harness.uri);
-
-                expect(stat.permissions).to.equal(harness.code.vscode.FilePermission.Readonly);
-            });
-
-            it('rejects writes without calling the source', async () => {
-                await harness.provider.readFile(harness.uri);
-
-                try {
-                    await harness.provider.writeFile(
-                        harness.uri,
-                        Buffer.from('{ "A": "brand-new" }', 'utf8'),
-                        { create: false, overwrite: true },
-                    );
-                    expect.fail('expected an error');
-                } catch (error) {
-                    expect(error).to.have.property('code', 'NoPermissions');
-                }
-                expect(harness.write.mock.callCount()).to.equal(0);
-            });
-        });
     });
 
     describe('unsupported operations', () => {
@@ -252,5 +278,4 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(() => { harness.provider.watch().dispose(); }).to.not.throw();
         });
     });
-
 });

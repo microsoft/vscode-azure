@@ -5,7 +5,7 @@
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
 import type { ServiceIdentifier } from 'inversify';
-import type { SettingsMap, SettingsSnapshot } from './core/SettingsModel';
+import type { SettingsMap, SettingsSnapshot } from './SettingsModel';
 
 /**
  * Per-product access to the settings on a resource.

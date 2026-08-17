@@ -157,7 +157,8 @@
                     "command": "vscode-azure/settings/edit",
                     "when": "false"
                 }
-            ],            "view/title": [
+            ],
+            "view/title": [
                 {
                     "command": "vscode-azure/resources/groupBy",
                     "when": "view == vscode-azure/resources",

@@ -6,19 +6,10 @@
 import {
     AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, type IWebAppClient,
 } from '@microsoft/vscode-azure-azutils';
-import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
-
-function makeSite(logicalType: string) {
-    return makeGenericResource({
-        id: '/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Web/sites/mysite',
-        name: 'mysite',
-        type: 'Microsoft.Web/sites',
-        logicalType,
-    });
-}
+import { makeSettingsResource } from '../mockSettings';
 
 function createAdapter(options?: { appSettings?: Record<string, string> }) {
     const listApplicationSettings = mock.fn((_rg: string, _name: string) => Promise.resolve({ properties: options?.appSettings ?? {} }));
@@ -38,19 +29,19 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('claims all three Microsoft.Web/sites flavours', () => {
             const { adapter } = createAdapter();
 
-            expect(adapter.canHandle(makeSite(FunctionAppLogicalType))).to.be.true;
-            expect(adapter.canHandle(makeSite(AppServiceLogicalType))).to.be.true;
-            expect(adapter.canHandle(makeSite(LogicAppLogicalType))).to.be.true;
+            expect(adapter.canHandle(makeSettingsResource({ logicalType: FunctionAppLogicalType }))).to.be.true;
+            expect(adapter.canHandle(makeSettingsResource({ logicalType: AppServiceLogicalType }))).to.be.true;
+            expect(adapter.canHandle(makeSettingsResource({ logicalType: LogicAppLogicalType }))).to.be.true;
         });
 
         it('compares logical types case-insensitively', () => {
             const { adapter } = createAdapter();
-            expect(adapter.canHandle(makeSite(FunctionAppLogicalType.toUpperCase()))).to.be.true;
+            expect(adapter.canHandle(makeSettingsResource({ logicalType: FunctionAppLogicalType.toUpperCase() }))).to.be.true;
         });
 
         it('does not claim unrelated resource types', () => {
             const { adapter } = createAdapter();
-            expect(adapter.canHandle(makeSite('Microsoft.Storage/storageAccounts'))).to.be.false;
+            expect(adapter.canHandle(makeSettingsResource({ logicalType: 'Microsoft.Storage/storageAccounts' }))).to.be.false;
         });
     });
 
@@ -65,7 +56,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('returns application settings sorted by key, for a stable display order', async () => {
             const { adapter } = createAdapter({ appSettings: { ZED: '1', alpha: '2', Beta: '3' } });
 
-            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType));
+            const snapshot = await adapter.read(makeSettingsResource());
 
             expect(snapshot.entries.map(setting => setting.key)).to.deep.equal(['Beta', 'ZED', 'alpha']);
         });
@@ -73,16 +64,16 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('describes the snapshot honestly', async () => {
             const { adapter } = createAdapter({ appSettings: { A: '1' } });
 
-            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType));
+            const snapshot = await adapter.read(makeSettingsResource());
 
-            expect(snapshot.resourceName).to.equal('mysite');
+            expect(snapshot.resourceName).to.equal('MyFuncApp');
             expect(snapshot.writable).to.be.true;
         });
 
-        it('handles a collection with no properties at all', async () => {
+        it('handles a resource with no settings at all', async () => {
             const { adapter } = createAdapter();
 
-            const snapshot = await adapter.read(makeSite(FunctionAppLogicalType));
+            const snapshot = await adapter.read(makeSettingsResource());
 
             expect(snapshot.entries).to.be.empty;
         });
@@ -90,19 +81,14 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('passes the resource group parsed from the ARM id', async () => {
             const { adapter, listApplicationSettings } = createAdapter();
 
-            await adapter.read(makeSite(FunctionAppLogicalType));
+            await adapter.read(makeSettingsResource());
 
-            expect(listApplicationSettings.mock.calls[0].arguments).to.deep.equal(['rg1', 'mysite']);
+            expect(listApplicationSettings.mock.calls[0].arguments).to.deep.equal(['MyRG', 'MyFuncApp']);
         });
 
         it('fails clearly when the ARM id has no resource group', async () => {
             const { adapter } = createAdapter();
-            const resource = makeGenericResource({
-                id: '/subscriptions/sub',
-                name: 'mysite',
-                type: 'Microsoft.Web/sites',
-                logicalType: FunctionAppLogicalType,
-            });
+            const resource = makeSettingsResource({ id: '/subscriptions/sub' });
 
             await expect(adapter.read(resource)).to.be.rejectedWith(/resource group/);
         });
@@ -112,7 +98,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
         it('sends the entries verbatim as the whole dictionary', async () => {
             const { adapter, updateApplicationSettings } = createAdapter();
 
-            await adapter.write(makeSite(FunctionAppLogicalType), [
+            await adapter.write(makeSettingsResource(), [
                 { key: 'A', value: '1' },
                 { key: 'B', value: '2' },
             ]);
@@ -127,7 +113,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
                 appSettings: { EXISTING: 'keep-me' },
             });
 
-            await adapter.write(makeSite(FunctionAppLogicalType), []);
+            await adapter.write(makeSettingsResource(), []);
 
             expect(updateApplicationSettings.mock.calls[0].arguments[2]).to.deep.equal({ properties: {} });
             // Last-writer-wins: no read-before-write on the editor path.
@@ -138,7 +124,7 @@ describe('WebAppSettingsAdapter (unit)', () => {
             const { adapter, updateApplicationSettings } = createAdapter();
 
             await expect(
-                adapter.write(makeSite(FunctionAppLogicalType), [{ key: '  ', value: 'x' }]),
+                adapter.write(makeSettingsResource(), [{ key: '  ', value: 'x' }]),
             ).to.be.rejectedWith(/cannot be empty/);
 
             expect(updateApplicationSettings.mock.callCount()).to.equal(0);

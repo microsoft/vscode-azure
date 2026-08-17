@@ -13,7 +13,7 @@ import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry'
 import { AcrViewProvider } from '../../../../src/tree/resources/acr/AcrViewProvider';
 import { AzureResourceDataProvider } from '../../../../src/tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../../../../src/tree/resources/GenericAzureViewProvider';
-import { createSettingsDataProvider, createSettingsRegistry } from '../../../settings/mockSettings';
+import { SettingsDataProvider } from '../../../../src/tree/resources/settings/SettingsDataProvider';
 import { createMockResourceClient } from '../mockResourceClient';
 import { createMockAcrClient } from './mockAcr';
 
@@ -96,7 +96,7 @@ describe('ACR Tree Integration (integration)', () => {
             mockVscode.vscode,
             executor,
             resourceClientProvider,
-            createSettingsDataProvider(),
+            new SettingsDataProvider([]),
         );
 
         const acrDataProvider = new AcrDataProvider(
@@ -134,7 +134,7 @@ describe('ACR Tree Integration (integration)', () => {
             mockCtx.ctx,
             executor,
             dataTree,
-            createSettingsRegistry(),
+            new SettingsDataProvider([]),
         );
 
         // Register in correct order: ACR first, generic fallback second

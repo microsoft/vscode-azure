@@ -166,9 +166,9 @@ last so its providers remain fallbacks.
 
 Because dispatch stops at the first match, **only one provider can serve a given resource**. Two providers that both want to contribute children to the same resource cannot both `canHandle` it.
 
-The settings framework shows the resolution: `SettingsDataProvider` claims only the *virtual* settings nodes, never the owning resource, and exposes `getCollectionNodes(resource)` for whichever provider does own the resource to compose into its own children. `AzureResourceDataProvider` — the generic fallback — calls it, so every resource with a registered settings adapter gets a settings node without any product-specific provider existing.
+The settings framework shows the resolution: `SettingsDataProvider` claims only the *virtual* settings nodes, never the owning resource, and exposes `getSettingsNodes(resource)` for whichever provider does own the resource to compose into its own children. `AzureResourceDataProvider` — the generic fallback — calls it, so every resource with a registered settings adapter gets a settings node without any product-specific provider existing.
 
-The consequence to remember: **a new product `DataProvider` that claims a resource takes it away from the generic provider**, and must compose `ISettingsDataProvider.getCollectionNodes(resource)` itself or that resource silently loses its settings node. A product whose only children are settings should not add a provider at all. See [Settings](settings.md).
+The consequence to remember: **a new product `DataProvider` that claims a resource takes it away from the generic provider**, and must compose `ISettingsDataProvider.getSettingsNodes(resource)` itself or that resource silently loses its settings node. A product whose only children are settings should not add a provider at all. See [Settings](settings.md).
 
 ## Azure Resources Tree Providers
 

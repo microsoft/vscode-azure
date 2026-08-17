@@ -11,7 +11,7 @@ import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
-import { ISettingsRegistry } from '../../settings/SettingsRegistry';
+import { ISettingsDataProvider } from './settings/SettingsDataProvider';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues } from '../combineContextValues';
 import { getResourceTypeIconUri } from '../iconPath';
@@ -54,7 +54,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(ISettingsRegistry) private readonly settingsRegistry: ISettingsRegistry,
+        @inject(ISettingsDataProvider) private readonly settings: ISettingsDataProvider,
     ) {
         this.disposables.push(ctx.code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)
@@ -157,7 +157,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             case isGenericResource(resource): {
                 // Expandable only when the product exposes settings; everything else is a leaf, so
                 // no chevron appears on a node that would open to nothing.
-                const collapsibleState = this.settingsRegistry.hasSettings(resource)
+                const collapsibleState = this.settings.getAdapter(resource)
                     ? this.ctx.code.TreeItemCollapsibleState.Collapsed
                     : this.ctx.code.TreeItemCollapsibleState.None;
 

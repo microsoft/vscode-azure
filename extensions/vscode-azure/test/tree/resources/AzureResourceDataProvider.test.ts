@@ -8,7 +8,7 @@ import { createMockVsCode, createTestActionExecutor, withSettings } from '@micro
 import { mock } from 'node:test';
 import { ConfigurationSection } from '../../../src/constants';
 import { AzureResourceDataProvider } from '../../../src/tree/resources/AzureResourceDataProvider';
-import { createSettingsDataProvider } from '../../settings/mockSettings';
+import { SettingsDataProvider } from '../../../src/tree/resources/settings/SettingsDataProvider';
 
 describe('AzureResourceDataProvider (unit)', () => {
     const code = createMockVsCode();
@@ -16,7 +16,7 @@ describe('AzureResourceDataProvider (unit)', () => {
     function createProvider(clientFactory?: unknown) {
         const { executor } = createTestActionExecutor();
         const createClient = clientFactory ?? mock.fn(() => ({}));
-        return new AzureResourceDataProvider(code.vscode, executor, createClient as never, createSettingsDataProvider());
+        return new AzureResourceDataProvider(code.vscode, executor, createClient as never, new SettingsDataProvider([]));
     }
 
     describe('canHandle', () => {

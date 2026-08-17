@@ -32,7 +32,7 @@ import { registerCommands } from './commands/registerCommands';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
-import { registerSettingsFileSystem } from './settings/registerSettings';
+import { registerSettingsFileSystem } from './settings/registerSettingsFileSystem';
 import { registerTrees } from './tree/registerTrees';
 
 /**
@@ -80,7 +80,7 @@ export async function activateInternal(
 
         registerCommands(container, products.getCommands());
         registerTrees(container, products);
-        // After the trees, because the document source resolves a URI by drilling the resource tree.
+        // After the trees, because the provider resolves a document URI against the resource tree.
         registerSettingsFileSystem(container);
     });
 
