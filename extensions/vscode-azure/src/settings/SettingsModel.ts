@@ -5,7 +5,12 @@
 
 /** A single name/value setting. */
 export interface SettingsEntry {
-    /** The setting name. Unique within a resource's settings; compared case-sensitively. */
+    /**
+     * The setting name.
+     *
+     * Unique within a resource's settings, compared **case-insensitively**: Azure treats setting
+     * names as case-insensitive, so `MySetting` and `MYSETTING` are the same setting.
+     */
     readonly key: string;
     /** The setting value. */
     readonly value: string;

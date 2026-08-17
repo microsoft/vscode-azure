@@ -13,14 +13,7 @@ import type { ManagedCommand } from '../ManagedCommand';
 /**
  * Opens a resource's settings for editing.
  *
- * This is the only settings command, and the fork point between the two editing experiences. Today
- * it opens the settings as an in-memory JSONC document whose save writes straight to Azure.
- *
- * @remarks
- * A second branch is planned: when the resource can be positively attributed to a local azd project,
- * the project's Bicep template is the declarative source of truth and should be edited instead, with
- * a prompt to re-provision on save. That branch depends on the azd association service being added
- * by another change, so it is deliberately absent rather than half-built here.
+ * Opens the settings as an in-memory JSONC document whose save writes straight to Azure.
  */
 @injectable()
 export class EditSettings implements ManagedCommand {

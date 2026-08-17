@@ -61,6 +61,23 @@ trade-off is real: two people editing the same settings in two windows will clob
 silently. `SettingsAdapter.write` takes the full map, so adding etag / `If-Match` support later is
 additive rather than a redesign.
 
+### Setting names are case-insensitive
+
+Two names differing only by capitalization are rejected on save, naming both spellings. Azure treats
+app setting names as case-insensitive -- on Windows they become environment variables, which the OS
+folds -- so sending `MySetting` and `MYSETTING` together would silently keep only one. This matches
+`@microsoft/vscode-azext-azureappsettings`, whose `validateAppSettingKey` compares
+`key.toLowerCase()` and whose `confirmOverwriteSettings` carries the comment "App setting keys are
+case insensitive", both unconditionally.
+
+Two caveats worth knowing, since neither is documented by Azure:
+
+- What ARM does with a payload containing both spellings is **unverified**; the rejection here is a
+  client-side guard, not an observed service error.
+- On Linux the underlying environment variables *are* case-sensitive, so an app could in principle
+  already hold both. Such a document would fail to save until one is removed. Microsoft's own tooling
+  makes the same trade-off, and the alternative -- silently dropping one on save -- is worse.
+
 ## Adapters
 
 A product supports settings by implementing `SettingsAdapter` and binding it to `ISettingsAdapter`

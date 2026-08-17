@@ -79,7 +79,9 @@ export class JsoncSettingsFormat {
         }
 
         const entries: SettingsEntry[] = [];
-        const seen = new Set<string>();
+        // Keyed by the lowercased name, valued by the name as written, so the error can name both
+        // spellings. Azure treats setting names case-insensitively -- see `docs/settings.md`.
+        const seen = new Map<string, string>();
 
         for (const property of root.children ?? []) {
             const children = property.children ?? [];
@@ -92,14 +94,17 @@ export class JsoncSettingsFormat {
 
             const [keyNode, valueNode] = children;
             const key = String(keyNode.value);
-            if (seen.has(key)) {
+            const existing = seen.get(key.toLowerCase());
+            if (existing !== undefined) {
                 throw new SettingsParseError(
-                    this.code.l10n.t('The setting \'{0}\' is listed more than once. Setting names must be unique.', key),
+                    existing === key
+                        ? this.code.l10n.t('The setting \'{0}\' is listed more than once. Setting names must be unique.', key)
+                        : this.code.l10n.t('The settings \'{0}\' and \'{1}\' differ only by capitalization. Azure treats setting names as case-insensitive, so only one of them would survive.', existing, key),
                     keyNode.offset,
                     keyNode.length,
                 );
             }
-            seen.add(key);
+            seen.set(key.toLowerCase(), key);
 
             if (valueNode.type !== 'string') {
                 throw new SettingsParseError(

@@ -116,10 +116,38 @@ describe('JsoncSettingsFormat (unit)', () => {
             } catch (error) {
                 expect(error).to.be.instanceOf(SettingsParseError);
                 const parseError = error as SettingsParseError;
-                expect(parseError.message).to.contain('A');
+                expect(parseError.message).to.contain('listed more than once');
                 expect(text.slice(parseError.offset, parseError.offset + parseError.length)).to.equal('"A"');
                 expect(parseError.offset).to.be.greaterThan(text.indexOf('"A"'));
             }
+        });
+
+        it('rejects two names differing only by capitalization, naming both spellings', () => {
+            const format = createFormat();
+            const text = '{ "MySetting": "1", "MYSETTING": "2" }';
+
+            try {
+                format.parse(text);
+                expect.fail('expected a SettingsParseError');
+            } catch (error) {
+                expect(error).to.be.instanceOf(SettingsParseError);
+                const parseError = error as SettingsParseError;
+                expect(parseError.message).to.contain('differ only by capitalization');
+                // Both spellings, so the user can tell which two names collided.
+                expect(parseError.message).to.contain('MySetting');
+                expect(parseError.message).to.contain('MYSETTING');
+                // Points at the second spelling, as the plain duplicate case does.
+                expect(text.slice(parseError.offset, parseError.offset + parseError.length)).to.equal('"MYSETTING"');
+            }
+        });
+
+        it('still accepts names that differ by more than capitalization', () => {
+            const format = createFormat();
+
+            expect(format.parse('{ "A_ONE": "1", "A_TWO": "2" }')).to.deep.equal([
+                { key: 'A_ONE', value: '1' },
+                { key: 'A_TWO', value: '2' },
+            ]);
         });
 
         it('rejects a non-string value', () => {
