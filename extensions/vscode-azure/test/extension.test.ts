@@ -20,19 +20,11 @@ const retainedSwaCommands = [
     `${swaCommandPrefix}action/cancel`,
     `${swaCommandPrefix}action/rerun`,
     `${swaCommandPrefix}deleteEnvironment`,
-    `${swaCommandPrefix}deleteStaticWebApp`,
     `${swaCommandPrefix}createSwaConfigFile`,
     `${swaCommandPrefix}openWorkflowConfigFile`,
     `${swaCommandPrefix}showDocumentation`,
     `${swaCommandPrefix}showFunctionsDocumentation`,
     `${swaCommandPrefix}viewProperties`,
-    `${swaCommandPrefix}appSettings/add`,
-    `${swaCommandPrefix}appSettings/edit`,
-    `${swaCommandPrefix}appSettings/rename`,
-    `${swaCommandPrefix}appSettings/delete`,
-    `${swaCommandPrefix}appSettings/download`,
-    `${swaCommandPrefix}appSettings/upload`,
-    `${swaCommandPrefix}toggleAppSettingVisibility`,
     `${swaCommandPrefix}installOrUpdateCli`,
     `${swaCommandPrefix}uninstallCli`,
 ] as const;
@@ -138,7 +130,7 @@ describe('Static Web Apps manifest (integration)', () => {
 
         const viewContext = manifest.contributes.menus['view/item/context'];
         const swaEntries = viewContext.filter(entry => entry.command?.startsWith(swaCommandPrefix));
-        expect(swaEntries).to.have.length(20);
+        expect(swaEntries).to.have.length(12);
         expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/openInPortal')).to.be.true;
         expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/refresh' && entry.when?.includes('azureStatic'))).to.be.true;
 
@@ -161,9 +153,6 @@ describe('Static Web Apps manifest (integration)', () => {
             'azureStaticActionInProgress',
             'azureStaticJob',
             'azureStaticStep',
-            'applicationSettings',
-            'applicationSettingItem',
-            'staticWebApps',
         ]) {
             expect(swaWhenClauses, `Missing legacy context ${context}`).to.include(context);
         }
@@ -206,15 +195,7 @@ describe('Static Web Apps manifest (integration)', () => {
         expect(hidden).to.have.members([
             `${swaCommandPrefix}action/cancel`,
             `${swaCommandPrefix}action/rerun`,
-            `${swaCommandPrefix}appSettings/add`,
-            `${swaCommandPrefix}appSettings/edit`,
-            `${swaCommandPrefix}appSettings/rename`,
-            `${swaCommandPrefix}appSettings/delete`,
-            `${swaCommandPrefix}appSettings/download`,
-            `${swaCommandPrefix}appSettings/upload`,
-            `${swaCommandPrefix}toggleAppSettingVisibility`,
             `${swaCommandPrefix}deleteEnvironment`,
-            `${swaCommandPrefix}deleteStaticWebApp`,
             `${swaCommandPrefix}openGitHubLog`,
             `${swaCommandPrefix}showFunctionsDocumentation`,
             `${swaCommandPrefix}viewProperties`,

@@ -38,8 +38,6 @@ export const StaticWebAppVirtualTypes = {
     Step: 'staticWebApp.step',
     Functions: 'staticWebApp.functions',
     Function: 'staticWebApp.function',
-    AppSettings: 'staticWebApp.appSettings',
-    AppSetting: 'staticWebApp.appSetting',
     NoFunctions: 'staticWebApp.noFunctions',
     WorkflowGroup: 'staticWebApp.workflowGroup',
     Workflow: 'staticWebApp.workflow',
@@ -121,25 +119,6 @@ export interface StaticWebAppFunction extends StaticWebAppVirtualBase {
     readonly functionName: string;
 }
 
-/** App-settings category for a production or preview Functions API. */
-export interface StaticWebAppAppSettingsGroup extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.AppSettings;
-    readonly environmentBuildId: string;
-    readonly isProduction: boolean;
-    readonly branch: string;
-}
-
-/** App-setting leaf. Values are intentionally kept out of tree-node data. */
-export interface StaticWebAppAppSetting extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.AppSetting;
-    readonly environmentBuildId: string;
-    readonly isProduction: boolean;
-    readonly branch: string;
-    readonly settingName: string;
-    /** Command-facing parent handle; values remain in the provider's private cache. */
-    readonly appSettingsGroup: StaticWebAppAppSettingsGroup;
-}
-
 /** Distinguishes environment-level API guidance from an empty function list. */
 export type NoFunctionsKind = 'help' | 'empty';
 
@@ -187,8 +166,6 @@ export type StaticWebAppVirtualNode =
     | StaticWebAppStep
     | StaticWebAppFunctions
     | StaticWebAppFunction
-    | StaticWebAppAppSettingsGroup
-    | StaticWebAppAppSetting
     | StaticWebAppNoFunctions
     | StaticWebAppWorkflowGroup
     | StaticWebAppWorkflow

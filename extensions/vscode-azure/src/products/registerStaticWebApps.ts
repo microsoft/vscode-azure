@@ -11,7 +11,6 @@ import { BrowseStaticWebApp } from '../commands/staticWebApps/BrowseStaticWebApp
 import { CloneRepository } from '../commands/staticWebApps/CloneRepository';
 import { CreateStaticWebApp } from '../commands/staticWebApps/CreateStaticWebApp';
 import { CreateSwaConfigFile } from '../commands/staticWebApps/CreateSwaConfigFile';
-import { DeleteStaticWebApp } from '../commands/staticWebApps/DeleteStaticWebApp';
 import { DeleteStaticWebAppEnvironment } from '../commands/staticWebApps/DeleteStaticWebAppEnvironment';
 import { DeployStaticWebApp } from '../commands/staticWebApps/DeployStaticWebApp';
 import { InstallOrUpdateSwaCli } from '../commands/staticWebApps/InstallOrUpdateSwaCli';
@@ -20,11 +19,6 @@ import { OpenGitHubRepository } from '../commands/staticWebApps/OpenGitHubReposi
 import { OpenWorkflowConfigFile } from '../commands/staticWebApps/OpenWorkflowConfigFile';
 import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from '../commands/staticWebApps/ShowDocumentation';
 import { ShowGitHubActions } from '../commands/staticWebApps/ShowGitHubActions';
-import {
-    ManageStaticWebAppAppSetting,
-    ToggleStaticWebAppAppSettingVisibility,
-    TransferStaticWebAppAppSettings,
-} from '../commands/staticWebApps/StaticWebAppAppSettingsCommands';
 import { StaticWebAppCommandResolver } from '../commands/staticWebApps/StaticWebAppCommandResolver';
 import { UninstallSwaCli } from '../commands/staticWebApps/UninstallSwaCli';
 import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStaticWebAppProperties';
@@ -74,20 +68,12 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/staticWebApps/action/cancel', CancelAction);
     registrar.registerCommand('vscode-azure/staticWebApps/action/rerun', RerunAction);
     registrar.registerCommand('vscode-azure/staticWebApps/deleteEnvironment', DeleteStaticWebAppEnvironment);
-    registrar.registerCommand('vscode-azure/staticWebApps/deleteStaticWebApp', DeleteStaticWebApp);
     registrar.registerCommand(DeployStaticWebAppCommandId, DeployStaticWebApp);
     registrar.registerCommand('vscode-azure/staticWebApps/createSwaConfigFile', CreateSwaConfigFile);
     registrar.registerCommand('vscode-azure/staticWebApps/openWorkflowConfigFile', OpenWorkflowConfigFile);
     registrar.registerCommand('vscode-azure/staticWebApps/showDocumentation', ShowStaticWebAppsDocumentation);
     registrar.registerCommand('vscode-azure/staticWebApps/showFunctionsDocumentation', ShowFunctionsDocumentation);
     registrar.registerCommand('vscode-azure/staticWebApps/viewProperties', ViewStaticWebAppProperties);
-    registrar.registerCommand('vscode-azure/staticWebApps/appSettings/add', ManageStaticWebAppAppSetting, 'add');
-    registrar.registerCommand('vscode-azure/staticWebApps/appSettings/edit', ManageStaticWebAppAppSetting, 'edit');
-    registrar.registerCommand('vscode-azure/staticWebApps/appSettings/rename', ManageStaticWebAppAppSetting, 'rename');
-    registrar.registerCommand('vscode-azure/staticWebApps/appSettings/delete', ManageStaticWebAppAppSetting, 'delete');
-    registrar.registerCommand('vscode-azure/staticWebApps/appSettings/download', TransferStaticWebAppAppSettings, 'download');
-    registrar.registerCommand('vscode-azure/staticWebApps/appSettings/upload', TransferStaticWebAppAppSettings, 'upload');
-    registrar.registerCommand('vscode-azure/staticWebApps/toggleAppSettingVisibility', ToggleStaticWebAppAppSettingVisibility);
     registrar.registerCommand('vscode-azure/staticWebApps/installOrUpdateCli', InstallOrUpdateSwaCli);
     registrar.registerCommand('vscode-azure/staticWebApps/uninstallCli', UninstallSwaCli);
 

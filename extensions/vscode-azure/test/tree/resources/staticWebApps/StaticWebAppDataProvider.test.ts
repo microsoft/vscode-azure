@@ -11,7 +11,6 @@ import {
     isStaticWebAppVirtualNode,
     StaticWebAppVirtualTypes,
     type StaticWebAppActions,
-    type StaticWebAppAppSettingsGroup,
     type StaticWebAppEnvironment,
     type StaticWebAppFunctions,
 } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
@@ -36,13 +35,13 @@ describe('StaticWebAppDataProvider (unit)', () => {
             sourceBranch: 'main',
             status: 'Ready',
         }];
-        const settingsResult = { properties: { ALPHA: 'a' } };
+        const probeResult = { properties: { ALPHA: 'a' } };
         const productionProbe = options?.settingsProbeError
             ? mock.fn(() => Promise.reject(new Error('No Functions API')))
-            : mock.fn(() => Promise.resolve(settingsResult));
+            : mock.fn(() => Promise.resolve(probeResult));
         const buildProbe = options?.settingsProbeError
             ? mock.fn(() => Promise.reject(new Error('No Functions API')))
-            : mock.fn(() => Promise.resolve(settingsResult));
+            : mock.fn(() => Promise.resolve(probeResult));
         const mockClient = {
             staticSites: {
                 getStaticSite: mock.fn(() => Promise.resolve({
@@ -55,8 +54,6 @@ describe('StaticWebAppDataProvider (unit)', () => {
                 listStaticSiteBuildFunctions: mock.fn(() => singlePage(options?.functions ?? [])),
                 listStaticSiteFunctionAppSettings: productionProbe,
                 listStaticSiteBuildFunctionAppSettings: buildProbe,
-                createOrUpdateStaticSiteFunctionAppSettings: mock.fn((_rg: string, _name: string, body: unknown) => Promise.resolve(body)),
-                createOrUpdateStaticSiteBuildFunctionAppSettings: mock.fn((_rg: string, _name: string, _build: string, body: unknown) => Promise.resolve(body)),
             },
         };
         const github = {
@@ -117,13 +114,12 @@ describe('StaticWebAppDataProvider (unit)', () => {
             && node.invalidContextValue === 'invalidStaticEnvironment')).to.be.true;
     });
 
-    it('should expose Actions, App Settings, and Functions after the production probe succeeds', async () => {
+    it('should expose Actions and Functions after the production probe succeeds', async () => {
         const { provider, mockClient } = createProvider();
         const children = await provider.getChildren(makeStaticWebAppEnvironment());
 
         expect(virtualTypes(children)).to.deep.equal([
             StaticWebAppVirtualTypes.Actions,
-            StaticWebAppVirtualTypes.AppSettings,
             StaticWebAppVirtualTypes.Functions,
         ]);
         expect(mockClient.staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(1);
@@ -180,25 +176,6 @@ describe('StaticWebAppDataProvider (unit)', () => {
         expect(isStaticWebAppVirtualNode(productionChildren[0])
             && productionChildren[0].virtualType === StaticWebAppVirtualTypes.NoFunctions
             && productionChildren[0].kind).to.equal('empty');
-    });
-
-    it('should route preview app-settings updates through build endpoints', async () => {
-        const { provider, mockClient } = createProvider();
-        const group: StaticWebAppAppSettingsGroup = {
-            virtualType: StaticWebAppVirtualTypes.AppSettings,
-            virtualPath: 'environments/42/appSettings',
-            azureResource: makeStaticWebApp(),
-            environmentBuildId: '42',
-            isProduction: false,
-            branch: 'feature',
-        };
-
-        await provider.getChildren(group);
-        await provider.addOrUpdateAppSetting(group, 'BETA', 'b');
-
-        expect(provider.getAppSettingValue(group, 'BETA')).to.equal('b');
-        expect(mockClient.staticSites.createOrUpdateStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(1);
-        expect(mockClient.staticSites.createOrUpdateStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
     });
 
     it('should create invalid action nodes per item and sort jobs by start time', async () => {

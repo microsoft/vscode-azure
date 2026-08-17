@@ -5,23 +5,17 @@
 
 import { AzureNodeId, getNodeType } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { CancelAction, RerunAction } from '../../../commands/staticWebApps/ActionCommands';
 import { BrowseStaticWebApp } from '../../../commands/staticWebApps/BrowseStaticWebApp';
 import { CloneRepository } from '../../../commands/staticWebApps/CloneRepository';
-import { DeleteStaticWebApp } from '../../../commands/staticWebApps/DeleteStaticWebApp';
 import { DeleteStaticWebAppEnvironment } from '../../../commands/staticWebApps/DeleteStaticWebAppEnvironment';
 import { OpenGitHubRepository } from '../../../commands/staticWebApps/OpenGitHubRepository';
 import { OpenGitHubLog } from '../../../commands/staticWebApps/OpenGitHubLog';
 import { OpenWorkflowConfigFile } from '../../../commands/staticWebApps/OpenWorkflowConfigFile';
 import { ShowFunctionsDocumentation } from '../../../commands/staticWebApps/ShowDocumentation';
 import { ShowGitHubActions } from '../../../commands/staticWebApps/ShowGitHubActions';
-import {
-    ManageStaticWebAppAppSetting,
-    ToggleStaticWebAppAppSettingVisibility,
-    TransferStaticWebAppAppSettings,
-} from '../../../commands/staticWebApps/StaticWebAppAppSettingsCommands';
 import { ViewStaticWebAppProperties } from '../../../commands/staticWebApps/ViewStaticWebAppProperties';
 import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IStaticWebAppsGitHubService } from '../../../services/StaticWebAppsGitHubService';
@@ -35,7 +29,6 @@ import {
     type InvalidStaticWebAppNode,
     type StaticWebApp,
     type StaticWebAppAction,
-    type StaticWebAppAppSetting,
     type StaticWebAppEnvironment,
     type StaticWebAppJob,
     type StaticWebAppStep,
@@ -45,7 +38,6 @@ import {
     type StaticWebAppWorkflowParseError,
 } from './StaticWebApp';
 import type { WorkflowSourceRange } from './workflowParser';
-import { IStaticWebAppDataProvider } from './StaticWebAppDataProvider';
 
 const openGitHubLogCommand = 'vscode-azure/staticWebApps/openGitHubLog';
 const openWorkflowCommand = 'vscode-azure/staticWebApps/openWorkflowConfigFile';
@@ -62,7 +54,6 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
         @inject(IStaticWebAppsGitHubService) private readonly github: IStaticWebAppsGitHubService,
-        @inject(IStaticWebAppDataProvider) @optional() private readonly dataProvider?: IStaticWebAppDataProvider,
     ) { }
 
     /** @inheritdoc */
@@ -110,7 +101,6 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
             StaticWebAppViewProvider.ContextValue,
             BrowseStaticWebApp.ContextValue,
             CloneRepository.ContextValue,
-            DeleteStaticWebApp.ContextValue,
             OpenInPortal.ContextValue,
             OpenWorkflowConfigFile.ContextValue,
         );
@@ -151,23 +141,6 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
                 );
             case StaticWebAppVirtualTypes.Function:
                 return this.treeItem(key, node.functionName, 'azureStaticFunction', false, 'symbol-function');
-            case StaticWebAppVirtualTypes.AppSettings:
-                return this.treeItem(
-                    key,
-                    this.ctx.code.l10n.t('App Settings'),
-                    combineContextValues(
-                        'applicationSettings',
-                        'staticWebApps',
-                        ManageStaticWebAppAppSetting.AddContextValue,
-                        TransferStaticWebAppAppSettings.DownloadContextValue,
-                        TransferStaticWebAppAppSettings.UploadContextValue,
-                        OpenInPortal.ContextValue,
-                    ),
-                    true,
-                    'folder',
-                );
-            case StaticWebAppVirtualTypes.AppSetting:
-                return this.getAppSettingTreeItem(key, node);
             case StaticWebAppVirtualTypes.NoFunctions:
                 return this.getNoFunctionsTreeItem(key, node.kind);
             case StaticWebAppVirtualTypes.WorkflowGroup:
@@ -259,27 +232,6 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
         item.description = this.getActionDescription(step.step);
         item.iconPath = this.getActionIcon(step.step);
         item.command = this.command(openGitHubLogCommand, this.ctx.code.l10n.t('Open GitHub Action Log'), key);
-        return item;
-    }
-
-    private getAppSettingTreeItem(key: string, setting: StaticWebAppAppSetting): ITreeItem {
-        const item = this.treeItem(
-            key,
-            setting.settingName,
-            combineContextValues(
-                'applicationSettingItem',
-                'staticWebApps',
-                ManageStaticWebAppAppSetting.EditContextValue,
-                ManageStaticWebAppAppSetting.RenameContextValue,
-                ManageStaticWebAppAppSetting.DeleteContextValue,
-                ToggleStaticWebAppAppSettingVisibility.ContextValue,
-            ),
-            false,
-            'symbol-key',
-        );
-        if (this.dataProvider?.isAppSettingVisible(setting.appSettingsGroup, setting.settingName)) {
-            item.description = this.dataProvider.getAppSettingValue(setting.appSettingsGroup, setting.settingName);
-        }
         return item;
     }
 

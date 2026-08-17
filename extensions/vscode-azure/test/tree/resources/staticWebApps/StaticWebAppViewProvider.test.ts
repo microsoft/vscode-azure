@@ -12,7 +12,6 @@ import {
     StaticWebAppVirtualTypes,
     type InvalidStaticWebAppNode,
     type StaticWebAppAction,
-    type StaticWebAppAppSettingsGroup,
     type StaticWebAppJob,
     type StaticWebAppNoFunctions,
     type StaticWebAppStep,
@@ -114,20 +113,6 @@ describe('StaticWebAppViewProvider (unit)', () => {
         expect(render(job).item.command?.command).to.equal('vscode-azure/staticWebApps/openGitHubLog');
         expect(render(step).item.command?.command).to.equal('vscode-azure/staticWebApps/openGitHubLog');
         expect(render(step).item.contextValue).to.include('azureStaticStep');
-    });
-
-    it('should preserve app-settings contexts for later shared commands', () => {
-        const group: StaticWebAppAppSettingsGroup = {
-            virtualType: StaticWebAppVirtualTypes.AppSettings,
-            virtualPath: 'environments/default/appSettings',
-            azureResource: makeStaticWebApp(),
-            environmentBuildId: 'default',
-            isProduction: true,
-            branch: 'main',
-        };
-        const item = render(group).item;
-        expect(item.contextValue).to.match(/applicationSettings.*staticWebApps/);
-        expect(item.contextValue).to.include(OpenInPortal.ContextValue);
     });
 
     it('should render distinct no-functions help and empty-list semantics', () => {
