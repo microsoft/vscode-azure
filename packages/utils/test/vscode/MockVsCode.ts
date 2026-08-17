@@ -244,13 +244,6 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         () => Promise.resolve(undefined),
     );
 
-    const showTextDocument = mock.fn(
-        () => Promise.resolve({
-            revealRange: mock.fn(),
-            selection: undefined,
-        } as unknown as vscode.TextEditor),
-    );
-
     const showWorkspaceFolderPick = mock.fn(
         () => Promise.resolve(undefined),
     );
@@ -359,7 +352,11 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const showTextDocument = mock.fn(
         (document: vscode.TextDocument) => {
             shownDocuments.push(document);
-            return Promise.resolve({ document } as unknown as vscode.TextEditor);
+            return Promise.resolve({
+                document,
+                revealRange: mock.fn(),
+                selection: undefined,
+            } as unknown as vscode.TextEditor);
         },
     );
 

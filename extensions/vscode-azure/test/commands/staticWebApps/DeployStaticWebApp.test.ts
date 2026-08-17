@@ -5,7 +5,6 @@
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import * as path from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';

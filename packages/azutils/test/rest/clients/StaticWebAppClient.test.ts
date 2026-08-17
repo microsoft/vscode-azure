@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PipelineRequest } from '@azure/core-rest-pipeline';
-import { collectPageItems, createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
+import { collectPageItems } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { StaticWebAppClient } from '../../../src/rest/clients/StaticWebAppClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';

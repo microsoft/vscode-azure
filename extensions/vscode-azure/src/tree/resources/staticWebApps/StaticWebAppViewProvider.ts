@@ -26,7 +26,7 @@ import { ViewStaticWebAppProperties } from '../../../commands/staticWebApps/View
 import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IStaticWebAppsGitHubService } from '../../../services/StaticWebAppsGitHubService';
 import { IAzureViewDataTree } from '../../../services';
-import { combineContextValues } from '../../combineContextValues';
+import { combineContextValues } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import {
     isStaticWebApp,

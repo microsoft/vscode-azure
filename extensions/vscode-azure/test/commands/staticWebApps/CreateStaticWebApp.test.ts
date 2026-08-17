@@ -7,7 +7,6 @@ import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, createMockSubscriptionClientProvider, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock as nodeMock } from 'node:test';
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../src/azd/TempDirManager';

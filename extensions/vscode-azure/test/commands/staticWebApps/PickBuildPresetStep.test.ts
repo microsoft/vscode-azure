@@ -5,7 +5,6 @@
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { StaticWebAppsGitHubService } from '../../../src/services/StaticWebAppsGitHubService';
 import { PickBuildPresetStep } from '../../../src/commands/staticWebApps/steps/PickBuildPresetStep';
 

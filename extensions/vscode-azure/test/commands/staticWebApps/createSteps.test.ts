@@ -5,7 +5,6 @@
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri, respondToPrompts, withSettings } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { parse } from 'yaml';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';

@@ -94,40 +94,6 @@ export class MockFileSystem {
         return Promise.reject(MockFileSystem.fileNotFound(uri));
     });
 
-    /** Lists immediate file and directory children of a directory. */
-    readonly readDirectory = mock.fn((uri: vscode.Uri): Promise<[string, vscode.FileType][]> => {
-        const prefix = uri.path.endsWith('/') ? uri.path : `${uri.path}/`;
-        const children = new Map<string, vscode.FileType>();
-
-        for (const filePath of this.files.keys()) {
-            if (!filePath.startsWith(prefix)) {
-                continue;
-            }
-            const remainder = filePath.slice(prefix.length);
-            const [name, nested] = remainder.split('/', 2);
-            if (name) {
-                children.set(name, nested ? 2 : 1);
-            }
-        }
-
-        for (const directoryPath of this.directories) {
-            if (!directoryPath.startsWith(prefix)) {
-                continue;
-            }
-            const remainder = directoryPath.slice(prefix.length);
-            const [name] = remainder.split('/', 1);
-            if (name) {
-                children.set(name, 2);
-            }
-        }
-
-        if (children.size === 0 && !this.directories.has(uri.path)) {
-            return Promise.reject(MockFileSystem.fileNotFound(uri));
-        }
-
-        return Promise.resolve([...children.entries()].sort(([left], [right]) => left.localeCompare(right)));
-    });
-
     readonly writeFile = mock.fn((uri: vscode.Uri, content: Uint8Array) => {
         this.addFile(uri, content);
         return Promise.resolve();
