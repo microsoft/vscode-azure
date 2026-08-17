@@ -7,6 +7,7 @@ import {
     getNodeType,
     IStaticWebAppClientProvider,
     parseAzureResourceId,
+    portalUrlForArmResource,
     type ConcreteAzureNode,
     type IStaticWebAppClient,
     type StaticSiteBuildARMResource,
@@ -370,7 +371,12 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             virtualType: StaticWebAppVirtualTypes.Functions,
             virtualPath: `${environment.virtualPath}/functions`,
             azureResource: environment.azureResource,
-            portalResourceId: `${environmentResourceId}/functions`,
+            // The portal models a build's functions as their own page, so this
+            // node opens there rather than at the parent static site.
+            portalUrl: portalUrlForArmResource(
+                environment.azureResource.subscription,
+                `${environmentResourceId}/functions`,
+            ),
             environmentBuildId: environment.buildId,
             isProduction: environment.isProduction,
         };

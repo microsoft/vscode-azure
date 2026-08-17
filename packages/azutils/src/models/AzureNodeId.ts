@@ -455,6 +455,26 @@ function portalHost(entity: { readonly environment: EnvironmentLike }): string {
     return new URL(entity.environment.portalUrl).hostname;
 }
 
+/**
+ * Builds the Azure Portal deep link for an ARM resource id that has no node of
+ * its own, such as a sub-resource surfaced as a {@linkcode VirtualResource}.
+ *
+ * Use this to populate {@linkcode VirtualResource.portalUrl} instead of
+ * assembling the URL by hand: it keeps the portal URL format in one place and
+ * derives the host from {@linkcode entity}'s own cloud, so the result always
+ * satisfies the validation applied when the node id is built.
+ *
+ * @param entity Any tenant-scoped object carrying an environment (typically the
+ * parent resource's subscription).
+ * @param armResourceId An absolute ARM resource id (leading `/`).
+ */
+export function portalUrlForArmResource(
+    entity: { readonly environment: EnvironmentLike; readonly tenantId: string },
+    armResourceId: string,
+): string {
+    return buildPortalUrl(portalHost(entity), entity.tenantId, armResourceId);
+}
+
 /** Builds the Azure Portal deep link for an absolute ARM resource id. */
 function buildPortalUrl(portalHostName: string, tenantId: string, armResourceId: string): string {
     return `https://${portalHostName}/#@${tenantId}/resource${armResourceId}`;

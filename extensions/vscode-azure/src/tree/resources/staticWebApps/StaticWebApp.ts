@@ -55,8 +55,6 @@ export type StaticWebAppInvalidContext =
 
 interface StaticWebAppVirtualBase extends VirtualResource {
     readonly azureResource: StaticWebApp;
-    /** Optional ARM subresource path used by the generic portal command. */
-    readonly portalResourceId?: string;
 }
 
 /** A production or preview environment returned by Azure Static Web Apps. */
