@@ -6,7 +6,7 @@
 import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, createActionContext, IActionContext, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts, type MockCodeContextResult, type MockInputBox, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts, type MockCodeContextResult, type MockInputBox, type MockVsCodeResult, type WizardResponse } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import type { AzdResourceAssociation } from '../../../src/azd/AzdResourceAssociationService';
@@ -14,6 +14,14 @@ import { IAzdResourceAssociationService } from '../../../src/azd/AzdResourceAsso
 import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResource';
 import { AzdDownCommandId } from '../../../src/constants';
 import { IAzureViewDataTree } from '../../../src/services';
+
+/**
+ * Queue entry standing in for the non-modal success toast. The toast has no
+ * buttons and nothing awaits it, so it is simply left to expire -- but
+ * {@linkcode respondToPrompts} drives every message API from one queue, so it
+ * still needs an entry to consume.
+ */
+const IgnoreToast: WizardResponse = 'cancel';
 
 describe('DeleteAzureResource (unit)', () => {
     afterEach(() => {
@@ -23,10 +31,11 @@ describe('DeleteAzureResource (unit)', () => {
     it('deletes a confirmed resource by id and type, then removes it from the tree', async () => {
         const resource = makeGenericResource();
         const setup = createCommand(resource);
-        setup.mockResult.messageResponses.push('Delete');
+        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete' }, IgnoreToast]);
 
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
+        tracker.assertAllConsumed();
         expect(setup.deleteById.mock.callCount()).to.equal(1);
         expect(setup.deleteById.mock.calls[0].arguments).to.deep.equal([resource.id, resource.type]);
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
@@ -38,7 +47,7 @@ describe('DeleteAzureResource (unit)', () => {
         const resource = makeGenericResource();
         const failure = new Error('delete failed');
         const setup = createCommand(resource, { deleteById: mock.fn(() => Promise.reject(failure)) });
-        setup.mockResult.messageResponses.push('Delete');
+        respondToPrompts(setup.mockResult, [{ button: 'Delete' }]);
 
         await expect(setup.command.execute(AzureNodeId.from(resource).toString()))
             .to.be.rejectedWith(failure);
@@ -50,6 +59,7 @@ describe('DeleteAzureResource (unit)', () => {
     it('cancels instead of deleting when the confirmation is dismissed', async () => {
         const resource = makeGenericResource();
         const setup = createCommand(resource);
+        respondToPrompts(setup.mockResult, ['cancel']);
 
         const error = await expect(setup.command.execute(AzureNodeId.from(resource).toString())).to.be.rejected;
         expect(CancellationError.test(error)).to.be.true;
@@ -63,7 +73,7 @@ describe('DeleteAzureResource (unit)', () => {
     it('deletes a resource group only after its name is typed', async () => {
         const resourceGroup = makeResourceGroup();
         const setup = createCommand(resourceGroup);
-        const tracker = respondToPrompts(setup.mockResult, [{ input: resourceGroup.name }]);
+        const tracker = respondToPrompts(setup.mockResult, [{ input: resourceGroup.name }, IgnoreToast]);
 
         await setup.command.execute(AzureNodeId.from(resourceGroup).toString());
 
@@ -77,7 +87,7 @@ describe('DeleteAzureResource (unit)', () => {
     it('never remembers or pre-fills the typed confirmation', async () => {
         const first = makeResourceGroup();
         const setup = createCommand(first);
-        respondToPrompts(setup.mockResult, [{ input: first.name }]);
+        respondToPrompts(setup.mockResult, [{ input: first.name }, IgnoreToast]);
 
         await setup.command.execute(AzureNodeId.from(first).toString());
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(1);
@@ -148,7 +158,7 @@ describe('DeleteAzureResource (unit)', () => {
         const deleteById = mock.fn((_resourceId: string, _resourceType: string) =>
             new Promise<void>(resolve => { finishDelete = resolve; }));
         const setup = createCommand(resource, { deleteById });
-        setup.mockResult.messageResponses.push('Delete');
+        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete' }, IgnoreToast]);
 
         const pending = setup.command.execute(AzureNodeId.from(resource).toString());
 
@@ -166,6 +176,7 @@ describe('DeleteAzureResource (unit)', () => {
 
         expect(setup.remove.mock.callCount()).to.equal(1);
         expect(shownToasts(setup)).to.deep.equal([`Deleted resource '${resource.name}'.`]);
+        tracker.assertAllConsumed();
     });
 
     it('routes an azd-managed resource through azd down against the matched environment', async () => {
@@ -173,10 +184,11 @@ describe('DeleteAzureResource (unit)', () => {
         const setup = createCommand(resource, {
             association: { azureYamlUri: MockUri.file('/project/azure.yaml'), environmentName: 'dev' },
         });
-        setup.mockResult.messageResponses.push('Delete Deployment');
+        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete Deployment' }]);
 
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
+        tracker.assertAllConsumed();
         expect(setup.executeCommand.mock.callCount()).to.equal(1);
         expect(setup.executeCommand.mock.calls[0].arguments[0]).to.equal(AzdDownCommandId);
         expect(setup.executeCommand.mock.calls[0].arguments[2]).to.deep.include({ environmentName: 'dev' });
@@ -189,7 +201,11 @@ describe('DeleteAzureResource (unit)', () => {
         const setup = createCommand(resource, {
             association: { azureYamlUri: MockUri.file('/project/azure.yaml'), environmentName: 'dev' },
         });
-        setup.mockResult.messageResponses.push('Delete Resource Anyway', 'Delete');
+        const tracker = respondToPrompts(setup.mockResult, [
+            { button: 'Delete Resource Anyway' },
+            { button: 'Delete' },
+            IgnoreToast,
+        ]);
 
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
@@ -199,7 +215,7 @@ describe('DeleteAzureResource (unit)', () => {
             .map(call => call.arguments[0]);
         expect(warnings).to.have.length(2);
         expect(warnings[1]).to.contain(resource.name);
-        expect(setup.mockResult.messageResponses, 'both responses should be consumed').to.be.empty;
+        tracker.assertAllConsumed();
         expect(setup.executeCommand.mock.callCount()).to.equal(0);
         expect(setup.deleteById.mock.callCount()).to.equal(1);
         expect(setup.remove.mock.callCount()).to.equal(1);
@@ -210,7 +226,7 @@ describe('DeleteAzureResource (unit)', () => {
         const setup = createCommand(resource, {
             associationError: new Error('Azure Developer CLI (azd) was not found'),
         });
-        setup.mockResult.messageResponses.push('Delete');
+        respondToPrompts(setup.mockResult, [{ button: 'Delete' }, IgnoreToast]);
 
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
@@ -226,6 +242,7 @@ describe('DeleteAzureResource (unit)', () => {
         const setup = createCommand(resource, {
             association: { azureYamlUri: MockUri.file('/project/azure.yaml'), environmentName: 'dev' },
         });
+        respondToPrompts(setup.mockResult, ['cancel']);
 
         const error = await expect(setup.command.execute(AzureNodeId.from(resource).toString())).to.be.rejected;
         expect(CancellationError.test(error)).to.be.true;

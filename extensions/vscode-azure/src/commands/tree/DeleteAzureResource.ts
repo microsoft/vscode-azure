@@ -10,7 +10,7 @@ import {
     isResourceGroup,
     type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, IActionContext, ICodeContext, IOutputChannel, showSmartInputBox, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, IOutputChannel, showMessage, showSmartInputBox, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzdResourceAssociationService, type AzdResourceAssociation } from '../../azd/AzdResourceAssociationService';
 import { AzdDownCommandId } from '../../constants';
@@ -75,7 +75,7 @@ export class DeleteAzureResource implements ManagedCommand {
         );
 
         this.dataTree.remove(resource);
-        void this.ctx.code.window.showInformationMessage(isResourceGroup(resource)
+        void showMessage(this.ctx.code, isResourceGroup(resource)
             ? this.ctx.code.l10n.t('Deleted resource group \'{0}\'.', resource.name)
             : this.ctx.code.l10n.t('Deleted resource \'{0}\'.', resource.name));
     }
@@ -118,11 +118,12 @@ export class DeleteAzureResource implements ManagedCommand {
         const deleteDirectly = isResourceGroup(resource)
             ? this.ctx.code.l10n.t('Delete Resource Group Anyway')
             : this.ctx.code.l10n.t('Delete Resource Anyway');
-        const choice = await this.ctx.code.window.showWarningMessage(
+        const choice = await showMessage(
+            this.ctx.code,
             isResourceGroup(resource)
                 ? this.ctx.code.l10n.t('This resource group is managed by a local Azure Developer CLI project. Delete the full deployment instead?')
                 : this.ctx.code.l10n.t('This resource is managed by a local Azure Developer CLI project. Delete the full deployment instead?'),
-            { modal: true },
+            { modal: true, severity: 'warning', stepName: 'confirmAzdDeletionChoice' },
             deleteDeployment,
             deleteDirectly,
         );
@@ -135,8 +136,6 @@ export class DeleteAzureResource implements ManagedCommand {
             };
             await this.ctx.code.commands.executeCommand(AzdDownCommandId, association.azureYamlUri, options);
             return true;
-        } else if (choice !== deleteDirectly) {
-            throw new CancellationError(undefined, 'confirmAzdDeletionChoice');
         }
 
         this.context.telemetry.properties.deletionPath = 'direct';
@@ -186,14 +185,12 @@ export class DeleteAzureResource implements ManagedCommand {
         }
 
         const deleteLabel = this.ctx.code.l10n.t('Delete');
-        const choice = await this.ctx.code.window.showWarningMessage(
+        await showMessage(
+            this.ctx.code,
             this.ctx.code.l10n.t('Are you sure you want to delete resource \'{0}\'? This cannot be undone.', resource.name),
-            { modal: true },
+            { modal: true, severity: 'warning', stepName: 'confirmResourceDeletion' },
             deleteLabel,
         );
-        if (choice !== deleteLabel) {
-            throw new CancellationError(undefined, 'confirmResourceDeletion');
-        }
     }
 
     /** Issue the ARM delete and resolve once Azure reports it complete. */
