@@ -11,8 +11,8 @@ import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import type { AzdResourceAssociation } from '../../../src/azd/AzdResourceAssociationService';
 import { IAzdResourceAssociationService } from '../../../src/azd/AzdResourceAssociationService';
-import { AzdDown } from '../../../src/commands/deploy/AzdDown';
 import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResource';
+import { AzdDownCommandId } from '../../../src/constants';
 import { IAzureViewDataTree } from '../../../src/services';
 
 describe('DeleteAzureResource (unit)', () => {
@@ -177,8 +177,9 @@ describe('DeleteAzureResource (unit)', () => {
 
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
-        expect(setup.executeAzdDown.mock.callCount()).to.equal(1);
-        expect(setup.executeAzdDown.mock.calls[0].arguments[1]).to.deep.include({ environmentName: 'dev' });
+        expect(setup.executeCommand.mock.callCount()).to.equal(1);
+        expect(setup.executeCommand.mock.calls[0].arguments[0]).to.equal(AzdDownCommandId);
+        expect(setup.executeCommand.mock.calls[0].arguments[2]).to.deep.include({ environmentName: 'dev' });
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.callCount()).to.equal(0);
     });
@@ -199,7 +200,7 @@ describe('DeleteAzureResource (unit)', () => {
         expect(warnings).to.have.length(2);
         expect(warnings[1]).to.contain(resource.name);
         expect(setup.mockResult.messageResponses, 'both responses should be consumed').to.be.empty;
-        expect(setup.executeAzdDown.mock.callCount()).to.equal(0);
+        expect(setup.executeCommand.mock.callCount()).to.equal(0);
         expect(setup.deleteById.mock.callCount()).to.equal(1);
         expect(setup.remove.mock.callCount()).to.equal(1);
     });
@@ -215,7 +216,7 @@ describe('DeleteAzureResource (unit)', () => {
 
         // A missing azd must not make the resource undeletable; it falls
         // through to the normal confirm-and-delete path.
-        expect(setup.executeAzdDown.mock.callCount()).to.equal(0);
+        expect(setup.executeCommand.mock.callCount()).to.equal(0);
         expect(setup.deleteById.mock.callCount()).to.equal(1);
         expect(setup.remove.mock.callCount()).to.equal(1);
     });
@@ -230,7 +231,7 @@ describe('DeleteAzureResource (unit)', () => {
         expect(CancellationError.test(error)).to.be.true;
         expect((error as CancellationError).stepName).to.equal('confirmAzdDeletionChoice');
 
-        expect(setup.executeAzdDown.mock.callCount()).to.equal(0);
+        expect(setup.executeCommand.mock.callCount()).to.equal(0);
         expect(setup.deleteById.mock.callCount()).to.equal(0);
     });
 
@@ -267,7 +268,7 @@ interface CommandSetup {
     readonly codeContext: MockCodeContextResult;
     readonly deleteById: Mock<(resourceId: string, resourceType: string) => Promise<void>>;
     readonly deleteResourceGroup: Mock<(name: string) => Promise<void>>;
-    readonly executeAzdDown: Mock<AzdDown['execute']>;
+    readonly executeCommand: MockVsCodeResult['commands']['executeCommand'];
     readonly remove: Mock<(target: unknown) => void>;
 }
 
@@ -300,7 +301,6 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
 
     const deleteById = options.deleteById ?? mock.fn((_resourceId: string, _resourceType: string) => Promise.resolve());
     const deleteResourceGroup = mock.fn((_name: string) => Promise.resolve());
-    const executeAzdDown = mock.fn<AzdDown['execute']>(() => Promise.resolve());
     const azdAssociation: IAzdResourceAssociationService = {
         find: mock.fn(() => options.associationError
             ? Promise.reject(options.associationError)
@@ -317,8 +317,6 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
         resources: { deleteById },
         resourceGroups: { delete: deleteResourceGroup },
     }) as unknown as ReturnType<IResourceClientProvider>);
-    container.bind(AzdDown).toConstantValue({ execute: executeAzdDown } as unknown as AzdDown);
-    container.bind(Container).toConstantValue(container);
     container.bind(DeleteAzureResource).toSelf();
 
     return {
@@ -327,7 +325,7 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
         codeContext,
         deleteById,
         deleteResourceGroup,
-        executeAzdDown,
+        executeCommand: mockResult.commands.executeCommand,
         remove,
     };
 }

@@ -11,10 +11,11 @@ import {
     type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
 import { CancellationError, IActionContext, ICodeContext, IOutputChannel, showSmartInputBox, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
-import { Container, inject, injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
 import { IAzdResourceAssociationService, type AzdResourceAssociation } from '../../azd/AzdResourceAssociationService';
+import { AzdDownCommandId } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
-import { AzdDown } from '../deploy/AzdDown';
+import type { AzdDownOptions } from '../deploy/AzdDown';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -26,8 +27,8 @@ import type { ManagedCommand } from '../ManagedCommand';
  * individual resources use a modal confirmation.
  *
  * When the target belongs to a local azd project, the user is steered toward
- * {@linkcode AzdDown} so the whole deployment is torn down consistently, but
- * may still choose to delete the single resource.
+ * {@linkcode AzdDownCommandId} so the whole deployment is torn down
+ * consistently, but may still choose to delete the single resource.
  *
  * The node is removed from {@linkcode IAzureViewDataTree} only after Azure
  * reports the deletion complete, so a failure leaves the tree untouched.
@@ -47,7 +48,6 @@ export class DeleteAzureResource implements ManagedCommand {
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IAzdResourceAssociationService) private readonly azdAssociation: IAzdResourceAssociationService,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
-        @inject(Container) private readonly container: Container,
     ) { }
 
     /**
@@ -59,7 +59,7 @@ export class DeleteAzureResource implements ManagedCommand {
         const resource = this.resolve(key);
         this.context.telemetry.properties.nodeType = getNodeType(resource);
 
-        if (await this.steerToAzd(resource)) {
+        if (await this.steerToAzdIfNeeded(resource)) {
             return;
         }
 
@@ -106,7 +106,7 @@ export class DeleteAzureResource implements ManagedCommand {
      * deletion should follow.
      * @throws {@linkcode CancellationError} if the user dismisses the prompt.
      */
-    private async steerToAzd(resource: GenericResource): Promise<boolean> {
+    private async steerToAzdIfNeeded(resource: GenericResource): Promise<boolean> {
         const association = await this.findAzdAssociation(resource);
         this.context.telemetry.properties.azdAssociated = String(!!association);
         if (!association) {
@@ -129,10 +129,11 @@ export class DeleteAzureResource implements ManagedCommand {
 
         if (choice === deleteDeployment) {
             this.context.telemetry.properties.deletionPath = 'azdDown';
-            await this.container.get(AzdDown).execute(association.azureYamlUri, {
+            const options: AzdDownOptions = {
                 skipConfirmation: true,
                 environmentName: association.environmentName,
-            });
+            };
+            await this.ctx.code.commands.executeCommand(AzdDownCommandId, association.azureYamlUri, options);
             return true;
         } else if (choice !== deleteDirectly) {
             throw new CancellationError(undefined, 'confirmAzdDeletionChoice');
