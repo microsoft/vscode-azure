@@ -5,7 +5,6 @@
 
 import { StaticWebAppResourceType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { expect } from 'chai';
 import {
     isStaticWebApp,
     isStaticWebAppVirtualNode,

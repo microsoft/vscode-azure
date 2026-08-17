@@ -5,7 +5,6 @@
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
 import {

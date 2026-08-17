@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import * as path from 'node:path';
 import { mock as nodeMock } from 'node:test';
 import type * as vscode from 'vscode';

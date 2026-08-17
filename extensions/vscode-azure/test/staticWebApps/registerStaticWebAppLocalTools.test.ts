@@ -5,7 +5,6 @@
 
 import { IExtensionContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { Container } from 'inversify';
 import { SwaDebugConfigurationProvider } from '../../src/debug/staticWebApps/SwaDebugConfigurationProvider';
 import { IStaticWebAppsGitHubService } from '../../src/services/StaticWebAppsGitHubService';

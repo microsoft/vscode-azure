@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { detectStaticWebAppProject } from '../../../src/commands/staticWebApps/steps/frameworkDetection';
 
 describe('Static Web Apps framework detection (unit)', () => {

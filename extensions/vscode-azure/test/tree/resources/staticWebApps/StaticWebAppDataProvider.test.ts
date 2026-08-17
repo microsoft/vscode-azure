@@ -5,7 +5,6 @@
 
 import type { ConcreteAzureNode, StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import type { GitHubJob, GitHubWorkflowRun } from '../../../../src/services/StaticWebAppsGitHubService';
 import {

@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { expect } from 'chai';
 import { resolvePosixProjectPath, resolveWindowsProjectPath } from '../../../src/commands/staticWebApps/deploymentRouting';
 
 describe('deploymentRouting path resolution (unit)', () => {

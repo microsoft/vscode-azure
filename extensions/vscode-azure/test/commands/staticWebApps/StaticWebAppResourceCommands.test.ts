@@ -5,7 +5,6 @@
 
 import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import { mock } from 'node:test';
 import { BrowseStaticWebApp } from '../../../src/commands/staticWebApps/BrowseStaticWebApp';
 import { CloneRepository } from '../../../src/commands/staticWebApps/CloneRepository';

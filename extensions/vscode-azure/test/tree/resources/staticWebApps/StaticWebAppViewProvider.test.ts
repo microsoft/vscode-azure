@@ -5,7 +5,6 @@
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { expect } from 'chai';
 import * as vscode from 'vscode';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import type { GitHubJob, GitHubWorkflowRun, GitHubWorkflowStep } from '../../../../src/services/StaticWebAppsGitHubService';
