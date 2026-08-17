@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { delay } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { ShowEndpointUrlStep } from '../../../src/azd/wizard/ShowEndpointUrlStep';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
@@ -136,7 +136,7 @@ describe('ShowEndpointUrlStep (unit)', () => {
                 services: { myfunc: { ingressUrl: 'https://myapp.azurewebsites.net' } },
             }));
 
-            mockResult.messageResponses.push('Open in Browser');
+            respondToPrompts(mockResult, [{ button: 'Open in Browser' }]);
 
             const context = {
                 iacFolder: MockUri.file('/project'),

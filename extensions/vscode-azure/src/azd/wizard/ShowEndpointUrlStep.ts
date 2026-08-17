@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, ICodeContext, IOutputChannel, stringifyError } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, ICodeContext, IOutputChannel, showMessage, stringifyError } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenUrl } from '../../commands/OpenUrl';
 import { IAzdService } from '../AzdService';
@@ -55,8 +55,10 @@ export class ShowEndpointUrlStep<TContext extends AzdWizardContext> extends Exec
 
     private async promptToOpen(url: string): Promise<void> {
         const openAction = this.ctx.code.l10n.t('Open in Browser');
-        const selection = await this.ctx.code.window.showInformationMessage(
+        const selection = await showMessage(
+            this.ctx.code,
             this.ctx.code.l10n.t('Application deployed: {0}', url),
+            {},
             openAction,
         );
 

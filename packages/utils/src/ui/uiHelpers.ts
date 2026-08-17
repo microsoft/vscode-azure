@@ -10,6 +10,66 @@ import { CancellationError } from '../vscode/CancellationError';
 import type { ICodeContext, IVsCode } from '../vscode/IVsCode';
 import { GoBackError } from '../wizard/GoBackError';
 
+/** Severity used by {@linkcode showMessage} to select the corresponding VS Code message API. */
+export type MessageSeverity = 'info' | 'warning' | 'error';
+
+/** Options forwarded to the selected VS Code message API. */
+export interface ShowMessageOptions extends vscode.MessageOptions {
+    /** Message severity. Defaults to `info`. */
+    readonly severity?: MessageSeverity;
+
+    /** Optional name of the operation, included in a modal cancellation error for diagnostics. */
+    readonly stepName?: string;
+}
+
+/**
+ * Shows a message using the VS Code API selected by {@linkcode ShowMessageOptions.severity}.
+ *
+ * Dismissing a modal message rejects with {@linkcode CancellationError}. Dismissing a
+ * non-modal message resolves to `undefined`, matching the underlying VS Code APIs.
+ */
+export function showMessage<T extends string>(
+    code: IVsCode,
+    message: string,
+    options: ShowMessageOptions & { readonly modal: true },
+    ...items: T[]
+): Promise<T>;
+export function showMessage<T extends string>(
+    code: IVsCode,
+    message: string,
+    options?: ShowMessageOptions,
+    ...items: T[]
+): Promise<T | undefined>;
+export async function showMessage<T extends string>(
+    code: IVsCode,
+    message: string,
+    options: ShowMessageOptions = {},
+    ...items: T[]
+): Promise<T | undefined> {
+    const { severity = 'info', stepName, ...messageOptions } = options;
+    let result: T | undefined;
+
+    switch (severity) {
+        case 'error':
+            result = await code.window.showErrorMessage(message, messageOptions, ...items);
+            break;
+        case 'warning':
+            result = await code.window.showWarningMessage(message, messageOptions, ...items);
+            break;
+        case 'info':
+            result = await code.window.showInformationMessage(message, messageOptions, ...items);
+            break;
+        default:
+            throw new Error(`Unsupported message severity: ${String(severity)}`);
+    }
+
+    if (messageOptions.modal && result === undefined) {
+        throw new CancellationError(undefined, stepName);
+    }
+
+    return result;
+}
+
 /** A {@linkcode vscode.QuickPickItem} with associated underlying data */
 export interface QuickPickItemWithData<T> extends vscode.QuickPickItem {
     readonly data: T;
@@ -458,6 +518,12 @@ function inputBoxRecentKey(options: ExtendedInputBoxOptions): string {
 
 const Pending: unique symbol = Symbol('Pending');
 
+/** Options for selecting a workspace folder. */
+export interface GetWorkspaceFolderOptions extends vscode.WorkspaceFolderPickOptions {
+    /** Optional name of the operation, included in a cancellation error for diagnostics. */
+    readonly stepName?: string;
+}
+
 /**
  * Returns the single workspace folder, or prompts the user to pick one
  * when multiple folders are open.
@@ -469,7 +535,7 @@ const Pending: unique symbol = Symbol('Pending');
  *   matching {@linkcode showSmartQuickPick} / {@linkcode showSmartInputBox}
  *   so callers can rely on the same cancellation contract.
  */
-export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): Promise<vscode.WorkspaceFolder | undefined> {
+export async function getWorkspaceFolder(code: IVsCode, options: GetWorkspaceFolderOptions = {}): Promise<vscode.WorkspaceFolder | undefined> {
     const folders = code.workspace.workspaceFolders;
     if (!folders?.length) {
         return undefined;
@@ -477,9 +543,10 @@ export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): P
         return folders[0];
     }
 
-    const picked = await code.window.showWorkspaceFolderPick({ placeHolder });
+    const { stepName, ...pickOptions } = options;
+    const picked = await code.window.showWorkspaceFolderPick(pickOptions);
     if (!picked) {
-        throw new CancellationError();
+        throw new CancellationError(undefined, stepName);
     }
     return picked;
 }
