@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { Everything, ICodeContext, IOutputChannel, Wizard } from '@microsoft/vscode-azure-utils';
+import { Everything, ICodeContext, IOutputChannel, showMessage, Wizard } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { AzdDownStep } from '../../azd/wizard/AzdDownStep';
@@ -58,9 +58,10 @@ export class AzdDown implements ManagedCommand {
         // unless the caller has opted out (e.g. a headless E2E host).
         if (!options?.skipConfirmation) {
             const deleteLabel = this.ctx.code.l10n.t('Delete');
-            const confirmation = await this.ctx.code.window.showWarningMessage(
+            const confirmation = await showMessage(
+                this.ctx.code,
                 this.ctx.code.l10n.t('Are you sure you want to delete all resources provisioned for this project\'s default environment? This cannot be undone.'),
-                { modal: true },
+                { modal: true, severity: 'warning' },
                 deleteLabel,
             );
             if (confirmation !== deleteLabel) {

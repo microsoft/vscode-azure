@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getWorkspaceFolder, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../src/ui/uiHelpers';
+import { getWorkspaceFolder, showMessage, showSmartInputBox, showSmartQuickPick, withDelayedProgress } from '../../src/ui/uiHelpers';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import type { IVsCode } from '../../src/vscode/IVsCode';
 import { GoBackError } from '../../src/wizard/GoBackError';
@@ -11,6 +11,47 @@ import { MockUri } from '../vscode/MockUri';
 import { createMockCodeContext, createMockVsCode, respondToPrompts } from '../vscode/MockVsCode';
 
 describe('uiHelpers (unit)', () => {
+    describe('showMessage', () => {
+        it('should show an information message by default', async () => {
+            const mockResult = createMockVsCode();
+            mockResult.messageResponses.push('Open');
+
+            const result = await showMessage(mockResult.vscode, 'Deployed', { modal: true }, 'Open');
+
+            expect(result).to.equal('Open');
+            expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(1);
+            expect(mockResult.window.showInformationMessage.mock.calls[0].arguments).to.deep.equal([
+                'Deployed',
+                { modal: true },
+                'Open',
+            ]);
+        });
+
+        it('should show a warning message', async () => {
+            const mockResult = createMockVsCode();
+
+            await showMessage(mockResult.vscode, 'Careful', { severity: 'warning' });
+
+            expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
+            expect(mockResult.window.showWarningMessage.mock.calls[0].arguments).to.deep.equal([
+                'Careful',
+                {},
+            ]);
+        });
+
+        it('should show an error message', async () => {
+            const mockResult = createMockVsCode();
+
+            await showMessage(mockResult.vscode, 'Failed', { severity: 'error' });
+
+            expect(mockResult.window.showErrorMessage.mock.callCount()).to.equal(1);
+            expect(mockResult.window.showErrorMessage.mock.calls[0].arguments).to.deep.equal([
+                'Failed',
+                {},
+            ]);
+        });
+    });
+
     describe('showSmartInputBox', () => {
         it('should accept input and return the value', async () => {
             const { ctx, mock } = createMockCodeContext();
@@ -705,7 +746,7 @@ describe('uiHelpers (unit)', () => {
             const showPick = mockResult.window.showWorkspaceFolderPick as unknown as ReturnType<typeof import('node:test').mock.fn>;
             showPick.mock.mockImplementation(() => Promise.resolve(folder1));
 
-            await getWorkspaceFolder(mockResult.vscode, 'Pick a folder');
+            await getWorkspaceFolder(mockResult.vscode, { placeHolder: 'Pick a folder' });
 
             const opts = showPick.mock.calls[0].arguments[0] as { placeHolder?: string };
             expect(opts.placeHolder).to.equal('Pick a folder');
@@ -722,6 +763,22 @@ describe('uiHelpers (unit)', () => {
             showPick.mock.mockImplementation(() => Promise.resolve(undefined));
 
             await expect(getWorkspaceFolder(mockResult.vscode)).to.be.rejectedWith(CancellationError);
+        });
+
+        it('should include the step name when the user dismisses the picker', async () => {
+            const folder1 = { uri: MockUri.file('/a'), name: 'a', index: 0 };
+            const folder2 = { uri: MockUri.file('/b'), name: 'b', index: 1 };
+            const mockResult = createMockVsCode();
+            mockResult.workspaceFolders.push(folder1, folder2);
+
+            const showPick = mockResult.window.showWorkspaceFolderPick;
+            showPick.mock.mockImplementation(() => Promise.resolve(undefined));
+
+            const error = await getWorkspaceFolder(mockResult.vscode, { stepName: 'selectFolder' })
+                .then(() => undefined, (reason: unknown) => reason);
+
+            expect(error).to.be.instanceOf(CancellationError);
+            expect((error as CancellationError).stepName).to.equal('selectFolder');
         });
     });
 });

@@ -63,7 +63,10 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
     private async promptDeployFolder(): Promise<Partial<TContext>> {
         const folder = await getWorkspaceFolder(
             this.ctx.code,
-            this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
+            {
+                placeHolder: this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
+                stepName: this.constructor.name,
+            },
         );
         if (!folder) {
             this.actionContext.errorHandling.suppress = 'reportIssue';
@@ -102,4 +105,3 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
         return { iacFolder: picked.uri } as Partial<TContext>;
     }
 }
-

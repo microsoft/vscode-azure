@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { isVirtualResource } from '@microsoft/vscode-azure-azutils';
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { FunctionAppVirtualTypes } from '../../tree/resources/functions/FunctionApp';
@@ -40,9 +40,10 @@ export class DeleteAppSetting implements ManagedCommand {
         const settingKey = resource.virtualPath;
 
         const deleteLabel = this.code.l10n.t('Delete');
-        const confirm = await this.code.window.showWarningMessage(
+        const confirm = await showMessage(
+            this.code,
             this.code.l10n.t('Are you sure you want to delete app setting \'{0}\'?', settingKey),
-            { modal: true },
+            { modal: true, severity: 'warning' },
             deleteLabel,
         );
 
@@ -61,7 +62,8 @@ export class DeleteAppSetting implements ManagedCommand {
             }
         }
 
-        void this.code.window.showInformationMessage(
+        void showMessage(
+            this.code,
             this.code.l10n.t('Deleted app setting \'{0}\'.', settingKey)
         );
     }
