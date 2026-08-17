@@ -142,7 +142,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
 }
 ```
 
-View providers assign these to tree items using `combineContextValues`:
+View providers assign these to tree items using `combineContextValues` (from `src/tree/contextValueHelpers.ts`):
 
 ```typescript
 // Multiple commands can target the same tree item
@@ -152,6 +152,8 @@ item.contextValue = combineContextValues(
 );
 // Result: "disableAcrAdminUser;openInPortal" (sorted, semicolon-separated)
 ```
+
+Azure resource nodes should use `resourceContextValue()` from the same file instead, which adds the context values every resource shares (plus any capability-driven ones, such as Browse Website) and takes only the product-specific additions.
 
 In `package.json`, commands use regex `when` clauses with word boundaries:
 

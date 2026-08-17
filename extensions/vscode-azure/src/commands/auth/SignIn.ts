@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { byAccount, ICredentialFactory, isAccount, VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
-import { Everything, ICodeContext, type QuickPickItemWithData, Roots, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { Everything, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { GuidPattern } from '../../constants';
@@ -158,12 +158,13 @@ export class SignIn implements ManagedCommand {
     private async confirmTenantSignIn(): Promise<boolean> {
         const code = this.ctx.code;
         const enterTenantId = code.l10n.t('Enter Tenant ID');
-        const choice = await code.window.showWarningMessage(
+        await showMessage(
+            code,
             code.l10n.t('Could not sign in to your default Azure account. Do you want to sign in to a specific tenant by ID instead?'),
-            { modal: true },
+            { modal: true, severity: 'warning', stepName: this.constructor.name },
             enterTenantId,
         );
-        return choice === enterTenantId;
+        return true;
     }
 
     /**

@@ -17,7 +17,7 @@ Coding conventions and best practices established in this project.
 
 - **`I`-prefix** for DI service identifier interfaces: `IVsCode`, `IActionExecutor`, `IOutputChannel`
 - **PascalCase** for files containing classes/interfaces: `DataItemTree.ts`, `GenericResource.ts`
-- **camelCase** for function-oriented files: `combineContextValues.ts`, `registerCommands.ts`
+- **camelCase** for function-oriented files: `contextValueHelpers.ts`, `registerCommands.ts`
 
 ## VS Code API
 
@@ -141,6 +141,37 @@ Commands that appear in tree item context menus should:
 ```
 
 The `\b` prevents unintended partial matches.
+
+## Comments and Documentation
+
+Comments and docs describe the code **as it is now**, not how it got that way. The
+diff, the commit message, and the PR description are where change history belongs.
+
+Don't write change-log commentary in the source or in `docs/`:
+
+```typescript
+// BAD -- describes a change, not the code
+// Removed the legacy retry helper; callers now use RetryPolicy directly.
+// Note: this used to accept a string; it no longer does.
+// (previously handled in AzureResourceProvider before it was deleted)
+
+// GOOD -- describes current behavior, or nothing at all
+// Retries are capped so a throttled subscription can't stall activation.
+```
+
+This applies to every kind of prose: inline comments, JSDoc, `docs/` pages,
+README updates, and test names. A reader who has never seen the old code should
+not encounter references to it. In particular:
+
+- Don't document that a function/option/setting "no longer" exists, or that a
+  behavior "was removed". If it's gone, say nothing.
+- Don't leave a comment marking where deleted code used to live.
+- When editing an existing doc, delete the stale prose outright rather than
+  appending a note that it's obsolete.
+
+The exception is a deliberate, user-facing deprecation contract -- `@deprecated`
+JSDoc on a symbol that still exists, or a CHANGELOG entry. Those describe the
+current API surface, not the edit that produced it.
 
 ## ESLint
 

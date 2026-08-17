@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { IVsCode, showMessage, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { EnrichedAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
 import { AcrResourceType, isAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
@@ -50,7 +50,8 @@ export class DisableAcrAdminUser implements ManagedCommand {
             this.selector.whenEnriched<EnrichedAcrRegistry>(resource),
         );
 
-        void this.code.window.showInformationMessage(
+        void showMessage(
+            this.code,
             this.code.l10n.t('If this command were real, it would disable admin user on \'{0}\' (loginServer: {1}, sku: {2}).', registry.name, registry.loginServer, registry.sku.name)
         );
     }

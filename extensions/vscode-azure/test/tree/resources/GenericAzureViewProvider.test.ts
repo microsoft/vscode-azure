@@ -7,11 +7,13 @@ import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalTy
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
+import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
 import { SettingsDataProvider } from '../../../src/tree/resources/settings/SettingsDataProvider';
+import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 
 describe('GenericAzureViewProvider (unit)', () => {
     const mockCodeContext = createMockCodeContext();
@@ -328,6 +330,19 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             expect(item.label).to.equal('site1');
             expect(item.description).to.equal('Microsoft.Web/sites');
+            expect(item.contextValue).to.include(OpenInPortal.ContextValue);
+            expect(item.contextValue).to.not.include(BrowseWebsite.ContextValue);
+        });
+
+        it('should offer browsing once enrichment attaches a website url', () => {
+            const resource = makeGenericResource();
+            setWebsiteUrl(resource, 'site1.azurewebsites.net');
+            const key = AzureNodeId.from(resource).toString();
+            const provider = createProvider([resource]);
+
+            const item = provider.getTreeItem(key);
+
+            expect(item.contextValue).to.include(BrowseWebsite.ContextValue);
         });
 
         it('should render a virtual group node', () => {

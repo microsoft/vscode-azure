@@ -64,6 +64,7 @@ describe('ProductRegistrar (unit)', () => {
             'vscode-azure/resources/refresh',
             'vscode-azure/resources/groupBy',
             'vscode-azure/resources/openInPortal',
+            'vscode-azure/resources/browseWebsite',
             'vscode-azure/signIn',
             'vscode-azure/selectSubscriptions',
         ]);

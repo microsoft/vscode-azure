@@ -157,6 +157,47 @@ Note: intermediate items in the pick step get ` $(chevron-right)` appended to th
 - `mockPipeline.ts` — `makeRequest()`, `makeResponse()` (using SDK's `createHttpHeaders`), and `MockHttpClient` for injecting into Azure SDK clients
 - `tree/mockTree.ts` — `createMockViewItemTree()`, `createMockDataItemTree()`, `createMockHierarchicalDataItemTree()` for testing `Choose*Step` classes and pick-based wizards
 
+### Reusing and Adapting Fixtures
+
+**Search the testing barrels before you write a fixture.** Re-authoring a mock
+that already exists is the most common review comment on test PRs in this repo.
+The decision order is:
+
+1. **Use the existing helper as-is.** Most `make*` factories take a `Partial<...>`
+   overrides argument — pass only the fields the test cares about and let the
+   factory supply the rest.
+2. **Adapt the existing helper.** If a shared fixture is close but not quite
+   right, extend it *additively* — add an optional override, an optional
+   parameter with a backward-compatible default, or a thin wrapper next to it.
+   Adapting the shared fixture is nearly always better than forking it, because
+   the next test that needs the same shape gets it for free.
+3. **Add a new shared helper** in the appropriate barrel (`mockAzure.ts` /
+   `mockTree.ts` in azutils for Azure entity and tree fixtures; utils for generic
+   primitives) and export it from that package's `testing.ts`.
+4. **Write a local fixture** only when it is genuinely single-use and specific to
+   one test file. The moment a second file needs the same shape, promote it to a
+   shared helper rather than copying it.
+
+Never do this:
+
+```typescript
+// BAD -- a hand-rolled near-duplicate of makeSubscription()
+const subscription = {
+    subscriptionId: 'sub-1',
+    displayName: 'Test Subscription',
+    tenantId: 'tenant-1',
+    environment: AzurePublicCloud,
+    // ...several more fields copied from another test file
+} as AzureSubscription;
+```
+
+```typescript
+// GOOD -- reuse the shared factory, override only what matters
+const subscription = makeSubscription({ subscriptionId: 'sub-1' });
+```
+
+If the shared factory can't express what you need, change the shared factory.
+
 ### Debounced Work
 
 Code that debounces work should depend on `IDebounceScheduler` rather than
@@ -212,6 +253,112 @@ await expect(client.getVersion()).to.eventually.equal('1.2.3');
 Always `await` these assertions -- including `.eventually` ones, which return a
 thenable rather than asserting synchronously. An un-awaited rejection assertion
 surfaces as an unhandled rejection rather than failing the test that created it.
+
+## What Not to Test
+
+Tests exist to catch **regressions** — changes that break behavior nobody meant
+to break. A test that can only fail when someone deliberately changes something
+catches no mistakes; it just converts intentional edits into mechanical churn.
+Every such test is a permanent maintenance cost with no offsetting benefit.
+Avoid these categories:
+
+### Don't test that a constant is still what it currently is
+
+Nobody accidentally edits the value of a constant, so a test that pins one to its
+current value can never catch a mistake. It fails only when someone deliberately
+changes the value, at which point the test is already stale and the failure is
+pure noise: the author updates the expected literal to match the new declaration
+and learns nothing.
+
+```typescript
+// BAD -- restates the declaration
+expect(AcrResourceType).to.equal('Microsoft.ContainerRegistry/registries');
+
+// BAD -- same thing, one level removed
+expect(command.id).to.equal('vscode-azure/resources/refresh');
+expect(getDefaultSettings()).to.deep.equal({ pageSize: 50, autoRefresh: true });
+
+// BAD -- a snapshot of the current shape, with nothing asserted about behavior
+expect(Object.keys(iconsByType)).to.have.members(['acr', 'functionapp', /* ... */]);
+```
+
+The same reasoning rules out snapshot-style assertions that freeze a literal
+structure without exercising any behavior. Both change only when someone means to
+change them, and both turn intentional edits into mechanical test churn.
+
+Test what the constant *does* instead. Assert behavior that would break by
+accident:
+
+```typescript
+// GOOD -- exercises the logic that consumes the constant
+const item = provider.getTreeItem(makeGenericResource({ logicalType: AcrResourceType }));
+expect(item.iconPath).to.not.be.undefined;
+
+// GOOD -- catches a real mistake: paging that ignores the configured size
+const pages = await collectPages(provider.getChildren(resource));
+expect(pages[0].items).to.have.lengthOf(configuredPageSize);
+```
+
+Note that referencing the constant (rather than its literal) in an assertion is
+fine and encouraged — the problem is when the constant *is* the subject.
+
+The exception is a value that is a genuine cross-boundary **contract**, where two
+independent sources must agree and can drift apart: a command ID declared in
+`package.json` and registered in code, an icon filename derived from a logical
+type, a serialized format that persisted state must still parse. Those tests are
+valuable, but write them as consistency checks between the two sources — read
+both sides and compare — not as an assertion against a hardcoded literal.
+
+### Don't test that removed behavior stays removed
+
+After deleting a feature, flag, command, or code path, do **not** add a test
+asserting that it's gone. These tests document history rather than behavior, they
+pass trivially forever, and they make the deleted concept permanently visible to
+everyone who reads the suite.
+
+```typescript
+// BAD
+it('(unit) should no longer register the legacy refresh command', () => {
+    expect(registeredCommands.has('vscode-azure.legacyRefresh')).to.be.false;
+});
+
+it('(unit) should not fall back to the old provider', () => {
+    expect(result.usedLegacyProvider).to.be.undefined;
+});
+```
+
+The type system, the build, and the existing tests for the surviving behavior
+already cover this. Delete the old tests along with the old code and move on.
+
+The narrow exception is a **regression test for a real bug** — e.g. a removed
+code path that caused data loss, or a security fix. In that case assert the
+correct *positive* behavior ("writes are not duplicated"), reference the issue,
+and phrase it in terms of what the system does today, not what was deleted.
+
+### Don't test the test fixtures
+
+Mocks and factories are test infrastructure, not production code. A test whose
+subject is `makeSubscription()` or `MockVsCode` only asserts that the fixture
+does what its own code literally says.
+
+```typescript
+// BAD -- asserts the fixture against itself
+it('(unit) makeSubscription should default the tenant id', () => {
+    expect(makeSubscription().tenantId).to.equal('mock-tenant');
+});
+
+// BAD -- exercises the mock, not the code under test
+it('(unit) MockFileSystem should read back what was written', async () => {
+    await fs.writeFile(uri, content);
+    expect(await fs.readFile(uri)).to.deep.equal(content);
+});
+```
+
+Fixtures are validated implicitly: if a factory is wrong, the tests that use it
+fail. The exception is a fixture with real, non-trivial logic of its own that
+tests depend on subtly (e.g. `respondToPrompts()`'s back-navigation handling or
+`MockHttpClient`'s request matching) — behavior complex enough that a bug in it
+would silently produce false passes. Test that logic, not the plain factories.
 
 ## Running Tests
 

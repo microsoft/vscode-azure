@@ -8,7 +8,7 @@ import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from
 import { inject, injectable } from 'inversify';
 import { EditSettings } from '../../../commands/settings/EditSettings';
 import { IAzureViewDataTree } from '../../../services';
-import { combineContextValues } from '../../combineContextValues';
+import { combineContextValues } from '../../contextValueHelpers';
 import { ISettingsDataProvider } from './SettingsDataProvider';
 import { isSettingsNode } from './SettingsNode';
 
