@@ -12,7 +12,7 @@ import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
-import { combineContextValues } from '../combineContextValues';
+import { combineContextValues, resourceContextValue } from '../contextValueHelpers';
 import { getResourceTypeIconUri } from '../iconPath';
 import { AcrResourceType } from './acr/AcrRegistry';
 
@@ -156,7 +156,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.None);
                 item.id = key;
                 item.description = resource.logicalType;
-                item.contextValue = combineContextValues(OpenInPortal.ContextValue);
+                item.contextValue = resourceContextValue(resource);
                 item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
                 return item;
             }

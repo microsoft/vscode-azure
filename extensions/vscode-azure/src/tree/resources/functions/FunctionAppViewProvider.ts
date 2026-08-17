@@ -9,9 +9,8 @@ import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { AddOrEditAppSetting } from '../../../commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../commands/functions/DeleteAppSetting';
-import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IAzureViewDataTree } from '../../../services';
-import { combineContextValues } from '../../combineContextValues';
+import { combineContextValues, resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { FunctionAppVirtualTypes, isFunctionApp, isFunctionAppVirtual } from './FunctionApp';
 
@@ -69,7 +68,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         // Function App resource node
         const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
-        item.contextValue = combineContextValues(OpenInPortal.ContextValue, FunctionAppViewProvider.ContextValue);
+        item.contextValue = resourceContextValue(resource, FunctionAppViewProvider.ContextValue);
         item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
         item.description = resource.logicalType;
 

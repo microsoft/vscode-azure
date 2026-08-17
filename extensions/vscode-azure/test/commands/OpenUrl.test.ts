@@ -46,4 +46,37 @@ describe('OpenUrl (unit)', () => {
         );
         expect(mockResult.env.openExternal.mock.callCount()).to.equal(0);
     });
+
+    it('refuses to open a URL that is not http(s)', async () => {
+        // Uri.parse accepts every one of these, and VS Code only blocks the
+        // `command:` scheme, so this check is the last line of defense.
+        const blocked = [
+            'javascript:alert(1)',
+            'mailto:someone@contoso.example.com',
+            'ftp://contoso.example.com',
+            'file:///etc/passwd',
+            'vscode:extension/some.extension',
+            // Uri.parse silently reads a scheme-less value as a file path.
+            'contoso.azurewebsites.net',
+        ];
+
+        for (const url of blocked) {
+            const mockResult = createMockVsCode({ Uri: vscode.Uri });
+            const command = new OpenUrl(mockResult.vscode);
+
+            await rejects(command.execute(url), /Only http and https links can be opened/, `expected ${url} to be blocked`);
+            expect(mockResult.env.openExternal.mock.callCount(), `expected ${url} not to be opened`).to.equal(0);
+        }
+    });
+
+    it('opens http and https regardless of scheme casing', async () => {
+        for (const url of ['http://contoso.example.com/', 'https://contoso.example.com/', 'HTTPS://contoso.example.com/']) {
+            const mockResult = createMockVsCode({ Uri: vscode.Uri });
+            const command = new OpenUrl(mockResult.vscode);
+
+            await command.execute(url);
+
+            expect(mockResult.env.openExternal.mock.callCount(), `expected ${url} to be opened`).to.equal(1);
+        }
+    });
 });

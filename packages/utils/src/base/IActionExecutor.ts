@@ -9,6 +9,7 @@ import type { AsWritable } from '../types/AsWritable';
 import { CancellationError } from '../vscode/CancellationError';
 import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { IVsCode } from '../vscode/IVsCode';
+import { showMessage } from '../ui/uiHelpers';
 import { createActionContext, type IActionContext, type KnownTelemetryProperty, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 import { stringifyError } from './stringifyError';
@@ -156,7 +157,7 @@ export class ActionExecutor implements IActionExecutor {
             : this.code.l10n.t('Report Issue');
 
         const items = reportIssue ? [reportIssue] : [];
-        const choice = await this.code.window.showErrorMessage(stringifyError(error), ...items);
+        const choice = await showMessage(this.code, stringifyError(error), { severity: 'error' }, ...items);
 
         if (choice === reportIssue) {
             const data = [

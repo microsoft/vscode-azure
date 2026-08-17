@@ -9,9 +9,11 @@ import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vsco
 import * as vscode from 'vscode';
 import { AddOrEditAppSetting } from '../../../../src/commands/functions/AddOrEditAppSetting';
 import { DeleteAppSetting } from '../../../../src/commands/functions/DeleteAppSetting';
+import { BrowseWebsite } from '../../../../src/commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes } from '../../../../src/tree/resources/functions/FunctionApp';
 import { FunctionAppViewProvider } from '../../../../src/tree/resources/functions/FunctionAppViewProvider';
+import { setWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
 import { makeFunctionApp } from './mockFunctionApp';
 
 function makeFunctionAppVirtual(overrides?: Partial<VirtualResource>): VirtualResource {
@@ -79,6 +81,7 @@ describe('FunctionAppViewProvider (unit)', () => {
     describe('getTreeItem', () => {
         it('should render a Function App with Collapsed state', () => {
             const app = makeFunctionApp();
+            setWebsiteUrl(app, 'myfunc.azurewebsites.net');
             const key = AzureNodeId.from(app).toString();
             const cache = new Map<string, ConcreteAzureNode>([[key, app]]);
             const provider = createProvider(cache);
@@ -87,6 +90,7 @@ describe('FunctionAppViewProvider (unit)', () => {
             expect(item.label).to.equal('myFunc');
             expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
             expect(item.contextValue).to.include(OpenInPortal.ContextValue);
+            expect(item.contextValue).to.include(BrowseWebsite.ContextValue);
             expect(item.contextValue).to.include(FunctionAppViewProvider.ContextValue);
         });
 

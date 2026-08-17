@@ -115,27 +115,6 @@ export interface MockVsCodeResult {
     readonly workspace: MockedNamespace<typeof vscode.workspace>;
 
     /**
-     * Pre-programmed responses for `showInformationMessage`,
-     * `showWarningMessage`, and `showErrorMessage`.
-     *
-     * Push button labels (e.g. `'Delete'`) to simulate the user
-     * clicking a button. Push `undefined` to simulate dismissal
-     * (the default when the queue is empty).
-     *
-     * Responses are consumed in order across all three message types.
-     *
-     * @example
-     * ```ts
-     * const m = createMockVsCode();
-     * m.messageResponses.push('Delete');
-     *
-     * // code under test calls showWarningMessage('Sure?', 'Delete', 'Cancel')
-     * // => resolves to 'Delete'
-     * ```
-     */
-    readonly messageResponses: (string | undefined)[];
-
-    /**
      * Fire this emitter to simulate a workspace configuration change.
      *
      * @example
@@ -238,12 +217,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         (name: string) => new MockOutputChannel(name),
     );
 
-    const messageResponses: (string | undefined)[] = [];
-    const nextMessageResponse = () => Promise.resolve(messageResponses.shift());
-
-    const showInformationMessage = mock.fn(nextMessageResponse);
-    const showWarningMessage = mock.fn(nextMessageResponse);
-    const showErrorMessage = mock.fn(nextMessageResponse);
+    const showInformationMessage = mock.fn(() => Promise.resolve(undefined));
+    const showWarningMessage = mock.fn(() => Promise.resolve(undefined));
+    const showErrorMessage = mock.fn(() => Promise.resolve(undefined));
 
     const showOpenDialog = mock.fn(
         () => Promise.resolve(undefined),
@@ -482,7 +458,6 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         env,
         window,
         workspace,
-        messageResponses,
         configChangeEmitter,
         sessionsChangeEmitter,
         workspaceFoldersChangeEmitter,
@@ -686,15 +661,17 @@ export function withSettings<T>(
  * - `{ value: 'text' }` -- type a value into a combobox-style QuickPick (one
  *   that reacts to {@linkcode vscode.QuickPick.onDidChangeValue}) and accept the
  *   resulting active item
+ * - `{ button: 'label' }` -- click a button on an information, warning, or error message
  * - `'acceptDefault'` -- accept the current value without changes
  * - `'goBack'` -- press the Back button (rejects with {@linkcode GoBackError})
- * - `'cancel'` -- dismiss the UI (rejects with {@linkcode CancellationError})
+ * - `'cancel'` -- dismiss the UI (modal UI rejects with {@linkcode CancellationError})
  */
 export type WizardResponse =
     | { readonly pick: string }
     | { readonly pickMany: readonly string[] }
     | { readonly input: string }
     | { readonly value: string }
+    | { readonly button: string }
     | 'acceptDefault'
     | 'goBack'
     | 'cancel';
@@ -711,12 +688,12 @@ export interface ResponseTracker {
 }
 
 /**
- * Pre-programs the mock to automatically respond to QuickPicks and
- * InputBoxes as they appear. Use this to drive wizards and other
- * multi-step UI flows in tests.
+ * Pre-programs the mock to automatically respond to QuickPicks, InputBoxes,
+ * and messages as they appear. Use this to drive wizards and other multi-step
+ * UI flows in tests.
  *
  * Responses are consumed in order: the first response answers the
- * first QuickPick or InputBox shown, the second answers the next, etc.
+ * first supported UI shown, the second answers the next, etc.
  *
  * @example
  * ```ts
@@ -724,6 +701,7 @@ export interface ResponseTracker {
  * const tracker = respondToPrompts(mock, [
  *     { pick: 'My Subscription' },
  *     { input: 'my-resource' },
+ *     { button: 'Deploy' },
  * ]);
  *
  * const wizard = new Wizard(
@@ -744,17 +722,24 @@ export function respondToPrompts(
 
     const createQPCtx = (mockResult.vscode.window.createQuickPick as unknown as UnknownMock).mock;
     const createIBCtx = (mockResult.vscode.window.createInputBox as unknown as UnknownMock).mock;
+    const showInformationMessageCtx = (mockResult.vscode.window.showInformationMessage as unknown as UnknownMock).mock;
+    const showWarningMessageCtx = (mockResult.vscode.window.showWarningMessage as unknown as UnknownMock).mock;
+    const showErrorMessageCtx = (mockResult.vscode.window.showErrorMessage as unknown as UnknownMock).mock;
+
+    const nextResponse = (ui: string): WizardResponse => {
+        const response = queue.shift();
+        if (response === undefined) {
+            throw new Error(`Unexpected ${ui} shown: no more responses in queue`);
+        }
+        return response;
+    };
 
     createQPCtx.mockImplementation(() => {
         const qp = new MockQuickPick<vscode.QuickPickItem>();
         (mockResult.quickPicks as MockQuickPick<vscode.QuickPickItem>[]).push(qp);
 
         qp.show.mock.mockImplementation(() => {
-            const response = queue.shift();
-            if (response === undefined) {
-                throw new Error('Unexpected QuickPick shown: no more responses in queue');
-            }
-            applyToQuickPick(qp, response, backButton);
+            applyToQuickPick(qp, nextResponse('QuickPick'), backButton);
         });
 
         return qp;
@@ -765,21 +750,37 @@ export function respondToPrompts(
         (mockResult.inputBoxes as MockInputBox[]).push(ib);
 
         ib.show.mock.mockImplementation(() => {
-            const response = queue.shift();
-            if (response === undefined) {
-                throw new Error('Unexpected InputBox shown: no more responses in queue');
-            }
-            applyToInputBox(ib, response, backButton);
+            applyToInputBox(ib, nextResponse('InputBox'), backButton);
         });
 
         return ib;
     });
 
+    const respondToMessage = (...args: unknown[]): Promise<string | undefined> => {
+        const response = nextResponse('message');
+        if (response === 'cancel') {
+            return Promise.resolve(undefined);
+        }
+        if (typeof response !== 'object' || !('button' in response)) {
+            throw new Error('Got a non-button response but a message was shown');
+        }
+
+        const buttons = args.slice(1).filter((arg): arg is string => typeof arg === 'string');
+        if (!buttons.includes(response.button)) {
+            throw new Error(`Message does not have a '${response.button}' button`);
+        }
+        return Promise.resolve(response.button);
+    };
+
+    showInformationMessageCtx.mockImplementation(respondToMessage);
+    showWarningMessageCtx.mockImplementation(respondToMessage);
+    showErrorMessageCtx.mockImplementation(respondToMessage);
+
     return {
         get remaining() { return queue.length; },
         assertAllConsumed() {
             if (queue.length > 0) {
-                throw new Error(`${String(queue.length)} wizard response(s) were not consumed`);
+                throw new Error(`${String(queue.length)} UI response(s) were not consumed`);
             }
         },
     };
@@ -801,6 +802,8 @@ function applyToQuickPick(
         return;
     } else if ('input' in response) {
         throw new Error('Got an \'input\' response but a QuickPick was shown');
+    } else if ('button' in response) {
+        throw new Error('Got a \'button\' response but a QuickPick was shown');
     } else if ('value' in response) {
         // Combobox: type a value (firing onDidChangeValue so the production
         // code can synthesize an item), then accept whatever it made active.
@@ -847,8 +850,8 @@ function applyToInputBox(
     } else if (response === 'acceptDefault') {
         ib.accept();
         return;
-    } else if ('pick' in response || 'pickMany' in response || 'value' in response) {
-        throw new Error('Got a \'pick\'/\'pickMany\'/\'value\' response but an InputBox was shown');
+    } else if ('pick' in response || 'pickMany' in response || 'value' in response || 'button' in response) {
+        throw new Error('Got a non-input response but an InputBox was shown');
     } else {
         // { input: string }
         ib.changeValue(response.input);

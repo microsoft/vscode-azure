@@ -8,9 +8,8 @@ import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { DisableAcrAdminUser } from '../../../commands/acr/DisableAcrAdminUser';
-import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IAzureViewDataTree } from '../../../services';
-import { combineContextValues } from '../../combineContextValues';
+import { resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { isAcrRegistry } from './AcrRegistry';
 
@@ -85,7 +84,7 @@ export class AcrViewProvider implements ViewProvider<string> {
         // Collapsed since we have children
         const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
-        item.contextValue = combineContextValues(OpenInPortal.ContextValue, DisableAcrAdminUser.ContextValue);
+        item.contextValue = resourceContextValue(resource, DisableAcrAdminUser.ContextValue);
         item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
 
         if (isAcrRegistry(resource)) {

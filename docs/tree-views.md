@@ -112,6 +112,14 @@ public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
 }
 ```
 
+#### Capabilities attached by enrichment
+
+Enrichment is also how a resource advertises a *capability* that is not derivable from its type alone. The website URL used by the Browse Website command works this way: the data provider that owns a resource attaches it via `setWebsiteUrl()` (in `src/tree/resources/websiteUrl.ts`), and view providers add the corresponding context value when `getWebsiteUrl()` returns a value.
+
+A module-private symbol is used as the property key so the capability can never collide with an ARM property, and so it can be detected exactly instead of by re-checking the resource type. Making any new resource type browsable therefore requires no change to the command or to the generic view provider — only that its data provider call `setWebsiteUrl()` during `enrich()`. A resource type with a dedicated view provider must add the context value itself (via the shared `resourceContextValue()` helper in `src/tree/contextValueHelpers.ts`); everything else is covered by `GenericAzureViewProvider`.
+
+Because the context value is derived from enriched state, a node rendered before enrichment lands simply lacks it; the `onDidChange` fired at step 4 re-renders the node with the capability present. `setWebsiteUrl()` also *clears* a previously attached URL when the resource stops reporting one, so a node cannot keep advertising a website that no longer resolves.
+
 ## View Layer
 
 ### `ViewItemTree<TViewItem, TResource>`
