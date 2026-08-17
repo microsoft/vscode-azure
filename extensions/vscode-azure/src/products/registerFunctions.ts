@@ -7,7 +7,8 @@ import { IWebAppClientProvider, WebAppClient } from '@microsoft/vscode-azure-azu
 import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
-import { ISettingsAdapter } from '../settings/SettingsAdapter';
+import { WebAppDataProvider } from '../tree/resources/webApp/WebAppDataProvider';
+import { WebAppViewProvider } from '../tree/resources/webApp/WebAppViewProvider';
 
 /** Contribute all Azure Functions services and UI integrations. */
 export function registerFunctions(registrar: ProductRegistrar): void {
@@ -15,11 +16,14 @@ export function registerFunctions(registrar: ProductRegistrar): void {
         return WebAppClient.create(context, executor, credential, subscription);
     });
 
-    // Adapters are multi-injected into the settings registry, so adding a product is one line.
+    // Registered once here for every Microsoft.Web/sites flavor; App Service and Logic Apps reuse
+    // this shared ownership rather than registering duplicate providers.
     registrar.registerBinding(container => {
-        container.bind(ISettingsAdapter).to(WebAppSettingsAdapter).inSingletonScope();
+        container.bind(WebAppSettingsAdapter).toSelf().inSingletonScope();
     });
 
+    registrar.registerResourceDataProvider(WebAppDataProvider);
+    registrar.registerResourceViewProvider(WebAppViewProvider);
     registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registrar.registerCommand('vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
 }

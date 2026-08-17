@@ -5,11 +5,10 @@
 
 import type * as vscode from 'vscode';
 import { Disposable, EventEmitter, IVsCode, stringifyError } from '@microsoft/vscode-azure-utils';
-import { inject, injectable, multiInject, optional, unmanaged } from 'inversify';
+import { inject, injectable, unmanaged } from 'inversify';
 import { IAzureViewDataTree, type IAzureViewDataTree as AzureViewDataTree } from '../services';
 import { isSettingsNode, type SettingsNode } from '../tree/resources/settings/SettingsNode';
 import { JsoncSettingsFormat } from './JsoncSettingsFormat';
-import { ISettingsAdapter, type SettingsAdapter } from './SettingsAdapter';
 import type { SettingsSnapshot } from './SettingsModel';
 import { SettingsUri } from './SettingsUri';
 
@@ -68,7 +67,6 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly tree: AzureViewDataTree,
-        @multiInject(ISettingsAdapter) @optional() private readonly adapters: readonly SettingsAdapter[] = [],
         @unmanaged() options?: SettingsFileSystemProviderOptions,
     ) {
         this.freshnessWindowMs = options?.freshnessWindowMs ?? DefaultFreshnessWindowMs;
@@ -132,8 +130,8 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
         const parsed = this.format.parse(Buffer.from(content).toString('utf8'));
 
-        const { node, adapter } = this.resolve(uri);
-        await adapter.write(node.azureResource, parsed);
+        const node = this.resolve(uri);
+        await node.adapter.write(node.azureResource, parsed);
 
         // The node itself is a leaf today, so this is cheap insurance rather than a visible refresh:
         // it keeps the data layer honest if a resource ever grows children derived from its settings.
@@ -188,24 +186,18 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     }
 
     /**
-     * Resolve the settings node a URI addresses, and the adapter that serves it.
+     * Resolve the settings node a URI addresses.
      *
-     * @throws if the URI is malformed, its node is not currently in the tree, or no adapter claims
-     * the node's resource.
+     * @throws if the URI is malformed or its node is not currently in the tree.
      */
-    private resolve(uri: vscode.Uri): { node: SettingsNode; adapter: SettingsAdapter } {
+    private resolve(uri: vscode.Uri): SettingsNode {
         const node = this.tree.get(SettingsUri.parseNodeKey(uri));
 
         if (!isSettingsNode(node)) {
             throw new Error(this.code.l10n.t('These settings are no longer available. Open them again from the Azure view.'));
         }
 
-        const adapter = this.adapters.find(candidate => candidate.canHandle(node.azureResource));
-        if (!adapter) {
-            throw new Error(`No settings adapter is registered for resources of type '${node.azureResource.logicalType}'`);
-        }
-
-        return { node, adapter };
+        return node;
     }
 
     private async load(uri: vscode.Uri, options: { allowReuse: boolean }): Promise<CacheEntry> {
@@ -216,8 +208,8 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
         let snapshot: SettingsSnapshot;
         try {
-            const { node, adapter } = this.resolve(uri);
-            snapshot = await adapter.read(node.azureResource);
+            const node = this.resolve(uri);
+            snapshot = await node.adapter.read(node.azureResource);
         } catch (error) {
             // The editor only acts on `FileNotFound`; anything else surfaces as an opaque failure.
             // Preserve the original message so the cause is not lost.

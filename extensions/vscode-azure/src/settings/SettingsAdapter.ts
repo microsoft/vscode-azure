@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import type { ServiceIdentifier } from 'inversify';
 import type { SettingsMap, SettingsSnapshot } from './SettingsModel';
 
 /**
@@ -50,12 +49,3 @@ export interface SettingsAdapter {
      */
     write(resource: GenericResource, entries: SettingsMap): Promise<void>;
 }
-
-/**
- * Collection identifier for every registered {@linkcode SettingsAdapter}.
- *
- * Bound multi-injection style; resolve with `container.getAll(ISettingsAdapter)`. Prefer the
- * extension's settings registry, which handles dispatch, over resolving adapters directly.
- */
-export const ISettingsAdapter: ServiceIdentifier<SettingsAdapter> = Symbol.for('ISettingsAdapter');
-export type ISettingsAdapter = SettingsAdapter;

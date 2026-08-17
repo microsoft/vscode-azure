@@ -4,13 +4,28 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, getNodeType } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext, type ITreeItem, type IVsCode, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { EditSettings } from '../../../commands/settings/EditSettings';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues } from '../../contextValueHelpers';
-import { ISettingsDataProvider } from './SettingsDataProvider';
-import { isSettingsNode } from './SettingsNode';
+import { isSettingsNode, type SettingsNode } from './SettingsNode';
+
+/** Convert a settings virtual node into its shared tree presentation. */
+export function createSettingsTreeItem(code: IVsCode, node: SettingsNode, key: string): ITreeItem {
+    const label = node.adapter.label;
+    const item = new code.TreeItem(label, code.TreeItemCollapsibleState.None);
+    item.id = key;
+    item.iconPath = new code.ThemeIcon('settings');
+    item.contextValue = combineContextValues(EditSettings.ContextValue);
+    item.command = {
+        command: EditSettings.CommandId,
+        title: label,
+        arguments: [key],
+    };
+
+    return item;
+}
 
 /**
  * View-layer provider for settings nodes.
@@ -33,7 +48,6 @@ export class SettingsViewProvider implements ViewProvider<string> {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
-        @inject(ISettingsDataProvider) private readonly settings: ISettingsDataProvider,
     ) { }
 
     /** @inheritdoc */
@@ -53,22 +67,7 @@ export class SettingsViewProvider implements ViewProvider<string> {
         }
 
         this.executor.setTelProp('nodeType', getNodeType(node));
-
-        // The adapter names the node, so a product can call these something other than
-        // "Application Settings". Falls back only if the node outlived its adapter.
-        const label = this.settings.getAdapter(node.azureResource)?.label ?? this.ctx.code.l10n.t('Settings');
-
-        const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.None);
-        item.id = key;
-        item.iconPath = new this.ctx.code.ThemeIcon('settings');
-        item.contextValue = combineContextValues(EditSettings.ContextValue);
-        item.command = {
-            command: EditSettings.CommandId,
-            title: label,
-            arguments: [key],
-        };
-
-        return item;
+        return createSettingsTreeItem(this.ctx.code, node, key);
     }
 
     /** @inheritdoc */

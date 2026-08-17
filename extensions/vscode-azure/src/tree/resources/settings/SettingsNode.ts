@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { isVirtualResource, type GenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import type { SettingsAdapter } from '../../../settings/SettingsAdapter';
 
 /**
  * Virtual-type discriminator for the settings tree node.
@@ -21,15 +22,19 @@ export const SettingsVirtualType = 'settings';
  * single document. That also keeps setting values -- frequently secrets -- out of a tree that is
  * often visible during screen shares.
  */
-export type SettingsNode = VirtualResource;
+export interface SettingsNode extends VirtualResource {
+    /** Adapter selected by the provider that owns the resource. */
+    readonly adapter: SettingsAdapter;
+}
 
-/** Build the settings node for {@linkcode resource}. */
-export function createSettingsNode(resource: GenericResource): SettingsNode {
-    return {
+/** Build a settings child when {@linkcode adapter} supports {@linkcode resource}. */
+export function getSettingsNodes(resource: GenericResource, adapter: SettingsAdapter): SettingsNode[] {
+    return adapter.canHandle(resource) ? [{
         virtualType: SettingsVirtualType,
         virtualPath: SettingsVirtualType,
         azureResource: resource,
-    };
+        adapter,
+    }] : [];
 }
 
 /** Type guard for a settings node. */
@@ -37,5 +42,6 @@ export function isSettingsNode(node: unknown): node is SettingsNode {
     return !!node
         && typeof node === 'object'
         && isVirtualResource(node as VirtualResource)
-        && (node as VirtualResource).virtualType === SettingsVirtualType;
+        && (node as VirtualResource).virtualType === SettingsVirtualType
+        && !!(node as Partial<SettingsNode>).adapter;
 }

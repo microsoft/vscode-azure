@@ -5,31 +5,32 @@
 
 import { AzureNodeId, FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createSettingsNode, isSettingsNode } from '../../../../src/tree/resources/settings/SettingsNode';
+import { getSettingsNodes, isSettingsNode } from '../../../../src/tree/resources/settings/SettingsNode';
+import { StubAdapter } from '../../../settings/mockSettings';
 
 const resource = makeGenericResource({
     id: '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Web/sites/app',
     name: 'app',
     logicalType: FunctionAppLogicalType,
 });
+const adapter = new StubAdapter({ logicalTypes: [FunctionAppLogicalType] });
+const [settingsNode] = getSettingsNodes(resource, adapter);
 
 describe('SettingsNode (unit)', () => {
-    describe('createSettingsNode', () => {
+    describe('getSettingsNodes', () => {
         it('hangs off the owning resource', () => {
-            const node = createSettingsNode(resource);
-
-            expect(node.azureResource).to.equal(resource);
+            expect(settingsNode.azureResource).to.equal(resource);
         });
 
         it('gives the settings node a key distinct from its resource', () => {
-            const node = AzureNodeId.from(createSettingsNode(resource)).toString();
+            const node = AzureNodeId.from(settingsNode).toString();
             const owner = AzureNodeId.from(resource).toString();
 
             expect(node).to.not.equal(owner);
         });
 
         it('round-trips through AzureNodeId', () => {
-            const key = AzureNodeId.from(createSettingsNode(resource)).toString();
+            const key = AzureNodeId.from(settingsNode).toString();
 
             expect(AzureNodeId.parse(key).toString()).to.equal(key);
         });
@@ -37,7 +38,7 @@ describe('SettingsNode (unit)', () => {
 
     describe('isSettingsNode', () => {
         it('claims a settings node', () => {
-            expect(isSettingsNode(createSettingsNode(resource))).to.be.true;
+            expect(isSettingsNode(settingsNode)).to.be.true;
         });
 
         it('rejects the owning resource and non-nodes', () => {

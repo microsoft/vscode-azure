@@ -7,6 +7,7 @@ import { FunctionAppLogicalType, type GenericResource } from '@microsoft/vscode-
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import type { SettingsAdapter } from '../../src/settings/SettingsAdapter';
 import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
+import { getSettingsNodes, type SettingsNode } from '../../src/tree/resources/settings/SettingsNode';
 
 /** Options for {@linkcode StubAdapter}. */
 export interface StubAdapterOptions {
@@ -88,6 +89,14 @@ export function makeSettingsResource(overrides?: Parameters<typeof makeGenericRe
         logicalType: FunctionAppLogicalType,
         ...overrides,
     });
+}
+
+/** Build the standard settings virtual-node fixture. */
+export function makeSettingsNode(
+    overrides?: Parameters<typeof makeGenericResource>[0],
+    adapter: SettingsAdapter = new StubAdapter({ logicalTypes: [FunctionAppLogicalType] }),
+): SettingsNode {
+    return getSettingsNodes(makeSettingsResource(overrides), adapter)[0];
 }
 
 /** A settings snapshot with sensible defaults for editor and format tests. */

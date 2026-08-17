@@ -1,9 +1,8 @@
 # Settings
 
 Application settings and similar name/value configuration on a deployed resource are a near-universal
-Azure concept. This document describes the shared framework that serves them, so a product gets
-settings by registering an adapter rather than by building a tree, a command, and an editor of its
-own.
+Azure concept. This document describes the shared framework that serves them, so a product can
+compose its adapter into the common tree node, command, and editor.
 
 ## Layers
 
@@ -11,18 +10,15 @@ own.
 extensions/vscode-azure/src/settings/                  Adapter contract, adapters, model, JSONC format,
                                                        document FileSystemProvider, URI codec
 extensions/vscode-azure/src/tree/resources/settings/   Data + view providers
+extensions/vscode-azure/src/tree/resources/webApp/     Product ownership and settings composition
 extensions/vscode-azure/src/commands/settings/         The edit command
 ```
 
 There is deliberately **no indirection between the file system provider and the adapter**.
-`SettingsFileSystemProvider` resolves a document URI to a tree node itself, picks the adapter that
-claims that node's resource, and calls `read`/`write` on it. Earlier revisions routed this through a
-`SettingsDocumentSource` seam and a `SettingsRegistry`; both were pure pass-through and are gone.
-
-Adapter dispatch is one line (`adapters.find(a => a.canHandle(resource))`) and lives in the two
-places that need it: the file system provider, and `SettingsDataProvider` for the tree. It is
-deliberately not memoized -- there are a handful of adapters and `canHandle` is a set lookup, so
-caching would buy nothing and would force adapters to key off `logicalType` alone.
+`SettingsFileSystemProvider` resolves a document URI to the exact tree node and calls `read`/`write`
+on the adapter attached to that node. The product provider selects the adapter explicitly when it
+calls `getSettingsNodes(resource, adapter)`. Earlier revisions routed this through a
+`SettingsDocumentSource`, `SettingsRegistry`, and global adapter dispatch; all were unnecessary.
 
 ## One command, one surface
 
@@ -80,8 +76,8 @@ Two caveats worth knowing, since neither is documented by Azure:
 
 ## Adapters
 
-A product supports settings by implementing `SettingsAdapter` and binding it to `ISettingsAdapter`
-in its own product registrar. Nothing else changes.
+A product supports settings by implementing `SettingsAdapter`, binding the concrete adapter in its
+registrar, and passing it to `getSettingsNodes` from the provider that owns the resource.
 
 ```typescript
 export interface SettingsAdapter {
@@ -98,8 +94,8 @@ several named dictionaries on a resource, because nothing needs one: the shared
 and no shipping Azure extension surfaces App Service connection strings (`listConnectionStrings`) at
 all. `label` exists so a product can name its node something other than "Application Settings".
 
-**`canHandle` runs for every resource the generic data provider lists**, so keep it cheap -- a set
-lookup on `logicalType` is the norm. It is free to inspect any field, since dispatch is not cached.
+The product data provider can delegate its own `canHandle` decision to the adapter. Keep that check
+cheap -- a set lookup on `logicalType` is the norm.
 
 ### Restricting what a product permits
 
@@ -163,15 +159,16 @@ Two encoding details are load-bearing:
 one resource. The settings framework therefore splits along the resource/virtual-node boundary:
 
 - `SettingsDataProvider` and `SettingsViewProvider` register **first** and claim only the virtual
-  settings nodes.
-- The settings nodes themselves are emitted by whichever provider owns the *resource*.
-  `AzureResourceDataProvider` (the generic fallback) asks `SettingsDataProvider` and emits them for
-  any resource with a registered adapter, so App Service and Logic App get settings with zero
-  product-specific code.
+  settings nodes. They are thin tree-framework glue: the data provider reports a leaf, while the
+  view provider delegates presentation to `createSettingsTreeItem`.
+- The product-specific provider owns the *resource*, injects its concrete adapter, and calls the pure
+  `getSettingsNodes(resource, adapter)` helper. The resulting virtual node retains that adapter.
+- A product-specific view provider presents the owning resource as expandable. For ordinary ARM
+  resources it can delegate shared presentation to `createGenericResourceTreeItem`.
 
-A product provider that owns a resource in order to contribute its own children must compose
-`ISettingsDataProvider.getSettingsNodes(resource)` into what it returns, or that resource will lose
-its settings node.
+For example, `WebAppDataProvider` owns Function App, App Service, and Logic App resources supported
+by `WebAppSettingsAdapter`, while `WebAppViewProvider` gives those resources a chevron. Other
+capabilities can overlap those products independently without inheritance or provider aggregation.
 
 ## Ownership boundary
 
@@ -190,14 +187,17 @@ document warns about this directly without adding a confirmation prompt to every
 1. Add a client wrapper in `packages/azutils/src/rest/clients/` if the product needs one, re-exporting
    any SDK types from the wrapper.
 2. Implement `SettingsAdapter` in `extensions/vscode-azure/src/settings/adapters/`.
-3. Bind it to `ISettingsAdapter` in that product's registrar (e.g. `src/products/registerFunctions.ts`).
+3. Bind the concrete adapter in the product registrar.
+4. Have the product data provider inject it and include `getSettingsNodes(resource, adapter)` in the
+   resource's children.
+5. Ensure the product view provider renders the owning resource as expandable.
 
-That is all. The tree node, the editor, and the command come for free.
+The settings virtual-node behavior, editor, and command then come from the shared framework.
 
 ## Testing
 
 `extensions/vscode-azure/test/settings/mockSettings.ts` provides `StubAdapter` (an in-memory adapter
 that retains writes for assertion, and refuses writes when constructed with `readOnly`) and
-`makeSettingsResource` (a `Microsoft.Web/sites` fixture, Function App by default). Prefer these over
-hand-rolled fixtures. Construct `SettingsDataProvider` directly with an array of adapters -- it takes
-no other dependency.
+`makeSettingsResource` / `makeSettingsNode` fixtures for `Microsoft.Web/sites` resources. Prefer
+these over hand-rolled fixtures. `SettingsDataProvider` has no constructor dependencies; test
+product composition through `getSettingsNodes`.

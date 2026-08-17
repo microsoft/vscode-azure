@@ -11,11 +11,25 @@ import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
-import { ISettingsDataProvider } from './settings/SettingsDataProvider';
 import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues, resourceContextValue } from '../contextValueHelpers';
 import { getResourceTypeIconUri } from '../iconPath';
 import { AcrResourceType } from './acr/AcrRegistry';
+
+/** Render a generic ARM resource with the collapsibility chosen by its owning product provider. */
+export function createGenericResourceTreeItem(
+    ctx: ICodeContext,
+    resource: GenericResource,
+    key: string,
+    collapsibleState: NonNullable<ITreeItem['collapsibleState']>,
+): ITreeItem {
+    const item = new ctx.code.TreeItem(resource.name, collapsibleState);
+    item.id = key;
+    item.description = resource.logicalType;
+    item.contextValue = resourceContextValue(resource);
+    item.iconPath = getResourceTypeIconUri(ctx, resource.logicalType);
+    return item;
+}
 
 /**
  * Root view-layer provider for the Azure resources tree.
@@ -54,7 +68,6 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(ISettingsDataProvider) private readonly settings: ISettingsDataProvider,
     ) {
         this.disposables.push(ctx.code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(`${ConfigurationSection}.alwaysShowAccountNodes`)
@@ -155,18 +168,12 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
 
             case isGenericResource(resource): {
-                // Expandable only when the product exposes settings; everything else is a leaf, so
-                // no chevron appears on a node that would open to nothing.
-                const collapsibleState = this.settings.getAdapter(resource)
-                    ? this.ctx.code.TreeItemCollapsibleState.Collapsed
-                    : this.ctx.code.TreeItemCollapsibleState.None;
-
-                const item = new this.ctx.code.TreeItem(resource.name, collapsibleState);
-                item.id = key;
-                item.description = resource.logicalType;
-                item.contextValue = resourceContextValue(resource);
-                item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
-                return item;
+                return createGenericResourceTreeItem(
+                    this.ctx,
+                    resource,
+                    key,
+                    this.ctx.code.TreeItemCollapsibleState.None,
+                );
             }
 
             default: {

@@ -115,10 +115,10 @@ implementation** rather than re-vendoring the source's code:
 - **Application settings** — there **is** a shared settings framework (`docs/settings.md`). Do **not**
   build product-specific settings trees, commands, or an editor. Implement a single `SettingsAdapter`
   (`label` / `canHandle` / `read` / `write`) in
-  `extensions/vscode-azure/src/settings/adapters/`, bind it to `ISettingsAdapter` in that product's
-  registrar, and stop. The settings tree node, the JSONC editor, and the edit command all come for
-  free. Local configuration synchronization belongs to azd or the product's deployment workflow, not
-  this framework.
+  `extensions/vscode-azure/src/settings/adapters/`, bind the concrete adapter in that product's
+  registrar, and pass it to `getSettingsNodes(resource, adapter)` from the product data provider.
+  The settings virtual-node behavior, JSONC editor, and edit command are shared. Local configuration
+  synchronization belongs to azd or the product's deployment workflow, not this framework.
   - There is one command and one surface: a resource's settings are edited as a single document.
     There are no per-setting add/edit/rename/delete commands, and no values are shown in the tree.
   - **One resource has at most one settings document.** There is no "collection id" for several named
@@ -140,14 +140,14 @@ implementation** rather than re-vendoring the source's code:
   `GenericAzureViewProvider`.
 
 > All of the above are true **Reuse**: wire straight to an existing generic command, provider, or
-> extension point. For app settings the only new code is the adapter itself. Say so in the mapping
-> record, so the implementer does not rebuild a settings UI that already exists.
+> extension point. For app settings the product adds the adapter and thin resource-provider
+> composition, not a settings UI. Say so in the mapping record, so the implementer does not rebuild
+> a settings UI that already exists.
 
 > **Tree dispatch caveat.** `ProviderRegistry` dispatches to the first `canHandle` match, so a
-> product `DataProvider` that claims a resource in order to add its own children takes that resource
-> away from the generic provider that would otherwise emit its settings node. Such a provider must
-> compose `ISettingsDataProvider.getSettingsNodes(resource)` into what it returns. A product with
-> no children beyond settings needs **no** data or view provider at all.
+> product `DataProvider` that claims a resource owns all of its children. It composes settings
+> explicitly with `getSettingsNodes(resource, adapter)`; providers are never aggregated. Its
+> corresponding view provider must render the resource as expandable.
 
 ---
 

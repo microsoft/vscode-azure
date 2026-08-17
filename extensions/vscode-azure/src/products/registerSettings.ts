@@ -9,7 +9,7 @@ import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
 import { SettingsFileSystemProvider } from '../settings/SettingsFileSystemProvider';
 import { SettingsScheme } from '../settings/SettingsUri';
-import { ISettingsDataProvider, SettingsDataProvider } from '../tree/resources/settings/SettingsDataProvider';
+import { SettingsDataProvider } from '../tree/resources/settings/SettingsDataProvider';
 import { SettingsViewProvider } from '../tree/resources/settings/SettingsViewProvider';
 
 /**
@@ -37,8 +37,6 @@ export function registerSettings(registrar: ProductRegistrar): void {
 
     registrar.registerCommand(EditSettings.CommandId, EditSettings);
 
-    // Aliased as a singleton so the resource-owning providers can inject it to compose their
-    // settings children, and so the view layer can ask it which adapter serves a resource.
-    registrar.registerResourceDataProvider([ISettingsDataProvider, SettingsDataProvider]);
+    registrar.registerResourceDataProvider(SettingsDataProvider);
     registrar.registerResourceViewProvider(SettingsViewProvider);
 }

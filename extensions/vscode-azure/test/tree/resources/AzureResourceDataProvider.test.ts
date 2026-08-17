@@ -8,7 +8,6 @@ import { createMockVsCode, createTestActionExecutor, withSettings } from '@micro
 import { mock } from 'node:test';
 import { ConfigurationSection } from '../../../src/constants';
 import { AzureResourceDataProvider } from '../../../src/tree/resources/AzureResourceDataProvider';
-import { SettingsDataProvider } from '../../../src/tree/resources/settings/SettingsDataProvider';
 
 describe('AzureResourceDataProvider (unit)', () => {
     const code = createMockVsCode();
@@ -16,7 +15,7 @@ describe('AzureResourceDataProvider (unit)', () => {
     function createProvider(clientFactory?: unknown) {
         const { executor } = createTestActionExecutor();
         const createClient = clientFactory ?? mock.fn(() => ({}));
-        return new AzureResourceDataProvider(code.vscode, executor, createClient as never, new SettingsDataProvider([]));
+        return new AzureResourceDataProvider(code.vscode, executor, createClient as never);
     }
 
     describe('canHandle', () => {
@@ -36,11 +35,11 @@ describe('AzureResourceDataProvider (unit)', () => {
             expect(createProvider().canHandle(makeResourceGroup())).to.be.true;
         });
 
-        it('should return true for generic resources, which may carry settings nodes', () => {
+        it('should return true for generic resources as the leaf fallback', () => {
             expect(createProvider().canHandle(makeGenericResource())).to.be.true;
         });
 
-        it('should return no children for a generic resource with no settings adapter', async () => {
+        it('should return no children for a generic resource', async () => {
             expect(await createProvider().getChildren(makeGenericResource())).to.be.empty;
         });
 

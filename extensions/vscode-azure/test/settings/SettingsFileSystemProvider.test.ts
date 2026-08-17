@@ -12,15 +12,13 @@ import type { SettingsAdapter } from '../../src/settings/SettingsAdapter';
 import { SettingsFileSystemProvider } from '../../src/settings/SettingsFileSystemProvider';
 import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
 import { SettingsUri } from '../../src/settings/SettingsUri';
-import { createSettingsNode } from '../../src/tree/resources/settings/SettingsNode';
+import { getSettingsNodes } from '../../src/tree/resources/settings/SettingsNode';
 import { makeSettingsResource, makeSettingsSnapshot } from './mockSettings';
 
 interface HarnessOptions {
     readonly freshnessWindowMs?: number;
     /** When false, the tree resolves nothing -- the window-reload case. */
     readonly inTree?: boolean;
-    /** When false, no adapter claims the node's resource. */
-    readonly hasAdapter?: boolean;
 }
 
 interface Harness {
@@ -45,13 +43,13 @@ function createHarness(options?: HarnessOptions): Harness {
 
     const adapter: SettingsAdapter = {
         label: 'Application Settings',
-        canHandle: () => options?.hasAdapter ?? true,
+        canHandle: () => true,
         read: resource => read(resource),
         write: (resource, entries) => write(resource, entries),
     };
 
     const resource = makeSettingsResource();
-    const node = createSettingsNode(resource);
+    const [node] = getSettingsNodes(resource, adapter);
     const key = AzureNodeId.from(node).toString();
 
     const invalidate = mock.fn();
@@ -63,7 +61,6 @@ function createHarness(options?: HarnessOptions): Harness {
     const provider = new SettingsFileSystemProvider(
         code.vscode,
         tree as never,
-        [adapter],
         options?.freshnessWindowMs === undefined ? undefined : { freshnessWindowMs: options.freshnessWindowMs },
     );
 
@@ -102,14 +99,6 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(h.read.mock.callCount()).to.equal(0);
         });
 
-        it('fails clearly when no adapter claims the resource', async () => {
-            const h = createHarness({ hasAdapter: false });
-
-            const error: Error = await expect(h.provider.stat(h.uri)).to.be.rejectedWith(Error, /No settings adapter/);
-
-            expect(error).to.have.property('code', 'FileNotFound');
-            expect(h.read.mock.callCount()).to.equal(0);
-        });
     });
 
     describe('stat', () => {

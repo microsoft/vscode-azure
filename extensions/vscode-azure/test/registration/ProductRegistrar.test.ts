@@ -29,8 +29,10 @@ import { AcrViewProvider } from '../../src/tree/resources/acr/AcrViewProvider';
 import { AzureAccountDataProvider, IAzureAccountDataProvider } from '../../src/tree/resources/AzureAccountDataProvider';
 import { AzureResourceDataProvider } from '../../src/tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../../src/tree/resources/GenericAzureViewProvider';
-import { ISettingsDataProvider, SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
+import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
 import { SettingsViewProvider } from '../../src/tree/resources/settings/SettingsViewProvider';
+import { WebAppDataProvider } from '../../src/tree/resources/webApp/WebAppDataProvider';
+import { WebAppViewProvider } from '../../src/tree/resources/webApp/WebAppViewProvider';
 
 @injectable()
 class TestCommand implements ManagedCommand {
@@ -54,11 +56,17 @@ describe('ProductRegistrar (unit)', () => {
 
         const dataProviders = registrar.getResourceDataProviders();
         const viewProviders = registrar.getResourceViewProviders();
-        expect(dataProviders[0]).to.deep.equal([ISettingsDataProvider, SettingsDataProvider]);
+        expect(dataProviders[0]).to.equal(SettingsDataProvider);
         expect(dataProviders[1]).to.equal(AcrDataProvider);
-        expect(dataProviders[2]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
-        expect(dataProviders[3]).to.equal(AzureResourceDataProvider);
-        expect(viewProviders).to.deep.equal([SettingsViewProvider, AcrViewProvider, GenericAzureViewProvider]);
+        expect(dataProviders[2]).to.equal(WebAppDataProvider);
+        expect(dataProviders[3]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
+        expect(dataProviders[4]).to.equal(AzureResourceDataProvider);
+        expect(viewProviders).to.deep.equal([
+            SettingsViewProvider,
+            AcrViewProvider,
+            WebAppViewProvider,
+            GenericAzureViewProvider,
+        ]);
     });
 
     it('binds primary provider identifiers as singleton collection aliases', () => {

@@ -12,7 +12,6 @@ import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
-import { SettingsDataProvider } from '../../../src/tree/resources/settings/SettingsDataProvider';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 
 describe('GenericAzureViewProvider (unit)', () => {
@@ -43,7 +42,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             },
             loadAll: () => Promise.resolve(),
         };
-        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never, new SettingsDataProvider([]));
+        return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
     }
 
     describe('canHandle', () => {
