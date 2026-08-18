@@ -34,11 +34,7 @@ export class JsoncSettingsFormat {
 
     /** Render a snapshot as document text, including the explanatory header. */
     public serialize(snapshot: SettingsSnapshot): string {
-        const body: Record<string, string> = {};
-        for (const entry of snapshot.entries) {
-            body[entry.key] = entry.value;
-        }
-
+        const body = Object.fromEntries(snapshot.entries.map(entry => [entry.key, entry.value]));
         return `${this.buildHeader(snapshot)}\n${JSON.stringify(body, undefined, 4)}\n`;
     }
 

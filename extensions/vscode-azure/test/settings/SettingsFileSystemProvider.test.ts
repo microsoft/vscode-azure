@@ -271,6 +271,15 @@ describe('SettingsFileSystemProvider (unit)', () => {
                 expect(text).to.contain('"FUNCTIONS_WORKER_RUNTIME": "node"');
             });
 
+            it('serializes __proto__ as a setting name', () => {
+                const format = createFormat();
+                const snapshot = makeSettingsSnapshot({
+                    entries: [{ key: '__proto__', value: 'secret' }],
+                });
+
+                expect(format.parse(format.serialize(snapshot))).to.deep.equal(snapshot.entries);
+            });
+
             it('names the resource and collection in the header', () => {
                 const text = createFormat().serialize(makeSettingsSnapshot({
                     resourceName: 'myFunctionApp',

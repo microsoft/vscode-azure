@@ -5,18 +5,21 @@
 
 import { FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { WebAppSettingsAdapter } from '../../../../src/settings/adapters/WebAppSettingsAdapter';
 import { isSettingsNode } from '../../../../src/tree/resources/settings/SettingsNode';
 import { WebAppDataProvider } from '../../../../src/tree/resources/webApp/WebAppDataProvider';
+import { getWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
 import { makeSettingsResource } from '../../../settings/mockSettings';
 
 describe('WebAppDataProvider (unit)', () => {
+    const client = createMockWebAppClient({ defaultHostName: 'myfuncapp.azurewebsites.net' });
+    const { executor } = createTestActionExecutor();
     const adapter = new WebAppSettingsAdapter(
         createMockVsCode().vscode,
-        () => createMockWebAppClient(),
+        () => client,
     );
-    const provider = new WebAppDataProvider(adapter);
+    const provider = new WebAppDataProvider(executor, () => client, adapter);
 
     it('claims resources supported by its settings adapter', () => {
         expect(provider.canHandle(makeSettingsResource())).to.be.true;
@@ -35,5 +38,14 @@ describe('WebAppDataProvider (unit)', () => {
 
         expect(node.azureResource.logicalType).to.equal(FunctionAppLogicalType);
         expect(node).to.have.property('adapter', adapter);
+    });
+
+    it('enriches resources with their website URL', async () => {
+        const resource = makeSettingsResource();
+
+        await provider.enrich(resource);
+
+        expect(getWebsiteUrl(resource)).to.equal('https://myfuncapp.azurewebsites.net');
+        expect(client.webApps.get.mock.calls[0].arguments).to.deep.equal(['MyRG', 'MyFuncApp']);
     });
 });
