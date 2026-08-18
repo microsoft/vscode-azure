@@ -142,7 +142,6 @@ interface CacheEntry {
 }
 
 const DefaultFreshnessWindowMs = 3000;
-const ProgressDelayMs = 500;
 
 /**
  * A {@linkcode vscode.FileSystemProvider} that presents a resource's settings as a single editable
@@ -247,7 +246,6 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
                 title: this.code.l10n.t('Saving {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
             },
             node.adapter.write(node.azureResource, parsed),
-            ProgressDelayMs,
         );
 
         // The node itself is a leaf today, so this is cheap insurance rather than a visible refresh:
@@ -340,7 +338,6 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
                         title: this.code.l10n.t('Loading {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
                     },
                     read,
-                    ProgressDelayMs,
                 )
                 : await read;
         } catch (error) {

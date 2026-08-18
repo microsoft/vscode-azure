@@ -156,13 +156,13 @@ describe('SettingsFileSystemProvider (unit)', () => {
                     harness.provider.readFile(harness.uri),
                     harness.provider.readFile(harness.uri),
                 ];
-                mock.timers.tick(200);
+                mock.timers.tick(100);
                 await new Promise<void>(resolveImmediate => setImmediate(resolveImmediate));
 
                 expect(harness.read.mock.callCount()).to.equal(1);
                 expect(harness.code.window.withProgress.mock.callCount()).to.equal(0);
 
-                mock.timers.tick(350);
+                mock.timers.tick(100);
                 await new Promise<void>(resolveImmediate => setImmediate(resolveImmediate));
                 expect(harness.code.window.withProgress.mock.callCount()).to.equal(1);
 
