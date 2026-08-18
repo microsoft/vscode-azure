@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { Disposable, EventEmitter, IVsCode, stringifyError } from '@microsoft/vscode-azure-utils';
+import { Disposable, EventEmitter, IVsCode, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged } from 'inversify';
 import { parseTree, printParseErrorCode } from 'jsonc-parser';
 import { IAzureViewDataTree, type IAzureViewDataTree as AzureViewDataTree } from '../services';
@@ -238,7 +238,14 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
         const parsed = this.format.parse(Buffer.from(content).toString('utf8'));
 
         const node = this.resolve(uri);
-        await node.adapter.write(node.azureResource, parsed);
+        await withDelayedProgress(
+            this.code,
+            {
+                location: this.code.ProgressLocation.Notification,
+                title: this.code.l10n.t('Saving {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
+            },
+            node.adapter.write(node.azureResource, parsed),
+        );
 
         // The node itself is a leaf today, so this is cheap insurance rather than a visible refresh:
         // it keeps the data layer honest if a resource ever grows children derived from its settings.
@@ -316,7 +323,14 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
         let snapshot: SettingsSnapshot;
         try {
             const node = this.resolve(uri);
-            snapshot = await node.adapter.read(node.azureResource);
+            snapshot = await withDelayedProgress(
+                this.code,
+                {
+                    location: this.code.ProgressLocation.Notification,
+                    title: this.code.l10n.t('Loading {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
+                },
+                node.adapter.read(node.azureResource),
+            );
         } catch (error) {
             // The editor only acts on `FileNotFound`; anything else surfaces as an opaque failure.
             // Preserve the original message so the cause is not lost.
