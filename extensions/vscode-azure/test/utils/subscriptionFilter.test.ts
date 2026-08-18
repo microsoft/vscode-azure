@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { parseSubscriptionFilterKey, subscriptionFilterKey } from '../../src/utils/subscriptionFilter';
+import { isTenantSelected, parseSubscriptionFilterKey, subscriptionFilterKey } from '../../src/utils/subscriptionFilter';
 
 describe('subscriptionFilter (unit)', () => {
     describe('subscriptionFilterKey', () => {
@@ -37,5 +37,19 @@ describe('subscriptionFilter (unit)', () => {
     it('should round-trip a build then parse back to the lowercased halves', () => {
         const key = subscriptionFilterKey('Tenant-1', 'Sub-2');
         expect(parseSubscriptionFilterKey(key)).to.deep.equal({ tenantId: 'tenant-1', subscriptionId: 'sub-2' });
+    });
+
+    describe('isTenantSelected', () => {
+        it('should select every tenant when no subscription filter is configured', () => {
+            expect(isTenantSelected([], 'tenant-1')).to.be.true;
+        });
+
+        it('should match a configured tenant case-insensitively', () => {
+            expect(isTenantSelected(['TENANT-1/sub-1'], 'tenant-1')).to.be.true;
+        });
+
+        it('should reject a tenant with no selected subscriptions', () => {
+            expect(isTenantSelected(['tenant-1/sub-1'], 'tenant-2')).to.be.false;
+        });
     });
 });

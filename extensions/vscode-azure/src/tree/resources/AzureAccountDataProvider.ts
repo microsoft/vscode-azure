@@ -17,8 +17,9 @@ import {
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
-import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../constants';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../constants';
 import { readSignedInTenants } from '../../utils/signedInTenants';
+import { isTenantSelected } from '../../utils/subscriptionFilter';
 
 /**
  * Identifier for the root account/tenant/subscription data provider. Bound as a
@@ -209,12 +210,12 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * entered manually), so it would fail again here. A token scoped to the
      * tenant satisfies the policy and lets the listing return that tenant's name.
      *
-     * Only placeholder tenants are enriched: accounts, and tenants that were
-     * listed normally (and so already carry a real display name), are skipped
-     * without any network call. Acquisition is silent, so this background pass
-     * never surfaces an interactive sign-in prompt; if no cached session
-     * satisfies it, or the listing is still blocked, the placeholder is left
-     * untouched.
+     * Only selected placeholder tenants are enriched: accounts, filtered-out
+     * tenants, and tenants that were listed normally (and so already carry a
+     * real display name) are skipped without any network call. Acquisition is
+     * silent, so this background pass never surfaces an interactive sign-in
+     * prompt; if no cached session satisfies it, or the listing is still
+     * blocked, the placeholder is left untouched.
      *
      * @returns Always `false`: a tenant's subscriptions do not depend on its
      *   display name, so only the tenant's own tree item is re-rendered.
@@ -229,6 +230,13 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
 
         const wantedTenantId = resource.tenantId.toLowerCase();
         if (resource.displayName.toLowerCase() !== wantedTenantId) {
+            return false;
+        }
+
+        const selectedSubscriptions = this.ctx.code.workspace
+            .getConfiguration(ConfigurationSection)
+            .get<string[]>(SelectedSubscriptionsConfigurationKey, []);
+        if (!isTenantSelected(selectedSubscriptions, wantedTenantId)) {
             return false;
         }
 
