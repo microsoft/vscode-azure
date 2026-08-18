@@ -21,6 +21,27 @@
             "isBackground": true,
         },
         {
+            "label": "Run Extension Development Host",
+            "type": "process",
+            "command": "${execPath}",
+            "args": [
+                "--new-window",
+                "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-azure",
+                "--disable-extension",
+                "ms-azuretools.vscode-azureresourcegroups",
+            ],
+            "options": {
+                "env": {
+                    "DEBUGTELEMETRY": "1",
+                },
+            },
+            "dependsOn": "Extension: ESBuild+Watch",
+            "inAgents": true,
+            "presentation": {
+                "reveal": "never",
+            },
+        },
+        {
             "label": "Extension: Check+Watch",
             "type": "shell",
             "command": "pnpm",
