@@ -10,7 +10,7 @@ import {
     isResourceGroup,
     type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, ICodeContext, showMessage, showSmartInputBox, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, showMessage, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { AzdEnvNameTag } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
@@ -65,14 +65,7 @@ export class DeleteAzureResource implements ManagedCommand {
         });
 
         try {
-            await withDelayedProgress(
-                this.ctx.code,
-                {
-                    location: this.ctx.code.ProgressLocation.Notification,
-                    title: this.ctx.code.l10n.t('Deleting \'{0}\'...', resource.name),
-                },
-                this.deleteResource(resource),
-            );
+            await this.deleteResource(resource);
             activity.update({ status: 'Completed' });
         } catch (error) {
             activity.update({ status: 'Failed', error });

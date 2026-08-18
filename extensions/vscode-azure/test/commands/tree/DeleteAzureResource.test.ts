@@ -154,7 +154,7 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.remove.mock.callCount()).to.equal(0);
     });
 
-    it('reports success only after a slow delete finishes', async () => {
+    it('reports progress until a slow delete finishes', async () => {
         const resource = makeGenericResource();
         let finishDelete: (() => void) | undefined;
         const deleteById = mock.fn((_resourceId: string, _resourceType: string) =>
@@ -164,14 +164,12 @@ describe('DeleteAzureResource (unit)', () => {
 
         const pending = setup.command.execute(AzureNodeId.from(resource).toString());
 
-        // withDelayedProgress only surfaces a notification once the work
-        // outlives its threshold, so wait for the progress path to engage.
-        await waitFor(() => setup.mockResult.window.withProgress.mock.callCount() === 1);
+        await waitFor(() => deleteById.mock.callCount() === 1);
 
         // Still in flight: the activity reports progress and the node remains.
-        expect(deleteById.mock.callCount()).to.equal(1);
         expect((await activities(setup))[0]).to.deep.include({ status: 'InProgress' });
         expect(setup.remove.mock.callCount()).to.equal(0);
+        expect(setup.mockResult.window.withProgress.mock.callCount()).to.equal(0);
 
         finishDelete?.();
         await pending;
