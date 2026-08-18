@@ -28,7 +28,6 @@ describe('WebAppViewProvider (unit)', () => {
         createMockCodeContext().ctx,
         executor,
         tree as never,
-        adapter,
     );
 
     it('claims resources supported by its settings adapter', () => {

@@ -6,11 +6,122 @@
 import type * as vscode from 'vscode';
 import { Disposable, EventEmitter, IVsCode, stringifyError } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged } from 'inversify';
+import { parseTree, printParseErrorCode } from 'jsonc-parser';
 import { IAzureViewDataTree, type IAzureViewDataTree as AzureViewDataTree } from '../services';
 import { isSettingsNode, type SettingsNode } from '../tree/resources/settings/SettingsNode';
-import { JsoncSettingsFormat } from './JsoncSettingsFormat';
-import type { SettingsSnapshot } from './SettingsModel';
+import type { SettingsEntry, SettingsMap, SettingsSnapshot } from './SettingsModel';
 import { SettingsUri } from './SettingsUri';
+
+/**
+ * A user-fixable problem in the settings document, carrying a source span for editor diagnostics.
+ */
+export class SettingsParseError extends Error {
+    public constructor(
+        message: string,
+        /** 0-based character offset into the document text. */
+        public readonly offset: number,
+        /** Length of the offending span, in characters. May be 0 for a point error. */
+        public readonly length: number = 0,
+    ) {
+        super(message);
+        this.name = 'SettingsParseError';
+    }
+}
+
+/** Renders settings as JSONC and parses edited document text back into settings. */
+export class JsoncSettingsFormat {
+    public constructor(private readonly code: IVsCode) { }
+
+    /** Render a snapshot as document text, including the explanatory header. */
+    public serialize(snapshot: SettingsSnapshot): string {
+        const body: Record<string, string> = {};
+        for (const entry of snapshot.entries) {
+            body[entry.key] = entry.value;
+        }
+
+        return `${this.buildHeader(snapshot)}\n${JSON.stringify(body, undefined, 4)}\n`;
+    }
+
+    /**
+     * Parse document text back into settings.
+     *
+     * @throws {@linkcode SettingsParseError} on malformed JSON, a non-object root, duplicate keys,
+     * or a non-string value.
+     */
+    public parse(text: string): SettingsMap {
+        const errors: { error: number; offset: number; length: number }[] = [];
+        const root = parseTree(text, errors, { allowTrailingComma: true, disallowComments: false });
+
+        if (errors.length > 0) {
+            const [first] = errors;
+            throw new SettingsParseError(
+                this.code.l10n.t('The settings file is not valid JSON: {0}.', printParseErrorCode(first.error)),
+                first.offset,
+                first.length,
+            );
+        }
+
+        if (root?.type !== 'object') {
+            throw new SettingsParseError(
+                this.code.l10n.t('The settings file must contain a single JSON object of setting names and values.'),
+                root?.offset ?? 0,
+                root?.length ?? text.length,
+            );
+        }
+
+        const entries: SettingsEntry[] = [];
+        const seen = new Map<string, string>();
+
+        for (const property of root.children ?? []) {
+            const children = property.children ?? [];
+            if (children.length < 2) {
+                continue;
+            }
+
+            const [keyNode, valueNode] = children;
+            const key = String(keyNode.value);
+            const existing = seen.get(key.toLowerCase());
+            if (existing !== undefined) {
+                throw new SettingsParseError(
+                    existing === key
+                        ? this.code.l10n.t('The setting \'{0}\' is listed more than once. Setting names must be unique.', key)
+                        : this.code.l10n.t('The settings \'{0}\' and \'{1}\' differ only by capitalization. Azure treats setting names as case-insensitive, so only one of them would survive.', existing, key),
+                    keyNode.offset,
+                    keyNode.length,
+                );
+            }
+            seen.set(key.toLowerCase(), key);
+
+            if (valueNode.type !== 'string') {
+                throw new SettingsParseError(
+                    this.code.l10n.t('The value of \'{0}\' must be a quoted string. Numbers, booleans, and null are not valid setting values.', key),
+                    valueNode.offset,
+                    valueNode.length,
+                );
+            }
+
+            entries.push({ key, value: String(valueNode.value) });
+        }
+
+        return entries;
+    }
+
+    private buildHeader(snapshot: SettingsSnapshot): string {
+        const lines = [
+            this.code.l10n.t('{0} for \'{1}\'.', snapshot.label, snapshot.resourceName),
+        ];
+
+        if (snapshot.writable) {
+            lines.push(this.code.l10n.t('Saving this file writes these settings to Azure. Removing a setting deletes it.'));
+            lines.push(this.code.l10n.t('The file is saved to Azure as-is: it overwrites any changes made elsewhere since it was opened.'));
+            lines.push(this.code.l10n.t('Deployments and infrastructure-as-code tools may overwrite edits made here.'));
+        } else {
+            lines.push(this.code.l10n.t('These settings are read-only and cannot be edited here.'));
+        }
+
+        return lines.map(line => `// ${line}`).join('\n');
+    }
+}
 
 /** Options for {@linkcode SettingsFileSystemProvider}. */
 export interface SettingsFileSystemProviderOptions {

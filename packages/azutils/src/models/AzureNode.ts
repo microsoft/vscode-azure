@@ -52,8 +52,13 @@ export function isVirtualGroup(node: AzureNode): node is VirtualGroup {
 }
 
 /** Narrows this node to a {@linkcode GenericResource} node. {@linkcode ResourceGroup} nodes do **not** match, though they do conform to `GenericResource`. */
-export function isGenericResource(node: AzureNode): node is GenericResource {
-    return !isResourceGroup(node) && 'id' in node && 'name' in node && 'type' in node && 'logicalType' in node;
+export function isGenericResource(node: unknown): node is GenericResource {
+    if (!node || typeof node !== 'object') {
+        return false;
+    }
+
+    const candidate = node as AzureNode;
+    return !isResourceGroup(candidate) && 'id' in candidate && 'name' in candidate && 'type' in candidate && 'logicalType' in candidate;
 }
 
 /** Narrows this node to a {@linkcode VirtualResource} node. */

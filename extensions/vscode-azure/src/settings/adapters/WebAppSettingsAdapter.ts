@@ -4,20 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    AppServiceLogicalType, FunctionAppLogicalType, IWebAppClientProvider,
-    LogicAppLogicalType, parseAzureResourceId,
+    IWebAppClientProvider, parseAzureResourceId,
     type GenericResource, type IWebAppClient,
 } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { SettingsAdapter } from '../SettingsAdapter';
 import type { SettingsMap, SettingsSnapshot } from '../SettingsModel';
-
-const supportedLogicalTypes = new Set<string>([
-    FunctionAppLogicalType.toLowerCase(),
-    AppServiceLogicalType.toLowerCase(),
-    LogicAppLogicalType.toLowerCase(),
-]);
+import { isWebApp } from '../../tree/resources/webApp/WebApp';
 
 /**
  * {@linkcode SettingsAdapter} for every `Microsoft.Web/sites` flavour -- Function App, App Service,
@@ -46,7 +40,7 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
 
     /** @inheritdoc */
     public canHandle(resource: GenericResource): boolean {
-        return supportedLogicalTypes.has(resource.logicalType.toLowerCase());
+        return isWebApp(resource);
     }
 
     /** @inheritdoc */

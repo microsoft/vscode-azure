@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { EditSettings } from '../commands/settings/EditSettings';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
@@ -28,11 +28,9 @@ export function registerSettings(registrar: ProductRegistrar): void {
         const code = container.get(IVsCode);
         const provider = container.get(SettingsFileSystemProvider);
 
-        container.get(IExtensionContext).subscriptions.push(
-            code.workspace.registerFileSystemProvider(SettingsScheme, provider, {
-                isCaseSensitive: true,
-            }),
-        );
+        pushDisposable(container, code.workspace.registerFileSystemProvider(SettingsScheme, provider, {
+            isCaseSensitive: true,
+        }));
     });
 
     registrar.registerCommand(EditSettings.CommandId, EditSettings);

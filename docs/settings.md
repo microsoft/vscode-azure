@@ -14,11 +14,9 @@ extensions/vscode-azure/src/tree/resources/webApp/     Product ownership and set
 extensions/vscode-azure/src/commands/settings/         The edit command
 ```
 
-There is deliberately **no indirection between the file system provider and the adapter**.
 `SettingsFileSystemProvider` resolves a document URI to the exact tree node and calls `read`/`write`
 on the adapter attached to that node. The product provider selects the adapter explicitly when it
-calls `getSettingsNodes(resource, adapter)`. Earlier revisions routed this through a
-`SettingsDocumentSource`, `SettingsRegistry`, and global adapter dispatch; all were unnecessary.
+calls `getSettingsNodes(resource, adapter)`.
 
 ## One command, one surface
 
@@ -88,12 +86,6 @@ export interface SettingsAdapter {
 }
 ```
 
-**One resource has at most one settings document.** There is no "collection id" discriminating
-several named dictionaries on a resource, because nothing needs one: the shared
-`@microsoft/vscode-azext-azureappsettings` package is likewise strictly one dictionary per resource,
-and no shipping Azure extension surfaces App Service connection strings (`listConnectionStrings`) at
-all. `label` exists so a product can name its node something other than "Application Settings".
-
 The product data provider can delegate its own `canHandle` decision to the adapter. Keep that check
 cheap -- a set lookup on `logicalType` is the norm.
 
@@ -105,10 +97,6 @@ There is deliberately **no capability model**. Two existing mechanisms already c
   registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values
   it wants; a command whose context value is absent never matches its `when` clause, so the menu item
   never appears. This is the same mechanism every other tree node uses.
-- **What is actually allowed** is `SettingsAdapter.write`. The editor can save anything the user
-  types, and the command palette ignores context values, so this is the only place a rule can be
-  enforced.
-
 Settings the product will not let the user edit set `writable: false` on the snapshot returned from
 `read`, which makes the editor document read-only.
 
@@ -133,13 +121,6 @@ azure-settings:/<nodeKey>/<resourceName>.settings.jsonc
 `<nodeKey>` is the hex-encoded `AzureNodeId` of the settings node -- the data tree's own primary key.
 `SettingsFileSystemProvider` resolves a URI with a single `tree.get(nodeKey)`, so the resource
 passed to the adapter is always **the object the tree loaded from Azure**.
-
-Two alternatives were tried and rejected:
-
-- *Searching the tree by ARM id* -- drilling account -> tenant -> subscription -> group to find a
-  resource is expensive and turns a lookup into a scan.
-- *Rebuilding a `GenericResource` from the URI* -- cheap, but it fabricates a resource that was never
-  read from Azure, so it can silently disagree with reality.
 
 The file name is cosmetic -- it makes the tab readable and selects the `jsonc` language mode. Nothing
 parses meaning out of it.

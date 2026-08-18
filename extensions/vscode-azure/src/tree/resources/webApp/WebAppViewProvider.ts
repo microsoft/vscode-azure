@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, getNodeType, isGenericResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, getNodeType } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../../services';
-import { WebAppSettingsAdapter } from '../../../settings/adapters/WebAppSettingsAdapter';
 import { createGenericResourceTreeItem } from '../GenericAzureViewProvider';
+import { isWebApp } from './WebApp';
 
 /**
  * Presents Web App resources as expandable because their data provider contributes a settings node.
@@ -19,7 +19,6 @@ export class WebAppViewProvider implements ViewProvider<string> {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
-        @inject(WebAppSettingsAdapter) private readonly settingsAdapter: WebAppSettingsAdapter,
     ) { }
 
     /** @inheritdoc */
@@ -29,13 +28,13 @@ export class WebAppViewProvider implements ViewProvider<string> {
         }
 
         const node = this.tree.get(resource);
-        return !!node && isGenericResource(node) && this.settingsAdapter.canHandle(node);
+        return isWebApp(node);
     }
 
     /** @inheritdoc */
     public async getChildren(key: string): Promise<string[]> {
         const resource = this.tree.get(key);
-        if (!resource || !isGenericResource(resource)) {
+        if (!isWebApp(resource)) {
             return [];
         }
 
@@ -46,7 +45,7 @@ export class WebAppViewProvider implements ViewProvider<string> {
     /** @inheritdoc */
     public getTreeItem(key: string): ITreeItem {
         const resource = this.tree.get(key);
-        if (!resource || !isGenericResource(resource)) {
+        if (!isWebApp(resource)) {
             return new this.ctx.code.TreeItem(key);
         }
 

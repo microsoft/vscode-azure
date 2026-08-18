@@ -7,9 +7,8 @@ import { AzureNodeId, type ConcreteAzureNode, type GenericResource } from '@micr
 import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { SettingsParseError } from '../../src/settings/JsoncSettingsFormat';
 import type { SettingsAdapter } from '../../src/settings/SettingsAdapter';
-import { SettingsFileSystemProvider } from '../../src/settings/SettingsFileSystemProvider';
+import { JsoncSettingsFormat, SettingsFileSystemProvider, SettingsParseError } from '../../src/settings/SettingsFileSystemProvider';
 import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
 import { SettingsUri } from '../../src/settings/SettingsUri';
 import { getSettingsNodes } from '../../src/tree/resources/settings/SettingsNode';
@@ -255,6 +254,161 @@ describe('SettingsFileSystemProvider (unit)', () => {
 
         it('returns a disposable from watch', () => {
             expect(() => { harness.provider.watch().dispose(); }).to.not.throw();
+        });
+    });
+
+    describe('JSONC format', () => {
+        const createFormat = (): JsoncSettingsFormat => new JsoncSettingsFormat(createMockVsCode().vscode);
+
+        describe('serialize', () => {
+            it('renders entries as a JSON object', () => {
+                const text = createFormat().serialize(makeSettingsSnapshot({
+                    resourceName: 'myFunctionApp',
+                    label: 'Application settings',
+                    entries: [{ key: 'FUNCTIONS_WORKER_RUNTIME', value: 'node' }],
+                }));
+
+                expect(text).to.contain('"FUNCTIONS_WORKER_RUNTIME": "node"');
+            });
+
+            it('names the resource and collection in the header', () => {
+                const text = createFormat().serialize(makeSettingsSnapshot({
+                    resourceName: 'myFunctionApp',
+                    label: 'Application settings',
+                }));
+
+                expect(text).to.contain('// Application settings for \'myFunctionApp\'.');
+            });
+
+            it('explains last-writer-wins save semantics when writable', () => {
+                expect(createFormat().serialize(makeSettingsSnapshot()))
+                    .to.contain('overwrites any changes made elsewhere');
+            });
+
+            it('warns that deployments may overwrite live edits', () => {
+                expect(createFormat().serialize(makeSettingsSnapshot()))
+                    .to.contain('Deployments and infrastructure-as-code tools may overwrite edits made here.');
+            });
+
+            it('says the document is read-only instead when it is not writable', () => {
+                const text = createFormat().serialize(makeSettingsSnapshot({ writable: false }));
+
+                expect(text).to.contain('read-only');
+                expect(text).to.not.contain('Removing a setting deletes it.');
+            });
+        });
+
+        describe('parse', () => {
+            it('reads a plain object of settings', () => {
+                expect(createFormat().parse('{ "A": "1", "B": "2" }')).to.deep.equal([
+                    { key: 'A', value: '1' },
+                    { key: 'B', value: '2' },
+                ]);
+            });
+
+            it('ignores comments, including the generated header', () => {
+                expect(createFormat().parse('// a header\n// another line\n{ "A": "1" }'))
+                    .to.deep.equal([{ key: 'A', value: '1' }]);
+            });
+
+            it('preserves document order', () => {
+                expect(createFormat().parse('{ "Z": "1", "A": "2" }').map(entry => entry.key))
+                    .to.deep.equal(['Z', 'A']);
+            });
+
+            it('accepts an empty object', () => {
+                expect(createFormat().parse('{}')).to.be.empty;
+            });
+
+            it('tolerates a trailing comma', () => {
+                expect(createFormat().parse('{ "A": "1", }')).to.deep.equal([{ key: 'A', value: '1' }]);
+            });
+
+            it('throws with a position for malformed JSON', () => {
+                expect(() => createFormat().parse('{ "A": '))
+                    .to.throw(SettingsParseError, /not valid JSON/);
+            });
+
+            it('throws when the root is not an object', () => {
+                expect(() => createFormat().parse('["A"]'))
+                    .to.throw(SettingsParseError, /single JSON object/);
+            });
+
+            it('rejects duplicate keys, pointing at the second one', () => {
+                const format = createFormat();
+                const text = '{ "A": "1", "A": "2" }';
+
+                try {
+                    format.parse(text);
+                    expect.fail('expected a SettingsParseError');
+                } catch (error) {
+                    expect(error).to.be.instanceOf(SettingsParseError);
+                    const parseError = error as SettingsParseError;
+                    expect(parseError.message).to.contain('listed more than once');
+                    expect(text.slice(parseError.offset, parseError.offset + parseError.length)).to.equal('"A"');
+                    expect(parseError.offset).to.be.greaterThan(text.indexOf('"A"'));
+                }
+            });
+
+            it('rejects two names differing only by capitalization, naming both spellings', () => {
+                const format = createFormat();
+                const text = '{ "MySetting": "1", "MYSETTING": "2" }';
+
+                try {
+                    format.parse(text);
+                    expect.fail('expected a SettingsParseError');
+                } catch (error) {
+                    expect(error).to.be.instanceOf(SettingsParseError);
+                    const parseError = error as SettingsParseError;
+                    expect(parseError.message).to.contain('differ only by capitalization');
+                    expect(parseError.message).to.contain('MySetting');
+                    expect(parseError.message).to.contain('MYSETTING');
+                    expect(text.slice(parseError.offset, parseError.offset + parseError.length)).to.equal('"MYSETTING"');
+                }
+            });
+
+            it('still accepts names that differ by more than capitalization', () => {
+                expect(createFormat().parse('{ "A_ONE": "1", "A_TWO": "2" }')).to.deep.equal([
+                    { key: 'A_ONE', value: '1' },
+                    { key: 'A_TWO', value: '2' },
+                ]);
+            });
+
+            it('rejects a non-string value', () => {
+                expect(() => createFormat().parse('{ "PORT": 8080 }'))
+                    .to.throw(SettingsParseError, /must be a quoted string/);
+            });
+
+            it('rejects null and boolean values', () => {
+                expect(() => createFormat().parse('{ "A": null }')).to.throw(SettingsParseError);
+                expect(() => createFormat().parse('{ "A": true }')).to.throw(SettingsParseError);
+            });
+
+            it('reports the offending span for a non-string value', () => {
+                const format = createFormat();
+                const text = '{ "PORT": 8080 }';
+
+                try {
+                    format.parse(text);
+                    expect.fail('expected a SettingsParseError');
+                } catch (error) {
+                    const parseError = error as SettingsParseError;
+                    expect(text.slice(parseError.offset, parseError.offset + parseError.length)).to.equal('8080');
+                }
+            });
+        });
+
+        it('round-trips entries exactly', () => {
+            const format = createFormat();
+            const entries: SettingsMap = [
+                { key: 'A', value: '1' },
+                { key: 'WITH SPACES', value: 'has "quotes" and \\ backslash' },
+                { key: 'EMPTY', value: '' },
+                { key: 'MULTILINE', value: 'line1\nline2' },
+                { key: 'UNICODE', value: 'caf\u00e9' },
+            ];
+
+            expect(format.parse(format.serialize(makeSettingsSnapshot({ entries })))).to.deep.equal(entries);
         });
     });
 });

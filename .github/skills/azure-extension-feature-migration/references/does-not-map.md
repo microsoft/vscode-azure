@@ -121,19 +121,6 @@ implementation** rather than re-vendoring the source's code:
   synchronization belongs to azd or the product's deployment workflow, not this framework.
   - There is one command and one surface: a resource's settings are edited as a single document.
     There are no per-setting add/edit/rename/delete commands, and no values are shown in the tree.
-  - **One resource has at most one settings document.** There is no "collection id" for several named
-    dictionaries per resource, matching `@microsoft/vscode-azext-azureappsettings`. App Service
-    connection strings (`listConnectionStrings`) are not surfaced by any shipping extension and are
-    not modeled here.
-  - There is no capability model. A product that wants a different presentation registers its own view
-    provider and attaches only the context values it wants; settings it will not let the user edit
-    return `writable: false` on the snapshot. Enforcement lives in `write`, which is the only path a
-    save can take.
-  - Per-entry metadata (e.g. a connection string's `type`) is **not** modeled. Add it alongside the
-    first adapter that needs it.
-  - (Note: the source likely uses the shared `@microsoft/vscode-azext-azureappsettings` package with
-    `contextValuesToAdd: ['<product>']`. That azext package is **not** the monorepo pattern; the
-    inventory should record which operations the product supports.)
 - **Sign-in, accounts, tenants, subscriptions, subscription filtering** — the account data provider +
   `Azure: Select Subscriptions`.
 - **Open in portal, resource-group grouping** — generic commands + `AzureResourceDataProvider` /
