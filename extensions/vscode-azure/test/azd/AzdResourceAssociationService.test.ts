@@ -7,6 +7,9 @@ import { makeGenericResource, makeResourceGroup } from '@microsoft/vscode-azure-
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { AzdResourceAssociationService } from '../../src/azd/AzdResourceAssociationService';
+import { AzdProjectFileTag } from '../../src/azd/azdWorkspaceDetector';
+import { MutableWorkspaceIndex } from '../../src/utils/workspaceIndex/WorkspaceIndex';
+import type { IWorkspaceIndexService } from '../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { createMockAzdService, type MockAzdService } from './MockAzdService';
 
 const ResourceId = '/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Web/sites/app-1';
@@ -14,8 +17,10 @@ const ResourceGroupId = '/subscriptions/sub-1/resourceGroups/rg-1';
 const SubscriptionValue = 'AZURE_SUBSCRIPTION_ID';
 const ResourceGroupValue = 'AZURE_RESOURCE_GROUP';
 
-function setProjects(azd: MockAzdService, paths: string[]): void {
-    azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve(paths.map(path => MockUri.file(`${path}/azure.yaml`))));
+function setProjects(index: MutableWorkspaceIndex, paths: string[]): void {
+    for (const path of paths) {
+        index.add(MockUri.file(`${path}/azure.yaml`), AzdProjectFileTag, undefined);
+    }
 }
 
 function setEnvironmentValues(
@@ -27,8 +32,11 @@ function setEnvironmentValues(
     });
 }
 
-function createService(azd: MockAzdService): AzdResourceAssociationService {
-    return new AzdResourceAssociationService(createMockVsCode().vscode, azd);
+function createService(azd: MockAzdService, index = new MutableWorkspaceIndex()): AzdResourceAssociationService {
+    const indexService = {
+        getIndex: mock.fn(() => Promise.resolve(index)),
+    } as unknown as IWorkspaceIndexService;
+    return new AzdResourceAssociationService(createMockVsCode().vscode, azd, indexService);
 }
 
 describe('AzdResourceAssociationService (unit)', () => {
@@ -38,7 +46,8 @@ describe('AzdResourceAssociationService (unit)', () => {
 
     it('matches a directly tagged resource', async () => {
         const azd = createMockAzdService([{ Name: 'dev', IsDefault: true }]);
-        setProjects(azd, ['/project']);
+        const index = new MutableWorkspaceIndex();
+        setProjects(index, ['/project']);
         setEnvironmentValues(azd, {
             '/project|dev': {
                 [SubscriptionValue]: 'sub-1',
@@ -46,17 +55,19 @@ describe('AzdResourceAssociationService (unit)', () => {
             },
         });
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = createService(azd);
+        const service = createService(azd, index);
 
         const result = await service.find(resource);
 
         expect(result?.azureYamlUri.path).to.equal('/project/azure.yaml');
         expect(result?.environmentName).to.equal('dev');
+        expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
     });
 
     it('rejects an untagged resource without spawning azd', async () => {
         const azd = createMockAzdService([{ Name: 'dev', IsDefault: true }]);
-        setProjects(azd, ['/project']);
+        const index = new MutableWorkspaceIndex();
+        setProjects(index, ['/project']);
         setEnvironmentValues(azd, {
             '/project|dev': {
                 [SubscriptionValue]: 'sub-1',
@@ -65,18 +76,18 @@ describe('AzdResourceAssociationService (unit)', () => {
         });
         const untagged = makeGenericResource({ id: ResourceId, tags: {} });
         const noTags = makeGenericResource({ id: ResourceId, tags: undefined });
-        const service = createService(azd);
+        const service = createService(azd, index);
 
         expect(await service.find(untagged)).to.be.undefined;
         expect(await service.find(noTags)).to.be.undefined;
-        expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
         expect(azd.envList.mock.callCount()).to.equal(0);
         expect(azd.envGetValues.mock.callCount()).to.equal(0);
     });
 
     it('matches tag keys, names, subscription ids, and resource groups case-insensitively', async () => {
         const azd = createMockAzdService([{ Name: 'DEV', IsDefault: false }]);
-        setProjects(azd, ['/project']);
+        const index = new MutableWorkspaceIndex();
+        setProjects(index, ['/project']);
         setEnvironmentValues(azd, {
             '/project|DEV': {
                 [SubscriptionValue]: 'SUB-1',
@@ -89,7 +100,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             groupingValue: 'rg-1',
             tags: { 'AZD-ENV-NAME': 'dev' },
         });
-        const service = createService(azd);
+        const service = createService(azd, index);
 
         const result = await service.find(resourceGroup);
 
@@ -98,7 +109,8 @@ describe('AzdResourceAssociationService (unit)', () => {
 
     it('returns no match when the tagged environment values differ', async () => {
         const azd = createMockAzdService([{ Name: 'dev', IsDefault: true }]);
-        setProjects(azd, ['/project']);
+        const index = new MutableWorkspaceIndex();
+        setProjects(index, ['/project']);
         setEnvironmentValues(azd, {
             '/project|dev': {
                 [SubscriptionValue]: 'other-subscription',
@@ -106,14 +118,15 @@ describe('AzdResourceAssociationService (unit)', () => {
             },
         });
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = createService(azd);
+        const service = createService(azd, index);
 
         expect(await service.find(resource)).to.be.undefined;
     });
 
     it('returns no match when multiple project and environment associations match', async () => {
         const azd = createMockAzdService();
-        setProjects(azd, ['/z-project', '/a-project']);
+        const index = new MutableWorkspaceIndex();
+        setProjects(index, ['/z-project', '/a-project']);
         azd.envList.mock.mockImplementation((cwd: { path: string }) => Promise.resolve(
             cwd.path === '/a-project'
                 ? [{ Name: 'z-env', IsDefault: true }, { Name: 'dev', IsDefault: false }]
@@ -130,7 +143,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             },
         });
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = createService(azd);
+        const service = createService(azd, index);
 
         expect(await service.find(resource)).to.be.undefined;
         expect(azd.envList.mock.callCount()).to.equal(2);
@@ -139,7 +152,8 @@ describe('AzdResourceAssociationService (unit)', () => {
 
     it('returns the unique match amid nonmatching projects', async () => {
         const azd = createMockAzdService();
-        setProjects(azd, ['/matching-project', '/other-environment', '/other-target']);
+        const index = new MutableWorkspaceIndex();
+        setProjects(index, ['/matching-project', '/other-environment', '/other-target']);
         azd.envList.mock.mockImplementation((cwd: { path: string }) => Promise.resolve(
             cwd.path === '/other-environment'
                 ? [{ Name: 'prod', IsDefault: true }]
@@ -156,7 +170,7 @@ describe('AzdResourceAssociationService (unit)', () => {
             },
         });
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = createService(azd);
+        const service = createService(azd, index);
 
         const result = await service.find(resource);
 
@@ -168,11 +182,12 @@ describe('AzdResourceAssociationService (unit)', () => {
 
     it('propagates unexpected azd errors', async () => {
         const azd = createMockAzdService();
-        setProjects(azd, ['/project']);
+        const index = new MutableWorkspaceIndex();
+        setProjects(index, ['/project']);
         const expectedError = new Error('azd env list failed');
         azd.envList.mock.mockImplementation(() => Promise.reject(expectedError));
         const resource = makeGenericResource({ id: ResourceId, tags: { 'azd-env-name': 'dev' } });
-        const service = createService(azd);
+        const service = createService(azd, index);
 
         let actualError: unknown;
         try {

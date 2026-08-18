@@ -8,7 +8,9 @@ import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { AzdEnvNameTag } from '../constants';
+import { IWorkspaceIndexService } from '../utils/workspaceIndex/WorkspaceIndexService';
 import { IAzdService } from './AzdService';
+import { AzdProjectFileTag } from './azdWorkspaceDetector';
 
 export const IAzdResourceAssociationService: ServiceIdentifier<IAzdResourceAssociationService> = Symbol.for('IAzdResourceAssociationService');
 
@@ -30,9 +32,10 @@ export interface IAzdResourceAssociationService {
      * so the common case costs nothing: only tagged targets are worth probing
      * the local azd projects for.
      *
-     * Discovery is fresh for each call. Errors from azd are allowed to
-     * propagate so an unavailable or malformed environment is not mistaken
-     * for a clean no-match result.
+     * Project discovery uses the shared workspace index, which is kept current
+     * by file watching. Errors from azd are allowed to propagate so an
+     * unavailable or malformed environment is not mistaken for a clean
+     * no-match result.
      */
     find(resource: GenericResource): Promise<AzdResourceAssociation | undefined>;
 }
@@ -52,6 +55,7 @@ export class AzdResourceAssociationService implements IAzdResourceAssociationSer
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) { }
 
     /** @inheritdoc */
@@ -88,9 +92,8 @@ export class AzdResourceAssociationService implements IAzdResourceAssociationSer
     }
 
     private async findProjects(): Promise<AzdProject[]> {
-        const yamlFiles = (await this.azd.findAzureYaml(undefined, Number.MAX_SAFE_INTEGER))
-            .slice()
-            .sort((left, right) => compareText(left.toString(), right.toString()));
+        const index = await this.indexService.getIndex();
+        const yamlFiles = index.withTag(AzdProjectFileTag);
         const projects = new Map<string, AzdProject>();
 
         for (const yamlFile of yamlFiles) {
