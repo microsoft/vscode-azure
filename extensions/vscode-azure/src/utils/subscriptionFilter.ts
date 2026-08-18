@@ -40,18 +40,3 @@ export function parseSubscriptionFilterKey(key: string): { readonly tenantId?: s
     const [tenantId, subscriptionId] = key.toLowerCase().split(separator);
     return { tenantId: tenantId || undefined, subscriptionId: subscriptionId || undefined };
 }
-
-/**
- * Determine whether a tenant is included by the selected-subscriptions filter.
- *
- * An empty filter selects every tenant. Otherwise, a tenant is selected when at
- * least one configured subscription belongs to it.
- */
-export function isTenantSelected(selectedSubscriptions: readonly string[], tenantId: string): boolean {
-    if (selectedSubscriptions.length === 0) {
-        return true;
-    }
-
-    const normalizedTenantId = tenantId.toLowerCase();
-    return selectedSubscriptions.some(entry => parseSubscriptionFilterKey(entry).tenantId === normalizedTenantId);
-}

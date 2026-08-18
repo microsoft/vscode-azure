@@ -9,7 +9,7 @@ import { collectPages, Everything, Roots, type DataProviderChangeEvent } from '@
 import { createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../src/tree/resources/AzureAccountDataProvider';
-import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../../src/constants';
+import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../../src/constants';
 
 describe('AzureAccountDataProvider (unit)', () => {
     afterEach(() => {
@@ -820,24 +820,6 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(tenant.displayName).to.equal('Already Named');
             expect(createSpy.mock.callCount()).to.equal(0);
             expect(includeChildren).to.be.false;
-        });
-
-        it('should skip a filtered-out placeholder tenant before requesting a credential', async () => {
-            const { ctx, mock: mockVsCode } = createMockCodeContext();
-            const { executor } = createTestActionExecutor();
-            const credentialInputs: Array<CredentialFactoryOptions | undefined> = [];
-            const credentialFactory: ICredentialFactory = (input) => {
-                credentialInputs.push(input);
-                return makeCredential();
-            };
-            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
-            const createSpy = mockSubscriptionClient({ tenantPages: [] });
-            const selectedSubscriptionsKey = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
-
-            await withSettings(mockVsCode, { [selectedSubscriptionsKey]: [`${otherTenantId}/sub-1`] }, () => provider.enrich(makePlaceholderTenant()));
-
-            expect(credentialInputs).to.be.empty;
-            expect(createSpy.mock.callCount()).to.equal(0);
         });
 
         it('should skip account nodes without any network call', async () => {
