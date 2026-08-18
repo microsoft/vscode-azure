@@ -3,17 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
+import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import type { AzdShowResult } from '../../../../src/azd/AzdService';
-import { AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
+import { azdDetector, AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
 import { isAzdProjectNode, isAzdServiceNode } from '../../../../src/tree/workspace/WorkspaceNode';
+import { WorkspaceIndexService } from '../../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { createMockAzdService } from '../../../azd/MockAzdService';
 import { makeAzdProjectNode, makeAzdServiceNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
 interface ProviderOptions {
-    readonly azureYamls?: vscode.Uri[];
     readonly showFor?: (cwd: vscode.Uri) => AzdShowResult | undefined;
 }
 
@@ -21,17 +20,13 @@ function createProvider(options: ProviderOptions = {}) {
     const m = createMockVsCode();
     const { executor } = createTestActionExecutor();
     const azd = createMockAzdService();
-    if (options.azureYamls) {
-        azd.findAzureYaml.mock.mockImplementation(
-            (dir?: vscode.Uri) => dir
-                ? Promise.resolve(options.azureYamls!.filter(u => (u).path.startsWith((dir).path + '/')))
-                : Promise.resolve(options.azureYamls!),
-        );
-    }
     if (options.showFor) {
         azd.show.mock.mockImplementation((cwd: vscode.Uri) => Promise.resolve(options.showFor!(cwd)));
     }
-    const provider = new AzdWorkspaceDataProvider(m.vscode, executor, azd);
+    // Projects now come from the shared index, so these tests drive the real
+    // service and detector rather than stubbing discovery.
+    const indexService = new WorkspaceIndexService(m.vscode, [azdDetector], new ManualDebounceScheduler());
+    const provider = new AzdWorkspaceDataProvider(m.vscode, executor, azd, indexService);
     return { provider, mock: m, azd };
 }
 
@@ -57,35 +52,23 @@ describe('AzdWorkspaceDataProvider (unit)', () => {
             expect(await provider.getChildren()).to.deep.equal([]);
         });
 
-        it('returns no projects when findAzureYaml returns empty', async () => {
+        it('returns no projects when no azure.yaml is present', async () => {
             const { provider, mock: m } = createProvider();
-            m.workspaceFolders.push({ uri: m.vscode.Uri.file('/repo'), name: 'repo', index: 0 });
+            addWorkspaceFolder(m, '/repo');
             expect(await provider.getChildren()).to.deep.equal([]);
         });
 
-        it('discovers an azd project via IAzdService.findAzureYaml', async () => {
-            const yamlUri = MockUri.file('/repo/azure.yaml');
-            const { provider, mock: m, azd } = createProvider({
-                azureYamls: [yamlUri],
-            });
-            const folder = m.vscode.Uri.file('/repo');
-            m.workspaceFolders.push({ uri: folder, name: 'repo', index: 0 });
+        it('discovers an azd project from the workspace index', async () => {
+            const { provider, mock: m } = createProvider();
+            addWorkspaceFolder(m, '/repo');
+            addWorkspaceFile(m, '/repo/azure.yaml', 'name: app');
 
             const children = await provider.getChildren();
+
             expect(children).to.have.length(1);
             expect(isAzdProjectNode(children[0])).to.be.true;
             expect(children[0].label).to.equal('repo');
-            expect(children[0].resourceUri.toString()).to.equal(yamlUri.toString());
-            expect(azd.findAzureYaml.mock.callCount()).to.equal(1);
-        });
-
-        it('emits onDidChange when workspace folders change', () => {
-            const { provider, mock: m } = createProvider();
-            const onChange = mock.fn();
-            provider.onDidChange(onChange);
-
-            m.workspaceFoldersChangeEmitter.fire({ added: [], removed: [] });
-            expect(onChange.mock.callCount()).to.equal(1);
+            expect(children[0].resourceUri.path).to.equal('/repo/azure.yaml');
         });
     });
 

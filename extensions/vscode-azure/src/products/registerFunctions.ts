@@ -9,6 +9,8 @@ import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
 import { WebAppDataProvider } from '../tree/resources/webApp/WebAppDataProvider';
 import { WebAppViewProvider } from '../tree/resources/webApp/WebAppViewProvider';
+import { functionsDetector } from '../tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /** Contribute all Azure Functions services and UI integrations. */
 export function registerFunctions(registrar: ProductRegistrar): void {
@@ -26,4 +28,8 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     registrar.registerResourceViewProvider(WebAppViewProvider);
     registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registrar.registerCommand('vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
+
+    registrar.registerBinding(container => {
+        container.bind(IWorkspaceDetector).toConstantValue(functionsDetector);
+    });
 }
