@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { Disposable, EventEmitter, IVsCode, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { Disposable, EventEmitter, InflightMap, IVsCode, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged } from 'inversify';
 import { parseTree, printParseErrorCode } from 'jsonc-parser';
 import { IAzureViewDataTree, type IAzureViewDataTree as AzureViewDataTree } from '../services';
@@ -168,6 +168,7 @@ const DefaultFreshnessWindowMs = 3000;
 export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Disposable {
     private readonly changeEmitter = new EventEmitter<vscode.FileChangeEvent[]>();
     private readonly cache = new Map<string, CacheEntry>();
+    private readonly pendingLoads = new InflightMap<CacheEntry>();
     private readonly freshnessWindowMs: number;
     private readonly format: JsoncSettingsFormat;
 
@@ -315,11 +316,16 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
     }
 
     private async load(uri: vscode.Uri, options: { allowReuse: boolean }): Promise<CacheEntry> {
-        const cached = this.cache.get(uri.toString());
+        const key = uri.toString();
+        const cached = this.cache.get(key);
         if (cached && options.allowReuse && Date.now() - cached.loadedAt < this.freshnessWindowMs) {
             return cached;
         }
 
+        return this.pendingLoads.getOrRun(key, () => this.loadFresh(uri));
+    }
+
+    private async loadFresh(uri: vscode.Uri): Promise<CacheEntry> {
         let snapshot: SettingsSnapshot;
         try {
             const node = this.resolve(uri);

@@ -144,6 +144,26 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(harness.read.mock.callCount()).to.equal(1);
         });
 
+        it('coalesces overlapping stat and read requests into one Azure read and progress notification', async () => {
+            const { promise, resolve } = Promise.withResolvers<SettingsSnapshot>();
+            harness.read.mock.mockImplementation(() => promise);
+
+            const stat = harness.provider.stat(harness.uri);
+            const reads = [
+                harness.provider.readFile(harness.uri),
+                harness.provider.readFile(harness.uri),
+                harness.provider.readFile(harness.uri),
+                harness.provider.readFile(harness.uri),
+            ];
+            await new Promise(resolveDelay => setTimeout(resolveDelay, 200));
+
+            expect(harness.read.mock.callCount()).to.equal(1);
+            expect(harness.code.window.withProgress.mock.callCount()).to.equal(1);
+
+            resolve(makeSettingsSnapshot());
+            await Promise.all([stat, ...reads]);
+        });
+
         it('fetches fresh data once the freshness window has elapsed', async () => {
             const h = createHarness({ freshnessWindowMs: 0 });
 
