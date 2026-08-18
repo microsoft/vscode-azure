@@ -211,7 +211,7 @@ export class ResourceClient implements IResourceClient {
 
         // ARM returns these newest-first, but sort defensively since that
         // ordering is conventional rather than contractual.
-        const apiVersions = match.apiVersions?.map(version => version.trim()).filter(version => version).sort((a, b) => a < b ? 1 : a > b ? -1 : 0) ?? [];
+        const apiVersions = match.apiVersions?.map(version => version.trim()).filter(version => version).sort((a, b) => b.localeCompare(a)) ?? [];
         const apiVersion = apiVersions.find(version => !version.toLowerCase().includes('preview')) ?? apiVersions[0];
         if (!apiVersion) {
             throw new Error(`Resource type "${resourceType}" does not define an API version.`);
