@@ -6,8 +6,7 @@
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import type { AzdShowResult } from '../../../../src/azd/AzdService';
-import { azdDetector } from '../../../../src/azd/azdWorkspaceDetector';
-import { AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
+import { azdDetector, AzdWorkspaceDataProvider } from '../../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
 import { isAzdProjectNode, isAzdServiceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { WorkspaceIndexService } from '../../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { createMockAzdService } from '../../../azd/MockAzdService';

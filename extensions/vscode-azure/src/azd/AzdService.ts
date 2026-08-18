@@ -91,10 +91,8 @@ export interface IAzdService {
      *
      * Resolves when the task completes successfully.
      * Rejects on non-zero exit.
-     *
-     * @param environmentName - Optional non-default environment to delete.
      */
-    down(cwd: vscode.Uri, environmentName?: string): Promise<void>;
+    down(cwd: vscode.Uri): Promise<void>;
 
     /**
      * Checks whether the installed `azd` version meets the given minimum.
@@ -322,7 +320,7 @@ export class AzdService implements IAzdService {
     }
 
     /** @inheritdoc */
-    public async down(cwd: vscode.Uri, environmentName?: string): Promise<void> {
+    public async down(cwd: vscode.Uri): Promise<void> {
         const authEnv = await this.authServer.getEnv();
 
         try {
@@ -331,8 +329,7 @@ export class AzdService implements IAzdService {
                 command: command(AzdCommand)
                     .arg('down')
                     .flagArg('--force')
-                    .flagArg('--purge')
-                    .namedArg('--environment', environmentName),
+                    .flagArg('--purge'),
                 cwd,
                 env: authEnv,
                 name: 'azd down',

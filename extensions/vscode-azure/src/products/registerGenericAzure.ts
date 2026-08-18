@@ -15,7 +15,6 @@ import {
     SubscriptionClient,
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
-import { azdDetector } from '../azd/azdWorkspaceDetector';
 import { SelectSubscriptions } from '../commands/auth/SelectSubscriptions';
 import { SignIn } from '../commands/auth/SignIn';
 import { OpenUrl } from '../commands/OpenUrl';
@@ -33,6 +32,7 @@ import {
 import { AzureResourceDataProvider } from '../tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../tree/resources/GenericAzureViewProvider';
 import { IResourceSelector, ResourceSelector } from '../tree/resources/ResourceSelector';
+import { azdDetector } from '../tree/workspace/azd/AzdWorkspaceDataProvider';
 import { CredentialOptionsScope, ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 

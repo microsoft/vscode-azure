@@ -26,14 +26,11 @@ export interface AzdDownOptions {
      * unset for interactive use so users are always asked to confirm.
      */
     readonly skipConfirmation?: boolean;
-    /** Explicit environment to delete instead of the project's default. */
-    readonly environmentName?: string;
 }
 
 /**
  * Runs `azd down --force --purge` in a visible terminal, deleting all
- * resources provisioned for an azd environment -- the project's default
- * unless {@linkcode AzdDownOptions.environmentName} names another.
+ * resources provisioned for the project's default azd environment.
  *
  * Prompts for explicit confirmation before doing anything, since the
  * operation is destructive and irreversible. The prompt can be bypassed
@@ -63,9 +60,7 @@ export class AzdDown implements ManagedCommand {
             const deleteLabel = this.ctx.code.l10n.t('Delete');
             await showMessage(
                 this.ctx.code,
-                options?.environmentName
-                    ? this.ctx.code.l10n.t('Are you sure you want to delete all resources provisioned for the \'{0}\' environment? This cannot be undone.', options.environmentName)
-                    : this.ctx.code.l10n.t('Are you sure you want to delete all resources provisioned for this project\'s default environment? This cannot be undone.'),
+                this.ctx.code.l10n.t('Are you sure you want to delete all resources provisioned for this project\'s default environment? This cannot be undone.'),
                 { modal: true, severity: 'warning', stepName: this.constructor.name },
                 deleteLabel,
             );
@@ -77,7 +72,6 @@ export class AzdDown implements ManagedCommand {
             this.output,
             {
                 iacFolder,
-                environmentName: options?.environmentName,
             },
             [
                 get(SelectIacFolderStep),

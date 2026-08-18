@@ -81,9 +81,10 @@ the shared command registration module.
 ### Resource deletion
 
 Products should use the shared Delete Resource command rather than shipping
-their own delete. `DeleteAzureResource` handles confirmation, azd steering,
-tree invalidation, and progress for any ARM resource or resource group, using
-the generic `ResourceClient` delete operations.
+their own delete. `DeleteAzureResource` handles confirmation, tree invalidation,
+and progress for any ARM resource or resource group, using the generic
+`ResourceClient` delete operations. When the target carries the
+`azd-env-name` tag, the confirmation suggests using `azd down` instead.
 
 A product only needs its own delete command for targets the generic command
 cannot express -- for example a virtual child node that maps to a
