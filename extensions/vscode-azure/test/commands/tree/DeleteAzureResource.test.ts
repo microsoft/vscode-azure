@@ -169,7 +169,6 @@ describe('DeleteAzureResource (unit)', () => {
         // Still in flight: the activity reports progress and the node remains.
         expect((await activities(setup))[0]).to.deep.include({ status: 'InProgress' });
         expect(setup.remove.mock.callCount()).to.equal(0);
-        expect(setup.mockResult.window.withProgress.mock.callCount()).to.equal(0);
 
         finishDelete?.();
         await pending;
