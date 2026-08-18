@@ -50,6 +50,7 @@
     },
     "devDependencies": {
         "@vscode/extension-telemetry": "catalog:",
-        "inversify": "catalog:"
+        "inversify": "catalog:",
+        "minimatch": "^10.2.6"
     }
 }

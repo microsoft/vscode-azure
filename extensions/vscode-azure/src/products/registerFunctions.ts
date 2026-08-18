@@ -10,6 +10,8 @@ import { DeleteAppSetting } from '../commands/functions/DeleteAppSetting';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { FunctionAppDataProvider, IFunctionAppDataProvider } from '../tree/resources/functions/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../tree/resources/functions/FunctionAppViewProvider';
+import { functionsDetector } from '../tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /** Contribute all Azure Functions services and UI integrations. */
 export function registerFunctions(registrar: ProductRegistrar): void {
@@ -25,4 +27,8 @@ export function registerFunctions(registrar: ProductRegistrar): void {
 
     registrar.registerResourceDataProvider([IFunctionAppDataProvider, FunctionAppDataProvider]);
     registrar.registerResourceViewProvider(FunctionAppViewProvider);
+
+    registrar.registerBinding(container => {
+        container.bind(IWorkspaceDetector).toConstantValue(functionsDetector);
+    });
 }

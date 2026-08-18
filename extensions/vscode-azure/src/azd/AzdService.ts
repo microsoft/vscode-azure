@@ -18,7 +18,8 @@ export const MinAzdVersion = '1.25.0-0';
 /** Minimum `azd` version that supports the `azd update` command (public preview). */
 export const MinAzdUpdateVersion = '1.23.14';
 
-const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
+/** File names that mark an azd project. */
+export const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 /** Glob pattern matching `azure.yaml` / `azure.yml` at the workspace root only. */
 export const AzureYamlGlobPattern = `{${AzureYamlFileNames.join(',')}}`;

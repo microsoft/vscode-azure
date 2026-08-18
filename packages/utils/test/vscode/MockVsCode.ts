@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { matchesGlob } from 'node:path/posix';
+import { minimatch } from 'minimatch';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { Disposable } from '../../src/vscode/Disposable';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../src/vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
@@ -50,6 +51,18 @@ type MockedNamespace<T> = {
  * {@linkcode MockVsCodeResult.vscode vscode} are typed as the real `IVsCode`
  * module, so reach for these top-level handles when you need `.mock`.)
  */
+/**
+ * A watcher created by the mock `workspace.createFileSystemWatcher`, exposing
+ * the glob it was created with and letting a test raise events on it.
+ */
+export interface MockFileSystemWatcher {
+    /** The pattern the watcher was created with. */
+    readonly pattern: vscode.GlobPattern;
+    fireCreate(uri: vscode.Uri): void;
+    fireChange(uri: vscode.Uri): void;
+    fireDelete(uri: vscode.Uri): void;
+}
+
 export interface MockVsCodeResult {
     /** The mock suitable for DI injection as {@linkcode IVsCode}. */
     readonly vscode: IVsCode;
@@ -73,6 +86,12 @@ export interface MockVsCodeResult {
 
     /** The in-memory file system backing `workspace.fs`. */
     readonly fs: MockFileSystem;
+
+    /**
+     * Every watcher created via `workspace.createFileSystemWatcher`, in
+     * creation order. Use {@linkcode fireFileSystemEvent} to drive them.
+     */
+    readonly fileSystemWatchers: readonly MockFileSystemWatcher[];
 
     /**
      * The workspace folders list backing `workspace.workspaceFolders`.
@@ -268,11 +287,12 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
     );
 
-    // Matches files in the mock file system against a glob, using Node's
-    // pure `path.matchesGlob` (no real filesystem access). VS Code resolves a
-    // relative glob against workspace folders, so a pattern without a path
-    // separator matches by basename anywhere; we mirror that with a `**/`
-    // prefix. The RelativePattern base is not scoped.
+    // Matches files in the mock file system against a glob, with no real
+    // filesystem access. VS Code resolves a relative glob against workspace
+    // folders, so a pattern without a path separator matches by basename
+    // anywhere; we mirror that with a `**/` prefix. `dot: true` because VS
+    // Code's glob matches dot-directories. The RelativePattern base is not
+    // scoped.
     const findFiles = mock.fn(
         (include: vscode.GlobPattern, _exclude?: unknown, maxResults?: number) => {
             const raw = typeof include === 'string' ? include : include.pattern;
@@ -283,7 +303,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
                 if (maxResults !== undefined && matched.length >= maxResults) {
                     break;
                 }
-                if (matchesGlob(filePath, pattern)) {
+                if (minimatch(filePath, pattern, { dot: true })) {
                     // `fs.files` is keyed by `uri.path`, so rehydrate from URI
                     // components rather than treating the key as a filesystem
                     // path (which would mishandle drive letters / schemes).
@@ -347,20 +367,28 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         },
     );
 
+    const fileSystemWatchers: MockFileSystemWatcher[] = [];
     const createFileSystemWatcher = mock.fn(
-        (): vscode.FileSystemWatcher => {
+        (pattern: vscode.GlobPattern): vscode.FileSystemWatcher => {
             const create = new EventEmitter<vscode.Uri>();
             const change = new EventEmitter<vscode.Uri>();
             const del = new EventEmitter<vscode.Uri>();
-            return {
+            const watcher = {
                 ignoreCreateEvents: false,
                 ignoreChangeEvents: false,
                 ignoreDeleteEvents: false,
                 onDidCreate: create.event,
                 onDidChange: change.event,
                 onDidDelete: del.event,
-                dispose: () => { create.dispose(); change.dispose(); del.dispose(); },
+                dispose: () => { Disposable.disposeAll(create, change, del); },
             };
+            fileSystemWatchers.push({
+                pattern,
+                fireCreate: uri => { create.fire(uri); },
+                fireChange: uri => { change.fire(uri); },
+                fireDelete: uri => { del.fire(uri); },
+            });
+            return watcher;
         },
     );
 
@@ -423,6 +451,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         settings,
         registeredCommands,
         fs,
+        fileSystemWatchers,
         workspaceFolders,
         authentication,
         commands,
@@ -490,6 +519,76 @@ export function createMockCodeContext(): MockCodeContextResult {
         ctx: { code: mockResult.vscode, extensionContext },
         mock: mockResult,
     };
+}
+
+/**
+ * Adds a workspace folder rooted at `path`, along with the backing directory in
+ * the mock file system, and returns it.
+ *
+ * The folder name is the last path segment and the index is its position, so
+ * repeated calls build a multi-root workspace.
+ *
+ * @example
+ * ```ts
+ * const m = createMockVsCode();
+ * addWorkspaceFolder(m, '/repo');
+ * addWorkspaceFile(m, '/repo/package.json', '{}');
+ * ```
+ */
+export function addWorkspaceFolder(mock: MockVsCodeResult, path: string): vscode.WorkspaceFolder {
+    const uri = mock.vscode.Uri.file(path);
+    const folder: vscode.WorkspaceFolder = {
+        uri,
+        name: path.split('/').filter(Boolean).pop() ?? path,
+        index: mock.workspaceFolders.length,
+    };
+    mock.workspaceFolders.push(folder);
+    mock.fs.addDirectory(uri);
+    return folder;
+}
+
+/**
+ * Writes a file into the mock file system at `path`, creating the directories
+ * above it. Convenience wrapper over {@linkcode MockFileSystem.addFile} that
+ * saves building a `Uri` at each call site.
+ */
+export function addWorkspaceFile(mock: MockVsCodeResult, path: string, contents = ''): vscode.Uri {
+    const uri = mock.vscode.Uri.file(path);
+    mock.fs.addFile(uri, contents);
+    return uri;
+}
+
+/**
+ * Raises a file system event for `path` on every watcher whose glob matches it,
+ * mirroring the filtering VS Code does before delivering to a watcher.
+ *
+ * Matching uses `dot: true`, because VS Code reports changes to dot-directories
+ * (its default `files.watcherExclude` excludes `**‍/.git/objects/**`, which only
+ * makes sense if `.git` paths are otherwise reported). Node's built-in
+ * `matchesGlob` has no such option and silently drops them.
+ *
+ * @param kind - Which of the three watcher events to raise. Defaults to
+ *   `'change'`.
+ */
+export function fireFileSystemEvent(
+    mock: MockVsCodeResult,
+    path: string,
+    kind: 'create' | 'change' | 'delete' = 'change',
+): void {
+    const uri = mock.vscode.Uri.file(path);
+
+    for (const watcher of mock.fileSystemWatchers) {
+        if (typeof watcher.pattern !== 'string' || !minimatch(path, watcher.pattern, { dot: true })) {
+            continue;
+        }
+        if (kind === 'create') {
+            watcher.fireCreate(uri);
+        } else if (kind === 'delete') {
+            watcher.fireDelete(uri);
+        } else {
+            watcher.fireChange(uri);
+        }
+    }
 }
 
 /**

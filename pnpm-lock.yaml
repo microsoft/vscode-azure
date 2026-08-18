@@ -144,6 +144,9 @@ importers:
       inversify:
         specifier: 'catalog:'
         version: 8.2.3(reflect-metadata@0.2.2)
+      minimatch:
+        specifier: ^10.2.6
+        version: 10.2.6
 
 packages:
 

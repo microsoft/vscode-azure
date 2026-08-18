@@ -32,7 +32,9 @@ import {
 import { AzureResourceDataProvider } from '../tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../tree/resources/GenericAzureViewProvider';
 import { IResourceSelector, ResourceSelector } from '../tree/resources/ResourceSelector';
+import { azdDetector } from '../tree/workspace/azd/AzdWorkspaceDataProvider';
 import { CredentialOptionsScope, ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
+import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /**
  * Contribute the generic Azure clients and fallback resource presentation
@@ -40,6 +42,7 @@ import { CredentialOptionsScope, ICredentialOptionsScope } from '../utils/Creden
  */
 export function registerGenericAzure(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
+        container.bind(IWorkspaceDetector).toConstantValue(azdDetector);
         container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
         container.bind(ICredentialFactory).toDynamicValue(context => {
             const scope = context.get(ICredentialOptionsScope);
