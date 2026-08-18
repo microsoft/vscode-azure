@@ -144,24 +144,52 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(harness.read.mock.callCount()).to.equal(1);
         });
 
-        it('coalesces overlapping stat and read requests into one Azure read and progress notification', async () => {
-            const { promise, resolve } = Promise.withResolvers<SettingsSnapshot>();
-            harness.read.mock.mockImplementation(() => promise);
+        it('shows one notification for concurrent slow readFile requests', async () => {
+            mock.timers.enable({ apis: ['setTimeout'] });
+            try {
+                const { promise, resolve } = Promise.withResolvers<SettingsSnapshot>();
+                harness.read.mock.mockImplementation(() => promise);
 
-            const stat = harness.provider.stat(harness.uri);
-            const reads = [
-                harness.provider.readFile(harness.uri),
-                harness.provider.readFile(harness.uri),
-                harness.provider.readFile(harness.uri),
-                harness.provider.readFile(harness.uri),
-            ];
-            await new Promise(resolveDelay => setTimeout(resolveDelay, 200));
+                const reads = [
+                    harness.provider.readFile(harness.uri),
+                    harness.provider.readFile(harness.uri),
+                    harness.provider.readFile(harness.uri),
+                    harness.provider.readFile(harness.uri),
+                ];
+                mock.timers.tick(200);
+                await new Promise<void>(resolveImmediate => setImmediate(resolveImmediate));
 
-            expect(harness.read.mock.callCount()).to.equal(1);
-            expect(harness.code.window.withProgress.mock.callCount()).to.equal(1);
+                expect(harness.read.mock.callCount()).to.equal(1);
+                expect(harness.code.window.withProgress.mock.callCount()).to.equal(0);
 
-            resolve(makeSettingsSnapshot());
-            await Promise.all([stat, ...reads]);
+                mock.timers.tick(350);
+                await new Promise<void>(resolveImmediate => setImmediate(resolveImmediate));
+                expect(harness.code.window.withProgress.mock.callCount()).to.equal(1);
+
+                resolve(makeSettingsSnapshot());
+                await Promise.all(reads);
+            } finally {
+                mock.timers.reset();
+            }
+        });
+
+        it('does not show read progress for slow stat requests', async () => {
+            mock.timers.enable({ apis: ['setTimeout'] });
+            try {
+                const { promise, resolve } = Promise.withResolvers<SettingsSnapshot>();
+                harness.read.mock.mockImplementation(() => promise);
+
+                const stat = harness.provider.stat(harness.uri);
+                mock.timers.tick(1000);
+                await new Promise<void>(resolveImmediate => setImmediate(resolveImmediate));
+
+                expect(harness.code.window.withProgress.mock.callCount()).to.equal(0);
+
+                resolve(makeSettingsSnapshot());
+                await stat;
+            } finally {
+                mock.timers.reset();
+            }
         });
 
         it('fetches fresh data once the freshness window has elapsed', async () => {

@@ -142,6 +142,7 @@ interface CacheEntry {
 }
 
 const DefaultFreshnessWindowMs = 3000;
+const ProgressDelayMs = 500;
 
 /**
  * A {@linkcode vscode.FileSystemProvider} that presents a resource's settings as a single editable
@@ -194,7 +195,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
      * @throws `FileNotFound` if the URI cannot be resolved to a settings node and adapter.
      */
     public async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
-        const entry = await this.load(uri, { allowReuse: false });
+        const entry = await this.load(uri, { allowReuse: false, showProgress: false });
 
         return {
             type: this.code.FileType.File,
@@ -212,7 +213,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
      * @throws `FileNotFound` if the URI cannot be resolved to a settings node and adapter.
      */
     public async readFile(uri: vscode.Uri): Promise<Uint8Array> {
-        const entry = await this.load(uri, { allowReuse: true });
+        const entry = await this.load(uri, { allowReuse: true, showProgress: true });
         return Buffer.from(entry.text, 'utf8');
     }
 
@@ -230,7 +231,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
      * so neither `create` nor `overwrite` can be false in a way that means anything here.
      */
     public async writeFile(uri: vscode.Uri, content: Uint8Array, _options: { readonly create: boolean; readonly overwrite: boolean }): Promise<void> {
-        const entry = await this.load(uri, { allowReuse: true });
+        const entry = await this.load(uri, { allowReuse: true, showProgress: false });
 
         if (!entry.snapshot.writable) {
             throw this.code.FileSystemError.NoPermissions(uri);
@@ -246,6 +247,7 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
                 title: this.code.l10n.t('Saving {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
             },
             node.adapter.write(node.azureResource, parsed),
+            ProgressDelayMs,
         );
 
         // The node itself is a leaf today, so this is cheap insurance rather than a visible refresh:
@@ -315,28 +317,32 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
         return node;
     }
 
-    private async load(uri: vscode.Uri, options: { allowReuse: boolean }): Promise<CacheEntry> {
+    private async load(uri: vscode.Uri, options: { allowReuse: boolean; showProgress: boolean }): Promise<CacheEntry> {
         const key = uri.toString();
         const cached = this.cache.get(key);
         if (cached && options.allowReuse && Date.now() - cached.loadedAt < this.freshnessWindowMs) {
             return cached;
         }
 
-        return this.pendingLoads.getOrRun(key, () => this.loadFresh(uri));
+        return this.pendingLoads.getOrRun(key, () => this.loadFresh(uri, options.showProgress));
     }
 
-    private async loadFresh(uri: vscode.Uri): Promise<CacheEntry> {
+    private async loadFresh(uri: vscode.Uri, showProgress: boolean): Promise<CacheEntry> {
         let snapshot: SettingsSnapshot;
         try {
             const node = this.resolve(uri);
-            snapshot = await withDelayedProgress(
-                this.code,
-                {
-                    location: this.code.ProgressLocation.Notification,
-                    title: this.code.l10n.t('Loading {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
-                },
-                node.adapter.read(node.azureResource),
-            );
+            const read = node.adapter.read(node.azureResource);
+            snapshot = showProgress
+                ? await withDelayedProgress(
+                    this.code,
+                    {
+                        location: this.code.ProgressLocation.Notification,
+                        title: this.code.l10n.t('Loading {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
+                    },
+                    read,
+                    ProgressDelayMs,
+                )
+                : await read;
         } catch (error) {
             // The editor only acts on `FileNotFound`; anything else surfaces as an opaque failure.
             // Preserve the original message so the cause is not lost.
