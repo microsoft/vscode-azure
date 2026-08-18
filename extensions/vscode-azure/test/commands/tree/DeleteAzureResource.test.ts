@@ -6,19 +6,13 @@
 import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, createActionContext, IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, respondToPrompts, type MockCodeContextResult, type MockVsCodeResult, type WizardResponse } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, respondToPrompts, type MockCodeContextResult, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResource';
 import { IAzureViewDataTree } from '../../../src/services';
-
-/**
- * Queue entry standing in for the non-modal success toast. The toast has no
- * buttons and nothing awaits it, so it is simply left to expire -- but
- * {@linkcode respondToPrompts} drives every message API from one queue, so it
- * still needs an entry to consume.
- */
-const IgnoreToast: WizardResponse = 'cancel';
+import type { Activity } from '../../../src/tree/activity/Activity';
+import { GenericActivityDataProvider, IGenericActivityDataProvider } from '../../../src/tree/activity/GenericActivityDataProvider';
 
 describe('DeleteAzureResource (unit)', () => {
     afterEach(() => {
@@ -28,7 +22,7 @@ describe('DeleteAzureResource (unit)', () => {
     it('deletes a confirmed resource by id and type, then removes it from the tree', async () => {
         const resource = makeGenericResource();
         const setup = createCommand(resource);
-        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete' }, IgnoreToast]);
+        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete' }]);
 
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
@@ -37,7 +31,10 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.deleteById.mock.calls[0].arguments).to.deep.equal([resource.id, resource.type]);
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.calls[0].arguments[0]).to.equal(resource);
-        expect(shownToasts(setup)).to.deep.equal([`Deleted resource '${resource.name}'.`]);
+        expect((await activities(setup))[0]).to.deep.include({
+            status: 'Completed',
+            title: `Delete resource '${resource.name}'`,
+        });
     });
 
     it('does not remove the node when the remote delete fails', async () => {
@@ -50,7 +47,10 @@ describe('DeleteAzureResource (unit)', () => {
             .to.be.rejectedWith(failure);
 
         expect(setup.remove.mock.callCount()).to.equal(0);
-        expect(shownToasts(setup)).to.be.empty;
+        expect((await activities(setup))[0]).to.deep.include({
+            status: 'Failed',
+            description: failure.message,
+        });
     });
 
     it('cancels instead of deleting when the confirmation is dismissed', async () => {
@@ -64,13 +64,13 @@ describe('DeleteAzureResource (unit)', () => {
 
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.callCount()).to.equal(0);
-        expect(shownToasts(setup)).to.be.empty;
+        expect(await activities(setup)).to.be.empty;
     });
 
     it('deletes a resource group only after its name is typed', async () => {
         const resourceGroup = makeResourceGroup();
         const setup = createCommand(resourceGroup);
-        const tracker = respondToPrompts(setup.mockResult, [{ input: resourceGroup.name }, IgnoreToast]);
+        const tracker = respondToPrompts(setup.mockResult, [{ input: resourceGroup.name }]);
 
         await setup.command.execute(AzureNodeId.from(resourceGroup).toString());
 
@@ -78,13 +78,16 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.deleteResourceGroup.mock.calls[0].arguments[0]).to.equal(resourceGroup.name);
         expect(setup.deleteById.mock.callCount()).to.equal(0);
         expect(setup.remove.mock.calls[0].arguments[0]).to.equal(resourceGroup);
-        expect(shownToasts(setup)).to.deep.equal([`Deleted resource group '${resourceGroup.name}'.`]);
+        expect((await activities(setup))[0]).to.deep.include({
+            status: 'Completed',
+            title: `Delete resource group '${resourceGroup.name}'`,
+        });
     });
 
     it('never remembers or pre-fills the typed confirmation', async () => {
         const first = makeResourceGroup();
         const setup = createCommand(first);
-        respondToPrompts(setup.mockResult, [{ input: first.name }, IgnoreToast]);
+        respondToPrompts(setup.mockResult, [{ input: first.name }]);
 
         await setup.command.execute(AzureNodeId.from(first).toString());
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(1);
@@ -135,7 +138,7 @@ describe('DeleteAzureResource (unit)', () => {
         const error = await expect(pending).to.be.rejected;
         expect(CancellationError.test(error)).to.be.true;
         expect(setup.remove.mock.callCount()).to.equal(0);
-        expect(shownToasts(setup)).to.be.empty;
+        expect(await activities(setup)).to.be.empty;
     });
 
     it('does not delete a resource group when the typed confirmation is cancelled', async () => {
@@ -157,7 +160,7 @@ describe('DeleteAzureResource (unit)', () => {
         const deleteById = mock.fn((_resourceId: string, _resourceType: string) =>
             new Promise<void>(resolve => { finishDelete = resolve; }));
         const setup = createCommand(resource, { deleteById });
-        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete' }, IgnoreToast]);
+        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete' }]);
 
         const pending = setup.command.execute(AzureNodeId.from(resource).toString());
 
@@ -165,23 +168,23 @@ describe('DeleteAzureResource (unit)', () => {
         // outlives its threshold, so wait for the progress path to engage.
         await waitFor(() => setup.mockResult.window.withProgress.mock.callCount() === 1);
 
-        // Still in flight: no toast and the node is still in the tree.
+        // Still in flight: the activity reports progress and the node remains.
         expect(deleteById.mock.callCount()).to.equal(1);
-        expect(shownToasts(setup)).to.be.empty;
+        expect((await activities(setup))[0]).to.deep.include({ status: 'InProgress' });
         expect(setup.remove.mock.callCount()).to.equal(0);
 
         finishDelete?.();
         await pending;
 
         expect(setup.remove.mock.callCount()).to.equal(1);
-        expect(shownToasts(setup)).to.deep.equal([`Deleted resource '${resource.name}'.`]);
+        expect((await activities(setup))[0]).to.deep.include({ status: 'Completed' });
         tracker.assertAllConsumed();
     });
 
     it('suggests azd down when deleting an azd-tagged resource', async () => {
         const resource = makeGenericResource({ tags: { 'azd-env-name': 'dev' } });
         const setup = createCommand(resource);
-        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete' }, IgnoreToast]);
+        const tracker = respondToPrompts(setup.mockResult, [{ button: 'Delete' }]);
 
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
@@ -193,7 +196,7 @@ describe('DeleteAzureResource (unit)', () => {
     it('suggests azd down when deleting an azd-tagged resource group', async () => {
         const resourceGroup = makeResourceGroup({ tags: { 'AZD-ENV-NAME': 'dev' } });
         const setup = createCommand(resourceGroup);
-        const tracker = respondToPrompts(setup.mockResult, [{ input: resourceGroup.name }, IgnoreToast]);
+        const tracker = respondToPrompts(setup.mockResult, [{ input: resourceGroup.name }]);
 
         await setup.command.execute(AzureNodeId.from(resourceGroup).toString());
 
@@ -232,6 +235,7 @@ interface CommandSetup {
     readonly codeContext: MockCodeContextResult;
     readonly deleteById: Mock<(resourceId: string, resourceType: string) => Promise<void>>;
     readonly deleteResourceGroup: Mock<(name: string) => Promise<void>>;
+    readonly activityProvider: GenericActivityDataProvider;
     readonly remove: Mock<(target: unknown) => void>;
 }
 
@@ -244,10 +248,9 @@ async function waitFor(condition: () => boolean): Promise<void> {
     expect(condition(), 'Timed out waiting for the expected state').to.be.true;
 }
 
-/** Localized information toasts shown by the command, in order. */
-function shownToasts(setup: CommandSetup): string[] {
-    return setup.mockResult.window.showInformationMessage.mock.calls
-        .map(call => call.arguments[0]);
+/** Activities recorded by the command, in insertion order. */
+function activities(setup: CommandSetup): Promise<Activity[]> {
+    return setup.activityProvider.getChildren();
 }
 
 function createCommand(resource: GenericResource, options: CommandOptions = {}): CommandSetup {
@@ -258,10 +261,12 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
 
     const deleteById = options.deleteById ?? mock.fn((_resourceId: string, _resourceType: string) => Promise.resolve());
     const deleteResourceGroup = mock.fn((_name: string) => Promise.resolve());
+    const activityProvider = new GenericActivityDataProvider();
     const container = new Container();
     container.bind(ICodeContext).toConstantValue(ctx);
     container.bind(IActionContext).toConstantValue(createActionContext('deleteAzureResource'));
     container.bind(IAzureViewDataTree).toConstantValue(dataTree);
+    container.bind(IGenericActivityDataProvider).toConstantValue(activityProvider);
     container.bind(IResourceClientProvider).toConstantValue(() => ({
         resources: { deleteById },
         resourceGroups: { delete: deleteResourceGroup },
@@ -274,6 +279,7 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
         codeContext,
         deleteById,
         deleteResourceGroup,
+        activityProvider,
         remove,
     };
 }

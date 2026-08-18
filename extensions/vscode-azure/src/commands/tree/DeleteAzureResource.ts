@@ -14,6 +14,7 @@ import { IActionContext, ICodeContext, showMessage, showSmartInputBox, withDelay
 import { inject, injectable } from 'inversify';
 import { AzdEnvNameTag } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
+import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -43,6 +44,7 @@ export class DeleteAzureResource implements ManagedCommand {
         @inject(IActionContext) private readonly context: IActionContext,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
+        @inject(IGenericActivityDataProvider) private readonly activityProvider: IGenericActivityDataProvider,
     ) { }
 
     /**
@@ -56,19 +58,28 @@ export class DeleteAzureResource implements ManagedCommand {
 
         await this.confirm(resource);
 
-        await withDelayedProgress(
-            this.ctx.code,
-            {
-                location: this.ctx.code.ProgressLocation.Notification,
-                title: this.ctx.code.l10n.t('Deleting \'{0}\'...', resource.name),
-            },
-            this.deleteResource(resource),
-        );
+        const activity = this.activityProvider.trackActivity({
+            title: isResourceGroup(resource)
+                ? this.ctx.code.l10n.t('Delete resource group \'{0}\'', resource.name)
+                : this.ctx.code.l10n.t('Delete resource \'{0}\'', resource.name),
+        });
+
+        try {
+            await withDelayedProgress(
+                this.ctx.code,
+                {
+                    location: this.ctx.code.ProgressLocation.Notification,
+                    title: this.ctx.code.l10n.t('Deleting \'{0}\'...', resource.name),
+                },
+                this.deleteResource(resource),
+            );
+            activity.update({ status: 'Completed' });
+        } catch (error) {
+            activity.update({ status: 'Failed', error });
+            throw error;
+        }
 
         this.dataTree.remove(resource);
-        void showMessage(this.ctx.code, isResourceGroup(resource)
-            ? this.ctx.code.l10n.t('Deleted resource group \'{0}\'.', resource.name)
-            : this.ctx.code.l10n.t('Deleted resource \'{0}\'.', resource.name));
     }
 
     /** Look up the selected node and confirm it is something we can delete. */
