@@ -157,7 +157,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.None);
                 item.id = key;
                 item.description = resource.logicalType;
-                item.contextValue = resourceContextValue(resource, DeleteAzureResource.ResourceContextValue);
+                item.contextValue = resourceContextValue(resource);
                 item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
                 return item;
             }
