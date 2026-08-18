@@ -91,14 +91,10 @@ cheap -- a set lookup on `logicalType` is the norm.
 
 ### Restricting what a product permits
 
-There is deliberately **no capability model**. Two existing mechanisms already cover it:
-
-- **What the user sees** is the tree's context values. A product that wants a different presentation
-  registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values
-  it wants; a command whose context value is absent never matches its `when` clause, so the menu item
-  never appears. This is the same mechanism every other tree node uses.
-Settings the product will not let the user edit set `writable: false` on the snapshot returned from
-`read`, which makes the editor document read-only.
+There is deliberately **no capability model**. A product controls presentation through the tree's
+context values, using the same mechanism as every other tree node. Settings that the product will not
+let the user edit set `writable: false` on the snapshot returned from `read`, which makes the editor
+document read-only.
 
 > **Not modeled:** services that refuse to return values on read, per-entry metadata (such as an
 > App Service connection string's database `type`), and more than one settings document per resource.
