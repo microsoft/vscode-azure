@@ -51,6 +51,9 @@ importers:
 
   extensions/vscode-azure:
     dependencies:
+      '@azure/core-lro':
+        specifier: ^3.4.0
+        version: 3.4.0
       '@microsoft/vscode-azure-azutils':
         specifier: workspace:*
         version: link:../../packages/azutils
