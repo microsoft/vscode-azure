@@ -78,5 +78,6 @@ export function isSettingsNode(node: unknown): node is SettingsNode {
         && isVirtualResource(node as VirtualResource)
         && (node as VirtualResource).virtualType === SettingsVirtualType
         && !!(node as Partial<SettingsNode>).adapter
-        && !!(node as Partial<SettingsNode>).owner;
+        && !!(node as Partial<SettingsNode>).owner
+        && !!(node as Partial<SettingsNode>).documentName;
 }

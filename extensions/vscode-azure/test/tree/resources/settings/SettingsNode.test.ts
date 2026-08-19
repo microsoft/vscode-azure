@@ -101,5 +101,12 @@ describe('SettingsNode (unit)', () => {
 
             expect(isSettingsNode(foreign)).to.be.false;
         });
+
+        it('rejects a node missing the parts the editor reads', () => {
+            // Both are dereferenced past this guard -- the owner on every read and write, the
+            // document name when titling the tab -- so a node without them is not one.
+            expect(isSettingsNode({ ...settingsNode, owner: undefined })).to.be.false;
+            expect(isSettingsNode({ ...settingsNode, documentName: undefined })).to.be.false;
+        });
     });
 });

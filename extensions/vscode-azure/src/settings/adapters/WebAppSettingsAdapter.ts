@@ -85,7 +85,7 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
     /** These settings hang off the site itself, so the owner is always the ARM resource. */
     private resolveResource(owner: SettingsOwner): GenericResource {
         if (!isWebApp(owner)) {
-            throw new Error('Application settings can only be read from a Microsoft.Web/sites resource.');
+            throw new Error(this.code.l10n.t('These settings are only available on an App Service, Function App, or Logic App.'));
         }
 
         return owner;
