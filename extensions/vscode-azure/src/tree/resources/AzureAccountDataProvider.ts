@@ -12,8 +12,8 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    DebounceScheduler, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
-    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type Page, type ProviderResult,
+    CaselessSet, DebounceScheduler, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type ICaselessSetReader, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
 import { IAzureListingCache } from '../../services';
@@ -53,9 +53,19 @@ const SessionChangeDebounceMs = 500;
  */
 const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
 
-/** Whether two sets contain exactly the same string ids. */
-function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-    return a.size === b.size && a.isSubsetOf(b);
+/** Whether two sets contain exactly the same ids, ignoring case. */
+function idSetsEqual(a: ICaselessSetReader, b: ICaselessSetReader): boolean {
+    if (a.size !== b.size) {
+        return false;
+    }
+
+    for (const id of a) {
+        if (!b.has(id)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -65,14 +75,14 @@ function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
  * and correct, because dropping the page would misreport whether more pages
  * remain.
  *
- * @param tenantIds - Lowercased ids of the tenants to admit.
+ * @param tenantIds - Ids of the tenants to admit (matched case-insensitively).
  */
 async function* filterTenantPages(
     pages: AsyncIterable<Page<ConcreteAzureNode>>,
-    tenantIds: ReadonlySet<string>,
+    tenantIds: ICaselessSetReader,
 ): AsyncIterable<Page<ConcreteAzureNode>> {
     for await (const page of pages) {
-        yield { items: page.items.filter(node => isTenant(node) && tenantIds.has(node.tenantId.toLowerCase())), hasMore: page.hasMore };
+        yield { items: page.items.filter(node => isTenant(node) && tenantIds.has(node.tenantId)), hasMore: page.hasMore };
     }
 }
 
@@ -323,7 +333,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // list could never reveal. The fresh result reseeds the cache, so the
             // root re-list below is served without a second fetch.
             const accounts = await this.listings.refreshAccounts();
-            const currentIds = new Set(accounts.map(account => account.id.toLowerCase()));
+            const currentIds = new CaselessSet(accounts.map(account => account.id));
 
             if (previousIds !== undefined && idSetsEqual(previousIds, currentIds)) {
                 this.executor.output.trace(`[auth] sessions changed provider=${providerId}; account set unchanged (count=${currentIds.size}), ignoring`);

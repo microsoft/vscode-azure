@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { byAccount, ICredentialFactory, isAccount, VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
-import { Everything, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, Everything, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { GuidPattern } from '../../constants';
@@ -238,7 +238,7 @@ export async function pickTenantOrEnterId(ctx: ICodeContext, tenants: ReachableT
         description: code.l10n.t('Account: {0}', item.account.label),
         data: { tenantId: item.tenant.tenantId, accountId: item.account.id },
     }));
-    const knownTenantIds = new Set(tenants.map(item => item.tenant.tenantId.toLowerCase()));
+    const knownTenantIds = new CaselessSet(tenants.map(item => item.tenant.tenantId));
 
     const picked = await showSmartQuickPick(ctx, items, {
         title: code.l10n.t('Sign in to a Tenant'),
@@ -251,7 +251,7 @@ export async function pickTenantOrEnterId(ctx: ICodeContext, tenants: ReachableT
         // paste tenant IDs rather than typing them, so any non-GUID value is a
         // filter over the suggestions, not a sign-in target.
         createItemFromValue: (value) => {
-            if (!GuidPattern.test(value) || knownTenantIds.has(value.toLowerCase())) {
+            if (!GuidPattern.test(value) || knownTenantIds.has(value)) {
                 return undefined;
             }
             return {

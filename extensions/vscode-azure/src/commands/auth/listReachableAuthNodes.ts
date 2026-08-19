@@ -5,6 +5,7 @@
 
 import type { AzureAccount, AzureSubscription, AzureTenant, IAzureListingSource } from '@microsoft/vscode-azure-azutils';
 import { isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
+import { CaselessMap } from '@microsoft/vscode-azure-utils';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 
 /**
@@ -60,7 +61,7 @@ export interface ReachableSubscriptionsResult {
  * purpose is to reach a tenant the tree does not currently show.
  */
 export async function listFirstPageReachableTenants(listing: IAzureListingSource): Promise<ReachableTenant[]> {
-    const tenants = new Map<string, ReachableTenant>();
+    const tenants = new CaselessMap<ReachableTenant>();
 
     for (const account of await listing.listAccounts()) {
         // First page only -- the loop breaks after the first iteration.
@@ -70,7 +71,7 @@ export async function listFirstPageReachableTenants(listing: IAzureListingSource
                     continue;
                 }
 
-                const key = `${account.id.toLowerCase()}/${tenantNode.tenantId.toLowerCase()}`;
+                const key = `${account.id}/${tenantNode.tenantId}`;
                 if (!tenants.has(key)) {
                     tenants.set(key, { account, tenant: tenantNode });
                 }
@@ -114,7 +115,7 @@ export async function listFirstPageReachableTenants(listing: IAzureListingSource
  * @returns The reachable subscriptions (deduped and sorted) and any failures.
  */
 export async function listReachableSubscriptions(listing: IAzureListingSource): Promise<ReachableSubscriptionsResult> {
-    const subscriptions = new Map<string, ReachableSubscription>();
+    const subscriptions = new CaselessMap<ReachableSubscription>();
     const failures: UnreachableAuthNode[] = [];
 
     for (const account of await listing.listAccounts()) {

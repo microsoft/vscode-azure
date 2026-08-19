@@ -8,7 +8,7 @@ import {
     type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    delay, Disposable, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
+    CaselessMap, CaselessSet, delay, Disposable, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
     type DataProvider, type DataProviderChangeEvent
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -78,12 +78,12 @@ export interface ArmDeploymentOperationActivity extends Activity {
 export class ArmDeploymentDataProvider implements DataProvider<Activity>, Disposable {
     public readonly isRoot = true;
 
-    /** Top-level tracked deployments (user-initiated). */
-    private readonly trackedRoots = new Map<string, ArmDeploymentActivity>();
-    /** All known deployment activities by ID, preserving object identity across re-fetches. */
-    private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
+    /** Top-level tracked deployments (user-initiated), keyed by their case-insensitive ARM deployment ID. */
+    private readonly trackedRoots = new CaselessMap<ArmDeploymentActivity>();
+    /** All known deployment activities by ARM deployment ID, preserving object identity across re-fetches. */
+    private readonly knownDeployments = new CaselessMap<ArmDeploymentActivity>();
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
-    private readonly activePolls = new Set<string>();
+    private readonly activePolls = new CaselessSet();
     private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<Activity>>();
     private readonly disposables: Disposable[] = [this.onDidChangeEmitter];
     public readonly onDidChange = this.onDidChangeEmitter.event;
@@ -96,8 +96,8 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
         @inject(IAzureAccountDataProvider) accountProvider: IAzureAccountDataProvider,
     ) {
         this.disposables.push(accountProvider.onDidRemoveAccounts(accountIds => {
-            const removedIds = new Set(accountIds.map(id => id.toLowerCase()));
-            this.clearActivities(activity => !!activity.accountId && removedIds.has(activity.accountId.toLowerCase()));
+            const removedIds = new CaselessSet(accountIds);
+            this.clearActivities(activity => !!activity.accountId && removedIds.has(activity.accountId));
         }));
     }
 
@@ -339,7 +339,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
      * operation per resource (Create/Delete over read-only ops).
      */
     private async fetchOperations(client: IDeploymentClient, activity: ArmDeploymentActivity, abortSignal: AbortSignal): Promise<ArmDeploymentOperationActivity[]> {
-        const byTargetId = new Map<string, { op: DeploymentOperation; rank: number }>();
+        const byTargetId = new CaselessMap<{ op: DeploymentOperation; rank: number }>();
 
         for await (const op of flattenPages(client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal }))) {
             const targetResource = op.properties?.targetResource;

@@ -115,10 +115,12 @@ export type IActivityTreeView = vscode.TreeView<string>;
 // #endregion
 
 /**
- * An activation callback that pushes a disposable service to the extension context's subscriptions.
- * Use with `.onActivation(pushDisposable)` at the end of a binding chain.
+ * Push a disposable to the extension context's subscriptions and return it unchanged.
+ *
+ * Use as `.onActivation(pushDisposable)` or call it directly with a container during product
+ * activation.
  */
-export function pushDisposable<T>(context: ResolutionContext, injectable: T): T {
+export function pushDisposable<T>(context: Pick<ResolutionContext, 'get'>, injectable: T): T {
     if (Disposable.test(injectable)) {
         context.get(IExtensionContext).subscriptions.push(injectable);
     }

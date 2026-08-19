@@ -12,7 +12,7 @@
  * sync).
  */
 
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, type ICaselessSetReader, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
 
 /** The separator between the tenant id and subscription id in a filter key. */
@@ -46,7 +46,8 @@ export function parseSubscriptionFilterKey(key: string): { readonly tenantId?: s
 
 /**
  * The active tenant/subscription filter, expressed as the two sets the data
- * provider tests against. Both sets hold lowercased ids.
+ * provider tests against. Both sets match case-insensitively, so callers pass
+ * ids verbatim rather than lowercasing at each lookup.
  *
  * A tenant is admitted when its id appears in {@linkcode SubscriptionFilter.tenantIds},
  * which lets the provider drop a tenant *before* minting a tenant-scoped token
@@ -54,8 +55,8 @@ export function parseSubscriptionFilterKey(key: string): { readonly tenantId?: s
  * {@linkcode SubscriptionFilter.subscriptionIds}.
  */
 export interface SubscriptionFilter {
-    readonly tenantIds: ReadonlySet<string>;
-    readonly subscriptionIds: ReadonlySet<string>;
+    readonly tenantIds: ICaselessSetReader;
+    readonly subscriptionIds: ICaselessSetReader;
 }
 
 /**
@@ -76,7 +77,7 @@ export function readSubscriptionFilter(code: IVsCode): SubscriptionFilter | unde
 
     const parsed = selected.map(parseSubscriptionFilterKey);
     return {
-        tenantIds: new Set(parsed.map(entry => entry.tenantId).filter((id): id is string => !!id)),
-        subscriptionIds: new Set(parsed.map(entry => entry.subscriptionId).filter((id): id is string => !!id)),
+        tenantIds: new CaselessSet(parsed.map(entry => entry.tenantId).filter((id): id is string => !!id)),
+        subscriptionIds: new CaselessSet(parsed.map(entry => entry.subscriptionId).filter((id): id is string => !!id)),
     };
 }

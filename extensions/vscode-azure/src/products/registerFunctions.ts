@@ -4,12 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IWebAppClientProvider, WebAppClient } from '@microsoft/vscode-azure-azutils';
-import { AddOrEditAppSetting } from '../commands/functions/AddOrEditAppSetting';
 import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
-import { DeleteAppSetting } from '../commands/functions/DeleteAppSetting';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { FunctionAppDataProvider, IFunctionAppDataProvider } from '../tree/resources/functions/FunctionAppDataProvider';
-import { FunctionAppViewProvider } from '../tree/resources/functions/FunctionAppViewProvider';
+import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
+import { WebAppDataProvider } from '../tree/resources/webApp/WebAppDataProvider';
+import { WebAppViewProvider } from '../tree/resources/webApp/WebAppViewProvider';
 import { functionsDetector } from '../tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
@@ -19,14 +18,16 @@ export function registerFunctions(registrar: ProductRegistrar): void {
         return WebAppClient.create(context, executor, credential, subscription);
     });
 
-    registrar.registerCommand('vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting, 'add');
-    registrar.registerCommand('vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
-    registrar.registerCommand('vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
+    // Registered once here for every Microsoft.Web/sites flavor; App Service and Logic Apps reuse
+    // this shared ownership rather than registering duplicate providers.
+    registrar.registerBinding(container => {
+        container.bind(WebAppSettingsAdapter).toSelf().inSingletonScope();
+    });
+
+    registrar.registerResourceDataProvider(WebAppDataProvider);
+    registrar.registerResourceViewProvider(WebAppViewProvider);
     registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registrar.registerCommand('vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
-
-    registrar.registerResourceDataProvider([IFunctionAppDataProvider, FunctionAppDataProvider]);
-    registrar.registerResourceViewProvider(FunctionAppViewProvider);
 
     registrar.registerBinding(container => {
         container.bind(IWorkspaceDetector).toConstantValue(functionsDetector);

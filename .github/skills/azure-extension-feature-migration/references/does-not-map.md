@@ -63,7 +63,7 @@ differently:
 
 - **`DataProvider<T>`** — `canHandle()` + `getChildren()` (+ optional `enrich()` for background hydration).
   Fetches and caches; returns plain resource objects, including **virtual nodes** for computed categories
-  (e.g. an "App Settings" grouping under a resource). No rendering here.
+  (e.g. a "Settings" grouping under a resource). No rendering here.
 - **`ViewProvider<T>`** — `canHandle()` + `getTreeItem()` + `getChildren()` + `getParent()`. Renders labels,
   icons, and `contextValue` (via `combineContextValues(...)`). Must **not** mutate data.
 - Both are registered in `registerTrees.ts`, **specific before generic**, so dispatch order matters.
@@ -107,30 +107,34 @@ a DI factory binding in `extension.ts`. Don't re-vendor the source's client code
 
 ---
 
-## 5. Solved generically (auth, "open in portal", resource groups -> Reuse) or via precedent (app settings -> Migrate)
+## 5. Solved generically (auth, "open in portal", resource groups, app settings -> Reuse)
 
-These are solved generically in the monorepo, or have a concrete precedent to mirror. If the source has
-them, **wire up the existing implementation (Reuse), or rebuild against the precedent (app settings, Migrate)**,
-rather than re-vendoring the source's code:
+These are solved generically in the monorepo. If the source has them, **wire up the existing
+implementation** rather than re-vendoring the source's code:
 
-- **Application settings / connection strings** — there is **no shared/generic app-settings package yet**;
-  the reference implementation is the **Functions product's native app-settings surface**
-  (`commands/functions/AddOrEditAppSetting.ts`, `DeleteAppSetting.ts`, and the app-settings virtual node in
-  `tree/resources/functions/appSettingsParentKey.ts` + `FunctionAppDataProvider`/`ViewProvider`). Mirror
-  that shape for the new product, backed by the product's own settings client. If the two implementations
-  end up near-identical, **flag extracting a shared abstraction to the human** rather than deciding it
-  yourself. (Note: the source likely uses the shared `@microsoft/vscode-azext-azureappsettings` package with
-  `contextValuesToAdd: ['<product>']`; that azext package is **not** the monorepo pattern — the base
-  contextValue contract is useful for the inventory, but you re-implement against the Functions precedent.)
+- **Application settings** — there **is** a shared settings framework (`docs/settings.md`). Do **not**
+  build product-specific settings trees, commands, or an editor. Implement a single `SettingsAdapter`
+  (`label` / `canHandle` / `read` / `write`) in
+  `extensions/vscode-azure/src/settings/adapters/`, bind the concrete adapter in that product's
+  registrar, and pass it to `getSettingsNodes(resource, adapter)` from the product data provider.
+  The settings virtual-node behavior, JSONC editor, and edit command are shared. Local configuration
+  synchronization belongs to azd or the product's deployment workflow, not this framework.
+  - There is one command and one surface: a resource's settings are edited as a single document.
+    There are no per-setting add/edit/rename/delete commands, and no values are shown in the tree.
 - **Sign-in, accounts, tenants, subscriptions, subscription filtering** — the account data provider +
   `Azure: Select Subscriptions`.
 - **Open in portal, resource-group grouping** — generic commands + `AzureResourceDataProvider` /
   `GenericAzureViewProvider`.
 
-> Distinguish true **Reuse** from **Migrate-against-a-precedent**: open-in-portal / resource-group grouping
-> are Reuse (wire straight to an existing generic command/provider), whereas app settings has **no** shared
-> package yet and must be **rebuilt against the Functions precedent** — disposition **Migrate**, not Reuse.
-> Say which in the mapping record so the implementer knows whether to wire or to rebuild-from-precedent.
+> All of the above are true **Reuse**: wire straight to an existing generic command, provider, or
+> extension point. For app settings the product adds the adapter and thin resource-provider
+> composition, not a settings UI. Say so in the mapping record, so the implementer does not rebuild
+> a settings UI that already exists.
+
+> **Tree dispatch caveat.** `ProviderRegistry` dispatches to the first `canHandle` match, so a
+> product `DataProvider` that claims a resource owns all of its children. It composes settings
+> explicitly with `getSettingsNodes(resource, adapter)`; providers are never aggregated. Its
+> corresponding view provider must render the resource as expandable.
 
 ---
 

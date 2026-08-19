@@ -70,7 +70,7 @@ export async function updateWorkspaceIndex(
     changed = index.evict(parent) || changed;
 
     const type = await statType(code, uri);
-    if (type === 'directory' && !defaultExcludedDirectories.has(basename(uri).toLowerCase())) {
+    if (type === 'directory' && !defaultExcludedDirectories.has(basename(uri))) {
         for await (const directory of walkDirectory(code, uri, token)) {
             changed = await inspectDirectory(code, detectors, directory, index) || changed;
         }

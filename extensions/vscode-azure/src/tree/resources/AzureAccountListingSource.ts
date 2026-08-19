@@ -10,7 +10,7 @@ import {
     type AzureAccount, type AzureSubscription, type AzureTenant,
     type ConcreteAzureNode, type IAzureListingSource,
 } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, ICodeContext, stringifyError, type Page } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, IActionExecutor, ICodeContext, stringifyError, type ICaselessSetReader, type Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
 import { readSignedInTenants } from '../../utils/signedInTenants';
 
@@ -52,7 +52,7 @@ export class AzureAccountListingSource implements IAzureListingSource {
      */
     private suppressSessionEventsUntil = 0;
 
-    private lastSeenAccountIds: ReadonlySet<string> | undefined;
+    private lastSeenAccountIds: ICaselessSetReader | undefined;
 
     /**
      * @param now - Clock used to arm the session-suppression window. Injectable
@@ -75,7 +75,7 @@ export class AzureAccountListingSource implements IAzureListingSource {
      * driven by the tree, so a session event arriving after the tree has loaded
      * compares against what the user can already see.
      */
-    public get knownAccountIds(): ReadonlySet<string> | undefined {
+    public get knownAccountIds(): ICaselessSetReader | undefined {
         return this.lastSeenAccountIds;
     }
 
@@ -125,7 +125,7 @@ export class AzureAccountListingSource implements IAzureListingSource {
             } satisfies AzureAccount))
             .sort((a, b) => a.label.localeCompare(b.label));
 
-        this.lastSeenAccountIds = new Set(result.map(account => account.id.toLowerCase()));
+        this.lastSeenAccountIds = new CaselessSet(result.map(account => account.id));
 
         return result;
     }
@@ -149,7 +149,7 @@ export class AzureAccountListingSource implements IAzureListingSource {
      */
     public async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
         const manualTenants = this.manualTenantsForAccount(account);
-        const seen = new Set<string>();
+        const seen = new CaselessSet();
         let emittedTerminalPage = false;
 
         const credential = this.credentialFactory({ sessionOptions: { account } });
@@ -227,7 +227,7 @@ export class AzureAccountListingSource implements IAzureListingSource {
      * never surfaced more than once for the same account.
      */
     private manualTenantsForAccount(account: AzureAccount): AzureTenant[] {
-        const seen = new Set<string>();
+        const seen = new CaselessSet();
         const tenants: AzureTenant[] = [];
         const accountId = account.id.toLowerCase();
         for (const entry of readSignedInTenants(this.ctx.code)) {
@@ -239,13 +239,12 @@ export class AzureAccountListingSource implements IAzureListingSource {
             if (entry.accountId.toLowerCase() !== accountId) {
                 continue;
             }
-            const tenantId = entry.tenantId.toLowerCase();
-            if (seen.has(tenantId)) {
+            if (seen.has(entry.tenantId)) {
                 continue;
             }
-            seen.add(tenantId);
+            seen.add(entry.tenantId);
             tenants.push({
-                tenantId,
+                tenantId: entry.tenantId.toLowerCase(),
                 displayName: entry.tenantId,
                 environment: account.environment,
                 accountId: account.id,
