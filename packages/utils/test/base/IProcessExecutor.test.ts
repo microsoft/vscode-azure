@@ -779,21 +779,21 @@ describe('ProcessExecutor (integration)', () => {
     });
 
     describe('isOnPath', () => {
-        it('should return true for a command that exists', async () => {
+        it('should return true for a command that exists', () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
             // node is always on PATH in this test environment
-            const result = await executor.isOnPath('node');
+            const result = executor.isOnPath('node');
 
             expect(result).to.be.true;
         });
 
-        it('should return false for a command that does not exist', async () => {
+        it('should return false for a command that does not exist', () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
-            const result = await executor.isOnPath('definitely-not-a-real-command-xyz');
+            const result = executor.isOnPath('definitely-not-a-real-command-xyz');
 
             expect(result).to.be.false;
         });

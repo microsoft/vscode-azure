@@ -172,9 +172,13 @@ export interface IProcessExecutor {
     /**
      * Tests whether a command is available on the system `PATH`.
      *
+     * @remarks
+     * Resolution is a synchronous filesystem lookup, so this returns a plain
+     * `boolean` rather than a promise.
+     *
      * @returns `true` when the command can be resolved, `false` otherwise.
      */
-    isOnPath(command: string): Promise<boolean>;
+    isOnPath(command: string): boolean;
 }
 
 /**
@@ -207,8 +211,7 @@ export class ProcessExecutor implements IProcessExecutor {
     }
 
     /** @inheritdoc */
-    // eslint-disable-next-line @typescript-eslint/require-await
-    public async isOnPath(command: string): Promise<boolean> {
+    public isOnPath(command: string): boolean {
         // Batch files are allowed so `.cmd` shims (the Azure CLI's `az.cmd`,
         // the Functions Core Tools' `func.cmd`) are reported as installed.
         return resolveExecutable(command, { allowWindowsBatchFiles: true }) !== undefined;
@@ -279,8 +282,11 @@ export class ProcessExecutor implements IProcessExecutor {
                 // The child environment replaces `process.env` rather than
                 // layering onto it, so merge the caller's overrides here.
                 env: mergeProcessEnv(options.env),
-                // Required so Windows `.cmd` shims (the Azure CLI's `az.cmd`)
-                // resolve and launch; arguments are still escaped individually.
+                // An explicit opt-in: without it, resolution of a `.cmd`/`.bat`
+                // target fails with ENOENT, so Windows shims (the Azure CLI's
+                // `az.cmd`) would never launch. Only resolution is gated -- the
+                // batch-specific argument escaping is applied automatically once
+                // the resolved target turns out to be a batch file.
                 allowWindowsBatchFiles: true,
                 signal,
             });

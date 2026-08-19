@@ -118,6 +118,33 @@ describe('createShellTask (unit)', () => {
         expect(execution.command).to.equal(relative);
     });
 
+    it('preserves the caller\'s quoting for an unresolvable explicit path', () => {
+        const m = createMockVsCode();
+
+        // Dropping the quoting here would let the shell split the path and run
+        // whatever sits at the first fragment instead.
+        const quoted = { value: './contoso tools/deploy.ps1', quoting: ShellQuoting.Weak };
+        const task = createShellTask(m.vscode, {
+            command: [quoted],
+            name: 'Example task',
+        });
+
+        const execution = task.execution as vscode.ShellExecution;
+        expect(execution.command).to.deep.equal(quoted);
+    });
+
+    it('quotes an unresolvable unquoted path that contains spaces', () => {
+        const m = createMockVsCode();
+
+        const task = createShellTask(m.vscode, {
+            command: ['./my scripts/deploy.ps1'],
+            name: 'Example task',
+        });
+
+        const execution = task.execution as vscode.ShellExecution;
+        expect(execution.command).to.deep.equal({ value: './my scripts/deploy.ps1', quoting: ShellQuoting.Strong });
+    });
+
     it('rejects an empty command line', () => {
         const m = createMockVsCode();
 

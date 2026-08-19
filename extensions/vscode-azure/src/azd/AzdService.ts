@@ -392,10 +392,10 @@ export class AzdService implements IAzdService {
         if (supportsUpdate) {
             return command(AzdCommand).arg('update');
         } else if (process.platform === 'win32') {
-            if (await this.processExecutor.isOnPath('winget')) {
+            if (this.processExecutor.isOnPath('winget')) {
                 // `winget install` upgrades already-installed packages by default
                 return command('winget').arg('install', 'microsoft.azd');
-            } else if (await this.processExecutor.isOnPath('choco')) {
+            } else if (this.processExecutor.isOnPath('choco')) {
                 // `choco upgrade` installs if missing and upgrades if already installed
                 return command('choco').arg('upgrade', 'azd');
             } else {
@@ -403,7 +403,7 @@ export class AzdService implements IAzdService {
                     .namedArg('-ExecutionPolicy', 'AllSigned')
                     .arg('-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression');
             }
-        } else if (process.platform === 'darwin' && await this.processExecutor.isOnPath('brew')) {
+        } else if (process.platform === 'darwin' && this.processExecutor.isOnPath('brew')) {
             // `brew install` upgrades already-installed packages by default
             return command('brew').arg('install', 'azure/azd/azd');
         } else {

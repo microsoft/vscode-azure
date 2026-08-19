@@ -31,10 +31,10 @@ type SpawnOpts = Omit<ProcessExecutorOptions, 'cwd'> & {
     readonly source?: string;
 };
 
-function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => Promise<boolean>) {
+function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => boolean) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
-    const isOnPathMock = isOnPathFn ?? mock.fn(() => Promise.resolve(false));
+    const isOnPathMock = isOnPathFn ?? mock.fn(() => false);
     const processExecutor = { spawn: spawnMock, isOnPath: isOnPathMock } as unknown as IProcessExecutor;
     const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
     const { executor } = createTestActionExecutor();
@@ -400,7 +400,7 @@ describe('AzdService (unit)', () => {
             const mockResult = createMockVsCode();
             const processExecutor = {
                 spawn: spawnFn,
-                isOnPath: mock.fn(() => Promise.resolve(false)),
+                isOnPath: mock.fn(() => false),
             } as unknown as IProcessExecutor;
             const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH: 'token' })) }; // eslint-disable-line @typescript-eslint/naming-convention
             const { executor } = createTestActionExecutor();
@@ -580,7 +580,7 @@ describe('AzdService (unit)', () => {
 
             it('should use winget on Windows when winget is available', async () => {
                 setPlatform('win32');
-                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'winget'));
+                const isOnPathFn = mock.fn((cmd: string) => cmd === 'winget');
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -592,7 +592,7 @@ describe('AzdService (unit)', () => {
 
             it('should use choco on Windows when winget is unavailable', async () => {
                 setPlatform('win32');
-                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'choco'));
+                const isOnPathFn = mock.fn((cmd: string) => cmd === 'choco');
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -604,7 +604,7 @@ describe('AzdService (unit)', () => {
 
             it('should use powershell script on Windows when no package manager is available', async () => {
                 setPlatform('win32');
-                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const isOnPathFn = mock.fn(() => false);
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -617,7 +617,7 @@ describe('AzdService (unit)', () => {
 
             it('should use brew on macOS when brew is available', async () => {
                 setPlatform('darwin');
-                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'brew'));
+                const isOnPathFn = mock.fn((cmd: string) => cmd === 'brew');
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -629,7 +629,7 @@ describe('AzdService (unit)', () => {
 
             it('should use bash curl script on macOS when brew is unavailable', async () => {
                 setPlatform('darwin');
-                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const isOnPathFn = mock.fn(() => false);
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -641,7 +641,7 @@ describe('AzdService (unit)', () => {
 
             it('should use bash curl script on Linux', async () => {
                 setPlatform('linux');
-                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const isOnPathFn = mock.fn(() => false);
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();

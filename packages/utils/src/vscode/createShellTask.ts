@@ -78,9 +78,7 @@ export function createShellTask(code: IVsCode, options: CreateShellTaskOptions):
         throw new ProcessError(`The executable '${name}' could not be found on PATH.`, { code: 'ENOENT' });
     }
 
-    const command: CommandLineArg = resolved === undefined
-        ? name
-        : { value: resolved, quoting: ShellQuoting.Strong };
+    const command = toExecutableArg(executable, resolved);
 
     const execution = new code.ShellExecution(
         command,
@@ -119,4 +117,30 @@ export function createShellTask(code: IVsCode, options: CreateShellTaskOptions):
  */
 function isBareName(command: string): boolean {
     return !command.includes('/') && !(process.platform === 'win32' && command.includes('\\'));
+}
+
+/**
+ * Builds the executable element of the {@linkcode vscode.ShellExecution ShellExecution}
+ * command line.
+ *
+ * @remarks
+ * A resolved path is emitted with {@linkcode vscode.ShellQuoting.Strong Strong}
+ * quoting, so the shell runs exactly the file the resolver picked rather than
+ * repeating the search itself.
+ *
+ * When resolution fails the caller's own {@linkcode CommandLineArg} is passed
+ * through untouched, preserving any quoting they asked for. Only an unquoted
+ * string is adjusted, and only when it contains a space: without quoting the
+ * shell would split it and run the wrong program.
+ */
+function toExecutableArg(executable: CommandLineArg, resolved: string | undefined): CommandLineArg {
+    if (resolved !== undefined) {
+        return { value: resolved, quoting: ShellQuoting.Strong };
+    }
+
+    if (typeof executable === 'string' && executable.includes(' ')) {
+        return { value: executable, quoting: ShellQuoting.Strong };
+    }
+
+    return executable;
 }
