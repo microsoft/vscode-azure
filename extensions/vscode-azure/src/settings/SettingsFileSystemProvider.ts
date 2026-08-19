@@ -243,9 +243,9 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
             this.code,
             {
                 location: this.code.ProgressLocation.Notification,
-                title: this.code.l10n.t('Saving {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
+                title: this.code.l10n.t('Saving {0} for \'{1}\'...', node.adapter.label, node.documentName),
             },
-            node.adapter.write(node.azureResource, parsed),
+            node.adapter.write(node.owner, parsed),
         );
 
         // The node itself is a leaf today, so this is cheap insurance rather than a visible refresh:
@@ -329,13 +329,13 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
         let snapshot: SettingsSnapshot;
         try {
             const node = this.resolve(uri);
-            const read = node.adapter.read(node.azureResource);
+            const read = node.adapter.read(node.owner);
             snapshot = showProgress
                 ? await withDelayedProgress(
                     this.code,
                     {
                         location: this.code.ProgressLocation.Notification,
-                        title: this.code.l10n.t('Loading {0} for \'{1}\'...', node.adapter.label, node.azureResource.name),
+                        title: this.code.l10n.t('Loading {0} for \'{1}\'...', node.adapter.label, node.documentName),
                     },
                     read,
                 )

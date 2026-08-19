@@ -9,7 +9,7 @@ import {
 } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import type { SettingsAdapter } from '../SettingsAdapter';
+import type { SettingsAdapter, SettingsOwner } from '../SettingsAdapter';
 import type { SettingsMap, SettingsSnapshot } from '../SettingsModel';
 import { isWebApp } from '../../tree/resources/webApp/WebApp';
 
@@ -39,12 +39,13 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
     }
 
     /** @inheritdoc */
-    public canHandle(resource: GenericResource): boolean {
-        return isWebApp(resource);
+    public canHandle(owner: SettingsOwner): boolean {
+        return isWebApp(owner);
     }
 
     /** @inheritdoc */
-    public async read(resource: GenericResource): Promise<SettingsSnapshot> {
+    public async read(owner: SettingsOwner): Promise<SettingsSnapshot> {
+        const resource = this.resolveResource(owner);
         const { client, resourceGroupName } = this.resolveClient(resource);
 
         const properties = (await client.webApps.listApplicationSettings(resourceGroupName, resource.name)).properties;
@@ -59,7 +60,8 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
     }
 
     /** @inheritdoc */
-    public async write(resource: GenericResource, entries: SettingsMap): Promise<void> {
+    public async write(owner: SettingsOwner, entries: SettingsMap): Promise<void> {
+        const resource = this.resolveResource(owner);
         const { client, resourceGroupName } = this.resolveClient(resource);
         this.validateKeys(entries);
 
@@ -78,6 +80,15 @@ export class WebAppSettingsAdapter implements SettingsAdapter {
                 throw new Error(this.code.l10n.t('The setting name cannot be empty.'));
             }
         }
+    }
+
+    /** These settings hang off the site itself, so the owner is always the ARM resource. */
+    private resolveResource(owner: SettingsOwner): GenericResource {
+        if (!isWebApp(owner)) {
+            throw new Error(this.code.l10n.t('These settings are only available on an App Service, Function App, or Logic App.'));
+        }
+
+        return owner;
     }
 
     private resolveClient(resource: GenericResource): { client: IWebAppClient; resourceGroupName: string } {

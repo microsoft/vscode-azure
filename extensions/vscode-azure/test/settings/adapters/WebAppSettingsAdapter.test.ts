@@ -6,7 +6,7 @@
 import {
     AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType,
 } from '@microsoft/vscode-azure-azutils';
-import { createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockWebAppClient, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
 import { makeSettingsResource } from '../mockSettings';
@@ -121,6 +121,19 @@ describe('WebAppSettingsAdapter (unit)', () => {
                 adapter.write(makeSettingsResource(), [{ key: '  ', value: 'x' }]),
             ).to.be.rejectedWith(/cannot be empty/);
 
+            expect(client.webApps.updateApplicationSettings.mock.callCount()).to.equal(0);
+        });
+    });
+
+    describe('an owner it does not serve', () => {
+        it('refuses to read or write rather than calling ARM for the wrong site', async () => {
+            const { adapter, client } = createAdapter();
+            const environment = makeVirtualResource({ azureResource: makeSettingsResource() });
+
+            await expect(adapter.read(environment)).to.be.rejectedWith(/App Service/);
+            await expect(adapter.write(environment, [])).to.be.rejectedWith(/App Service/);
+
+            expect(client.webApps.listApplicationSettings.mock.callCount()).to.equal(0);
             expect(client.webApps.updateApplicationSettings.mock.callCount()).to.equal(0);
         });
     });
