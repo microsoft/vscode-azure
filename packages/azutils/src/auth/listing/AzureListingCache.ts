@@ -5,10 +5,10 @@
 
 import { stringifyError, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { isSubscription } from '../../models/AzureNode';
+import { isSubscription, type AzureListingNode } from '../../models/AzureNode';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
 import type { IAzureListingFetcher } from './AzureListingFetcher';
-import { AzureListingRootKey, azureListingKey, azureListingKeyFor, AzureListingStore, type AzureListingNode } from './AzureListingStore';
+import { AzureListingRootKey, azureListingKey, azureListingKeyFor, AzureListingStore } from './AzureListingStore';
 
 /**
  * Decides whether a node takes part in a listing walk.

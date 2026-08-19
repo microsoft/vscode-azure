@@ -199,10 +199,24 @@ Three pieces, deliberately named so a cached and an uncached thing can never be 
 | Piece | Verbs | Role |
 |-------|-------|------|
 | `AzureListingFetcher` | `fetchAccounts` / `fetchTenants` / `fetchSubscriptions` | **All** auth and ARM I/O, no caching. Reads signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`, minting tokens through `ICredentialFactory`. Owns the two auth traps: it guards against `authentication.getAccounts()` re-entrantly raising `onDidChangeSessions`, and it folds the manually-entered tenant ids from `vscode-azure.signedInTenants` into the tenant listing when conditional access blocks `tenants.list()` outright (the id doubles as a placeholder display name until a *silent* tenant-scoped token upgrades it). |
-| `AzureListingStore` | `listing` / `evict` / `scan` / `clear` | The cache. Flat, keyed by hierarchical id (`{accountId}`, `{accountId}/{tenantId}`, `{accountId}/{tenantId}/{subscriptionId}`), compared case-insensitively. Children are a prefix query; eviction is a prefix delete; paging state attaches to the *parent* key. A subscription reachable through two tenants is naturally two entries with no special case. |
+| `AzureListingStore` | `listing` / `evict` / `scan` / `clear` | The cache, **internal to the package**. Flat, keyed by hierarchical id (`{accountId}`, `{accountId}/{tenantId}`, `{accountId}/{tenantId}/{subscriptionId}`), compared case-insensitively. Children are a prefix query; eviction is a prefix delete; paging state attaches to the *parent* key. A subscription reachable through two tenants is naturally two entries with no special case. |
 | `AzureListingCache` | `listAccounts` / `listTenants` / `listSubscriptions` / `walkSubscriptions` / `findSubscription` | The injected read surface (`IAzureListingCache`). One traversal that takes the filter as a parameter. |
 
-Each parent's children are a `CachedPagedListing`: pages are pulled from the underlying iterator only as far as a reader asks, a later reader resumes the same iterator rather than restarting, concurrent pulls of the same listing are single-flighted, and a pull that throws discards **both** the iterator and the pages already collected, so a retry can never replay a truncated listing as if it were complete.
+Only the fetcher and the cache are exported from the package barrel. The store holds unfiltered truth and knows nothing of the filter, so making it reachable from a consuming extension would put it one autocomplete entry away from the thing that *does* apply the filter -- and picking the wrong one silently defeats the guarantee that an excluded tenant is never requested. It stays private; `AzureListingCache` holds it as a private field.
+
+The store keeps two maps over the same key space, and the distinction matters: `listings` answers "what are this parent's children" (keyed by the *parent*), while `nodes` answers "what is this node" (keyed by the node itself), backing `findSubscription`'s scan and its ancestor checks. Nodes are indexed as pages arrive, through a callback the store hands to each listing -- which sits *below* the filter, and is why everything fetched is cached no matter who asked or why. The two maps are populated at different moments, so an invalidation has to be explicit about which it means: evicting a node that is still a member of its parent's cached listing would unindex it permanently, because a replayed page is not re-indexed.
+
+Each parent's children are a `CachedPagedListing`: pages are pulled from the underlying iterator only as far as a reader asks, a later reader resumes the same iterator rather than restarting, concurrent pulls of the same listing are single-flighted, and a pull that throws discards **both** the iterator and the pages already collected, so a retry can never replay a truncated listing as if it were complete. Discarding invalidates every reader's position, so a reader that had already advanced past the discarded pages fails too rather than silently resuming at an offset that no longer means anything.
+
+#### Worked example: a filtered read followed by an unfiltered one
+
+An account with tenants A and B, and a filter admitting only A:
+
+1. **The tree loads, filtered.** The accounts and tenants listings miss and are fetched; A *and* B are both indexed, because indexing happens below the filter. The filter then drops B on the way out, so the traversal never enters B's body and `fetchSubscriptions(B)` is never called -- no tenant-scoped token, no prompt. A's subscriptions are fetched and cached in full.
+2. **`Select Subscriptions` runs, unfiltered.** The accounts, tenants, and A-subscriptions listings all hit and replay. Only `{account}/{B}` misses, because nobody ever asked for B's children.
+3. **Exactly one new request.** Caching per *parent listing* rather than per query is what makes this a delta; caching "the result of the filtered walk" as one unit would make the unfiltered walk a total miss.
+
+Changing the filter afterwards invalidates nothing at all -- every entry above is still true, and only the predicate changed.
 
 ### Subscription / tenant filtering
 

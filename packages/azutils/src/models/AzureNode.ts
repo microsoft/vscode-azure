@@ -23,6 +23,16 @@ export type AzureNode = AzureAccount | AzureTenant | AzureSubscription | Resourc
  */
 export type ConcreteAzureNode = Exclude<AzureNode, VirtualGroup>;
 
+/**
+ * The account -> tenant -> subscription portion of {@linkcode AzureNode}: the
+ * nodes that come from the authentication hierarchy rather than from ARM.
+ *
+ * This is the level at which the listing layer caches and at which a listing
+ * filter decides what to admit, so a filter is written once against all three
+ * rather than per level.
+ */
+export type AzureListingNode = AzureAccount | AzureTenant | AzureSubscription;
+
 /** Convenience alias for the data-layer tree used throughout the extension. */
 export type ConcreteAzureNodeTree = DataItemTree<ConcreteAzureNode>;
 

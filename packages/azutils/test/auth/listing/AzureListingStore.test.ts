@@ -5,7 +5,7 @@
 
 import { collectPageItems, type Page } from '@microsoft/vscode-azure-utils';
 import * as assert from 'node:assert';
-import type { AzureListingNode } from '../../../src/auth/listing/AzureListingStore';
+import type { AzureListingNode } from '../../../src/models/AzureNode';
 import { azureListingKey, azureListingKeyFor, AzureListingRootKey, AzureListingStore } from '../../../src/auth/listing/AzureListingStore';
 import { makeAccount, makeSubscription, makeTenant } from '../../mockAzure';
 

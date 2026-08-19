@@ -8,7 +8,7 @@ import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing'
 import * as assert from 'node:assert';
 import type { AzureListingFilter, AzureSubscriptionPath } from '../../../src/auth/listing/AzureListingCache';
 import { AzureListingCache } from '../../../src/auth/listing/AzureListingCache';
-import type { AzureListingNode } from '../../../src/auth/listing/AzureListingStore';
+import type { AzureListingNode } from '../../../src/models/AzureNode';
 import { isSubscription, isTenant } from '../../../src/models/AzureNode';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '../../mockAzure';
 

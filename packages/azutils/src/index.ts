@@ -8,8 +8,6 @@ export * from './auth/CredentialFactory';
 export * from './auth/Environment';
 export * from './auth/listing/AzureListingCache';
 export * from './auth/listing/AzureListingFetcher';
-export * from './auth/listing/AzureListingStore';
-export * from './auth/listing/CachedPagedListing';
 export * from './auth/VsCodeExtensionCredential';
 export * from './models/AzureNode';
 export * from './models/AzureNodeId';

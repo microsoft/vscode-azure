@@ -4,12 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CaselessMap, type Page } from '@microsoft/vscode-azure-utils';
-import { isSubscription, isTenant } from '../../models/AzureNode';
-import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
+import { isSubscription, isTenant, type AzureListingNode } from '../../models/AzureNode';
 import { CachedPagedListing } from './CachedPagedListing';
-
-/** A node of the account -> tenant -> subscription hierarchy. */
-export type AzureListingNode = AzureAccount | AzureTenant | AzureSubscription;
 
 /**
  * The key of the synthetic parent whose children are the accounts. Using the
