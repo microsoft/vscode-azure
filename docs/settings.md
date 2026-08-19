@@ -135,9 +135,13 @@ azure-settings:/<nodeKey>/<documentName>.settings.jsonc
 the adapter is always **the object the tree loaded from Azure**.
 
 The file name is cosmetic -- it makes the tab readable and selects the `jsonc` language mode. Nothing
-parses meaning out of it. Path separators in the document name are flattened to `-`, since ARM names
-some child resources with one (a deployment slot is `site/slot`) and the file has to stay in a single
-path segment.
+parses meaning out of it. It is still arbitrary text, though: a product may name a settings document
+after an ARM child resource (a deployment slot is `site/slot`) or after something a user wrote (a
+Static Web Apps preview environment is named after a pull request title). Path separators are
+therefore flattened to `-`, since they are the one character class that would split the file across
+two path segments. Everything else survives on its own: `?`, `#`, `%`, spaces, and non-ASCII are
+percent-encoded on serialization and decoded back byte-for-byte, and an already-encoded `%2F`
+double-encodes rather than becoming a separator.
 
 Two encoding details are load-bearing:
 

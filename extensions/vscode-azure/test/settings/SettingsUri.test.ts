@@ -36,12 +36,24 @@ describe('SettingsUri (unit)', () => {
         });
 
         it('keeps the file in one path segment when the document name contains a separator', () => {
-            // ARM names a deployment slot 'site/slot', so a document name can arrive with a separator
-            // already in it.
+            // A document name is display text: ARM names a deployment slot 'site/slot', and a Static
+            // Web Apps preview environment is named after a pull request title.
             const uri = SettingsUri.from(code, makeSettingsNode(undefined, undefined, 'MyFuncApp/staging'));
 
             expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(makeSettingsNode()).toString());
             expect(uri.path.endsWith('/MyFuncApp-staging.settings.jsonc')).to.equal(true, uri.path);
+        });
+
+        it('survives a document name made of arbitrary user-authored text', () => {
+            const node = makeSettingsNode(undefined, undefined, 'fix: a/b test? 100% done #42');
+            const uri = code.Uri.parse(SettingsUri.from(code, node).toString());
+
+            // Only a path separator is structural. Every other character a pull request title can
+            // carry -- '?', '#', '%', spaces, non-ASCII -- is percent-encoded on serialization and
+            // decoded back byte-for-byte, and an already-encoded '%2F' double-encodes rather than
+            // becoming a separator.
+            expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(node).toString());
+            expect(uri.path.endsWith('/fix: a-b test? 100% done #42.settings.jsonc')).to.equal(true, uri.path);
         });
 
         it('distinguishes settings on two different resources', () => {

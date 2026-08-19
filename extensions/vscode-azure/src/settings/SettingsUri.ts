@@ -43,8 +43,12 @@ export const SettingsUri = {
     from(code: IVsCode, node: SettingsNode): vscode.Uri {
         const nodeKey = Buffer.from(AzureNodeId.from(node).toString(), 'utf8').toString('hex');
 
-        // A document name is a display string and may legitimately contain a path separator -- ARM
-        // names a deployment slot 'site/slot' -- so flatten it to keep the file in one path segment.
+        // A document name is display text and may carry anything a product names a settings owner
+        // after -- ARM names a deployment slot 'site/slot', and a Static Web Apps preview
+        // environment is named after a pull request title. Only a path separator is structural: it
+        // would split the file across two segments and defeat parseNodeKey. Everything else is
+        // percent-encoded on serialization and decoded back byte-for-byte, and an already-encoded
+        // '%2F' double-encodes rather than becoming a separator, so flattening is the whole job.
         const fileName = `${node.documentName.replace(PathSeparators, '-')}${SettingsFileExtension}`;
 
         return code.Uri.from({ scheme: SettingsScheme, path: `/${nodeKey}/${fileName}` });
