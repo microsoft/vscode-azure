@@ -12,17 +12,21 @@ import { makeActivity, makeOperationActivity } from './mockActivity';
 /** Creates a mock IDeploymentClient that returns the given operations and deployment state. */
 function createMockClient(
     operations: Array<{ operationId: string; targetId: string; targetType: string; targetName: string; provisioningOperation?: string; provisioningState?: string }> = [],
-    deploymentState = 'Running',
+    deploymentState: string | string[] = 'Running',
+    retryAfter?: string,
 ) {
+    let deploymentRequest = 0;
     return {
         deployments: {
-            getAtScope: mock.fn((_scope: string, _name: string, options?: { onResponse?: (r: unknown) => void }) => {
-                options?.onResponse?.({ headers: { get: () => null } });
+            getAtScope: mock.fn((_scope: string, _name: string, options?: { onResponse?: (r: { status: number; headers: { get: (name: string) => string | undefined } }) => void }) => {
+                options?.onResponse?.({ status: 200, headers: { get: name => name === 'retry-after' ? retryAfter : undefined } });
+                const states = Array.isArray(deploymentState) ? deploymentState : [deploymentState];
+                const provisioningState = states[Math.min(deploymentRequest++, states.length - 1)];
                 return Promise.resolve({
                     id: 'deploy-id',
                     name: 'deploy',
                     type: 'Microsoft.Resources/deployments',
-                    properties: { provisioningState: deploymentState },
+                    properties: { provisioningState },
                 });
             }),
         },
@@ -338,6 +342,26 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
             const changed = await provider.enrich(activity);
             expect(changed).to.be.false;
+        });
+
+        it('should use the server polling interval until the deployment completes', async () => {
+            const client = createMockClient([], ['Running', 'Succeeded'], '0');
+            const provider = createProvider(client);
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+            const activity = provider.getChildren()[0];
+            const completed = new Promise<void>(resolve => {
+                provider.onDidChange(() => {
+                    if (activity.status === 'Completed') {
+                        resolve();
+                    }
+                });
+            });
+
+            await provider.enrich(activity);
+            await completed;
+
+            expect(client.deployments.getAtScope.mock.callCount()).to.equal(2);
+            expect(activity.endTime).to.be.instanceOf(Date);
         });
 
         it('should deduplicate operations by target resource ID, keeping highest rank', async () => {

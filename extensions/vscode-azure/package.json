@@ -414,6 +414,7 @@
         "tsx": "catalog:"
     },
     "dependencies": {
+        "@azure/core-lro": "^3.4.0",
         "@microsoft/vscode-azure-azutils": "workspace:*",
         "@microsoft/vscode-azure-utils": "workspace:*",
         "@vscode/extension-telemetry": "catalog:",
