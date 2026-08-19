@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzurePublicCloud, PublicAuthProviderId, SovereignCloudConfigurationSection, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
+import { AzureListingCache, AzurePublicCloud, PublicAuthProviderId, SovereignCloudConfigurationSection, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
-import { collectPages, Everything, Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { collectPages, Everything, Roots, type DataProviderChangeEvent, type IActionExecutor, type ICodeContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../src/tree/resources/AzureAccountDataProvider';
+import { AzureAccountListingSource } from '../../../src/tree/resources/AzureAccountListingSource';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../../src/constants';
 
 describe('AzureAccountDataProvider (unit)', () => {
@@ -16,13 +17,25 @@ describe('AzureAccountDataProvider (unit)', () => {
         mock.restoreAll();
     });
 
+    /**
+     * Assembles the production wiring -- raw listing source, shared cache, and
+     * the provider on top -- around the supplied mocks. The scheduler doubles as
+     * the source's clock so `scheduler.advance()` drives the session-event
+     * suppression window as well as the debounce.
+     */
+    function buildProvider(ctx: ICodeContext, executor: IActionExecutor, credentialFactory: ICredentialFactory, scheduler = new ManualDebounceScheduler()) {
+        const source = new AzureAccountListingSource(ctx, executor, credentialFactory, () => scheduler.now());
+        const listings = new AzureListingCache(source);
+        const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, listings, source, scheduler);
+        return { provider, listings, source, scheduler };
+    }
+
     function createProvider() {
         const { ctx, mock } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const credentialFactory = () => makeCredential();
-        const scheduler = new ManualDebounceScheduler();
-        const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, scheduler);
-        return { provider, mock, scheduler };
+        const { provider, listings, scheduler } = buildProvider(ctx, executor, credentialFactory);
+        return { provider, listings, mock, scheduler };
     }
 
     /**
@@ -409,7 +422,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             const getToken = mock.fn(() => Promise.resolve({ token: 'tok', expiresOnTimestamp: Date.now() + 3600000 }));
             const { ctx, mock: vscodeMock } = createMockCodeContext();
             const { executor } = createTestActionExecutor();
-            const provider = new AzureAccountDataProvider(ctx, executor, () => ({ getToken }));
+            const { provider } = buildProvider(ctx, executor, () => ({ getToken }));
             vscodeMock.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
 
             await provider.getChildren();
@@ -728,7 +741,7 @@ describe('AzureAccountDataProvider (unit)', () => {
                 inputs.push(input as CredentialFactoryOptions);
                 return makeCredential();
             };
-            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
+            const { provider } = buildProvider(ctx, executor, credentialFactory);
             const tenant = makeTenant();
             mockSubscriptionClient({
                 subscriptionPages: [{ items: [{ subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' }], hasMore: false }],
@@ -761,7 +774,7 @@ describe('AzureAccountDataProvider (unit)', () => {
                 credentialTenantIds.push((input as CredentialFactoryOptions).tenantId);
                 return makeCredential();
             };
-            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
+            const { provider } = buildProvider(ctx, executor, credentialFactory);
             const account = makeAccount();
             mockSubscriptionClient({
                 tenantPages: [{ items: tenantIds.map(id => ({ tenantId: id, displayName: `Tenant ${id}` })), hasMore: false }],
@@ -832,14 +845,14 @@ describe('AzureAccountDataProvider (unit)', () => {
         });
 
         it('should ignore the filter on the unfiltered listing path used by discovery', async () => {
-            const { provider, mock: vscodeMock } = createProvider();
+            const { listings, mock: vscodeMock } = createProvider();
             const account = makeAccount();
             mockSubscriptionClient({
                 tenantPages: [{ items: [{ tenantId: 't1', displayName: 'Tenant One' }, { tenantId: 't2', displayName: 'Tenant Two' }], hasMore: false }],
             });
 
             const pages = await withSettings(vscodeMock, { [filterKey]: ['t1/sub-1'] }, async () =>
-                await collectPages(provider.listings.listTenantsForAccount(account)));
+                await collectPages(listings.listTenantsForAccount(account)));
 
             // Select Subscriptions has to offer tenants the filter currently
             // excludes, otherwise the filter could only ever be narrowed.
@@ -868,13 +881,13 @@ describe('AzureAccountDataProvider (unit)', () => {
         }
 
         it('should serve the filtered tree from a listing the unfiltered path already fetched', async () => {
-            const { provider, mock: vscodeMock } = createProvider();
+            const { provider, listings, mock: vscodeMock } = createProvider();
             const account = makeAccount();
             const listed = mockCountingTenantList();
 
             await withSettings(vscodeMock, { [filterKey]: ['t1/sub-1'] }, async () => {
                 // Select Subscriptions enumerates unfiltered...
-                await collectPages(provider.listings.listTenantsForAccount(account));
+                await collectPages(listings.listTenantsForAccount(account));
                 // ...and the tree then lists the same account.
                 await collectPages(await provider.getChildren(account));
             });
@@ -1042,7 +1055,7 @@ describe('AzureAccountDataProvider (unit)', () => {
                 inputs.push(input as CredentialFactoryOptions);
                 return makeCredential();
             };
-            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
+            const { provider } = buildProvider(ctx, executor, credentialFactory);
             const createSpy = mockSubscriptionClient({
                 tenantPages: [{
                     items: [

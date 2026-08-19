@@ -188,11 +188,13 @@ Tenant and subscription filtering both read `vscode-azure.selectedSubscriptions`
 - **Tenants are filtered in the data layer**, by `AzureAccountDataProvider.getChildren`. Listing a tenant's subscriptions requires a tenant-scoped token, and acquiring one can surface an interactive sign-in prompt. Dropping the tenant before it ever becomes a node positively guarantees no token and no subscription request is issued for it. The data provider fires `onDidChange` with `{ target: Everything }` when the setting changes, so the tree re-lists.
 - **Subscriptions are filtered in the view layer**, by `GenericAzureViewProvider.applyFilter`. A tenant's subscriptions all arrive in a single listing, so discarding some of them lower down would save nothing — it is purely a presentation choice. Node types other than subscriptions pass through untouched.
 
-Because the data layer filters tenants, commands that need to see *past* the filter cannot drill the shared tree. `AzureAccountDataProvider` therefore also exposes `listings`, an unfiltered `IAzureListingSource`, bound in DI under the `IAzureListingSource` identifier. `Azure: Select Subscriptions` and `Azure: Sign In` inject that rather than the data provider, so the filter can be widened again, not just narrowed.
+Because the data layer filters tenants, commands that need to see *past* the filter cannot drill the shared tree. `Azure: Select Subscriptions` and `Azure: Sign In` therefore inject `IAzureListingSource` — the unfiltered listings — rather than the data provider, so the filter can be widened again, not just narrowed.
 
 ### Listing cache
 
-Both paths — the filtered tree and the unfiltered commands — share one `AzureListingCache` (`packages/azutils/src/auth/AzureListingCache.ts`, reusable by other extensions). It decorates an `IAzureListingSource` and caches **unfiltered truth**; the filter is applied on *read*, above the cache. That split is what makes sharing safe: a tenant the filter currently excludes is still a true tenant of that account, so keeping it costs nothing and pays off the moment the filter widens.
+Both paths — the filtered tree and the unfiltered commands — share one `AzureListingCache` (`packages/azutils/src/auth/AzureListingCache.ts`, reusable by other extensions). It decorates an `IAzureListingSource` and caches **unfiltered truth**; the filter is applied on *read*, above the cache.
+
+The cache is a container-owned singleton, not a member of any provider. `AzureAccountListingSource` (`src/tree/resources/AzureAccountListingSource.ts`) is the raw fetcher that talks to the `authentication` API and `SubscriptionClient`; `AzureListingCache` wraps it, and DI publishes the result under two identifiers. `IAzureListingCache` is the full surface, injected only by `AzureAccountDataProvider`, which owns invalidation because it is the thing watching for sign-in/out and environment changes. `IAzureListingSource` is a `toService` alias of the same instance exposing only the three listing methods, and is what every other consumer injects. That split is what makes sharing safe: a tenant the filter currently excludes is still a true tenant of that account, so keeping it costs nothing and pays off the moment the filter widens.
 
 `CachedPagedListing` backs the two paged listings. It is lazy (it only pulls pages a reader actually asks for), resumes a partially-read listing instead of restarting it, single-flights concurrent pulls, and on error discards both the iterator and the pages already collected so a retry starts clean rather than replaying a truncated listing as if it were whole.
 
@@ -203,11 +205,11 @@ Invalidation is deliberately narrow:
 | Sovereign cloud setting | `clear()` — the endpoints themselves changed |
 | `signedInTenants` setting | `clear()` — manually-entered tenants are folded into tenant listings |
 | `selectedSubscriptions` setting | **nothing** — a filter change makes no cached listing untrue |
-| Account signed in / out | `clearAccounts()`, plus `clearAccount(id)` per removed account |
+| Account signed in / out | `refreshAccounts()`, plus `clearAccount(id)` per removed account |
 
 The third row is the point of the cache: widening the filter costs no network at all when the tenant was already fetched — typically the case, since `Azure: Select Subscriptions` just enumerated everything to build its pick list. The last row is narrow for the same reason: a new account signing in does not make an existing account's tenants untrue.
 
-Note that account *change detection* must bypass the cache. `reconcileAccountsOnSessionChange` calls the raw fetcher directly, since asking the memoized `listAccounts()` whether the account set changed would always answer "no".
+Note that account *change detection* must bypass the memo. `reconcileAccountsOnSessionChange` calls `refreshAccounts()`, since asking the memoized `listAccounts()` whether the account set changed would always answer "no". `refreshAccounts()` reseeds the memo with what it fetched, so the root re-list that follows is served without a second call.
 
 ## Workspace (Local) Tree
 

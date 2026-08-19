@@ -149,17 +149,10 @@ export interface MockAccountDataProviderOptions {
     readonly subscriptions?: AzureSubscription[];
 }
 
-/**
- * Account provider fixture with a controllable account-removal event.
- *
- * Also exposes the unfiltered account/tenant/subscription listings used by the
- * discovery flows (Select Subscriptions, Sign In), which read past the
- * subscription filter that `getChildren` applies.
- */
+/** Account provider fixture with a controllable account-removal event. */
 export interface MockAccountDataProvider extends DataProvider<ConcreteAzureNode> {
     readonly onDidRemoveAccounts: Event<readonly string[]>;
     readonly removeAccountsEmitter: EventEmitter<readonly string[]>;
-    readonly listings: IAzureListingSource;
 }
 
 /**
@@ -199,13 +192,27 @@ export function createMockAccountDataProvider(options?: MockAccountDataProviderO
                 throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
             }
         }),
-        listings: {
-            listAccounts: () => Promise.resolve(accounts),
-            // eslint-disable-next-line @typescript-eslint/require-await
-            listTenantsForAccount: () => (async function* () { yield { items: tenants, hasMore: false }; })(),
-            // eslint-disable-next-line @typescript-eslint/require-await
-            listSubscriptionsForTenant: () => (async function* () { yield { items: subscriptions, hasMore: false }; })(),
-        },
+    };
+}
+
+/**
+ * Creates a mock {@linkcode IAzureListingSource} yielding the same canned
+ * accounts, tenants, and subscriptions as
+ * {@linkcode createMockAccountDataProvider} -- a stand-in for the raw listing
+ * source that the discovery flows (Select Subscriptions, Sign In) read, which
+ * see past the subscription filter the tree applies.
+ */
+export function createMockListingSource(options?: MockAccountDataProviderOptions): IAzureListingSource {
+    const accounts = options?.accounts ?? [makeAccount()];
+    const tenants = options?.tenants ?? [makeTenant()];
+    const subscriptions = options?.subscriptions ?? [makeSubscription()];
+
+    return {
+        listAccounts: () => Promise.resolve(accounts),
+        // eslint-disable-next-line @typescript-eslint/require-await
+        listTenantsForAccount: () => (async function* () { yield { items: tenants, hasMore: false }; })(),
+        // eslint-disable-next-line @typescript-eslint/require-await
+        listSubscriptionsForTenant: () => (async function* () { yield { items: subscriptions, hasMore: false }; })(),
     };
 }
 

@@ -9,13 +9,14 @@
 // so none of this code ends up in the main extension bundle.
 
 import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, createMockListingSource, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
 import { createMockAcrClient } from '../tree/resources/acr/mockAcr';
 import { createMockResourceClient } from '../tree/resources/mockResourceClient';
 import type { ActivityStatus } from '../../src/tree/activity/Activity';
 import { type AddChildOptions, ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
 import { IGenericActivityDataProvider } from '../../src/tree/activity/GenericActivityDataProvider';
+import { IAzureListingSource } from '../../src/services';
 import { IAzureAccountDataProvider } from '../../src/tree/resources/AzureAccountDataProvider';
 
 // -- Mock data ----------------------------------------------------------------
@@ -126,6 +127,11 @@ export function applyOverrides(container: Container): void {
         subscriptions: [subscription],
     });
     container.rebind(IAzureAccountDataProvider).toConstantValue(accountProvider);
+    container.rebind(IAzureListingSource).toConstantValue(createMockListingSource({
+        accounts: [account],
+        tenants: [tenant],
+        subscriptions: [subscription],
+    }));
 
     container.rebind(IResourceClientProvider).toConstantValue(
         () => createMockResourceClient([demoRg, stagingRg], resourcesByGroup),

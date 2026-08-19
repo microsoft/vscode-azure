@@ -5,22 +5,21 @@
 
 import {
     AzureListingCache,
-    getAuthProviderId, getConfiguredAzureEnv,
     ICredentialFactory,
     isAccount, isTenant,
     PublicAuthProviderId, SovereignAuthProviderId, SovereignCloudConfigurationSection,
     SubscriptionClient,
-    type AzureAccount, type AzureSubscription, type AzureTenant,
-    type ConcreteAzureNode, type IAzureListingSource,
+    type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
     DebounceScheduler, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
+import { IAzureListingCache } from '../../services';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../constants';
-import { readSignedInTenants } from '../../utils/signedInTenants';
 import { readSubscriptionFilter } from '../../utils/subscriptionFilter';
+import { AzureAccountListingSource, IAzureAccountListingSource } from './AzureAccountListingSource';
 
 /**
  * Identifier for the root account/tenant/subscription data provider. Bound as a
@@ -30,20 +29,14 @@ import { readSubscriptionFilter } from '../../utils/subscriptionFilter';
  * {@linkcode DataProvider.getChildren} is *filtered*: a tenant excluded by
  * `vscode-azure.selectedSubscriptions` is never listed, and therefore never has
  * a tenant-scoped token minted for it. That guarantee is the whole point of
- * filtering in the data layer, so there is no opt-out on the tree itself.
- *
- * The flows that let the user *change* the filter must see past it -- otherwise
- * the filter could only ever be narrowed, never widened. They read
- * {@linkcode listings} instead, which is unfiltered. Both surfaces are served by
- * the same cache, so whichever runs first pays for the fetch; because the filter
- * is applied on read, sharing it cannot leak an excluded tenant into the tree.
+ * filtering in the data layer, so there is no opt-out on the tree itself. Flows
+ * that must see past the filter depend on the unfiltered `IAzureListingSource`
+ * instead, which is served by the same {@linkcode AzureListingCache} this
+ * provider reads.
  */
 export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNode> {
     /** Fires with normalized account IDs removed by a reconciled session change. */
     readonly onDidRemoveAccounts: Event<readonly string[]>;
-
-    /** The unfiltered account/tenant/subscription listings backing this provider. */
-    readonly listings: IAzureListingSource;
 }
 
 export const IAzureAccountDataProvider: ServiceIdentifier<IAzureAccountDataProvider> = Symbol.for('IAzureAccountDataProvider');
@@ -56,13 +49,8 @@ export const IAzureAccountDataProvider: ServiceIdentifier<IAzureAccountDataProvi
 const SessionChangeDebounceMs = 500;
 
 /**
- * Suppression window (ms) applied around our own `getAccounts()` call. Listing
- * accounts can itself trigger an `onDidChangeSessions` event; ignoring events
- * for a short window around the call breaks that self-induced feedback loop.
+ * Debounce key for coalescing `onDidChangeSessions` bursts.
  */
-const GetAccountsSuppressionMs = 1000;
-
-/** Debounce key for coalescing `onDidChangeSessions` bursts. */
 const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
 
 /** Whether two sets contain exactly the same string ids. */
@@ -112,8 +100,8 @@ async function* filterTenantPages(
  * tenant-scoped token, and potentially prompting for interactive sign-in -- only
  * to discard the result. The subscription half stays in the view, where it costs
  * nothing: a tenant's subscriptions all arrive in one listing.
- * {@linkcode IAzureListingSource} is the deliberate exception, for flows that
- * let the user edit the filter.
+ * The unfiltered `IAzureListingSource` is the deliberate exception, for flows
+ * that let the user edit the filter.
  */
 @injectable()
 export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disposable {
@@ -124,59 +112,15 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
 
     private readonly disposables: Disposable[];
 
-    /**
-     * Count of in-flight {@linkcode listAccounts} calls. While greater than
-     * zero, incoming `onDidChangeSessions` events are treated as potentially
-     * self-induced and suppressed, regardless of how long the underlying
-     * `getAccounts()` call takes. A counter (rather than a boolean) tolerates
-     * overlapping calls. See {@linkcode suppressSessionEventsUntil} for the
-     * trailing window that covers events arriving just after the call resolves.
-     */
-    private getAccountsInFlight = 0;
-
-    /**
-     * Timestamp (epoch ms) before which incoming `onDidChangeSessions` events
-     * are ignored. Armed after our own `getAccounts()` call resolves to suppress
-     * self-induced events that arrive shortly afterward. See
-     * {@linkcode GetAccountsSuppressionMs}.
-     */
-    private suppressSessionEventsUntil = 0;
-
-    /**
-     * The set of account ids ({@linkcode AzureAccount.id}) seen by the most
-     * recent {@linkcode listAccounts} call, or `undefined` if accounts have
-     * never been listed. Used by {@linkcode reconcileAccountsOnSessionChange} to
-     * decide whether an `onDidChangeSessions` burst actually added or removed an
-     * account -- the only changes we act on. The vast majority of session events
-     * (token refreshes, other extensions' activity, re-auth of the same account)
-     * leave this set unchanged and are ignored.
-     */
-    private knownAccountIds: ReadonlySet<string> | undefined;
-
     public readonly onDidChange = this.changeEmitter.event;
     public readonly onDidRemoveAccounts = this.removeAccountsEmitter.event;
-
-    /**
-     * The unfiltered account/tenant/subscription listings, cached.
-     *
-     * Both {@linkcode getChildren} (filtered, for the tree) and the discovery
-     * flows that change the filter (unfiltered) read through this, so whichever
-     * runs first pays for the fetch and the other reuses it. The filter is
-     * applied on *read*, so the cache can hold tenants the tree does not
-     * currently show without any risk of displaying them -- and changing the
-     * filter needs no invalidation at all, because it does not make anything
-     * cached untrue.
-     */
-    public readonly listings: AzureListingCache = new AzureListingCache({
-        listAccounts: () => this.fetchAccounts(),
-        listTenantsForAccount: account => this.fetchTenantsForAccount(account),
-        listSubscriptionsForTenant: tenant => this.fetchSubscriptionsForTenant(tenant),
-    } satisfies IAzureListingSource);
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
+        @inject(IAzureListingCache) private readonly listings: AzureListingCache,
+        @inject(IAzureAccountListingSource) private readonly source: AzureAccountListingSource,
         @unmanaged() private readonly sessionChangeScheduler: IDebounceScheduler = new DebounceScheduler(SessionChangeDebounceMs, SessionInvalidationKey),
     ) {
         this.disposables = [this.changeEmitter, this.removeAccountsEmitter, this.sessionChangeScheduler];
@@ -188,7 +132,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // Listing accounts can itself trigger a session-change event;
             // ignore events while a getAccounts() call is in flight (any
             // duration) or inside the trailing window, to avoid looping.
-            if (this.getAccountsInFlight > 0 || this.sessionChangeScheduler.now() < this.suppressSessionEventsUntil) {
+            if (this.source.isSuppressingSessionEvents()) {
                 this.executor.output.trace(`[auth] sessions changed provider=${e.provider.id}; suppressed (self-induced window)`);
                 return;
             }
@@ -347,47 +291,6 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     }
 
     /**
-     * List the Azure accounts the user is signed in to for the currently
-     * configured environment.
-     *
-     * Reads the configured environment via {@linkcode getConfiguredAzureEnv} and
-     * attaches it to each account.
-     *
-     * @returns The signed-in accounts, sorted by label.
-     */
-    private async fetchAccounts(): Promise<AzureAccount[]> {
-        const environment = getConfiguredAzureEnv(this.ctx.code);
-
-        // Suppress session-change events around our own getAccounts() call: the
-        // call can itself trigger onDidChangeSessions, which would otherwise
-        // re-enter and loop. The in-flight counter covers the call no matter how
-        // long it takes; the trailing timestamp (armed in finally, so a thrown
-        // call still leaves a guarded tail) covers any event that arrives just
-        // after the call resolves.
-        this.getAccountsInFlight++;
-        let accounts;
-        try {
-            accounts = await this.ctx.code.authentication.getAccounts(getAuthProviderId(environment));
-        } finally {
-            this.suppressSessionEventsUntil = this.sessionChangeScheduler.now() + GetAccountsSuppressionMs;
-            this.getAccountsInFlight--;
-        }
-
-        const result = accounts
-            .map(account => ({
-                ...account,
-                environment,
-            } satisfies AzureAccount))
-            .sort((a, b) => a.label.localeCompare(b.label));
-
-        // Track the current account-id set so session-change events can be
-        // reconciled against it (see reconcileAccountsOnSessionChange).
-        this.knownAccountIds = new Set(result.map(account => account.id.toLowerCase()));
-
-        return result;
-    }
-
-    /**
      * Reconcile the signed-in account set in response to a (debounced)
      * `onDidChangeSessions` burst, firing a reconciling root re-list **only if
      * the set of accounts actually changed**.
@@ -401,24 +304,25 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * intentionally left in place until a full invalidation.
      *
      * Listing accounts is a cheap local operation, so it is safe to do on every
-     * burst purely to detect whether the set changed. The {@linkcode listAccounts}
-     * call here also arms the self-induced-event suppression window
-     * ({@linkcode getAccountsInFlight} / {@linkcode suppressSessionEventsUntil}),
-     * which -- together with this set comparison -- defends against feedback
-     * loops should `getAccounts()` itself ever start emitting
-     * `onDidChangeSessions` again (a bug we have seen in the past): re-entrant
-     * events are suppressed while the call is in flight, and any that still slip
-     * through reconcile to an unchanged set and stop here without re-firing.
+     * burst purely to detect whether the set changed. That call also arms the
+     * self-induced-event suppression window
+     * ({@linkcode AzureAccountListingSource.isSuppressingSessionEvents}), which
+     * -- together with this set comparison -- defends against feedback loops
+     * should `getAccounts()` itself ever start emitting `onDidChangeSessions`
+     * again (a bug we have seen in the past): re-entrant events are suppressed
+     * while the call is in flight, and any that still slip through reconcile to
+     * an unchanged set and stop here without re-firing.
      *
      * @param providerId - The auth provider id that triggered the burst (logging only).
      */
     private async reconcileAccountsOnSessionChange(providerId: string): Promise<void> {
         try {
-            const previousIds = this.knownAccountIds;
-            // Deliberately fetches rather than reading the cache: the whole
-            // point is to detect that the signed-in account set changed, which a
-            // memoized list could never reveal.
-            const accounts = await this.fetchAccounts();
+            const previousIds = this.source.knownAccountIds;
+            // Refreshes rather than reading the cached list: the whole point is
+            // to detect that the signed-in account set changed, which a memoized
+            // list could never reveal. The fresh result reseeds the cache, so the
+            // root re-list below is served without a second fetch.
+            const accounts = await this.listings.refreshAccounts();
             const currentIds = new Set(accounts.map(account => account.id.toLowerCase()));
 
             if (previousIds !== undefined && idSetsEqual(previousIds, currentIds)) {
@@ -433,12 +337,11 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // new listing.
             this.executor.output.debug(`[auth] sessions changed provider=${providerId}; account set changed (count=${currentIds.size}), re-listing accounts`);
 
-            // Drop the stale account list, but keep the tenant/subscription
-            // listings of accounts that survived -- they are still true, and
-            // re-fetching them is exactly the cost this cache exists to avoid.
-            this.listings.clearAccounts();
-
             if (previousIds) {
+                // Evict the subtrees of accounts that went away. Accounts that
+                // survived keep their tenant/subscription listings -- those are
+                // still true, and re-fetching them is exactly the cost this cache
+                // exists to avoid.
                 const removedIds = [...previousIds].filter(id => !currentIds.has(id));
                 for (const id of removedIds) {
                     this.listings.clearAccount(id);
@@ -455,134 +358,6 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // than surfacing an unhandled rejection; a later session event or the
             // tree's own root fetch will retry.
             this.executor.output.warn(`[auth] sessions changed provider=${providerId}; account reconcile failed: ${stringifyError(error)}`);
-        }
-    }
-
-    /**
-     * List the tenants belonging to the given account, yielded one page at a
-     * time. Accounts can belong to a very large number of tenants, so pages are
-     * streamed lazily rather than buffered; ordering follows the service
-     * response (no cross-page sort).
-     *
-     * Tenants the user signed in to by manually entering a tenant id (persisted
-     * via {@linkcode readSignedInTenants}) are merged into the listing so the
-     * tree can reach them even when listing tenants is blocked outright (e.g.
-     * conditional access). They are appended to the final page (or, if the
-     * listing itself fails, become the only page), and deduplicated against the
-     * listed tenants so a tenant that is both listed and saved keeps its real
-     * display name rather than the bare id stand-in.
-     *
-     * Unfiltered: the subscription filter is applied by
-     * {@linkcode getChildren}, not here.
-     *
-     * @param account - The account whose tenants are listed.
-     */
-    private async *fetchTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
-        const manualTenants = this.manualTenantsForAccount(account);
-        const seen = new Set<string>();
-        let emittedTerminalPage = false;
-
-        const credential = this.credentialFactory({ sessionOptions: { account } });
-        const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment, undefined, { accountId: account.id });
-        try {
-            for await (const page of client.tenants.list()) {
-                const items = page.items
-                    .filter((tenant): tenant is typeof tenant & { tenantId: string; displayName: string } => !!tenant.tenantId && !!tenant.displayName)
-                    .map(tenant => ({
-                        ...tenant,
-                        tenantId: tenant.tenantId.toLowerCase(),
-                        environment: account.environment,
-                        accountId: account.id,
-                    } satisfies AzureTenant));
-                items.forEach(tenant => seen.add(tenant.tenantId));
-
-                if (page.hasMore) {
-                    yield { items, hasMore: true };
-                } else {
-                    // Final page: fold in any manual tenants not already listed.
-                    const extras = manualTenants.filter(tenant => !seen.has(tenant.tenantId));
-                    yield { items: [...items, ...extras], hasMore: false };
-                    emittedTerminalPage = true;
-                }
-            }
-        } catch (error) {
-            // Listing tenants can fail outright (e.g. conditional access). Fall
-            // back to the manually-entered tenants below rather than surfacing an
-            // error: a tenant-scoped sign-in still works, so those tenants are
-            // reachable even though they can't be enumerated.
-            this.executor.output.warn(this.ctx.code.l10n.t('[auth] listing tenants failed; falling back to {0} manually-entered tenant(s): {1}', manualTenants.length, stringifyError(error)));
-        }
-
-        if (!emittedTerminalPage) {
-            // The listing failed, or yielded nothing, so emit the manual tenants
-            // as the terminal page (deduped against anything already streamed).
-            const extras = manualTenants.filter(tenant => !seen.has(tenant.tenantId));
-            yield { items: extras, hasMore: false };
-        }
-    }
-
-    /**
-     * Build synthesized {@linkcode AzureTenant}s for the manually-entered
-     * tenants saved for the given account. No display name is available (listing
-     * is what's blocked), so the tenant id is used as the label stand-in.
-     *
-     * The persisted setting is user-editable, so it can contain duplicate tenant
-     * ids (differing only in casing); they are deduplicated here so a tenant is
-     * never surfaced more than once for the same account.
-     */
-    private manualTenantsForAccount(account: AzureAccount): AzureTenant[] {
-        const seen = new Set<string>();
-        const tenants: AzureTenant[] = [];
-        const accountId = account.id.toLowerCase();
-        for (const entry of readSignedInTenants(this.ctx.code)) {
-            // Match account ids case-insensitively (matching the `byAccount`
-            // selector): the persisted id is written verbatim from
-            // `session.account.id` and this setting is user-editable, so a casing
-            // difference must not prevent a saved tenant from being folded into
-            // its account's listing.
-            if (entry.accountId.toLowerCase() !== accountId) {
-                continue;
-            }
-            const tenantId = entry.tenantId.toLowerCase();
-            if (seen.has(tenantId)) {
-                continue;
-            }
-            seen.add(tenantId);
-            tenants.push({
-                tenantId,
-                displayName: entry.tenantId,
-                environment: account.environment,
-                accountId: account.id,
-            } satisfies AzureTenant);
-        }
-        return tenants;
-    }
-
-    /**
-     * List the subscriptions belonging to the given tenant, yielded one page at
-     * a time. A tenant can contain a very large number of subscriptions, so
-     * pages are streamed lazily rather than buffered; ordering follows the
-     * service response (no cross-page sort).
-     *
-     * Unfiltered: the subscription filter is applied by
-     * {@linkcode getChildren}, not here.
-     *
-     * @param tenant - The tenant whose subscriptions are listed.
-     */
-    private async *fetchSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
-        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
-        const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment, undefined, tenant);
-        for await (const page of client.subscriptions.list()) {
-            const items = page.items
-                .filter((sub): sub is typeof sub & { subscriptionId: string; tenantId: string; displayName: string } => !!sub.subscriptionId && !!sub.tenantId && !!sub.displayName)
-                .map(sub => ({
-                    ...sub,
-                    subscriptionId: sub.subscriptionId.toLowerCase(),
-                    tenantId: sub.tenantId.toLowerCase(),
-                    environment: tenant.environment,
-                    accountId: tenant.accountId,
-                } satisfies AzureSubscription));
-            yield { items, hasMore: page.hasMore };
         }
     }
 

@@ -4,17 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    AzureListingCache,
     type AzureSubscription,
     type CredentialFactoryInput,
     ICredentialFactory,
     type TokenCredential,
 } from '@microsoft/vscode-azure-azutils';
-import { createMockAccountDataProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import {
     CommandRegistry,
     IActionExecutor,
     ICodeContext,
     ICommandRegistry,
+    IOutputChannel,
+    IVsCode,
 } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { Container, injectable, type ServiceIdentifier } from 'inversify';
@@ -23,7 +26,7 @@ import { registerCommands } from '../../src/commands/registerCommands';
 import type { ManagedCommand } from '../../src/commands/ManagedCommand';
 import { registerProducts } from '../../src/products/registerProducts';
 import { ProductRegistrar } from '../../src/registration/ProductRegistrar';
-import { bindAzureClientProvider, bindProviders, IAzureListingSource } from '../../src/services';
+import { bindAzureClientProvider, bindProviders, IAzureListingCache, IAzureListingSource } from '../../src/services';
 import { AcrDataProvider } from '../../src/tree/resources/acr/AcrDataProvider';
 import { AcrViewProvider } from '../../src/tree/resources/acr/AcrViewProvider';
 import {
@@ -175,19 +178,25 @@ describe('ProductRegistrar (unit)', () => {
         expect(provider(makeSubscription()).source).to.equal('first');
     });
 
-    it('resolves the unfiltered listing source from the account data provider', () => {
+    it('serves the unfiltered listing source from the shared listing cache', () => {
         // The commands that widen the subscription filter inject
-        // IAzureListingSource, which is bound only as a projection of the account
-        // data provider. Nothing else resolves that binding, so without this the
-        // wiring would break silently until a user ran Select Subscriptions.
+        // IAzureListingSource, which is an alias of the cache the tree reads
+        // through. Nothing else resolves that binding, so if the alias were
+        // dropped -- or bound to a second cache instance -- the sharing would
+        // break silently until a user ran Select Subscriptions.
         const registrar = new ProductRegistrar();
         const container = new Container();
-        const accountProvider = createMockAccountDataProvider();
-        container.bind(IAzureAccountDataProvider).toConstantValue(accountProvider);
+        const { executor } = createTestActionExecutor();
+        container.bind(ICodeContext).toConstantValue({} as ICodeContext);
+        container.bind(IActionExecutor).toConstantValue(executor);
+        container.bind(IVsCode).toConstantValue(createMockVsCode().vscode);
+        container.bind(IOutputChannel).toConstantValue(executor.output);
 
         registerProducts(registrar);
         registrar.applyBindings(container);
 
-        expect(container.get(IAzureListingSource)).to.equal(accountProvider.listings);
+        const listingSource = container.get(IAzureListingSource);
+        expect(listingSource).to.be.instanceOf(AzureListingCache);
+        expect(listingSource).to.equal(container.get(IAzureListingCache));
     });
 });

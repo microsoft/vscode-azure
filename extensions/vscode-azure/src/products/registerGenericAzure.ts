@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    AzureListingCache,
     createDefaultCredentialFactory,
     DeploymentClient,
     findSubscriptionById,
@@ -23,11 +24,12 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { IAzureListingSource, IAzureViewDataTree, ISubscriptionResolver } from '../services';
+import { IAzureListingCache, IAzureListingSource, IAzureViewDataTree, ISubscriptionResolver } from '../services';
 import {
     AzureAccountDataProvider,
     IAzureAccountDataProvider,
 } from '../tree/resources/AzureAccountDataProvider';
+import { AzureAccountListingSource, IAzureAccountListingSource } from '../tree/resources/AzureAccountListingSource';
 import { AzureResourceDataProvider } from '../tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../tree/resources/GenericAzureViewProvider';
 import { IResourceSelector, ResourceSelector } from '../tree/resources/ResourceSelector';
@@ -42,7 +44,9 @@ import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 export function registerGenericAzure(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
         container.bind(IWorkspaceDetector).toConstantValue(azdDetector);
-        container.bind(IAzureListingSource).toDynamicValue(context => context.get(IAzureAccountDataProvider).listings).inSingletonScope();
+        container.bind(IAzureAccountListingSource).to(AzureAccountListingSource).inSingletonScope();
+        container.bind(IAzureListingCache).toDynamicValue(context => new AzureListingCache(context.get(IAzureAccountListingSource))).inSingletonScope();
+        container.bind(IAzureListingSource).toService(IAzureListingCache);
         container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
         container.bind(ICredentialFactory).toDynamicValue(context => {
             const scope = context.get(ICredentialOptionsScope);

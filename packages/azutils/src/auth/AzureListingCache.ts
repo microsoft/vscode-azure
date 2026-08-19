@@ -186,16 +186,19 @@ export class AzureListingCache implements IAzureListingSource {
     }
 
     /**
-     * Discard the cached account list only, leaving per-account tenant and
-     * subscription listings intact.
+     * Re-fetch the account list, replacing whatever was cached.
      *
-     * Use this when the set of signed-in accounts may have changed but the
-     * accounts that remain are unaffected -- their tenants and subscriptions are
-     * still true, and re-fetching them would be wasted work. Pair it with
-     * {@linkcode AzureListingCache.clearAccount} for accounts that went away.
+     * Use this when the set of signed-in accounts may have changed. Per-account
+     * tenant and subscription listings are left intact, since the accounts that
+     * remain are unaffected and re-fetching them would be wasted work; pair this
+     * with {@linkcode AzureListingCache.clearAccount} for accounts that went
+     * away.
+     *
+     * @returns The freshly-fetched accounts, which also become the cached list.
      */
-    public clearAccounts(): void {
+    public refreshAccounts(): Promise<AzureAccount[]> {
         this.accounts = undefined;
+        return this.listAccounts();
     }
 
     /**

@@ -191,18 +191,20 @@ describe('AzureListingCache (unit)', () => {
         expect(calls).to.deep.equal({ accounts: 2, tenants: 2, subscriptions: 0 });
     });
 
-    it('should keep tenant listings when only the account list is cleared', async () => {
+    it('should keep tenant listings when the account list is refreshed', async () => {
         const { source, calls } = createCountingSource();
         const cache = new AzureListingCache(source);
 
         await cache.listAccounts();
         await collectPages(cache.listTenantsForAccount(account));
-        cache.clearAccounts();
+        expect(await cache.refreshAccounts()).to.deep.equal([account]);
         await cache.listAccounts();
         await collectPages(cache.listTenantsForAccount(account));
 
-        // Signing a *new* account in does not make the existing account's
-        // tenants untrue, so they must not be re-fetched.
+        // The refresh itself re-lists accounts, and reseeds the memo so the
+        // subsequent read is served from cache. Signing a *new* account in does
+        // not make the existing account's tenants untrue, so they must not be
+        // re-fetched.
         expect(calls).to.deep.equal({ accounts: 2, tenants: 1, subscriptions: 0 });
     });
 

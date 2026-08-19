@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    type AzureListingCache,
     type AzureSubscription,
     type ConcreteAzureNode,
     type ConcreteAzureNodeTree,
@@ -46,9 +47,22 @@ export type IAzureResourceTreeView = vscode.TreeView<string>;
  * user has not selected. The flows that let the user *change* that filter
  * (Select Subscriptions, Sign In) must see past it, and depend on this instead.
  * Both are served by one cache, so neither pays twice for the same listing.
+ *
+ * This is the read-only half of {@linkcode IAzureListingCache}; depend on it
+ * unless you need to invalidate.
  */
 export const IAzureListingSource: ServiceIdentifier<IAzureListingSource> = Symbol.for('IAzureListingSource');
 export type IAzureListingSource = ListingSource;
+
+/**
+ * Identifier for the shared listing cache that serves {@linkcode IAzureListingSource}.
+ *
+ * Adds the invalidation surface (`clear`, `clearAccount`, `refreshAccounts`) on
+ * top of the listing methods. Only the owner of cache lifetime -- the data
+ * provider, which watches for sign-in/out and environment changes -- should
+ * depend on this; everything else depends on {@linkcode IAzureListingSource}.
+ */
+export const IAzureListingCache: ServiceIdentifier<AzureListingCache> = Symbol.for('IAzureListingCache');
 
 /**
  * Identifier for a resolver that maps a bare subscription id to a fully-populated
