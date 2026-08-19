@@ -7,14 +7,15 @@ import {
     AppServiceLogicalType, FunctionAppLogicalType, isGenericResource, LogicAppLogicalType,
     type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
+import { CaselessSet } from '@microsoft/vscode-azure-utils';
 
-const WebAppLogicalTypes = new Set<string>([
-    FunctionAppLogicalType.toLowerCase(),
-    AppServiceLogicalType.toLowerCase(),
-    LogicAppLogicalType.toLowerCase(),
+const WebAppLogicalTypes = new CaselessSet([
+    FunctionAppLogicalType,
+    AppServiceLogicalType,
+    LogicAppLogicalType,
 ]);
 
 /** Identifies Function App, App Service, and Logic App resources sharing the Web Apps ARM surface. */
 export function isWebApp(resource: unknown): resource is GenericResource {
-    return isGenericResource(resource) && WebAppLogicalTypes.has(resource.logicalType.toLowerCase());
+    return isGenericResource(resource) && WebAppLogicalTypes.has(resource.logicalType);
 }
