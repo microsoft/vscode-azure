@@ -220,8 +220,8 @@
                 "id": "vscode-azure/staticWebApps/workspaceActions",
                 "label": "%submenus.vscode-azure/staticWebApps/workspaceActions%",
                 "icon": {
-                    "light": "resources/staticWebApps/azure-staticwebapps.svg",
-                    "dark": "resources/staticWebApps/azure-staticwebapps.svg"
+                    "light": "dist/azureIcons/microsoft.web/staticsites.svg",
+                    "dark": "dist/azureIcons/microsoft.web/staticsites.svg"
                 }
             }
         ],
