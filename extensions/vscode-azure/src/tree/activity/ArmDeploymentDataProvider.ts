@@ -24,11 +24,6 @@ export type IArmDeploymentDataProvider = ArmDeploymentDataProvider;
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
 const DefaultPollingIntervalMs = 10 * 1000;
 
-interface DeploymentPollResult {
-    readonly deployment: DeploymentExtended;
-    readonly operations: ArmDeploymentOperationActivity[];
-}
-
 /**
  * An {@linkcode Activity} representing a single ARM deployment (root or nested).
  *
@@ -206,16 +201,16 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
             abortSignal.throwIfAborted();
 
             this.activePolls.add(activity.id);
-            const poller = createHttpPoller<DeploymentPollResult, OperationState<DeploymentPollResult>>(
+            const poller = createHttpPoller<undefined, OperationState<undefined>>(
                 {
-                    sendInitialRequest: () => this.getPollResponse(client, activity, abortSignal),
-                    sendPollRequest: () => this.getPollResponse(client, activity, abortSignal),
+                    sendInitialRequest: () => this.pollOnce(client, activity, abortSignal),
+                    sendPollRequest: () => this.pollOnce(client, activity, abortSignal),
                 },
                 {
                     intervalInMs: DefaultPollingIntervalMs,
-                    updateState: (_state, response) => {
-                        this.updateFromPollResponse(activity, response);
-                    },
+                    // A failed or canceled deployment is a normal terminal outcome
+                    // for a tracker, so resolve on it instead of rejecting.
+                    resolveOnUnsuccessful: true,
                 },
             );
 
@@ -235,50 +230,48 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
         }
     }
 
-    private async getPollResponse(
+    /**
+     * Fetch the deployment's status and operations once, apply them to
+     * {@linkcode activity}, and describe the result to the poller.
+     *
+     * The activity is updated here rather than from the poller's result so that
+     * every response is applied, including the initial one. A request failure is
+     * assumed to be transient: it is logged and reported as still running, so the
+     * poller waits its current interval and tries again instead of abandoning the
+     * deployment. Only an abort ends polling early.
+     */
+    private async pollOnce(
         client: IDeploymentClient,
         activity: ArmDeploymentActivity,
         abortSignal: AbortSignal,
-    ): Promise<OperationResponse<DeploymentPollResult>> {
-        let statusCode = 200;
-        let retryAfter: string | undefined;
+    ): Promise<OperationResponse<undefined>> {
         this.executor.output.debug(`[activity] poll request deployment=${activity.id}`);
+        let retryAfter: string | undefined;
 
-        const [deployment, operations] = await Promise.all([
-            client.deployments.getAtScope(activity.scope, activity.deploymentName, {
-                abortSignal,
-                onResponse: response => {
-                    statusCode = response.status;
-                    retryAfter = response.headers.get('retry-after');
-                },
-            }),
-            this.fetchOperations(client, activity, abortSignal),
-        ]);
-
-        const provisioningState = deployment.properties?.provisioningState;
-        return {
-            flatResponse: { deployment, operations },
-            rawResponse: {
-                statusCode,
-                request: {
-                    // Body polling is the core-lro mode for PUT operations.
-                    method: 'PUT',
-                    url: activity.deploymentId,
-                },
-                headers: retryAfter ? { 'retry-after': retryAfter } : {},
-                body: {
-                    ...deployment,
-                    properties: {
-                        ...deployment.properties,
-                        provisioningState: toLroProvisioningState(provisioningState),
+        try {
+            const [deployment, operations] = await Promise.all([
+                client.deployments.getAtScope(activity.scope, activity.deploymentName, {
+                    abortSignal,
+                    onResponse: response => {
+                        retryAfter = response.headers.get('retry-after');
                     },
-                },
-            },
-        };
+                }),
+                this.fetchOperations(client, activity, abortSignal),
+            ]);
+
+            abortSignal.throwIfAborted();
+            this.applyPollResult(activity, deployment, operations);
+            return toPollResponse(activity, toLroProvisioningState(deployment.properties?.provisioningState), retryAfter);
+        } catch (error) {
+            abortSignal.throwIfAborted();
+            const message = stringifyError(error);
+            this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
+            return toPollResponse(activity, KnownProvisioningState.Running, retryAfter);
+        }
     }
 
-    private updateFromPollResponse(activity: ArmDeploymentActivity, response: OperationResponse): void {
-        const { deployment, operations } = response.flatResponse as DeploymentPollResult;
+    /** Apply a poll result to the activity and fire a targeted change event. */
+    private applyPollResult(activity: ArmDeploymentActivity, deployment: DeploymentExtended, operations: ArmDeploymentOperationActivity[]): void {
         const provisioningState = deployment.properties?.provisioningState;
         if (provisioningState) {
             const previousStatus = activity.status;
@@ -492,6 +485,31 @@ function toLroProvisioningState(provisioningState: ProvisioningState | undefined
     return provisioningState === KnownProvisioningState.Ready || provisioningState === KnownProvisioningState.Deleted
         ? KnownProvisioningState.Succeeded
         : provisioningState;
+}
+
+/**
+ * Describes a poll result to the LRO poller.
+ *
+ * The poller only needs the provisioning state to decide whether to keep
+ * polling and the `retry-after` header to pace itself; the deployment itself is
+ * applied to the activity as it arrives, so no payload is carried in
+ * `flatResponse`. `PUT` selects core-lro's Body polling mode, which reads the
+ * status from `properties.provisioningState`.
+ */
+function toPollResponse(
+    activity: ArmDeploymentActivity,
+    provisioningState: ProvisioningState | undefined,
+    retryAfter: string | undefined,
+): OperationResponse<undefined> {
+    return {
+        flatResponse: undefined,
+        rawResponse: {
+            statusCode: 200,
+            request: { method: 'PUT', url: activity.deploymentId },
+            headers: retryAfter ? { 'retry-after': retryAfter } : {},
+            body: { properties: { provisioningState } },
+        },
+    };
 }
 
 /**

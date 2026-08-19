@@ -6,7 +6,7 @@
 import { createMockAccountDataProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { ArmDeploymentDataProvider, isNestedDeploymentOp, isVisibleOperation, parseDeploymentId } from '../../../src/tree/activity/ArmDeploymentDataProvider';
+import { ArmDeploymentDataProvider, isNestedDeploymentOp, isVisibleOperation, parseDeploymentId, type ArmDeploymentActivity } from '../../../src/tree/activity/ArmDeploymentDataProvider';
 import { makeActivity, makeOperationActivity } from './mockActivity';
 
 /** Creates a mock IDeploymentClient that returns the given operations and deployment state. */
@@ -14,11 +14,17 @@ function createMockClient(
     operations: Array<{ operationId: string; targetId: string; targetType: string; targetName: string; provisioningOperation?: string; provisioningState?: string }> = [],
     deploymentState: string | string[] = 'Running',
     retryAfter?: string,
+    /** Zero-based index of a `getAtScope` attempt that should reject, simulating a transient failure. */
+    failAtAttempt?: number,
 ) {
     let deploymentRequest = 0;
+    let attempt = 0;
     return {
         deployments: {
             getAtScope: mock.fn((_scope: string, _name: string, options?: { onResponse?: (r: { status: number; headers: { get: (name: string) => string | undefined } }) => void }) => {
+                if (attempt++ === failAtAttempt) {
+                    return Promise.reject(new Error('transient failure'));
+                }
                 options?.onResponse?.({ status: 200, headers: { get: name => name === 'retry-after' ? retryAfter : undefined } });
                 const states = Array.isArray(deploymentState) ? deploymentState : [deploymentState];
                 const provisioningState = states[Math.min(deploymentRequest++, states.length - 1)];
@@ -139,6 +145,17 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             : mock.fn(() => ({}));
         const resolveSubscription = mock.fn((subscriptionId: string) => Promise.resolve(makeSubscription({ subscriptionId })));
         return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, resolveSubscription, createMockAccountDataProvider());
+    }
+
+    /** Resolves once polling has driven the activity to a terminal status. */
+    function waitForCompletion(provider: ArmDeploymentDataProvider, activity: ArmDeploymentActivity): Promise<void> {
+        return new Promise<void>(resolve => {
+            provider.onDidChange(() => {
+                if (activity.status === 'Completed') {
+                    resolve();
+                }
+            });
+        });
     }
 
     describe('canHandle', () => {
@@ -344,24 +361,51 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(changed).to.be.false;
         });
 
-        it('should use the server polling interval until the deployment completes', async () => {
-            const client = createMockClient([], ['Running', 'Succeeded'], '0');
+        it('should stop polling once the deployment reaches a terminal state', async () => {
+            const client = createMockClient([], ['Running', 'Succeeded']);
             const provider = createProvider(client);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             const activity = provider.getChildren()[0];
-            const completed = new Promise<void>(resolve => {
-                provider.onDidChange(() => {
-                    if (activity.status === 'Completed') {
-                        resolve();
-                    }
-                });
-            });
+            const completed = waitForCompletion(provider, activity);
 
             await provider.enrich(activity);
             await completed;
 
             expect(client.deployments.getAtScope.mock.callCount()).to.equal(2);
             expect(activity.endTime).to.be.instanceOf(Date);
+        });
+
+        it('should wait the server-provided retry-after interval between polls', async () => {
+            // The first poll response sets the pace, so the wait before the
+            // final poll is the 1s retry-after rather than the 10s default.
+            const client = createMockClient([], ['Running', 'Running', 'Succeeded'], '1');
+            const provider = createProvider(client);
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+            const activity = provider.getChildren()[0];
+            const completed = waitForCompletion(provider, activity);
+
+            const started = Date.now();
+            await provider.enrich(activity);
+            await completed;
+
+            const elapsed = Date.now() - started;
+            expect(client.deployments.getAtScope.mock.callCount()).to.equal(3);
+            expect(elapsed).to.be.greaterThan(900);
+            expect(elapsed).to.be.lessThan(8000);
+        });
+
+        it('should keep polling after a transient request failure', async () => {
+            const client = createMockClient([], ['Running', 'Running', 'Succeeded'], '1', 2);
+            const provider = createProvider(client);
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+            const activity = provider.getChildren()[0];
+            const completed = waitForCompletion(provider, activity);
+
+            await provider.enrich(activity);
+            await completed;
+
+            expect(activity.status).to.equal('Completed');
+            expect(client.deployments.getAtScope.mock.callCount()).to.equal(4);
         });
 
         it('should deduplicate operations by target resource ID, keeping highest rank', async () => {
