@@ -147,11 +147,17 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, resolveSubscription, createMockAccountDataProvider());
     }
 
-    /** Resolves once polling has driven the activity to a terminal status. */
-    function waitForCompletion(provider: ArmDeploymentDataProvider, activity: ArmDeploymentActivity): Promise<void> {
+    /**
+     * Resolves on the change event fired for the poll response that moved the
+     * activity to `Completed`. That event is emitted while the final response is
+     * being applied, so the poller itself may not have unwound yet -- but no
+     * further requests follow a terminal response, so request counts are stable.
+     */
+    function waitForCompletedStatus(provider: ArmDeploymentDataProvider, activity: ArmDeploymentActivity): Promise<void> {
         return new Promise<void>(resolve => {
-            provider.onDidChange(() => {
+            const subscription = provider.onDidChange(() => {
                 if (activity.status === 'Completed') {
+                    subscription.dispose();
                     resolve();
                 }
             });
@@ -366,7 +372,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const provider = createProvider(client);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             const activity = provider.getChildren()[0];
-            const completed = waitForCompletion(provider, activity);
+            const completed = waitForCompletedStatus(provider, activity);
 
             await provider.enrich(activity);
             await completed;
@@ -382,7 +388,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const provider = createProvider(client);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             const activity = provider.getChildren()[0];
-            const completed = waitForCompletion(provider, activity);
+            const completed = waitForCompletedStatus(provider, activity);
 
             const started = Date.now();
             await provider.enrich(activity);
@@ -399,7 +405,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const provider = createProvider(client);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             const activity = provider.getChildren()[0];
-            const completed = waitForCompletion(provider, activity);
+            const completed = waitForCompletedStatus(provider, activity);
 
             await provider.enrich(activity);
             await completed;
