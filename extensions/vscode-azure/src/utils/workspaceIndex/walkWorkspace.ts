@@ -37,8 +37,9 @@ export interface ScannedDirectory {
  * Walks the open workspace folders, yielding each directory with its file names.
  *
  * **Internal to the workspace index**: it is the traversal engine behind
- * `buildWorkspaceIndex`. Product code should go through
- * `IWorkspaceIndexService`, so one walk and one watcher serve every consumer.
+ * `buildWorkspaceIndex`. Product code wanting the *workspace* should go through
+ * `IWorkspaceIndexService`, so one walk and one watcher serve every consumer;
+ * see {@linkcode walkDirectory} for the on-demand, arbitrary-root case.
  *
  * Breadth-first, so shallower directories arrive first, and entries within a
  * directory are visited in name order so repeated walks agree.
@@ -63,7 +64,9 @@ export async function* walkWorkspace(
  * ordering, and budget as {@linkcode walkWorkspace}.
  *
  * Used to re-scan just the subtree an event touched, rather than the whole
- * workspace.
+ * workspace, and by product code that must scan a directory the index does not
+ * cover -- an on-demand scan of one azd service's project folder, which need
+ * not be a workspace folder or even inside one.
  *
  * @throws {@linkcode CancellationError} when `token` is cancelled.
  */

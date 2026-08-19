@@ -6,6 +6,7 @@
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { StaticWebAppAzdLanguage } from '../CreateStaticWebAppContext';
+import { walkDirectory } from '../../../utils/workspaceIndex/walkWorkspace';
 import type { StaticWebAppBuildPresetId } from '../buildPresets';
 
 interface ScannedFile {
@@ -44,24 +45,19 @@ export interface StaticWebAppProjectDetection {
     readonly branch?: string;
 }
 
-const excludedDirectories = new Set([
-    '.git', '.next', '.output', '.svelte-kit', 'bin', 'build', 'coverage',
-    'dist', 'node_modules', 'obj', 'out', 'public', 'target',
-]);
-const maximumScanDepth = 8;
-const maximumFiles = 5000;
-
 /**
  * Detects retained framework presets, Function API roots, and existing Git
  * metadata using only VS Code workspace APIs.
  *
  * @remarks
- * The workspace walk below is Static Web Apps-specific by necessity: the
- * monorepo has no shared project-scanning service yet. Once the shared,
- * bounded workspace project detection service lands (see
- * https://github.com/microsoft/vscode-azure/issues/255), replace
- * {@linkcode scanWorkspace} and the exclusion/budget constants with that
- * service and keep only the Static Web Apps-specific preset mapping here.
+ * Traversal is the shared {@linkcode walkDirectory}, so the exclusion set,
+ * entry budget, symlink handling, and ordering match every other consumer of
+ * the workspace index. Only the Static Web Apps preset mapping lives here.
+ *
+ * {@linkcode IWorkspaceIndexService} is deliberately not used: it indexes the
+ * open workspace folders in the background, whereas this runs on demand
+ * against one azd service's project folder, which need not be a workspace
+ * folder or even inside one.
  */
 export async function detectStaticWebAppProject(
     code: IVsCode,
@@ -152,39 +148,33 @@ export async function detectStaticWebAppProject(
     };
 }
 
+/**
+ * Flattens the shared walk into the root-relative file list the detectors
+ * below index by path.
+ */
 async function scanWorkspace(code: IVsCode, root: vscode.Uri): Promise<ScannedFile[]> {
     const files: ScannedFile[] = [];
-    const pending: { readonly uri: vscode.Uri; readonly relativePath: string; readonly depth: number }[] = [
-        { uri: root, relativePath: '', depth: 0 },
-    ];
 
-    while (pending.length > 0 && files.length < maximumFiles) {
-        const directory = pending.shift();
-        if (!directory) {
-            break;
-        }
-        let entries: [string, vscode.FileType][];
-        try {
-            entries = await code.workspace.fs.readDirectory(directory.uri);
-        } catch (error) {
-            if (isFileNotFound(error)) {
-                continue;
-            }
-            throw error;
-        }
-
-        for (const [name, type] of entries) {
-            const relativePath = directory.relativePath ? `${directory.relativePath}/${name}` : name;
-            if (type === code.FileType.Directory) {
-                if (directory.depth < maximumScanDepth && !excludedDirectories.has(name.toLowerCase())) {
-                    pending.push({ uri: code.Uri.joinPath(directory.uri, name), relativePath, depth: directory.depth + 1 });
-                }
-            } else if (type === code.FileType.File) {
-                files.push({ relativePath, uri: code.Uri.joinPath(directory.uri, name) });
-            }
+    for await (const directory of walkDirectory(code, root)) {
+        const relativeDirectory = relativePathFrom(root, directory.uri);
+        for (const name of directory.fileNames) {
+            files.push({
+                relativePath: relativeDirectory ? `${relativeDirectory}/${name}` : name,
+                uri: code.Uri.joinPath(directory.uri, name),
+            });
         }
     }
+
     return files;
+}
+
+/**
+ * Path of {@linkcode uri} relative to {@linkcode root}, or `''` for the root
+ * itself. The walk only ever yields descendants of the root, so no `..`
+ * result is possible.
+ */
+function relativePathFrom(root: vscode.Uri, uri: vscode.Uri): string {
+    return uri.path.slice(root.path.length).replace(/^\/+/, '');
 }
 
 async function detectPackageFrameworks(
