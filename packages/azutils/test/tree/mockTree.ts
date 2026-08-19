@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DataItemTree } from '@microsoft/vscode-azure-utils';
+import type { DataItemTree, Page } from '@microsoft/vscode-azure-utils';
 import { mock } from 'node:test';
+import type { AzureAccount, AzureTenant } from '../../src/auth/AzureSubscription';
 import type { ConcreteAzureNode } from '../../src/models/AzureNode';
 import { AzureNodeId } from '../../src/models/AzureNodeId';
 
@@ -189,4 +190,65 @@ export function pagedChildren(
     entries: readonly [ConcreteAzureNode, ConcreteAzureNode[][]][],
 ): Map<ConcreteAzureNode, ConcreteAzureNode[][]> {
     return new Map<ConcreteAzureNode, ConcreteAzureNode[][]>(entries);
+}
+
+/** The unfiltered account/tenant/subscription listing surface, plus its spies. */
+export interface MockAzureListing {
+    readonly listing: {
+        listAccounts(): Promise<AzureAccount[]>;
+        listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>>;
+        listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>>;
+    };
+    readonly listAccounts: ReturnType<typeof mock.fn>;
+    readonly listTenantsForAccount: ReturnType<typeof mock.fn>;
+    readonly listSubscriptionsForTenant: ReturnType<typeof mock.fn>;
+}
+
+/**
+ * Creates a mock of the unfiltered account/tenant/subscription listing that the
+ * discovery flows (Select Subscriptions, Sign In) read instead of the tree.
+ *
+ * Unlike {@linkcode createMockPagedDataItemTree}, pages are streamed directly:
+ * the listing surface yields every page of a node in sequence, so there is no
+ * `hasMore`/`loadMore` cursor to advance.
+ *
+ * Any node in `failNodes` throws when its children are listed, simulating a
+ * branch whose children cannot be enumerated (e.g. a tenant that can't mint a
+ * token). The returned spies let tests assert which nodes were listed at all --
+ * the key property when verifying that a filtered-out tenant is never touched.
+ *
+ * @param accounts - The accounts returned by `listAccounts`.
+ * @param pagesMap - Maps a node to its children split into pages.
+ * @param options - Optional `failNodes`: nodes whose listing throws.
+ */
+export function createMockAzureListing(
+    accounts: AzureAccount[],
+    pagesMap: Map<ConcreteAzureNode, ConcreteAzureNode[][]>,
+    options: { readonly failNodes?: Set<ConcreteAzureNode> } = {},
+): MockAzureListing {
+    const failNodes = options.failNodes ?? new Set<ConcreteAzureNode>();
+
+    function pagesFor(node: ConcreteAzureNode): AsyncIterable<Page<ConcreteAzureNode>> {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        return (async function* () {
+            if (failNodes.has(node)) {
+                throw new Error('token acquisition failed');
+            }
+            const pages = pagesMap.get(node) ?? [];
+            for (let i = 0; i < pages.length; i++) {
+                yield { items: pages[i], hasMore: i < pages.length - 1 };
+            }
+        })();
+    }
+
+    const listAccounts = mock.fn(() => Promise.resolve(accounts));
+    const listTenantsForAccount = mock.fn((account: AzureAccount) => pagesFor(account as ConcreteAzureNode));
+    const listSubscriptionsForTenant = mock.fn((tenant: AzureTenant) => pagesFor(tenant as ConcreteAzureNode));
+
+    return {
+        listing: { listAccounts, listTenantsForAccount, listSubscriptionsForTenant },
+        listAccounts,
+        listTenantsForAccount,
+        listSubscriptionsForTenant,
+    };
 }

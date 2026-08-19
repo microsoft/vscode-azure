@@ -148,10 +148,19 @@ export interface MockAccountDataProviderOptions {
     readonly subscriptions?: AzureSubscription[];
 }
 
-/** Account provider fixture with a controllable account-removal event. */
+/**
+ * Account provider fixture with a controllable account-removal event.
+ *
+ * Also exposes the unfiltered account/tenant/subscription listing used by the
+ * discovery flows (Select Subscriptions, Sign In), which read past the
+ * subscription filter that `getChildren` applies.
+ */
 export interface MockAccountDataProvider extends DataProvider<ConcreteAzureNode> {
     readonly onDidRemoveAccounts: Event<readonly string[]>;
     readonly removeAccountsEmitter: EventEmitter<readonly string[]>;
+    listAccounts(): Promise<AzureAccount[]>;
+    listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>>;
+    listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>>;
 }
 
 /**
@@ -191,6 +200,11 @@ export function createMockAccountDataProvider(options?: MockAccountDataProviderO
                 throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
             }
         }),
+        listAccounts: () => Promise.resolve(accounts),
+        // eslint-disable-next-line @typescript-eslint/require-await
+        listTenantsForAccount: () => (async function* () { yield { items: tenants, hasMore: false }; })(),
+        // eslint-disable-next-line @typescript-eslint/require-await
+        listSubscriptionsForTenant: () => (async function* () { yield { items: subscriptions, hasMore: false }; })(),
     };
 }
 

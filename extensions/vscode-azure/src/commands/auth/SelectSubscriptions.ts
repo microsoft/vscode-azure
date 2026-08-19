@@ -7,7 +7,7 @@ import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, IActionExecutor, ICodeContext, showMessage, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
-import { IAzureViewDataTree } from '../../services';
+import { IAzureAccountDataProvider, type IUnfilteredAzureListing } from '../../tree/resources/AzureAccountDataProvider';
 import { ICredentialOptionsScope } from '../../utils/CredentialOptionsScope';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -22,13 +22,17 @@ import { listReachableSubscriptions, type UnreachableAuthNode } from './listReac
  * token without interactive sign-in are skipped and surfaced as a non-blocking
  * warning (see {@linkcode listReachableSubscriptions}) rather than aborting the
  * whole command, so the user can still filter the subscriptions that did load.
+ *
+ * Discovery reads the *unfiltered* listing rather than the resources tree. The
+ * tree applies the very filter this command edits, so sourcing the pick list
+ * from it would let the user narrow the filter but never widen it again.
  */
 @injectable()
 export class SelectSubscriptions implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(IAzureAccountDataProvider) private readonly listing: IUnfilteredAzureListing,
         @inject(ICredentialOptionsScope) private readonly credentialOptions: ICredentialOptionsScope,
         @inject(IActionContext) private readonly actionContext: IActionContext,
     ) { }
@@ -45,7 +49,7 @@ export class SelectSubscriptions implements ManagedCommand {
         // un-authable tenant fails fast instead of interrupting the user.
         const { subscriptions: reachable, failures } = await this.credentialOptions.run(
             { sessionOptions: { silent: true } },
-            () => listReachableSubscriptions(this.cache),
+            () => listReachableSubscriptions(this.listing),
         );
 
         if (failures.length > 0) {

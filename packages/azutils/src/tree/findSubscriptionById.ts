@@ -32,8 +32,7 @@ import { isAccount, isSubscription, isTenant, type ConcreteAzureNodeTree } from 
  * case-insensitive. Returns `undefined` when no signed-in account exposes a
  * subscription with the given id.
  *
- * A tenant whose subscriptions cannot be listed -- typically because a
- * conditional access policy blocks token issuance for it -- is skipped rather
+ * A tenant whose subscriptions cannot be listed is skipped rather
  * than aborting the search, so an unreachable tenant encountered along the way
  * never hides a subscription that lives in a later tenant.
  *

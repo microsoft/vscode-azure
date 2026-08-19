@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureAccount, AzureSubscription, AzureTenant, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
-import { isAccount, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
-import { drillChildren } from '@microsoft/vscode-azure-utils';
+import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azure-azutils';
+import { isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
+import type { IUnfilteredAzureListing } from '../../tree/resources/AzureAccountDataProvider';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 
 /**
@@ -52,32 +52,31 @@ export interface ReachableSubscriptionsResult {
  * Enumerate the first page of reachable tenants across all signed-in accounts.
  *
  * Accounts can belong to a very large number of tenants (hundreds), so this
- * deliberately reads only the first page of each account's tenants -- it never
- * calls {@linkcode ConcreteAzureNodeTree.loadMore} to drain later pages. The
- * result is intended to seed a combobox where the user can either pick a
- * suggested tenant or type any tenant ID directly, so an exhaustive list is
- * neither needed nor desirable.
+ * deliberately reads only the first page of each account's tenants. The result
+ * is intended to seed a combobox where the user can either pick a suggested
+ * tenant or type any tenant ID directly, so an exhaustive list is neither
+ * needed nor desirable.
+ *
+ * Reads the *unfiltered* listing: this seeds a sign-in flow, whose whole
+ * purpose is to reach a tenant the tree does not currently show.
  */
-export async function listFirstPageReachableTenants(tree: ConcreteAzureNodeTree): Promise<ReachableTenant[]> {
+export async function listFirstPageReachableTenants(listing: IUnfilteredAzureListing): Promise<ReachableTenant[]> {
     const tenants = new Map<string, ReachableTenant>();
 
-    // Root children (accounts) are not paged, so a single getChildren() call
-    // returns them all.
-    for (const accountNode of await tree.getChildren()) {
-        if (!isAccount(accountNode)) {
-            continue;
-        }
+    for (const account of await listing.listAccounts()) {
+        // First page only -- the loop breaks after the first iteration.
+        for await (const page of listing.listTenantsForAccount(account)) {
+            for (const tenantNode of page.items) {
+                if (!isTenant(tenantNode)) {
+                    continue;
+                }
 
-        // First page only -- intentionally no loadMore() here.
-        for (const tenantNode of await tree.getChildren(accountNode)) {
-            if (!isTenant(tenantNode)) {
-                continue;
+                const key = `${account.id.toLowerCase()}/${tenantNode.tenantId.toLowerCase()}`;
+                if (!tenants.has(key)) {
+                    tenants.set(key, { account, tenant: tenantNode });
+                }
             }
-
-            const key = `${accountNode.id.toLowerCase()}/${tenantNode.tenantId.toLowerCase()}`;
-            if (!tenants.has(key)) {
-                tenants.set(key, { account: accountNode, tenant: tenantNode });
-            }
+            break;
         }
     }
 
@@ -90,14 +89,19 @@ export async function listFirstPageReachableTenants(tree: ConcreteAzureNodeTree)
 
 /**
  * Enumerate every subscription reachable from the currently signed-in accounts,
- * drilling account -> tenant -> subscription via the shared tree cache (so
- * results already loaded for the tree are reused).
+ * walking account -> tenant -> subscription.
  *
- * This function only drills and isolates faults; it does *not* establish any
+ * Reads the *unfiltered* listing, bypassing the shared tree cache. This backs
+ * the Select Subscriptions pick list, which must show subscriptions the current
+ * filter excludes -- otherwise the filter could only ever be narrowed, never
+ * widened. Nothing enumerated here enters the tree cache, so a filtered-out
+ * tenant surfaced for the pick list cannot leak into the resources view.
+ *
+ * This function only walks and isolates faults; it does *not* establish any
  * credential options itself. Callers that need silent acquisition (e.g. Select
  * Subscriptions) should run it inside an {@linkcode ICredentialOptionsScope}
- * requesting `{ sessionOptions: { silent: true } }`, so that any cache *miss*
- * fetches a credential silently rather than prompting interactive sign-in.
+ * requesting `{ sessionOptions: { silent: true } }`, so that acquiring a
+ * credential fetches silently rather than prompting interactive sign-in.
  *
  * Discovery is best-effort and fault-isolated: a failure enumerating one
  * account's tenants, or one tenant's subscriptions, is captured in
@@ -106,50 +110,50 @@ export async function listFirstPageReachableTenants(tree: ConcreteAzureNodeTree)
  * otherwise) would otherwise reject the whole walk and prevent the user from
  * selecting *any* subscription.
  *
- * @param tree - The Azure resources data tree (cache) to drill.
+ * @param listing - The unfiltered account/tenant/subscription listing.
  * @returns The reachable subscriptions (deduped and sorted) and any failures.
  */
-export async function listReachableSubscriptions(tree: ConcreteAzureNodeTree): Promise<ReachableSubscriptionsResult> {
+export async function listReachableSubscriptions(listing: IUnfilteredAzureListing): Promise<ReachableSubscriptionsResult> {
     const subscriptions = new Map<string, ReachableSubscription>();
     const failures: UnreachableAuthNode[] = [];
 
-    for await (const accountNode of drillChildren(tree, undefined)) {
-        if (!isAccount(accountNode)) {
-            continue;
-        }
-
+    for (const account of await listing.listAccounts()) {
         try {
-            for await (const tenantNode of drillChildren(tree, accountNode)) {
-                if (!isTenant(tenantNode)) {
-                    continue;
-                }
-
-                try {
-                    for await (const subscriptionNode of drillChildren(tree, tenantNode)) {
-                        if (!isSubscription(subscriptionNode)) {
-                            continue;
-                        }
-
-                        const key = subscriptionFilterKey(tenantNode.tenantId, subscriptionNode.subscriptionId);
-                        if (!subscriptions.has(key)) {
-                            subscriptions.set(key, {
-                                account: accountNode,
-                                tenant: tenantNode,
-                                subscription: subscriptionNode,
-                            });
-                        }
+            for await (const tenantPage of listing.listTenantsForAccount(account)) {
+                for (const tenantNode of tenantPage.items) {
+                    if (!isTenant(tenantNode)) {
+                        continue;
                     }
-                } catch (error) {
-                    // One tenant could not be enumerated (e.g. token acquisition
-                    // needs interactive sign-in under a silent scope). Record and
-                    // continue so other tenants/accounts still contribute their
-                    // subscriptions.
-                    failures.push({ account: accountNode, tenant: tenantNode, error });
+
+                    try {
+                        for await (const subscriptionPage of listing.listSubscriptionsForTenant(tenantNode)) {
+                            for (const subscriptionNode of subscriptionPage.items) {
+                                if (!isSubscription(subscriptionNode)) {
+                                    continue;
+                                }
+
+                                const key = subscriptionFilterKey(tenantNode.tenantId, subscriptionNode.subscriptionId);
+                                if (!subscriptions.has(key)) {
+                                    subscriptions.set(key, {
+                                        account,
+                                        tenant: tenantNode,
+                                        subscription: subscriptionNode,
+                                    });
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        // One tenant could not be enumerated (e.g. token acquisition
+                        // needs interactive sign-in under a silent scope). Record and
+                        // continue so other tenants/accounts still contribute their
+                        // subscriptions.
+                        failures.push({ account, tenant: tenantNode, error });
+                    }
                 }
             }
         } catch (error) {
             // The account's tenant list itself failed; record and move on.
-            failures.push({ account: accountNode, error });
+            failures.push({ account, error });
         }
     }
 

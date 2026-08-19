@@ -9,7 +9,7 @@ import { collectPages, Everything, Roots, type DataProviderChangeEvent } from '@
 import { createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { AzureAccountDataProvider } from '../../../src/tree/resources/AzureAccountDataProvider';
-import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../../src/constants';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../../src/constants';
 
 describe('AzureAccountDataProvider (unit)', () => {
     afterEach(() => {
@@ -352,6 +352,21 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             // The manually-entered tenants (folded into each account's tenant
             // listing) changed, so re-list to surface added/removed tenants.
+            expect(fired).to.equal(1);
+            expect(event?.target).to.equal(Everything);
+        });
+
+        it('should emit a full invalidation when the subscription filter setting changes', () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
+            let fired = 0;
+            provider.onDidChange(e => { event = e; fired++; });
+
+            const key = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
+            vscodeMock.configChangeEmitter.fire({ affectsConfiguration: section => section === key });
+
+            // Tenants are filtered as they are listed, so a filter change must
+            // re-list rather than merely re-render.
             expect(fired).to.equal(1);
             expect(event?.target).to.equal(Everything);
         });
@@ -726,6 +741,110 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(inputs[0]?.tenantId).to.equal(tenant.tenantId);
             expect(inputs[0]?.sessionOptions?.account?.id).to.equal(tenant.accountId);
             expect(inputs[0]?.sessionOptions?.silent).to.be.undefined;
+        });
+    });
+
+    describe('tenant filtering', () => {
+        const filterKey = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
+
+        /**
+         * Lists an account's tenants under the supplied `selectedSubscriptions`
+         * value, returning both the surviving tenant ids and the tenant ids for
+         * which a credential was minted. The latter is the enforcement signal:
+         * a tenant that never gets a credential never costs a token request.
+         */
+        async function listTenantIdsUnderFilter(selected: string[], tenantIds: string[]) {
+            const credentialTenantIds: (string | undefined)[] = [];
+            const { ctx, mock: vscodeMock } = createMockCodeContext();
+            const { executor } = createTestActionExecutor();
+            const credentialFactory: ICredentialFactory = (input) => {
+                credentialTenantIds.push((input as CredentialFactoryOptions).tenantId);
+                return makeCredential();
+            };
+            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory);
+            const account = makeAccount();
+            mockSubscriptionClient({
+                tenantPages: [{ items: tenantIds.map(id => ({ tenantId: id, displayName: `Tenant ${id}` })), hasMore: false }],
+                subscriptionPages: [{ items: tenantIds.map(id => ({ subscriptionId: `sub-${id}`, tenantId: id, displayName: `Sub ${id}` })), hasMore: false }],
+            });
+
+            const listed = await withSettings(vscodeMock, { [filterKey]: selected }, async () => {
+                const pages = await collectPages(await provider.getChildren(account));
+                const tenants = pages.flatMap(page => page.items as AzureTenant[]);
+                // Drill each surviving tenant the way the tree would, so the
+                // credential log reflects real subscription-listing cost.
+                for (const tenant of tenants) {
+                    await collectPages(await provider.getChildren(tenant));
+                }
+                return tenants.map(tenant => tenant.tenantId);
+            });
+
+            return { listed, credentialTenantIds, provider, account, vscodeMock };
+        }
+
+        it('should drop a tenant that is absent from the filter', async () => {
+            const { listed } = await listTenantIdsUnderFilter(['t1/sub-t1'], ['t1', 't2']);
+
+            expect(listed).to.deep.equal(['t1']);
+        });
+
+        it('should never mint a credential for a tenant excluded by the filter', async () => {
+            const { credentialTenantIds } = await listTenantIdsUnderFilter(['t1/sub-t1'], ['t1', 't2']);
+
+            // This is the whole point of filtering below the view: a tenant the
+            // user did not select must never trigger a tenant-scoped token
+            // request (which can surface an interactive sign-in prompt).
+            expect(credentialTenantIds).to.not.include('t2');
+        });
+
+        it('should match tenant ids case-insensitively', async () => {
+            const { listed } = await listTenantIdsUnderFilter(['T1/SUB-T1'], ['T1', 't2']);
+
+            expect(listed.map(id => id.toLowerCase())).to.deep.equal(['t1']);
+        });
+
+        it('should apply no filtering when the setting is empty', async () => {
+            const { listed } = await listTenantIdsUnderFilter([], ['t1', 't2']);
+
+            expect(listed).to.deep.equal(['t1', 't2']);
+        });
+
+        it('should not filter subscriptions, which the view layer narrows instead', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            const tenant = makeTenant({ tenantId: 't1' });
+            mockSubscriptionClient({
+                subscriptionPages: [{
+                    items: [
+                        { subscriptionId: 's1', tenantId: tenant.tenantId, displayName: 'Sub One' },
+                        { subscriptionId: 's2', tenantId: tenant.tenantId, displayName: 'Sub Two' },
+                    ],
+                    hasMore: false,
+                }],
+            });
+
+            const pages = await withSettings(vscodeMock, { [filterKey]: ['t1/s1'] }, async () =>
+                await collectPages(await provider.getChildren(tenant)));
+
+            // Both subscriptions arrive in one listing, so dropping s2 here
+            // would save no requests -- the view provider hides it instead.
+            expect(pages.flatMap(page => (page.items as AzureSubscription[]).map(s => s.subscriptionId)))
+                .to.deep.equal(['s1', 's2']);
+        });
+
+        it('should ignore the filter on the unfiltered listing path used by discovery', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            const account = makeAccount();
+            mockSubscriptionClient({
+                tenantPages: [{ items: [{ tenantId: 't1', displayName: 'Tenant One' }, { tenantId: 't2', displayName: 'Tenant Two' }], hasMore: false }],
+            });
+
+            const pages = await withSettings(vscodeMock, { [filterKey]: ['t1/sub-1'] }, async () =>
+                await collectPages(provider.listTenantsForAccount(account)));
+
+            // Select Subscriptions has to offer tenants the filter currently
+            // excludes, otherwise the filter could only ever be narrowed.
+            expect(pages.flatMap(page => (page.items as AzureTenant[]).map(t => t.tenantId)))
+                .to.deep.equal(['t1', 't2']);
         });
     });
 

@@ -4,21 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { createMockPagedDataItemTree, makeAccount, makeSubscription, makeTenant, pagedChildren } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAzureListing, makeAccount, makeSubscription, makeTenant, pagedChildren } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, MockQuickPick, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { SelectSubscriptions } from '../../../src/commands/auth/SelectSubscriptions';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
-import type { IAzureViewDataTree } from '../../../src/services';
+import type { IUnfilteredAzureListing } from '../../../src/tree/resources/AzureAccountDataProvider';
 import { CredentialOptionsScope } from '../../../src/utils/CredentialOptionsScope';
 
 describe('SelectSubscriptions (unit)', () => {
-    function createCommand(cache: IAzureViewDataTree) {
+    function createCommand(listing: IUnfilteredAzureListing) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const actionContext = createActionContext('test');
-        const command = new SelectSubscriptions(ctx, executor, cache, new CredentialOptionsScope(), actionContext);
+        const command = new SelectSubscriptions(ctx, executor, listing, new CredentialOptionsScope(), actionContext);
         return { command, ctx, mockResult, actionContext };
     }
 
@@ -27,19 +27,20 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { tree: cache, loadMore } = createMockPagedDataItemTree([account], pagedChildren([
+        const { listing } = createMockAzureListing([account], pagedChildren([
             [account, [[tenant]]],
             [tenant, [[sub1], [sub2]]],
         ]));
 
-        const { command, mockResult } = createCommand(cache);
-        respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)'] }]);
+        const { command, mockResult } = createCommand(listing);
+        // 'Sub Two' lives on the second page, so selecting it only works if the
+        // walk drained past page one.
+        respondToPrompts(mockResult, [{ pickMany: ['Sub Two (sub-2)'] }]);
 
         await command.execute();
 
         expect(mockResult.settings.get(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`))
-            .to.deep.equal(['tenant-1/sub-1']);
-        expect(loadMore.mock.callCount()).to.equal(1);
+            .to.deep.equal(['tenant-1/sub-2']);
     });
 
     it('should pre-check the currently-selected subscriptions case-insensitively', async () => {
@@ -47,12 +48,12 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { tree: cache } = createMockPagedDataItemTree([account], pagedChildren([
+        const { listing } = createMockAzureListing([account], pagedChildren([
             [account, [[tenant]]],
             [tenant, [[sub1, sub2]]],
         ]));
 
-        const { command, mockResult } = createCommand(cache);
+        const { command, mockResult } = createCommand(listing);
 
         // Seed the filter with an UPPERCASE id: the command lowercases both the
         // stored ids and the computed selection key, so the pre-check must still
@@ -94,12 +95,12 @@ describe('SelectSubscriptions (unit)', () => {
         const tenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: tenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: tenant.tenantId, accountId: account.id });
-        const { tree: cache } = createMockPagedDataItemTree([account], pagedChildren([
+        const { listing } = createMockAzureListing([account], pagedChildren([
             [account, [[tenant]]],
             [tenant, [[sub1, sub2]]],
         ]));
 
-        const { command, mockResult } = createCommand(cache);
+        const { command, mockResult } = createCommand(listing);
         respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)', 'Sub Two (sub-2)'] }]);
 
         await command.execute();
@@ -114,7 +115,7 @@ describe('SelectSubscriptions (unit)', () => {
         const badTenant = makeTenant({ tenantId: 'tenant-2', displayName: 'Bad Tenant', accountId: account.id });
         const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub One', tenantId: goodTenant.tenantId, accountId: account.id });
         const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub Two', tenantId: goodTenant.tenantId, accountId: account.id });
-        const { tree: cache } = createMockPagedDataItemTree(
+        const { listing } = createMockAzureListing(
             [account],
             pagedChildren([
                 [account, [[goodTenant, badTenant]]],
@@ -123,7 +124,7 @@ describe('SelectSubscriptions (unit)', () => {
             { failNodes: new Set<ConcreteAzureNode>([badTenant]) },
         );
 
-        const { command, mockResult } = createCommand(cache);
+        const { command, mockResult } = createCommand(listing);
         respondToPrompts(mockResult, [
             'cancel',
             { pickMany: ['Sub One (sub-1)', 'Sub Two (sub-2)'] },
@@ -142,7 +143,7 @@ describe('SelectSubscriptions (unit)', () => {
     it('should throw when no tenant could be enumerated', async () => {
         const account = makeAccount({ id: 'acct-1' });
         const badTenant = makeTenant({ tenantId: 'tenant-1', displayName: 'Bad Tenant', accountId: account.id });
-        const { tree: cache } = createMockPagedDataItemTree(
+        const { listing } = createMockAzureListing(
             [account],
             pagedChildren([
                 [account, [[badTenant]]],
@@ -150,7 +151,7 @@ describe('SelectSubscriptions (unit)', () => {
             { failNodes: new Set<ConcreteAzureNode>([badTenant]) },
         );
 
-        const { command, mockResult, actionContext } = createCommand(cache);
+        const { command, mockResult, actionContext } = createCommand(listing);
 
         let caught: unknown;
         try {

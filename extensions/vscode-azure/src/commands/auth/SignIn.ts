@@ -9,6 +9,7 @@ import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { GuidPattern } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
+import { IAzureAccountDataProvider, type IUnfilteredAzureListing } from '../../tree/resources/AzureAccountDataProvider';
 import { addSignedInTenant } from '../../utils/signedInTenants';
 import type { ManagedCommand } from '../ManagedCommand';
 import { listFirstPageReachableTenants, type ReachableTenant } from './listReachableAuthNodes';
@@ -42,6 +43,7 @@ export class SignIn implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(IAzureAccountDataProvider) private readonly listing: IUnfilteredAzureListing,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
     ) { }
 
@@ -86,7 +88,7 @@ export class SignIn implements ManagedCommand {
         // tenant ID, so a failure is treated as "no suggestions".
         let tenants: ReachableTenant[];
         try {
-            tenants = await listFirstPageReachableTenants(this.cache);
+            tenants = await listFirstPageReachableTenants(this.listing);
         } catch {
             tenants = [];
         }

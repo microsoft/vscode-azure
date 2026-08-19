@@ -17,17 +17,43 @@ import {
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
-import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../constants';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../constants';
 import { readSignedInTenants } from '../../utils/signedInTenants';
+import { readSubscriptionFilter } from '../../utils/subscriptionFilter';
 
 /**
  * Identifier for the root account/tenant/subscription data provider. Bound as a
  * singleton and aliased into the resource tree's data-provider collection so the
  * "Run (Mock Data)" debug entry point can rebind it with mock data.
  */
-export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNode> {
+export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNode>, IUnfilteredAzureListing {
     /** Fires with normalized account IDs removed by a reconciled session change. */
     readonly onDidRemoveAccounts: Event<readonly string[]>;
+}
+
+/**
+ * The raw account/tenant/subscription listings, before the
+ * `vscode-azure.selectedSubscriptions` filter is applied.
+ *
+ * {@linkcode DataProvider.getChildren} deliberately exposes only the *filtered*
+ * view, so that a tenant excluded by the filter is never listed and therefore
+ * never has a tenant-scoped token minted for it. That guarantee is the whole
+ * point of filtering in the data layer, so it must not be weakened by an opt-out
+ * on the tree itself.
+ *
+ * Discovery flows that let the user *change* the filter (Select Subscriptions,
+ * Sign In) need the unfiltered truth -- otherwise the filter could only ever be
+ * narrowed, never widened. They use this surface, which talks to Azure directly
+ * and never reads or writes the shared tree cache, so a filtered-out tenant
+ * pulled in for a pick list cannot leak into the resources view.
+ */
+export interface IUnfilteredAzureListing {
+    /** List every signed-in account for the configured environment. */
+    listAccounts(): Promise<AzureAccount[]>;
+    /** List every tenant of an account, one page at a time. */
+    listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>>;
+    /** List every subscription of a tenant, one page at a time. */
+    listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>>;
 }
 
 export const IAzureAccountDataProvider: ServiceIdentifier<IAzureAccountDataProvider> = Symbol.for('IAzureAccountDataProvider');
@@ -55,6 +81,23 @@ function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
 }
 
 /**
+ * Apply a predicate to each item of a paged listing, preserving page boundaries
+ * and `hasMore`.
+ *
+ * A page may become empty while `hasMore` is still `true`; that is intentional
+ * and correct, because dropping the page would misreport whether more pages
+ * remain.
+ */
+async function* filterPages(
+    pages: AsyncIterable<Page<ConcreteAzureNode>>,
+    predicate: (node: ConcreteAzureNode) => boolean,
+): AsyncIterable<Page<ConcreteAzureNode>> {
+    for await (const page of pages) {
+        yield { items: page.items.filter(predicate), hasMore: page.hasMore };
+    }
+}
+
+/**
  * Root data-layer provider for the account / tenant / subscription levels of the
  * Azure resources tree.
  *
@@ -69,9 +112,17 @@ function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
  *
  * Children never expire on their own ({@linkcode getTtl} returns `Infinity`);
  * the provider instead fires {@linkcode onDidChange} when the user signs in/out
- * (`authentication.onDidChangeSessions`) or changes the configured sovereign
- * cloud (`microsoft-sovereign-cloud`). Subscription filtering is applied by the
- * view layer, not here.
+ * (`authentication.onDidChangeSessions`), changes the configured sovereign
+ * cloud (`microsoft-sovereign-cloud`), or edits the subscription filter.
+ *
+ * The tenant half of the `vscode-azure.selectedSubscriptions` filter is applied
+ * here, in the data layer, rather than by the view. Filtering tenants above this
+ * point would still list an excluded tenant's subscriptions -- minting a
+ * tenant-scoped token, and potentially prompting for interactive sign-in -- only
+ * to discard the result. The subscription half stays in the view, where it costs
+ * nothing: a tenant's subscriptions all arrive in one listing.
+ * {@linkcode IUnfilteredAzureListing} is the deliberate exception, for flows that
+ * let the user edit the filter.
  */
 @injectable()
 export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disposable {
@@ -154,6 +205,14 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
                 // tenant listing, so re-list to surface added tenants and drop
                 // removed ones.
                 this.changeEmitter.fire({ target: Everything });
+            } else if (e.affectsConfiguration(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
+                this.executor.output.debug('[auth] subscription filter changed; invalidating accounts');
+                // Every cached tenant/subscription listing was produced through
+                // the previous filter, so the whole tree is re-listed. Widening
+                // the filter admits tenants that were never listed before (and
+                // so were never token-requested), which is exactly why this
+                // cannot be a view-level refresh.
+                this.changeEmitter.fire({ target: Everything });
             }
         }));
     }
@@ -175,6 +234,20 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
 
     /**
      * @inheritdoc
+     *
+     * Applies the tenant half of the `vscode-azure.selectedSubscriptions` filter.
+     * A tenant excluded here is never listed, so
+     * {@linkcode listSubscriptionsForTenant} is never called for it and no
+     * tenant-scoped token is ever requested -- the only place the filter can
+     * actually avoid a request.
+     *
+     * Subscriptions are deliberately *not* filtered here. A tenant's
+     * subscriptions arrive in one listing, so dropping some of them saves no
+     * request; that half of the filter is presentation, and stays in the view.
+     *
+     * Accounts are never filtered: the filter keys carry no account id, and an
+     * account whose tenants are all excluded simply lists no children.
+     *
      * @throws if `resource` is neither an account nor a tenant.
      */
     public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
@@ -186,7 +259,9 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         }
 
         if (isAccount(resource)) {
-            return this.listTenantsForAccount(resource);
+            const tenants = this.listTenantsForAccount(resource);
+            const filter = readSubscriptionFilter(this.ctx.code);
+            return filter ? filterPages(tenants, node => !isTenant(node) || filter.tenantIds.has(node.tenantId.toLowerCase())) : tenants;
         }
 
         if (isTenant(resource)) {
@@ -267,7 +342,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      *
      * @returns The signed-in accounts, sorted by label.
      */
-    private async listAccounts(): Promise<AzureAccount[]> {
+    public async listAccounts(): Promise<AzureAccount[]> {
         const environment = getConfiguredAzureEnv(this.ctx.code);
 
         // Suppress session-change events around our own getAccounts() call: the
@@ -372,9 +447,12 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * listed tenants so a tenant that is both listed and saved keeps its real
      * display name rather than the bare id stand-in.
      *
+     * Unfiltered: the subscription filter is applied by
+     * {@linkcode getChildren}, not here.
+     *
      * @param account - The account whose tenants are listed.
      */
-    private async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
+    public async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
         const manualTenants = this.manualTenantsForAccount(account);
         const seen = new Set<string>();
         let emittedTerminalPage = false;
@@ -461,9 +539,12 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * pages are streamed lazily rather than buffered; ordering follows the
      * service response (no cross-page sort).
      *
+     * Unfiltered: the subscription filter is applied by
+     * {@linkcode getChildren}, not here.
+     *
      * @param tenant - The tenant whose subscriptions are listed.
      */
-    private async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
+    public async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
         const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment, undefined, tenant);
         for await (const page of client.subscriptions.list()) {

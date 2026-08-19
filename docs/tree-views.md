@@ -183,9 +183,12 @@ The Azure resources tree composes three data providers. They split responsibilit
 
 ### Subscription / tenant filtering
 
-Tenant and subscription filtering is a **view-layer** concern, implemented in `GenericAzureViewProvider.applyFilter`. It reads `vscode-azure.selectedSubscriptions` (an array of `tenantId/subscriptionId` strings, written by the `Azure: Select Subscriptions` command). When the list is empty, no filtering applies. Otherwise, tenant nodes survive only when their `tenantId` is in the filter, and subscription nodes only when their `subscriptionId` is. Other node types pass through.
+Tenant and subscription filtering both read `vscode-azure.selectedSubscriptions` (an array of `tenantId/subscriptionId` strings, written by the `Azure: Select Subscriptions` command; parsed by `readSubscriptionFilter` in `src/utils/subscriptionFilter.ts`). An empty list means no filtering. The two halves are enforced at **different layers**, because only one of them saves requests:
 
-Because the tree loads lazily, a filtered-out tenant is never expanded, so its subscriptions are never requested from Azure. The data layer may still cache subscriptions that don't pass the filter when they arrive in the *same* response as ones that do (e.g. two subscriptions in one tenant) — that's acceptable since it costs no extra request. The view provider fires `onDidChange` when the filter setting changes so the tree re-renders.
+- **Tenants are filtered in the data layer**, by `AzureAccountDataProvider.getChildren`. Listing a tenant's subscriptions requires a tenant-scoped token, and acquiring one can surface an interactive sign-in prompt. Dropping the tenant before it ever becomes a node positively guarantees no token and no subscription request is issued for it. The data provider fires `onDidChange` with `{ target: Everything }` when the setting changes, so the tree re-lists.
+- **Subscriptions are filtered in the view layer**, by `GenericAzureViewProvider.applyFilter`. A tenant's subscriptions all arrive in a single listing, so discarding some of them lower down would save nothing — it is purely a presentation choice. Node types other than subscriptions pass through untouched.
+
+Because the data layer filters tenants, commands that need to see *past* the filter cannot drill the shared tree. `AzureAccountDataProvider` therefore also implements `IUnfilteredAzureListing` (`listAccounts` / `listTenantsForAccount` / `listSubscriptionsForTenant`), an unfiltered, uncached enumeration path. `Azure: Select Subscriptions` and `Azure: Sign In` use it so the filter can be widened again, not just narrowed.
 
 ## Workspace (Local) Tree
 

@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createDefaultCredentialFactory, type ConcreteAzureNode, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
-import { makeAccount, makeTenant, createMockHierarchicalDataItemTree } from '@microsoft/vscode-azure-azutils/testing';
+import { createDefaultCredentialFactory, isAccount, type ConcreteAzureNode, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
+import { createMockAzureListing, createMockHierarchicalDataItemTree, makeAccount, makeTenant, pagedChildren } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
@@ -12,6 +12,7 @@ import { pickTenantOrEnterId, SignIn } from '../../../src/commands/auth/SignIn';
 import type { ReachableTenant } from '../../../src/commands/auth/listReachableAuthNodes';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../../src/constants';
 import type { IAzureViewDataTree } from '../../../src/services';
+import type { IUnfilteredAzureListing } from '../../../src/tree/resources/AzureAccountDataProvider';
 import type { SignedInTenant } from '../../../src/utils/signedInTenants';
 
 describe('SignIn (unit)', () => {
@@ -19,16 +20,28 @@ describe('SignIn (unit)', () => {
      * Wraps the shared {@linkcode createMockHierarchicalDataItemTree} fixture,
      * casting it to {@linkcode IAzureViewDataTree} and surfacing its `invalidate`
      * spy so tests can assert how the command invalidated the tree.
+     *
+     * Also derives the matching unfiltered listing from the same data: the
+     * command reads accounts/tenants from the listing (which sees past the
+     * subscription filter) while invalidating the tree.
      */
     function createTree(
         rootChildren: ConcreteAzureNode[],
         childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>(),
-    ): { cache: IAzureViewDataTree; invalidate: ReturnType<typeof mock.fn> } {
+    ): { cache: IAzureViewDataTree; listing: IUnfilteredAzureListing; invalidate: ReturnType<typeof mock.fn> } {
         const tree = createMockHierarchicalDataItemTree(rootChildren, childrenMap);
+        const accounts = rootChildren.filter(isAccount);
+        const pages = pagedChildren([...childrenMap].map(([node, children]) => [node, [children]]));
         return {
             cache: tree,
+            listing: createMockAzureListing(accounts, pages).listing,
             invalidate: (tree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate,
         };
+    }
+
+    /** An unfiltered listing with no signed-in accounts. */
+    function emptyListing(): IUnfilteredAzureListing {
+        return createMockAzureListing([], pagedChildren([])).listing;
     }
 
     /** A minimal stand-in session carrying the account a tenant resolved to. */
@@ -57,12 +70,12 @@ describe('SignIn (unit)', () => {
     }
 
     it('should perform a default sign-in and invalidate roots when signed out', async () => {
-        const { cache, invalidate } = createTree([]);
+        const { cache, listing, invalidate } = createTree([]);
         const { ctx, mock: mockResult } = createMockCodeContext();
         resolveDefaultSession(mockResult);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         // The default sign-in goes through the credential factory, which is
@@ -90,11 +103,12 @@ describe('SignIn (unit)', () => {
             loadMore: () => Promise.resolve(),
             invalidate,
         } as unknown as IAzureViewDataTree;
+        const listing = emptyListing();
         const { ctx, mock: mockResult } = createMockCodeContext();
         resolveDefaultSession(mockResult);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         // A plain (default) interactive sign-in was attempted, with no tenant scope.
@@ -111,7 +125,7 @@ describe('SignIn (unit)', () => {
         const account = makeAccount({ id: 'acct-1', label: 'Account One' });
         const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
         const tenant2 = makeTenant({ tenantId: 'tenant-2', displayName: 'Tenant Two', accountId: account.id });
-        const { cache, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+        const { cache, listing, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant1, tenant2]],
         ]));
 
@@ -119,7 +133,7 @@ describe('SignIn (unit)', () => {
         respondToPrompts(mockResult, [{ pick: 'Tenant Two (tenant-2)' }]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         // Already signed in, so only the tenant-scoped sign-in happens.
@@ -142,7 +156,7 @@ describe('SignIn (unit)', () => {
     it('should sign in to a typed tenant ID when already signed in', async () => {
         const account = makeAccount({ id: 'acct-1', label: 'Account One' });
         const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
-        const { cache, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+        const { cache, listing, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant1]],
         ]));
 
@@ -155,7 +169,7 @@ describe('SignIn (unit)', () => {
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         const calls = mockResult.authentication.getSession.mock.calls;
@@ -177,7 +191,7 @@ describe('SignIn (unit)', () => {
     it('should invalidate the account subtree when re-signing in to an already-saved tenant', async () => {
         const account = makeAccount({ id: 'acct-1', label: 'Account One' });
         const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
-        const { cache, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+        const { cache, listing, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant1]],
         ]));
 
@@ -192,7 +206,7 @@ describe('SignIn (unit)', () => {
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         // No setting change => the configuration listener won't refresh, so SignIn
@@ -213,7 +227,7 @@ describe('SignIn (unit)', () => {
     it('should invalidate everything when a typed tenant sign-in resolves to no account', async () => {
         const account = makeAccount({ id: 'acct-1', label: 'Account One' });
         const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
-        const { cache, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+        const { cache, listing, invalidate } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant1]],
         ]));
 
@@ -224,7 +238,7 @@ describe('SignIn (unit)', () => {
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         // No resolved account => fall back to a full-tree invalidation.
@@ -235,7 +249,7 @@ describe('SignIn (unit)', () => {
     it('should persist a manually-entered tenant under the account it resolved to', async () => {
         const account = makeAccount({ id: 'acct-1', label: 'Account One' });
         const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
-        const { cache } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+        const { cache, listing } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant1]],
         ]));
 
@@ -247,7 +261,7 @@ describe('SignIn (unit)', () => {
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         // Persisted under the resolved account id, with the tenant id lowercased
@@ -260,7 +274,7 @@ describe('SignIn (unit)', () => {
     it('should not persist a manually-entered tenant that is already saved', async () => {
         const account = makeAccount({ id: 'acct-1', label: 'Account One' });
         const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
-        const { cache } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+        const { cache, listing } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant1]],
         ]));
 
@@ -274,7 +288,7 @@ describe('SignIn (unit)', () => {
         respondToPrompts(mockResult, [{ value: typedTenantId }]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         // Idempotent: the pre-existing entry is left untouched (not duplicated).
@@ -286,7 +300,7 @@ describe('SignIn (unit)', () => {
     it('should not persist anything when signing in to a listed tenant', async () => {
         const account = makeAccount({ id: 'acct-1', label: 'Account One' });
         const tenant1 = makeTenant({ tenantId: 'tenant-1', displayName: 'Tenant One', accountId: account.id });
-        const { cache } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+        const { cache, listing } = createTree([account], new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
             [account, [tenant1]],
         ]));
 
@@ -295,7 +309,7 @@ describe('SignIn (unit)', () => {
         respondToPrompts(mockResult, [{ pick: 'Tenant One (tenant-1)' }]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         // A listed tenant is already reachable, so there's nothing to persist.
@@ -303,7 +317,7 @@ describe('SignIn (unit)', () => {
     });
 
     it('should offer a tenant sign-in when default sign-in fails', async () => {
-        const { cache, invalidate } = createTree([]);
+        const { cache, listing, invalidate } = createTree([]);
         const { ctx, mock: mockResult } = createMockCodeContext();
 
         // Default sign-in (no VSCODE_TENANT scope) fails; the tenant-scoped
@@ -323,7 +337,7 @@ describe('SignIn (unit)', () => {
         ]);
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await command.execute();
 
         expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
@@ -344,14 +358,14 @@ describe('SignIn (unit)', () => {
     });
 
     it('should cancel without another sign-in attempt when the fallback is dismissed', async () => {
-        const { cache, invalidate } = createTree([]);
+        const { cache, listing, invalidate } = createTree([]);
         const { ctx, mock: mockResult } = createMockCodeContext();
 
         mockResult.authentication.getSession.mock.mockImplementation((): Promise<never> => Promise.reject(new Error('conditional access blocked')));
         // No message response queued => the recovery prompt is dismissed.
         const credentialFactory = createCredentialFactory(ctx.code);
 
-        const command = new SignIn(ctx, cache, credentialFactory);
+        const command = new SignIn(ctx, cache, listing, credentialFactory);
         await expect(command.execute()).to.be.rejectedWith(CancellationError);
 
         // Only the failed default sign-in was attempted.
