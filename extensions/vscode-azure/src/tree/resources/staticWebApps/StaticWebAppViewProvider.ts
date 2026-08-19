@@ -26,7 +26,7 @@ import { ViewStaticWebAppProperties } from '../../../commands/staticWebApps/View
 import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IStaticWebAppsGitHubService } from '../../../services/StaticWebAppsGitHubService';
 import { IAzureViewDataTree } from '../../../services';
-import { combineContextValues } from '../../contextValueHelpers';
+import { combineContextValues, resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import {
     isStaticWebApp,
@@ -103,11 +103,14 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
     private getSiteTreeItem(key: string, site: StaticWebApp): ITreeItem {
         const item = new this.ctx.code.TreeItem(site.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.id = key;
-        item.contextValue = combineContextValues(
+        // The shared helper contributes what every Azure resource node gets --
+        // Open in Portal and Delete -- so deleting a static web app is the one
+        // generic implementation rather than a product-specific copy of it.
+        item.contextValue = resourceContextValue(
+            site,
             StaticWebAppViewProvider.ContextValue,
             BrowseStaticWebApp.ContextValue,
             CloneRepository.ContextValue,
-            OpenInPortal.ContextValue,
             OpenWorkflowConfigFile.ContextValue,
         );
         item.iconPath = getResourceTypeIconUri(this.ctx, site.logicalType);

@@ -6,6 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import * as vscode from 'vscode';
+import { DeleteAzureResource } from '../../../../src/commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import type { GitHubJob, GitHubWorkflowRun, GitHubWorkflowStep } from '../../../../src/services/StaticWebAppsGitHubService';
 import {
@@ -43,6 +44,11 @@ describe('StaticWebAppViewProvider (unit)', () => {
         expect(item.contextValue).to.include(StaticWebAppViewProvider.ContextValue);
         expect(item.contextValue).to.include(OpenInPortal.ContextValue);
         expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
+    });
+
+    it('should offer the generic delete on the site rather than a product-specific one', () => {
+        const { item } = render(makeStaticWebApp());
+        expect(item.contextValue).to.include(DeleteAzureResource.ResourceContextValue);
     });
 
     it('should prioritize environment status and show linked branches when ready', () => {

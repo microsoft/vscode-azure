@@ -4,14 +4,26 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, IActionContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionContext, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
 import { StaticWebAppVirtualTypes, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
 import type { ManagedCommand } from '../ManagedCommand';
 import { isStaticWebAppEnvironment } from './BrowseStaticWebApp';
 import { StaticWebAppCommandResolver } from './StaticWebAppCommandResolver';
 
-/** Deletes a non-production Static Web Apps environment after confirmation. */
+/**
+ * Deletes a non-production Static Web Apps environment after confirmation.
+ *
+ * Separate from the generic {@linkcode DeleteAzureResource}, which deletes an
+ * ARM resource by id: an environment is a *build* of a static site rather than
+ * a resource of its own, so it is removed through the Static Web Apps API.
+ * Deleting the production environment means deleting the site, which is what
+ * the generic command on the site node does.
+ *
+ * The node leaves the tree only after Azure reports the deletion complete, so
+ * a failure leaves the tree untouched.
+ */
 @injectable()
 export class DeleteStaticWebAppEnvironment implements ManagedCommand {
     /** Context value for environment tree items. */
@@ -20,9 +32,9 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
     public constructor(
         @inject(IActionContext) private readonly context: IActionContext,
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IStaticWebAppClientProvider) private readonly createClient: IStaticWebAppClientProvider,
         @inject(StaticWebAppCommandResolver) private readonly resolver: StaticWebAppCommandResolver,
+        @inject(IGenericActivityDataProvider) private readonly activityProvider: IGenericActivityDataProvider,
     ) { }
 
     /** @inheritdoc */
@@ -37,31 +49,34 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
             throw new Error(this.code.l10n.t('Cannot delete the production environment directly. Delete the Static Web App instead.'));
         }
 
-        const deleteLabel = this.code.l10n.t('Delete');
-        const confirmation = await this.code.window.showWarningMessage(
-            this.code.l10n.t('Are you sure you want to delete environment \'{0}\'?', environment.displayLabel),
-            { modal: true },
-            deleteLabel,
+        await showMessage(
+            this.code,
+            this.code.l10n.t('Are you sure you want to delete environment \'{0}\'? This cannot be undone.', environment.displayLabel),
+            { modal: true, severity: 'warning', stepName: 'confirmStaticWebAppEnvironmentDeletion' },
+            this.code.l10n.t('Delete'),
         );
-        if (confirmation !== deleteLabel) {
-            throw new CancellationError(undefined, 'Confirm Static Web Apps environment deletion');
-        }
 
         const { resourceGroup } = parseAzureResourceId(environment.azureResource.id);
         if (!resourceGroup) {
             throw new Error(this.code.l10n.t('Could not determine the resource group for the selected Static Web App.'));
         }
         const client = this.createClient(environment.azureResource.subscription);
-        await client.staticSites.deleteStaticSiteBuild(
-            resourceGroup,
-            environment.azureResource.name,
-            environment.buildId,
-        );
+        const activity = this.activityProvider.trackActivity({
+            title: this.code.l10n.t('Delete environment \'{0}\'', environment.displayLabel),
+        });
+
+        try {
+            await client.staticSites.deleteStaticSiteBuild(
+                resourceGroup,
+                environment.azureResource.name,
+                environment.buildId,
+            );
+            activity.update({ status: 'Completed' });
+        } catch (error) {
+            activity.update({ status: 'Failed', error });
+            throw error;
+        }
 
         this.resolver.dataTree.remove(environment);
-        this.output.info('Static Web Apps environment deletion completed.');
-        void this.code.window.showInformationMessage(
-            this.code.l10n.t('Successfully deleted environment \'{0}\'.', environment.displayLabel),
-        );
     }
 }

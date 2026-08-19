@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { BrowseStaticWebApp } from '../../../src/commands/staticWebApps/BrowseStaticWebApp';
 import { CloneRepository } from '../../../src/commands/staticWebApps/CloneRepository';
@@ -17,6 +17,7 @@ import { OpenGitHubRepository } from '../../../src/commands/staticWebApps/OpenGi
 import { ShowGitHubActions } from '../../../src/commands/staticWebApps/ShowGitHubActions';
 import { StaticWebAppCommandResolver } from '../../../src/commands/staticWebApps/StaticWebAppCommandResolver';
 import { ViewStaticWebAppProperties } from '../../../src/commands/staticWebApps/ViewStaticWebAppProperties';
+import { GenericActivityDataProvider } from '../../../src/tree/activity/GenericActivityDataProvider';
 import {
     StaticWebAppVirtualTypes,
     type StaticWebAppActions,
@@ -98,9 +99,9 @@ describe('Static Web Apps resource commands (unit)', () => {
         const command = new DeleteStaticWebAppEnvironment(
             createActionContext('test'),
             mockResult.vscode,
-            new MockOutputChannel('test'),
             (() => ({ staticSites: { deleteStaticSiteBuild: deleteBuild } })) as never,
             resolver,
+            new GenericActivityDataProvider(),
         );
 
         let error: unknown;
@@ -127,9 +128,9 @@ describe('Static Web Apps resource commands (unit)', () => {
         const command = new DeleteStaticWebAppEnvironment(
             createActionContext('test'),
             mockResult.vscode,
-            new MockOutputChannel('test'),
             (() => ({ staticSites: { deleteStaticSiteBuild: deleteBuild } })) as never,
             resolver,
+            new GenericActivityDataProvider(),
         );
 
         await command.execute('key');
