@@ -107,6 +107,12 @@ describe('AzureNode (unit)', () => {
         it('should return false for account nodes', () => {
             expect(isGenericResource(makeAccount())).to.be.false;
         });
+
+        it('should return false for null, undefined, and non-objects', () => {
+            expect(isGenericResource(null)).to.be.false;
+            expect(isGenericResource(undefined)).to.be.false;
+            expect(isGenericResource('resource')).to.be.false;
+        });
     });
 
     describe('isVirtualResource', () => {

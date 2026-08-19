@@ -78,6 +78,18 @@ export function registerFunctions(registrar: ProductRegistrar): void {
 been applied. Product command classes therefore do not need to be imported by
 the shared command registration module.
 
+### Resource deletion
+
+Products should use the shared Delete Resource command rather than shipping
+their own delete. `DeleteAzureResource` handles confirmation, tree invalidation,
+and activity-log tracking for any ARM resource or resource group, using the
+generic `ResourceClient` delete operations. When the target carries the
+`azd-env-name` tag, the confirmation suggests using `azd down` instead.
+
+A product only needs its own delete command for targets the generic command
+cannot express -- for example a virtual child node that maps to a
+service-specific API rather than an ARM resource ID.
+
 Each call:
 1. Binds the command class to itself in the container (if not already)
 2. Registers it with `ICommandRegistry`, which wraps execution in `callWithTelemetryAndErrorHandling`
@@ -165,6 +177,14 @@ In `package.json`, commands use regex `when` clauses with word boundaries:
 ```
 
 The `\b` word boundary prevents unintended partial matches (e.g. `openInPortal` matching `openInPortalV2`).
+
+### Gating a command conditionally
+
+A context value does not have to be unconditional. When whether a command applies is a property of the *data* rather than of the node type, the view provider decides per node, and the command is contributed only when it is genuinely available.
+
+Prefer expressing this in the view provider that owns the node rather than inventing a separate permission model: a product that permits only a subset of the shared settings commands registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values it wants. This is preferable to contributing the command and failing at execution time — the user never sees an action that cannot work.
+
+Note that a context value only controls *menu visibility*. The command palette ignores it, so anything that must never happen has to be enforced where the work is actually done (for settings, that is `SettingsAdapter.write`). See [Settings](settings.md).
 
 ## Commands with Resource Selection
 

@@ -5,6 +5,7 @@
 
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { BrowseWebsite } from '../../src/commands/tree/BrowseWebsite';
+import { DeleteAzureResource } from '../../src/commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../src/commands/tree/OpenInPortal';
 import { combineContextValues, resourceContextValue } from '../../src/tree/contextValueHelpers';
 import { setWebsiteUrl } from '../../src/tree/resources/websiteUrl';
@@ -24,14 +25,21 @@ describe('combineContextValues (unit)', () => {
 });
 
 describe('resourceContextValue (unit)', () => {
-    it('should always allow opening in the portal', () => {
-        expect(resourceContextValue(makeGenericResource())).to.equal(OpenInPortal.ContextValue);
+    it('should always provide common resource actions', () => {
+        expect(resourceContextValue(makeGenericResource()).split(';')).to.have.members([
+            DeleteAzureResource.ResourceContextValue,
+            OpenInPortal.ContextValue,
+        ]);
     });
 
     it('should include product-specific additions', () => {
         const contextValue = resourceContextValue(makeGenericResource(), 'functionApp');
 
-        expect(contextValue.split(';')).to.have.members([OpenInPortal.ContextValue, 'functionApp']);
+        expect(contextValue.split(';')).to.have.members([
+            DeleteAzureResource.ResourceContextValue,
+            OpenInPortal.ContextValue,
+            'functionApp',
+        ]);
     });
 
     it('should offer browsing once enrichment attaches a website url', () => {

@@ -80,6 +80,7 @@ export async function activateInternal(
 
         registerCommands(container, products.getCommands());
         registerTrees(container, products);
+        products.activate(container);
     });
 
     // Expose the DI container to E2E tests so they can resolve services (e.g.

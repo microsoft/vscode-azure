@@ -38,12 +38,12 @@ import type { WorkspaceNode } from './workspace/WorkspaceNode';
  * the generic fallback so {@linkcode ProviderRegistry} dispatches to the
  * most specific match.
  *
- * All tree views are eagerly resolved so their construction kicks off
- * the full subscription/resource load.
+ * Each tree view contributes activation work that resolves it after all tree
+ * bindings are installed, which registers it with VS Code and starts loading.
  */
 export function registerTrees(container: Container, products: ProductRegistrar): void {
     // Resources tree
-    registerTree<ConcreteAzureNode>(container, {
+    registerTree<ConcreteAzureNode>(container, products, {
         treeViewId: AzureResourceTreeViewId,
         dataTreeId: IAzureViewDataTree,
         viewItemTreeId: IAzureViewViewItemTree,
@@ -59,7 +59,7 @@ export function registerTrees(container: Container, products: ProductRegistrar):
     });
 
     // Workspace tree
-    registerTree<WorkspaceNode>(container, {
+    registerTree<WorkspaceNode>(container, products, {
         treeViewId: WorkspaceTreeViewId,
         dataTreeId: IWorkspaceViewDataTree,
         viewItemTreeId: IWorkspaceViewViewItemTree,
@@ -93,7 +93,7 @@ export function registerTrees(container: Container, products: ProductRegistrar):
     );
 
     // Activity tree
-    registerTree<Activity>(container, {
+    registerTree<Activity>(container, products, {
         treeViewId: ActivityTreeViewId,
         dataTreeId: IActivityViewDataTree,
         viewItemTreeId: IActivityViewViewItemTree,
@@ -149,10 +149,10 @@ interface TreeConfig<TData> {
 /**
  * Generic helper that wires up the data layer ({@linkcode DataItemTree}),
  * view layer ({@linkcode ViewItemTree}), and VS Code
- * {@linkcode vscode.TreeView TreeView} for a single tree, then eagerly
- * resolves the tree view to kick off the load chain.
+ * {@linkcode vscode.TreeView TreeView} for a single tree, then contributes
+ * activation work that resolves the view to register it with VS Code.
  */
-function registerTree<TData>(container: Container, config: TreeConfig<TData>): void {
+function registerTree<TData>(container: Container, registrar: ProductRegistrar, config: TreeConfig<TData>): void {
     // Data layer
     bindProviders(container, config.dataProvidersId, config.dataProviders);
     container.bind(config.dataTreeId).toDynamicValue(context => {
@@ -203,8 +203,9 @@ function registerTree<TData>(container: Container, config: TreeConfig<TData>): v
         });
     }).inSingletonScope().onActivation(pushDisposable);
 
-    // Eagerly resolve the tree view to kick off the whole chain
-    container.get(config.treeViewServiceId);
+    registrar.registerActivation(activationContainer => {
+        activationContainer.get(config.treeViewServiceId);
+    });
 }
 
 // #endregion

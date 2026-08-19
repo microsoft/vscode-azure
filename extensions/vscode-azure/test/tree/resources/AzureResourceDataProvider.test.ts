@@ -35,8 +35,12 @@ describe('AzureResourceDataProvider (unit)', () => {
             expect(createProvider().canHandle(makeResourceGroup())).to.be.true;
         });
 
-        it('should return false for generic resources', () => {
-            expect(createProvider().canHandle(makeGenericResource())).to.be.false;
+        it('should return true for generic resources as the leaf fallback', () => {
+            expect(createProvider().canHandle(makeGenericResource())).to.be.true;
+        });
+
+        it('should return no children for a generic resource', async () => {
+            expect(await createProvider().getChildren(makeGenericResource())).to.be.empty;
         });
 
         it('should return false for null/undefined', () => {

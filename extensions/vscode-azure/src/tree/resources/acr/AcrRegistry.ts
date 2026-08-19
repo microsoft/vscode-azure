@@ -54,6 +54,6 @@ export interface EnrichedAcrRegistry extends GenericResource {
  * distinguish enriched from un-enriched registries when needed.
  */
 export function isAcrRegistry(node: unknown): node is AcrRegistry {
-    return !!node && typeof node === 'object' && isGenericResource(node as GenericResource)
-        && (node as GenericResource).logicalType.toLowerCase() === AcrResourceType.toLowerCase();
+    return isGenericResource(node)
+        && node.logicalType.toLowerCase() === AcrResourceType.toLowerCase();
 }
