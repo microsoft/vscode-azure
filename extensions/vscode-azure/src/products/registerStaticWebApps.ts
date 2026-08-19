@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, StaticWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IExtensionContext, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { DeployStaticWebAppCommandId } from '../constants';
 import { BrowseStaticWebApp } from '../commands/staticWebApps/BrowseStaticWebApp';
 import { CreateStaticWebApp } from '../commands/staticWebApps/CreateStaticWebApp';
@@ -16,11 +16,10 @@ import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from '../c
 import { StaticWebAppCommandResolver } from '../commands/staticWebApps/StaticWebAppCommandResolver';
 import { UninstallSwaCli } from '../commands/staticWebApps/UninstallSwaCli';
 import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStaticWebAppProperties';
-import { SwaDebugConfigurationProvider } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
+import { PwaChromeDebugType, SwaDebugConfigurationProvider, SwaDebugType } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
-import { registerStaticWebAppLocalTools } from '../staticWebApps/registerStaticWebAppLocalTools';
 import { ISwaCliService, SwaCliService } from '../staticWebApps/SwaCliService';
 import { IProcessTerminator, ProcessTerminator, SwaTaskLifecycle } from '../tasks/staticWebApps/SwaTaskLifecycle';
 import { SwaTaskProvider } from '../tasks/staticWebApps/SwaTaskProvider';
@@ -63,5 +62,45 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerResourceDataProvider([IStaticWebAppDataProvider, StaticWebAppDataProvider]);
     registrar.registerResourceViewProvider(StaticWebAppViewProvider);
 
-    registrar.registerActivation(registerStaticWebAppLocalTools);
+    registrar.registerActivation(container => {
+        const code = container.get(IVsCode);
+        const extensionContext = container.get(IExtensionContext);
+        const taskProvider = container.get(SwaTaskProvider);
+        const debugProvider = container.get(SwaDebugConfigurationProvider);
+
+        extensionContext.subscriptions.push(
+            code.tasks.registerTaskProvider('shell', taskProvider),
+            code.debug.registerDebugConfigurationProvider(PwaChromeDebugType, debugProvider),
+            code.debug.registerDebugConfigurationProvider(
+                SwaDebugType,
+                debugProvider,
+                code.DebugConfigurationProviderTriggerKind.Dynamic,
+            ),
+            code.debug.registerDebugConfigurationProvider(
+                SwaDebugType,
+                debugProvider,
+                code.DebugConfigurationProviderTriggerKind.Initial,
+            ),
+        );
+    });
+
+    // Resolve the lifecycle eagerly so its task event subscriptions are active.
+    registrar.registerActivation(container => {
+        container.get(SwaTaskLifecycle);
+    });
+
+    registrar.registerActivation(container => {
+        if (process.env.VSCODE_RUNNING_TESTS) {
+            return;
+        }
+
+        void container.get(IActionExecutor).callWithTelemetryAndErrorHandling(
+            'staticWebApps.validateStaticWebAppsCliIsLatest',
+            async context => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.suppress = 'display';
+                await container.get(ISwaCliService).warnIfOutdated();
+            },
+        );
+    });
 }
