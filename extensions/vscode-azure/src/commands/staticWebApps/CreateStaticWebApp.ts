@@ -78,8 +78,6 @@ export class CreateStaticWebApp implements ManagedCommand {
                     'apiLocation',
                     'outputLocation',
                     'azdServiceName',
-                    'repositoryUrl',
-                    'branch',
                 ],
             ),
             get(GenerateAzureYamlStep),

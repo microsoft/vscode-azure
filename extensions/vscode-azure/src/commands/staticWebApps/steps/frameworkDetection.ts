@@ -46,8 +46,8 @@ export interface StaticWebAppProjectDetection {
 }
 
 /**
- * Detects retained framework presets, Function API roots, and existing Git
- * metadata using only VS Code workspace APIs.
+ * Detects retained framework presets and Function API roots using only VS Code
+ * workspace APIs.
  *
  * @remarks
  * Traversal is the shared {@linkcode walkDirectory}, so the exclusion set,

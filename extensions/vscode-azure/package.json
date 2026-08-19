@@ -139,43 +139,6 @@
                 "title": "%commands.vscode-azure/staticWebApps/browse%"
             },
             {
-                "command": "vscode-azure/staticWebApps/cloneRepo",
-                "category": "%commands.category.azureStaticWebApps%",
-                "enablement": "!isWeb",
-                "icon": "$(repo-clone)",
-                "title": "%commands.vscode-azure/staticWebApps/cloneRepo%"
-            },
-            {
-                "command": "vscode-azure/staticWebApps/openGitHubRepo",
-                "category": "%commands.category.azureStaticWebApps%",
-                "icon": "$(github)",
-                "title": "%commands.vscode-azure/staticWebApps/openGitHubRepo%"
-            },
-            {
-                "command": "vscode-azure/staticWebApps/openGitHubLog",
-                "category": "%commands.category.azureStaticWebApps%",
-                "icon": "$(output)",
-                "title": "%commands.vscode-azure/staticWebApps/openGitHubLog%"
-            },
-            {
-                "command": "vscode-azure/staticWebApps/showActions",
-                "category": "%commands.category.azureStaticWebApps%",
-                "icon": "$(github-action)",
-                "title": "%commands.vscode-azure/staticWebApps/showActions%"
-            },
-            {
-                "command": "vscode-azure/staticWebApps/action/cancel",
-                "category": "%commands.category.azureStaticWebApps%",
-                "icon": "$(circle-slash)",
-                "title": "%commands.vscode-azure/staticWebApps/action/cancel%"
-            },
-            {
-                "command": "vscode-azure/staticWebApps/action/rerun",
-                "category": "%commands.category.azureStaticWebApps%",
-                "icon": "$(debug-rerun)",
-                "title": "%commands.vscode-azure/staticWebApps/action/rerun%"
-            },
-            {
                 "command": "vscode-azure/staticWebApps/deleteEnvironment",
                 "category": "%commands.category.azureStaticWebApps%",
                 "icon": "$(trash)",
@@ -194,12 +157,6 @@
                 "enablement": "!isWeb",
                 "icon": "$(new-file)",
                 "title": "%commands.vscode-azure/staticWebApps/createSwaConfigFile%"
-            },
-            {
-                "command": "vscode-azure/staticWebApps/openWorkflowConfigFile",
-                "category": "%commands.category.azureStaticWebApps%",
-                "icon": "$(edit)",
-                "title": "%commands.vscode-azure/staticWebApps/openWorkflowConfigFile%"
             },
             {
                 "command": "vscode-azure/staticWebApps/showDocumentation",
@@ -341,19 +298,7 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/staticWebApps/action/cancel",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/action/rerun",
-                    "when": "false"
-                },
-                {
                     "command": "vscode-azure/staticWebApps/deleteEnvironment",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/openGitHubLog",
                     "when": "false"
                 },
                 {
@@ -449,54 +394,19 @@
                     "group": "1@1"
                 },
                 {
-                    "command": "vscode-azure/staticWebApps/openGitHubRepo",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:openStaticWebAppGitHubRepository|azureStaticEnvironment)\\b/i",
-                    "group": "1@2"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/showActions",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:showStaticWebAppGitHubActions|azureStaticActions)\\b/i",
-                    "group": "1@1"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/cloneRepo",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:cloneStaticWebAppRepository|azureStaticWebApp)\\b/i",
-                    "group": "1@2"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/openWorkflowConfigFile",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:openStaticWebAppWorkflowConfig|azureStaticWebApp|azureStaticEnvironment|azureStaticWorkflowGroup|azureStaticWorkflow|parseYamlErrorTreeItem)\\b/i",
-                    "group": "3@1"
-                },
-                {
                     "command": "vscode-azure/staticWebApps/deleteEnvironment",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:deleteStaticWebAppEnvironment|azureStaticEnvironment)\\b/i",
                     "group": "3@2"
                 },
                 {
-                    "command": "vscode-azure/staticWebApps/openGitHubLog",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:openStaticWebAppGitHubLog|azureStaticJob|azureStaticStep)\\b/i",
-                    "group": "1@1"
-                },
-                {
                     "command": "vscode-azure/staticWebApps/viewProperties",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:viewStaticWebAppProperties|azureStaticEnvironment|azureStaticActionCompleted|azureStaticActionInProgress|azureStaticJob|azureStaticStep)\\b/i",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:viewStaticWebAppProperties|azureStaticEnvironment)\\b/i",
                     "group": "9@1"
                 },
                 {
                     "command": "vscode-azure/resources/refresh",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions|azureStaticActions|azureStaticActionCompleted|azureStaticActionInProgress|azureStaticJob|azureStaticStep|azureStaticWorkflowGroup)\\b/i",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions)\\b/i",
                     "group": "9@3"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/action/rerun",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:rerunStaticWebAppAction|azureStaticActionCompleted)\\b/i",
-                    "group": "1@1"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/action/cancel",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:cancelStaticWebAppAction|azureStaticActionInProgress)\\b/i",
-                    "group": "1@2"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",
@@ -716,7 +626,6 @@
         "@azure/core-lro": "^3.4.0",
         "@microsoft/vscode-azure-azutils": "workspace:*",
         "@microsoft/vscode-azure-utils": "workspace:*",
-        "@octokit/rest": "^22.0.1",
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:",
         "jsonc-parser": "^3.3.1",

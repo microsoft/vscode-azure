@@ -33,8 +33,8 @@ describe('StaticWebApp model (unit)', () => {
     it('should match only known virtual nodes owned by a Static Web App', () => {
         expect(isStaticWebAppVirtualNode(makeVirtualResource({
             azureResource: makeStaticWebApp(),
-            virtualType: StaticWebAppVirtualTypes.Actions,
-            virtualPath: 'environments/default/actions',
+            virtualType: StaticWebAppVirtualTypes.Functions,
+            virtualPath: 'environments/default/functions',
         }))).to.be.true;
         expect(isStaticWebAppVirtualNode(makeVirtualResource({
             azureResource: makeStaticWebApp(),

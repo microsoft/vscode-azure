@@ -6,11 +6,9 @@
 import { AzureNodeId, isVirtualResource, type ConcreteAzureNode, type StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import type { GitHubJob, GitHubWorkflowRun } from '../../../../src/services/StaticWebAppsGitHubService';
 import {
     isStaticWebAppVirtualNode,
     StaticWebAppVirtualTypes,
-    type StaticWebAppActions,
     type StaticWebAppEnvironment,
     type StaticWebAppFunctions,
 } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
@@ -23,8 +21,6 @@ describe('StaticWebAppDataProvider (unit)', () => {
     function createProvider(options?: {
         readonly builds?: StaticSiteBuildARMResource[];
         readonly settingsProbeError?: boolean;
-        readonly workflowRuns?: GitHubWorkflowRun[];
-        readonly jobs?: GitHubJob[];
         readonly functions?: { readonly id?: string; readonly name?: string; readonly functionName?: string }[];
     }) {
         const { executor } = createTestActionExecutor();
@@ -47,7 +43,6 @@ describe('StaticWebAppDataProvider (unit)', () => {
         const mockClient = {
             staticSites: {
                 getStaticSite: mock.fn(() => Promise.resolve({
-                    repositoryUrl: 'https://github.com/octo-org/octo-repo',
                     branch: 'main',
                     defaultHostname: 'site.azurestaticapps.net',
                 })),
@@ -58,27 +53,20 @@ describe('StaticWebAppDataProvider (unit)', () => {
                 listStaticSiteBuildFunctionAppSettings: buildProbe,
             },
         };
-        const github = {
-            parseRepositoryUrl: mock.fn((url: string | undefined) => url ? { owner: 'octo-org', repo: 'octo-repo' } : undefined),
-            listWorkflowRuns: mock.fn(() => Promise.resolve(options?.workflowRuns ?? [])),
-            listJobs: mock.fn(() => Promise.resolve(options?.jobs ?? [])),
-        };
         const settingsAdapter = new StaticWebAppSettingsAdapter(code, () => mockClient as never);
-        const provider = new StaticWebAppDataProvider(executor, code, () => mockClient as never, github as never, settingsAdapter);
-        return { provider, mockClient, github, settingsAdapter };
+        const provider = new StaticWebAppDataProvider(executor, code, () => mockClient as never, settingsAdapter);
+        return { provider, mockClient, settingsAdapter };
     }
 
     it('should enrich the root with site details without changing its key fields', async () => {
         const { provider } = createProvider();
         const site = makeStaticWebApp({
             staticSite: undefined,
-            repositoryUrl: undefined,
             branch: undefined,
             defaultHostname: undefined,
         });
 
         expect(await provider.enrich(site)).to.be.false;
-        expect(site.repositoryUrl).to.equal('https://github.com/octo-org/octo-repo');
         expect(site.branch).to.equal('main');
         expect(site.defaultHostname).to.equal('site.azurestaticapps.net');
         expect(site.id).to.include('/Microsoft.Web/staticSites/mySwa');
@@ -117,13 +105,12 @@ describe('StaticWebAppDataProvider (unit)', () => {
             && node.invalidContextValue === 'invalidStaticEnvironment')).to.be.true;
     });
 
-    it('should expose Actions and Functions after the production probe succeeds', async () => {
+    it('should expose Functions after the production probe succeeds', async () => {
         const { provider, mockClient } = createProvider();
         const children = await provider.getChildren(makeStaticWebAppEnvironment());
 
         expect(virtualTypes(children)).to.deep.equal([
             SettingsVirtualType,
-            StaticWebAppVirtualTypes.Actions,
             StaticWebAppVirtualTypes.Functions,
         ]);
         expect(mockClient.staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(1);
@@ -201,21 +188,17 @@ describe('StaticWebAppDataProvider (unit)', () => {
         expect(mockClient.staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
     });
 
-    it('should expose source-compatible help and avoid GitHub calls for an unlinked site', async () => {
-        const { provider, github } = createProvider({ settingsProbeError: true });
-        const environment = makeStaticWebAppEnvironment({
-            azureResource: makeStaticWebApp({ repositoryUrl: undefined }),
-        });
+    it('should expose Functions help when the environment has no Functions API', async () => {
+        const { provider } = createProvider({ settingsProbeError: true });
+        const environment = makeStaticWebAppEnvironment();
 
         const children = await provider.getChildren(environment);
         expect(virtualTypes(children)).to.deep.equal([
             SettingsVirtualType,
-            StaticWebAppVirtualTypes.Actions,
             StaticWebAppVirtualTypes.NoFunctions,
         ]);
-        const help = children[2];
+        const help = children[1];
         expect(isStaticWebAppVirtualNode(help) && help.virtualType === StaticWebAppVirtualTypes.NoFunctions && help.kind).to.equal('help');
-        expect(github.listWorkflowRuns.mock.callCount()).to.equal(0);
     });
 
     it('should use production and build function-list operations and preserve empty-list semantics', async () => {
@@ -239,47 +222,6 @@ describe('StaticWebAppDataProvider (unit)', () => {
             && productionChildren[0].kind).to.equal('empty');
     });
 
-    it('should create invalid action nodes per item and sort jobs by start time', async () => {
-        /* eslint-disable @typescript-eslint/naming-convention -- GitHub REST response fixtures */
-        const validRun = {
-            id: 1,
-            status: 'completed',
-            conclusion: 'success',
-            head_branch: 'main',
-            head_sha: 'abc',
-            event: 'push',
-            head_commit: { message: 'Valid run' },
-        } as GitHubWorkflowRun;
-        const invalidRun = {
-            ...validRun,
-            id: 2,
-            status: 'waiting',
-            head_commit: { message: 'Invalid run' },
-        } as GitHubWorkflowRun;
-        const jobs = [
-            { id: 2, name: 'Later', status: 'completed', conclusion: 'success', started_at: '2026-01-02T00:00:00Z', steps: [] },
-            { id: 1, name: 'Earlier', status: 'completed', conclusion: 'success', started_at: '2026-01-01T00:00:00Z', steps: [] },
-        ] as unknown as GitHubJob[];
-        /* eslint-enable @typescript-eslint/naming-convention */
-        const { provider } = createProvider({ workflowRuns: [validRun, invalidRun], jobs });
-        const group: StaticWebAppActions = {
-            virtualType: StaticWebAppVirtualTypes.Actions,
-            virtualPath: 'environments/default/actions',
-            azureResource: makeStaticWebApp(),
-            environmentBuildId: 'default',
-            branch: 'main',
-            repository: { owner: 'octo-org', repo: 'octo-repo' },
-        };
-
-        const actions = await provider.getChildren(group);
-        expect(virtualTypes(actions)).to.deep.equal([
-            StaticWebAppVirtualTypes.Action,
-            StaticWebAppVirtualTypes.Invalid,
-        ]);
-        const sortedJobs = await provider.getChildren(actions[0]);
-        expect(sortedJobs.map(node => isStaticWebAppVirtualNode(node)
-            && node.virtualType === StaticWebAppVirtualTypes.Job ? node.job.name : '')).to.deep.equal(['Earlier', 'Later']);
-    });
 });
 
 function virtualTypes(nodes: ConcreteAzureNode[]): string[] {

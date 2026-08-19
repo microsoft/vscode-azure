@@ -6,7 +6,6 @@
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import { IStaticWebAppsGitHubService } from '../services/StaticWebAppsGitHubService';
 
 /**
  * Classification of a Git remote for deployment routing purposes.
@@ -77,7 +76,6 @@ const azureDevOpsHostnames = new Set(['dev.azure.com', 'ssh.dev.azure.com', 'vs-
 export class GitRemoteService implements IGitRemoteService {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IStaticWebAppsGitHubService) private readonly github: IStaticWebAppsGitHubService,
     ) { }
 
     /** @inheritdoc */
@@ -121,7 +119,7 @@ export class GitRemoteService implements IGitRemoteService {
 
     /** Classifies a remote URL as `github`, `azdo`, or `unsupported`. */
     private classifyProvider(url: string): GitRemoteProvider {
-        if (this.github.parseRepositoryUrl(url)) {
+        if (isGitHubRemoteUrl(url)) {
             return 'github';
         }
         if (isAzureDevOpsRemoteUrl(url)) {
@@ -152,6 +150,31 @@ export class GitRemoteService implements IGitRemoteService {
  * Matches Azure DevOps HTTPS (`dev.azure.com`, `*.visualstudio.com`) and SSH
  * (`ssh.dev.azure.com`, `vs-ssh.visualstudio.com`) remote URLs.
  */
+/**
+ * `true` when `url` points at a repository on github.com.
+ *
+ * Recognizes both the SSH (`git@github.com:owner/repo.git`) and HTTPS
+ * (`https://github.com/owner/repo`) remote forms, requiring an
+ * `owner/repo` path so that non-repository github.com URLs are not
+ * misclassified as deployable remotes.
+ */
+function isGitHubRemoteUrl(url: string): boolean {
+    if (/^(?:ssh:\/\/)?git@github\.com(?::|\/)[^/]+\/[^/]+?(?:\.git)?\/?$/i.test(url)) {
+        return true;
+    }
+
+    try {
+        const parsed = new URL(url);
+        const hostname = parsed.hostname.toLowerCase();
+        if (hostname !== 'github.com' && hostname !== 'www.github.com') {
+            return false;
+        }
+        return parsed.pathname.split('/').filter(Boolean).length === 2;
+    } catch {
+        return false;
+    }
+}
+
 function isAzureDevOpsRemoteUrl(url: string): boolean {
     // SSH form: git@ssh.dev.azure.com:v3/... or org@vs-ssh.visualstudio.com:v3/...
     const sshMatch = /^(?:ssh:\/\/)?[^@/]+@([^:/]+)[:/]/i.exec(url);

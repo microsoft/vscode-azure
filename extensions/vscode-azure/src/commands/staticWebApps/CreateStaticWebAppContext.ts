@@ -40,10 +40,6 @@ export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext
     readonly appLocation?: string;
     readonly apiLocation?: string;
     readonly outputLocation?: string;
-    /** Existing GitHub remote URL retained as resource metadata without a token. */
-    readonly repositoryUrl?: string;
-    /** Existing local branch retained with {@linkcode repositoryUrl}. */
-    readonly branch?: string;
     /**
      * Set by `DetermineStaticWebAppDeploymentRouteStep` when a supported,
      * pushed Git remote and a sufficient `azd` version make CI/CD setup

@@ -6,7 +6,6 @@
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { StaticWebAppsGitHubService } from '../../src/services/StaticWebAppsGitHubService';
 import { GitRemoteService } from '../../src/staticWebApps/GitRemoteService';
 
 interface MockRemote {
@@ -32,8 +31,7 @@ function createService(repositories: readonly MockRepository[], options?: { read
     };
     const getExtension = mock.fn((id: string) => (options?.noExtension || id !== 'vscode.git' ? undefined : gitExtension));
     const { vscode: code } = createMockVsCode({ extensions: { getExtension } as never });
-    const github = new StaticWebAppsGitHubService(code, {} as never);
-    return { service: new GitRemoteService(code, github), gitExtension };
+    return { service: new GitRemoteService(code), gitExtension };
 }
 
 /** Single-remote repo, named `origin` and tracked by HEAD when `pushed` is true (the common case). */

@@ -13,16 +13,11 @@ import {
     type StaticSiteFunctionOverviewARMResource,
     type VirtualResource,
 } from '@microsoft/vscode-azure-azutils';
-import type { GitHubJob, GitHubRepository, GitHubWorkflowRun, GitHubWorkflowStep } from '../../../services/StaticWebAppsGitHubService';
-import type * as vscode from 'vscode';
-import type { ParsedWorkflow, WorkflowBuildConfig, WorkflowSourceRange } from './workflowParser';
 
 /** Enriched Azure Static Web App resource retained in the Azure data tree. */
 export interface StaticWebApp extends GenericResource {
     /** Full management-plane payload from the latest enrichment. */
     staticSite?: StaticSiteARMResource;
-    /** GitHub repository URL, when the site is source-linked. */
-    repositoryUrl?: string;
     /** Production source branch, when supplied by Azure. */
     branch?: string;
     /** Default Azure hostname, when provisioned. */
@@ -32,25 +27,15 @@ export interface StaticWebApp extends GenericResource {
 /** Stable virtual discriminators for every Static Web Apps child node. */
 export const StaticWebAppVirtualTypes = {
     Environment: 'staticWebApp.environment',
-    Actions: 'staticWebApp.actions',
-    Action: 'staticWebApp.action',
-    Job: 'staticWebApp.job',
-    Step: 'staticWebApp.step',
     Functions: 'staticWebApp.functions',
     Function: 'staticWebApp.function',
     NoFunctions: 'staticWebApp.noFunctions',
-    WorkflowGroup: 'staticWebApp.workflowGroup',
-    Workflow: 'staticWebApp.workflow',
-    WorkflowParseError: 'staticWebApp.workflowParseError',
     Invalid: 'staticWebApp.invalid',
 } as const;
 
 /** Context values used for auditable malformed-child placeholders. */
 export type StaticWebAppInvalidContext =
     | 'invalidStaticEnvironment'
-    | 'invalidActionTreeItem'
-    | 'invalidJobTreeItem'
-    | 'invalidStepTreeItem'
     | 'invalidFunction';
 
 interface StaticWebAppVirtualBase extends VirtualResource {
@@ -67,39 +52,6 @@ export interface StaticWebAppEnvironment extends StaticWebAppVirtualBase {
     readonly hostname?: string;
     readonly status?: string;
     readonly displayLabel: string;
-    readonly inWorkspace: boolean;
-    readonly localRepositoryUri?: vscode.Uri;
-}
-
-/** GitHub Actions category for one environment branch. */
-export interface StaticWebAppActions extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.Actions;
-    readonly environmentBuildId: string;
-    readonly branch: string;
-    readonly repository?: GitHubRepository;
-}
-
-/** GitHub Actions workflow run. */
-export interface StaticWebAppAction extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.Action;
-    readonly repository: GitHubRepository;
-    readonly run: GitHubWorkflowRun;
-}
-
-/** GitHub Actions job within a workflow run. */
-export interface StaticWebAppJob extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.Job;
-    readonly repository: GitHubRepository;
-    readonly runId: number;
-    readonly job: GitHubJob;
-}
-
-/** GitHub Actions step within a job. */
-export interface StaticWebAppStep extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.Step;
-    readonly repository: GitHubRepository;
-    readonly jobId: number;
-    readonly step: GitHubWorkflowStep;
 }
 
 /** Azure Functions category for one environment. */
@@ -126,28 +78,6 @@ export interface StaticWebAppNoFunctions extends StaticWebAppVirtualBase {
     readonly kind: NoFunctionsKind;
 }
 
-/** Workflow file group parsed from a matching local repository and branch. */
-export interface StaticWebAppWorkflowGroup extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.WorkflowGroup;
-    readonly workflow: ParsedWorkflow;
-}
-
-/** One editable build setting from a Static Web Apps deployment workflow. */
-export interface StaticWebAppWorkflow extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.Workflow;
-    readonly uri: ParsedWorkflow['uri'];
-    readonly buildConfig: WorkflowBuildConfig;
-    readonly value: string;
-    readonly selectionRange: WorkflowSourceRange;
-}
-
-/** YAML parse-error child preserving source location for the future open command. */
-export interface StaticWebAppWorkflowParseError extends StaticWebAppVirtualBase {
-    readonly virtualType: typeof StaticWebAppVirtualTypes.WorkflowParseError;
-    readonly uri: ParsedWorkflow['uri'];
-    readonly errorRange: WorkflowSourceRange;
-}
-
 /** Placeholder for malformed data returned within an otherwise valid collection. */
 export interface InvalidStaticWebAppNode extends StaticWebAppVirtualBase {
     readonly virtualType: typeof StaticWebAppVirtualTypes.Invalid;
@@ -158,16 +88,9 @@ export interface InvalidStaticWebAppNode extends StaticWebAppVirtualBase {
 /** All Static Web Apps-owned virtual resources stored in the Azure data tree. */
 export type StaticWebAppVirtualNode =
     | StaticWebAppEnvironment
-    | StaticWebAppActions
-    | StaticWebAppAction
-    | StaticWebAppJob
-    | StaticWebAppStep
     | StaticWebAppFunctions
     | StaticWebAppFunction
     | StaticWebAppNoFunctions
-    | StaticWebAppWorkflowGroup
-    | StaticWebAppWorkflow
-    | StaticWebAppWorkflowParseError
     | InvalidStaticWebAppNode;
 
 const knownVirtualTypes = new Set<string>(Object.values(StaticWebAppVirtualTypes));

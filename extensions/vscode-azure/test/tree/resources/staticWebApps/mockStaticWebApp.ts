@@ -16,7 +16,6 @@ export function makeStaticWebApp(overrides?: Partial<StaticWebApp>): StaticWebAp
         name: 'mySwa',
         type: StaticWebAppResourceType,
         logicalType: StaticWebAppResourceType,
-        repositoryUrl: 'https://github.com/octo-org/octo-repo',
         branch: 'main',
         defaultHostname: 'my-swa.azurestaticapps.net',
         staticSite: {},
@@ -46,7 +45,6 @@ export function makeStaticWebAppEnvironment(overrides?: Partial<StaticWebAppEnvi
         hostname: site.defaultHostname,
         status: 'Ready',
         displayLabel: 'Production',
-        inWorkspace: false,
         ...overrides,
     };
 }
