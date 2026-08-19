@@ -47,6 +47,22 @@ create a managed Functions workflow. Direct azd deployments also do not poll
 GitHub Actions; the existing 15-second/20-minute poller is reserved for actual
 linked workflow runs.
 
+## Settings
+
+Static Web Apps keeps no application settings on the site itself, so the site
+node has no settings document. Each *environment* -- production plus one per
+open pull request -- owns its own dictionary, and they come from different ARM
+endpoints: production reads and writes at the site level, while every other
+environment is keyed by its build id.
+
+`StaticWebAppDataProvider` therefore passes the environment's virtual node to
+`getSettingsNodes` rather than the ARM resource, which keys the settings node
+beneath the environment at `environments/<buildId>/settings`, and passes a
+document name so sibling environments open as distinguishable editor tabs.
+`StaticWebAppSettingsAdapter` reads the environment back off the owner it is
+handed and picks the matching endpoint. See [Settings](settings.md) for the
+framework's ownership model.
+
 ## CI/CD Routing
 
 After creation, `CreateStaticWebApp` routes deployment based only on the

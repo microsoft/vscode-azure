@@ -103,7 +103,7 @@ export class StaticWebAppSettingsAdapter implements SettingsAdapter {
 
     private resolveEnvironment(owner: SettingsOwner): StaticWebAppEnvironment {
         if (!isStaticWebAppEnvironment(owner)) {
-            throw new Error('Static Web Apps application settings can only be read from an environment.');
+            throw new Error(this.code.l10n.t('These settings are only available on a Static Web Apps environment.'));
         }
 
         return owner;
