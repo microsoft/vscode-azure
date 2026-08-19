@@ -9,7 +9,7 @@ import {
     ICredentialFactory,
     type TokenCredential,
 } from '@microsoft/vscode-azure-azutils';
-import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockAccountDataProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import {
     CommandRegistry,
     IActionExecutor,
@@ -23,7 +23,7 @@ import { registerCommands } from '../../src/commands/registerCommands';
 import type { ManagedCommand } from '../../src/commands/ManagedCommand';
 import { registerProducts } from '../../src/products/registerProducts';
 import { ProductRegistrar } from '../../src/registration/ProductRegistrar';
-import { bindAzureClientProvider, bindProviders } from '../../src/services';
+import { bindAzureClientProvider, bindProviders, IAzureListingSource } from '../../src/services';
 import { AcrDataProvider } from '../../src/tree/resources/acr/AcrDataProvider';
 import { AcrViewProvider } from '../../src/tree/resources/acr/AcrViewProvider';
 import {
@@ -173,5 +173,21 @@ describe('ProductRegistrar (unit)', () => {
         const provider = container.get<(subscription: AzureSubscription) => ClientResult>(providerId);
 
         expect(provider(makeSubscription()).source).to.equal('first');
+    });
+
+    it('resolves the unfiltered listing source from the account data provider', () => {
+        // The commands that widen the subscription filter inject
+        // IAzureListingSource, which is bound only as a projection of the account
+        // data provider. Nothing else resolves that binding, so without this the
+        // wiring would break silently until a user ran Select Subscriptions.
+        const registrar = new ProductRegistrar();
+        const container = new Container();
+        const accountProvider = createMockAccountDataProvider();
+        container.bind(IAzureAccountDataProvider).toConstantValue(accountProvider);
+
+        registerProducts(registrar);
+        registrar.applyBindings(container);
+
+        expect(container.get(IAzureListingSource)).to.equal(accountProvider.listings);
     });
 });

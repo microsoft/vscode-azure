@@ -27,22 +27,23 @@ import { readSubscriptionFilter } from '../../utils/subscriptionFilter';
  * singleton and aliased into the resource tree's data-provider collection so the
  * "Run (Mock Data)" debug entry point can rebind it with mock data.
  *
- * Exposes two deliberately different views of the same data.
  * {@linkcode DataProvider.getChildren} is *filtered*: a tenant excluded by
  * `vscode-azure.selectedSubscriptions` is never listed, and therefore never has
  * a tenant-scoped token minted for it. That guarantee is the whole point of
  * filtering in the data layer, so there is no opt-out on the tree itself.
  *
- * The inherited {@linkcode IAzureListingSource} methods are *unfiltered*, for
- * the discovery flows that let the user change the filter (Select Subscriptions,
- * Sign In) -- otherwise the filter could only ever be narrowed, never widened.
- * Both views read the same {@linkcode AzureListingCache}, so anything one loads
- * is available to the other without re-fetching; because filtering happens on
- * read, sharing that cache cannot leak an excluded tenant into the tree.
+ * The flows that let the user *change* the filter must see past it -- otherwise
+ * the filter could only ever be narrowed, never widened. They read
+ * {@linkcode listings} instead, which is unfiltered. Both surfaces are served by
+ * the same cache, so whichever runs first pays for the fetch; because the filter
+ * is applied on read, sharing it cannot leak an excluded tenant into the tree.
  */
-export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNode>, IAzureListingSource {
+export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNode> {
     /** Fires with normalized account IDs removed by a reconciled session change. */
     readonly onDidRemoveAccounts: Event<readonly string[]>;
+
+    /** The unfiltered account/tenant/subscription listings backing this provider. */
+    readonly listings: IAzureListingSource;
 }
 
 export const IAzureAccountDataProvider: ServiceIdentifier<IAzureAccountDataProvider> = Symbol.for('IAzureAccountDataProvider');
@@ -70,19 +71,20 @@ function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
 }
 
 /**
- * Apply a predicate to each item of a paged listing, preserving page boundaries
- * and `hasMore`.
+ * Drop tenants excluded by the filter, preserving page boundaries and `hasMore`.
  *
  * A page may become empty while `hasMore` is still `true`; that is intentional
  * and correct, because dropping the page would misreport whether more pages
  * remain.
+ *
+ * @param tenantIds - Lowercased ids of the tenants to admit.
  */
-async function* filterPages(
+async function* filterTenantPages(
     pages: AsyncIterable<Page<ConcreteAzureNode>>,
-    predicate: (node: ConcreteAzureNode) => boolean,
+    tenantIds: ReadonlySet<string>,
 ): AsyncIterable<Page<ConcreteAzureNode>> {
     for await (const page of pages) {
-        yield { items: page.items.filter(predicate), hasMore: page.hasMore };
+        yield { items: page.items.filter(node => isTenant(node) && tenantIds.has(node.tenantId.toLowerCase())), hasMore: page.hasMore };
     }
 }
 
@@ -155,17 +157,17 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     public readonly onDidRemoveAccounts = this.removeAccountsEmitter.event;
 
     /**
-     * Caches the unfiltered listings behind both access paths.
+     * The unfiltered account/tenant/subscription listings, cached.
      *
-     * Both {@linkcode getChildren} (filtered, for the tree) and the
-     * {@linkcode IAzureListingSource} methods (unfiltered, for the flows that
-     * change the filter) read through this, so whichever runs first pays for the
-     * fetch and the other reuses it. The filter is applied on *read*, so the
-     * cache can hold tenants the tree does not currently show without any risk of
-     * displaying them -- and changing the filter needs no invalidation at all,
-     * because it does not make anything cached untrue.
+     * Both {@linkcode getChildren} (filtered, for the tree) and the discovery
+     * flows that change the filter (unfiltered) read through this, so whichever
+     * runs first pays for the fetch and the other reuses it. The filter is
+     * applied on *read*, so the cache can hold tenants the tree does not
+     * currently show without any risk of displaying them -- and changing the
+     * filter needs no invalidation at all, because it does not make anything
+     * cached untrue.
      */
-    private readonly listings = new AzureListingCache({
+    public readonly listings: AzureListingCache = new AzureListingCache({
         listAccounts: () => this.fetchAccounts(),
         listTenantsForAccount: account => this.fetchTenantsForAccount(account),
         listSubscriptionsForTenant: tenant => this.fetchSubscriptionsForTenant(tenant),
@@ -266,45 +268,20 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // Lists already-signed-in accounts without prompting. The user is
             // prompted to sign in lazily when an operation actually needs a
             // credential (the default credential uses `createIfNone`).
-            return this.listAccounts();
+            return this.listings.listAccounts();
         }
 
         if (isAccount(resource)) {
-            const tenants = this.listTenantsForAccount(resource);
+            const tenants = this.listings.listTenantsForAccount(resource);
             const filter = readSubscriptionFilter(this.ctx.code);
-            return filter ? filterPages(tenants, node => !isTenant(node) || filter.tenantIds.has(node.tenantId.toLowerCase())) : tenants;
+            return filter ? filterTenantPages(tenants, filter.tenantIds) : tenants;
         }
 
         if (isTenant(resource)) {
-            return this.listSubscriptionsForTenant(resource);
+            return this.listings.listSubscriptionsForTenant(resource);
         }
 
         throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
-    }
-
-    /**
-     * @inheritdoc
-     *
-     * Served from {@linkcode listings}, so this shares fetched data with the
-     * tree rather than duplicating its requests.
-     */
-    public listAccounts(): Promise<AzureAccount[]> {
-        return this.listings.listAccounts();
-    }
-
-    /**
-     * @inheritdoc
-     *
-     * Unfiltered by design: this backs the flows that let the user widen the
-     * filter, which must be able to see tenants the tree currently hides.
-     */
-    public listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
-        return this.listings.listTenantsForAccount(account);
-    }
-
-    /** @inheritdoc */
-    public listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
-        return this.listings.listSubscriptionsForTenant(tenant);
     }
 
     /**

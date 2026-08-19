@@ -839,7 +839,7 @@ describe('AzureAccountDataProvider (unit)', () => {
             });
 
             const pages = await withSettings(vscodeMock, { [filterKey]: ['t1/sub-1'] }, async () =>
-                await collectPages(provider.listTenantsForAccount(account)));
+                await collectPages(provider.listings.listTenantsForAccount(account)));
 
             // Select Subscriptions has to offer tenants the filter currently
             // excludes, otherwise the filter could only ever be narrowed.
@@ -874,7 +874,7 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             await withSettings(vscodeMock, { [filterKey]: ['t1/sub-1'] }, async () => {
                 // Select Subscriptions enumerates unfiltered...
-                await collectPages(provider.listTenantsForAccount(account));
+                await collectPages(provider.listings.listTenantsForAccount(account));
                 // ...and the tree then lists the same account.
                 await collectPages(await provider.getChildren(account));
             });

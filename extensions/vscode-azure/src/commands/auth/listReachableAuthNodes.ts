@@ -90,11 +90,12 @@ export async function listFirstPageReachableTenants(listing: IAzureListingSource
  * Enumerate every subscription reachable from the currently signed-in accounts,
  * walking account -> tenant -> subscription.
  *
- * Reads the *unfiltered* listing, bypassing the shared tree cache. This backs
- * the Select Subscriptions pick list, which must show subscriptions the current
- * filter excludes -- otherwise the filter could only ever be narrowed, never
- * widened. Nothing enumerated here enters the tree cache, so a filtered-out
- * tenant surfaced for the pick list cannot leak into the resources view.
+ * Reads the *unfiltered* listing. This backs the Select Subscriptions pick
+ * list, which must show subscriptions the current filter excludes -- otherwise
+ * the filter could only ever be narrowed, never widened. The listing is shared
+ * with the tree, so this walk is served by (and populates) the same cache;
+ * because the tree filters on read, surfacing an excluded tenant here cannot
+ * leak it into the resources view.
  *
  * This function only walks and isolates faults; it does *not* establish any
  * credential options itself. Callers that need silent acquisition (e.g. Select

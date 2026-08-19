@@ -6,6 +6,7 @@
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
 import { EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
 import { mock, type Mock } from 'node:test';
+import type { IAzureListingSource } from '../src/auth/AzureListingCache';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../src/auth/AzureSubscription';
 import { AzurePublicCloud, type EnvironmentLike } from '../src/auth/Environment';
 import { isAccount, isTenant, type ConcreteAzureNode } from '../src/models/AzureNode';
@@ -151,16 +152,14 @@ export interface MockAccountDataProviderOptions {
 /**
  * Account provider fixture with a controllable account-removal event.
  *
- * Also exposes the unfiltered account/tenant/subscription listing used by the
+ * Also exposes the unfiltered account/tenant/subscription listings used by the
  * discovery flows (Select Subscriptions, Sign In), which read past the
  * subscription filter that `getChildren` applies.
  */
 export interface MockAccountDataProvider extends DataProvider<ConcreteAzureNode> {
     readonly onDidRemoveAccounts: Event<readonly string[]>;
     readonly removeAccountsEmitter: EventEmitter<readonly string[]>;
-    listAccounts(): Promise<AzureAccount[]>;
-    listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>>;
-    listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>>;
+    readonly listings: IAzureListingSource;
 }
 
 /**
@@ -200,11 +199,13 @@ export function createMockAccountDataProvider(options?: MockAccountDataProviderO
                 throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
             }
         }),
-        listAccounts: () => Promise.resolve(accounts),
-        // eslint-disable-next-line @typescript-eslint/require-await
-        listTenantsForAccount: () => (async function* () { yield { items: tenants, hasMore: false }; })(),
-        // eslint-disable-next-line @typescript-eslint/require-await
-        listSubscriptionsForTenant: () => (async function* () { yield { items: subscriptions, hasMore: false }; })(),
+        listings: {
+            listAccounts: () => Promise.resolve(accounts),
+            // eslint-disable-next-line @typescript-eslint/require-await
+            listTenantsForAccount: () => (async function* () { yield { items: tenants, hasMore: false }; })(),
+            // eslint-disable-next-line @typescript-eslint/require-await
+            listSubscriptionsForTenant: () => (async function* () { yield { items: subscriptions, hasMore: false }; })(),
+        },
     };
 }
 

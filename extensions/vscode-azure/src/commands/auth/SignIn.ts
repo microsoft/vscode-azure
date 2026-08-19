@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { byAccount, ICredentialFactory, isAccount, VsCodeExtensionCredential, type IAzureListingSource } from '@microsoft/vscode-azure-azutils';
+import { byAccount, ICredentialFactory, isAccount, VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
 import { Everything, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { GuidPattern } from '../../constants';
-import { IAzureViewDataTree } from '../../services';
-import { IAzureAccountDataProvider } from '../../tree/resources/AzureAccountDataProvider';
+import { IAzureListingSource, IAzureViewDataTree } from '../../services';
 import { addSignedInTenant } from '../../utils/signedInTenants';
 import type { ManagedCommand } from '../ManagedCommand';
 import { listFirstPageReachableTenants, type ReachableTenant } from './listReachableAuthNodes';
@@ -43,7 +42,7 @@ export class SignIn implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
-        @inject(IAzureAccountDataProvider) private readonly listing: IAzureListingSource,
+        @inject(IAzureListingSource) private readonly listing: IAzureListingSource,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
     ) { }
 

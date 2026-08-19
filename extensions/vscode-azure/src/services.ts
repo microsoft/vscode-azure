@@ -8,6 +8,7 @@ import {
     type ConcreteAzureNode,
     type ConcreteAzureNodeTree,
     ICredentialFactory,
+    type IAzureListingSource as ListingSource,
     type TokenCredential,
 } from '@microsoft/vscode-azure-azutils';
 import {
@@ -36,6 +37,18 @@ export type IAzureViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');
 export type IAzureResourceTreeView = vscode.TreeView<string>;
+
+/**
+ * Identifier for the *unfiltered* account/tenant/subscription listings.
+ *
+ * Deliberately separate from the resource tree, which applies the
+ * `vscode-azure.selectedSubscriptions` filter and so cannot show a tenant the
+ * user has not selected. The flows that let the user *change* that filter
+ * (Select Subscriptions, Sign In) must see past it, and depend on this instead.
+ * Both are served by one cache, so neither pays twice for the same listing.
+ */
+export const IAzureListingSource: ServiceIdentifier<IAzureListingSource> = Symbol.for('IAzureListingSource');
+export type IAzureListingSource = ListingSource;
 
 /**
  * Identifier for a resolver that maps a bare subscription id to a fully-populated

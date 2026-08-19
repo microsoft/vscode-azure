@@ -23,7 +23,7 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { IAzureViewDataTree, ISubscriptionResolver } from '../services';
+import { IAzureListingSource, IAzureViewDataTree, ISubscriptionResolver } from '../services';
 import {
     AzureAccountDataProvider,
     IAzureAccountDataProvider,
@@ -42,6 +42,7 @@ import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 export function registerGenericAzure(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
         container.bind(IWorkspaceDetector).toConstantValue(azdDetector);
+        container.bind(IAzureListingSource).toDynamicValue(context => context.get(IAzureAccountDataProvider).listings).inSingletonScope();
         container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
         container.bind(ICredentialFactory).toDynamicValue(context => {
             const scope = context.get(ICredentialOptionsScope);
