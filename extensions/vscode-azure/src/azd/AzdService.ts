@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, showMessage, type CommandLineArgs } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, isProcessError, showMessage, type CommandLineArgs } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
@@ -413,10 +413,8 @@ export class AzdService implements IAzdService {
 
     /**
      * Wraps errors from `azd` commands with actionable messages.
-     * - azd not installed (a raw `ENOENT`, or -- on Windows, where nano-spawn's
-     *   forced shell turns a missing command into a generic non-zero exit rather
-     *   than `ENOENT` -- a `checkVersion` probe that cannot produce a version)
-     *   -> "not found"
+     * - azd not installed (`ENOENT`, or a {@linkcode checkVersion} probe that
+     *   cannot produce a version) -> "not found"
      * - Installed but below {@linkcode MinAzdVersion} -> "version required"
      *
      * Shows a toast with an "Install" button and suppresses the
@@ -425,9 +423,9 @@ export class AzdService implements IAzdService {
     private async wrapAzdError(e: unknown): Promise<unknown> {
         // A raw ENOENT is already conclusive, so skip the extra version probe.
         // Otherwise let `checkVersion` decide: it returns `undefined` when it
-        // cannot run azd at all (effectively not installed), `false` when azd is
-        // present but too old, and `true` when azd is usable.
-        const meetsMin = (e as NodeJS.ErrnoException).code === 'ENOENT'
+        // cannot produce a version at all (effectively not installed), `false`
+        // when azd is present but too old, and `true` when azd is usable.
+        const meetsMin = isProcessError(e) && e.code === 'ENOENT'
             ? undefined
             : await this.checkVersion();
 

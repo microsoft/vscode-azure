@@ -3,9 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Result as SpawnResult, type Subprocess, SubprocessError } from 'nano-spawn';
+import { ProcessError } from '@azure/core-process';
+import { ChildProcess } from 'node:child_process';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { Readable } from 'node:stream';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { URI as Uri } from 'vscode-uri';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
 import { ProcessExecutor, type SpawnFn } from '../../src/base/IProcessExecutor';
@@ -13,80 +19,51 @@ import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import { createMockVsCode } from '../vscode/MockVsCode';
 
-/** Builds a nano-spawn {@linkcode SpawnResult} with the fields the executor reads. */
-function makeResult(command: string, stdout: string, stderr: string): SpawnResult {
-    return {
-        stdout,
-        stderr,
-        output: [stdout, stderr].filter(Boolean).join('\n'),
-        command,
-        durationMs: 0,
-    };
-}
-
-/** Wraps a list of lines as an async iterable, mimicking nano-spawn's line streams. */
-function asyncLines(lines: readonly string[]): AsyncIterable<string> {
-    return {
-        // eslint-disable-next-line @typescript-eslint/require-await
-        async *[Symbol.asyncIterator](): AsyncGenerator<string> {
-            for (const line of lines) {
-                yield line;
-            }
-        },
-    };
+/** Wraps a list of lines as a readable stream, mimicking a child's stdio. */
+function lineStream(lines: readonly string[]): Readable {
+    return Readable.from(lines.map((line) => `${line}\n`));
 }
 
 /**
- * Builds a real nano-spawn {@linkcode SubprocessError}, matching how nano-spawn
- * assembles it at runtime: the class body only sets `name`, and the remaining
- * fields are assigned onto the instance.
- */
-function makeSubprocessError(opts: {
-    message?: string;
-    exitCode?: number;
-    signalName?: string;
-    isCanceled?: boolean;
-    stderr?: string;
-    cause?: unknown;
-}): SubprocessError {
-    const e = new SubprocessError(opts.message ?? 'Command failed');
-    Object.assign(e, {
-        exitCode: opts.exitCode,
-        signalName: opts.signalName,
-        isCanceled: opts.isCanceled ?? false,
-        stderr: opts.stderr ?? '',
-    });
-    if (opts.cause !== undefined) {
-        (e as { cause?: unknown }).cause = opts.cause;
-    }
-    return e;
-}
-
-/**
- * Creates a mock {@linkcode SpawnFn} returning a nano-spawn `Subprocess` fake: a
- * thenable that resolves to a {@linkcode SpawnResult} (or rejects with the given
- * error), plus `.stdout`/`.stderr` line iterables for JSON-lines mode.
+ * Creates a mock {@linkcode SpawnFn} returning a fake {@linkcode ChildProcess}:
+ * `stdout`/`stderr` readables plus a deferred `'close'` (or `'error'`) event.
+ *
+ * @param options - `exitCode` defaults to `0`. When `spawnError` is set the
+ *   factory throws it synchronously, mimicking a command that cannot be
+ *   resolved. When `emitError` is set the child emits it as an `'error'` event.
  */
 function createMockSpawn(options?: {
     stdout?: string;
     stderr?: string;
     stderrLines?: readonly string[];
-    error?: Error;
+    exitCode?: number | null;
+    signalName?: NodeJS.Signals | null;
+    spawnError?: Error;
+    emitError?: Error;
 }): Mock<SpawnFn> {
-    const { stdout = '', stderr = '', stderrLines, error } = options ?? {};
-    return mock.fn<SpawnFn>((command: string): Subprocess => {
-        const promise = error
-            ? Promise.reject(error)
-            : Promise.resolve(makeResult(command, stdout, stderr));
-        // Prevent an unhandled-rejection warning; the executor still awaits it.
-        void promise.catch(() => { /* handled by the executor */ });
+    const { stdout = '', stderr = '', stderrLines, exitCode = 0, signalName = null, spawnError, emitError } = options ?? {};
 
-        const subprocess = promise as unknown as Subprocess;
-        void Object.defineProperties(subprocess, {
-            stdout: { value: asyncLines(stdout ? stdout.split('\n') : []) },
-            stderr: { value: asyncLines(stderrLines ?? (stderr ? stderr.split('\n') : [])) },
+    return mock.fn<SpawnFn>((): ChildProcess => {
+        if (spawnError) {
+            throw spawnError;
+        }
+
+        const child = new ChildProcess();
+        Object.defineProperties(child, {
+            stdout: { value: Readable.from(stdout ? [stdout] : []) },
+            stderr: { value: stderrLines ? lineStream(stderrLines) : Readable.from(stderr ? [stderr] : []) },
         });
-        return subprocess;
+
+        // Let the caller attach listeners before the process "finishes".
+        setImmediate(() => {
+            if (emitError) {
+                child.emit('error', emitError);
+            } else {
+                child.emit('close', exitCode, signalName);
+            }
+        });
+
+        return child;
     });
 }
 
@@ -121,62 +98,65 @@ describe('ProcessExecutor (unit)', () => {
             expect(result.stdout).to.equal('{"key":"value"}');
         });
 
-        it('should throw SubprocessError on non-zero exit code', async () => {
+        it('should throw ProcessError on non-zero exit code', async () => {
             const { vscode: code } = createMockVsCode();
-            const spawnFn = createMockSpawn({ error: makeSubprocessError({ exitCode: 1, stderr: 'failure reason' }) });
+            const spawnFn = createMockSpawn({ exitCode: 1, stderr: 'failure reason' });
             const executor = new ProcessExecutor(code, spawnFn);
 
             await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
-            })).to.be.rejectedWith(SubprocessError, 'failure reason')
-                .and.eventually.have.property('exitCode', 1);
+            })).to.be.rejectedWith(ProcessError, 'failure reason')
+                .and.eventually.have.property('code', 1);
         });
 
-        it('should throw SubprocessError when terminated by a signal', async () => {
+        it('should throw ProcessError when terminated by a signal', async () => {
             const { vscode: code } = createMockVsCode();
-            const spawnFn = createMockSpawn({ error: makeSubprocessError({ signalName: 'SIGTERM', stderr: 'killed' }) });
+            const spawnFn = createMockSpawn({ exitCode: null, signalName: 'SIGTERM', stderr: 'killed' });
             const executor = new ProcessExecutor(code, spawnFn);
 
             await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
-            })).to.be.rejectedWith(SubprocessError, 'killed')
-                .and.eventually.have.property('signalName', 'SIGTERM');
+            })).to.be.rejectedWith(ProcessError, 'killed')
+                .and.eventually.have.property('signal', 'SIGTERM');
         });
 
-        it('should throw CancellationError when the subprocess reports isCanceled', async () => {
+        it('should capture stdout and stderr on the thrown error', async () => {
             const { vscode: code } = createMockVsCode();
-            const spawnFn = createMockSpawn({ error: makeSubprocessError({ isCanceled: true }) });
+            const spawnFn = createMockSpawn({ exitCode: 2, stdout: 'partial', stderr: 'why it failed' });
             const executor = new ProcessExecutor(code, spawnFn);
 
-            await expect(executor.spawn({
+            const error: ProcessError = await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
-            })).to.be.rejectedWith(CancellationError);
+            })).to.be.rejected;
+
+            expect(error.stdout).to.equal('partial');
+            expect(error.stderr).to.equal('why it failed');
         });
 
-        it('should preserve the ENOENT code from a spawn-time failure', async () => {
-            // A start failure (no exitCode, no signal) surfaces the underlying
-            // cause so callers (e.g. AzdService) can still inspect `.code`.
+        it('should preserve the ENOENT code when the executable cannot be resolved', async () => {
+            // The executable is resolved before the process starts, so a missing
+            // command always surfaces as ENOENT -- including on Windows, where
+            // callers (e.g. AzdService) rely on `.code` to detect "not installed".
             const { vscode: code } = createMockVsCode();
-            const cause = Object.assign(new Error('spawn test-cmd ENOENT'), { code: 'ENOENT' });
-            const spawnFn = createMockSpawn({ error: makeSubprocessError({ message: 'Command failed', cause }) });
+            const spawnError = new ProcessError('The executable could not be found.', { code: 'ENOENT' });
+            const spawnFn = createMockSpawn({ spawnError });
             const executor = new ProcessExecutor(code, spawnFn);
 
             const error: Error & { code?: string } = await expect(executor.spawn({
                 execution: 'background',
                 command: ['test-cmd'],
             })).to.be.rejected;
-            expect(error).to.not.be.instanceOf(SubprocessError);
             expect(error.code).to.equal('ENOENT');
         });
 
         it('should reject promptly when the process fails to spawn', async () => {
-            // Mirrors a spawn-time failure (e.g. EINVAL/ENOENT): the process
-            // never starts. The rejection must settle promptly, not hang.
+            // Mirrors a spawn-time failure: the process never starts. The
+            // rejection must settle promptly, not hang.
             const { vscode: code } = createMockVsCode();
-            const spawnFn = createMockSpawn({ error: makeSubprocessError({ message: 'spawn test-cmd EINVAL' }) });
+            const spawnFn = createMockSpawn({ emitError: new Error('spawn test-cmd EACCES') });
             const executor = new ProcessExecutor(code, spawnFn);
 
             const spawnResult = executor.spawn({
@@ -191,7 +171,7 @@ describe('ProcessExecutor (unit)', () => {
             ]);
 
             expect(outcome, 'spawn() hung instead of rejecting').to.not.equal(timedOut);
-            expect((outcome as Error).message).to.include('EINVAL');
+            expect((outcome as Error).message).to.include('EACCES');
         });
 
         it('should pass the command and args from a CommandLineBuilder', async () => {
@@ -210,7 +190,25 @@ describe('ProcessExecutor (unit)', () => {
             expect(args).to.deep.equal(['sub', '--name', 'value', '--force']);
         });
 
-        it('should forward the shell option to nano-spawn', async () => {
+        it('should layer the caller env over the inherited environment', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ stdout: 'ok' });
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            await executor.spawn({
+                execution: 'background',
+                command: ['test-cmd'],
+                env: { CUSTOM_VALUE: 'set-by-caller' }, // eslint-disable-line @typescript-eslint/naming-convention
+            });
+
+            // The child environment replaces `process.env` rather than layering
+            // onto it, so the executor must merge before spawning.
+            const spawnOptions = spawnFn.mock.calls[0].arguments[2]!;
+            expect(spawnOptions.env).to.have.property('CUSTOM_VALUE', 'set-by-caller');
+            expect(spawnOptions.env).to.have.property('PATH', process.env.PATH);
+        });
+
+        it('should allow Windows batch files so .cmd shims can be launched', async () => {
             const { vscode: code } = createMockVsCode();
             const spawnFn = createMockSpawn({ stdout: 'ok' });
             const executor = new ProcessExecutor(code, spawnFn);
@@ -218,11 +216,44 @@ describe('ProcessExecutor (unit)', () => {
             await executor.spawn({
                 execution: 'background',
                 command: ['az', 'account', 'show'],
-                shell: true,
             });
 
-            const options = spawnFn.mock.calls[0].arguments[2]!;
-            expect(options.shell).to.equal(true);
+            const spawnOptions = spawnFn.mock.calls[0].arguments[2]!;
+            expect(spawnOptions.allowWindowsBatchFiles).to.equal(true);
+        });
+
+        it('should throw CancellationError when the signal is already aborted', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ stdout: 'ok' });
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            await expect(executor.spawn({
+                execution: 'background',
+                command: ['test-cmd'],
+            }, AbortSignal.abort())).to.be.rejectedWith(CancellationError);
+        });
+
+        it('should throw CancellationError when the process reports an abort', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ emitError: new ProcessError('Aborted', { code: 'ABORT_ERR' }) });
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            await expect(executor.spawn({
+                execution: 'background',
+                command: ['test-cmd'],
+            })).to.be.rejectedWith(CancellationError);
+        });
+
+        it('should throw when the command vector is empty', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn();
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            await expect(executor.spawn({
+                execution: 'background',
+                command: [],
+            })).to.be.rejectedWith(Error, 'must include at least the executable');
+            expect(spawnFn.mock.callCount()).to.equal(0);
         });
 
         it('should stream JSON lines from stderr', async () => {
@@ -507,14 +538,14 @@ describe('ProcessExecutor (integration)', () => {
             expect(result.stdout).to.equal('{"key":"value"}');
         });
 
-        it('should throw SubprocessError on non-zero exit code', async () => {
+        it('should throw ProcessError on non-zero exit code', async () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
 
             await expect(executor.spawn({
                 execution: 'background',
                 ...evalNode('process.stderr.write("failure reason"); process.exit(1);'),
-            })).to.be.rejectedWith(SubprocessError, 'failure reason');
+            })).to.be.rejectedWith(ProcessError, 'failure reason');
         });
 
         it('should throw CancellationError when cancelled', async () => {
@@ -742,6 +773,35 @@ describe('ProcessExecutor (integration)', () => {
             const result = await executor.isOnPath('definitely-not-a-real-command-xyz');
 
             expect(result).to.be.false;
+        });
+    });
+
+    describe('executable resolution', () => {
+        it('should not execute a same-named binary from the working directory', async function () {
+            // On Windows a shell searches the working directory before PATH, so
+            // a planted binary could otherwise hijack a bare command name.
+            if (process.platform !== 'win32') {
+                this.skip();
+            }
+
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'process-executor-'));
+            try {
+                await fs.writeFile(path.join(directory, 'node.cmd'), '@echo off\r\necho hijacked\r\n');
+
+                const result = await executor.spawn({
+                    execution: 'background',
+                    command: ['node', '--version'],
+                    cwd: Uri.file(directory),
+                    env,
+                });
+
+                expect(result.stdout.trim()).to.equal(process.version);
+            } finally {
+                await fs.rm(directory, { recursive: true, force: true });
+            }
         });
     });
 });

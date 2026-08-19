@@ -9,7 +9,7 @@ import { createShellTask } from '../../src/vscode/createShellTask';
 import { createMockVsCode } from './MockVsCode';
 
 describe('createShellTask (unit)', () => {
-    it('builds a configured task from a structured command line', async () => {
+    it('builds a configured task from a structured command line', () => {
         const m = createMockVsCode();
         const workspaceFolder: vscode.WorkspaceFolder = {
             uri: m.vscode.Uri.file('workspace'),
@@ -19,7 +19,7 @@ describe('createShellTask (unit)', () => {
         const definition = { type: 'example', id: 'task' };
         const cwd = m.vscode.Uri.file('cwd');
 
-        const task = await createShellTask(m.vscode, {
+        const task = createShellTask(m.vscode, {
             command: command(process.execPath)
                 .arg('plain')
                 .quotedArg('quoted value'),
@@ -45,7 +45,9 @@ describe('createShellTask (unit)', () => {
         expect(task.presentationOptions).to.deep.equal({ focus: true });
 
         const execution = task.execution as vscode.ShellExecution;
-        expect(execution.command).to.equal(process.execPath);
+        // The executable is resolved to an absolute path and strongly quoted so
+        // the shell cannot mis-split a path containing spaces.
+        expect(execution.command).to.deep.equal({ value: process.execPath, quoting: ShellQuoting.Strong });
         expect(execution.args).to.deep.equal([
             'plain',
             { value: 'quoted value', quoting: ShellQuoting.Strong },
@@ -56,10 +58,10 @@ describe('createShellTask (unit)', () => {
         });
     });
 
-    it('uses process-task defaults', async () => {
+    it('uses process-task defaults', () => {
         const m = createMockVsCode();
 
-        const task = await createShellTask(m.vscode, {
+        const task = createShellTask(m.vscode, {
             command: [process.execPath],
             name: 'Example task',
         });
@@ -70,12 +72,26 @@ describe('createShellTask (unit)', () => {
         expect(task.isBackground).to.equal(false);
     });
 
-    it('rejects an empty command line', async () => {
+    it('passes an unresolvable command through unchanged', () => {
         const m = createMockVsCode();
 
-        await expect(createShellTask(m.vscode, {
+        // The terminal reports the failure itself, which is more useful than
+        // failing before the task is even created.
+        const task = createShellTask(m.vscode, {
+            command: ['definitely-not-a-real-command-xyz'],
+            name: 'Example task',
+        });
+
+        const execution = task.execution as vscode.ShellExecution;
+        expect(execution.command).to.equal('definitely-not-a-real-command-xyz');
+    });
+
+    it('rejects an empty command line', () => {
+        const m = createMockVsCode();
+
+        expect(() => createShellTask(m.vscode, {
             command: [],
             name: 'Example task',
-        })).to.be.rejectedWith(/A command line must include at least the executable/);
+        })).to.throw(/A command line must include at least the executable/);
     });
 });

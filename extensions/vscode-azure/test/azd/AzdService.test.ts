@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
+import { ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
 import { MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
@@ -246,7 +246,7 @@ describe('AzdService (unit)', () => {
 
     describe('ENOENT handling', () => {
         it('should wrap ENOENT errors with an install hint and suppress display', async () => {
-            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
+            const enoent = new ProcessError('The executable could not be found.', { code: 'ENOENT' });
             const spawnFn = mock.fn(() => Promise.reject(enoent));
             const { service, executor } = createService(spawnFn);
 
@@ -260,30 +260,6 @@ describe('AzdService (unit)', () => {
                 }
             })).to.be.rejectedWith(Error, 'Azure Developer CLI (azd) was not found')
                 .and.eventually.have.property('cause', enoent);
-            expect(suppress).to.equal('display');
-        });
-
-        it('should treat a non-ENOENT failure as not-installed when azd is unrunnable (Windows forced-shell)', async () => {
-            // On Windows, nano-spawn falls back to `shell: true` whenever the target
-            // isn't a resolvable *.exe/*.com (see its windows.js `shouldForceShell`).
-            // A missing command like `azd` never resolves, so it's run through cmd.exe,
-            // which reports "not recognized" as a generic non-zero exit instead of an
-            // ENOENT spawn error. Both the failing command and the follow-up
-            // `checkVersion` probe fail, so azd is effectively absent.
-            const exitError = new Error("'azd' is not recognized as an internal or external command");
-            const spawnFn = mock.fn(() => Promise.reject(exitError));
-            const { service, executor } = createService(spawnFn);
-
-            let suppress: string | boolean | undefined;
-            await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
-                ctx.errorHandling.rethrow = true;
-                try {
-                    await service.init(MockUri.file('/project'));
-                } finally {
-                    suppress = ctx.errorHandling.suppress;
-                }
-            })).to.be.rejectedWith(Error, 'Azure Developer CLI (azd) was not found')
-                .and.eventually.have.property('cause', exitError);
             expect(suppress).to.equal('display');
         });
 

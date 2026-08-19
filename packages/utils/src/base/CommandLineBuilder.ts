@@ -69,7 +69,7 @@ export interface NamedArgOptions {
  * iterate it directly. Empty/`null`/`undefined` argument values are skipped.
  *
  * The executable is only separated from the arguments at execution time (when
- * decomposing for `nano-spawn` or a `vscode.ShellExecution`).
+ * decomposing for a direct spawn or a `vscode.ShellExecution`).
  *
  * Argument-adding methods ({@linkcode CommandLineBuilder.arg arg},
  * {@linkcode CommandLineBuilder.flagArg flagArg}, and {@linkcode CommandLineBuilder.namedArg namedArg}
@@ -201,8 +201,8 @@ function isNonEmptyArg(value: CommandLineArg | null | undefined): value is Comma
  *
  * @remarks
  * This is the canonical way to turn an argument-vector element into a raw
- * string for argv-first execution (e.g. `nano-spawn`) or for inspecting a
- * command line in tests. Prefer {@linkcode argsToStrings} for a whole vector.
+ * string for argv-first execution or for inspecting a command line in tests.
+ * Prefer {@linkcode argsToStrings} for a whole vector.
  */
 export function argToString(arg: CommandLineArg): string {
     return typeof arg === 'string' ? arg : arg.value;

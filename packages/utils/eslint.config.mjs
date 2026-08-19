@@ -13,7 +13,9 @@
  *   are passed down from the extension so shared code stays runtime-free
  *   of VS Code).
  * - `@azure/*` packages must be lazily imported inside functions to reduce
- *   extension activation time (except `@azure/ms-rest-azure-env`).
+ *   extension activation time. `@azure/core-process` is exempt: it is tiny,
+ *   dependency-free, and is a thin `node:child_process` wrapper needed
+ *   eagerly by {@linkcode ProcessExecutor}.
  */
 
 import { azExtEslintStrictTypeChecked } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
@@ -42,7 +44,7 @@ export default defineConfig([
                     }
                 ],
                 patterns: [{
-                    group: ['@azure/*', '!@azure/ms-rest-azure-env'],
+                    group: ['@azure/*', '!@azure/core-process'],
                     message: 'Please lazily import this package within the function that uses it to reduce extension activation time.',
                     allowTypeImports: true,
                 }],

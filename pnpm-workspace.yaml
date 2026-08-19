@@ -10,6 +10,11 @@ minimumReleaseAgeExclude:
   # package we own, so we take it before it ages out. Remove this exclusion on or after
   # 2026-08-20, once the one-week minimum release age has elapsed.
   - "@microsoft/vscode-azext-eng"
+  # TEMPORARY, DRAFT ONLY -- @azure/core-process 1.0.0 was published 2026-08-13 and has not
+  # yet cleared the one-week minimum release age. It is a first-party Azure SDK package with
+  # no runtime dependencies. Remove this exclusion on or after 2026-08-20; this PR must not
+  # merge with it still present.
+  - "@azure/core-process"
 
 allowBuilds:
   esbuild: true
