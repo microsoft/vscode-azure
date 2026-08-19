@@ -94,4 +94,13 @@ describe('createShellTask (unit)', () => {
             name: 'Example task',
         })).to.throw(/A command line must include at least the executable/);
     });
+
+    it('rejects a quoted empty executable', () => {
+        const m = createMockVsCode();
+
+        expect(() => createShellTask(m.vscode, {
+            command: [{ value: '', quoting: ShellQuoting.Strong }],
+            name: 'Example task',
+        })).to.throw(/A command line must include at least the executable/);
+    });
 });

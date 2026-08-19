@@ -43,11 +43,13 @@ export interface CreateShellTaskOptions {
  */
 export function createShellTask(code: IVsCode, options: CreateShellTaskOptions): vscode.Task {
     const [executable, ...args] = options.command;
-    if (!executable) {
+    // Flattened before the check so a quoted empty string is rejected here
+    // rather than by the resolver.
+    const name = options.command.length > 0 ? argToString(executable) : '';
+    if (!name) {
         throw new Error('A command line must include at least the executable as its first element.');
     }
 
-    const name = argToString(executable);
     const resolved = resolveExecutable(name, {
         cwd: options.cwd?.fsPath,
         // Batch files are allowed so Windows `.cmd` shims (the Azure CLI's
