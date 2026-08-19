@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { Disposable, EventEmitter, InflightMap, IVsCode, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, Disposable, EventEmitter, InflightMap, IVsCode, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged } from 'inversify';
 import { parseTree, printParseErrorCode } from 'jsonc-parser';
 import { IAzureViewDataTree, type IAzureViewDataTree as AzureViewDataTree } from '../services';
@@ -66,7 +66,7 @@ export class JsoncSettingsFormat {
         }
 
         const entries: SettingsEntry[] = [];
-        const seen = new Map<string, string>();
+        const seen = new CaselessMap<string>();
 
         for (const property of root.children ?? []) {
             const children = property.children ?? [];
@@ -76,7 +76,7 @@ export class JsoncSettingsFormat {
 
             const [keyNode, valueNode] = children;
             const key = String(keyNode.value);
-            const existing = seen.get(key.toLowerCase());
+            const existing = seen.get(key);
             if (existing !== undefined) {
                 throw new SettingsParseError(
                     existing === key
@@ -86,7 +86,7 @@ export class JsoncSettingsFormat {
                     keyNode.length,
                 );
             }
-            seen.set(key.toLowerCase(), key);
+            seen.set(key, key);
 
             if (valueNode.type !== 'string') {
                 throw new SettingsParseError(

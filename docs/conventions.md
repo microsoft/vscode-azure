@@ -128,6 +128,29 @@ if (resource.type.toLowerCase() === AcrResourceType.toLowerCase()) { ... }
 if (resource.type === 'Microsoft.ContainerRegistry/registries') { ... }
 ```
 
+## Case-Insensitive Collections
+
+Azure identifiers -- ARM resource IDs, resource types, tenant IDs, subscription IDs, and account IDs -- are case-insensitive. When one of them is a `Set` value or a `Map` key, use `CaselessSet` / `CaselessMap<V>` from `@microsoft/vscode-azure-utils` rather than folding by hand:
+
+```typescript
+// Good -- the invariant lives in the collection
+const knownTenantIds = new CaselessSet(tenants.map(t => t.tenantId));
+knownTenantIds.has(value);
+
+// Bad -- folding has to be remembered on both sides, and a missed
+// fold silently returns false instead of failing
+const knownTenantIds = new Set(tenants.map(t => t.tenantId.toLowerCase()));
+knownTenantIds.has(value.toLowerCase());
+```
+
+Both classes fold with `toLowerCase()` (locale-independent, so a Turkish locale cannot change matching) and iterate in the **original** casing, so display sites get the string as it was written. Neither inherits from `Set`/`Map`: an inherited member would read internal slots and bypass folding.
+
+Declare read-only holders as `ICaselessSetReader` / `ICaselessMapReader<V>` so they cannot mutate the collection.
+
+Plain string comparisons still use `toLowerCase()` directly -- these classes are only for collections.
+
+Both carry only the members call sites currently use, so `CaselessSet` has no `keys()`/`values()`/`entries()`/`forEach` and `CaselessMap` has no `size`/`keys()`/`forEach`. Add a member when something needs it -- adding it to the matching reader interface too if it is read-only -- rather than mirroring the whole built-in surface up front.
+
 ## Context Values
 
 Commands that appear in tree item context menus should:

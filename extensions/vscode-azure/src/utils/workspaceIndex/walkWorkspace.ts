@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isFileNotFoundError, throwIfCancelled, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, isFileNotFoundError, throwIfCancelled, type ICaselessSetReader, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
  * Directories never descended into: generated output, dependency caches, and
  * VCS metadata. Skipping these is most of what makes a walk affordable.
  */
-export const defaultExcludedDirectories: ReadonlySet<string> = new Set([
+export const defaultExcludedDirectories: ICaselessSetReader = new CaselessSet([
     '.git', '.hg', '.svn',
     'node_modules', 'bower_components', 'vendor',
     'bin', 'obj', 'target', 'build', 'dist', 'out',
@@ -103,7 +103,7 @@ export async function* walkDirectory(
         for (const [name, type] of entries) {
             if ((type & code.FileType.Directory) !== 0) {
                 const isSymbolicLink = (type & code.FileType.SymbolicLink) !== 0;
-                if (!isSymbolicLink && !defaultExcludedDirectories.has(name.toLowerCase())) {
+                if (!isSymbolicLink && !defaultExcludedDirectories.has(name)) {
                     subdirectories.push(code.Uri.joinPath(uri, name));
                 }
             } else if ((type & code.FileType.File) !== 0) {

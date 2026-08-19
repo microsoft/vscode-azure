@@ -8,6 +8,7 @@ import { get as sdkGetProvider } from '@azure/arm-resources/api/providers';
 import { $delete as sdkDeleteResourceGroup, list as sdkListResourceGroups, type ResourceGroupsDeleteOptionalParams, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
 import { deleteById as sdkDeleteById, listByResourceGroup as sdkListByResourceGroup, type ResourcesDeleteByIdOptionalParams, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
 import type { TokenCredential } from '@azure/core-auth';
+import { CaselessMap } from '@microsoft/vscode-azure-utils';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
@@ -83,7 +84,7 @@ export interface IResourceClient {
  * Use the static {@linkcode create} factory to construct.
  */
 export class ResourceClient implements IResourceClient {
-    private readonly apiVersionCache = new Map<string, Promise<string>>();
+    private readonly apiVersionCache = new CaselessMap<Promise<string>>();
 
     private constructor(
         private readonly inner: ResourceManagementContext,
@@ -159,12 +160,11 @@ export class ResourceClient implements IResourceClient {
     }
 
     private resolveApiVersion(resourceType: string): Promise<string> {
-        const normalizedType = resourceType.toLowerCase();
-        let resolution = this.apiVersionCache.get(normalizedType);
+        let resolution = this.apiVersionCache.get(resourceType);
         if (!resolution) {
             resolution = this.fetchApiVersion(resourceType);
-            this.apiVersionCache.set(normalizedType, resolution);
-            void resolution.catch(() => this.apiVersionCache.delete(normalizedType));
+            this.apiVersionCache.set(resourceType, resolution);
+            void resolution.catch(() => this.apiVersionCache.delete(resourceType));
         }
         return resolution;
     }
