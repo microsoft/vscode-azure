@@ -77,19 +77,9 @@
                 "title": "%commands.vscode-azure/activity/clearAll%"
             },
             {
-                "command": "vscode-azure/functionApp/appSettings/add",
-                "icon": "$(add)",
-                "title": "%commands.vscode-azure/functionApp/appSettings/add%"
-            },
-            {
-                "command": "vscode-azure/functionApp/appSettings/edit",
+                "command": "vscode-azure/settings/edit",
                 "icon": "$(edit)",
-                "title": "%commands.vscode-azure/functionApp/appSettings/edit%"
-            },
-            {
-                "command": "vscode-azure/functionApp/appSettings/delete",
-                "icon": "$(trash)",
-                "title": "%commands.vscode-azure/functionApp/appSettings/delete%"
+                "title": "%commands.vscode-azure/settings/edit%"
             },
             {
                 "command": "vscode-azure/functions/createNew",
@@ -173,15 +163,7 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/functionApp/appSettings/add",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functionApp/appSettings/edit",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functionApp/appSettings/delete",
+                    "command": "vscode-azure/settings/edit",
                     "when": "false"
                 }
             ],
@@ -236,16 +218,9 @@
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bbrowseWebsite\\b/i"
                 },
                 {
-                    "command": "vscode-azure/functionApp/appSettings/add",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\baddFunctionAppSetting\\b/i"
-                },
-                {
-                    "command": "vscode-azure/functionApp/appSettings/edit",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\beditFunctionAppSetting\\b/i"
-                },
-                {
-                    "command": "vscode-azure/functionApp/appSettings/delete",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteFunctionAppSetting\\b/i"
+                    "command": "vscode-azure/settings/edit",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\beditSettings\\b/i",
+                    "group": "inline@1"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",
@@ -417,6 +392,7 @@
         "@microsoft/vscode-azure-utils": "workspace:*",
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:",
+        "jsonc-parser": "^3.3.1",
         "semver": "^7.8.4"
     }
 }

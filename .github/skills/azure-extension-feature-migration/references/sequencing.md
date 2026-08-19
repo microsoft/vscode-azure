@@ -70,7 +70,7 @@ Monorepo phase: <n>
 - [ ] Register Create<Product> per AzdJob (createNew / deploy)                           <- SWA-0xx (create/deploy cmds)
 
 ## Slice 4 — Reuse wiring
-- [ ] App settings (mirror Functions precedent; product settings client + virtual node)   <- SWA-0xx (app settings)
+- [ ] App settings (implement one `SettingsAdapter`; the shared framework supplies the rest)   <- SWA-0xx (app settings)
 - [ ] Auth / subscription filtering (if product-specific)  <- SWA-0xx (sign-in)
 
 ## Slice N — Settings & manifest cleanup

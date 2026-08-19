@@ -157,6 +157,7 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 
 ```typescript
 // Product registrations run in this order.
+registerSettings(registrar);     // settings virtual nodes only, so it goes first
 registerAcr(registrar);
 registerFunctions(registrar);
 registerGenericAzure(registrar); // root and fallback providers last
@@ -169,6 +170,14 @@ point with `registerResourceDataProvider()` and
 `registerResourceViewProvider()`. The generic Azure registration is deliberately
 last so its providers remain fallbacks.
 
+### Composing children instead of competing for a resource
+
+Because dispatch stops at the first match, **only one provider can serve a given resource**. Two providers that both want to contribute children to the same resource cannot both `canHandle` it.
+
+The settings framework shows the resolution: `SettingsDataProvider` claims only the *virtual* settings nodes, never the owning resource. The product-specific provider injects its concrete adapter and calls the pure `getSettingsNodes(resource, adapter)` helper to compose those nodes into its own children.
+
+The consequence to remember: **a product `DataProvider` that claims a resource takes it away from the generic provider** and owns all of that resource's children. Settings are an explicit capability of that provider rather than a second provider aggregated at runtime. See [Settings](settings.md).
+
 ## Azure Resources Tree Providers
 
 The Azure resources tree composes three data providers. They split responsibility so each level can have its own caching and refresh semantics:
@@ -176,8 +185,10 @@ The Azure resources tree composes three data providers. They split responsibilit
 | Provider | Root? | Handles | TTL | Refresh trigger |
 |----------|-------|---------|-----|-----------------|
 | `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud` configuration change |
-| `AcrDataProvider` / `FunctionAppDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
-| `AzureResourceDataProvider` | No | Resource groups (under a subscription) and generic resources (under a resource group) | default | default TTL |
+| `AcrDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
+| `SettingsDataProvider` | No | Settings virtual-node leaves created by product providers | default | default TTL |
+| `WebAppDataProvider` | No | Function App, App Service, and Logic App resources; composes their settings nodes | default | default TTL |
+| `AzureResourceDataProvider` | No | Resource groups (under a subscription), and generic resources as the leaf fallback | default | default TTL |
 
 `AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes. An auth session change fires a reconciling root re-list (`{ target: Roots }`) that re-lists accounts — preserving tenant/subscription caches under surviving accounts and evicting a signed-out account's subtree because it drops out of the new listing. (This event is noisy — it also fires on individual token acquisitions — but an unchanged account set reconciles to a no-op.) A sovereign-cloud configuration change fires a full `{ target: Everything }` since the endpoint itself changed.
 

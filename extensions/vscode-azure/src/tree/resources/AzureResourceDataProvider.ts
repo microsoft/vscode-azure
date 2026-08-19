@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    getNodeType, IResourceClientProvider, isResourceGroup, isSubscription,
+    getNodeType, IResourceClientProvider, isGenericResource, isResourceGroup, isSubscription,
     type ConcreteAzureNode
 } from '@microsoft/vscode-azure-azutils';
 import {
@@ -58,12 +58,13 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
         }
 
         const node = resource as ConcreteAzureNode;
-        return isSubscription(node) || isResourceGroup(node);
+        // Generic resources are claimed as a leaf fallback after product-specific providers.
+        return isSubscription(node) || isResourceGroup(node) || isGenericResource(node);
     }
 
     /**
      * @inheritdoc
-     * @throws if `resource` is not a subscription or resource group.
+     * @throws if `resource` is not a subscription, resource group, or resource.
      */
     public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
         if (!resource) {
@@ -84,6 +85,9 @@ export class AzureResourceDataProvider implements DataProvider<ConcreteAzureNode
                 this.executor.output.debug(`[data] discover resources resourceGroup=${resource.subscription.subscriptionId}/${resource.name} pageSize=${this.pageSize}`);
                 return client.resources.listByResourceGroup(resource.name, { top: this.pageSize });
             }
+
+            case isGenericResource(resource):
+                return [];
 
             default:
                 throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
