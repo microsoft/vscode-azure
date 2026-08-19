@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { drillChildren } from '@microsoft/vscode-azure-utils';
+import { drillChildren, stringifyError, type IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '../auth/AzureSubscription';
 import { isAccount, isSubscription, isTenant, type ConcreteAzureNodeTree } from '../models/AzureNode';
 
@@ -32,6 +32,15 @@ import { isAccount, isSubscription, isTenant, type ConcreteAzureNodeTree } from 
  * case-insensitive. Returns `undefined` when no signed-in account exposes a
  * subscription with the given id.
  *
+ * A tenant whose subscriptions cannot be listed -- typically because a
+ * conditional access policy blocks token issuance for it -- is skipped rather
+ * than aborting the search, so an unreachable tenant encountered along the way
+ * never hides a subscription that lives in a later tenant.
+ *
+ * Callers that must not surface an interactive sign-in prompt (this drill can
+ * touch tenants the user never opened in the UI) should invoke it inside a
+ * credential scope that forces silent acquisition.
+ *
  * @param tree - The Azure data-layer tree to drill.
  * @param subscriptionId - The subscription id to resolve (e.g. parsed from an
  *   ARM resource id).
@@ -39,12 +48,14 @@ import { isAccount, isSubscription, isTenant, type ConcreteAzureNodeTree } from 
  *   tenant's subscriptions are searched.
  * @param accountId - (Optional) The owning account id. When provided, only that
  *   account's tenants are searched.
+ * @param output - (Optional) Channel used to record skipped tenants.
  */
 export async function findSubscriptionById(
     tree: ConcreteAzureNodeTree,
     subscriptionId: string,
     tenantId?: string,
     accountId?: string,
+    output?: IOutputChannel,
 ): Promise<AzureSubscription | undefined> {
     const target = subscriptionId.toLowerCase();
     const targetTenant = tenantId?.toLowerCase();
@@ -63,10 +74,14 @@ export async function findSubscriptionById(
                 continue;
             }
 
-            for await (const node of drillChildren(tree, tenant)) {
-                if (isSubscription(node) && node.subscriptionId.toLowerCase() === target) {
-                    return node;
+            try {
+                for await (const node of drillChildren(tree, tenant)) {
+                    if (isSubscription(node) && node.subscriptionId.toLowerCase() === target) {
+                        return node;
+                    }
                 }
+            } catch (error) {
+                output?.debug(`[auth] skipped tenant ${tenant.tenantId} while resolving subscription: ${stringifyError(error)}`);
             }
         }
     }

@@ -54,8 +54,16 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
 
         container.bind(ISubscriptionResolver).toDynamicValue(context => {
             const tree = context.get(IAzureViewDataTree);
+            const credentialScope = context.get(ICredentialOptionsScope);
+            const output = context.get(IOutputChannel);
             return (subscriptionId: string, tenantId?: string, accountId?: string) => {
-                return findSubscriptionById(tree, subscriptionId, tenantId, accountId);
+                // Resolving a bare subscription id walks tenants the user never
+                // opened in the tree, so acquisition is forced silent: an
+                // unrelated tenant must never trigger an interactive sign-in.
+                // An unresolved subscription is already handled by callers.
+                return credentialScope.run({ sessionOptions: { silent: true } }, () => {
+                    return findSubscriptionById(tree, subscriptionId, tenantId, accountId, output);
+                });
             };
         }).inSingletonScope();
 

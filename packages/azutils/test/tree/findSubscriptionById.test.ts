@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { mock } from 'node:test';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../src/models/AzureNode';
 import { findSubscriptionById } from '../../src/tree/findSubscriptionById';
@@ -211,5 +212,66 @@ describe('findSubscriptionById (unit)', () => {
         // Matched on the first page, so no later pages should have been pulled.
         expect(result).to.equal(subA);
         expect(loadMore.mock.callCount()).to.equal(0);
+    });
+
+    it('should skip a tenant whose subscriptions cannot be listed and match a later tenant', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const blockedTenant = makeTenant({ tenantId: 'tenant-blocked', accountId: account.id });
+        const tenant = makeTenant({ tenantId: 'tenant-2', accountId: account.id });
+        const subB = makeSubscription({ subscriptionId: 'sub-b', tenantId: tenant.tenantId, accountId: account.id });
+
+        const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
+            if (node === blockedTenant) {
+                return Promise.reject(new Error('Access has been blocked by Conditional Access policies'));
+            }
+            if (node === account) {
+                return Promise.resolve([blockedTenant, tenant]);
+            }
+            if (node === tenant) {
+                return Promise.resolve([subB]);
+            }
+            return Promise.resolve(node ? [] : [account]);
+        });
+        const tree = { getChildren, hasMore: () => false, loadMore: () => Promise.resolve() } as unknown as ConcreteAzureNodeTree;
+
+        const result = await findSubscriptionById(tree, 'sub-b');
+
+        expect(result).to.equal(subB);
+    });
+
+    it('should return undefined when every tenant fails to list subscriptions', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const blockedTenant = makeTenant({ tenantId: 'tenant-blocked', accountId: account.id });
+
+        const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
+            if (node === blockedTenant) {
+                return Promise.reject(new Error('Access has been blocked by Conditional Access policies'));
+            }
+            return Promise.resolve(node === account ? [blockedTenant] : node ? [] : [account]);
+        });
+        const tree = { getChildren, hasMore: () => false, loadMore: () => Promise.resolve() } as unknown as ConcreteAzureNodeTree;
+
+        const result = await findSubscriptionById(tree, 'sub-b');
+
+        expect(result).to.be.undefined;
+    });
+
+    it('should report each skipped tenant to the output channel', async () => {
+        const account = makeAccount({ id: 'acct-1' });
+        const blockedTenant = makeTenant({ tenantId: 'tenant-blocked', accountId: account.id });
+
+        const getChildren = mock.fn((node?: ConcreteAzureNode): Promise<ConcreteAzureNode[]> => {
+            if (node === blockedTenant) {
+                return Promise.reject(new Error('Access has been blocked by Conditional Access policies'));
+            }
+            return Promise.resolve(node === account ? [blockedTenant] : node ? [] : [account]);
+        });
+        const tree = { getChildren, hasMore: () => false, loadMore: () => Promise.resolve() } as unknown as ConcreteAzureNodeTree;
+        const debug = mock.fn();
+
+        await findSubscriptionById(tree, 'sub-b', undefined, undefined, { debug } as unknown as IOutputChannel);
+
+        expect(debug.mock.callCount()).to.equal(1);
+        expect(debug.mock.calls[0].arguments[0]).to.contain('tenant-blocked');
     });
 });
