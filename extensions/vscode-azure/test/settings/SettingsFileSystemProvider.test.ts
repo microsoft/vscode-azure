@@ -7,7 +7,7 @@ import { AzureNodeId, type ConcreteAzureNode, type GenericResource } from '@micr
 import { createMockVsCode, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import type { SettingsAdapter } from '../../src/settings/SettingsAdapter';
+import type { SettingsAdapter, SettingsOwner } from '../../src/settings/SettingsAdapter';
 import { JsoncSettingsFormat, SettingsFileSystemProvider, SettingsParseError } from '../../src/settings/SettingsFileSystemProvider';
 import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
 import { SettingsUri } from '../../src/settings/SettingsUri';
@@ -37,14 +37,14 @@ function createHarness(options?: HarnessOptions): Harness {
     const code = createMockVsCode();
     let snapshot = makeSettingsSnapshot({ entries: [{ key: 'A', value: '1' }] });
 
-    const read = mock.fn((_resource: GenericResource) => Promise.resolve(snapshot));
-    const write = mock.fn((_resource: GenericResource, _entries: SettingsMap) => Promise.resolve());
+    const read = mock.fn((_owner: SettingsOwner) => Promise.resolve(snapshot));
+    const write = mock.fn((_owner: SettingsOwner, _entries: SettingsMap) => Promise.resolve());
 
     const adapter: SettingsAdapter = {
         label: 'Application Settings',
         canHandle: () => true,
-        read: resource => read(resource),
-        write: (resource, entries) => write(resource, entries),
+        read: owner => read(owner),
+        write: (owner, entries) => write(owner, entries),
     };
 
     const resource = makeSettingsResource();

@@ -3,13 +3,22 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { GenericResource } from '@microsoft/vscode-azure-azutils';
+import type { GenericResource, VirtualResource } from '@microsoft/vscode-azure-azutils';
 import type { SettingsMap, SettingsSnapshot } from './SettingsModel';
+
+/**
+ * The tree node a settings document belongs to.
+ *
+ * Usually the ARM resource itself, but a product whose settings are scoped to a *part* of a
+ * resource passes that part's virtual node instead -- for example Static Web Apps, where each
+ * environment has its own application settings and the ARM resource has none of its own.
+ */
+export type SettingsOwner = GenericResource | VirtualResource;
 
 /**
  * Per-product access to the settings on a resource.
  *
- * A resource has at most one settings document, served by at most one adapter. Implementations own
+ * An owner has at most one settings document, served by at most one adapter. Implementations own
  * everything product-specific: how to read and write the settings, and what a valid setting name
  * looks like. The shared model, tree, editor, and command consult this interface and never branch
  * on resource type themselves.
@@ -27,19 +36,19 @@ export interface SettingsAdapter {
      */
     readonly label: string;
 
-    /** Whether this adapter serves the given resource. */
-    canHandle(resource: GenericResource): boolean;
+    /** Whether this adapter serves the given owner. */
+    canHandle(owner: SettingsOwner): boolean;
 
     /**
-     * Read the resource's current settings.
+     * Read the owner's current settings.
      *
      * Set {@linkcode SettingsSnapshot.writable writable} on the returned snapshot to `false` when
      * this product will not let the user edit them; the editor then opens the document read-only.
      */
-    read(resource: GenericResource): Promise<SettingsSnapshot>;
+    read(owner: SettingsOwner): Promise<SettingsSnapshot>;
 
     /**
-     * Replace the resource's settings with {@linkcode entries} in their entirety.
+     * Replace the owner's settings with {@linkcode entries} in their entirety.
      *
      * Implementations own enforcement: reject the write if the settings are read-only or any entry
      * is invalid. The editor can save anything the user types, so this is the only place a product's
@@ -47,5 +56,5 @@ export interface SettingsAdapter {
      *
      * @throws if the settings are not writable or an entry is invalid.
      */
-    write(resource: GenericResource, entries: SettingsMap): Promise<void>;
+    write(owner: SettingsOwner, entries: SettingsMap): Promise<void>;
 }

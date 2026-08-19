@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { FunctionAppLogicalType, type GenericResource } from '@microsoft/vscode-azure-azutils';
+import { isVirtualResource, FunctionAppLogicalType, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import type { SettingsAdapter } from '../../src/settings/SettingsAdapter';
+import type { SettingsAdapter, SettingsOwner } from '../../src/settings/SettingsAdapter';
 import type { SettingsMap, SettingsSnapshot } from '../../src/settings/SettingsModel';
 import { getSettingsNodes, type SettingsNode } from '../../src/tree/resources/settings/SettingsNode';
 
@@ -44,22 +44,22 @@ export class StubAdapter implements SettingsAdapter {
     }
 
     /** @inheritdoc */
-    public canHandle(resource: GenericResource): boolean {
-        return this.logicalTypes.has(resource.logicalType.toLowerCase());
+    public canHandle(owner: SettingsOwner): boolean {
+        return this.logicalTypes.has(armResourceOf(owner).logicalType.toLowerCase());
     }
 
     /** @inheritdoc */
-    public read(resource: GenericResource): Promise<SettingsSnapshot> {
+    public read(owner: SettingsOwner): Promise<SettingsSnapshot> {
         return Promise.resolve({
             entries: this.entries,
-            resourceName: resource.name,
+            resourceName: armResourceOf(owner).name,
             label: this.label,
             writable: !this.options.readOnly,
         });
     }
 
     /** @inheritdoc */
-    public write(_resource: GenericResource, entries: SettingsMap): Promise<void> {
+    public write(_owner: SettingsOwner, entries: SettingsMap): Promise<void> {
         if (this.options.readOnly) {
             return Promise.reject(new Error('These settings are read-only.'));
         }
@@ -73,6 +73,11 @@ export class StubAdapter implements SettingsAdapter {
     public contents(): SettingsMap {
         return this.entries;
     }
+}
+
+/** The ARM resource behind a settings owner, whether the owner is the resource or a part of it. */
+function armResourceOf(owner: SettingsOwner): GenericResource {
+    return isVirtualResource(owner) ? owner.azureResource : owner;
 }
 
 /**

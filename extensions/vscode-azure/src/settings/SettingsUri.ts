@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
+import type { SettingsNode } from '../tree/resources/settings/SettingsNode';
 
 /** URI scheme under which settings documents are served. */
 export const SettingsScheme = 'azure-settings';
@@ -37,9 +38,9 @@ const HexPattern = /^[0-9a-f]+$/i;
  */
 export const SettingsUri = {
     /** Build the document URI for a settings node. */
-    from(code: IVsCode, node: VirtualResource): vscode.Uri {
+    from(code: IVsCode, node: SettingsNode): vscode.Uri {
         const nodeKey = Buffer.from(AzureNodeId.from(node).toString(), 'utf8').toString('hex');
-        const fileName = `${node.azureResource.name}${SettingsFileExtension}`;
+        const fileName = `${node.documentName}${SettingsFileExtension}`;
 
         return code.Uri.from({ scheme: SettingsScheme, path: `/${nodeKey}/${fileName}` });
     },
