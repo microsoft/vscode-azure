@@ -61,7 +61,12 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
     }
 
     private async promptDeployFolder(context: Readonly<TContext>): Promise<Partial<TContext>> {
-        const resourceDisplayName = context.resourceDisplayName ?? this.ctx.code.l10n.t('Function App');
+        const resourceDisplayName = context.resourceDisplayName;
+        if (!resourceDisplayName) {
+            // Deploy-job wizards redeclare this as required, so reaching here means a new
+            // caller set job='deploy' without naming its product. Fail rather than guess one.
+            throw new Error(`${this.constructor.name}: a 'deploy' job requires resourceDisplayName`);
+        }
         const folder = await getWorkspaceFolder(
             this.ctx.code,
             {

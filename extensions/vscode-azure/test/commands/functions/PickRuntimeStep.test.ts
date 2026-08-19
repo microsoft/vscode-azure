@@ -13,20 +13,20 @@ describe('PickRuntimeStep (unit)', () => {
         it('should return true when runtime is not set', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeStep(ctx);
-            expect(step.shouldPrompt({})).to.be.true;
+            expect(step.shouldPrompt({ resourceDisplayName: 'Function App' })).to.be.true;
         });
 
         it('should return false when functionWorkerRuntime is already set', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeStep(ctx);
             const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node' };
-            expect(step.shouldPrompt(context)).to.be.false;
+            expect(step.shouldPrompt({ resourceDisplayName: 'Function App', ...context })).to.be.false;
         });
 
         it('should return false when infrastructure already exists (hasInfra)', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeStep(ctx);
-            expect(step.shouldPrompt({ hasInfra: true })).to.be.false;
+            expect(step.shouldPrompt({ resourceDisplayName: 'Function App', hasInfra: true })).to.be.false;
         });
     });
 

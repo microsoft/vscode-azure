@@ -28,6 +28,8 @@ export const staticWebAppLocationNames: ICaselessSetReader = new CaselessSet([
 
 /** Accumulated context for azd-backed Static Web App creation. */
 export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext<string> {
+    /** Always set; shared prompts name the product rather than assuming one. */
+    readonly resourceDisplayName: string;
     readonly mode: CreateStaticWebAppMode;
     readonly staticWebAppSkuName?: StaticWebAppSkuName;
     readonly buildPreset?: StaticWebAppBuildPreset;

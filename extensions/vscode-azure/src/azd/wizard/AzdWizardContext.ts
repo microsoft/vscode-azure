@@ -40,8 +40,13 @@ export interface AzdWizardContext {
     /** Selected job-to-be-done; set by the command entry point before the wizard runs. */
     readonly job?: AzdJob;
     /**
-     * Localized resource name used by shared prompts. Commands may omit this
-     * to retain the Function App wording used by the original wizard.
+     * Localized resource name used by shared prompts, e.g. `'Function App'` or
+     * `'Static Web App'`.
+     *
+     * Optional here because product-agnostic entry points (`azd up` / `azd down`)
+     * name no single resource and never reach a prompt that uses it. Wizards that
+     * set {@linkcode AzdWizardContext.job job} to `'deploy'` must supply it, and
+     * their contexts redeclare it as required so the compiler enforces that.
      */
     readonly resourceDisplayName?: string;
 

@@ -19,6 +19,7 @@ describe('PickBuildPresetStep (unit)', () => {
         respondToPrompts(mock, [{ pick: '$(keyboard) Custom' }]);
 
         const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
             mode: 'advanced',
             iacFolder: MockUri.file('/workspace'),
         });
@@ -43,6 +44,7 @@ describe('PickBuildPresetStep (unit)', () => {
         respondToPrompts(mock, ['acceptDefault']);
 
         const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
             mode: 'basic',
             iacFolder: MockUri.file('/workspace'),
         });

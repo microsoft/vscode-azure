@@ -57,6 +57,7 @@ describe('Static Web Apps creation steps (unit)', () => {
             mock,
             { 'vscode-azure.staticWebApps.appSubpath': 'frontend' },
             () => step.prompt({
+                resourceDisplayName: 'Static Web App',
                 mode: 'basic',
                 iacFolder: MockUri.file('/workspace'),
                 buildPreset: getStaticWebAppBuildPreset('react'),
@@ -71,6 +72,7 @@ describe('Static Web Apps creation steps (unit)', () => {
         const { ctx, mock } = createMockCodeContext();
         const step = new ApiLocationStep(createActionContext('test'), ctx);
         const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
             mode: 'advanced',
             detectedApiLocations: ['services/api'],
             buildPreset: getStaticWebAppBuildPreset('react'),
@@ -85,6 +87,7 @@ describe('Static Web Apps creation steps (unit)', () => {
         const { ctx, mock } = createMockCodeContext();
         const step = new ApiLocationStep(createActionContext('test'), ctx);
         const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
             mode: 'basic',
             detectedApiLocations: [],
             buildPreset: getStaticWebAppBuildPreset('react'),
@@ -132,6 +135,7 @@ describe('Static Web Apps creation steps (unit)', () => {
         const step = new ConfigureStaticWebAppAzureYamlStep(ctx, azd);
 
         expect(await step.shouldExecute({
+            resourceDisplayName: 'Static Web App',
             mode: 'basic',
             iacFolder: MockUri.file('/workspace'),
             azdServiceName: 'web',
