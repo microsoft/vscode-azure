@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, delay, ExecuteStep, stringifyError, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { CancellationError, CaselessSet, delay, ExecuteStep, stringifyError, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
@@ -47,7 +47,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const deployIdFileUri = this.ctx.code.Uri.joinPath(deployIdDir, 'deployment-id.jsonl');
 
         const abortCtl = new AbortController();
-        const trackedIds = new Set<string>();
+        const trackedIds = new CaselessSet();
 
         // The hydrated tenant (when the env was fully configured) is the owning
         // tenant of the subscription this provision targets -- forward it as a
@@ -82,7 +82,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * still-running provision -- a brand new deployment is a brand new event
      * and should appear in the tree.
      */
-    private async pollLoop(fileUri: vscode.Uri, trackedIds: Set<string>, signal: AbortSignal, tenantId?: string, accountId?: string): Promise<void> {
+    private async pollLoop(fileUri: vscode.Uri, trackedIds: CaselessSet, signal: AbortSignal, tenantId?: string, accountId?: string): Promise<void> {
         try {
             while (!signal.aborted) {
                 await this.readAndTrack(fileUri, trackedIds, tenantId, accountId);
@@ -103,7 +103,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * optional {@linkcode tenantId} and {@linkcode accountId} hints to speed up
      * resolution.
      */
-    private async readAndTrack(fileUri: vscode.Uri, trackedIds: Set<string>, tenantId?: string, accountId?: string): Promise<void> {
+    private async readAndTrack(fileUri: vscode.Uri, trackedIds: CaselessSet, tenantId?: string, accountId?: string): Promise<void> {
         const entries = await this.readDeploymentIdFile(fileUri);
         for (const entry of entries) {
             if (trackedIds.has(entry.deploymentId)) {

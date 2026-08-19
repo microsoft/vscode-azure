@@ -6,7 +6,7 @@
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, LogicAppLogicalType, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
@@ -328,14 +328,14 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         }
 
         const parsed = selected.map(parseSubscriptionFilterKey);
-        const tenantFilter = new Set(parsed.map(entry => entry.tenantId).filter(Boolean));
-        const subscriptionFilter = new Set(parsed.map(entry => entry.subscriptionId).filter(Boolean));
+        const tenantFilter = new CaselessSet(parsed.map(entry => entry.tenantId).filter((id): id is string => !!id));
+        const subscriptionFilter = new CaselessSet(parsed.map(entry => entry.subscriptionId).filter((id): id is string => !!id));
 
         return nodes.filter(node => {
             if (isTenant(node)) {
-                return tenantFilter.has(node.tenantId.toLowerCase());
+                return tenantFilter.has(node.tenantId);
             } else if (isSubscription(node)) {
-                return subscriptionFilter.has(node.subscriptionId.toLowerCase());
+                return subscriptionFilter.has(node.subscriptionId);
             } else {
                 return true;
             }

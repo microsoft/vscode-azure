@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, IActionExecutor, ICodeContext, showMessage, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, IActionContext, IActionExecutor, ICodeContext, showMessage, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
@@ -38,7 +38,7 @@ export class SelectSubscriptions implements ManagedCommand {
         const code = this.ctx.code;
         const config = code.workspace.getConfiguration(ConfigurationSection);
         const currentSelected = config.get<string[]>(SelectedSubscriptionsConfigurationKey, []);
-        const currentSet = new Set(currentSelected.map(id => id.toLowerCase()));
+        const currentSet = new CaselessSet(currentSelected);
 
         // Discover subscriptions silently: any credential built during the walk
         // (including cache misses) acquires its token without prompting, so an
@@ -77,7 +77,7 @@ export class SelectSubscriptions implements ManagedCommand {
             isSelectedItem: item => currentSet.size === 0 || currentSet.has(subscriptionFilterKey(item.data.tenantId, item.data.subscriptionId)),
         });
 
-        const selectedIds = [...new Set(selected.map(item => subscriptionFilterKey(item.data.tenantId, item.data.subscriptionId)))]
+        const selectedIds = [...new CaselessSet(selected.map(item => subscriptionFilterKey(item.data.tenantId, item.data.subscriptionId)))]
             .sort((a, b) => a.localeCompare(b));
 
         // Persisting an empty list means "no filtering" (show everything). Only

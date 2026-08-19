@@ -13,8 +13,8 @@ import {
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    DebounceScheduler, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
-    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type Page, type ProviderResult,
+    CaselessSet, DebounceScheduler, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
+    type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type ICaselessSetReader, type Page, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../constants';
@@ -49,9 +49,9 @@ const GetAccountsSuppressionMs = 1000;
 /** Debounce key for coalescing `onDidChangeSessions` bursts. */
 const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
 
-/** Whether two sets contain exactly the same string ids. */
-function idSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-    return a.size === b.size && a.isSubsetOf(b);
+/** Whether two sets contain exactly the same ids, ignoring case. */
+function idSetsEqual(a: ICaselessSetReader, b: ICaselessSetReader): boolean {
+    return a.size === b.size && [...a].every(id => b.has(id));
 }
 
 /**
@@ -109,7 +109,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * (token refreshes, other extensions' activity, re-auth of the same account)
      * leave this set unchanged and are ignored.
      */
-    private knownAccountIds: ReadonlySet<string> | undefined;
+    private knownAccountIds: ICaselessSetReader | undefined;
 
     public readonly onDidChange = this.changeEmitter.event;
     public readonly onDidRemoveAccounts = this.removeAccountsEmitter.event;
@@ -294,7 +294,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
 
         // Track the current account-id set so session-change events can be
         // reconciled against it (see reconcileAccountsOnSessionChange).
-        this.knownAccountIds = new Set(result.map(account => account.id.toLowerCase()));
+        this.knownAccountIds = new CaselessSet(result.map(account => account.id));
 
         return result;
     }
@@ -328,7 +328,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         try {
             const previousIds = this.knownAccountIds;
             const accounts = await this.listAccounts();
-            const currentIds = new Set(accounts.map(account => account.id.toLowerCase()));
+            const currentIds = new CaselessSet(accounts.map(account => account.id));
 
             if (previousIds !== undefined && idSetsEqual(previousIds, currentIds)) {
                 this.executor.output.trace(`[auth] sessions changed provider=${providerId}; account set unchanged (count=${currentIds.size}), ignoring`);
@@ -376,7 +376,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      */
     private async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
         const manualTenants = this.manualTenantsForAccount(account);
-        const seen = new Set<string>();
+        const seen = new CaselessSet();
         let emittedTerminalPage = false;
 
         const credential = this.credentialFactory({ sessionOptions: { account } });
@@ -428,7 +428,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * never surfaced more than once for the same account.
      */
     private manualTenantsForAccount(account: AzureAccount): AzureTenant[] {
-        const seen = new Set<string>();
+        const seen = new CaselessSet();
         const tenants: AzureTenant[] = [];
         const accountId = account.id.toLowerCase();
         for (const entry of readSignedInTenants(this.ctx.code)) {
@@ -440,13 +440,12 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             if (entry.accountId.toLowerCase() !== accountId) {
                 continue;
             }
-            const tenantId = entry.tenantId.toLowerCase();
-            if (seen.has(tenantId)) {
+            if (seen.has(entry.tenantId)) {
                 continue;
             }
-            seen.add(tenantId);
+            seen.add(entry.tenantId);
             tenants.push({
-                tenantId,
+                tenantId: entry.tenantId.toLowerCase(),
                 displayName: entry.tenantId,
                 environment: account.environment,
                 accountId: account.id,

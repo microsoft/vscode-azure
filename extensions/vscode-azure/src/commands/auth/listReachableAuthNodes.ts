@@ -5,7 +5,7 @@
 
 import type { AzureAccount, AzureSubscription, AzureTenant, ConcreteAzureNodeTree } from '@microsoft/vscode-azure-azutils';
 import { isAccount, isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
-import { drillChildren } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, drillChildren } from '@microsoft/vscode-azure-utils';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 
 /**
@@ -59,7 +59,7 @@ export interface ReachableSubscriptionsResult {
  * neither needed nor desirable.
  */
 export async function listFirstPageReachableTenants(tree: ConcreteAzureNodeTree): Promise<ReachableTenant[]> {
-    const tenants = new Map<string, ReachableTenant>();
+    const tenants = new CaselessMap<ReachableTenant>();
 
     // Root children (accounts) are not paged, so a single getChildren() call
     // returns them all.
@@ -74,7 +74,7 @@ export async function listFirstPageReachableTenants(tree: ConcreteAzureNodeTree)
                 continue;
             }
 
-            const key = `${accountNode.id.toLowerCase()}/${tenantNode.tenantId.toLowerCase()}`;
+            const key = `${accountNode.id}/${tenantNode.tenantId}`;
             if (!tenants.has(key)) {
                 tenants.set(key, { account: accountNode, tenant: tenantNode });
             }
@@ -110,7 +110,7 @@ export async function listFirstPageReachableTenants(tree: ConcreteAzureNodeTree)
  * @returns The reachable subscriptions (deduped and sorted) and any failures.
  */
 export async function listReachableSubscriptions(tree: ConcreteAzureNodeTree): Promise<ReachableSubscriptionsResult> {
-    const subscriptions = new Map<string, ReachableSubscription>();
+    const subscriptions = new CaselessMap<ReachableSubscription>();
     const failures: UnreachableAuthNode[] = [];
 
     for await (const accountNode of drillChildren(tree, undefined)) {

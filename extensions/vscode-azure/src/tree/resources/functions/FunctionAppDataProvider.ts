@@ -10,7 +10,7 @@ import {
     IWebAppClientProvider,
     type ConcreteAzureNode, type GenericResource, type IWebAppClient, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { setWebsiteUrl } from '../websiteUrl';
 import { FunctionAppVirtualPaths, FunctionAppVirtualTypes, isFunctionApp } from './FunctionApp';
@@ -36,7 +36,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
      * Populated when listing children, used by CRUD commands to
      * avoid redundant API calls.
      */
-    private readonly settingsCache = new Map<string, Record<string, string>>();
+    private readonly settingsCache = new CaselessMap<Record<string, string>>();
 
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,

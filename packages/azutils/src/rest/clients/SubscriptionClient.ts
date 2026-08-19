@@ -12,6 +12,7 @@ import type {
     TenantIdDescription,
 } from '@azure/arm-resources-subscriptions/models';
 import type { TokenCredential } from '@azure/core-auth';
+import { CaselessMap } from '@microsoft/vscode-azure-utils';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
@@ -101,12 +102,13 @@ export class SubscriptionClient implements ISubscriptionClient {
         return toPages(sdkListSubscriptions(this.inner, options));
     }
 
-    private static readonly locationsCache = new Map<string, Location[]>();
+    private static readonly locationsCache = new CaselessMap<Location[]>();
     private async listLocations(subscriptionId: string, options?: SubscriptionsListLocationsOptionalParams): Promise<Location[]> {
         const extendedSuffix = options?.includeExtendedLocations ? ':ext' : '';
-        const cacheKey = `${subscriptionId.toLowerCase()}${extendedSuffix}`;
-        if (SubscriptionClient.locationsCache.has(cacheKey)) {
-            return SubscriptionClient.locationsCache.get(cacheKey)!; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- checked above
+        const cacheKey = `${subscriptionId}${extendedSuffix}`;
+        const cached = SubscriptionClient.locationsCache.get(cacheKey);
+        if (cached) {
+            return cached;
         }
 
         const locations: Location[] = [];
