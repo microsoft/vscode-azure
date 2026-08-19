@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, type IOutputChannel, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, type ICodeContext, type IOutputChannel, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '../auth/AzureSubscription';
 import type { ISubscriptionClientProvider, Location } from '../rest/clients/SubscriptionClient';
 
@@ -15,8 +15,16 @@ import type { ISubscriptionClientProvider, Location } from '../rest/clients/Subs
 export interface ChooseLocationContext {
     readonly subscription?: AzureSubscription;
     readonly location?: Location;
-    /** Optional allow-list for resources available in only a subset of Azure regions. */
-    readonly allowedLocationNames?: ReadonlySet<string>;
+    /**
+     * Optional allow-list for resources available in only a subset of Azure regions.
+     *
+     * Matched case-insensitively: the step folds these into a {@linkcode CaselessSet}
+     * itself rather than trusting the caller's collection to compare caselessly, since a
+     * plain {@linkcode Set} structurally satisfies any read-only set type but compares
+     * exactly. Callers therefore need not normalize the casing, and neither side has to
+     * match the casing ARM happens to return.
+     */
+    readonly allowedLocationNames?: Iterable<string>;
 }
 
 /**
@@ -47,9 +55,9 @@ export class ChooseLocationStep<TContext extends ChooseLocationContext> extends 
         const locations = await client.subscriptions.listLocations(context.subscription.subscriptionId);
         this.output.debug(`[wizard] fetch locations done subscription=${context.subscription.subscriptionId} count=${locations.length}`);
 
+        const allowed = context.allowedLocationNames && new CaselessSet(context.allowedLocationNames);
         const picks: QuickPickItemWithData<Location>[] = locations
-            .filter(location => !context.allowedLocationNames
-                || (!!location.name && context.allowedLocationNames.has(location.name.toLowerCase())))
+            .filter(location => !allowed || (!!location.name && allowed.has(location.name)))
             .filter(l => l.name && l.displayName)
             .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''))
             .map(l => ({

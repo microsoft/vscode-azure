@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { PickContext } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, type ICaselessSetReader, type PickContext } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
 import type { StaticWebAppUnsupportedArtifactReason } from './deploymentRouting';
 import type { StaticWebAppBuildPreset, StaticWebAppBuildPresetId } from './buildPresets';
@@ -18,7 +18,7 @@ export type StaticWebAppSkuName = 'Free' | 'Standard';
 export type StaticWebAppAzdLanguage = 'dotnet' | 'js' | 'ts';
 
 /** Regions supported by the Static Web Apps creation API. */
-export const staticWebAppLocationNames: ReadonlySet<string> = new Set([
+export const staticWebAppLocationNames: ICaselessSetReader = new CaselessSet([
     'centralus',
     'eastasia',
     'eastus2',

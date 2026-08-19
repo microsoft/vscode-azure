@@ -22,8 +22,11 @@ export type AzdJob = 'createNew' | 'deploy';
 export interface AzdWizardContext {
     readonly subscription?: AzureSubscription;
     readonly location?: Location;
-    /** Optional allow-list for resource types available in only a subset of regions. */
-    readonly allowedLocationNames?: ReadonlySet<string>;
+    /**
+     * Optional allow-list for resource types available in only a subset of regions.
+     * Matched case-insensitively by {@linkcode ChooseLocationStep}.
+     */
+    readonly allowedLocationNames?: Iterable<string>;
     /** Name of the azd environment used to isolate state and resources. */
     readonly environmentName?: string;
     /** Value written as the `azd-service-name` tag on the resource so `azd deploy` can target it. */
