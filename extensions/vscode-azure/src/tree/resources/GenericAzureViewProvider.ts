@@ -8,6 +8,7 @@ import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalTy
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { DeleteAzureResource } from '../../commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
@@ -156,7 +157,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             case isResourceGroup(resource): {
                 const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.contextValue = combineContextValues(OpenInPortal.ContextValue);
+                item.contextValue = combineContextValues(OpenInPortal.ContextValue, DeleteAzureResource.ResourceGroupContextValue);
                 const azdEnvName = resource.tags?.[AzdEnvNameTag];
                 if (azdEnvName) {
                     item.iconPath = new this.ctx.code.ThemeIcon('rocket');

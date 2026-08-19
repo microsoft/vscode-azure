@@ -5,6 +5,7 @@
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
 import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
+import { DeleteAzureResource } from '../commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { getWebsiteUrl } from './resources/websiteUrl';
 
@@ -30,7 +31,11 @@ export function combineContextValues(...contextValues: string[]): string {
  * @param additional - Product-specific context values for this node.
  */
 export function resourceContextValue(resource: GenericResource, ...additional: string[]): string {
-    const contextValues = [OpenInPortal.ContextValue, ...additional];
+    const contextValues = [
+        OpenInPortal.ContextValue,
+        DeleteAzureResource.ResourceContextValue,
+        ...additional,
+    ];
 
     if (getWebsiteUrl(resource)) {
         contextValues.push(BrowseWebsite.ContextValue);

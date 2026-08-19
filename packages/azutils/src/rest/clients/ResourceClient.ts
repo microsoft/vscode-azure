@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createResourceManagement, type ResourceManagementClientOptionalParams, type ResourceManagementContext } from '@azure/arm-resources/api';
-import { list as sdkListResourceGroups, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
-import { listByResourceGroup as sdkListByResourceGroup, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
+import { get as sdkGetProvider } from '@azure/arm-resources/api/providers';
+import { $delete as sdkDeleteResourceGroup, list as sdkListResourceGroups, type ResourceGroupsDeleteOptionalParams, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
+import { deleteById as sdkDeleteById, listByResourceGroup as sdkListByResourceGroup, type ResourcesDeleteByIdOptionalParams, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
 import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
@@ -14,6 +15,9 @@ import type { GenericResource } from '../../models/GenericResource';
 import type { ResourceGroup } from '../../models/Grouping';
 import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
+
+export type { ResourceGroupsDeleteOptionalParams, ResourceGroupsListOptionalParams };
+export type { ResourcesDeleteByIdOptionalParams, ResourcesListByResourceGroupOptionalParams };
 
 /** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
 export const SiteType = 'Microsoft.Web/sites';
@@ -60,9 +64,14 @@ export type IResourceClientProvider = SyncFactory<IResourceClient, [AzureSubscri
 export interface IResourceClient {
     readonly resourceGroups: {
         list(options?: ResourceGroupsListOptionalParams): AsyncIterable<Page<ResourceGroup>>;
+        delete(resourceGroupName: string, options?: ResourceGroupsDeleteOptionalParams): Promise<void>;
     };
     readonly resources: {
         listByResourceGroup(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>>;
+        deleteById(resourceId: string, resourceType: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void>;
+    };
+    readonly providers: {
+        resolveApiVersion(resourceType: string): Promise<string>;
     };
 }
 
@@ -74,6 +83,8 @@ export interface IResourceClient {
  * Use the static {@linkcode create} factory to construct.
  */
 export class ResourceClient implements IResourceClient {
+    private readonly apiVersionCache = new Map<string, Promise<string>>();
+
     private constructor(
         private readonly inner: ResourceManagementContext,
         private readonly subscription: AzureSubscription,
@@ -101,11 +112,21 @@ export class ResourceClient implements IResourceClient {
     }
 
     public get resourceGroups(): IResourceClient['resourceGroups'] {
-        return { list: (options) => this.listResourceGroups(options) };
+        return {
+            list: (options) => this.listResourceGroups(options),
+            delete: (resourceGroupName, options) => this.deleteResourceGroup(resourceGroupName, options),
+        };
     }
 
     public get resources(): IResourceClient['resources'] {
-        return { listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options) };
+        return {
+            listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options),
+            deleteById: (resourceId, resourceType, options) => this.deleteResourceById(resourceId, resourceType, options),
+        };
+    }
+
+    public get providers(): IResourceClient['providers'] {
+        return { resolveApiVersion: (resourceType) => this.resolveApiVersion(resourceType) };
     }
 
     private listResourceGroups(options?: ResourceGroupsListOptionalParams): AsyncIterable<Page<ResourceGroup>> {
@@ -126,6 +147,76 @@ export class ResourceClient implements IResourceClient {
             sdkListByResourceGroup(this.inner, resourceGroupName, options),
             r => attachMetadata(r, this.subscription)
         );
+    }
+
+    private async deleteResourceGroup(resourceGroupName: string, options?: ResourceGroupsDeleteOptionalParams): Promise<void> {
+        await sdkDeleteResourceGroup(this.inner, resourceGroupName, options).pollUntilDone();
+    }
+
+    private async deleteResourceById(resourceId: string, resourceType: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void> {
+        const apiVersion = await this.resolveApiVersion(resourceType);
+        await sdkDeleteById(this.inner, resourceId, apiVersion, options).pollUntilDone();
+    }
+
+    private resolveApiVersion(resourceType: string): Promise<string> {
+        const normalizedType = resourceType.toLowerCase();
+        let resolution = this.apiVersionCache.get(normalizedType);
+        if (!resolution) {
+            resolution = this.fetchApiVersion(resourceType);
+            this.apiVersionCache.set(normalizedType, resolution);
+            void resolution.catch(() => this.apiVersionCache.delete(normalizedType));
+        }
+        return resolution;
+    }
+
+    /**
+     * Resolve the API version to use for {@linkcode resourceType} from the
+     * provider metadata for this subscription.
+     *
+     * ARM exposes `apiVersions` as a single flat list per resource type -- there
+     * is no per-location breakdown (`locationMappings` covers EdgeZone extended
+     * locations only), so the version cannot be tailored to a resource's region.
+     * Selection therefore favors the most broadly available version:
+     *
+     * 1. `defaultApiVersion`, which the provider designates as its stable
+     *    default and is typically older than the newest version.
+     * 2. Otherwise the newest non-preview version, since preview versions are
+     *    the most likely to be missing in a given region or sovereign cloud.
+     * 3. Otherwise the newest version of any kind.
+     *
+     * Because the metadata is fetched through the subscription's own ARM
+     * endpoint, the result is already scoped to the correct cloud. If Azure
+     * still rejects the version it responds with `NoRegisteredProviderFound`,
+     * which names the versions it will accept; that error is surfaced as-is
+     * rather than guessed around.
+     */
+    private async fetchApiVersion(resourceType: string): Promise<string> {
+        const separator = resourceType.indexOf('/');
+        if (separator <= 0 || separator === resourceType.length - 1) {
+            throw new Error(`Unable to resolve an API version for resource type "${resourceType}": expected "<provider namespace>/<resource type>".`);
+        }
+
+        const providerNamespace = resourceType.slice(0, separator);
+        const providerResourceType = resourceType.slice(separator + 1);
+        const provider = await sdkGetProvider(this.inner, providerNamespace);
+        const match = provider.resourceTypes?.find(type => type.resourceType?.toLowerCase() === providerResourceType.toLowerCase());
+        if (!match) {
+            throw new Error(`Resource provider "${providerNamespace}" does not define resource type "${providerResourceType}".`);
+        }
+
+        const defaultApiVersion = match.defaultApiVersion?.trim();
+        if (defaultApiVersion) {
+            return defaultApiVersion;
+        }
+
+        // ARM returns these newest-first, but sort defensively since that
+        // ordering is conventional rather than contractual.
+        const apiVersions = match.apiVersions?.map(version => version.trim()).filter(version => version).sort((a, b) => b.localeCompare(a)) ?? [];
+        const apiVersion = apiVersions.find(version => !version.toLowerCase().includes('preview')) ?? apiVersions[0];
+        if (!apiVersion) {
+            throw new Error(`Resource type "${resourceType}" does not define an API version.`);
+        }
+        return apiVersion;
     }
 }
 
