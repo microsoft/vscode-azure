@@ -179,13 +179,12 @@ const knownVirtualTypes = new Set<string>(Object.values(StaticWebAppVirtualTypes
  * case-insensitively so listings remain robust across SDK casing.
  */
 export function isStaticWebApp(node: unknown): node is StaticWebApp {
-    if (!node || typeof node !== 'object' || !isGenericResource(node as GenericResource)) {
+    if (!node || typeof node !== 'object' || !isGenericResource(node)) {
         return false;
     }
 
-    const resource = node as GenericResource;
-    return resource.type.toLowerCase() === StaticWebAppResourceType.toLowerCase()
-        || resource.logicalType.toLowerCase() === StaticWebAppResourceType.toLowerCase();
+    return node.type.toLowerCase() === StaticWebAppResourceType.toLowerCase()
+        || node.logicalType.toLowerCase() === StaticWebAppResourceType.toLowerCase();
 }
 
 /** Narrows a virtual resource to a known Static Web Apps child variant. */

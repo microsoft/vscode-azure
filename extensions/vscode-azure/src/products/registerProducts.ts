@@ -18,6 +18,5 @@ export function registerProducts(registrar: ProductRegistrar): void {
     registerStaticWebApps(registrar);
     registerAcr(registrar);
     registerFunctions(registrar);
-    registerStaticWebApps(registrar);
     registerGenericAzure(registrar);
 }

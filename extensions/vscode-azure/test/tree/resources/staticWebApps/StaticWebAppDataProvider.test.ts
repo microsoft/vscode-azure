@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode, type StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, isVirtualResource, type ConcreteAzureNode, type StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { GitHubJob, GitHubWorkflowRun } from '../../../../src/services/StaticWebAppsGitHubService';
@@ -14,6 +14,8 @@ import {
     type StaticWebAppEnvironment,
     type StaticWebAppFunctions,
 } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
+import { StaticWebAppSettingsAdapter } from '../../../../src/settings/adapters/StaticWebAppSettingsAdapter';
+import { isSettingsNode, SettingsVirtualType } from '../../../../src/tree/resources/settings/SettingsNode';
 import { StaticWebAppDataProvider } from '../../../../src/tree/resources/staticWebApps/StaticWebAppDataProvider';
 import { makeStaticWebApp, makeStaticWebAppEnvironment, singlePage } from './mockStaticWebApp';
 
@@ -61,8 +63,9 @@ describe('StaticWebAppDataProvider (unit)', () => {
             listWorkflowRuns: mock.fn(() => Promise.resolve(options?.workflowRuns ?? [])),
             listJobs: mock.fn(() => Promise.resolve(options?.jobs ?? [])),
         };
-        const provider = new StaticWebAppDataProvider(executor, code, () => mockClient as never, github as never);
-        return { provider, mockClient, github };
+        const settingsAdapter = new StaticWebAppSettingsAdapter(code, () => mockClient as never);
+        const provider = new StaticWebAppDataProvider(executor, code, () => mockClient as never, github as never, settingsAdapter);
+        return { provider, mockClient, github, settingsAdapter };
     }
 
     it('should enrich the root with site details without changing its key fields', async () => {
@@ -119,11 +122,27 @@ describe('StaticWebAppDataProvider (unit)', () => {
         const children = await provider.getChildren(makeStaticWebAppEnvironment());
 
         expect(virtualTypes(children)).to.deep.equal([
+            SettingsVirtualType,
             StaticWebAppVirtualTypes.Actions,
             StaticWebAppVirtualTypes.Functions,
         ]);
         expect(mockClient.staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(1);
         expect(mockClient.staticSites.listStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(0);
+    });
+
+    it('should hang application settings off each environment rather than the site', async () => {
+        const { provider, settingsAdapter } = createProvider();
+        const environment = makeStaticWebAppEnvironment();
+
+        const [settings] = await provider.getChildren(environment);
+
+        expect(isSettingsNode(settings)).to.be.true;
+        // Keyed beneath the environment, so production and each preview get their own document.
+        expect(isSettingsNode(settings) && settings.virtualPath).to.equal('environments/default/settings');
+        expect(isSettingsNode(settings) && settings.owner).to.equal(environment);
+        expect(isSettingsNode(settings) && settings.adapter).to.equal(settingsAdapter);
+        // Distinguishes the editor tab from the site's other environments.
+        expect(isSettingsNode(settings) && settings.documentName).to.equal('mySwa-Production');
     });
 
     it('should point the Functions node at the build\'s own portal page', async () => {
@@ -190,10 +209,11 @@ describe('StaticWebAppDataProvider (unit)', () => {
 
         const children = await provider.getChildren(environment);
         expect(virtualTypes(children)).to.deep.equal([
+            SettingsVirtualType,
             StaticWebAppVirtualTypes.Actions,
             StaticWebAppVirtualTypes.NoFunctions,
         ]);
-        const help = children[1];
+        const help = children[2];
         expect(isStaticWebAppVirtualNode(help) && help.virtualType === StaticWebAppVirtualTypes.NoFunctions && help.kind).to.equal('help');
         expect(github.listWorkflowRuns.mock.callCount()).to.equal(0);
     });
@@ -263,5 +283,5 @@ describe('StaticWebAppDataProvider (unit)', () => {
 });
 
 function virtualTypes(nodes: ConcreteAzureNode[]): string[] {
-    return nodes.map(node => isStaticWebAppVirtualNode(node) ? node.virtualType : '');
+    return nodes.map(node => isVirtualResource(node) ? node.virtualType : '');
 }

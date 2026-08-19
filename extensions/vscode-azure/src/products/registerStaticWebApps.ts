@@ -25,6 +25,7 @@ import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStatic
 import { SwaDebugConfigurationProvider } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
+import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
 import { IStaticWebAppsGitHubService, StaticWebAppsGitHubService } from '../services/StaticWebAppsGitHubService';
 import { GitHubActionLogContentProvider } from '../staticWebApps/GitHubActionLogContentProvider';
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
@@ -43,6 +44,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
 
     registrar.registerBinding(container => {
         container.bind(StaticWebAppCommandResolver).toSelf();
+        container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();
         container.bind(IStaticWebAppsGitHubService).to(StaticWebAppsGitHubService).inSingletonScope();
         container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
         container.bind(ISwaCliService).toDynamicValue(context => new SwaCliService(

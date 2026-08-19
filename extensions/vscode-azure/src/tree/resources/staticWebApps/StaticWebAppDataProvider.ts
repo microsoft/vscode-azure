@@ -16,6 +16,8 @@ import {
 import { IActionExecutor, IVsCode, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
+import { StaticWebAppSettingsAdapter } from '../../../settings/adapters/StaticWebAppSettingsAdapter';
+import { getSettingsNodes } from '../settings/SettingsNode';
 import { IStaticWebAppsGitHubService, type GitHubJob, type GitHubRepository, type GitHubWorkflowRun, type GitHubWorkflowStep } from '../../../services/StaticWebAppsGitHubService';
 import {
     isStaticWebApp,
@@ -81,6 +83,7 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IStaticWebAppClientProvider) private readonly createClient: IStaticWebAppClientProvider,
         @inject(IStaticWebAppsGitHubService) private readonly github: IStaticWebAppsGitHubService,
+        @inject(StaticWebAppSettingsAdapter) private readonly settingsAdapter: StaticWebAppSettingsAdapter,
     ) { }
 
     /** @inheritdoc */
@@ -162,7 +165,12 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             repository,
         };
 
-        const children: ConcreteAzureNode[] = [actions];
+        // Settings first: they belong to the environment itself, whereas everything below is a
+        // category of things deployed into it.
+        const children: ConcreteAzureNode[] = [
+            ...getSettingsNodes(environment, this.settingsAdapter, `${environment.azureResource.name}-${environment.displayLabel}`),
+            actions,
+        ];
         if (await this.hasFunctionsApi(environment)) {
             children.push(this.createFunctionsGroup(environment));
         } else {
