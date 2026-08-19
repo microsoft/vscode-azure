@@ -180,6 +180,22 @@ describe('AzureListingCache (unit)', () => {
             assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a']);
         });
 
+        it('does not resolve a cached subscription whose tenant the filter excludes', async () => {
+            const { cache, fetcher } = createCache();
+            // Pay for everything first, the way Select Subscriptions does, so
+            // the excluded tenant's subscription is sitting in the cache.
+            await collectAsync(cache.walkSubscriptions());
+            fetcher.fetchSubscriptions.mock.resetCalls();
+
+            // A filter that names only tenants still governs what lies beneath
+            // them: a cached node is reached without passing through its
+            // ancestors, so the lookup has to replay those levels itself.
+            const resolved = await cache.findSubscription('sub-b', { filter: onlyTenants('tenant-a') });
+
+            assert.strictEqual(resolved, undefined);
+            assert.deepStrictEqual(listedTenantIds(fetcher), []);
+        });
+
         it('answers from the cache without issuing anything', async () => {
             const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());

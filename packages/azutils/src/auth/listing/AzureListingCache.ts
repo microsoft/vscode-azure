@@ -213,10 +213,13 @@ export class AzureListingCache {
      * what a view has loaded, how far a listing has been paged, or whether a
      * refresh is in flight.
      *
-     * The same filter that governs the tree governs this lookup: a subscription
-     * the filter excludes does not resolve. The caller gets `undefined` and
-     * degrades; it is never an error and never a prompt, because prompting for a
-     * tenant the user deselected is the very thing the filter exists to prevent.
+     * The same filter that governs the tree governs this lookup, at every level:
+     * a subscription the filter excludes does not resolve, and neither does one
+     * whose tenant or account it excludes, even when that subscription is
+     * already cached from an earlier unfiltered read. The caller gets
+     * `undefined` and degrades; it is never an error and never a prompt, because
+     * prompting for a tenant the user deselected is the very thing the filter
+     * exists to prevent.
      *
      * A subscription id alone can legitimately match more than one node (the
      * same subscription reached through two tenants). Cached matches are
@@ -248,7 +251,7 @@ export class AzureListingCache {
             if (wantedTenant && node.tenantId.toLowerCase() !== wantedTenant) {
                 continue;
             }
-            if (filter && !filter(node)) {
+            if (!this.admitsPath(node, filter)) {
                 continue;
             }
             cached.push(node);
@@ -303,6 +306,32 @@ export class AzureListingCache {
     private reportLookupFailure(failure: AzureListingFailure, options?: AzureWalkOptions): void {
         this.executor.output.debug(`[listing] subscription lookup skipped tenant=${failure.tenant?.tenantId ?? '<all>'}: ${stringifyError(failure.error)}`);
         options?.onFailure?.(failure);
+    }
+
+    /**
+     * Whether the filter admits a cached subscription *and* both of its
+     * ancestors.
+     *
+     * A walk consults the predicate at every level, so skipping a tenant skips
+     * everything beneath it. Reading a cached node reaches it without passing
+     * through its ancestors, so those levels have to be replayed here or a
+     * tenant-level exclusion could be bypassed by a subscription that an earlier
+     * unfiltered read had already cached.
+     *
+     * An ancestor that is not cached cannot be shown to be admitted, so it is
+     * treated as excluded. That is the safe direction: the lookup falls through
+     * to the walk, which fetches the ancestor and applies the filter to it
+     * properly.
+     */
+    private admitsPath(node: AzureSubscription, filter?: AzureListingFilter): boolean {
+        if (!filter) {
+            return true;
+        }
+        const ancestors = [
+            this.store.get(azureListingKeyFor(node.accountId)),
+            this.store.get(azureListingKeyFor(node.accountId, node.tenantId)),
+        ];
+        return ancestors.every(ancestor => ancestor !== undefined && filter(ancestor)) && filter(node);
     }
 }
 
