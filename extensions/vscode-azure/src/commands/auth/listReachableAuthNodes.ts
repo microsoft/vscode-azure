@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azure-azutils';
+import type { AzureAccount, AzureSubscription, AzureTenant, IAzureListingSource } from '@microsoft/vscode-azure-azutils';
 import { isSubscription, isTenant } from '@microsoft/vscode-azure-azutils';
-import type { IUnfilteredAzureListing } from '../../tree/resources/AzureAccountDataProvider';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 
 /**
@@ -60,7 +59,7 @@ export interface ReachableSubscriptionsResult {
  * Reads the *unfiltered* listing: this seeds a sign-in flow, whose whole
  * purpose is to reach a tenant the tree does not currently show.
  */
-export async function listFirstPageReachableTenants(listing: IUnfilteredAzureListing): Promise<ReachableTenant[]> {
+export async function listFirstPageReachableTenants(listing: IAzureListingSource): Promise<ReachableTenant[]> {
     const tenants = new Map<string, ReachableTenant>();
 
     for (const account of await listing.listAccounts()) {
@@ -113,7 +112,7 @@ export async function listFirstPageReachableTenants(listing: IUnfilteredAzureLis
  * @param listing - The unfiltered account/tenant/subscription listing.
  * @returns The reachable subscriptions (deduped and sorted) and any failures.
  */
-export async function listReachableSubscriptions(listing: IUnfilteredAzureListing): Promise<ReachableSubscriptionsResult> {
+export async function listReachableSubscriptions(listing: IAzureListingSource): Promise<ReachableSubscriptionsResult> {
     const subscriptions = new Map<string, ReachableSubscription>();
     const failures: UnreachableAuthNode[] = [];
 

@@ -26,31 +26,24 @@ import { readSubscriptionFilter } from '../../utils/subscriptionFilter';
  * Identifier for the root account/tenant/subscription data provider. Bound as a
  * singleton and aliased into the resource tree's data-provider collection so the
  * "Run (Mock Data)" debug entry point can rebind it with mock data.
+ *
+ * Exposes two deliberately different views of the same data.
+ * {@linkcode DataProvider.getChildren} is *filtered*: a tenant excluded by
+ * `vscode-azure.selectedSubscriptions` is never listed, and therefore never has
+ * a tenant-scoped token minted for it. That guarantee is the whole point of
+ * filtering in the data layer, so there is no opt-out on the tree itself.
+ *
+ * The inherited {@linkcode IAzureListingSource} methods are *unfiltered*, for
+ * the discovery flows that let the user change the filter (Select Subscriptions,
+ * Sign In) -- otherwise the filter could only ever be narrowed, never widened.
+ * Both views read the same {@linkcode AzureListingCache}, so anything one loads
+ * is available to the other without re-fetching; because filtering happens on
+ * read, sharing that cache cannot leak an excluded tenant into the tree.
  */
-export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNode>, IUnfilteredAzureListing {
+export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNode>, IAzureListingSource {
     /** Fires with normalized account IDs removed by a reconciled session change. */
     readonly onDidRemoveAccounts: Event<readonly string[]>;
 }
-
-/**
- * The raw account/tenant/subscription listings, before the
- * `vscode-azure.selectedSubscriptions` filter is applied.
- *
- * {@linkcode DataProvider.getChildren} deliberately exposes only the *filtered*
- * view, so that a tenant excluded by the filter is never listed and therefore
- * never has a tenant-scoped token minted for it. That guarantee is the whole
- * point of filtering in the data layer, so it must not be weakened by an opt-out
- * on the tree itself.
- *
- * Discovery flows that let the user *change* the filter (Select Subscriptions,
- * Sign In) need the unfiltered truth -- otherwise the filter could only ever be
- * narrowed, never widened. They use this surface, which reads the same
- * {@linkcode AzureListingCache} the filtered tree reads, so anything they load
- * is available to the tree afterwards (and vice versa) without re-fetching.
- * Filtering happens on read, so sharing the cache cannot leak an excluded tenant
- * into the resources view.
- */
-export type IUnfilteredAzureListing = IAzureListingSource;
 
 export const IAzureAccountDataProvider: ServiceIdentifier<IAzureAccountDataProvider> = Symbol.for('IAzureAccountDataProvider');
 
@@ -117,7 +110,7 @@ async function* filterPages(
  * tenant-scoped token, and potentially prompting for interactive sign-in -- only
  * to discard the result. The subscription half stays in the view, where it costs
  * nothing: a tenant's subscriptions all arrive in one listing.
- * {@linkcode IUnfilteredAzureListing} is the deliberate exception, for flows that
+ * {@linkcode IAzureListingSource} is the deliberate exception, for flows that
  * let the user edit the filter.
  */
 @injectable()
@@ -165,7 +158,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * Caches the unfiltered listings behind both access paths.
      *
      * Both {@linkcode getChildren} (filtered, for the tree) and the
-     * {@linkcode IUnfilteredAzureListing} methods (unfiltered, for the flows that
+     * {@linkcode IAzureListingSource} methods (unfiltered, for the flows that
      * change the filter) read through this, so whichever runs first pays for the
      * fetch and the other reuses it. The filter is applied on *read*, so the
      * cache can hold tenants the tree does not currently show without any risk of

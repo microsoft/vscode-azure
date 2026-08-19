@@ -188,7 +188,7 @@ Tenant and subscription filtering both read `vscode-azure.selectedSubscriptions`
 - **Tenants are filtered in the data layer**, by `AzureAccountDataProvider.getChildren`. Listing a tenant's subscriptions requires a tenant-scoped token, and acquiring one can surface an interactive sign-in prompt. Dropping the tenant before it ever becomes a node positively guarantees no token and no subscription request is issued for it. The data provider fires `onDidChange` with `{ target: Everything }` when the setting changes, so the tree re-lists.
 - **Subscriptions are filtered in the view layer**, by `GenericAzureViewProvider.applyFilter`. A tenant's subscriptions all arrive in a single listing, so discarding some of them lower down would save nothing — it is purely a presentation choice. Node types other than subscriptions pass through untouched.
 
-Because the data layer filters tenants, commands that need to see *past* the filter cannot drill the shared tree. `AzureAccountDataProvider` therefore also implements `IUnfilteredAzureListing` (`listAccounts` / `listTenantsForAccount` / `listSubscriptionsForTenant`), an unfiltered enumeration path. `Azure: Select Subscriptions` and `Azure: Sign In` use it so the filter can be widened again, not just narrowed.
+Because the data layer filters tenants, commands that need to see *past* the filter cannot drill the shared tree. `AzureAccountDataProvider` therefore also implements azutils' `IAzureListingSource` (`listAccounts` / `listTenantsForAccount` / `listSubscriptionsForTenant`), an unfiltered enumeration path. `Azure: Select Subscriptions` and `Azure: Sign In` use it so the filter can be widened again, not just narrowed.
 
 ### Listing cache
 

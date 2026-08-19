@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createDefaultCredentialFactory, isAccount, type ConcreteAzureNode, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
+import { createDefaultCredentialFactory, isAccount, type ConcreteAzureNode, type IAzureListingSource, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListing, createMockHierarchicalDataItemTree, makeAccount, makeTenant, pagedChildren } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
@@ -12,7 +12,6 @@ import { pickTenantOrEnterId, SignIn } from '../../../src/commands/auth/SignIn';
 import type { ReachableTenant } from '../../../src/commands/auth/listReachableAuthNodes';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../../src/constants';
 import type { IAzureViewDataTree } from '../../../src/services';
-import type { IUnfilteredAzureListing } from '../../../src/tree/resources/AzureAccountDataProvider';
 import type { SignedInTenant } from '../../../src/utils/signedInTenants';
 
 describe('SignIn (unit)', () => {
@@ -28,7 +27,7 @@ describe('SignIn (unit)', () => {
     function createTree(
         rootChildren: ConcreteAzureNode[],
         childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>(),
-    ): { cache: IAzureViewDataTree; listing: IUnfilteredAzureListing; invalidate: ReturnType<typeof mock.fn> } {
+    ): { cache: IAzureViewDataTree; listing: IAzureListingSource; invalidate: ReturnType<typeof mock.fn> } {
         const tree = createMockHierarchicalDataItemTree(rootChildren, childrenMap);
         const accounts = rootChildren.filter(isAccount);
         const pages = pagedChildren([...childrenMap].map(([node, children]) => [node, [children]]));
@@ -40,7 +39,7 @@ describe('SignIn (unit)', () => {
     }
 
     /** An unfiltered listing with no signed-in accounts. */
-    function emptyListing(): IUnfilteredAzureListing {
+    function emptyListing(): IAzureListingSource {
         return createMockAzureListing([], pagedChildren([])).listing;
     }
 

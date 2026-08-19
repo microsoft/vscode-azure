@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscription, IAzureListingSource } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, IActionExecutor, ICodeContext, showMessage, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
-import { IAzureAccountDataProvider, type IUnfilteredAzureListing } from '../../tree/resources/AzureAccountDataProvider';
+import { IAzureAccountDataProvider } from '../../tree/resources/AzureAccountDataProvider';
 import { ICredentialOptionsScope } from '../../utils/CredentialOptionsScope';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -32,7 +32,7 @@ export class SelectSubscriptions implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-        @inject(IAzureAccountDataProvider) private readonly listing: IUnfilteredAzureListing,
+        @inject(IAzureAccountDataProvider) private readonly listing: IAzureListingSource,
         @inject(ICredentialOptionsScope) private readonly credentialOptions: ICredentialOptionsScope,
         @inject(IActionContext) private readonly actionContext: IActionContext,
     ) { }

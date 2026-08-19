@@ -3,18 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import type { ConcreteAzureNode, IAzureListingSource } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListing, makeAccount, makeSubscription, makeTenant, pagedChildren } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, MockQuickPick, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { SelectSubscriptions } from '../../../src/commands/auth/SelectSubscriptions';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
-import type { IUnfilteredAzureListing } from '../../../src/tree/resources/AzureAccountDataProvider';
 import { CredentialOptionsScope } from '../../../src/utils/CredentialOptionsScope';
 
 describe('SelectSubscriptions (unit)', () => {
-    function createCommand(listing: IUnfilteredAzureListing) {
+    function createCommand(listing: IAzureListingSource) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const actionContext = createActionContext('test');
