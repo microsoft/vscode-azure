@@ -12,6 +12,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
+import { staticWebAppsCliSetupUrl } from '../../commands/staticWebApps/staticWebAppLinks';
 import { detectStaticWebAppProject } from '../../commands/staticWebApps/steps/frameworkDetection';
 import {
     FunctionsEmulatorAddress,
@@ -121,7 +122,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
     ): Promise<vscode.DebugConfiguration | undefined> {
         context.telemetry.properties.hasWorkspaceFolder = String(!!folder);
         if (!folder) {
-            context.telemetry.properties.outcome = 'missingWorkspaceFolder';
+            context.telemetry.properties.resolveOutcome = 'missingWorkspaceFolder';
             return undefined;
         }
 
@@ -130,7 +131,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         ));
         context.telemetry.properties.cliAvailable = String(installed);
         if (!installed) {
-            context.telemetry.properties.outcome = 'cliUnavailable';
+            context.telemetry.properties.resolveOutcome = 'cliUnavailable';
             return undefined;
         }
 
@@ -151,7 +152,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         }
 
         context.telemetry.properties.cancellationRequested = String(cancellationToken.isCancellationRequested);
-        context.telemetry.properties.outcome = 'resolved';
+        context.telemetry.properties.resolveOutcome = 'resolved';
         return debugConfiguration;
     }
 
@@ -198,7 +199,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
             learnMoreLabel,
         );
         if (result === learnMoreLabel) {
-            await this.code.env.openExternal(this.code.Uri.parse('https://aka.ms/setupSwaCliCode'));
+            await this.code.env.openExternal(this.code.Uri.parse(staticWebAppsCliSetupUrl));
             return 'learnMore';
         } else if (result === fixLabel) {
             const updated: StaticWebAppsCliConfigFile = {

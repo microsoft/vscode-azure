@@ -15,3 +15,5 @@ export const staticWebAppsAppLocationUrl = 'https://aka.ms/SwaAppLoc';
 export const staticWebAppsApiLocationUrl = 'https://aka.ms/SwaApiLoc';
 /** Build output location guidance. */
 export const staticWebAppsOutputLocationUrl = 'https://aka.ms/SwaOutLoc';
+/** SWA CLI setup guidance shown when the CLI config needs fixing. */
+export const staticWebAppsCliSetupUrl = 'https://aka.ms/setupSwaCliCode';

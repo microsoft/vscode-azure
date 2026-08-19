@@ -149,7 +149,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
             hasSwaCliConfigFile: 'true',
             functionsProxyFix: 'fixed',
             debugApi: 'true',
-            outcome: 'resolved',
+            resolveOutcome: 'resolved',
             result: 'Succeeded',
         });
     });
