@@ -46,11 +46,22 @@ export interface ICaselessMapReader<V> extends Iterable<[string, V]> {
  * const deployments = new CaselessMap<Deployment>();
  * deployments.set(deployment.id, deployment);
  * deployments.get(resourceId); // matches regardless of the casing of either side
- * ```
- */
+ * ``` */
 export class CaselessMap<V> implements ICaselessMapReader<V> {
     /** Maps the folded key to the casing it was first set with, plus the current value. */
     private readonly store = new Map<string, { key: string; value: V }>();
+
+    /**
+     * @param entries - Initial `[key, value]` pairs. Keys differing only by case collapse to
+     * one entry, retaining the first casing seen and the last value set.
+     */
+    public constructor(entries?: Iterable<readonly [string, V]>) {
+        if (entries) {
+            for (const [key, value] of entries) {
+                this.set(key, value);
+            }
+        }
+    }
 
     /** Returns `true` if `key` is present, ignoring case. */
     public has(key: string): boolean {
