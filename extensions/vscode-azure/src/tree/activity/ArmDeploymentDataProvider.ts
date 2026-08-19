@@ -23,6 +23,17 @@ export type IArmDeploymentDataProvider = ArmDeploymentDataProvider;
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
 const DefaultPollingIntervalMs = 10 * 1000;
+/**
+ * How many back-to-back failed poll requests are tolerated before tracking is
+ * abandoned. Bounded so a deployment that has become permanently unreachable
+ * (deleted, or access revoked) stops issuing requests forever.
+ */
+const MaxConsecutivePollFailures = 5;
+
+/** Running count of consecutive failed poll requests, shared across one poller's requests. */
+interface PollFailureState {
+    consecutive: number;
+}
 
 /**
  * An {@linkcode Activity} representing a single ARM deployment (root or nested).
@@ -201,10 +212,11 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
             abortSignal.throwIfAborted();
 
             this.activePolls.add(activity.id);
+            const failures: PollFailureState = { consecutive: 0 };
             const poller = createHttpPoller<undefined, OperationState<undefined>>(
                 {
-                    sendInitialRequest: () => this.pollOnce(client, activity, abortSignal),
-                    sendPollRequest: () => this.pollOnce(client, activity, abortSignal),
+                    sendInitialRequest: () => this.pollOnce(client, activity, abortSignal, failures),
+                    sendPollRequest: () => this.pollOnce(client, activity, abortSignal, failures),
                 },
                 {
                     intervalInMs: DefaultPollingIntervalMs,
@@ -235,15 +247,20 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
      * {@linkcode activity}, and describe the result to the poller.
      *
      * The activity is updated here rather than from the poller's result so that
-     * every response is applied, including the initial one. A request failure is
-     * assumed to be transient: it is logged and reported as still running, so the
-     * poller waits its current interval and tries again instead of abandoning the
-     * deployment. Only an abort ends polling early.
+     * every response is applied, including the initial one.
+     *
+     * A request failure is treated as transient and reported as still running so
+     * the poller retries on its next interval, up to
+     * {@linkcode MaxConsecutivePollFailures} in a row. Past that the failure is
+     * rethrown, which ends tracking; the activity keeps its last known status and
+     * {@linkcode enrich} starts a fresh poller if the tree is refreshed later. An
+     * abort ends polling immediately and is never counted as a failure.
      */
     private async pollOnce(
         client: IDeploymentClient,
         activity: ArmDeploymentActivity,
         abortSignal: AbortSignal,
+        failures: PollFailureState,
     ): Promise<OperationResponse<undefined>> {
         this.executor.output.debug(`[activity] poll request deployment=${activity.id}`);
         let retryAfter: string | undefined;
@@ -260,12 +277,21 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
             ]);
 
             abortSignal.throwIfAborted();
+            failures.consecutive = 0;
             this.applyPollResult(activity, deployment, operations);
             return toPollResponse(activity, toLroProvisioningState(deployment.properties?.provisioningState), retryAfter);
         } catch (error) {
             abortSignal.throwIfAborted();
             const message = stringifyError(error);
             this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
+
+            if (++failures.consecutive > MaxConsecutivePollFailures) {
+                this.executor.output.warn(this.code.l10n.t('[activity] giving up tracking deployment={0} after {1} consecutive polling errors', activity.id, failures.consecutive));
+                throw error;
+            }
+
+            // Continue on a transient error: report the deployment as still
+            // running so the poller waits its current interval and retries.
             return toPollResponse(activity, KnownProvisioningState.Running, retryAfter);
         }
     }
