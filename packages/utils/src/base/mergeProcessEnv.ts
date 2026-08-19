@@ -16,6 +16,10 @@
  *
  * Names are matched exactly on other platforms, where the environment is
  * genuinely case-sensitive.
+ *
+ * @returns A fresh object; {@linkcode process.env} is never mutated. On Windows
+ * the result holds at most one spelling of any given name, even when
+ * {@linkcode overrides} supplies several.
  */
 export function mergeProcessEnv(overrides?: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
     const merged: NodeJS.ProcessEnv = { ...process.env };
@@ -33,7 +37,12 @@ export function mergeProcessEnv(overrides?: Readonly<Record<string, string>>): N
     }
 
     for (const [key, value] of Object.entries(overrides)) {
-        merged[existingKeysByName.get(key.toLowerCase()) ?? key] = value;
+        const name = key.toLowerCase();
+        // Recorded so a second override differing only in case collapses onto
+        // the same key rather than adding a rival spelling.
+        const target = existingKeysByName.get(name) ?? key;
+        existingKeysByName.set(name, target);
+        merged[target] = value;
     }
 
     return merged;
