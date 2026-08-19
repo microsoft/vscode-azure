@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import { isFileNotFoundError, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { LineCounter, parseDocument, type Node } from 'yaml';
 import type * as vscode from 'vscode';
 
@@ -123,7 +123,7 @@ export async function scanStaticWebAppWorkflows(code: IVsCode, repositoryRoot: v
     try {
         entries = await code.workspace.fs.readDirectory(workflowsUri);
     } catch (error) {
-        if (isFileNotFound(error)) {
+        if (isFileNotFoundError(error)) {
             return [];
         }
         throw error;
@@ -177,6 +177,3 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isFileNotFound(error: unknown): error is { readonly code: 'FileNotFound' } {
-    return !!error && typeof error === 'object' && 'code' in error && error.code === 'FileNotFound';
-}

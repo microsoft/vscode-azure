@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, fileExists, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -37,7 +37,7 @@ export class CreateSwaConfigFile implements ManagedCommand {
         }
 
         const configUri = this.code.Uri.joinPath(folder.uri, staticWebAppConfigFileName);
-        if (await this.exists(configUri)) {
+        if (await fileExists(this.code, configUri)) {
             const overwriteLabel = this.code.l10n.t('Overwrite');
             const response = await this.code.window.showWarningMessage(
                 this.code.l10n.t('Static Web App configuration file \'{0}\' already exists.', configUri.fsPath),
@@ -66,15 +66,4 @@ export class CreateSwaConfigFile implements ManagedCommand {
         });
     }
 
-    private async exists(uri: vscode.Uri): Promise<boolean> {
-        try {
-            await this.code.workspace.fs.stat(uri);
-            return true;
-        } catch (error) {
-            if ((error as { readonly code?: unknown }).code === 'FileNotFound') {
-                return false;
-            }
-            throw error;
-        }
-    }
 }

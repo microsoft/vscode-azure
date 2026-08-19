@@ -33,7 +33,7 @@
         "debuggers": [
             {
                 "type": "swa",
-                "label": "Azure Static Web Apps"
+                "label": "%debuggers.vscode-azure/staticWebApps/swa%"
             }
         ],
         "commands": [
@@ -672,7 +672,7 @@
             {
                 "name": "swa-watch",
                 "label": "%problemMatchers.vscode-azure/staticWebApps/swaWatch%",
-                "owner": "Azure Static Web Apps",
+                "owner": "swa",
                 "source": "swa",
                 "pattern": {
                     "regexp": ".",

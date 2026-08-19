@@ -65,5 +65,6 @@
     "settings.vscode-azure.staticWebApps.showStaticWebAppsCliWarning": "Show a warning if the installed Azure Static Web Apps CLI is out of date.",
     "submenus.vscode-azure/staticWebApps/workspaceActions": "Azure Static Web Apps",
     "problemMatchers.vscode-azure/staticWebApps/swaWatch": "Azure Static Web Apps CLI (watch mode)",
+    "debuggers.vscode-azure/staticWebApps/swa": "Azure Static Web Apps",
     "capabilities.virtualWorkspaces.description": "Some features are not supported in virtual workspaces."
 }

@@ -52,6 +52,7 @@ The VS Code extension that wires everything together:
 - **Activation**: Core container setup plus declarative product, command, and tree registration
 - **Commands**: `SignIn`, `SelectSubscriptions`, `RefreshResourcesView`, `GroupBy`, `OpenUrl` (backing open-in-portal), `BrowseWebsite`, `DeleteAzureResource`, `LoadMore`, `RefreshWorkspaceView`, `RevealInExplorer`, `DisableAcrAdminUser`, `EditSettings`, `ClearActivities`, `AzdUp`, `AzdDown`, `InstallAzd`
 - **Resource creation wizards**: `CreateFunctionApp` — azd-backed wizard for creating and deploying Azure resources. See [Resource Creation](resource-creation.md).
+- **Static Web Apps**: creation wizard, deployment routing, local CLI/debug integration. See [Static Web Apps](static-web-apps.md).
 - **Tree providers**:
   - Resources: `AzureAccountDataProvider` (account/tenant/subscription), `AzureResourceDataProvider`/`GenericAzureViewProvider` (resource groups + fallback resources), `AcrDataProvider`/`ViewProvider`, `WebAppDataProvider`/`ViewProvider` (Web App resources and their settings), `SettingsDataProvider`/`ViewProvider` (shared settings virtual-node glue -- see [Settings](settings.md))
   - Workspace (local): `AzdWorkspaceDataProvider`/`ViewProvider`, `FunctionsWorkspaceDataProvider`/`ViewProvider`, `EmulatorsWorkspaceDataProvider`/`ViewProvider`

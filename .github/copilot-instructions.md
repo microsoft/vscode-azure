@@ -9,6 +9,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers, comment/doc hygiene
 * `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
 * `docs/resource-creation.md` -- AzdJob, wizard step sequence, scenario matrix, hydration, adding new resource types
+* `docs/static-web-apps.md` -- Static Web Apps creation wizard, deployment routing, CI/CD decisions
 * `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, fixture reuse, what not to test, coverage
 * `docs/resource-models.md` -- AzureNode union, GenericResource, AzureNodeId URI scheme
 * `docs/telemetry.md` -- IActionContext, ActionExecutor, telemetry suppression

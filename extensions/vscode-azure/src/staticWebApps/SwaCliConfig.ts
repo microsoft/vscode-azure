@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { stringifyError, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { isFileNotFoundError, stringifyError, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /** File name used by the Azure Static Web Apps CLI for project configurations. */
@@ -66,7 +66,7 @@ export async function tryGetStaticWebAppsCliConfig(
     try {
         await code.workspace.fs.stat(configUri);
     } catch (error) {
-        if (isFileNotFound(error)) {
+        if (isFileNotFoundError(error)) {
             return undefined;
         }
         throw error;
@@ -84,9 +84,3 @@ export async function tryGetStaticWebAppsCliConfig(
     }
 }
 
-function isFileNotFound(error: unknown): boolean {
-    return !!error
-        && typeof error === 'object'
-        && 'code' in error
-        && error.code === 'FileNotFound';
-}

@@ -13,7 +13,7 @@ import {
     type StaticSiteBuildARMResource,
     type StaticSiteFunctionOverviewARMResource,
 } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, IVsCode, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
+import { collectPageItems, IActionExecutor, IVsCode, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { StaticWebAppSettingsAdapter } from '../../../settings/adapters/StaticWebAppSettingsAdapter';
@@ -149,7 +149,7 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             await this.enrich(site);
         }
         const { client, resourceGroupName } = this.resolveClient(site);
-        const builds = await collectPages(client.staticSites.listStaticSiteBuilds(resourceGroupName, site.name));
+        const builds = await collectPageItems(client.staticSites.listStaticSiteBuilds(resourceGroupName, site.name));
         const environments = await Promise.all(builds.map(build => this.createEnvironmentOrInvalid(site, build)));
         return environments.sort((left, right) => compareEnvironments(left, right));
     }
@@ -213,7 +213,7 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         const pages = group.isProduction
             ? client.staticSites.listStaticSiteFunctions(resourceGroupName, group.azureResource.name)
             : client.staticSites.listStaticSiteBuildFunctions(resourceGroupName, group.azureResource.name, group.environmentBuildId);
-        const functions = await collectPages(pages);
+        const functions = await collectPageItems(pages);
         const children = functions.map(func => this.createFunctionOrInvalid(group, func));
         return children.length ? children : [this.createNoFunctions(group, 'empty')];
     }
@@ -489,14 +489,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         return client;
     }
 
-}
-
-async function collectPages<T>(pages: AsyncIterable<Page<T>>): Promise<T[]> {
-    const items: T[] = [];
-    for await (const page of pages) {
-        items.push(...page.items);
-    }
-    return items;
 }
 
 function compareEnvironments(left: ConcreteAzureNode, right: ConcreteAzureNode): number {

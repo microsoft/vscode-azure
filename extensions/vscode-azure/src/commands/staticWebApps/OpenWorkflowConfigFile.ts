@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, ICodeContext } from '@microsoft/vscode-azure-utils';
+import {
+    basename,
+    CancellationError,
+    ICodeContext,
+} from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IStaticWebAppsGitHubService } from '../../services/StaticWebAppsGitHubService';
@@ -179,8 +183,4 @@ export class OpenWorkflowConfigFile implements ManagedCommand {
         const url = `${getGitHubRepositoryUrl(repository)}/edit/${encodeGitHubBranch(branch)}/.github/workflows/${encodeURIComponent(workflowName)}`;
         await this.ctx.code.env.openExternal(this.ctx.code.Uri.parse(url));
     }
-}
-
-function basename(uri: vscode.Uri): string {
-    return uri.path.split('/').pop() || uri.path;
 }

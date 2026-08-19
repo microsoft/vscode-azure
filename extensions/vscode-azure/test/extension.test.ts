@@ -245,13 +245,13 @@ describe('Static Web Apps manifest (integration)', () => {
             description: '%capabilities.virtualWorkspaces.description%',
         });
         expect(manifest.contributes.debuggers).to.deep.equal([
-            { type: 'swa', label: 'Azure Static Web Apps' },
+            { type: 'swa', label: '%debuggers.vscode-azure/staticWebApps/swa%' },
         ]);
         expect(manifest.contributes.problemMatchers).to.deep.equal([
             {
                 name: 'swa-watch',
                 label: '%problemMatchers.vscode-azure/staticWebApps/swaWatch%',
-                owner: 'Azure Static Web Apps',
+                owner: 'swa',
                 source: 'swa',
                 pattern: { regexp: '.', file: 1, location: 2, message: 3 },
                 background: {

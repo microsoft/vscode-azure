@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import { readText, relativePath, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { StaticWebAppAzdLanguage } from '../CreateStaticWebAppContext';
 import { walkDirectory } from '../../../utils/workspaceIndex/walkWorkspace';
@@ -156,7 +156,7 @@ async function scanWorkspace(code: IVsCode, root: vscode.Uri): Promise<ScannedFi
     const files: ScannedFile[] = [];
 
     for await (const directory of walkDirectory(code, root)) {
-        const relativeDirectory = relativePathFrom(root, directory.uri);
+        const relativeDirectory = relativePath(root, directory.uri) ?? '';
         for (const name of directory.fileNames) {
             files.push({
                 relativePath: relativeDirectory ? `${relativeDirectory}/${name}` : name,
@@ -173,10 +173,6 @@ async function scanWorkspace(code: IVsCode, root: vscode.Uri): Promise<ScannedFi
  * itself. The walk only ever yields descendants of the root, so no `..`
  * result is possible.
  */
-function relativePathFrom(root: vscode.Uri, uri: vscode.Uri): string {
-    return uri.path.slice(root.path.length).replace(/^\/+/, '');
-}
-
 async function detectPackageFrameworks(
     code: IVsCode,
     files: readonly ScannedFile[],
@@ -229,7 +225,7 @@ async function isNextStaticExport(
     if (!config) {
         return false;
     }
-    const source = await tryReadText(code, config.uri);
+    const source = await readText(code, config.uri);
     return !!source && /\boutput\s*:\s*['"]export['"]/.test(source);
 }
 
@@ -258,7 +254,7 @@ async function detectAngularProjectName(
 async function findBlazorProject(code: IVsCode, files: readonly ScannedFile[]): Promise<ScannedFile | undefined> {
     const projects = files.filter(file => /\.csproj$/i.test(file.relativePath)).sort(compareShallowFirst);
     for (const project of projects) {
-        const source = await tryReadText(code, project.uri);
+        const source = await readText(code, project.uri);
         if (source && /Microsoft\.AspNetCore\.Components\.WebAssembly|Sdk="Microsoft\.NET\.Sdk\.BlazorWebAssembly"/i.test(source)) {
             return project;
         }
@@ -317,7 +313,7 @@ function hasFile(files: readonly ScannedFile[], directory: string, name: string)
 }
 
 async function tryReadJson<T>(code: IVsCode, uri: vscode.Uri): Promise<T | undefined> {
-    const text = await tryReadText(code, uri);
+    const text = await readText(code, uri);
     if (text === undefined) {
         return undefined;
     }
@@ -325,17 +321,6 @@ async function tryReadJson<T>(code: IVsCode, uri: vscode.Uri): Promise<T | undef
         return JSON.parse(text) as T;
     } catch (error) {
         if (error instanceof SyntaxError) {
-            return undefined;
-        }
-        throw error;
-    }
-}
-
-async function tryReadText(code: IVsCode, uri: vscode.Uri): Promise<string | undefined> {
-    try {
-        return new TextDecoder().decode(await code.workspace.fs.readFile(uri));
-    } catch (error) {
-        if (isFileNotFound(error)) {
             return undefined;
         }
         throw error;
@@ -369,6 +354,3 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isFileNotFound(error: unknown): error is { readonly code: 'FileNotFound' } {
-    return !!error && typeof error === 'object' && 'code' in error && error.code === 'FileNotFound';
-}

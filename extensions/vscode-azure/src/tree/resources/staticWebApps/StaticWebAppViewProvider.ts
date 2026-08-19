@@ -4,7 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, getNodeType } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import {
+    basename,
+    IActionExecutor,
+    ICodeContext,
+    type ITreeItem,
+    type ViewProvider,
+} from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { CancelAction, RerunAction } from '../../../commands/staticWebApps/ActionCommands';
@@ -395,11 +401,6 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
     private command(command: string, title: string, key: string): vscode.Command {
         return { command, title, arguments: [key] };
     }
-}
-
-function basename(uri: vscode.Uri): string {
-    const parts = uri.path.split('/');
-    return parts[parts.length - 1] || uri.path;
 }
 
 function conclusionVerb(code: ICodeContext['code'], conclusion: string): string {
