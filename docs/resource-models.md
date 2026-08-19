@@ -51,7 +51,7 @@ interface AzureTenant extends WithRequired<TenantIdDescription, 'tenantId' | 'di
 interface AzureSubscription extends WithRequired<Subscription, 'subscriptionId' | 'tenantId' | 'displayName'> {
     readonly environment: EnvironmentLike;
     readonly accountId: string;    // VS Code auth account id (kept verbatim)
-    readonly homeTenantId?: string; // the tenant that owns the subscription, when ARM reports one
+    readonly homeTenantId: string; // the tenant that owns the subscription
 }
 ```
 

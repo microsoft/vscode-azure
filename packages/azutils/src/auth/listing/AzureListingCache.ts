@@ -359,7 +359,7 @@ export const IAzureListingCache: ServiceIdentifier<AzureListingCache> = Symbol.f
  * the choice is stable across sessions.
  */
 function preferHomeTenant(a: AzureSubscription, b: AzureSubscription): number {
-    const isHome = (sub: AzureSubscription) => sub.homeTenantId?.toLowerCase() === sub.tenantId.toLowerCase();
+    const isHome = (sub: AzureSubscription) => sub.homeTenantId.toLowerCase() === sub.tenantId.toLowerCase();
     if (isHome(a) !== isHome(b)) {
         return isHome(a) ? -1 : 1;
     }

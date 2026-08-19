@@ -6,44 +6,13 @@
 import { AzureListingCache } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcher, type MockAzureListingFetcherOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { collectAsync, createActionContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createTestActionExecutor, MockQuickPick, respondToPrompts, withSettings } from '@microsoft/vscode-azure-utils/testing';
-import type * as vscode from 'vscode';
+import { createMockCodeContext, createTestActionExecutor, respondToPrompts, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { SelectSubscriptions } from '../../../src/commands/auth/SelectSubscriptions';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
 import { CredentialOptionsScope } from '../../../src/utils/CredentialOptionsScope';
 import { createSubscriptionFilter } from '../../../src/utils/subscriptionFilter';
 
 const selectedSubscriptionsKey = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
-
-/** Labels a quick pick was given, and the subset production pre-checked. */
-interface QuickPickCapture {
-    readonly items: string[];
-    readonly selected: string[];
-}
-
-/**
- * Capture what the next quick pick is shown, then accept whatever production
- * pre-checked. Cast to a loose mock shape because the real `createQuickPick`
- * signature is generic (`<T>() => QuickPick<T>`), which a concrete impl can't
- * satisfy.
- */
-function captureQuickPick(mockResult: ReturnType<typeof createMockCodeContext>['mock']): QuickPickCapture {
-    const capture: QuickPickCapture = { items: [], selected: [] };
-    const createQuickPickMock = (mockResult.window.createQuickPick as unknown as {
-        mock: { mockImplementation: (fn: () => MockQuickPick<vscode.QuickPickItem>) => void };
-    }).mock;
-    createQuickPickMock.mockImplementation(() => {
-        const qp = new MockQuickPick<vscode.QuickPickItem>();
-        (mockResult.quickPicks as MockQuickPick<vscode.QuickPickItem>[]).push(qp);
-        qp.show.mock.mockImplementation(() => {
-            capture.items.push(...qp.items.map(item => item.label));
-            capture.selected.push(...qp.selectedItems.map(item => item.label));
-            qp.accept();
-        });
-        return qp;
-    });
-    return capture;
-}
 
 describe('SelectSubscriptions (unit)', () => {
     function createCommand(options: MockAzureListingFetcherOptions, fetcher?: MockAzureListingFetcher) {
@@ -77,11 +46,12 @@ describe('SelectSubscriptions (unit)', () => {
         // could only ever narrow their selection and never widen it again.
         const { command, mockResult } = createCommand(bothSubscriptions);
         mockResult.settings.set(selectedSubscriptionsKey, ['tenant-1/sub-1']);
-        const offered = captureQuickPick(mockResult);
+        respondToPrompts(mockResult, ['acceptDefault']);
 
         await command.execute();
 
-        expect(offered.items).to.deep.equal(['Sub One (sub-1)', 'Sub Two (sub-2)']);
+        expect(mockResult.quickPicks[0].items.map(item => item.label))
+            .to.deep.equal(['Sub One (sub-1)', 'Sub Two (sub-2)']);
     });
 
     it('should pre-check the currently-selected subscriptions case-insensitively', async () => {
@@ -91,14 +61,15 @@ describe('SelectSubscriptions (unit)', () => {
         // ids case-insensitively, so the pre-check must still match sub-2.
         mockResult.settings.set(selectedSubscriptionsKey, ['TENANT-1/SUB-2']);
 
-        // Snapshot which items production pre-checks (assigned to selectedItems
-        // before show()), then accept that selection unchanged.
-        const capture = captureQuickPick(mockResult);
+        // Accept the selection unchanged. Every other response would overwrite
+        // `selectedItems`, which is exactly what production pre-checked.
+        respondToPrompts(mockResult, ['acceptDefault']);
 
         await command.execute();
 
         // Only sub-2 was in the (upper-cased) filter, so only it is pre-checked...
-        expect(capture.selected).to.deep.equal(['Sub Two (sub-2)']);
+        expect(mockResult.quickPicks[0].selectedItems.map(item => item.label))
+            .to.deep.equal(['Sub Two (sub-2)']);
         // ...and accepting the pre-checked set round-trips to the lowercased id.
         expect(mockResult.settings.get(selectedSubscriptionsKey)).to.deep.equal(['tenant-1/sub-2']);
     });

@@ -68,17 +68,17 @@ export interface AzureSubscription extends WithRequired<Subscription, 'subscript
      */
     readonly accountId: string;
     /**
-     * The tenant ARM reports as the subscription's owner, when it differs from
-     * the tenant the subscription was listed through
-     * ({@linkcode AzureSubscription.tenantId tenantId}).
+     * The tenant ARM reports as the subscription's owner.
      *
      * A subscription can be reachable through more than one tenant -- a guest
      * or delegated arrangement lists it under a tenant that does not own it --
      * and each of those is a distinct node that authenticates through its own
      * tenant. This field is the tie-break signal for choosing between such
-     * copies when only a subscription id is known.
+     * copies when only a subscription id is known, so it is always populated;
+     * it equals {@linkcode AzureSubscription.tenantId tenantId} whenever the
+     * listing tenant is also the owner.
      */
-    readonly homeTenantId?: string;
+    readonly homeTenantId: string;
 }
 
 /**

@@ -9,7 +9,7 @@ import {
     isAccount, isTenant,
     PublicAuthProviderId, SovereignAuthProviderId, SovereignCloudConfigurationSection,
     SubscriptionClient,
-    type AzureAccount, type AzureListingCache, type AzureListingFilter,
+    type AzureAccount, type AzureListingCache, type AzureListingFilter, type AzureListingOptions,
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
@@ -179,7 +179,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // Lists already-signed-in accounts without prompting. The user is
             // prompted to sign in lazily when an operation actually needs a
             // credential (the default credential uses `createIfNone`).
-            return this.listAccounts(options.filter);
+            return this.listAccounts(options);
         }
 
         if (isAccount(resource)) {
@@ -263,8 +263,8 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     }
 
     /** List accounts and record the resulting id set for session reconciliation. */
-    private async listAccounts(filter: AzureListingFilter | undefined): Promise<AzureAccount[]> {
-        const accounts = await this.listings.listAccounts({ filter });
+    private async listAccounts(options?: AzureListingOptions): Promise<AzureAccount[]> {
+        const accounts = await this.listings.listAccounts(options);
         this.knownAccountIds = new CaselessSet(accounts.map(account => account.id));
         return accounts;
     }

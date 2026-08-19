@@ -126,7 +126,7 @@ export class AzureListingFetcher implements IAzureListingFetcher {
     /**
      * @inheritdoc
      *
-     * Accounts can belong to a very large number of tenants, so pages are
+     * An account can have access to a very large number of tenants, so pages are
      * streamed lazily rather than buffered; ordering follows the service
      * response (no cross-page sort).
      *
@@ -198,7 +198,7 @@ export class AzureListingFetcher implements IAzureListingFetcher {
                     ...sub,
                     subscriptionId: sub.subscriptionId.toLowerCase(),
                     tenantId: tenant.tenantId,
-                    homeTenantId: sub.tenantId?.toLowerCase(),
+                    homeTenantId: sub.tenantId?.toLowerCase() ?? tenant.tenantId,
                     environment: tenant.environment,
                     accountId: tenant.accountId,
                 } satisfies AzureSubscription));

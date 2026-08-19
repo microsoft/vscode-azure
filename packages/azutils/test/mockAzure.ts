@@ -55,10 +55,14 @@ export function makeTenant(overrides?: Partial<AzureTenant>): AzureTenant {
  */
 export function makeSubscription(overrides?: Partial<AzureSubscription>): AzureSubscription {
     const tenant = makeTenant();
+    const tenantId = overrides?.tenantId ?? tenant.tenantId;
     return {
         subscriptionId: 'test-sub',
         displayName: 'Test Subscription',
-        tenantId: tenant.tenantId,
+        tenantId,
+        // Default to the listing tenant also being the owner; a test modelling a
+        // guest or delegated grant overrides this explicitly.
+        homeTenantId: tenantId,
         environment: tenant.environment,
         accountId: tenant.accountId,
         ...overrides,

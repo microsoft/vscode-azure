@@ -9,8 +9,6 @@ import { createMockVsCode, withSettings } from '@microsoft/vscode-azure-utils/te
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../src/constants';
 import { createSubscriptionFilter, parseSubscriptionFilterKey, subscriptionFilterKey } from '../../src/utils/subscriptionFilter';
 
-const selectedSubscriptionsKey = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
-
 describe('subscriptionFilter (unit)', () => {
     describe('subscriptionFilterKey', () => {
         it('should join the tenant and subscription ids with a slash', () => {
@@ -49,7 +47,8 @@ describe('subscriptionFilter (unit)', () => {
         /** Build the filter with the setting temporarily set to `selected`. */
         function filterFor(selected: string[]): AzureListingFilter | undefined {
             const mockResult = createMockVsCode();
-            return withSettings(mockResult, { [selectedSubscriptionsKey]: selected }, () => createSubscriptionFilter(mockResult.vscode)) as AzureListingFilter | undefined;
+            const key = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
+            return withSettings(mockResult, { [key]: selected }, () => createSubscriptionFilter(mockResult.vscode)) as AzureListingFilter | undefined;
         }
 
         it('should return undefined when nothing is selected', () => {

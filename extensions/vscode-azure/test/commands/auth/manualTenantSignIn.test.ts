@@ -101,14 +101,17 @@ describe('manual tenant sign-in (unit)', () => {
         ]);
     });
 
-    it('should sign in without prompting through the authentication provider', async () => {
+    it('should drive the tenant sign-in through the credential factory', async () => {
         const { code, command, credentialFactory } = createHarness();
 
         respondToPrompts(code, [{ value: manualTenantId }]);
         await command.execute();
 
-        // The mock factory stands in for the whole authentication provider, so a
-        // sign-in flow can be driven with no interactive session at all.
+        // The factory owns provider selection and auth logging, so the command
+        // goes through it rather than calling getSession itself. Mocking it is
+        // therefore enough to drive a sign-in with no real session behind it --
+        // the request is still interactive (`createIfNone`), scoped to the
+        // tenant the user typed.
         expect(code.authentication.getSession.mock.callCount()).to.equal(0);
         expect(credentialFactory.mock.calls.map(call => call.arguments[0])).to.deep.equal([
             { tenantId: manualTenantId, sessionOptions: { createIfNone: true } },

@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/**
+import { isSubscription, isTenant, type AzureListingFilter } from '@microsoft/vscode-azure-azutils';
+import { CaselessSet, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
+
+/*
  * Owns the format of the `vscode-azure.selectedSubscriptions` filter entries: a
  * `tenantId/subscriptionId` pair with both halves lowercased. Keeping the build
  * and parse sides in one place ensures the values written by the Select
@@ -11,10 +15,6 @@
  * tree walks the listing cache (change the separator or casing here and both
  * directions stay in sync).
  */
-
-import { isSubscription, isTenant, type AzureListingFilter } from '@microsoft/vscode-azure-azutils';
-import { CaselessSet, type IVsCode } from '@microsoft/vscode-azure-utils';
-import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
 
 /** The separator between the tenant id and subscription id in a filter key. */
 const separator = '/';

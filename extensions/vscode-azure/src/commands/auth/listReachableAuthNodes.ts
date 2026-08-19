@@ -50,11 +50,11 @@ export interface ReachableSubscriptionsResult {
 /**
  * Enumerate the first page of reachable tenants across all signed-in accounts.
  *
- * Accounts can belong to a very large number of tenants (hundreds), so this
- * deliberately reads only the first page of each account's tenants. The result
- * is intended to seed a combobox where the user can either pick a suggested
- * tenant or type any tenant ID directly, so an exhaustive list is neither
- * needed nor desirable.
+ * An account can have access to a very large number of tenants (hundreds), so
+ * this deliberately reads only the first page of each account's tenants. The
+ * result is intended to seed a combobox where the user can either pick a
+ * suggested tenant or type any tenant ID directly, so an exhaustive list is
+ * neither needed nor desirable.
  *
  * Read **unfiltered**: this feeds a flow that decides which tenants to sign in
  * to, and a list narrowed by the current filter could only ever narrow it
