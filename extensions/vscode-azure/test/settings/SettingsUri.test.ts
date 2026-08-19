@@ -35,6 +35,15 @@ describe('SettingsUri (unit)', () => {
             expect(uri.path.endsWith('.jsonc')).to.be.true;
         });
 
+        it('keeps the file in one path segment when the document name contains a separator', () => {
+            // ARM names a deployment slot 'site/slot', so a document name can arrive with a separator
+            // already in it.
+            const uri = SettingsUri.from(code, makeSettingsNode(undefined, undefined, 'MyFuncApp/staging'));
+
+            expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(makeSettingsNode()).toString());
+            expect(uri.path.endsWith('/MyFuncApp-staging.settings.jsonc')).to.equal(true, uri.path);
+        });
+
         it('distinguishes settings on two different resources', () => {
             const first = SettingsUri.from(code, makeSettingsNode({ name: 'first' }));
             const second = SettingsUri.from(code, makeSettingsNode({ name: 'second' }));

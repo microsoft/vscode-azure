@@ -16,6 +16,8 @@ const SettingsFileExtension = '.settings.jsonc';
 
 const HexPattern = /^[0-9a-f]+$/i;
 
+const PathSeparators = /[/\\]/g;
+
 /**
  * Encodes and decodes the `azure-settings:` URIs that address settings documents.
  *
@@ -40,7 +42,10 @@ export const SettingsUri = {
     /** Build the document URI for a settings node. */
     from(code: IVsCode, node: SettingsNode): vscode.Uri {
         const nodeKey = Buffer.from(AzureNodeId.from(node).toString(), 'utf8').toString('hex');
-        const fileName = `${node.documentName}${SettingsFileExtension}`;
+
+        // A document name is a display string and may legitimately contain a path separator -- ARM
+        // names a deployment slot 'site/slot' -- so flatten it to keep the file in one path segment.
+        const fileName = `${node.documentName.replace(PathSeparators, '-')}${SettingsFileExtension}`;
 
         return code.Uri.from({ scheme: SettingsScheme, path: `/${nodeKey}/${fileName}` });
     },

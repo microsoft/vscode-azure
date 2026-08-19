@@ -100,8 +100,9 @@ export function makeSettingsResource(overrides?: Parameters<typeof makeGenericRe
 export function makeSettingsNode(
     overrides?: Parameters<typeof makeGenericResource>[0],
     adapter: SettingsAdapter = new StubAdapter({ logicalTypes: [FunctionAppLogicalType] }),
+    documentName?: string,
 ): SettingsNode {
-    return getSettingsNodes(makeSettingsResource(overrides), adapter)[0];
+    return getSettingsNodes(makeSettingsResource(overrides), adapter, documentName)[0];
 }
 
 /** A settings snapshot with sensible defaults for editor and format tests. */
