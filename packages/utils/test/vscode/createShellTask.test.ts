@@ -136,6 +136,55 @@ describe('createShellTask (unit)', () => {
         })).to.throw(/A command line must include at least the executable/);
     });
 
+    it('resolves the executable against the caller-supplied PATH', async () => {
+        const m = createMockVsCode();
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'shell-task-path-'));
+        try {
+            const extension = process.platform === 'win32' ? '.cmd' : '';
+            const target = path.join(directory, `pathtool${extension}`);
+            await fs.writeFile(target, process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n', { mode: 0o755 });
+
+            // The name is absent from the real PATH, so this only succeeds if
+            // the override is honored.
+            const task = createShellTask(m.vscode, {
+                command: ['pathtool'],
+                name: 'Example task',
+                env: { PATH: directory },
+            });
+
+            const execution = task.execution as vscode.ShellExecution;
+            expect(execution.command).to.deep.equal({ value: target, quoting: ShellQuoting.Strong });
+        } finally {
+            await fs.rm(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('lets a differently-cased PATH override replace the inherited one', async function () {
+        // Windows environment names are case-insensitive, so `Path` must
+        // replace `PATH` rather than producing an ambiguous environment.
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+
+        const m = createMockVsCode();
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'shell-task-case-'));
+        try {
+            const target = path.join(directory, 'casetool.cmd');
+            await fs.writeFile(target, '@echo off\r\n');
+
+            const task = createShellTask(m.vscode, {
+                command: ['casetool'],
+                name: 'Example task',
+                env: { Path: directory },
+            });
+
+            const execution = task.execution as vscode.ShellExecution;
+            expect(execution.command).to.deep.equal({ value: target, quoting: ShellQuoting.Strong });
+        } finally {
+            await fs.rm(directory, { recursive: true, force: true });
+        }
+    });
+
     it('does not hand a bare name to the shell when only the working directory has a match', async function () {
         // cmd.exe searches the working directory before PATH, so passing the
         // bare name through would let a planted binary run.

@@ -12,6 +12,7 @@ import { CancellationError } from '../vscode/CancellationError';
 import { createShellTask } from '../vscode/createShellTask';
 import type { IVsCode } from '../vscode/IVsCode';
 import { argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
+import { mergeProcessEnv } from './mergeProcessEnv';
 import { toAbortSignal } from './toAbortSignal';
 
 export * from './CommandLineBuilder';
@@ -277,7 +278,7 @@ export class ProcessExecutor implements IProcessExecutor {
                 cwd: options.cwd?.fsPath,
                 // The child environment replaces `process.env` rather than
                 // layering onto it, so merge the caller's overrides here.
-                env: { ...process.env, ...options.env },
+                env: mergeProcessEnv(options.env),
                 // Required so Windows `.cmd` shims (the Azure CLI's `az.cmd`)
                 // resolve and launch; arguments are still escaped individually.
                 allowWindowsBatchFiles: true,

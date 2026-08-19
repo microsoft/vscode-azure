@@ -208,6 +208,29 @@ describe('ProcessExecutor (unit)', () => {
             expect(spawnOptions.env).to.have.property('PATH', process.env.PATH);
         });
 
+        it('should replace a differently-cased env override rather than duplicating it', async function () {
+            // Windows environment names are case-insensitive, and a spawn whose
+            // environment carries two spellings of one name is rejected.
+            if (process.platform !== 'win32') {
+                this.skip();
+            }
+
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ stdout: 'ok' });
+            const executor = new ProcessExecutor(code, spawnFn);
+
+            await executor.spawn({
+                execution: 'background',
+                command: ['test-cmd'],
+                env: { Path: 'C:\\only-this' },
+            });
+
+            const spawnOptions = spawnFn.mock.calls[0].arguments[2]!;
+            const pathKeys = Object.keys(spawnOptions.env ?? {}).filter((key) => key.toLowerCase() === 'path');
+            expect(pathKeys).to.have.lengthOf(1);
+            expect(spawnOptions.env?.[pathKeys[0]]).to.equal('C:\\only-this');
+        });
+
         it('should allow Windows batch files so .cmd shims can be launched', async () => {
             const { vscode: code } = createMockVsCode();
             const spawnFn = createMockSpawn({ stdout: 'ok' });

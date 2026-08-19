@@ -6,6 +6,7 @@
 import { ProcessError, resolveExecutable } from '@azure/core-process';
 import type * as vscode from 'vscode';
 import { argToString, ShellQuoting, type CommandLineArg, type CommandLineArgs } from '../base/CommandLineBuilder';
+import { mergeProcessEnv } from '../base/mergeProcessEnv';
 import type { IVsCode } from './IVsCode';
 
 /**
@@ -61,6 +62,11 @@ export function createShellTask(code: IVsCode, options: CreateShellTaskOptions):
 
     const resolved = resolveExecutable(name, {
         cwd: options.cwd?.fsPath,
+        // Resolved against the environment the task will actually run under,
+        // since VS Code merges `env` over the parent environment. A caller that
+        // overrides `PATH` must not have the executable looked up on a
+        // different one.
+        env: mergeProcessEnv(options.env),
         // Batch files are allowed so Windows `.cmd` shims (the Azure CLI's
         // `az.cmd`) resolve; a shell runs the task, so it can invoke them.
         allowWindowsBatchFiles: true,
