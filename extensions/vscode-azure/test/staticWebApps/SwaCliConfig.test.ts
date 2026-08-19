@@ -77,7 +77,7 @@ describe('Static Web Apps local config detection (unit)', () => {
         expect((error as Error).message).to.contain('parse');
     });
 
-    it('should find only a one-level database config outside node_modules', async () => {
+    it('should prefer the shallowest database config outside excluded directories', async () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
         mockResult.fs.addFile(
@@ -95,14 +95,36 @@ describe('Static Web Apps local config detection (unit)', () => {
         expect(result?.path).to.equal('/workspace/data');
     });
 
-    it('should not treat root or deeper database configs as one-level matches', async () => {
+    it('should not treat a root database config as a match', async () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
         mockResult.fs.addFile(
             mockResult.vscode.Uri.joinPath(root, 'staticwebapp.database.config.json'),
         );
+
+        expect(await getFolderContainingDatabaseConfig(mockResult.vscode, root)).to.equal(undefined);
+    });
+
+    it('should find a nested database config when nothing shallower has one', async () => {
+        const mockResult = createMockVsCode();
+        const root = mockResult.vscode.Uri.file('/workspace');
         mockResult.fs.addFile(
             mockResult.vscode.Uri.joinPath(root, 'one', 'two', 'staticwebapp.database.config.json'),
+        );
+
+        const result = await getFolderContainingDatabaseConfig(mockResult.vscode, root);
+
+        expect(result?.path).to.equal('/workspace/one/two');
+    });
+
+    it('should ignore a database config inside an excluded directory', async () => {
+        const mockResult = createMockVsCode();
+        const root = mockResult.vscode.Uri.file('/workspace');
+        mockResult.fs.addFile(
+            mockResult.vscode.Uri.joinPath(root, 'node_modules', 'pkg', 'staticwebapp.database.config.json'),
+        );
+        mockResult.fs.addFile(
+            mockResult.vscode.Uri.joinPath(root, 'dist', 'staticwebapp.database.config.json'),
         );
 
         expect(await getFolderContainingDatabaseConfig(mockResult.vscode, root)).to.equal(undefined);

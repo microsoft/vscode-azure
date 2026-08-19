@@ -31,6 +31,12 @@ export const SwaDebugType = 'swa';
 export const PwaChromeDebugType = 'pwa-chrome';
 
 const debugConfigurationPrefix = 'SWA: Run ';
+/**
+ * Command contributed by the standalone Azure Functions extension that adds an
+ * attach configuration to a Functions project. An optional integration: this
+ * extension works without it.
+ */
+const InitFunctionsProjectCommandId = 'azureFunctions.initProjectForVSCode';
 const configPostfix = ` (${SwaCliConfigFileName})`;
 type FunctionsProxyFixOutcome = 'notApplicable' | 'alreadyConfigured' | 'fixed' | 'learnMore' | 'dismissed';
 
@@ -92,11 +98,15 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         debugConfiguration: vscode.DebugConfiguration,
         cancellationToken: vscode.CancellationToken,
     ): Promise<vscode.DebugConfiguration | undefined> {
+        // VS Code calls this for every debug session of every type, so hand back
+        // anything that is not ours before starting a telemetry action.
+        if (!isSwaDebugConfiguration(debugConfiguration)) {
+            return debugConfiguration;
+        }
+
         return this.executor.callWithTelemetryAndErrorHandling(
             'staticWebApps.resolveDebugConfiguration',
             async context => {
-                context.telemetry.isUserEvent = false;
-                context.telemetry.suppress = 'onSuccess';
                 context.errorHandling.rethrow = true;
                 return this.resolveSwaDebugConfiguration(folder, debugConfiguration, cancellationToken, context);
             },
@@ -109,11 +119,6 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         cancellationToken: vscode.CancellationToken,
         context: IActionContext,
     ): Promise<vscode.DebugConfiguration | undefined> {
-        if (!isSwaDebugConfiguration(debugConfiguration)) {
-            return debugConfiguration;
-        }
-        context.telemetry.isUserEvent = true;
-        context.telemetry.suppress = undefined;
         context.telemetry.properties.hasWorkspaceFolder = String(!!folder);
         if (!folder) {
             context.telemetry.properties.outcome = 'missingWorkspaceFolder';
@@ -215,13 +220,29 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         return 'dismissed';
     }
 
+    /**
+     * Attaches the Azure Functions debugger to the workspace's API, if the
+     * workspace has an attach configuration for it.
+     *
+     * @remarks
+     * Generating that configuration is the standalone Azure Functions
+     * extension's `azureFunctions.initProjectForVSCode`, which this extension
+     * neither owns nor requires. Invoking a command that is not registered
+     * rejects, so it is only used when actually present; otherwise the user is
+     * told what is missing and the browser still launches without the API
+     * attached.
+     */
     private async startFunctionsDebugging(folder: vscode.WorkspaceFolder): Promise<boolean> {
         let configuration = getFunctionsDebugConfiguration(this.code, folder);
         if (!configuration) {
-            await this.code.commands.executeCommand(
-                'azureFunctions.initProjectForVSCode',
-                folder.uri.fsPath,
-            );
+            if (!(await this.code.commands.getCommands(true)).includes(InitFunctionsProjectCommandId)) {
+                void this.code.window.showWarningMessage(this.code.l10n.t(
+                    'This static web app has an API, but the workspace has no Azure Functions attach configuration, so the API will not be debugged. Install the Azure Functions extension to generate one.',
+                ));
+                return false;
+            }
+
+            await this.code.commands.executeCommand(InitFunctionsProjectCommandId, folder.uri.fsPath);
             configuration = getFunctionsDebugConfiguration(this.code, folder);
         }
         if (configuration) {

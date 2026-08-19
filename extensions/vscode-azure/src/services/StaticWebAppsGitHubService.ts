@@ -35,9 +35,10 @@ export type IStaticWebAppsGitHubService = StaticWebAppsGitHubService;
 /**
  * Lazy, token-safe GitHub operations used by Static Web Apps.
  *
- * Construction and activation never prompt. Tree or command operations request
- * a session only when invoked. {@linkcode prepareAuthentication} may be called
- * during activation to advertise account availability without prompting.
+ * Construction and activation never prompt, and nothing here runs until a tree
+ * or command operation asks for it. Callers that must not prompt use
+ * {@linkcode StaticWebAppsGitHubService.hasAuthentication hasAuthentication};
+ * everything else acquires a session on demand.
  */
 @injectable()
 export class StaticWebAppsGitHubService {
@@ -50,11 +51,14 @@ export class StaticWebAppsGitHubService {
     ) { }
 
     /**
-     * Requests an existing GitHub session without creating one.
+     * Whether VS Code already holds a GitHub session this extension can use.
      *
-     * @returns `true` when VS Code already has a suitable session.
+     * Never creates one, so it never prompts and never surfaces an account
+     * picker. Callers use it to decide whether a GitHub-backed affordance is
+     * worth offering, not as a precondition -- the operations themselves
+     * acquire a session on demand.
      */
-    public async prepareAuthentication(): Promise<boolean> {
+    public async hasAuthentication(): Promise<boolean> {
         return !!await this.getSession(false);
     }
 

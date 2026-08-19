@@ -3,26 +3,26 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IExtensionContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import type { Container } from 'inversify';
 import { SwaDebugConfigurationProvider, PwaChromeDebugType, SwaDebugType } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
-import { IStaticWebAppsGitHubService } from '../services/StaticWebAppsGitHubService';
 import { SwaTaskLifecycle } from '../tasks/staticWebApps/SwaTaskLifecycle';
 import { SwaTaskProvider } from '../tasks/staticWebApps/SwaTaskProvider';
 import { GitHubActionLogContentProvider, GitHubActionLogScheme } from './GitHubActionLogContentProvider';
 import { GitHubActionLogFoldingProvider } from './GitHubActionLogFoldingProvider';
+import { StaticWebAppConfigFileName, SwaCliConfigFileName } from './SwaCliConfig';
 import { ISwaCliService } from './SwaCliService';
 
 /**
  * Registers Static Web Apps local task/debug/log providers and activation services.
  *
- * Every registration is owned by the extension context. Best-effort activation
- * checks use explicit rejection handlers so they cannot become unhandled promises.
+ * Every registration is owned by the extension context. The one best-effort
+ * activation check is gated on the workspace actually holding a Static Web Apps
+ * project, so users without one pay nothing for it.
  */
 export function registerStaticWebAppLocalTools(container: Container): void {
     const code = container.get(IVsCode);
     const extensionContext = container.get(IExtensionContext);
-    const output = container.get(IOutputChannel);
     const taskProvider = container.get(SwaTaskProvider);
     const debugProvider = container.get(SwaDebugConfigurationProvider);
     const contentProvider = container.get(GitHubActionLogContentProvider);
@@ -53,18 +53,44 @@ export function registerStaticWebAppLocalTools(container: Container): void {
     // Resolve the singleton so its event subscriptions are active.
     container.get(SwaTaskLifecycle);
 
-    if (!process.env.VSCODE_RUNNING_TESTS) {
-        void container.get(IActionExecutor).callWithTelemetryAndErrorHandling(
-            'staticWebApps.validateStaticWebAppsCliIsLatest',
-            async context => {
-                context.telemetry.isUserEvent = false;
-                context.errorHandling.suppress = 'display';
-                await container.get(ISwaCliService).warnIfOutdated();
-            },
-        );
+    void container.get(IActionExecutor).callWithTelemetryAndErrorHandling(
+        'staticWebApps.validateStaticWebAppsCliIsLatest',
+        async context => {
+            context.telemetry.isUserEvent = false;
+            context.errorHandling.suppress = 'display';
 
-        void container.get(IStaticWebAppsGitHubService).prepareAuthentication().catch(() => {
-            output.warn(code.l10n.t('[swa] GitHub authentication prewarm failed.'));
-        });
+            const hasProject = await hasStaticWebAppProject(code);
+            context.telemetry.properties.hasStaticWebAppProject = String(hasProject);
+            if (!hasProject) {
+                return;
+            }
+
+            await container.get(ISwaCliService).warnIfOutdated();
+        },
+    );
+}
+
+/**
+ * Whether any workspace folder holds a Static Web Apps project at its root.
+ *
+ * Two `stat` calls per folder, which is cheap enough to run on every
+ * activation -- unlike the update check it gates, which spawns npm and queries
+ * the registry, and which most users have no Static Web App to benefit from.
+ *
+ * Only folder roots are checked, deliberately: a walk is not worth paying for
+ * to decide whether to show an optional version nudge.
+ */
+async function hasStaticWebAppProject(code: IVsCode): Promise<boolean> {
+    for (const folder of code.workspace.workspaceFolders ?? []) {
+        for (const name of [SwaCliConfigFileName, StaticWebAppConfigFileName]) {
+            try {
+                await code.workspace.fs.stat(code.Uri.joinPath(folder.uri, name));
+                return true;
+            } catch {
+                // Absent, which is the common case and not an error here.
+            }
+        }
     }
+
+    return false;
 }

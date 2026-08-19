@@ -17,11 +17,11 @@ describe('StaticWebAppsGitHubService (unit)', () => {
         expect(mock.authentication.getSession.mock.callCount()).to.equal(0);
     });
 
-    it('should pre-warm authentication without prompting', async () => {
+    it('should report existing authentication without prompting', async () => {
         const { ctx, mock } = createMockCodeContext();
         const service = new StaticWebAppsGitHubService(ctx.code, ctx.extensionContext);
 
-        expect(await service.prepareAuthentication()).to.be.false;
+        expect(await service.hasAuthentication()).to.be.false;
         const call = mock.authentication.getSession.mock.calls[0];
         expect(call.arguments[0]).to.equal('github');
         expect(call.arguments[1]).to.deep.equal(staticWebAppsGitHubScopes);
@@ -42,7 +42,7 @@ describe('StaticWebAppsGitHubService (unit)', () => {
         })) as never);
         const service = new StaticWebAppsGitHubService(ctx.code, ctx.extensionContext);
 
-        expect(await service.prepareAuthentication()).to.be.true;
+        expect(await service.hasAuthentication()).to.be.true;
         expect(mock.authentication.getSession.mock.callCount()).to.equal(2);
         expect(mock.authentication.getSession.mock.calls[1].arguments[1]).to.deep.equal([
             ...staticWebAppsGitHubScopes,
