@@ -4,21 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    IAzureListingCache, IAzureListingFetcher,
+    IAzureListingCache,
     ICredentialFactory,
     isAccount, isTenant,
     PublicAuthProviderId, SovereignAuthProviderId, SovereignCloudConfigurationSection,
     SubscriptionClient,
-    type AzureAccount, type AzureListingCache, type AzureListingFilter, type AzureListingOptions,
+    type AzureAccount, type AzureListingCache,
     type ConcreteAzureNode,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    CaselessSet, DebounceScheduler, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
+    CaselessSet, DebounceScheduler, Disposable, EventEmitter, Everything, filterPages, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
     type ChildResult, type DataProvider, type DataProviderChangeEvent, type Event, type ICaselessSetReader, type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../constants';
-import { createSubscriptionFilter } from '../../utils/subscriptionFilter';
+import { createSubscriptionFilter, type SelectedSubscriptionsFilter } from '../../utils/subscriptionFilter';
 
 /**
  * Identifier for the root account/tenant/subscription data provider. Bound as a
@@ -40,6 +40,12 @@ const SessionChangeDebounceMs = 500;
 
 /** Debounce key for coalescing `onDidChangeSessions` bursts. */
 const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidation');
+
+/**
+ * Window (ms) during which a session-change event is treated as this provider's
+ * own echo of the `getAccounts()` call it just made.
+ */
+const SelfInducedSessionEventMs = 1000;
 
 /** Whether two sets contain exactly the same ids, ignoring case. */
 function idSetsEqual(a: ICaselessSetReader, b: ICaselessSetReader): boolean {
@@ -98,6 +104,16 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      */
     private knownAccountIds: ICaselessSetReader | undefined;
 
+    /**
+     * Timestamp (epoch ms) before which `onDidChangeSessions` is ignored.
+     *
+     * Reconciling calls `getAccounts()`, which itself raises a session-change
+     * event, so without this the reconcile would re-trigger itself forever. Only
+     * this provider's own echo needs suppressing: an event provoked by anything
+     * else costs one reconcile that finds the account set unchanged and stops.
+     */
+    private ignoreSessionChangesUntil = 0;
+
     public readonly onDidChange = this.changeEmitter.event;
     public readonly onDidRemoveAccounts = this.removeAccountsEmitter.event;
 
@@ -106,7 +122,6 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
         @inject(IAzureListingCache) private readonly listings: AzureListingCache,
-        @inject(IAzureListingFetcher) private readonly fetcher: IAzureListingFetcher,
         @unmanaged() private readonly sessionChangeScheduler: IDebounceScheduler = new DebounceScheduler(SessionChangeDebounceMs, SessionInvalidationKey),
     ) {
         this.disposables = [this.changeEmitter, this.removeAccountsEmitter, this.sessionChangeScheduler];
@@ -115,10 +130,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
                 return;
             }
 
-            // Listing accounts can itself raise a session-change event, so the
-            // fetcher that makes the call is asked whether this one is
-            // plausibly its own.
-            if (this.fetcher.shouldIgnoreSessionChange()) {
+            if (Date.now() < this.ignoreSessionChangesUntil) {
                 this.executor.output.trace(`[auth] sessions changed provider=${e.provider.id}; suppressed (self-induced window)`);
                 return;
             }
@@ -173,21 +185,27 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * @throws if `resource` is neither an account nor a tenant.
      */
     public getChildren(resource?: ConcreteAzureNode): ProviderResult<ChildResult<ConcreteAzureNode>> {
-        const options = { filter: this.filter() };
-
         if (!resource) {
             // Lists already-signed-in accounts without prompting. The user is
             // prompted to sign in lazily when an operation actually needs a
             // credential (the default credential uses `createIfNone`).
-            return this.listAccounts(options);
+            return this.listAccounts();
         }
 
+        const filter = this.filter();
+
         if (isAccount(resource)) {
-            return this.listings.listTenants(resource, options);
+            // Excluded tenants are skipped by the cache itself, so no
+            // tenant-scoped token is minted for them and their subscriptions are
+            // never listed.
+            return this.listings.listTenants(resource, { filter: filter?.admitsTenant });
         }
 
         if (isTenant(resource)) {
-            return this.listings.listSubscriptions(resource, options);
+            // By contrast this tenant is already listed, so dropping a
+            // subscription here saves no work -- it is only about what the tree
+            // shows, and belongs above the cache.
+            return filterPages(this.listings.listSubscriptions(resource), filter?.admitsSubscription);
         }
 
         throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
@@ -258,13 +276,13 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     }
 
     /** The filter currently configured, or `undefined` when nothing is filtered. */
-    private filter(): AzureListingFilter | undefined {
+    private filter(): SelectedSubscriptionsFilter | undefined {
         return createSubscriptionFilter(this.ctx.code);
     }
 
     /** List accounts and record the resulting id set for session reconciliation. */
-    private async listAccounts(options?: AzureListingOptions): Promise<AzureAccount[]> {
-        const accounts = await this.listings.listAccounts(options);
+    private async listAccounts(): Promise<AzureAccount[]> {
+        const accounts = await this.listings.listAccounts();
         this.knownAccountIds = new CaselessSet(accounts.map(account => account.id));
         return accounts;
     }
@@ -291,7 +309,18 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     private async reconcileAccountsOnSessionChange(providerId: string): Promise<void> {
         try {
             const previousIds = this.knownAccountIds;
-            const accounts = await this.listings.refreshAccounts();
+
+            // Armed on both sides of the call: the event this provokes can
+            // arrive while `getAccounts()` is still outstanding, or just after
+            // it settles -- including when it throws.
+            this.ignoreSessionChangesUntil = Date.now() + SelfInducedSessionEventMs;
+            let accounts: AzureAccount[];
+            try {
+                accounts = await this.listings.refreshAccounts();
+            } finally {
+                this.ignoreSessionChangesUntil = Date.now() + SelfInducedSessionEventMs;
+            }
+
             const currentIds = new CaselessSet(accounts.map(account => account.id));
             this.knownAccountIds = currentIds;
 

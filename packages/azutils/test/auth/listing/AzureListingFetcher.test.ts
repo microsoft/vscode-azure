@@ -82,31 +82,6 @@ describe('AzureListingFetcher (unit)', () => {
 
             assert.strictEqual(credentialFactory.mock.callCount(), 0);
         });
-
-        it('ignores session changes while the call is in flight and just after it settles', async () => {
-            let release: (() => void) | undefined;
-            const { fetcher, code } = createFetcher();
-            code.authentication.getAccounts.mock.mockImplementation(() => new Promise(resolve => {
-                release = () => { resolve([]); };
-            }));
-
-            const pending = fetcher.fetchAccounts();
-            assert.strictEqual(fetcher.shouldIgnoreSessionChange(), true, 'in flight');
-            release?.();
-            await pending;
-            assert.strictEqual(fetcher.shouldIgnoreSessionChange(), true, 'trailing window');
-        });
-
-        it('arms the trailing window even when the call fails', async () => {
-            const { fetcher, code } = createFetcher();
-            code.authentication.getAccounts.mock.mockImplementation(() => Promise.reject(new Error('boom')));
-
-            await assert.rejects(() => fetcher.fetchAccounts(), /boom/);
-
-            // A failed call can raise a session event just as readily as a
-            // successful one, so the guard must cover it too.
-            assert.strictEqual(fetcher.shouldIgnoreSessionChange(), true);
-        });
     });
 
     describe('fetchTenants', () => {
@@ -227,7 +202,7 @@ describe('AzureListingFetcher (unit)', () => {
             assert.deepStrictEqual(pages.flatMap(page => page.items.map(sub => sub.subscriptionId)), ['s1', 's2']);
         });
 
-        it('records the tenant it listed through, keeping ARM home tenant separately', async () => {
+        it('records the tenant it listed through, not the one ARM reports', async () => {
             const { fetcher } = createFetcher();
             const guestTenant = makeTenant({ tenantId: 'guest-tenant', accountId: 'acct' });
             mockSubscriptionClient({
@@ -241,7 +216,6 @@ describe('AzureListingFetcher (unit)', () => {
             // through; recording ARM's owner here would collapse a subscription
             // reachable through two tenants into one node.
             assert.strictEqual(subscription.tenantId, 'guest-tenant');
-            assert.strictEqual(subscription.homeTenantId, 'home-tenant');
             assert.strictEqual(subscription.accountId, guestTenant.accountId);
             assert.strictEqual(subscription.environment, guestTenant.environment);
         });

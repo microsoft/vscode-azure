@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import type { AzureListingFilter } from '@microsoft/vscode-azure-azutils';
+import { makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../src/constants';
+import type { SelectedSubscriptionsFilter } from '../../src/utils/subscriptionFilter';
 import { createSubscriptionFilter, parseSubscriptionFilterKey, subscriptionFilterKey } from '../../src/utils/subscriptionFilter';
 
 describe('subscriptionFilter (unit)', () => {
@@ -45,10 +45,10 @@ describe('subscriptionFilter (unit)', () => {
 
     describe('createSubscriptionFilter', () => {
         /** Build the filter with the setting temporarily set to `selected`. */
-        function filterFor(selected: string[]): AzureListingFilter | undefined {
+        function filterFor(selected: string[]): SelectedSubscriptionsFilter | undefined {
             const mockResult = createMockVsCode();
             const key = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
-            return withSettings(mockResult, { [key]: selected }, () => createSubscriptionFilter(mockResult.vscode)) as AzureListingFilter | undefined;
+            return withSettings(mockResult, { [key]: selected }, () => createSubscriptionFilter(mockResult.vscode)) as SelectedSubscriptionsFilter | undefined;
         }
 
         it('should return undefined when nothing is selected', () => {
@@ -60,18 +60,18 @@ describe('subscriptionFilter (unit)', () => {
         it('should admit a named tenant and reject one the setting never mentions', () => {
             const filter = filterFor(['tenant-1/sub-1']);
 
-            expect(filter?.(makeTenant({ tenantId: 'tenant-1' }))).to.be.true;
-            expect(filter?.(makeTenant({ tenantId: 'tenant-2' }))).to.be.false;
+            expect(filter?.admitsTenant(makeTenant({ tenantId: 'tenant-1' }))).to.be.true;
+            expect(filter?.admitsTenant(makeTenant({ tenantId: 'tenant-2' }))).to.be.false;
         });
 
         it('should admit only the exact tenant/subscription pair', () => {
             const filter = filterFor(['tenant-1/sub-1']);
 
-            expect(filter?.(makeSubscription({ tenantId: 'tenant-1', subscriptionId: 'sub-1' }))).to.be.true;
+            expect(filter?.admitsSubscription(makeSubscription({ tenantId: 'tenant-1', subscriptionId: 'sub-1' }))).to.be.true;
             // The same subscription reached through another tenant is a
             // different node, and the user selected only one of them.
-            expect(filter?.(makeSubscription({ tenantId: 'tenant-2', subscriptionId: 'sub-1' }))).to.be.false;
-            expect(filter?.(makeSubscription({ tenantId: 'tenant-1', subscriptionId: 'sub-2' }))).to.be.false;
+            expect(filter?.admitsSubscription(makeSubscription({ tenantId: 'tenant-2', subscriptionId: 'sub-1' }))).to.be.false;
+            expect(filter?.admitsSubscription(makeSubscription({ tenantId: 'tenant-1', subscriptionId: 'sub-2' }))).to.be.false;
         });
 
         it('should match ids case-insensitively', () => {
@@ -79,23 +79,17 @@ describe('subscriptionFilter (unit)', () => {
             // user-editable setting.
             const filter = filterFor(['TENANT-1/SUB-1']);
 
-            expect(filter?.(makeTenant({ tenantId: 'tenant-1' }))).to.be.true;
-            expect(filter?.(makeSubscription({ tenantId: 'tenant-1', subscriptionId: 'sub-1' }))).to.be.true;
-        });
-
-        it('should always admit accounts, which the setting says nothing about', () => {
-            const filter = filterFor(['tenant-1/sub-1']);
-
-            expect(filter?.(makeAccount({ id: 'acct-1' }))).to.be.true;
+            expect(filter?.admitsTenant(makeTenant({ tenantId: 'tenant-1' }))).to.be.true;
+            expect(filter?.admitsSubscription(makeSubscription({ tenantId: 'tenant-1', subscriptionId: 'sub-1' }))).to.be.true;
         });
 
         it('should ignore a malformed entry that names no subscription', () => {
             const filter = filterFor(['tenant-1']);
 
             // The tenant half is still usable, so the tenant is admitted...
-            expect(filter?.(makeTenant({ tenantId: 'tenant-1' }))).to.be.true;
+            expect(filter?.admitsTenant(makeTenant({ tenantId: 'tenant-1' }))).to.be.true;
             // ...but no pair was named, so no subscription under it is.
-            expect(filter?.(makeSubscription({ tenantId: 'tenant-1', subscriptionId: 'sub-1' }))).to.be.false;
+            expect(filter?.admitsSubscription(makeSubscription({ tenantId: 'tenant-1', subscriptionId: 'sub-1' }))).to.be.false;
         });
     });
 });

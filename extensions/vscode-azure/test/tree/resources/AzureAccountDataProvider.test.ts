@@ -38,7 +38,7 @@ describe('AzureAccountDataProvider (unit)', () => {
         const listings = new AzureListingCache(fetcher, executor);
         const scheduler = new ManualDebounceScheduler();
         const credentialFactory: ICredentialFactory = () => makeCredential();
-        const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, listings, fetcher, scheduler);
+        const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, listings, scheduler);
         return { provider, code, scheduler, fetcher, listings };
     }
 
@@ -302,15 +302,21 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(onDidRemoveAccounts.mock.callCount()).to.equal(0);
         });
 
-        it('should ignore a session change the fetcher reports as self-induced', () => {
-            const { provider, code, scheduler } = createProvider({ shouldIgnoreSessionChange: () => true });
-            let fired = 0;
-            provider.onDidChange(() => { fired++; });
+        it('should ignore the session change its own reconcile provokes', async () => {
+            const { provider, code, scheduler, fetcher } = createProvider();
+            await provider.getChildren();
+            fetcher.fetchAccounts.mock.resetCalls();
+
+            // Reconciling calls getAccounts(), which itself raises a session
+            // change; acting on that echo would reconcile forever.
+            code.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            await scheduler.flush();
+            expect(fetcher.fetchAccounts.mock.callCount()).to.equal(1);
 
             code.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
 
-            expect(fired).to.equal(0);
             expect(scheduler.hasPending).to.be.false;
+            expect(fetcher.fetchAccounts.mock.callCount()).to.equal(1);
         });
 
         it('should swallow a listing failure during reconcile instead of rejecting', async () => {
@@ -505,7 +511,7 @@ describe('AzureAccountDataProvider (unit)', () => {
                 return makeCredential();
             };
             const fetcher = createMockAzureListingFetcher();
-            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, new AzureListingCache(fetcher, executor), fetcher);
+            const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, new AzureListingCache(fetcher, executor));
             const createSpy = mockSubscriptionClient({
                 tenantPages: [{
                     items: [

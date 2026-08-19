@@ -3,37 +3,36 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { stringifyError, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
+import { filterPages, stringifyError, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { isSubscription, type AzureListingNode } from '../../models/AzureNode';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
 import type { IAzureListingFetcher } from './AzureListingFetcher';
 import { AzureListingRootKey, azureListingKey, azureListingKeyFor, AzureListingStore } from './AzureListingStore';
 
 /**
- * Decides whether a node takes part in a listing walk.
+ * Decides whether a tenant takes part in a listing walk.
  *
- * Returning `false` skips the node **and everything beneath it**, before any
- * work is done for it: a skipped tenant never has a tenant-scoped token minted,
- * never has its subscriptions listed, and never reaches the caller at all. That
- * is the point of expressing the filter as a traversal-time predicate rather
- * than a post-hoc `list().filter(...)` -- by the time a listing exists, its cost
- * has already been paid.
+ * Returning `false` skips the tenant **and everything beneath it**, before any
+ * work is done for it: no tenant-scoped token is minted and no subscription
+ * listing is issued. That is why this is a traversal-time predicate rather than
+ * a post-hoc `list().filter(...)` -- by the time a listing exists its cost has
+ * been paid, and for a tenant that cost is the slow part whether or not it
+ * succeeds.
  *
- * The predicate is consulted at every level, so one function expresses the whole
- * rule; a caller that only filters tenants and subscriptions simply admits every
- * account.
+ * The tenant is the only level worth skipping. Accounts are already in hand, and
+ * omitting a subscription saves nothing once its tenant has been listed, so
+ * choosing which subscriptions to *show* is left to the consumer.
  */
-export type AzureListingFilter = (node: AzureListingNode) => boolean;
+export type AzureTenantFilter = (tenant: AzureTenant) => boolean;
 
-/** Options accepted by every {@linkcode AzureListingCache} read. */
+/** Options accepted by {@linkcode AzureListingCache} reads that descend into tenants. */
 export interface AzureListingOptions {
     /**
      * Skip predicate applied during the walk. Omit it to read the unfiltered
      * truth -- which is what a flow that *edits* the filter must do, or the
      * filter could only ever be narrowed.
      */
-    readonly filter?: AzureListingFilter;
+    readonly filter?: AzureTenantFilter;
 }
 
 /** A subscription together with the account and tenant it was reached through. */
@@ -76,23 +75,17 @@ export interface AzureWalkOptions extends AzureListingOptions {
  * **The cache holds unfiltered truth; the filter is applied on read, above the
  * cache.** However data was obtained -- a filtered tree walk, an unfiltered pick
  * list, a subscription lookup -- all of it is stored, including the parts the
- * caller's filter excluded. Filtering on insert is what makes a filtered read
- * poison a later unfiltered one.
- *
- * Two consequences follow, and both are the point:
- *
- * - A filtered read followed by an unfiltered read fetches only the delta.
- *   Caching is per **parent listing**, not per query, so any walk hits or misses
- *   node by node rather than as a whole.
- * - Changing which subset a product shows needs no invalidation at all: a filter
- *   change makes no cached listing untrue.
+ * caller's filter excluded. Two consequences follow, and both are the point: a
+ * filtered read followed by an unfiltered one fetches only the delta (caching is
+ * per **parent listing**, not per query), and changing which subset a product
+ * shows needs no invalidation at all.
  *
  * Invalidation is correspondingly narrow. {@linkcode AzureListingCache.clear clear}
  * only when the data stops being true (the configured cloud changed, or the set
  * of manually-named tenants did); {@linkcode AzureListingCache.clearAccount clearAccount}
- * for a single sign-out; {@linkcode AzureListingCache.refreshAccounts refreshAccounts}
- * for a sign-in, which re-lists accounts without discarding what is cached
- * beneath the accounts that were already there.
+ * for one account signing in or out; {@linkcode AzureListingCache.refreshAccounts refreshAccounts}
+ * to re-list accounts without discarding what is cached beneath the ones that
+ * were already there.
  */
 export class AzureListingCache {
     private readonly store = new AzureListingStore();
@@ -108,12 +101,12 @@ export class AzureListingCache {
      * Cached: concurrent callers share one fetch, and later callers replay it. A
      * failed fetch is not retained, so the next call retries.
      */
-    public async listAccounts(options?: AzureListingOptions): Promise<AzureAccount[]> {
+    public async listAccounts(): Promise<AzureAccount[]> {
         const accounts: AzureAccount[] = [];
         for await (const page of this.accountListing().read()) {
             accounts.push(...page.items);
         }
-        return admit(accounts, options?.filter);
+        return accounts;
     }
 
     /**
@@ -126,9 +119,8 @@ export class AzureListingCache {
      * re-list that follows a detected change is served from cache rather than
      * fetching a second time.
      *
-     * Only the accounts listing is discarded. Tenants and subscriptions already
-     * cached under accounts that are still present stay cached -- a new account
-     * signing in does not make another account's tenants untrue.
+     * Only the accounts listing is discarded -- a new account signing in does
+     * not make another account's tenants untrue.
      */
     public async refreshAccounts(): Promise<AzureAccount[]> {
         this.store.evictListing(AzureListingRootKey);
@@ -138,25 +130,24 @@ export class AzureListingCache {
     /**
      * An account's tenants, one page at a time, pulling only as far as the
      * reader asks.
+     *
+     * Excluded tenants are dropped from their page rather than the page being
+     * dropped, so the reader's paging is unaffected by how many a page loses.
      */
     public listTenants(account: AzureAccount, options?: AzureListingOptions): AsyncIterable<Page<AzureTenant>> {
-        const listing = this.store.listing<AzureTenant>(
-            azureListingKey(account),
-            () => this.fetcher.fetchTenants(account),
-        );
-        return admitPages(listing.read(), options?.filter);
+        return filterPages(this.tenantListing(account).read(), options?.filter);
     }
 
     /**
      * A tenant's subscriptions, one page at a time, pulling only as far as the
      * reader asks.
+     *
+     * Unfiltered: reaching this call means the tenant was already admitted, and
+     * the expensive part -- the token and the listing itself -- is already
+     * committed. Which of them to *show* is the consumer's business.
      */
-    public listSubscriptions(tenant: AzureTenant, options?: AzureListingOptions): AsyncIterable<Page<AzureSubscription>> {
-        const listing = this.store.listing<AzureSubscription>(
-            azureListingKey(tenant),
-            () => this.fetcher.fetchSubscriptions(tenant),
-        );
-        return admitPages(listing.read(), options?.filter);
+    public listSubscriptions(tenant: AzureTenant): AsyncIterable<Page<AzureSubscription>> {
+        return this.subscriptionListing(tenant).read();
     }
 
     /**
@@ -173,23 +164,20 @@ export class AzureListingCache {
      * subscription.
      */
     public async *walkSubscriptions(options?: AzureWalkOptions): AsyncIterable<AzureSubscriptionPath> {
-        const wantedAccount = options?.accountId?.toLowerCase();
-        const wantedTenant = options?.tenantId?.toLowerCase();
-
-        for (const account of await this.listAccounts(options)) {
-            if (wantedAccount && account.id.toLowerCase() !== wantedAccount) {
+        for (const account of await this.listAccounts()) {
+            if (!visitsAccount(account, options)) {
                 continue;
             }
 
             try {
-                for await (const tenantPage of this.listTenants(account, options)) {
+                for await (const tenantPage of this.tenantListing(account).read()) {
                     for (const tenant of tenantPage.items) {
-                        if (wantedTenant && tenant.tenantId.toLowerCase() !== wantedTenant) {
+                        if (!visitsTenant(tenant, options)) {
                             continue;
                         }
 
                         try {
-                            for await (const subscriptionPage of this.listSubscriptions(tenant, options)) {
+                            for await (const subscriptionPage of this.subscriptionListing(tenant).read()) {
                                 for (const subscription of subscriptionPage.items) {
                                     yield { account, tenant, subscription };
                                 }
@@ -213,21 +201,21 @@ export class AzureListingCache {
      * what a view has loaded, how far a listing has been paged, or whether a
      * refresh is in flight.
      *
-     * The same filter that governs the tree governs this lookup, at every level:
-     * a subscription the filter excludes does not resolve, and neither does one
-     * whose tenant or account it excludes, even when that subscription is
-     * already cached from an earlier unfiltered read. The caller gets
-     * `undefined` and degrades; it is never an error and never a prompt, because
-     * prompting for a tenant the user deselected is the very thing the filter
-     * exists to prevent.
+     * Runs in two phases. The first descends only through listings already in
+     * hand and is synchronous, so it provably issues no request -- which is the
+     * point, since this runs in the background for tenants the user never
+     * opened, and even a token request that *fails* costs tens of milliseconds.
+     * Only on a miss does the second phase walk for real.
+     *
+     * Both phases descend through the same levels, so the filter governs this
+     * lookup exactly as it governs the tree: a subscription in a tenant the user
+     * deselected cannot be reached, because there is no way to arrive at it
+     * except through that tenant. The caller gets `undefined` and degrades; it
+     * is never an error and never a prompt.
      *
      * A subscription id alone can legitimately match more than one node (the
-     * same subscription reached through two tenants). Cached matches are
-     * therefore resolved by an explicit tie-break -- prefer the copy listed
-     * through the subscription's own home tenant, then the lowest account id,
-     * then the lowest tenant id -- rather than by whichever happened to be found
-     * first. Only when nothing is cached does it walk, taking the first match in
-     * walk order.
+     * same subscription reached through two tenants); the first match in walk
+     * order wins.
      *
      * @param subscriptionId - The subscription id to resolve.
      * @param options - Optional account/tenant narrowing, the filter, and a
@@ -236,29 +224,11 @@ export class AzureListingCache {
      */
     public async findSubscription(subscriptionId: string, options?: AzureWalkOptions): Promise<AzureSubscription | undefined> {
         const wanted = subscriptionId.toLowerCase();
-        const wantedAccount = options?.accountId?.toLowerCase();
-        const wantedTenant = options?.tenantId?.toLowerCase();
-        const filter = options?.filter;
 
-        const cached: AzureSubscription[] = [];
-        for (const node of this.store.scan()) {
-            if (!isSubscription(node) || node.subscriptionId.toLowerCase() !== wanted) {
-                continue;
+        for (const path of this.walkCachedSubscriptions(options)) {
+            if (path.subscription.subscriptionId.toLowerCase() === wanted) {
+                return path.subscription;
             }
-            if (wantedAccount && node.accountId.toLowerCase() !== wantedAccount) {
-                continue;
-            }
-            if (wantedTenant && node.tenantId.toLowerCase() !== wantedTenant) {
-                continue;
-            }
-            if (!this.admitsPath(node, filter)) {
-                continue;
-            }
-            cached.push(node);
-        }
-
-        if (cached.length > 0) {
-            return cached.sort(preferHomeTenant)[0];
         }
 
         const walkOptions: AzureWalkOptions = {
@@ -275,25 +245,16 @@ export class AzureListingCache {
     }
 
     /**
-     * Evict one account and everything cached beneath it, leaving other accounts
-     * untouched. Use when that account signs out.
+     * Evict everything cached beneath one account, leaving other accounts
+     * untouched.
+     *
+     * Use when that account signs out, and equally after an interactive sign-in
+     * to it: the tenants and subscriptions listed before the sign-in are not
+     * merely stale but untrue, because the sign-in can have authorized ones that
+     * were invisible at the time.
      */
     public clearAccount(accountId: string): void {
         this.store.evict(azureListingKeyFor(accountId));
-    }
-
-    /**
-     * Discard everything cached beneath an account that is **still signed in**,
-     * keeping the account itself.
-     *
-     * Use after an interactive sign-in: the tenants and subscriptions listed
-     * before it are not merely stale but untrue, because the sign-in can have
-     * authorized ones that were invisible at the time. The account is unaffected,
-     * and evicting it would only unindex it -- it stays in the cached accounts
-     * listing, which replays rather than re-indexing.
-     */
-    public clearAccountContents(accountId: string): void {
-        this.store.evictDescendants(azureListingKeyFor(accountId));
     }
 
     /**
@@ -308,8 +269,48 @@ export class AzureListingCache {
         this.store.clear();
     }
 
+    /**
+     * The cached-only counterpart of
+     * {@linkcode AzureListingCache.walkSubscriptions walkSubscriptions}: the
+     * same descent, reading pages already fetched instead of fetching more.
+     *
+     * Being synchronous is the guarantee, not an optimization -- there is
+     * nowhere for a request to hide.
+     */
+    private *walkCachedSubscriptions(options?: AzureWalkOptions): Iterable<AzureSubscriptionPath> {
+        for (const accountPage of this.store.cachedPages<AzureAccount>(AzureListingRootKey)) {
+            for (const account of accountPage.items) {
+                if (!visitsAccount(account, options)) {
+                    continue;
+                }
+
+                for (const tenantPage of this.store.cachedPages<AzureTenant>(azureListingKey(account))) {
+                    for (const tenant of tenantPage.items) {
+                        if (!visitsTenant(tenant, options)) {
+                            continue;
+                        }
+
+                        for (const subscriptionPage of this.store.cachedPages<AzureSubscription>(azureListingKey(tenant))) {
+                            for (const subscription of subscriptionPage.items) {
+                                yield { account, tenant, subscription };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private accountListing() {
         return this.store.listing<AzureAccount>(AzureListingRootKey, () => this.fetchAccountsAsPage());
+    }
+
+    private tenantListing(account: AzureAccount) {
+        return this.store.listing<AzureTenant>(azureListingKey(account), () => this.fetcher.fetchTenants(account));
+    }
+
+    private subscriptionListing(tenant: AzureTenant) {
+        return this.store.listing<AzureSubscription>(azureListingKey(tenant), () => this.fetcher.fetchSubscriptions(tenant));
     }
 
     /** Adapt the unpaged accounts fetch to the paged listing the store caches. */
@@ -321,65 +322,23 @@ export class AzureListingCache {
         this.executor.output.debug(`[listing] subscription lookup skipped tenant=${failure.tenant?.tenantId ?? '<all>'}: ${stringifyError(failure.error)}`);
         options?.onFailure?.(failure);
     }
-
-    /**
-     * Whether the filter admits a cached subscription *and* both of its
-     * ancestors.
-     *
-     * A walk consults the predicate at every level, so skipping a tenant skips
-     * everything beneath it. Reading a cached node reaches it without passing
-     * through its ancestors, so those levels have to be replayed here or a
-     * tenant-level exclusion could be bypassed by a subscription that an earlier
-     * unfiltered read had already cached.
-     *
-     * An ancestor that is not cached cannot be shown to be admitted, so it is
-     * treated as excluded. That is the safe direction: the lookup falls through
-     * to the walk, which fetches the ancestor and applies the filter to it
-     * properly.
-     */
-    private admitsPath(node: AzureSubscription, filter?: AzureListingFilter): boolean {
-        if (!filter) {
-            return true;
-        }
-        const ancestors = [
-            this.store.get(azureListingKeyFor(node.accountId)),
-            this.store.get(azureListingKeyFor(node.accountId, node.tenantId)),
-        ];
-        return ancestors.every(ancestor => ancestor !== undefined && filter(ancestor)) && filter(node);
-    }
 }
 
 /** DI identifier for the {@linkcode AzureListingCache}. */
 export const IAzureListingCache: ServiceIdentifier<AzureListingCache> = Symbol.for('IAzureListingCache');
 
-/**
- * Order two copies of the same subscription: the one listed through its home
- * tenant first (it is the copy with the subscription's own authorization rather
- * than a guest or delegated grant), then by account id, then by tenant id, so
- * the choice is stable across sessions.
- */
-function preferHomeTenant(a: AzureSubscription, b: AzureSubscription): number {
-    const isHome = (sub: AzureSubscription) => sub.homeTenantId.toLowerCase() === sub.tenantId.toLowerCase();
-    if (isHome(a) !== isHome(b)) {
-        return isHome(a) ? -1 : 1;
-    }
-    return a.accountId.toLowerCase().localeCompare(b.accountId.toLowerCase())
-        || a.tenantId.toLowerCase().localeCompare(b.tenantId.toLowerCase());
-}
-
-/** Apply a filter to an already-materialized list. */
-function admit<T extends AzureListingNode>(items: T[], filter?: AzureListingFilter): T[] {
-    return filter ? items.filter(item => filter(item)) : items;
+/** Whether a walk narrowed by `options` should descend into this account. */
+function visitsAccount(account: AzureAccount, options?: AzureWalkOptions): boolean {
+    return !options?.accountId || account.id.toLowerCase() === options.accountId.toLowerCase();
 }
 
 /**
- * Apply a filter to each page as it arrives, preserving page boundaries and the
- * `hasMore` flags so the reader's paging is unaffected by how many items a page
- * lost. Filtering here -- rather than after a listing is materialized -- is what
- * keeps a skipped node from ever reaching a caller that would then drill it.
+ * Whether a walk narrowed by `options` should descend into this tenant -- the
+ * one place the filter is consulted, so both walks agree by construction.
  */
-async function* admitPages<T extends AzureListingNode>(pages: AsyncIterable<Page<T>>, filter?: AzureListingFilter): AsyncIterable<Page<T>> {
-    for await (const page of pages) {
-        yield filter ? { items: page.items.filter(item => filter(item)), hasMore: page.hasMore } : page;
+function visitsTenant(tenant: AzureTenant, options?: AzureWalkOptions): boolean {
+    if (options?.tenantId && tenant.tenantId.toLowerCase() !== options.tenantId.toLowerCase()) {
+        return false;
     }
+    return options?.filter?.(tenant) ?? true;
 }

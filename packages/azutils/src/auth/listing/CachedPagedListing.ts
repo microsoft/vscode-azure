@@ -18,17 +18,13 @@ import type { Page } from '@microsoft/vscode-azure-utils';
  * Concurrent readers are safe: a pull that is already in flight is shared rather
  * than duplicated, so overlapping reads never issue the same request twice.
  *
- * A pull that throws is **not** cached -- the error propagates to the waiting
- * readers, the partially-fetched pages are discarded, and the next read starts a
- * fresh listing. This matters because a listing can fail for transient reasons
- * (an expired session, a network blip), and retaining a truncated result would
- * let a retry replay it as if it were the whole listing.
- *
- * A reader that had already advanced past the discarded pages fails too, rather
- * than silently resuming at its old offset. Its position means nothing once the
- * pages it counted are gone, and continuing would splice a prefix of the failed
- * attempt onto a suffix of the next one -- losing whatever the retry produced in
- * between, with no error to say so.
+ * A pull that throws **poisons** the listing permanently: the error reaches
+ * every reader, including one that had already advanced past earlier pages and
+ * comes back for more, and no further pull is attempted. Retaining a truncated
+ * result would let a later read replay it as if it were the whole listing, and
+ * silently resuming a reader across a failed pull would splice two different
+ * attempts together. Retrying is the owner's job -- {@linkcode AzureListingStore}
+ * replaces a poisoned listing with a fresh one on the next read.
  *
  * @typeParam T - The item type carried by each {@linkcode Page}.
  */
@@ -37,49 +33,43 @@ export class CachedPagedListing<T> {
     private iterator: AsyncIterator<Page<T>> | undefined;
     private exhausted = false;
     private pending: Promise<boolean> | undefined;
-    /** Bumped whenever the collected pages are discarded, invalidating every reader's position. */
-    private generation = 0;
-    /** The failure that caused the most recent discard, replayed to readers invalidated by it. */
-    private discarded: unknown;
+    /** Boxed so a thrown `undefined` still registers as a failure. */
+    private failure: { readonly error: unknown } | undefined;
 
     /**
-     * @param factory - Produces the underlying listing. Called on the first pull
-     *   and again after a failure discards the previous attempt; replays and
-     *   resumed reads reuse the iterator it returned.
-     * @param onPage - (Optional) Called once for each page that is newly
-     *   fetched (never for a replayed page), before the page reaches the reader
-     *   that triggered the pull.
+     * @param factory - Produces the underlying listing, called on the first
+     *   pull. Replays and resumed reads reuse the iterator it returned.
      */
-    public constructor(
-        private readonly factory: () => AsyncIterable<Page<T>>,
-        private readonly onPage?: (page: Page<T>) => void,
-    ) { }
+    public constructor(private readonly factory: () => AsyncIterable<Page<T>>) { }
+
+    /** Whether a pull has thrown, leaving this listing permanently unusable. */
+    public get hasFailed(): boolean {
+        return this.failure !== undefined;
+    }
 
     /**
-     * Whether the underlying listing ran to completion, so the cached pages are
-     * the *whole* listing rather than a prefix of it.
+     * The pages pulled so far, as a snapshot, without pulling another.
      *
-     * A complete listing with no items is meaningfully different from a listing
-     * that was never started: the former is a cached "there are none".
+     * This is what makes a cache-only traversal possible: it is synchronous, so
+     * it cannot fetch, mint a token, or prompt -- a caller can descend the whole
+     * hierarchy knowing it pays for nothing that was not already paid for.
      */
-    public get isComplete(): boolean {
-        return this.exhausted;
+    public cachedPages(): Page<T>[] {
+        return [...this.pages];
     }
 
     /**
      * Read the listing from the beginning, replaying cached pages first and
      * fetching further pages only if the reader keeps asking.
      *
-     * @throws The failure that discarded the collected pages, if another reader
-     *   hit one partway through this read.
+     * @throws The failure that poisoned the listing, if any pull has thrown.
      */
     public async *read(): AsyncIterable<Page<T>> {
-        const generation = this.generation;
         let index = 0;
 
         for (; ;) {
-            if (this.generation !== generation) {
-                throw this.discarded;
+            if (this.failure) {
+                throw this.failure.error;
             }
 
             if (index < this.pages.length) {
@@ -118,18 +108,9 @@ export class CachedPagedListing<T> {
             }
 
             this.pages.push(result.value);
-            this.onPage?.(result.value);
             return true;
         } catch (error) {
-            // Discard the partial state: the iterator is spent once it has
-            // thrown, and the pages already pulled came from a listing that
-            // never completed. Dropping both lets the next read start a clean
-            // listing instead of resuming a broken one or replaying a truncated
-            // result as if it were whole.
-            this.iterator = undefined;
-            this.pages.length = 0;
-            this.discarded = error;
-            this.generation++;
+            this.failure = { error };
             throw error;
         }
     }

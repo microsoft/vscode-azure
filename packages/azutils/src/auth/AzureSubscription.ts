@@ -53,8 +53,8 @@ export interface AzureTenant extends WithRequired<TenantIdDescription, 'tenantId
  *
  * `tenantId` is the tenant the subscription was **listed through**, which is the
  * tenant a credential for it must be scoped to. That is not always the tenant
- * that owns the subscription; see
- * {@linkcode AzureSubscription.homeTenantId homeTenantId}.
+ * that owns the subscription, so the same subscription reached through two
+ * tenants is two distinct nodes.
  */
 export interface AzureSubscription extends WithRequired<Subscription, 'subscriptionId' | 'tenantId' | 'displayName'> {
     /** The Azure environment (cloud) to which this subscription belongs. */
@@ -67,18 +67,6 @@ export interface AzureSubscription extends WithRequired<Subscription, 'subscript
      * case-normalized on the object.
      */
     readonly accountId: string;
-    /**
-     * The tenant ARM reports as the subscription's owner.
-     *
-     * A subscription can be reachable through more than one tenant -- a guest
-     * or delegated arrangement lists it under a tenant that does not own it --
-     * and each of those is a distinct node that authenticates through its own
-     * tenant. This field is the tie-break signal for choosing between such
-     * copies when only a subscription id is known, so it is always populated;
-     * it equals {@linkcode AzureSubscription.tenantId tenantId} whenever the
-     * listing tenant is also the owner.
-     */
-    readonly homeTenantId: string;
 }
 
 /**

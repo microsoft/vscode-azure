@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { collectAsync } from '@microsoft/vscode-azure-utils';
+import { collectAsync, type Page } from '@microsoft/vscode-azure-utils';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import * as assert from 'node:assert';
-import type { AzureListingFilter, AzureSubscriptionPath } from '../../../src/auth/listing/AzureListingCache';
+import type { AzureSubscriptionPath, AzureTenantFilter } from '../../../src/auth/listing/AzureListingCache';
 import { AzureListingCache } from '../../../src/auth/listing/AzureListingCache';
-import type { AzureListingNode } from '../../../src/models/AzureNode';
-import { isSubscription, isTenant } from '../../../src/models/AzureNode';
+import type { AzureSubscription, AzureTenant } from '../../../src/auth/AzureSubscription';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '../../mockAzure';
 
 const account = makeAccount({ id: 'acct', label: 'Account' });
@@ -30,9 +29,9 @@ function createCache(options?: MockAzureListingFetcherOptions) {
     return { fetcher, cache: new AzureListingCache(fetcher, executor) };
 }
 
-/** Admit only the named tenants (and everything that is not a tenant). */
-function onlyTenants(...tenantIds: string[]): AzureListingFilter {
-    return (node: AzureListingNode) => !isTenant(node) || tenantIds.includes(node.tenantId);
+/** Admit only the named tenants. */
+function onlyTenants(...tenantIds: string[]): AzureTenantFilter {
+    return (tenant: AzureTenant) => tenantIds.includes(tenant.tenantId);
 }
 
 /** The tenant ids `fetchSubscriptions` was called for, in call order. */
@@ -40,12 +39,25 @@ function listedTenantIds(fetcher: ReturnType<typeof createCache>['fetcher']): st
     return fetcher.fetchSubscriptions.mock.calls.map(call => call.arguments[0].tenantId);
 }
 
+/** The account ids `fetchTenants` was called for, in call order. */
+function listedAccountIds(fetcher: ReturnType<typeof createCache>['fetcher']): string[] {
+    return fetcher.fetchTenants.mock.calls.map(call => call.arguments[0].id);
+}
+
 function pathIds(paths: AzureSubscriptionPath[]): string[] {
     return paths.map(path => `${path.tenant.tenantId}/${path.subscription.subscriptionId}`);
 }
 
+function subscriptionIds(pages: Array<Page<AzureSubscription>>): string[] {
+    return pages.flatMap(page => page.items.map(sub => sub.subscriptionId));
+}
+
+function tenantIds(pages: Array<Page<AzureTenant>>): string[] {
+    return pages.flatMap(page => page.items.map(tenant => tenant.tenantId));
+}
+
 describe('AzureListingCache (unit)', () => {
-    describe('filtering (R1)', () => {
+    describe('filtering', () => {
         it('issues no request for a tenant the filter excludes', async () => {
             const { cache, fetcher } = createCache();
 
@@ -61,18 +73,7 @@ describe('AzureListingCache (unit)', () => {
 
             const pages = await collectAsync(cache.listTenants(account, { filter: onlyTenants('tenant-b') }));
 
-            assert.deepStrictEqual(pages.flatMap(page => page.items.map(tenant => tenant.tenantId)), ['tenant-b']);
-        });
-
-        it('does not hand out an excluded subscription, which would be drillable', async () => {
-            const { cache } = createCache();
-            const filter: AzureListingFilter = node => !isSubscription(node) || node.subscriptionId === 'sub-a';
-
-            const pages = await collectAsync(cache.listSubscriptions(tenantA, { filter }));
-            const excluded = await collectAsync(cache.listSubscriptions(tenantB, { filter }));
-
-            assert.deepStrictEqual(pages.flatMap(page => page.items.map(sub => sub.subscriptionId)), ['sub-a']);
-            assert.deepStrictEqual(excluded.flatMap(page => page.items), []);
+            assert.deepStrictEqual(tenantIds(pages), ['tenant-b']);
         });
 
         it('treats an absent filter as "everything", not "nothing"', async () => {
@@ -82,9 +83,19 @@ describe('AzureListingCache (unit)', () => {
 
             assert.deepStrictEqual(pathIds(paths), ['tenant-a/sub-a', 'tenant-b/sub-b']);
         });
+
+        it('lists every subscription of an admitted tenant, leaving the choice to the caller', async () => {
+            const otherSubA = makeSubscription({ accountId: account.id, tenantId: tenantA.tenantId, subscriptionId: 'sub-a2' });
+            const { cache } = createCache({ subscriptions: [subA, otherSubA, subB] });
+
+            const pages = await collectAsync(cache.listSubscriptions(tenantA));
+
+            assert.deepStrictEqual(subscriptionIds(pages), ['sub-a', 'sub-a2'],
+                'the token and the listing are already paid for; which to show is the consumer\'s business');
+        });
     });
 
-    describe('caching (R3, R3a)', () => {
+    describe('caching', () => {
         it('fetches only the delta when an unfiltered read follows a filtered one', async () => {
             const { cache, fetcher } = createCache();
 
@@ -109,19 +120,17 @@ describe('AzureListingCache (unit)', () => {
             assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), 0);
         });
 
-        it('caches the items the filter excluded, so widening the filter needs no request', async () => {
-            const otherSubA = makeSubscription({ accountId: account.id, tenantId: tenantA.tenantId, subscriptionId: 'sub-a2', displayName: 'Sub A2' });
-            const { cache, fetcher } = createCache({ subscriptions: [subA, otherSubA, subB] });
-            const filter: AzureListingFilter = node => !isSubscription(node) || node.subscriptionId === 'sub-a';
+        it('caches the tenants the filter excluded, so widening it needs no request', async () => {
+            const { cache, fetcher } = createCache();
 
-            const narrowed = await collectAsync(cache.listSubscriptions(tenantA, { filter }));
-            fetcher.fetchSubscriptions.mock.resetCalls();
-            const all = await collectAsync(cache.listSubscriptions(tenantA));
+            const narrowed = await collectAsync(cache.listTenants(account, { filter: onlyTenants('tenant-a') }));
+            fetcher.fetchTenants.mock.resetCalls();
+            const all = await collectAsync(cache.listTenants(account));
 
-            assert.deepStrictEqual(narrowed.flatMap(page => page.items.map(sub => sub.subscriptionId)), ['sub-a']);
-            assert.deepStrictEqual(all.flatMap(page => page.items.map(sub => sub.subscriptionId)), ['sub-a', 'sub-a2'],
+            assert.deepStrictEqual(tenantIds(narrowed), ['tenant-a']);
+            assert.deepStrictEqual(tenantIds(all), ['tenant-a', 'tenant-b'],
                 'the cache holds unfiltered truth -- filtering on insert loses what the filter excluded');
-            assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), 0, 'the excluded subscription was already paid for');
+            assert.strictEqual(fetcher.fetchTenants.mock.callCount(), 0, 'the excluded tenant was already paid for');
         });
 
         it('issues nothing when only the filter changes', async () => {
@@ -135,12 +144,31 @@ describe('AzureListingCache (unit)', () => {
             assert.deepStrictEqual(pathIds(narrowed), ['tenant-b/sub-b']);
             assert.strictEqual(after, before, 'a filter change makes no cached listing untrue');
         });
+
+        it('collapses concurrent reads of one listing into a single fetch', async () => {
+            const pulled: string[] = [];
+            const { cache, fetcher } = createCache({
+                pageSize: 1,
+                onPagePulled: (listing, index) => pulled.push(`${listing}-${index}`),
+            });
+
+            const [first, second] = await Promise.all([
+                collectAsync(cache.listTenants(account)),
+                collectAsync(cache.listTenants(account)),
+            ]);
+
+            assert.deepStrictEqual(tenantIds(first), ['tenant-a', 'tenant-b']);
+            assert.deepStrictEqual(tenantIds(second), tenantIds(first));
+            assert.strictEqual(fetcher.fetchTenants.mock.callCount(), 1);
+            assert.deepStrictEqual(pulled, ['tenants-0', 'tenants-1'],
+                'concurrent readers must share pulls, not duplicate them');
+        });
     });
 
-    describe('multi-tenant subscriptions (R4)', () => {
+    describe('multi-tenant subscriptions', () => {
         const shared = 'shared-sub';
-        const viaA = makeSubscription({ accountId: account.id, tenantId: tenantA.tenantId, subscriptionId: shared, displayName: 'Shared', homeTenantId: tenantB.tenantId });
-        const viaB = makeSubscription({ accountId: account.id, tenantId: tenantB.tenantId, subscriptionId: shared, displayName: 'Shared', homeTenantId: tenantB.tenantId });
+        const viaA = makeSubscription({ accountId: account.id, tenantId: tenantA.tenantId, subscriptionId: shared, displayName: 'Shared' });
+        const viaB = makeSubscription({ accountId: account.id, tenantId: tenantB.tenantId, subscriptionId: shared, displayName: 'Shared' });
 
         it('yields one node per tenant the subscription is reachable through', async () => {
             const { cache } = createCache({ subscriptions: [viaA, viaB] });
@@ -150,27 +178,26 @@ describe('AzureListingCache (unit)', () => {
             assert.deepStrictEqual(pathIds(paths), [`tenant-a/${shared}`, `tenant-b/${shared}`]);
         });
 
-        it('resolves a bare subscription id to the copy listed through its home tenant', async () => {
+        it('resolves a bare subscription id to the first copy in walk order', async () => {
             const { cache } = createCache({ subscriptions: [viaA, viaB] });
             await collectAsync(cache.walkSubscriptions());
 
             const resolved = await cache.findSubscription(shared);
 
-            assert.strictEqual(resolved?.tenantId, tenantB.tenantId,
-                'the tie-break must be explicit, not "whichever was cached first"');
+            assert.strictEqual(resolved?.tenantId, tenantA.tenantId);
         });
 
-        it('honours a tenant hint over the tie-break', async () => {
+        it('honours a tenant hint over walk order', async () => {
             const { cache } = createCache({ subscriptions: [viaA, viaB] });
             await collectAsync(cache.walkSubscriptions());
 
-            const resolved = await cache.findSubscription(shared, { tenantId: tenantA.tenantId });
+            const resolved = await cache.findSubscription(shared, { tenantId: tenantB.tenantId });
 
-            assert.strictEqual(resolved?.tenantId, tenantA.tenantId);
+            assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
         });
     });
 
-    describe('lookup (R2)', () => {
+    describe('lookup', () => {
         it('does not resolve, or request, a subscription in an excluded tenant', async () => {
             const { cache, fetcher } = createCache();
 
@@ -187,12 +214,10 @@ describe('AzureListingCache (unit)', () => {
             await collectAsync(cache.walkSubscriptions());
             fetcher.fetchSubscriptions.mock.resetCalls();
 
-            // A filter that names only tenants still governs what lies beneath
-            // them: a cached node is reached without passing through its
-            // ancestors, so the lookup has to replay those levels itself.
             const resolved = await cache.findSubscription('sub-b', { filter: onlyTenants('tenant-a') });
 
-            assert.strictEqual(resolved, undefined);
+            assert.strictEqual(resolved, undefined,
+                'a cached subscription is reached by descending through its tenant, so the filter governs it too');
             assert.deepStrictEqual(listedTenantIds(fetcher), []);
         });
 
@@ -211,6 +236,23 @@ describe('AzureListingCache (unit)', () => {
             assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), 0);
         });
 
+        it('reads past the page a tree stopped at without paging it further', async () => {
+            const extraTenants = Array.from({ length: 3 }, (_unused, index) => makeTenant({
+                accountId: account.id,
+                tenantId: `tenant-${index}`,
+            }));
+            const target = makeSubscription({ accountId: account.id, tenantId: 'tenant-2', subscriptionId: 'sub-late' });
+            const { cache, fetcher } = createCache({ tenants: extraTenants, subscriptions: [target], pageSize: 1 });
+
+            // A tree that rendered only the first page leaves the rest unpulled.
+            await cache.listTenants(account)[Symbol.asyncIterator]().next();
+            const resolved = await cache.findSubscription('sub-late');
+
+            assert.strictEqual(resolved?.subscriptionId, 'sub-late',
+                'the cached pass misses, so the real walk must still be able to find it');
+            assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-0', 'tenant-1', 'tenant-2']);
+        });
+
         it('narrows the walk to the tenant it was given', async () => {
             const { cache, fetcher } = createCache();
 
@@ -227,7 +269,7 @@ describe('AzureListingCache (unit)', () => {
         });
     });
 
-    describe('failure isolation (R7)', () => {
+    describe('failure isolation', () => {
         it('keeps walking when a tenant cannot be listed', async () => {
             const { cache } = createCache({ unreachableTenantIds: [tenantA.tenantId] });
             const failures: string[] = [];
@@ -240,7 +282,7 @@ describe('AzureListingCache (unit)', () => {
             assert.deepStrictEqual(failures, ['tenant-a']);
         });
 
-        it('retries a failed listing on the next read', async () => {
+        it('retries a failed listing on the next read, and only that one', async () => {
             const { cache, fetcher } = createCache({ unreachableTenantIds: [tenantA.tenantId] });
             await collectAsync(cache.walkSubscriptions({ onFailure: () => undefined }));
 
@@ -249,9 +291,36 @@ describe('AzureListingCache (unit)', () => {
             assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a', 'tenant-b', 'tenant-a'],
                 'the failed listing is retried; the successful one is not');
         });
+
+        it('serves a whole listing on the retry, never a truncated one', async () => {
+            const { cache, fetcher } = createCache();
+            fetcher.fetchSubscriptions.mock.mockImplementation(flakySubscriptions(tenantA));
+
+            await assert.rejects(() => collectAsync(cache.listSubscriptions(tenantA)), /listing failed/);
+            const retried = await collectAsync(cache.listSubscriptions(tenantA));
+
+            assert.deepStrictEqual(subscriptionIds(retried), ['attempt-2-0', 'attempt-2-1', 'attempt-2-2'],
+                'replaying the pages the failed attempt collected would serve a prefix as if it were the whole listing');
+        });
+
+        it('fails a reader that had advanced into a listing that then failed', async () => {
+            const { cache, fetcher } = createCache();
+            fetcher.fetchSubscriptions.mock.mockImplementation(flakySubscriptions(tenantA));
+
+            // Advance one reader into the listing, then let a second reader
+            // drive the pull that fails.
+            const reader = cache.listSubscriptions(tenantA)[Symbol.asyncIterator]();
+            const nextIds = async () => subscriptionIds([(await reader.next()).value as Page<AzureSubscription>]);
+            assert.deepStrictEqual(await nextIds(), ['attempt-1-0']);
+            assert.deepStrictEqual(await nextIds(), ['attempt-1-1']);
+
+            await assert.rejects(() => collectAsync(cache.listSubscriptions(tenantA)), /listing failed/);
+            await assert.rejects(() => reader.next(), /listing failed/,
+                'resuming would splice a later attempt\'s tail onto this attempt\'s head');
+        });
     });
 
-    describe('invalidation (R5, R6)', () => {
+    describe('invalidation', () => {
         it('re-lists accounts without discarding what is cached beneath them', async () => {
             const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());
@@ -289,42 +358,44 @@ describe('AzureListingCache (unit)', () => {
             fetcher.fetchSubscriptions.mock.resetCalls();
             await collectAsync(cache.walkSubscriptions());
 
-            assert.deepStrictEqual(fetcher.fetchTenants.mock.calls.map(call => call.arguments[0].id), [account.id]);
+            assert.deepStrictEqual(listedAccountIds(fetcher), [account.id]);
             assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a', 'tenant-b']);
         });
 
-        it('re-lists what is under an account that signed in, keeping the account', async () => {
-            // The home tenant is listed second, so the cached lookup and the
-            // walk fallthrough disagree -- which is what makes it observable
-            // whether the account survived as a cached node.
-            const shared = 'shared-sub';
-            const viaA = makeSubscription({ accountId: account.id, tenantId: tenantA.tenantId, subscriptionId: shared, homeTenantId: tenantB.tenantId });
-            const viaB = makeSubscription({ accountId: account.id, tenantId: tenantB.tenantId, subscriptionId: shared, homeTenantId: tenantB.tenantId });
-            const { cache, fetcher } = createCache({ subscriptions: [viaA, viaB] });
+        it('evicts an account whose id differs only by case', async () => {
+            const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());
 
-            // What Sign In does: the account set may have changed, and anything
-            // listed under this account predates an authorization that may have
-            // widened it.
-            await cache.refreshAccounts();
-            cache.clearAccountContents(account.id);
+            cache.clearAccount(account.id.toUpperCase());
             fetcher.fetchTenants.mock.resetCalls();
-            fetcher.fetchSubscriptions.mock.resetCalls();
             await collectAsync(cache.walkSubscriptions());
 
-            assert.strictEqual(fetcher.fetchTenants.mock.callCount(), 1);
-            assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a', 'tenant-b']);
-
-            // Evicting the account instead would only unindex it -- it stays in
-            // the accounts listing, which replays rather than re-indexing -- so
-            // it could never be looked up again. A filtered lookup has to check
-            // a cached node's ancestors, so it would miss and fall through to a
-            // walk, taking first-match order instead of the tie-break.
-            const resolved = await cache.findSubscription(shared, { filter: onlyTenants('tenant-a', 'tenant-b') });
-            assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
+            assert.deepStrictEqual(listedAccountIds(fetcher), [account.id],
+                'account ids are case-insensitive, so a differently-cased id names the same subtree');
         });
 
-        it('discards everything when the data itself stops being true', async () => {            const { cache, fetcher } = createCache();
+        it('does not evict an account whose id merely starts with the evicted one', async () => {
+            // A VS Code account id is an opaque provider string and may contain
+            // the separator the cache keys with.
+            const nested = makeAccount({ id: 'acct/tenant', label: 'Nested' });
+            const nestedTenant = makeTenant({ accountId: nested.id, tenantId: 'tenant-n' });
+            const { cache, fetcher } = createCache({
+                accounts: [account, nested],
+                tenants: [tenantA, tenantB, nestedTenant],
+                subscriptions: [subA, subB],
+            });
+            await collectAsync(cache.walkSubscriptions());
+
+            cache.clearAccount(account.id);
+            fetcher.fetchTenants.mock.resetCalls();
+            await collectAsync(cache.walkSubscriptions());
+
+            assert.deepStrictEqual(listedAccountIds(fetcher), [account.id],
+                'the other account must survive -- its key is not a descendant, only a textual prefix match');
+        });
+
+        it('discards everything when the data itself stops being true', async () => {
+            const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());
 
             cache.clear();
@@ -336,13 +407,19 @@ describe('AzureListingCache (unit)', () => {
         });
     });
 
-    describe('paging (R8)', () => {
+    describe('paging', () => {
         it('pulls only the pages the reader asks for', async () => {
             const extraTenants = Array.from({ length: 4 }, (_unused, index) => makeTenant({
                 accountId: account.id,
                 tenantId: `tenant-${index}`,
             }));
-            const { cache } = createCache({ tenants: extraTenants, subscriptions: [], pageSize: 1 });
+            const pulled: string[] = [];
+            const { cache } = createCache({
+                tenants: extraTenants,
+                subscriptions: [],
+                pageSize: 1,
+                onPagePulled: (listing, index) => pulled.push(`${listing}-${index}`),
+            });
 
             const first: string[] = [];
             for await (const page of cache.listTenants(account)) {
@@ -351,6 +428,71 @@ describe('AzureListingCache (unit)', () => {
             }
 
             assert.deepStrictEqual(first, ['tenant-0']);
+            assert.deepStrictEqual(pulled, ['tenants-0'],
+                'a reader that stopped after one page must not have provoked more');
+        });
+
+        it('resumes a partially-read listing instead of restarting it', async () => {
+            const extraTenants = Array.from({ length: 3 }, (_unused, index) => makeTenant({
+                accountId: account.id,
+                tenantId: `tenant-${index}`,
+            }));
+            const pulled: string[] = [];
+            const { cache, fetcher } = createCache({
+                tenants: extraTenants,
+                subscriptions: [],
+                pageSize: 1,
+                onPagePulled: (listing, index) => pulled.push(`${listing}-${index}`),
+            });
+
+            await cache.listTenants(account)[Symbol.asyncIterator]().next();
+            const all = await collectAsync(cache.listTenants(account));
+
+            assert.deepStrictEqual(tenantIds(all), ['tenant-0', 'tenant-1', 'tenant-2']);
+            assert.deepStrictEqual(pulled, ['tenants-0', 'tenants-1', 'tenants-2'],
+                'each page must be produced exactly once');
+            assert.strictEqual(fetcher.fetchTenants.mock.callCount(), 1);
+        });
+
+        it('replays a completed listing without touching the source', async () => {
+            const pulled: string[] = [];
+            const { cache } = createCache({
+                pageSize: 1,
+                onPagePulled: (listing, index) => pulled.push(`${listing}-${index}`),
+            });
+
+            const first = await collectAsync(cache.listTenants(account));
+            const second = await collectAsync(cache.listTenants(account));
+
+            assert.deepStrictEqual(tenantIds(first), ['tenant-a', 'tenant-b']);
+            assert.deepStrictEqual(tenantIds(second), tenantIds(first));
+            assert.deepStrictEqual(pulled, ['tenants-0', 'tenants-1']);
         });
     });
 });
+
+/**
+ * A subscription listing for `tenant` that throws partway through its first
+ * attempt and streams three pages on every attempt after that.
+ */
+function flakySubscriptions(tenant: AzureTenant) {
+    let attempt = 0;
+    return function (): AsyncIterable<Page<AzureSubscription>> {
+        const current = ++attempt;
+        return (async function* () {
+            for (let index = 0; index < 3; index++) {
+                if (current === 1 && index === 2) {
+                    throw new Error('listing failed');
+                }
+                yield await Promise.resolve({
+                    items: [makeSubscription({
+                        accountId: tenant.accountId,
+                        tenantId: tenant.tenantId,
+                        subscriptionId: `attempt-${current}-${index}`,
+                    })],
+                    hasMore: index < 2,
+                });
+            }
+        })();
+    };
+}

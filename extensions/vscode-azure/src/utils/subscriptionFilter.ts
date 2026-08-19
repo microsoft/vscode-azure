@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isSubscription, isTenant, type AzureListingFilter } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscription, AzureTenantFilter } from '@microsoft/vscode-azure-azutils';
 import { CaselessSet, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
 
@@ -46,25 +46,42 @@ export function parseSubscriptionFilterKey(key: string): { readonly tenantId?: s
 }
 
 /**
- * Build the {@linkcode AzureListingFilter} described by
+ * The two predicates described by `vscode-azure.selectedSubscriptions`.
+ *
+ * They are separate because they buy different things. Skipping a tenant avoids
+ * the expensive work -- a tenant-scoped token, then a subscription listing --
+ * so {@linkcode SelectedSubscriptionsFilter.admitsTenant admitsTenant} is
+ * handed to the listing cache to prune the walk. By the time a subscription is
+ * in hand its tenant has already been listed, so omitting it saves nothing and
+ * {@linkcode SelectedSubscriptionsFilter.admitsSubscription admitsSubscription}
+ * is purely about what the tree shows.
+ */
+export interface SelectedSubscriptionsFilter {
+    /** Whether the filter names this tenant at all. */
+    readonly admitsTenant: AzureTenantFilter;
+    /** Whether the filter names this exact `tenantId/subscriptionId` pair. */
+    readonly admitsSubscription: (subscription: AzureSubscription) => boolean;
+}
+
+/**
+ * Build the {@linkcode SelectedSubscriptionsFilter} described by
  * `vscode-azure.selectedSubscriptions`, or `undefined` when the setting is
  * empty.
  *
  * An empty setting means "no filtering", not "admit nothing" -- conflating the
- * two shows an empty tree. Returning `undefined` (rather than a predicate that
- * happens to admit everything) keeps that distinction impossible to get wrong at
+ * two shows an empty tree. Returning `undefined` (rather than predicates that
+ * happen to admit everything) keeps that distinction impossible to get wrong at
  * a call site, since the unfiltered read is spelled the same way as the
  * no-filter-configured one.
  *
  * A tenant is admitted when the filter names it at all; a subscription only when
  * the filter names the exact `tenantId/subscriptionId` pair, because the same
  * subscription reached through two tenants is two distinct nodes and the user
- * may well have selected only one of them. Accounts are always admitted: the
- * setting says nothing about them.
+ * may well have selected only one of them.
  *
  * @param code - Used to read the configuration.
  */
-export function createSubscriptionFilter(code: IVsCode): AzureListingFilter | undefined {
+export function createSubscriptionFilter(code: IVsCode): SelectedSubscriptionsFilter | undefined {
     const selected = code.workspace
         .getConfiguration(ConfigurationSection)
         .get<string[]>(SelectedSubscriptionsConfigurationKey, []);
@@ -80,13 +97,8 @@ export function createSubscriptionFilter(code: IVsCode): AzureListingFilter | un
             ? [subscriptionFilterKey(entry.tenantId, entry.subscriptionId)]
             : []));
 
-    return node => {
-        if (isSubscription(node)) {
-            return pairs.has(subscriptionFilterKey(node.tenantId, node.subscriptionId));
-        } else if (isTenant(node)) {
-            return tenants.has(node.tenantId);
-        } else {
-            return true;
-        }
+    return {
+        admitsTenant: tenant => tenants.has(tenant.tenantId),
+        admitsSubscription: subscription => pairs.has(subscriptionFilterKey(subscription.tenantId, subscription.subscriptionId)),
     };
 }

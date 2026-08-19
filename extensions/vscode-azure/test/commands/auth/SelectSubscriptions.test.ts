@@ -141,7 +141,7 @@ describe('SelectSubscriptions (unit)', () => {
         // Stand in for the tree: a walk through the very filter the tree passes.
         await withSettings(mockResult, { [selectedSubscriptionsKey]: ['tenant-1/sub-1'] }, async () => {
             const filter = createSubscriptionFilter(mockResult.vscode);
-            await collectAsync(listings.walkSubscriptions({ filter }));
+            await collectAsync(listings.walkSubscriptions({ filter: filter?.admitsTenant }));
         });
         fetcher.fetchSubscriptions.mock.resetCalls();
 

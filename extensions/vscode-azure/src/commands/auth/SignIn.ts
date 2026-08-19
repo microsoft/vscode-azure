@@ -130,7 +130,7 @@ export class SignIn implements ManagedCommand {
             // can bring in an account that was not there before), and the
             // accounts memo would otherwise keep saying it did not.
             await this.refreshAccounts();
-            this.listings.clearAccountContents(accountId);
+            this.listings.clearAccount(accountId);
             this.tree.invalidate(byAccount(accountId));
             this.tree.invalidate(Roots);
         } else {

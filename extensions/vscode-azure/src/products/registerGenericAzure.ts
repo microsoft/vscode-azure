@@ -86,7 +86,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
                     () => listings.findSubscription(subscriptionId, {
                         tenantId,
                         accountId,
-                        filter: createSubscriptionFilter(code),
+                        filter: createSubscriptionFilter(code)?.admitsTenant,
                     }),
                 );
             };

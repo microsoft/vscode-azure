@@ -5,6 +5,7 @@
 
 import { AzureListingCache } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '@microsoft/vscode-azure-azutils/testing';
+import { collectAsync } from '@microsoft/vscode-azure-utils';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { listFirstPageReachableTenants, listReachableSubscriptions } from '../../../src/commands/auth/listReachableAuthNodes';
 
@@ -115,7 +116,7 @@ describe('listReachableAuthNodes (unit)', () => {
             const sub = makeSubscription({ subscriptionId: 'sub-1', tenantId: tenant.tenantId, accountId: account.id });
             const { listings } = createCache({ accounts: [account], tenants: [tenant], subscriptions: [sub] });
             // Something the tree's (filtered) reads would have skipped entirely.
-            await listings.listAccounts({ filter: () => false });
+            await collectAsync(listings.walkSubscriptions({ filter: () => false }));
 
             const { subscriptions } = await listReachableSubscriptions(listings);
 

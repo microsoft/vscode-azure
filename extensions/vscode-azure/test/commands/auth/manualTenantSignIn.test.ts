@@ -46,7 +46,7 @@ describe('manual tenant sign-in (unit)', () => {
 
         const listings = new AzureListingCache(fetcher, executor);
         const credentialFactory = createMockCredentialFactory({ account });
-        const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, listings, fetcher, new ManualDebounceScheduler());
+        const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, listings, new ManualDebounceScheduler());
         const invalidate = mock.fn((_target: unknown) => { /* spy */ });
         const command = new SignIn(ctx, { invalidate } as unknown as IAzureViewDataTree, listings, credentialFactory);
 

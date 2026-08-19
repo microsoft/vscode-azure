@@ -5,7 +5,6 @@
 
 import { CaselessSet, stringifyError, type IActionExecutor, type ICodeContext, type Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import type * as vscode from 'vscode';
 import { SubscriptionClient } from '../../rest/clients/SubscriptionClient';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
 import type { ICredentialFactory } from '../CredentialFactory';
@@ -27,17 +26,6 @@ export interface IAzureListingFetcher {
 
     /** List a tenant's subscriptions, one page at a time. */
     fetchSubscriptions(tenant: AzureTenant): AsyncIterable<Page<AzureSubscription>>;
-
-    /**
-     * Whether an `authentication.onDidChangeSessions` event arriving right now
-     * is plausibly one this fetcher provoked itself, and should be ignored.
-     *
-     * Listing accounts can itself raise a session-change event, so a listener
-     * that re-lists on every event would loop. The guard lives here, with the
-     * call that provokes the event, because several consumers fetch accounts --
-     * a guard owned by one of them would not cover the others.
-     */
-    shouldIgnoreSessionChange(): boolean;
 }
 
 /** DI identifier for the {@linkcode IAzureListingFetcher}. */
@@ -59,13 +47,6 @@ export interface AzureListingFetcherOptions {
 }
 
 /**
- * Suppression window (ms) applied after a `getAccounts()` call resolves. The
- * in-flight counter covers the call itself; this covers events that arrive just
- * after it settles.
- */
-const GetAccountsSuppressionMs = 1000;
-
-/**
  * The default {@linkcode IAzureListingFetcher}: VS Code's `authentication` API
  * for accounts, and {@linkcode SubscriptionClient} for tenants and
  * subscriptions.
@@ -75,26 +56,12 @@ const GetAccountsSuppressionMs = 1000;
  * acquisition) without this class taking a position on it.
  */
 export class AzureListingFetcher implements IAzureListingFetcher {
-    /**
-     * Count of in-flight {@linkcode fetchAccounts} calls. A counter rather than
-     * a boolean so overlapping calls cannot un-arm each other.
-     */
-    private accountFetchesInFlight = 0;
-
-    /** Timestamp (epoch ms) before which session-change events are ignored. */
-    private suppressSessionEventsUntil = 0;
-
     public constructor(
         private readonly ctx: ICodeContext,
         private readonly executor: IActionExecutor,
         private readonly credentialFactory: ICredentialFactory,
         private readonly options?: AzureListingFetcherOptions,
     ) { }
-
-    /** @inheritdoc */
-    public shouldIgnoreSessionChange(): boolean {
-        return this.accountFetchesInFlight > 0 || Date.now() < this.suppressSessionEventsUntil;
-    }
 
     /**
      * @inheritdoc
@@ -106,17 +73,7 @@ export class AzureListingFetcher implements IAzureListingFetcher {
      */
     public async fetchAccounts(): Promise<AzureAccount[]> {
         const environment = getConfiguredAzureEnv(this.ctx.code);
-
-        this.accountFetchesInFlight++;
-        let accounts: readonly vscode.AuthenticationSessionAccountInformation[];
-        try {
-            accounts = await this.ctx.code.authentication.getAccounts(getAuthProviderId(environment));
-        } finally {
-            // Armed in `finally` so a thrown call still leaves a guarded tail:
-            // a failed getAccounts() can raise a session event just as readily.
-            this.suppressSessionEventsUntil = Date.now() + GetAccountsSuppressionMs;
-            this.accountFetchesInFlight--;
-        }
+        const accounts = await this.ctx.code.authentication.getAccounts(getAuthProviderId(environment));
 
         return accounts
             .map(account => ({ ...account, environment } satisfies AzureAccount))
@@ -183,10 +140,9 @@ export class AzureListingFetcher implements IAzureListingFetcher {
      *
      * The subscription's {@linkcode AzureSubscription.tenantId tenantId} is the
      * tenant it was listed through -- the tenant a credential must be scoped to
-     * in order to reach it -- while the tenant ARM reports as its owner is kept
-     * separately as {@linkcode AzureSubscription.homeTenantId homeTenantId}.
-     * The same subscription reached through two tenants is therefore two
-     * distinct nodes, each authenticating the way it actually has to.
+     * in order to reach it, which is not necessarily the tenant ARM reports as
+     * its owner. The same subscription reached through two tenants is therefore
+     * two distinct nodes, each authenticating the way it actually has to.
      */
     public async *fetchSubscriptions(tenant: AzureTenant): AsyncIterable<Page<AzureSubscription>> {
         const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
@@ -198,7 +154,6 @@ export class AzureListingFetcher implements IAzureListingFetcher {
                     ...sub,
                     subscriptionId: sub.subscriptionId.toLowerCase(),
                     tenantId: tenant.tenantId,
-                    homeTenantId: sub.tenantId?.toLowerCase() ?? tenant.tenantId,
                     environment: tenant.environment,
                     accountId: tenant.accountId,
                 } satisfies AzureSubscription));

@@ -55,14 +55,10 @@ export function makeTenant(overrides?: Partial<AzureTenant>): AzureTenant {
  */
 export function makeSubscription(overrides?: Partial<AzureSubscription>): AzureSubscription {
     const tenant = makeTenant();
-    const tenantId = overrides?.tenantId ?? tenant.tenantId;
     return {
         subscriptionId: 'test-sub',
         displayName: 'Test Subscription',
-        tenantId,
-        // Default to the listing tenant also being the owner; a test modelling a
-        // guest or delegated grant overrides this explicitly.
-        homeTenantId: tenantId,
+        tenantId: tenant.tenantId,
         environment: tenant.environment,
         accountId: tenant.accountId,
         ...overrides,
@@ -310,6 +306,15 @@ export interface MockAzureListingFetcherOptions {
      * enrichment.
      */
     readonly additionalTenantIds?: AzureListingFetcherOptions['additionalTenantIds'];
+    /**
+     * Called each time a tenant or subscription page is actually produced,
+     * naming the listing and the zero-based page index.
+     *
+     * Listings are lazy, so a page that is never pulled is never reported --
+     * which is what lets a test assert that a reader stopped after the first
+     * page, or that a second read replayed from cache instead of re-pulling.
+     */
+    readonly onPagePulled?: (listing: 'tenants' | 'subscriptions', pageIndex: number) => void;
 }
 
 /**
@@ -349,10 +354,11 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
     const unreachable = new CaselessSet(options?.unreachableTenantIds ?? []);
     const unlistable = new CaselessSet(options?.unlistableAccountIds ?? []);
 
-    async function* paged<T>(items: T[]): AsyncIterable<Page<T>> {
+    async function* paged<T>(listing: 'tenants' | 'subscriptions', items: T[]): AsyncIterable<Page<T>> {
         const size = options?.pageSize ?? Math.max(items.length, 1);
-        for (let start = 0; start < items.length || start === 0; start += size) {
+        for (let start = 0, index = 0; start < items.length || start === 0; start += size, index++) {
             const slice = items.slice(start, start + size);
+            options?.onPagePulled?.(listing, index);
             yield await Promise.resolve({ items: slice, hasMore: start + size < items.length });
         }
     }
@@ -382,7 +388,7 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
             const listed = unlistable.has(account.id)
                 ? []
                 : tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase());
-            return paged([...listed, ...namedTenants(account, listed)]);
+            return paged('tenants', [...listed, ...namedTenants(account, listed)]);
         }),
         fetchSubscriptions: mock.fn((tenant: AzureTenant) => {
             if (unreachable.has(tenant.tenantId)) {
@@ -393,11 +399,10 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
                 };
                 return rejecting;
             }
-            return paged(subscriptions.filter(sub =>
+            return paged('subscriptions', subscriptions.filter(sub =>
                 sub.accountId.toLowerCase() === tenant.accountId.toLowerCase()
                 && sub.tenantId.toLowerCase() === tenant.tenantId.toLowerCase()));
         }),
-        shouldIgnoreSessionChange: () => false,
     };
 }
 
