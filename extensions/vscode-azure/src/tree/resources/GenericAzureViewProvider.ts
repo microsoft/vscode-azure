@@ -328,8 +328,8 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         }
 
         const parsed = selected.map(parseSubscriptionFilterKey);
-        const tenantFilter = new CaselessSet(parsed.map(entry => entry.tenantId).filter((id): id is string => !!id));
-        const subscriptionFilter = new CaselessSet(parsed.map(entry => entry.subscriptionId).filter((id): id is string => !!id));
+        const tenantFilter = new CaselessSet(parsed.map(entry => entry.tenantId).filter(id => id !== undefined));
+        const subscriptionFilter = new CaselessSet(parsed.map(entry => entry.subscriptionId).filter(id => id !== undefined));
 
         return nodes.filter(node => {
             if (isTenant(node)) {

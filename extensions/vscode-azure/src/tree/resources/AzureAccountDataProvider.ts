@@ -51,7 +51,17 @@ const SessionInvalidationKey = Symbol('AzureAccountDataProvider.sessionInvalidat
 
 /** Whether two sets contain exactly the same ids, ignoring case. */
 function idSetsEqual(a: ICaselessSetReader, b: ICaselessSetReader): boolean {
-    return a.size === b.size && [...a].every(id => b.has(id));
+    if (a.size !== b.size) {
+        return false;
+    }
+
+    for (const id of a) {
+        if (!b.has(id)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**

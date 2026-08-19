@@ -49,7 +49,7 @@ export interface ICaselessMapReader<V> extends Iterable<[string, V]> {
  * ``` */
 export class CaselessMap<V> implements ICaselessMapReader<V> {
     /** Maps the folded key to the casing it was first set with, plus the current value. */
-    private readonly store = new Map<string, { key: string; value: V }>();
+    private readonly store = new Map<string, { originalKey: string; value: V }>();
 
     /**
      * @param entries - Initial `[key, value]` pairs. Keys differing only by case collapse to
@@ -83,7 +83,7 @@ export class CaselessMap<V> implements ICaselessMapReader<V> {
         if (existing) {
             existing.value = value;
         } else {
-            this.store.set(folded, { key, value });
+            this.store.set(folded, { originalKey: key, value });
         }
         return this;
     }
@@ -112,7 +112,7 @@ export class CaselessMap<V> implements ICaselessMapReader<V> {
     /** Yields `[key, value]` pairs with keys in their original casing, in insertion order. */
     public *[Symbol.iterator](): IterableIterator<[string, V]> {
         for (const entry of this.store.values()) {
-            yield [entry.key, entry.value];
+            yield [entry.originalKey, entry.value];
         }
     }
 }

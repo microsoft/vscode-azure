@@ -133,11 +133,11 @@ if (resource.type === 'Microsoft.ContainerRegistry/registries') { ... }
 Azure identifiers -- ARM resource IDs, resource types, tenant IDs, subscription IDs, and account IDs -- are case-insensitive. When one of them is a `Set` value or a `Map` key, use `CaselessSet` / `CaselessMap<V>` from `@microsoft/vscode-azure-utils` rather than folding by hand:
 
 ```typescript
-// Good — the invariant lives in the collection
+// Good -- the invariant lives in the collection
 const knownTenantIds = new CaselessSet(tenants.map(t => t.tenantId));
 knownTenantIds.has(value);
 
-// Bad — folding has to be remembered on both sides, and a missed
+// Bad -- folding has to be remembered on both sides, and a missed
 // fold silently returns false instead of failing
 const knownTenantIds = new Set(tenants.map(t => t.tenantId.toLowerCase()));
 knownTenantIds.has(value.toLowerCase());
