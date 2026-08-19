@@ -24,6 +24,12 @@ import type { Page } from '@microsoft/vscode-azure-utils';
  * (an expired session, a network blip), and retaining a truncated result would
  * let a retry replay it as if it were the whole listing.
  *
+ * A reader that had already advanced past the discarded pages fails too, rather
+ * than silently resuming at its old offset. Its position means nothing once the
+ * pages it counted are gone, and continuing would splice a prefix of the failed
+ * attempt onto a suffix of the next one -- losing whatever the retry produced in
+ * between, with no error to say so.
+ *
  * @typeParam T - The item type carried by each {@linkcode Page}.
  */
 export class CachedPagedListing<T> {
@@ -31,6 +37,10 @@ export class CachedPagedListing<T> {
     private iterator: AsyncIterator<Page<T>> | undefined;
     private exhausted = false;
     private pending: Promise<boolean> | undefined;
+    /** Bumped whenever the collected pages are discarded, invalidating every reader's position. */
+    private generation = 0;
+    /** The failure that caused the most recent discard, replayed to readers invalidated by it. */
+    private discarded: unknown;
 
     /**
      * @param factory - Produces the underlying listing. Called on the first pull
@@ -59,11 +69,19 @@ export class CachedPagedListing<T> {
     /**
      * Read the listing from the beginning, replaying cached pages first and
      * fetching further pages only if the reader keeps asking.
+     *
+     * @throws The failure that discarded the collected pages, if another reader
+     *   hit one partway through this read.
      */
     public async *read(): AsyncIterable<Page<T>> {
+        const generation = this.generation;
         let index = 0;
 
         for (; ;) {
+            if (this.generation !== generation) {
+                throw this.discarded;
+            }
+
             if (index < this.pages.length) {
                 yield this.pages[index++];
                 continue;
@@ -110,6 +128,8 @@ export class CachedPagedListing<T> {
             // result as if it were whole.
             this.iterator = undefined;
             this.pages.length = 0;
+            this.discarded = error;
+            this.generation++;
             throw error;
         }
     }

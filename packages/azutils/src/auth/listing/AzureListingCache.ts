@@ -283,6 +283,20 @@ export class AzureListingCache {
     }
 
     /**
+     * Discard everything cached beneath an account that is **still signed in**,
+     * keeping the account itself.
+     *
+     * Use after an interactive sign-in: the tenants and subscriptions listed
+     * before it are not merely stale but untrue, because the sign-in can have
+     * authorized ones that were invisible at the time. The account is unaffected,
+     * and evicting it would only unindex it -- it stays in the cached accounts
+     * listing, which replays rather than re-indexing.
+     */
+    public clearAccountContents(accountId: string): void {
+        this.store.evictDescendants(azureListingKeyFor(accountId));
+    }
+
+    /**
      * Discard every cached listing.
      *
      * Reserved for changes that make the data itself untrue -- the configured

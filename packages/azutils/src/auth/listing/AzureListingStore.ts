@@ -154,6 +154,22 @@ export class AzureListingStore {
     }
 
     /**
+     * Evict everything cached beneath a node -- its children, their listings, and
+     * the node's own listing of them -- while leaving the node itself in place.
+     *
+     * This is the invalidation for "this node is still true, but nothing under it
+     * is", such as a sign-in that may have authorized tenants which were
+     * invisible when the account was last listed. Evicting the node instead would
+     * unindex it without removing it from its parent's cached listing, which
+     * replays rather than re-indexing, so the node could never be looked up
+     * again.
+     */
+    public evictDescendants(parentKey: string): void {
+        this.listings.delete(parentKey);
+        this.evictChildren(parentKey);
+    }
+
+    /**
      * Drop only the cached listing of a parent's children, keeping the children
      * themselves and everything beneath them.
      *

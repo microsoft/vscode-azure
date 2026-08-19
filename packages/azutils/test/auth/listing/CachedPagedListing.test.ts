@@ -102,4 +102,29 @@ describe('CachedPagedListing (unit)', () => {
         assert.deepStrictEqual(retried, ['attempt-2-a', 'attempt-2-b']);
         assert.strictEqual(listing.isComplete, true);
     });
+
+    it('fails a reader whose collected pages another reader discarded', async () => {
+        let attempt = 0;
+        const factory = mock.fn(async function* (): AsyncIterable<Page<string>> {
+            const current = ++attempt;
+            for (let index = 0; ; index++) {
+                if (current === 1 && index === 2) {
+                    throw new Error('listing failed');
+                }
+                yield await Promise.resolve({ items: [`attempt-${current}-${index}`], hasMore: true });
+            }
+        });
+        const listing = new CachedPagedListing(factory);
+
+        // Advance one reader past the pages that are about to be discarded, then
+        // let a second reader drive the pull that fails.
+        const reader = listing.read()[Symbol.asyncIterator]();
+        assert.deepStrictEqual((await reader.next()).value?.items, ['attempt-1-0']);
+        assert.deepStrictEqual((await reader.next()).value?.items, ['attempt-1-1']);
+        await assert.rejects(() => collectPageItems(listing.read()), /listing failed/);
+
+        // Resuming at the old offset would splice the second attempt's tail onto
+        // the first attempt's head, silently swallowing everything in between.
+        await assert.rejects(() => reader.next(), /listing failed/);
+    });
 });

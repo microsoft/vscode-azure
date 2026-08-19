@@ -293,8 +293,38 @@ describe('AzureListingCache (unit)', () => {
             assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a', 'tenant-b']);
         });
 
-        it('discards everything when the data itself stops being true', async () => {
-            const { cache, fetcher } = createCache();
+        it('re-lists what is under an account that signed in, keeping the account', async () => {
+            // The home tenant is listed second, so the cached lookup and the
+            // walk fallthrough disagree -- which is what makes it observable
+            // whether the account survived as a cached node.
+            const shared = 'shared-sub';
+            const viaA = makeSubscription({ accountId: account.id, tenantId: tenantA.tenantId, subscriptionId: shared, homeTenantId: tenantB.tenantId });
+            const viaB = makeSubscription({ accountId: account.id, tenantId: tenantB.tenantId, subscriptionId: shared, homeTenantId: tenantB.tenantId });
+            const { cache, fetcher } = createCache({ subscriptions: [viaA, viaB] });
+            await collectAsync(cache.walkSubscriptions());
+
+            // What Sign In does: the account set may have changed, and anything
+            // listed under this account predates an authorization that may have
+            // widened it.
+            await cache.refreshAccounts();
+            cache.clearAccountContents(account.id);
+            fetcher.fetchTenants.mock.resetCalls();
+            fetcher.fetchSubscriptions.mock.resetCalls();
+            await collectAsync(cache.walkSubscriptions());
+
+            assert.strictEqual(fetcher.fetchTenants.mock.callCount(), 1);
+            assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a', 'tenant-b']);
+
+            // Evicting the account instead would only unindex it -- it stays in
+            // the accounts listing, which replays rather than re-indexing -- so
+            // it could never be looked up again. A filtered lookup has to check
+            // a cached node's ancestors, so it would miss and fall through to a
+            // walk, taking first-match order instead of the tie-break.
+            const resolved = await cache.findSubscription(shared, { filter: onlyTenants('tenant-a', 'tenant-b') });
+            assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
+        });
+
+        it('discards everything when the data itself stops being true', async () => {            const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());
 
             cache.clear();
