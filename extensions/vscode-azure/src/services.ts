@@ -39,16 +39,22 @@ export type IAzureResourceTreeView = vscode.TreeView<string>;
 
 /**
  * Identifier for a resolver that maps a bare subscription id to a fully-populated
- * {@linkcode AzureSubscription} by drilling the Azure resource data tree.
+ * {@linkcode AzureSubscription}, reading the shared Azure listing cache.
  *
  * Lets activity-tree components (e.g. the ARM deployment provider) obtain an
  * authenticatable subscription handle without taking a direct dependency on the
- * resource tree. Returns `undefined` when no signed-in account exposes the id.
+ * resource tree -- resolution must not depend on what a view has loaded, how far
+ * a listing has been paged, or whether a refresh is in flight.
  *
- * An optional `tenantId` hint narrows the drill to a single tenant when the
+ * Resolution is subject to the same subscription filter as the tree, so a
+ * subscription in a tenant the user deselected does not resolve: `undefined` is
+ * returned and the dependent feature degrades quietly. That is deliberate --
+ * resolving it would mean minting a token for a tenant the user excluded
+ * precisely to stop being prompted.
+ *
+ * An optional `tenantId` hint narrows the lookup to a single tenant when the
  * owning tenant is known (e.g. hydrated from azd). An optional `accountId` hint
- * likewise narrows the drill to a single account when the owning account is
- * known.
+ * likewise narrows it to a single account.
  */
 export const ISubscriptionResolver: ServiceIdentifier<ISubscriptionResolver> = Symbol.for('ISubscriptionResolver');
 export type ISubscriptionResolver = (subscriptionId: string, tenantId?: string, accountId?: string) => Promise<AzureSubscription | undefined>;

@@ -6,13 +6,12 @@
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, LogicAppLogicalType, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { CaselessSet, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { DeleteAzureResource } from '../../commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
-import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
+import { AzdEnvNameTag, ConfigurationSection } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
-import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
 import { combineContextValues, resourceContextValue } from '../contextValueHelpers';
 import { getResourceTypeIconUri } from '../iconPath';
 import { AcrResourceType } from './acr/AcrRegistry';
@@ -75,9 +74,6 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 || e.affectsConfiguration(`${ConfigurationSection}.groupBy`)
                 || e.affectsConfiguration(`${ConfigurationSection}.groupByTag`)) {
                 this.executor.output.debug('[view] resources grouping configuration changed');
-                this.changeEmitter.fire({ target: Everything });
-            } else if (e.affectsConfiguration(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
-                this.executor.output.debug('[view] subscription filter configuration changed');
                 this.changeEmitter.fire({ target: Everything });
             }
         }));
@@ -251,7 +247,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
      * exactly one tenant.
      */
     private async getRootChildren(): Promise<string[]> {
-        let nodes = this.applyFilter(await this.cache.getChildren(undefined));
+        let nodes = await this.cache.getChildren(undefined);
         this.rootKind = 'account';
         this.isOneRootSub = false;
 
@@ -259,13 +255,13 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (skip && nodes.length === 1 && isAccount(nodes[0])) {
             this.executor.output.debug('[view] skipping account level');
-            nodes = this.applyFilter(await this.cache.getChildren(nodes[0]));
+            nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'tenant';
         }
 
         if (skip && nodes.length === 1 && isTenant(nodes[0])) {
             this.executor.output.debug('[view] skipping tenant level');
-            nodes = this.applyFilter(await this.cache.getChildren(nodes[0]));
+            nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'subscription';
 
             if (nodes.length === 1) {
@@ -318,44 +314,8 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             return [];
         } else {
             this.executor.setTelProp('nodeType', getNodeType(resource));
-            return this.applyFilter(await this.cache.getChildren(resource)).map(toKey);
+            return (await this.cache.getChildren(resource)).map(toKey);
         }
-    }
-
-    /**
-     * Apply the tenant/subscription filter from
-     * `vscode-azure.selectedSubscriptions`.
-     *
-     * Each configured entry is a `tenantId/subscriptionId` pair. When the
-     * setting is empty, no filtering is applied. Tenant nodes are kept only when
-     * their tenant id appears in the filter; subscription nodes only when their
-     * subscription id appears. Other node types pass through unchanged.
-     *
-     * Because the tree loads lazily, filtered-out tenants are never expanded, so
-     * their subscriptions are never requested from Azure.
-     */
-    private applyFilter(nodes: ConcreteAzureNode[]): ConcreteAzureNode[] {
-        const selected = this.ctx.code.workspace
-            .getConfiguration(ConfigurationSection)
-            .get<string[]>(SelectedSubscriptionsConfigurationKey, []);
-
-        if (selected.length === 0) {
-            return nodes;
-        }
-
-        const parsed = selected.map(parseSubscriptionFilterKey);
-        const tenantFilter = new CaselessSet(parsed.map(entry => entry.tenantId).filter(id => id !== undefined));
-        const subscriptionFilter = new CaselessSet(parsed.map(entry => entry.subscriptionId).filter(id => id !== undefined));
-
-        return nodes.filter(node => {
-            if (isTenant(node)) {
-                return tenantFilter.has(node.tenantId);
-            } else if (isSubscription(node)) {
-                return subscriptionFilter.has(node.subscriptionId);
-            } else {
-                return true;
-            }
-        });
     }
 
     /**

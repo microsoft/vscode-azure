@@ -4,9 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    AzureListingCache,
+    AzureListingFetcher,
     createDefaultCredentialFactory,
     DeploymentClient,
-    findSubscriptionById,
+    IAzureListingCache,
+    IAzureListingFetcher,
     ICredentialFactory,
     IDeploymentClientProvider,
     IResourceClientProvider,
@@ -24,7 +27,7 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { IAzureViewDataTree, ISubscriptionResolver } from '../services';
+import { ISubscriptionResolver } from '../services';
 import {
     AzureAccountDataProvider,
     IAzureAccountDataProvider,
@@ -34,6 +37,8 @@ import { GenericAzureViewProvider } from '../tree/resources/GenericAzureViewProv
 import { IResourceSelector, ResourceSelector } from '../tree/resources/ResourceSelector';
 import { azdDetector } from '../tree/workspace/azd/AzdWorkspaceDataProvider';
 import { CredentialOptionsScope, ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
+import { signedInTenantIdsFor } from '../utils/signedInTenants';
+import { createSubscriptionFilter } from '../utils/subscriptionFilter';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /**
@@ -53,10 +58,37 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
             );
         }).inSingletonScope();
 
+        container.bind(IAzureListingFetcher).toDynamicValue(context => {
+            const code = context.get(IVsCode);
+            return new AzureListingFetcher(
+                context.get(ICodeContext),
+                context.get(IActionExecutor),
+                context.get(ICredentialFactory),
+                { additionalTenantIds: account => signedInTenantIdsFor(code, account.id) },
+            );
+        }).inSingletonScope();
+
+        container.bind(IAzureListingCache).toDynamicValue(context => {
+            return new AzureListingCache(context.get(IAzureListingFetcher), context.get(IActionExecutor));
+        }).inSingletonScope();
+
         container.bind(ISubscriptionResolver).toDynamicValue(context => {
-            const tree = context.get(IAzureViewDataTree);
+            const code = context.get(IVsCode);
+            const listings = context.get(IAzureListingCache);
+            const scope = context.get(ICredentialOptionsScope);
             return (subscriptionId: string, tenantId?: string, accountId?: string) => {
-                return findSubscriptionById(tree, subscriptionId, tenantId, accountId);
+                // Resolution happens in the background, for tenants the user
+                // never opened, so any credential minted along the way must be
+                // silent -- and it reads through the same filter the tree uses,
+                // so a deselected tenant is not walked at all.
+                return scope.run(
+                    { sessionOptions: { silent: true } },
+                    () => listings.findSubscription(subscriptionId, {
+                        tenantId,
+                        accountId,
+                        filter: createSubscriptionFilter(code),
+                    }),
+                );
             };
         }).inSingletonScope();
 

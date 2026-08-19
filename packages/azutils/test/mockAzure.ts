@@ -4,9 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
-import { EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
 import { mock, type Mock } from 'node:test';
-import type { AzureAccount, AzureSubscription, AzureTenant } from '../src/auth/AzureSubscription';
+import type * as vscode from 'vscode';
+import { isAzureSubscription, type AzureAccount, type AzureSubscription, type AzureTenant } from '../src/auth/AzureSubscription';
+import type { ICredentialFactory } from '../src/auth/CredentialFactory';
+import type { AzureListingFetcherOptions, IAzureListingFetcher } from '../src/auth/listing/AzureListingFetcher';
+import type { VsCodeExtensionCredential } from '../src/auth/VsCodeExtensionCredential';
 import { AzurePublicCloud, type EnvironmentLike } from '../src/auth/Environment';
 import { isAccount, isTenant, type ConcreteAzureNode } from '../src/models/AzureNode';
 import type { GenericResource } from '../src/models/GenericResource';
@@ -71,6 +75,81 @@ export function makeCredential(token = 'mock-token'): TokenCredential {
     return {
         getToken: mock.fn((): Promise<AccessToken> => Promise.resolve({ token, expiresOnTimestamp: Date.now() + 3600000 })),
     };
+}
+
+/** Options for {@linkcode createMockCredentialFactory}. */
+export interface MockCredentialFactoryOptions {
+    /**
+     * The account a session resolves to when the caller did not scope its
+     * request to one.
+     *
+     * This is what a sign-in to a manually-entered tenant reports back: the
+     * caller has a tenant id but no account context, and learns which account
+     * the tenant turned out to belong to only from the resulting session.
+     * Defaults to {@linkcode makeAccount}.
+     */
+    readonly account?: AzureAccount;
+
+    /**
+     * Whether a request asking for a silent acquisition fails, modelling a
+     * fixture with no cached session to satisfy it. Defaults to `false`.
+     *
+     * Background passes (tenant-name enrichment, subscription resolution) force
+     * silent acquisition precisely so they cannot prompt, so this is what
+     * decides whether such a pass succeeds or leaves its subject untouched.
+     */
+    readonly denySilentAcquisition?: boolean;
+
+    /** The access token every produced credential returns. */
+    readonly token?: string;
+}
+
+/**
+ * Creates a mock {@linkcode ICredentialFactory} that authenticates without
+ * touching VS Code's authentication provider, so a sign-in flow can be driven
+ * end to end without an interactive prompt.
+ *
+ * The produced credential carries the `authenticate()` method that
+ * {@linkcode VsCodeExtensionCredential} exposes and sign-in flows depend on,
+ * resolving a session for the account the request was scoped to, or for
+ * {@linkcode MockCredentialFactoryOptions.account} when it was not scoped to
+ * one.
+ *
+ * The factory is wrapped with `mock.fn()` so callers can assert what each
+ * credential was scoped to -- the tenant id and session options are what decide
+ * whether a sign-in prompts.
+ */
+export function createMockCredentialFactory(options?: MockCredentialFactoryOptions): Mock<ICredentialFactory> {
+    const fallbackAccount = options?.account ?? makeAccount();
+    const token = options?.token ?? 'mock-token';
+
+    return mock.fn<ICredentialFactory>((input) => {
+        const scope = isAzureSubscription(input)
+            ? { tenantId: input.tenantId, accountId: input.accountId, silent: false }
+            : { tenantId: input?.tenantId, accountId: input?.sessionOptions?.account?.id, silent: input?.sessionOptions?.silent ?? false };
+
+        const authenticate = (): Promise<vscode.AuthenticationSession> => {
+            if (scope.silent && options?.denySilentAcquisition) {
+                return Promise.reject(new Error(`Mock: no cached session for tenant ${scope.tenantId ?? '<default>'}`));
+            }
+            return Promise.resolve({
+                id: `mock-session-${scope.tenantId ?? 'default'}`,
+                accessToken: token,
+                account: scope.accountId
+                    ? { id: scope.accountId, label: scope.accountId }
+                    : { id: fallbackAccount.id, label: fallbackAccount.label },
+                scopes: [],
+            });
+        };
+
+        return {
+            getToken: mock.fn(async (): Promise<AccessToken> => {
+                await authenticate();
+                return { token, expiresOnTimestamp: Date.now() + 3600000 };
+            }),
+            authenticate: mock.fn(authenticate),
+        } satisfies Pick<VsCodeExtensionCredential, 'getToken' | 'authenticate'>;
+    });
 }
 
 /**
@@ -191,6 +270,130 @@ export function createMockAccountDataProvider(options?: MockAccountDataProviderO
                 throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
             }
         }),
+    };
+}
+
+/** Options for {@linkcode createMockAzureListingFetcher}. */
+export interface MockAzureListingFetcherOptions {
+    /** Accounts returned by `fetchAccounts`. Defaults to a single {@linkcode makeAccount}. */
+    readonly accounts?: AzureAccount[];
+    /** Every tenant, matched to its account by `accountId`. Defaults to a single {@linkcode makeTenant}. */
+    readonly tenants?: AzureTenant[];
+    /** Every subscription, matched to its tenant by `accountId` + `tenantId`. Defaults to a single {@linkcode makeSubscription}. */
+    readonly subscriptions?: AzureSubscription[];
+    /** Items per page for the tenant and subscription listings. Defaults to one page per listing. */
+    readonly pageSize?: number;
+    /** Tenant ids whose subscription listing rejects, simulating a tenant that cannot mint a token. */
+    readonly unreachableTenantIds?: string[];
+    /**
+     * Account ids whose tenant listing is blocked, simulating conditional access
+     * denying enumeration outright.
+     *
+     * Such an account lists only the tenants named by
+     * {@linkcode MockAzureListingFetcherOptions.additionalTenantIds additionalTenantIds} --
+     * degrading rather than throwing, the way the real fetcher does, since a
+     * tenant-scoped sign-in still reaches those tenants.
+     */
+    readonly unlistableAccountIds?: string[];
+    /**
+     * Tenant ids folded into an account's tenant listing on top of whatever it
+     * lists, taking the real fetcher's option verbatim.
+     *
+     * Consulted on every `fetchTenants` call rather than captured up front, so a
+     * fixture backed by mutable storage (the setting a manually-entered tenant is
+     * persisted to) reflects a tenant added mid-test. Synthesized tenants carry
+     * the tenant id as their display name, which is what marks them as awaiting
+     * enrichment.
+     */
+    readonly additionalTenantIds?: AzureListingFetcherOptions['additionalTenantIds'];
+}
+
+/**
+ * An {@linkcode IAzureListingFetcher} fixture whose three fetch methods are
+ * `mock.fn()` instances, so a test can assert exactly which listings were
+ * issued -- the property most of the listing-layer requirements are stated in
+ * terms of.
+ */
+export interface MockAzureListingFetcher extends IAzureListingFetcher {
+    readonly fetchAccounts: Mock<IAzureListingFetcher['fetchAccounts']>;
+    readonly fetchTenants: Mock<IAzureListingFetcher['fetchTenants']>;
+    readonly fetchSubscriptions: Mock<IAzureListingFetcher['fetchSubscriptions']>;
+}
+
+/**
+ * Creates a mock {@linkcode IAzureListingFetcher} serving canned accounts,
+ * tenants, and subscriptions.
+ *
+ * Membership comes from the fixtures themselves (a tenant belongs to the
+ * account named by its `accountId`; a subscription to the tenant named by its
+ * `accountId` + `tenantId`), so a subscription reachable through two tenants is
+ * expressed the way it is in Azure -- two entries with the same
+ * `subscriptionId` and different `tenantId`s.
+ *
+ * Listings are lazy: a page is produced only when the reader asks for it, so a
+ * test can assert that a caller stopped after the first page.
+ *
+ * The supplied arrays are read on every call rather than copied up front, so a
+ * caller may append to them between listings to model data that appears while
+ * the fixture is live (e.g. a subscription that becomes visible only once its
+ * tenant has been signed in to).
+ */
+export function createMockAzureListingFetcher(options?: MockAzureListingFetcherOptions): MockAzureListingFetcher {
+    const accounts = options?.accounts ?? [makeAccount()];
+    const tenants = options?.tenants ?? [makeTenant()];
+    const subscriptions = options?.subscriptions ?? [makeSubscription()];
+    const unreachable = new CaselessSet(options?.unreachableTenantIds ?? []);
+    const unlistable = new CaselessSet(options?.unlistableAccountIds ?? []);
+
+    async function* paged<T>(items: T[]): AsyncIterable<Page<T>> {
+        const size = options?.pageSize ?? Math.max(items.length, 1);
+        for (let start = 0; start < items.length || start === 0; start += size) {
+            const slice = items.slice(start, start + size);
+            yield await Promise.resolve({ items: slice, hasMore: start + size < items.length });
+        }
+    }
+
+    /** Synthesize the named tenants this account has, minus any it already listed. */
+    function namedTenants(account: AzureAccount, listed: AzureTenant[]): AzureTenant[] {
+        const seen = new CaselessSet(listed.map(tenant => tenant.tenantId));
+        const named: AzureTenant[] = [];
+        for (const tenantId of options?.additionalTenantIds?.(account) ?? []) {
+            if (seen.has(tenantId)) {
+                continue;
+            }
+            seen.add(tenantId);
+            named.push(makeTenant({
+                tenantId: tenantId.toLowerCase(),
+                displayName: tenantId,
+                environment: account.environment,
+                accountId: account.id,
+            }));
+        }
+        return named;
+    }
+
+    return {
+        fetchAccounts: mock.fn(() => Promise.resolve([...accounts])),
+        fetchTenants: mock.fn((account: AzureAccount) => {
+            const listed = unlistable.has(account.id)
+                ? []
+                : tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase());
+            return paged([...listed, ...namedTenants(account, listed)]);
+        }),
+        fetchSubscriptions: mock.fn((tenant: AzureTenant) => {
+            if (unreachable.has(tenant.tenantId)) {
+                const rejecting: AsyncIterable<Page<AzureSubscription>> = {
+                    [Symbol.asyncIterator]: () => ({
+                        next: () => Promise.reject(new Error(`Mock: cannot list subscriptions for tenant ${tenant.tenantId}`)),
+                    }),
+                };
+                return rejecting;
+            }
+            return paged(subscriptions.filter(sub =>
+                sub.accountId.toLowerCase() === tenant.accountId.toLowerCase()
+                && sub.tenantId.toLowerCase() === tenant.tenantId.toLowerCase()));
+        }),
+        shouldIgnoreSessionChange: () => false,
     };
 }
 

@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { IAzureListingCache, type AzureListingCache, type AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { CaselessSet, IActionContext, IActionExecutor, ICodeContext, showMessage, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
-import { IAzureViewDataTree } from '../../services';
 import { ICredentialOptionsScope } from '../../utils/CredentialOptionsScope';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -28,7 +27,7 @@ export class SelectSubscriptions implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(IAzureListingCache) private readonly listings: AzureListingCache,
         @inject(ICredentialOptionsScope) private readonly credentialOptions: ICredentialOptionsScope,
         @inject(IActionContext) private readonly actionContext: IActionContext,
     ) { }
@@ -45,7 +44,7 @@ export class SelectSubscriptions implements ManagedCommand {
         // un-authable tenant fails fast instead of interrupting the user.
         const { subscriptions: reachable, failures } = await this.credentialOptions.run(
             { sessionOptions: { silent: true } },
-            () => listReachableSubscriptions(this.cache),
+            () => listReachableSubscriptions(this.listings),
         );
 
         if (failures.length > 0) {

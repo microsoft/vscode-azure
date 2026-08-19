@@ -8,15 +8,16 @@
 // This file is compiled as a SEPARATE esbuild entry point (test/mock.bundle.js)
 // so none of this code ends up in the main extension bundle.
 
-import { IAcrClientProvider, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
-import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { IAcrClientProvider, IAzureListingFetcher, ICredentialFactory, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import { createMockAzureListingFetcher, createMockCredentialFactory, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import type { Container } from 'inversify';
 import { createMockAcrClient } from '../tree/resources/acr/mockAcr';
 import { createMockResourceClient } from '../tree/resources/mockResourceClient';
 import type { ActivityStatus } from '../../src/tree/activity/Activity';
 import { type AddChildOptions, ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
 import { IGenericActivityDataProvider } from '../../src/tree/activity/GenericActivityDataProvider';
-import { IAzureAccountDataProvider } from '../../src/tree/resources/AzureAccountDataProvider';
+import { signedInTenantIdsFor } from '../../src/utils/signedInTenants';
 
 // -- Mock data ----------------------------------------------------------------
 
@@ -28,6 +29,35 @@ const subscription = makeSubscription({
     tenantId: tenant.tenantId,
     accountId: account.id,
 });
+
+// A second account whose tenants cannot be enumerated, standing in for an
+// account behind conditional access. It shows up signed in but empty, which is
+// the state that makes `Azure: Sign In` offer to sign in to a tenant by id --
+// the one path that reaches a tenant Azure will not list. Whatever tenant id is
+// entered is persisted to `vscode-azure.signedInTenants`, folded back into this
+// account's listing below, and given a subscription of its own so it can be
+// drilled like any other.
+const restrictedAccount = makeAccount({ id: 'mock-account-restricted', label: 'Mock Account (Conditional Access)' });
+
+/** Every subscription the mock fetcher serves. Grows as tenants are entered by hand. */
+const subscriptions = [subscription];
+
+/**
+ * Give a manually-entered tenant a subscription, once. Called each time the
+ * restricted account's tenants are listed, since the tenant is not known until
+ * the user types its id.
+ */
+function ensureSubscriptionFor(accountId: string, tenantId: string): void {
+    if (subscriptions.some(sub => sub.accountId === accountId && sub.tenantId === tenantId)) {
+        return;
+    }
+    subscriptions.push(makeSubscription({
+        subscriptionId: `mock-sub-${tenantId.slice(0, 8)}`,
+        displayName: `Mock Subscription (${tenantId.slice(0, 8)})`,
+        tenantId,
+        accountId,
+    }));
+}
 
 const subscriptionIdPrefix = `/subscriptions/${subscription.subscriptionId}`;
 const rgIdPrefix = (rgName: string) => `${subscriptionIdPrefix}/resourceGroups/${rgName}`;
@@ -120,12 +150,40 @@ const mockCodeDeployments: ReadonlyArray<{
 export function applyOverrides(container: Container): void {
     // -- Rebind Azure providers with mock implementations ---------------------
 
-    const accountProvider = createMockAccountDataProvider({
-        accounts: [account],
+    // Rebinding the fetcher (rather than the data provider above it) keeps the
+    // real cache, filter, and tree wiring in the loop, so mock mode exercises
+    // the same code paths -- including flows that read the cache directly, such
+    // as Select Subscriptions.
+    const code = container.get(IVsCode);
+    const listingFetcher = createMockAzureListingFetcher({
+        accounts: [account, restrictedAccount],
         tenants: [tenant],
-        subscriptions: [subscription],
+        subscriptions,
+        unlistableAccountIds: [restrictedAccount.id],
+        additionalTenantIds: (forAccount) => {
+            const tenantIds = signedInTenantIdsFor(code, forAccount.id);
+            for (const tenantId of tenantIds) {
+                ensureSubscriptionFor(forAccount.id, tenantId);
+            }
+            return tenantIds;
+        },
     });
-    container.rebind(IAzureAccountDataProvider).toConstantValue(accountProvider);
+    container.rebind(IAzureListingFetcher).toConstantValue(listingFetcher);
+
+    // Sign-in flows ask the credential factory for a session directly, so mock
+    // mode needs one that resolves without VS Code's authentication provider --
+    // otherwise `Azure: Sign In` prompts for a real account. A tenant entered by
+    // hand carries no account context, so it resolves to the restricted account:
+    // the one whose tenants cannot be listed, and therefore the only one a
+    // tenant id has to be entered for.
+    //
+    // Silent acquisition is denied because there is no cached session behind
+    // this factory. That is what a manually-entered tenant's name enrichment
+    // asks for, so the tenant keeps showing its id -- the same outcome as a real
+    // session that conditional access still will not let list tenants.
+    container.rebind(ICredentialFactory).toConstantValue(
+        createMockCredentialFactory({ account: restrictedAccount, denySilentAcquisition: true }),
+    );
 
     container.rebind(IResourceClientProvider).toConstantValue(
         () => createMockResourceClient([demoRg, stagingRg], resourcesByGroup),

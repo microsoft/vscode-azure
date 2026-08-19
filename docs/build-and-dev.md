@@ -143,6 +143,23 @@ pnpm --filter @microsoft/vscode-azure-utils run test -- --watch --extension ts
 
 The extension's `vscode-test` runner has no watch mode at all.
 
+## Running against mock data
+
+The **Extension: Run (Mock Data)** launch configuration sets `AZURE_MOCK_DATA=1`, which makes `main.js` apply [`test/override/mock.ts`](../extensions/vscode-azure/test/override/mock.ts) to the container after `setUpContainer` but before activation. It runs in its own `Azure Mock Data` settings profile, so a personal subscription filter cannot hide the mock data.
+
+The overrides are deliberately shallow: they rebind the lowest thing that issues I/O -- the `IAzureListingFetcher`, the resource/ACR clients, and the `ICredentialFactory` -- and leave the listing cache, the subscription filter, and the whole tree above them real. Mock mode therefore exercises the same code paths as a live session, including flows that read the cache directly such as `Azure: Select Subscriptions`.
+
+Two accounts are signed in, covering both shapes the account -> tenant -> subscription hierarchy comes in:
+
+| Account | What it demonstrates |
+|---------|----------------------|
+| `Mock Account` | The ordinary path: a tenant that enumerates, holding one subscription with resource groups and resources beneath it. |
+| `Mock Account (Conditional Access)` | An account whose `tenants.list()` is blocked. It appears signed in but empty, which is what sends a user to `Azure: Sign In` -> **type a tenant ID**. The entered id is persisted to `vscode-azure.signedInTenants`, folded back into the account's tenant listing, and given a subscription of its own, so the whole manual-tenant path can be walked without an Azure account. |
+
+Because the mock credential factory has no cached session behind it, silent acquisition fails -- so a manually-entered tenant keeps showing its id as its display name rather than being enriched to its real name. That is the same outcome as a real session that conditional access still will not let list tenants.
+
+The fixtures behind all of this (`createMockAzureListingFetcher`, `createMockCredentialFactory`) come from `@microsoft/vscode-azure-azutils/testing` and are the same ones the automated tests use, so a scenario worth clicking through is usually also worth asserting -- see `test/commands/auth/manualTenantSignIn.test.ts`.
+
 ## Sharing the VS Code test download across worktrees
 
 The extension's test runner downloads a full VS Code build (~1 GB) into `extensions/vscode-azure/.vscode-test`, and every new clone or `git worktree` re-downloads it. There is no config knob — `@vscode/test-electron` resolves its cache as `<cwd>/.vscode-test` and `@vscode/test-cli` never passes a `cachePath` — so the only lever is to link that path somewhere shared:

@@ -36,7 +36,7 @@ Additional helpers exported by `AzureNode.ts`:
 
 ## Account / Tenant / Subscription
 
-`Account`, `Tenant`, and `Subscription` are the identity-layer node types, defined in `packages/azutils/src/auth/AzureSubscription.ts` (exported as `AzureAccount`, `AzureTenant`, `AzureSubscription`). They are produced by `AzureAccountDataProvider` (in the extension) and form the top three levels of the resources tree.
+`Account`, `Tenant`, and `Subscription` are the identity-layer node types, defined in `packages/azutils/src/auth/AzureSubscription.ts` (exported as `AzureAccount`, `AzureTenant`, `AzureSubscription`). They are produced by `AzureListingFetcher` (in azutils) and form the top three levels of the resources tree.
 
 ```typescript
 type AzureAccount = vscode.AuthenticationSessionAccountInformation & {
@@ -51,10 +51,13 @@ interface AzureTenant extends WithRequired<TenantIdDescription, 'tenantId' | 'di
 interface AzureSubscription extends WithRequired<Subscription, 'subscriptionId' | 'tenantId' | 'displayName'> {
     readonly environment: EnvironmentLike;
     readonly accountId: string;    // VS Code auth account id (kept verbatim)
+    readonly homeTenantId?: string; // the tenant that owns the subscription, when ARM reports one
 }
 ```
 
-**Branded ids, not object embeds.** Tenants and subscriptions reference their owning account by `accountId` rather than embedding an `AzureAccount` object, and a subscription carries its `tenantId` directly rather than embedding an `AzureTenant`. This keeps every node a flat, immutable value object: re-listing one level (e.g. re-listing accounts after an auth-session change) never leaves stale embedded parent objects behind, and callers must not rely on reference equality against a shared account/tenant instance. The producer (`AzureAccountDataProvider`) lowercases `tenantId` and `subscriptionId` (case-insensitive GUIDs) but keeps `accountId` verbatim because it doubles as the VS Code `getSession` identity; case-insensitive cache keys are achieved by lowercasing `accountId`/`tenantId` inside `AzureNodeId.toString()` instead. The account's display label is **not** carried on tenants/subscriptions: `getSession` resolves the account by `id`, so the credential factory passes an empty `label`.
+**Branded ids, not object embeds.** Tenants and subscriptions reference their owning account by `accountId` rather than embedding an `AzureAccount` object, and a subscription carries its `tenantId` directly rather than embedding an `AzureTenant`. This keeps every node a flat, immutable value object: re-listing one level (e.g. re-listing accounts after an auth-session change) never leaves stale embedded parent objects behind, and callers must not rely on reference equality against a shared account/tenant instance. The producer (`AzureListingFetcher`) lowercases `tenantId` and `subscriptionId` (case-insensitive GUIDs) but keeps `accountId` verbatim because it doubles as the VS Code `getSession` identity; case-insensitive cache keys are achieved by lowercasing `accountId`/`tenantId` inside `AzureNodeId.toString()` instead. The account's display label is **not** carried on tenants/subscriptions: `getSession` resolves the account by `id`, so the credential factory passes an empty `label`.
+
+**A subscription's `tenantId` is the tenant it was *listed through*.** Azure lets one subscription be reachable through more than one tenant, so identity is the triple **(accountId, tenantId, subscriptionId)** — never `subscriptionId` alone. The same subscription reached through two tenants is two distinct nodes with two distinct `AzureNodeId`s. `homeTenantId` records the tenant that actually owns the subscription (ARM's `tenantId` on the subscription record), which is what lets a bare-id lookup prefer the copy carrying the subscription's own authorization over a guest or delegated grant.
 
 **No credential on the subscription.** Unlike the removed `@microsoft/vscode-azext-azureauth` model, `AzureSubscription` carries no credential or authentication object — only the `environment` (an [`EnvironmentLike`](#environmentlike)) plus ids/displayName/account-id. Tokens are produced on demand via the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. See [Azure Client Wrappers — DI Integration](azure-clients.md#di-integration).
 
