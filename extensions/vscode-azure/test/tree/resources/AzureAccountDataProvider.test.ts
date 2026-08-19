@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzurePublicCloud, PublicAuthProviderId, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
+import { AzurePublicCloud, PublicAuthProviderId, SovereignCloudConfigurationSection, SubscriptionClient, type AzureAccount, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { collectPages, Everything, Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler, withSettings } from '@microsoft/vscode-azure-utils/testing';
@@ -845,6 +845,89 @@ describe('AzureAccountDataProvider (unit)', () => {
             // excludes, otherwise the filter could only ever be narrowed.
             expect(pages.flatMap(page => (page.items as AzureTenant[]).map(t => t.tenantId)))
                 .to.deep.equal(['t1', 't2']);
+        });
+    });
+
+    describe('listing cache', () => {
+        const filterKey = `${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`;
+
+        /**
+         * Mocks the subscription client, counting how many tenant listings are
+         * actually issued. The count is the signal that matters: it is the
+         * network work the cache exists to avoid.
+         */
+        function mockCountingTenantList() {
+            const listed = { tenants: 0 };
+            mock.method(SubscriptionClient, 'create', () => createMockSubscriptionClient({
+                get tenantPages() {
+                    listed.tenants++;
+                    return [{ items: [{ tenantId: 't1', displayName: 'Tenant One' }, { tenantId: 't2', displayName: 'Tenant Two' }], hasMore: false }];
+                },
+            }) as never);
+            return listed;
+        }
+
+        it('should serve the filtered tree from a listing the unfiltered path already fetched', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            const account = makeAccount();
+            const listed = mockCountingTenantList();
+
+            await withSettings(vscodeMock, { [filterKey]: ['t1/sub-1'] }, async () => {
+                // Select Subscriptions enumerates unfiltered...
+                await collectPages(provider.listTenantsForAccount(account));
+                // ...and the tree then lists the same account.
+                await collectPages(await provider.getChildren(account));
+            });
+
+            // Both paths read one cache, so the tenants are listed once.
+            expect(listed.tenants).to.equal(1);
+        });
+
+        it('should not re-list tenants when only the subscription filter changes', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            const account = makeAccount();
+            const listed = mockCountingTenantList();
+
+            const first = await withSettings(vscodeMock, { [filterKey]: ['t1/sub-1'] }, async () =>
+                await collectPages(await provider.getChildren(account)));
+            expect(first.flatMap(page => (page.items as AzureTenant[]).map(t => t.tenantId))).to.deep.equal(['t1']);
+
+            vscodeMock.configChangeEmitter.fire({ affectsConfiguration: (s: string) => s === filterKey });
+
+            const second = await withSettings(vscodeMock, { [filterKey]: ['t1/sub-1', 't2/sub-2'] }, async () =>
+                await collectPages(await provider.getChildren(account)));
+
+            // Widening the filter admits a tenant the tree never showed, but the
+            // filter changing did not make the cached listing untrue -- so the
+            // newly-admitted tenant comes from cache, with no new request.
+            expect(second.flatMap(page => (page.items as AzureTenant[]).map(t => t.tenantId))).to.deep.equal(['t1', 't2']);
+            expect(listed.tenants).to.equal(1);
+        });
+
+        it('should re-list tenants when the sovereign cloud configuration changes', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            const account = makeAccount();
+            const listed = mockCountingTenantList();
+
+            await collectPages(await provider.getChildren(account));
+            vscodeMock.configChangeEmitter.fire({ affectsConfiguration: (s: string) => s === SovereignCloudConfigurationSection });
+            await collectPages(await provider.getChildren(account));
+
+            // The endpoint changed, so the cached listing really is untrue.
+            expect(listed.tenants).to.equal(2);
+        });
+
+        it('should re-list tenants when the manually-entered tenants change', async () => {
+            const { provider, mock: vscodeMock } = createProvider();
+            const account = makeAccount();
+            const listed = mockCountingTenantList();
+
+            await collectPages(await provider.getChildren(account));
+            vscodeMock.configChangeEmitter.fire({ affectsConfiguration: (s: string) => s === `${ConfigurationSection}.${SignedInTenantsConfigurationKey}` });
+            await collectPages(await provider.getChildren(account));
+
+            // Manual tenants are folded into the listing, so it must be rebuilt.
+            expect(listed.tenants).to.equal(2);
         });
     });
 

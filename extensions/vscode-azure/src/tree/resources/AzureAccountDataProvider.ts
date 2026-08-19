@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    AzureListingCache,
     getAuthProviderId, getConfiguredAzureEnv,
     ICredentialFactory,
     isAccount, isTenant,
     PublicAuthProviderId, SovereignAuthProviderId, SovereignCloudConfigurationSection,
     SubscriptionClient,
     type AzureAccount, type AzureSubscription, type AzureTenant,
-    type ConcreteAzureNode,
+    type ConcreteAzureNode, type IAzureListingSource,
 } from '@microsoft/vscode-azure-azutils';
 import {
     DebounceScheduler, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, IDebounceScheduler, Roots, stringifyError,
@@ -43,18 +44,13 @@ export interface IAzureAccountDataProvider extends DataProvider<ConcreteAzureNod
  *
  * Discovery flows that let the user *change* the filter (Select Subscriptions,
  * Sign In) need the unfiltered truth -- otherwise the filter could only ever be
- * narrowed, never widened. They use this surface, which talks to Azure directly
- * and never reads or writes the shared tree cache, so a filtered-out tenant
- * pulled in for a pick list cannot leak into the resources view.
+ * narrowed, never widened. They use this surface, which reads the same
+ * {@linkcode AzureListingCache} the filtered tree reads, so anything they load
+ * is available to the tree afterwards (and vice versa) without re-fetching.
+ * Filtering happens on read, so sharing the cache cannot leak an excluded tenant
+ * into the resources view.
  */
-export interface IUnfilteredAzureListing {
-    /** List every signed-in account for the configured environment. */
-    listAccounts(): Promise<AzureAccount[]>;
-    /** List every tenant of an account, one page at a time. */
-    listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>>;
-    /** List every subscription of a tenant, one page at a time. */
-    listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>>;
-}
+export type IUnfilteredAzureListing = IAzureListingSource;
 
 export const IAzureAccountDataProvider: ServiceIdentifier<IAzureAccountDataProvider> = Symbol.for('IAzureAccountDataProvider');
 
@@ -165,6 +161,23 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     public readonly onDidChange = this.changeEmitter.event;
     public readonly onDidRemoveAccounts = this.removeAccountsEmitter.event;
 
+    /**
+     * Caches the unfiltered listings behind both access paths.
+     *
+     * Both {@linkcode getChildren} (filtered, for the tree) and the
+     * {@linkcode IUnfilteredAzureListing} methods (unfiltered, for the flows that
+     * change the filter) read through this, so whichever runs first pays for the
+     * fetch and the other reuses it. The filter is applied on *read*, so the
+     * cache can hold tenants the tree does not currently show without any risk of
+     * displaying them -- and changing the filter needs no invalidation at all,
+     * because it does not make anything cached untrue.
+     */
+    private readonly listings = new AzureListingCache({
+        listAccounts: () => this.fetchAccounts(),
+        listTenantsForAccount: account => this.fetchTenantsForAccount(account),
+        listSubscriptionsForTenant: tenant => this.fetchSubscriptionsForTenant(tenant),
+    } satisfies IAzureListingSource);
+
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
@@ -196,22 +209,27 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             if (e.affectsConfiguration(SovereignCloudConfigurationSection)) {
                 this.executor.output.debug('[auth] sovereign cloud configuration changed; invalidating accounts');
                 // The configured environment itself changed, so every cached
-                // listing was fetched against the old endpoint and is invalid.
+                // listing was fetched against the old endpoint and is untrue.
+                this.listings.clear();
                 this.changeEmitter.fire({ target: Everything });
             } else if (e.affectsConfiguration(`${ConfigurationSection}.${SignedInTenantsConfigurationKey}`)) {
                 this.executor.output.debug('[auth] signed-in tenants configuration changed; invalidating accounts');
                 // The user edited the manually-entered tenants directly (e.g. in
                 // settings.json). Those tenants are folded into each account's
-                // tenant listing, so re-list to surface added tenants and drop
-                // removed ones.
+                // tenant listing, so the cached listings no longer match the
+                // setting and must be re-fetched.
+                this.listings.clear();
                 this.changeEmitter.fire({ target: Everything });
             } else if (e.affectsConfiguration(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
-                this.executor.output.debug('[auth] subscription filter changed; invalidating accounts');
-                // Every cached tenant/subscription listing was produced through
-                // the previous filter, so the whole tree is re-listed. Widening
-                // the filter admits tenants that were never listed before (and
-                // so were never token-requested), which is exactly why this
-                // cannot be a view-level refresh.
+                this.executor.output.debug('[auth] subscription filter changed; re-listing from cache');
+                // Re-list so newly-admitted tenants appear (they were filtered
+                // out of the previous listing, so the tree has never seen them).
+                //
+                // Deliberately does NOT clear the listing cache: the filter
+                // changing does not make any cached listing untrue. Widening the
+                // filter therefore costs nothing when the tenant was already
+                // fetched -- typically the case, since Select Subscriptions just
+                // enumerated everything to build its pick list.
                 this.changeEmitter.fire({ target: Everything });
             }
         }));
@@ -269,6 +287,31 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         }
 
         throw new Error(`Unsupported resource type: ${JSON.stringify(resource)}`);
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Served from {@linkcode listings}, so this shares fetched data with the
+     * tree rather than duplicating its requests.
+     */
+    public listAccounts(): Promise<AzureAccount[]> {
+        return this.listings.listAccounts();
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Unfiltered by design: this backs the flows that let the user widen the
+     * filter, which must be able to see tenants the tree currently hides.
+     */
+    public listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
+        return this.listings.listTenantsForAccount(account);
+    }
+
+    /** @inheritdoc */
+    public listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
+        return this.listings.listSubscriptionsForTenant(tenant);
     }
 
     /**
@@ -342,7 +385,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      *
      * @returns The signed-in accounts, sorted by label.
      */
-    public async listAccounts(): Promise<AzureAccount[]> {
+    private async fetchAccounts(): Promise<AzureAccount[]> {
         const environment = getConfiguredAzureEnv(this.ctx.code);
 
         // Suppress session-change events around our own getAccounts() call: the
@@ -402,7 +445,10 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     private async reconcileAccountsOnSessionChange(providerId: string): Promise<void> {
         try {
             const previousIds = this.knownAccountIds;
-            const accounts = await this.listAccounts();
+            // Deliberately fetches rather than reading the cache: the whole
+            // point is to detect that the signed-in account set changed, which a
+            // memoized list could never reveal.
+            const accounts = await this.fetchAccounts();
             const currentIds = new Set(accounts.map(account => account.id.toLowerCase()));
 
             if (previousIds !== undefined && idSetsEqual(previousIds, currentIds)) {
@@ -416,15 +462,24 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // a signed-out account's subtree is evicted because it drops out of the
             // new listing.
             this.executor.output.debug(`[auth] sessions changed provider=${providerId}; account set changed (count=${currentIds.size}), re-listing accounts`);
+
+            // Drop the stale account list, but keep the tenant/subscription
+            // listings of accounts that survived -- they are still true, and
+            // re-fetching them is exactly the cost this cache exists to avoid.
+            this.listings.clearAccounts();
+
             if (previousIds) {
                 const removedIds = [...previousIds].filter(id => !currentIds.has(id));
+                for (const id of removedIds) {
+                    this.listings.clearAccount(id);
+                }
                 if (removedIds.length > 0) {
                     this.removeAccountsEmitter.fire(removedIds);
                 }
             }
             this.changeEmitter.fire({ target: Roots });
         } catch (error) {
-            // This runs as a fire-and-forget reconcile, and listAccounts() can
+            // This runs as a fire-and-forget reconcile, and listing accounts can
             // throw (a transient getAccounts() failure, or getConfiguredAzureEnv()
             // throwing on a misconfigured custom cloud). Swallow and log rather
             // than surfacing an unhandled rejection; a later session event or the
@@ -452,7 +507,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      *
      * @param account - The account whose tenants are listed.
      */
-    public async *listTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
+    private async *fetchTenantsForAccount(account: AzureAccount): AsyncIterable<Page<ConcreteAzureNode>> {
         const manualTenants = this.manualTenantsForAccount(account);
         const seen = new Set<string>();
         let emittedTerminalPage = false;
@@ -544,7 +599,7 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      *
      * @param tenant - The tenant whose subscriptions are listed.
      */
-    public async *listSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
+    private async *fetchSubscriptionsForTenant(tenant: AzureTenant): AsyncIterable<Page<ConcreteAzureNode>> {
         const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment, undefined, tenant);
         for await (const page of client.subscriptions.list()) {
