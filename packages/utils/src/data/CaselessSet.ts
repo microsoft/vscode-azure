@@ -15,12 +15,6 @@ export interface ICaselessSetReader extends Iterable<string> {
 
     /** Returns `true` if `value` is present, ignoring case. */
     has(value: string): boolean;
-
-    /** Yields values in their original casing, in insertion order. */
-    keys(): IterableIterator<string>;
-
-    /** Yields values in their original casing, in insertion order. */
-    values(): IterableIterator<string>;
 }
 
 /**
@@ -104,29 +98,8 @@ export class CaselessSet implements ICaselessSetReader {
         this.store.clear();
     }
 
-    public keys(): IterableIterator<string> {
-        return this.values();
-    }
-
-    public values(): IterableIterator<string> {
-        return this.store.values();
-    }
-
-    /** Yields each value paired with itself, mirroring {@linkcode Set.entries}. */
-    public *entries(): IterableIterator<[string, string]> {
-        for (const value of this.values()) {
-            yield [value, value];
-        }
-    }
-
-    /** Calls `callback` for each value, in its original casing, in insertion order. */
-    public forEach(callback: (value: string, value2: string, set: CaselessSet) => void, thisArg?: unknown): void {
-        for (const value of this.values()) {
-            callback.call(thisArg, value, value, this);
-        }
-    }
-
+    /** Yields values in their original casing, in insertion order. */
     public [Symbol.iterator](): IterableIterator<string> {
-        return this.values();
+        return this.store.values();
     }
 }

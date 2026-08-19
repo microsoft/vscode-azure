@@ -10,23 +10,14 @@
  * so that it cannot add or remove them.
  */
 export interface ICaselessMapReader<V> extends Iterable<[string, V]> {
-    /** The number of distinct keys, compared case-insensitively. */
-    readonly size: number;
-
     /** Returns `true` if `key` is present, ignoring case. */
     has(key: string): boolean;
 
     /** Returns the value for `key`, ignoring case, or `undefined` if absent. */
     get(key: string): V | undefined;
 
-    /** Yields keys in their original casing, in insertion order. */
-    keys(): IterableIterator<string>;
-
     /** Yields values in insertion order. */
     values(): IterableIterator<V>;
-
-    /** Yields `[key, value]` pairs with keys in their original casing, in insertion order. */
-    entries(): IterableIterator<[string, V]>;
 }
 
 /**
@@ -61,26 +52,12 @@ export class CaselessMap<V> implements ICaselessMapReader<V> {
     /** Maps the folded key to the casing it was first set with, plus the current value. */
     private readonly store = new Map<string, { key: string; value: V }>();
 
-    /**
-     * @param entries - Initial entries. Keys differing only by case collapse to one entry,
-     * retaining the first casing seen and the last value set.
-     */
-    public constructor(entries?: Iterable<readonly [string, V]>) {
-        if (entries) {
-            for (const [key, value] of entries) {
-                this.set(key, value);
-            }
-        }
-    }
-
-    public get size(): number {
-        return this.store.size;
-    }
-
+    /** Returns `true` if `key` is present, ignoring case. */
     public has(key: string): boolean {
         return this.store.has(key.toLowerCase());
     }
 
+    /** Returns the value for `key`, ignoring case, or `undefined` if absent. */
     public get(key: string): V | undefined {
         return this.store.get(key.toLowerCase())?.value;
     }
@@ -114,32 +91,17 @@ export class CaselessMap<V> implements ICaselessMapReader<V> {
         this.store.clear();
     }
 
-    public *keys(): IterableIterator<string> {
-        for (const entry of this.store.values()) {
-            yield entry.key;
-        }
-    }
-
+    /** Yields values in insertion order. */
     public *values(): IterableIterator<V> {
         for (const entry of this.store.values()) {
             yield entry.value;
         }
     }
 
-    public *entries(): IterableIterator<[string, V]> {
+    /** Yields `[key, value]` pairs with keys in their original casing, in insertion order. */
+    public *[Symbol.iterator](): IterableIterator<[string, V]> {
         for (const entry of this.store.values()) {
             yield [entry.key, entry.value];
         }
-    }
-
-    /** Calls `callback` for each entry, with the key in its original casing, in insertion order. */
-    public forEach(callback: (value: V, key: string, map: CaselessMap<V>) => void, thisArg?: unknown): void {
-        for (const [key, value] of this.entries()) {
-            callback.call(thisArg, value, key, this);
-        }
-    }
-
-    public [Symbol.iterator](): IterableIterator<[string, V]> {
-        return this.entries();
     }
 }

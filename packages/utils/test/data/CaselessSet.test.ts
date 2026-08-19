@@ -76,20 +76,11 @@ describe('CaselessSet (unit)', () => {
             const set = new CaselessSet(['Alpha', 'BETA']);
             set.add('gamma');
             expect([...set]).to.deep.equal(['Alpha', 'BETA', 'gamma']);
-            expect([...set.values()]).to.deep.equal(['Alpha', 'BETA', 'gamma']);
-            expect([...set.keys()]).to.deep.equal(['Alpha', 'BETA', 'gamma']);
-            expect([...set.entries()]).to.deep.equal([['Alpha', 'Alpha'], ['BETA', 'BETA'], ['gamma', 'gamma']]);
         });
 
-        it('should visit each value once via forEach', () => {
-            const set = new CaselessSet(['Alpha', 'BETA']);
-            const seen: string[] = [];
-            set.forEach((value, value2, source) => {
-                expect(value2).to.equal(value);
-                expect(source).to.equal(set);
-                seen.push(value);
-            });
-            expect(seen).to.deep.equal(['Alpha', 'BETA']);
+        it('should collapse values differing only by case to the first casing', () => {
+            const set = new CaselessSet(['Alpha', 'ALPHA', 'alpha']);
+            expect([...set]).to.deep.equal(['Alpha']);
         });
     });
 });

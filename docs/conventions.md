@@ -149,6 +149,8 @@ Declare read-only holders as `ICaselessSetReader` / `ICaselessMapReader<V>` so t
 
 Plain string comparisons still use `toLowerCase()` directly -- these classes are only for collections.
 
+Both carry only the members call sites currently use, so `CaselessSet` has no `keys()`/`values()`/`entries()`/`forEach` and `CaselessMap` has no `size`/`keys()`/`forEach`. Add a member when something needs it -- adding it to the matching reader interface too if it is read-only -- rather than mirroring the whole built-in surface up front.
+
 ## Context Values
 
 Commands that appear in tree item context menus should:
