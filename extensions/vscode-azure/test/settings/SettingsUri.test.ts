@@ -50,10 +50,17 @@ describe('SettingsUri (unit)', () => {
 
             // Only a path separator is structural. Every other character a pull request title can
             // carry -- '?', '#', '%', spaces, non-ASCII -- is percent-encoded on serialization and
-            // decoded back byte-for-byte, and an already-encoded '%2F' double-encodes rather than
-            // becoming a separator.
+            // decoded back byte-for-byte.
             expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(node).toString());
             expect(uri.path.endsWith('/fix: a-b test? 100% done #42.settings.jsonc')).to.equal(true, uri.path);
+        });
+
+        it('leaves an already-encoded separator as literal text rather than a path segment', () => {
+            const node = makeSettingsNode(undefined, undefined, 'fix: a%2Fb test');
+            const uri = code.Uri.parse(SettingsUri.from(code, node).toString());
+
+            expect(SettingsUri.parseNodeKey(uri)).to.equal(AzureNodeId.from(node).toString());
+            expect(uri.path.endsWith('/fix: a%2Fb test.settings.jsonc')).to.equal(true, uri.path);
         });
 
         it('distinguishes settings on two different resources', () => {
