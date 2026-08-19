@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CaselessMap } from '../data/CaselessMap';
+
 /**
  * Layers {@linkcode overrides} onto the current process environment, producing
  * the environment a child process should inherit.
@@ -13,6 +15,8 @@
  * canonical `PATH`) must replace it rather than sit alongside it. A merge that
  * produced both spellings would be rejected with `ERR_INVALID_ENVIRONMENT`,
  * and the child would otherwise inherit an ambiguous environment.
+ * {@linkcode CaselessMap} supplies that folding, keeping the casing each name
+ * was first seen with.
  *
  * Names are matched exactly on other platforms, where the environment is
  * genuinely case-sensitive.
@@ -22,28 +26,18 @@
  * {@linkcode overrides} supplies several.
  */
 export function mergeProcessEnv(overrides?: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
-    const merged: NodeJS.ProcessEnv = { ...process.env };
     if (!overrides) {
-        return merged;
+        return { ...process.env };
     }
 
     if (process.platform !== 'win32') {
-        return Object.assign(merged, overrides);
+        return { ...process.env, ...overrides };
     }
 
-    const existingKeysByName = new Map<string, string>();
-    for (const key of Object.keys(merged)) {
-        existingKeysByName.set(key.toLowerCase(), key);
-    }
-
+    const merged = new CaselessMap<string | undefined>(Object.entries(process.env));
     for (const [key, value] of Object.entries(overrides)) {
-        const name = key.toLowerCase();
-        // Recorded so a second override differing only in case collapses onto
-        // the same key rather than adding a rival spelling.
-        const target = existingKeysByName.get(name) ?? key;
-        existingKeysByName.set(name, target);
-        merged[target] = value;
+        merged.set(key, value);
     }
 
-    return merged;
+    return Object.fromEntries(merged);
 }
