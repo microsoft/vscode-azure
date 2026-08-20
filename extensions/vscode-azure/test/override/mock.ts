@@ -8,16 +8,14 @@
 // This file is compiled as a SEPARATE esbuild entry point (test/mock.bundle.js)
 // so none of this code ends up in the main extension bundle.
 
-import { IAcrClientProvider, IAzureListingFetcher, ICredentialFactory, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import { IAcrClientProvider, IAzureListingFetcher, ICredentialFactory, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, type AzureTenant } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, createMockCredentialFactory, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
-import { IVsCode } from '@microsoft/vscode-azure-utils';
 import type { Container } from 'inversify';
 import { createMockAcrClient } from '../tree/resources/acr/mockAcr';
 import { createMockResourceClient } from '../tree/resources/mockResourceClient';
 import type { ActivityStatus } from '../../src/tree/activity/Activity';
 import { type AddChildOptions, ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
 import { IGenericActivityDataProvider } from '../../src/tree/activity/GenericActivityDataProvider';
-import { signedInTenantIdsFor } from '../../src/utils/signedInTenants';
 
 // -- Mock data ----------------------------------------------------------------
 
@@ -153,22 +151,26 @@ export function applyOverrides(container: Container): void {
     // Rebinding the fetcher (rather than the data provider above it) keeps the
     // real cache, filter, and tree wiring in the loop, so mock mode exercises
     // the same code paths -- including flows that read the cache directly, such
-    // as Select Subscriptions.
-    const code = container.get(IVsCode);
+    // as Select Subscriptions, and the merging of manually-entered tenants,
+    // which the real cache does over whatever this fetcher lists.
     const listingFetcher = createMockAzureListingFetcher({
         accounts: [account, restrictedAccount],
         tenants: [tenant],
         subscriptions,
         unlistableAccountIds: [restrictedAccount.id],
-        additionalTenantIds: (forAccount) => {
-            const tenantIds = signedInTenantIdsFor(code, forAccount.id);
-            for (const tenantId of tenantIds) {
-                ensureSubscriptionFor(forAccount.id, tenantId);
-            }
-            return tenantIds;
-        },
     });
-    container.rebind(IAzureListingFetcher).toConstantValue(listingFetcher);
+
+    container.rebind(IAzureListingFetcher).toConstantValue({
+        ...listingFetcher,
+        // A manually-entered tenant is not in the canned data, so give it a
+        // subscription the moment something lists it. Doing so here rather than
+        // up front means the fixture only invents subscriptions for tenants the
+        // user actually signed in to.
+        fetchSubscriptions: (forTenant: AzureTenant) => {
+            ensureSubscriptionFor(forTenant.accountId, forTenant.tenantId);
+            return listingFetcher.fetchSubscriptions(forTenant);
+        },
+    } satisfies IAzureListingFetcher);
 
     // Sign-in flows ask the credential factory for a session directly, so mock
     // mode needs one that resolves without VS Code's authentication provider --

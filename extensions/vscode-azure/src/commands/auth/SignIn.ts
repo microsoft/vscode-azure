@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { byAccount, ICredentialFactory, IAzureListingCache, VsCodeExtensionCredential, type AzureListingCache } from '@microsoft/vscode-azure-azutils';
-import { CaselessSet, Everything, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { GuidPattern } from '../../constants';
@@ -31,11 +31,10 @@ import { listFirstPageReachableTenants, type ReachableTenant } from './listReach
  *   directly (see {@linkcode pickTenantOrEnterId}).
  *
  * After a successful sign-in it invalidates the resources tree so the freshly
- * added account/tenant appears: a {@linkcode Roots} re-list for a default
- * sign-in, or the affected account's subtree ({@linkcode byAccount}) / the whole
- * tree ({@linkcode Everything}) for a tenant sign-in, since a reconciling
- * {@linkcode Roots} re-list would otherwise preserve the previously-empty
- * subscription list of a newly authorized tenant.
+ * added account or tenant appears, and touches the listing cache as little as
+ * the change allows: a {@linkcode Roots} re-list for a default sign-in, and for
+ * a tenant sign-in either nothing at all (a newly named tenant, which is merged
+ * above the cache) or a re-enumeration of just that tenant's subscriptions.
  */
 @injectable()
 export class SignIn implements ManagedCommand {
@@ -97,46 +96,33 @@ export class SignIn implements ManagedCommand {
         const pick = await pickTenantOrEnterId(this.ctx, tenants);
         const session = await this.signInToTenant(pick);
 
-        const accountId = pick.accountId ?? session?.account.id;
+        // A tenant-targeted sign-in can surface an account that was not signed
+        // in before, and the accounts memo would otherwise keep saying it was
+        // not. Done before anything else so the tree re-list any branch below
+        // triggers sees the new account.
+        await this.refreshAccounts();
+
+        const accountId = pick.accountId ?? session.account.id;
 
         // A manually-entered tenant (no account context from the pick) won't show
         // up when listing tenants is blocked (e.g. conditional access), so persist
-        // it now that we know which account it resolved to. The fetcher merges
-        // these saved tenants into that account's tenant listing.
-        if (!pick.accountId && accountId) {
-            // Persisting updates the signedInTenants setting, which
-            // AzureAccountDataProvider's configuration listener reacts to by
-            // discarding the cached listings and refreshing the tree -- so this
-            // path does not invalidate anything directly. Only when nothing was
-            // persisted (the tenant was already saved, so no configuration-change
-            // event fires) do we fall through to the direct invalidation below.
-            if (await addSignedInTenant(code, { accountId, tenantId: pick.tenantId })) {
-                return;
-            }
+        // it now that we know which account it resolved to.
+        if (!pick.accountId && await addSignedInTenant(code, { accountId, tenantId: pick.tenantId })) {
+            // Newly named: nothing cached is untrue, because named tenants are
+            // merged above the cache on every read. The tenant appears on the
+            // next read with nothing re-listed, and its subscriptions are
+            // fetched when something first drills into it. The configuration
+            // listener re-renders the tree.
+            return;
         }
 
-        // A picked tenant, a typed tenant that resolved to no account, or a
-        // re-sign-in to an already-saved tenant writes no setting, so nothing else
-        // refreshes anything.
-        //
-        // The cached listings for that account are now genuinely untrue rather
-        // than merely stale: the sign-in can have authorized tenants and
-        // subscriptions that were invisible when they were listed. Evict them, so
-        // the tree re-list that follows actually goes back to Azure. Prefer the
-        // affected account; fall back to everything only when no account id is
-        // available.
-        if (accountId) {
-            // The account set itself can have changed (a tenant-targeted sign-in
-            // can bring in an account that was not there before), and the
-            // accounts memo would otherwise keep saying it did not.
-            await this.refreshAccounts();
-            this.listings.clearAccount(accountId);
-            this.tree.invalidate(byAccount(accountId));
-            this.tree.invalidate(Roots);
-        } else {
-            this.listings.clear();
-            this.tree.invalidate(Everything);
-        }
+        // The tenant was already reachable -- picked from the suggestions, or
+        // typed but already saved. Its subscriptions are the one thing the
+        // sign-in can have changed: it may have authorized subscriptions that
+        // were invisible when the tenant was last listed. Nothing else is
+        // touched, including every other tenant under the same account.
+        this.listings.reenumerateSubscriptions(accountId, pick.tenantId);
+        this.tree.invalidate(byAccount(accountId));
     }
 
     /**
@@ -212,11 +198,15 @@ export class SignIn implements ManagedCommand {
      * instead of `getToken`. The cast is safe because the default factory always
      * produces a {@linkcode VsCodeExtensionCredential}.
      *
-     * @returns The established session (whose `account.id` identifies the
-     * account the tenant resolved to), or `undefined` if VS Code returned no
-     * session.
+     * @returns The established session, whose `account.id` identifies the
+     * account the tenant resolved to.
+     * @throws If VS Code returns no session. `createIfNone` is set, so the
+     * documented outcomes are a session or a thrown cancellation; returning
+     * nothing would leave the caller unable to say which account was affected,
+     * and treating that as "signed in, account unknown" is what previously drove
+     * a full cache discard in response to a sign-in that had not happened.
      */
-    private async signInToTenant(pick: TenantPick): Promise<vscode.AuthenticationSession | undefined> {
+    private async signInToTenant(pick: TenantPick): Promise<vscode.AuthenticationSession> {
         const credential = this.credentialFactory({
             tenantId: pick.tenantId,
             sessionOptions: {
@@ -225,7 +215,11 @@ export class SignIn implements ManagedCommand {
             },
         }) as VsCodeExtensionCredential;
 
-        return (await credential.authenticate()) ?? undefined;
+        const session = await credential.authenticate();
+        if (!session) {
+            throw new Error(this.ctx.code.l10n.t('Signing in to tenant {0} returned no session.', pick.tenantId));
+        }
+        return session;
     }
 }
 

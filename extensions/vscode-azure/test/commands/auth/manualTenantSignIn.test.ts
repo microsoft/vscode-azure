@@ -41,10 +41,11 @@ describe('manual tenant sign-in (unit)', () => {
             tenants: [hiddenTenant],
             subscriptions: [hiddenSubscription],
             unlistableAccountIds: [account.id],
-            additionalTenantIds: forAccount => signedInTenantIdsFor(ctx.code, forAccount.id),
         });
 
-        const listings = new AzureListingCache(fetcher, executor);
+        const listings = new AzureListingCache(fetcher, executor, {
+            additionalTenantIds: forAccount => signedInTenantIdsFor(ctx.code, forAccount.id),
+        });
         const credentialFactory = createMockCredentialFactory({ account });
         const provider = new AzureAccountDataProvider(ctx, executor, credentialFactory, listings, new ManualDebounceScheduler());
         const invalidate = mock.fn((_target: unknown) => { /* spy */ });

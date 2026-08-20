@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CaselessSet, stringifyError, type IActionExecutor, type ICodeContext, type Page } from '@microsoft/vscode-azure-utils';
+import { stringifyError, type IActionExecutor, type ICodeContext, type Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { SubscriptionClient } from '../../rest/clients/SubscriptionClient';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
@@ -31,21 +31,6 @@ export interface IAzureListingFetcher {
 /** DI identifier for the {@linkcode IAzureListingFetcher}. */
 export const IAzureListingFetcher: ServiceIdentifier<IAzureListingFetcher> = Symbol.for('IAzureListingFetcher');
 
-/** Options for {@linkcode AzureListingFetcher}. */
-export interface AzureListingFetcherOptions {
-    /**
-     * Tenant ids to fold into an account's tenant listing on top of whatever
-     * `tenants.list()` returns.
-     *
-     * Conditional access can block tenant enumeration outright, in which case
-     * the only way to reach a tenant is for the user to name it. Where those
-     * ids are persisted is a product concern, so the fetcher takes them as a
-     * callback rather than reading configuration itself. Synthesized tenants
-     * carry the tenant id as their display name until something upgrades it.
-     */
-    readonly additionalTenantIds?: (account: AzureAccount) => readonly string[];
-}
-
 /**
  * The default {@linkcode IAzureListingFetcher}: VS Code's `authentication` API
  * for accounts, and {@linkcode SubscriptionClient} for tenants and
@@ -60,7 +45,6 @@ export class AzureListingFetcher implements IAzureListingFetcher {
         private readonly ctx: ICodeContext,
         private readonly executor: IActionExecutor,
         private readonly credentialFactory: ICredentialFactory,
-        private readonly options?: AzureListingFetcherOptions,
     ) { }
 
     /**
@@ -87,16 +71,15 @@ export class AzureListingFetcher implements IAzureListingFetcher {
      * streamed lazily rather than buffered; ordering follows the service
      * response (no cross-page sort).
      *
-     * Tenants supplied by {@linkcode AzureListingFetcherOptions.additionalTenantIds}
-     * are appended to the final page (or become the only page if the listing
-     * fails outright), deduplicated against the listed tenants so a tenant that
-     * is both listed and named keeps its real display name.
+     * A listing that fails outright yields an empty terminal page rather than
+     * throwing. Conditional access blocks this call for exactly the accounts
+     * whose tenants the user has to name by hand, and those named tenants are
+     * merged in above this layer -- so failing here would take out the fallback
+     * along with the thing it is a fallback for. Retrying is not attempted
+     * either: the failure is usually policy rather than transience, and the
+     * retry would be the interactive prompt the user is trying to avoid.
      */
     public async *fetchTenants(account: AzureAccount): AsyncIterable<Page<AzureTenant>> {
-        const additional = this.additionalTenants(account);
-        const seen = new CaselessSet();
-        let emittedTerminalPage = false;
-
         const credential = this.credentialFactory({ sessionOptions: { account } });
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, account.environment, undefined, { accountId: account.id });
         try {
@@ -109,25 +92,11 @@ export class AzureListingFetcher implements IAzureListingFetcher {
                         environment: account.environment,
                         accountId: account.id,
                     } satisfies AzureTenant));
-                items.forEach(tenant => seen.add(tenant.tenantId));
-
-                if (page.hasMore) {
-                    yield { items, hasMore: true };
-                } else {
-                    yield { items: [...items, ...additional.filter(tenant => !seen.has(tenant.tenantId))], hasMore: false };
-                    emittedTerminalPage = true;
-                }
+                yield { items, hasMore: page.hasMore };
             }
         } catch (error) {
-            // Listing tenants can fail outright (e.g. conditional access). Fall
-            // back to the named tenants below rather than surfacing an error: a
-            // tenant-scoped sign-in still works, so those tenants are reachable
-            // even though they cannot be enumerated.
-            this.executor.output.warn(this.ctx.code.l10n.t('[listing] listing tenants failed; falling back to {0} manually-entered tenant(s): {1}', additional.length, stringifyError(error)));
-        }
-
-        if (!emittedTerminalPage) {
-            yield { items: additional.filter(tenant => !seen.has(tenant.tenantId)), hasMore: false };
+            this.executor.output.warn(this.ctx.code.l10n.t('[listing] listing tenants failed; only manually-entered tenants will be reachable for this account: {0}', stringifyError(error)));
+            yield { items: [], hasMore: false };
         }
     }
 
@@ -159,31 +128,5 @@ export class AzureListingFetcher implements IAzureListingFetcher {
                 } satisfies AzureSubscription));
             yield { items, hasMore: page.hasMore };
         }
-    }
-
-    /**
-     * Synthesize {@linkcode AzureTenant}s for the tenant ids named for this
-     * account. No display name is available (enumeration is what is blocked),
-     * so the tenant id stands in until it is upgraded.
-     *
-     * Ids are deduplicated case-insensitively: they typically come from
-     * user-editable storage, so the same tenant can be named twice.
-     */
-    private additionalTenants(account: AzureAccount): AzureTenant[] {
-        const seen = new CaselessSet();
-        const tenants: AzureTenant[] = [];
-        for (const tenantId of this.options?.additionalTenantIds?.(account) ?? []) {
-            if (seen.has(tenantId)) {
-                continue;
-            }
-            seen.add(tenantId);
-            tenants.push({
-                tenantId: tenantId.toLowerCase(),
-                displayName: tenantId,
-                environment: account.environment,
-                accountId: account.id,
-            } satisfies AzureTenant);
-        }
-        return tenants;
     }
 }

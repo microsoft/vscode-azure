@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { filterPages, stringifyError, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, filterPages, stringifyError, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
 import type { IAzureListingFetcher } from './AzureListingFetcher';
@@ -40,6 +40,31 @@ export interface AzureSubscriptionPath {
     readonly account: AzureAccount;
     readonly tenant: AzureTenant;
     readonly subscription: AzureSubscription;
+}
+
+/** Options for {@linkcode AzureListingCache}. */
+export interface AzureListingCacheOptions {
+    /**
+     * Tenant ids to fold into an account's tenant listing on top of whatever
+     * `tenants.list()` returns.
+     *
+     * Conditional access can block tenant enumeration outright, in which case
+     * the only way to reach a tenant is for the user to name it. Where those ids
+     * are persisted is a product concern, so this is a callback rather than
+     * configuration read here.
+     *
+     * It is consulted **on every read, above the cache**, never folded into a
+     * cached listing. That is what makes the named set free to change: adding an
+     * id makes the tenant appear on the next read with nothing re-listed (its
+     * subscriptions are simply a cache miss when something drills into it), and
+     * removing one makes it stop appearing while its subscriptions stay cached
+     * in case it comes back.
+     *
+     * Named tenants carry the tenant id as their display name until something
+     * upgrades it, and are deduplicated against the listed tenants so a tenant
+     * that is both listed and named keeps its real name.
+     */
+    readonly additionalTenantIds?: (account: AzureAccount) => readonly string[];
 }
 
 /**
@@ -80,12 +105,17 @@ export interface AzureWalkOptions extends AzureListingOptions {
  * per **parent listing**, not per query), and changing which subset a product
  * shows needs no invalidation at all.
  *
- * Invalidation is correspondingly narrow. {@linkcode AzureListingCache.clear clear}
- * only when the data stops being true (the configured cloud changed, or the set
- * of manually-named tenants did); {@linkcode AzureListingCache.clearAccount clearAccount}
- * for one account signing in or out; {@linkcode AzureListingCache.refreshAccounts refreshAccounts}
- * to re-list accounts without discarding what is cached beneath the ones that
- * were already there.
+ * Invalidation is correspondingly narrow, because a listing is expensive to earn
+ * and rarely becomes wrong. Almost every change makes some data *unreachable*
+ * rather than untrue, and the right response to that is to stop showing it, not
+ * to discard it -- an account signing out, a tenant dropping off the named list,
+ * and a filter being narrowed all fall in that class and invalidate **nothing**.
+ * What remains is one narrow verb,
+ * {@linkcode AzureListingCache.reenumerateTenants reenumerateTenants} /
+ * {@linkcode AzureListingCache.reenumerateSubscriptions reenumerateSubscriptions} /
+ * {@linkcode AzureListingCache.reenumerateAccounts reenumerateAccounts} for
+ * "this child set may have grown", and {@linkcode AzureListingCache.clear clear}
+ * for the rare case where the user asked for fresh data outright.
  */
 export class AzureListingCache {
     private readonly store = new AzureListingStore();
@@ -93,6 +123,7 @@ export class AzureListingCache {
     public constructor(
         private readonly fetcher: IAzureListingFetcher,
         private readonly executor: IActionExecutor,
+        private readonly options?: AzureListingCacheOptions,
     ) { }
 
     /**
@@ -123,8 +154,57 @@ export class AzureListingCache {
      * not make another account's tenants untrue.
      */
     public async refreshAccounts(): Promise<AzureAccount[]> {
-        this.store.evictListing(AzureListingRootKey);
+        this.reenumerateAccounts();
         return this.listAccounts();
+    }
+
+    /**
+     * Discard the accounts listing so the next read asks again, keeping every
+     * tenant and subscription listing beneath it.
+     *
+     * Cheap: listing accounts is a local `getAccounts()` call with no network
+     * behind it. It is also the whole response to a cloud switch, since every
+     * key below the root carries its environment and so the previous cloud's
+     * listings neither collide with the new cloud's nor need discarding.
+     */
+    public reenumerateAccounts(): void {
+        this.store.evictListing(AzureListingRootKey);
+    }
+
+    /**
+     * Discard one account's tenant listing so the next read asks again, keeping
+     * every subscription listing beneath it.
+     *
+     * For "this account may be able to see a tenant it could not before" -- the
+     * set may have grown, not that what was listed was wrong. Tenants that come
+     * back unchanged re-attach to their cached subscriptions, so only a genuinely
+     * new tenant costs anything.
+     *
+     * A no-op when the account is not cached, which is the honest answer: no
+     * cached account means no cached tenant listing to re-ask for.
+     */
+    public reenumerateTenants(accountId: string): void {
+        const account = this.cachedAccount(accountId);
+        if (account) {
+            this.store.evictListing(azureListingKey(account));
+        }
+    }
+
+    /**
+     * Discard one tenant's subscription listing so the next read asks again.
+     *
+     * For "signing in to this tenant may have authorized subscriptions that were
+     * invisible when it was last listed". Nothing else is touched: the tenant
+     * itself is still true, and so is every other tenant's listing.
+     *
+     * A no-op when the account is not cached (see
+     * {@linkcode AzureListingCache.reenumerateTenants reenumerateTenants}).
+     */
+    public reenumerateSubscriptions(accountId: string, tenantId: string): void {
+        const account = this.cachedAccount(accountId);
+        if (account) {
+            this.store.evictListing(azureListingKeyFor(account.environment, accountId, tenantId));
+        }
     }
 
     /**
@@ -135,7 +215,7 @@ export class AzureListingCache {
      * dropped, so the reader's paging is unaffected by how many a page loses.
      */
     public listTenants(account: AzureAccount, options?: AzureListingOptions): AsyncIterable<Page<AzureTenant>> {
-        return filterPages(this.tenantListing(account).read(), options?.filter);
+        return filterPages(this.tenantPages(account), options?.filter);
     }
 
     /**
@@ -170,7 +250,7 @@ export class AzureListingCache {
             }
 
             try {
-                for await (const tenantPage of this.tenantListing(account).read()) {
+                for await (const tenantPage of this.tenantPages(account)) {
                     for (const tenant of tenantPage.items) {
                         if (!visitsTenant(tenant, options)) {
                             continue;
@@ -245,28 +325,97 @@ export class AzureListingCache {
     }
 
     /**
-     * Evict everything cached beneath one account, leaving other accounts
-     * untouched.
-     *
-     * Use when that account signs out, and equally after an interactive sign-in
-     * to it: the tenants and subscriptions listed before the sign-in are not
-     * merely stale but untrue, because the sign-in can have authorized ones that
-     * were invisible at the time.
-     */
-    public clearAccount(accountId: string): void {
-        this.store.evict(azureListingKeyFor(accountId));
-    }
-
-    /**
      * Discard every cached listing.
      *
-     * Reserved for changes that make the data itself untrue -- the configured
-     * cloud (the endpoints changed) or the set of manually-named tenants (they
-     * fold into tenant listings). A change to which subscriptions a product
-     * *shows* is not one of these.
+     * Reserved for an explicit user-driven refresh: re-earning the whole
+     * hierarchy costs a token and a round trip per tenant, so nothing should
+     * reach for this on the user's behalf. Every automatic response to a change
+     * is either narrower (a re-enumeration) or nothing at all.
      */
     public clear(): void {
         this.store.clear();
+    }
+
+    /**
+     * An account's tenants, with the tenant ids named by
+     * {@linkcode AzureListingCacheOptions.additionalTenantIds additionalTenantIds}
+     * merged in.
+     *
+     * The merge happens here, above the cache, rather than being folded into the
+     * cached listing -- so the named set is free to change, and a tenant that is
+     * both listed and named keeps the real display name the listing gave it.
+     *
+     * Named tenants join the **terminal** page, so a reader that stops early
+     * sees the same prefix it would have seen anyway.
+     */
+    private async *tenantPages(account: AzureAccount): AsyncIterable<Page<AzureTenant>> {
+        const additional = this.additionalTenants(account);
+        const seen = new CaselessSet();
+        let emittedTerminalPage = false;
+
+        for await (const page of this.tenantListing(account).read()) {
+            page.items.forEach(tenant => seen.add(tenant.tenantId));
+            if (page.hasMore) {
+                yield page;
+            } else {
+                yield { items: [...page.items, ...additional.filter(tenant => !seen.has(tenant.tenantId))], hasMore: false };
+                emittedTerminalPage = true;
+            }
+        }
+
+        if (!emittedTerminalPage) {
+            yield { items: additional.filter(tenant => !seen.has(tenant.tenantId)), hasMore: false };
+        }
+    }
+
+    /**
+     * The cached-only counterpart of
+     * {@linkcode AzureListingCache.tenantPages tenantPages}.
+     *
+     * Named tenants are appended as their own page rather than merged into a
+     * terminal one, since the cached pages may stop mid-listing. Page shape does
+     * not matter to the only caller (a lookup), and a named tenant that a later
+     * page would also have listed lands on the same key either way.
+     */
+    private cachedTenantPages(account: AzureAccount): Page<AzureTenant>[] {
+        const pages = this.store.cachedPages<AzureTenant>(azureListingKey(account));
+        const seen = new CaselessSet(pages.flatMap(page => page.items.map(tenant => tenant.tenantId)));
+        const additional = this.additionalTenants(account).filter(tenant => !seen.has(tenant.tenantId));
+        return additional.length > 0 ? [...pages, { items: additional, hasMore: false }] : pages;
+    }
+
+    /**
+     * Synthesize {@linkcode AzureTenant}s for the tenant ids named for this
+     * account. No display name is available (enumeration is what is blocked), so
+     * the tenant id stands in until something upgrades it.
+     *
+     * Ids are deduplicated case-insensitively: they typically come from
+     * user-editable storage, so the same tenant can be named twice.
+     */
+    private additionalTenants(account: AzureAccount): AzureTenant[] {
+        const seen = new CaselessSet();
+        const tenants: AzureTenant[] = [];
+        for (const tenantId of this.options?.additionalTenantIds?.(account) ?? []) {
+            if (seen.has(tenantId)) {
+                continue;
+            }
+            seen.add(tenantId);
+            tenants.push({
+                tenantId: tenantId.toLowerCase(),
+                displayName: tenantId,
+                environment: account.environment,
+                accountId: account.id,
+            } satisfies AzureTenant);
+        }
+        return tenants;
+    }
+
+    /** The cached account with this id, without fetching. */
+    private cachedAccount(accountId: string): AzureAccount | undefined {
+        const wanted = accountId.toLowerCase();
+        return this.store.cachedPages<AzureAccount>(AzureListingRootKey)
+            .flatMap(page => page.items)
+            .find(account => account.id.toLowerCase() === wanted);
     }
 
     /**
@@ -284,7 +433,7 @@ export class AzureListingCache {
                     continue;
                 }
 
-                for (const tenantPage of this.store.cachedPages<AzureTenant>(azureListingKey(account))) {
+                for (const tenantPage of this.cachedTenantPages(account)) {
                     for (const tenant of tenantPage.items) {
                         if (!visitsTenant(tenant, options)) {
                             continue;

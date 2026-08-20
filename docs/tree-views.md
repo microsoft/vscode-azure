@@ -184,7 +184,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 
 | Provider | Root? | Handles | TTL | Refresh trigger |
 |----------|-------|---------|-----|-----------------|
-| `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud`, `vscode-azure.signedInTenants`, or `vscode-azure.selectedSubscriptions` configuration change |
+| `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud`, `vscode-azure.signedInTenants`, or `vscode-azure.selectedSubscriptions` configuration change. Since nothing goes stale on its own, `Azure: Refresh` is the only thing that re-lists |
 | `AcrDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
 | `SettingsDataProvider` | No | Settings virtual-node leaves created by product providers | default | default TTL |
 | `WebAppDataProvider` | No | Function App, App Service, and Logic App resources; composes their settings nodes | default | default TTL |
@@ -198,9 +198,9 @@ Three pieces, deliberately named so a cached and an uncached thing can never be 
 
 | Piece | Verbs | Role |
 |-------|-------|------|
-| `AzureListingFetcher` | `fetchAccounts` / `fetchTenants` / `fetchSubscriptions` | **All** auth and ARM I/O, no caching. Reads signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`, minting tokens through `ICredentialFactory`. Folds the manually-entered tenant ids from `vscode-azure.signedInTenants` into the tenant listing when conditional access blocks `tenants.list()` outright (the id doubles as a placeholder display name until a *silent* tenant-scoped token upgrades it). |
-| `AzureListingStore` | `listing` / `cachedPages` / `evict` / `evictListing` / `clear` | The cache, **internal to the package**. One map from a *parent* key to that parent's `CachedPagedListing`. Keys are hierarchical and percent-encoded (`{accountId}`, `{accountId}/{tenantId}`) and compared case-insensitively, so eviction of a subtree is a prefix delete and an account id containing a `/` cannot masquerade as another account's descendant. A subscription reachable through two tenants is naturally an entry in each tenant's listing, with no special case. |
-| `AzureListingCache` | `listAccounts` / `listTenants` / `listSubscriptions` / `walkSubscriptions` / `findSubscription` | The injected read surface (`IAzureListingCache`). One traversal that takes the tenant filter as a parameter. |
+| `AzureListingFetcher` | `fetchAccounts` / `fetchTenants` / `fetchSubscriptions` | **All** auth and ARM I/O, no caching. Reads signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`, minting tokens through `ICredentialFactory`. When conditional access blocks `tenants.list()` outright it warns and yields an empty listing rather than throwing — throwing would poison the listing, and every tree expand would retry a call that can prompt. |
+| `AzureListingStore` | `listing` / `cachedPages` / `evictListing` / `clear` | The cache, **internal to the package**. One map from a *parent* key to that parent's `CachedPagedListing`. Keys are hierarchical and percent-encoded (`{env}/{accountId}`, `{env}/{accountId}/{tenantId}`) and compared case-insensitively, so an account id containing a `/` cannot masquerade as another account's descendant, and listings taken against two clouds coexist instead of colliding. A subscription reachable through two tenants is naturally an entry in each tenant's listing, with no special case. There is no prefix delete: nothing evicts a subtree, so the operation does not exist. |
+| `AzureListingCache` | `listAccounts` / `listTenants` / `listSubscriptions` / `walkSubscriptions` / `findSubscription` / `refreshAccounts` / `reenumerate*` / `clear` | The injected read surface (`IAzureListingCache`). One traversal that takes the tenant filter as a parameter, and the merge point for the manually-named tenants from `vscode-azure.signedInTenants` — merged on *read*, over whatever the account listed, so adding or removing one re-fetches nothing. A named tenant carries its id as a placeholder display name until a *silent* tenant-scoped token upgrades it. |
 
 Only the fetcher and the cache are exported from the package barrel. The store holds unfiltered truth and knows nothing of the filter, so making it reachable from a consuming extension would put it one autocomplete entry away from the thing that *does* apply the filter -- and picking the wrong one silently defeats the guarantee that an excluded tenant is never requested. It stays private; `AzureListingCache` holds it as a private field.
 
@@ -216,7 +216,7 @@ An account with tenants A and B, and a filter admitting only A:
 2. **`Select Subscriptions` runs, unfiltered.** The accounts, tenants, and A-subscriptions listings all hit and replay. Only `{account}/{B}` misses, because nobody ever asked for B's children.
 3. **Exactly one new request.** Caching per *parent listing* rather than per query is what makes this a delta; caching "the result of the filtered walk" as one unit would make the unfiltered walk a total miss.
 
-Changing the filter afterwards invalidates nothing at all -- every entry above is still true, and only the predicate changed.
+Changing the filter afterwards invalidates nothing at all -- every entry above is still true, and only the predicate changed. Nor does naming or un-naming a tenant, for the same reason: both are applied on read.
 
 ### Subscription / tenant filtering
 
@@ -242,18 +242,26 @@ Everything fetched is cached regardless of why it was fetched, so a filtered rea
 
 ### Invalidation
 
-Invalidate only what a change makes *untrue*:
+A listing is expensive to earn (a token and a round trip per tenant) and rarely wrong: what tenants an account can reach, and what subscriptions a tenant holds, change on the order of months. So the layer discards as little as it can, and the default answer is **nothing**. Hiding data is preferred to evicting it; leaked memory in a session costs far less than re-earning a listing the user is about to look at again.
 
-| Change | Action | Why |
-|--------|--------|-----|
-| `microsoft-sovereign-cloud` setting | `cache.clear()` + `{ target: Everything }` | the endpoints themselves changed |
-| `vscode-azure.signedInTenants` | `cache.clear()` + `{ target: Everything }` | manual tenants fold into tenant listings |
-| `vscode-azure.selectedSubscriptions` (the filter) | `{ target: Everything }` only — **no cache eviction** | a filter change makes no cached listing untrue |
-| Account signed out | `cache.clearAccount(id)` + `{ target: byAccount(id) }` | other accounts are unaffected |
-| New account appears in a session change | `cache.refreshAccounts()` + `{ target: Roots }` | a new account does not falsify existing tenants |
-| Interactive sign-in to a known account | `cache.refreshAccounts()` + `cache.clearAccount(id)` + `{ target: byAccount(id) }` | the sign-in can have authorized tenants that were invisible before, so what was listed under it is not merely stale but untrue |
+Three distinct verbs, in increasing cost:
 
-Sign-out and post-sign-in are the same eviction -- everything under one account -- so they are the same verb. What distinguishes them is only what is invalidated in the tree afterwards.
+| Verb | Cost | Meaning |
+|------|------|---------|
+| Nothing | free | the change is applied on *read*, above the cache — a filter, or the manually-named tenants merged over each account's tenant listing |
+| `reenumerate*` | one listing | one listing's membership may have changed. Lossless for everything beneath it: the store is flat and path-keyed, so re-listing an account's tenants returns them under the same keys and their subscriptions re-attach untouched. Only a genuinely new child costs a fetch |
+| `clear()` | everything | only when the user asked for it |
+
+| Change | Cache action | Tree | Why |
+|--------|--------------|------|-----|
+| `microsoft-sovereign-cloud` setting | `reenumerateAccounts()` | `Everything` | the accounts listing is the one read against the *ambient* cloud. Everything below it is keyed by environment, so the two clouds' listings coexist rather than collide, and switching back is free |
+| `vscode-azure.signedInTenants` | **nothing** | `Everything` | manually-named tenants are merged above the cache on every read, so naming or un-naming one falsifies no listing |
+| `vscode-azure.selectedSubscriptions` (the filter) | **nothing** | `Everything` | a filter change makes no cached listing untrue |
+| Account signed out | **nothing** | remove those accounts' nodes | the account has left the accounts listing, and a node is only reachable by descending the listing that produced it, so everything under it is already unreachable. Keeping it makes the re-sign-in that usually follows a token expiry instant |
+| New account appears in a session change | `refreshAccounts()` | `Roots` | a new account does not falsify existing tenants |
+| Sign-in to a newly-named tenant | **nothing** | (the configuration listener) | the tenant appears via the merge with nothing re-listed; its subscriptions are simply a miss when something first drills in |
+| Sign-in to an already-reachable tenant | `reenumerateSubscriptions(accountId, tenantId)` | `byAccount(id)` | the session may have authorized subscriptions that were invisible when that tenant was last listed. It says nothing about any *other* tenant, or about what tenants the account can reach |
+| `Azure: Refresh` | `clear()` | `Everything` | the one place that discards outright. `getTtl()` is `Infinity`, so nothing else ever re-lists — a refresh that skipped the listings could never pick up a newly created subscription |
 
 Auth-session changes are noisy (they also fire on individual token acquisitions), so the provider reconciles: it asks `refreshAccounts()` for the current account set and does nothing when it is unchanged. That call must **bypass** the memoized accounts listing — a memoized `listAccounts()` could only ever answer "no change" — and it reseeds the memo, so the re-list that follows is free.
 

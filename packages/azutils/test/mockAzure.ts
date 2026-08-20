@@ -9,7 +9,7 @@ import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { isAzureSubscription, type AzureAccount, type AzureSubscription, type AzureTenant } from '../src/auth/AzureSubscription';
 import type { ICredentialFactory } from '../src/auth/CredentialFactory';
-import type { AzureListingFetcherOptions, IAzureListingFetcher } from '../src/auth/listing/AzureListingFetcher';
+import type { IAzureListingFetcher } from '../src/auth/listing/AzureListingFetcher';
 import type { VsCodeExtensionCredential } from '../src/auth/VsCodeExtensionCredential';
 import { AzurePublicCloud, type EnvironmentLike } from '../src/auth/Environment';
 import { isAccount, isTenant, type ConcreteAzureNode } from '../src/models/AzureNode';
@@ -289,23 +289,12 @@ export interface MockAzureListingFetcherOptions {
      * Account ids whose tenant listing is blocked, simulating conditional access
      * denying enumeration outright.
      *
-     * Such an account lists only the tenants named by
-     * {@linkcode MockAzureListingFetcherOptions.additionalTenantIds additionalTenantIds} --
-     * degrading rather than throwing, the way the real fetcher does, since a
-     * tenant-scoped sign-in still reaches those tenants.
+     * Such an account lists no tenants at all -- degrading rather than throwing,
+     * the way the real fetcher does, since a tenant-scoped sign-in still reaches
+     * a tenant the user can name. Those named tenants are merged in above the
+     * fetcher, by {@linkcode AzureListingCache}.
      */
     readonly unlistableAccountIds?: string[];
-    /**
-     * Tenant ids folded into an account's tenant listing on top of whatever it
-     * lists, taking the real fetcher's option verbatim.
-     *
-     * Consulted on every `fetchTenants` call rather than captured up front, so a
-     * fixture backed by mutable storage (the setting a manually-entered tenant is
-     * persisted to) reflects a tenant added mid-test. Synthesized tenants carry
-     * the tenant id as their display name, which is what marks them as awaiting
-     * enrichment.
-     */
-    readonly additionalTenantIds?: AzureListingFetcherOptions['additionalTenantIds'];
     /**
      * Called each time a tenant or subscription page is actually produced,
      * naming the listing and the zero-based page index.
@@ -363,33 +352,11 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
         }
     }
 
-    /** Synthesize the named tenants this account has, minus any it already listed. */
-    function namedTenants(account: AzureAccount, listed: AzureTenant[]): AzureTenant[] {
-        const seen = new CaselessSet(listed.map(tenant => tenant.tenantId));
-        const named: AzureTenant[] = [];
-        for (const tenantId of options?.additionalTenantIds?.(account) ?? []) {
-            if (seen.has(tenantId)) {
-                continue;
-            }
-            seen.add(tenantId);
-            named.push(makeTenant({
-                tenantId: tenantId.toLowerCase(),
-                displayName: tenantId,
-                environment: account.environment,
-                accountId: account.id,
-            }));
-        }
-        return named;
-    }
-
     return {
         fetchAccounts: mock.fn(() => Promise.resolve([...accounts])),
-        fetchTenants: mock.fn((account: AzureAccount) => {
-            const listed = unlistable.has(account.id)
-                ? []
-                : tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase());
-            return paged('tenants', [...listed, ...namedTenants(account, listed)]);
-        }),
+        fetchTenants: mock.fn((account: AzureAccount) => paged('tenants', unlistable.has(account.id)
+            ? []
+            : tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase()))),
         fetchSubscriptions: mock.fn((tenant: AzureTenant) => {
             if (unreachable.has(tenant.tenantId)) {
                 const rejecting: AsyncIterable<Page<AzureSubscription>> = {

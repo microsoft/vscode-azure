@@ -336,7 +336,7 @@ describe('AzureAccountDataProvider (unit)', () => {
     });
 
     describe('configuration changes', () => {
-        it('should discard every cached listing when the sovereign cloud changes', async () => {
+        it('should re-enumerate accounts when the sovereign cloud changes', async () => {
             const { provider, code, fetcher } = createProvider();
             let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
             let fired = 0;
@@ -347,13 +347,14 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             expect(fired).to.equal(1);
             expect(event?.target).to.equal(Everything);
-            // Everything cached was fetched against endpoints that are no longer
-            // in use.
+            // The accounts listing is the one taken against the ambient cloud.
+            // Everything below it is keyed by environment, so the two clouds'
+            // listings coexist instead of colliding.
             await provider.getChildren();
             expect(fetcher.fetchAccounts.mock.callCount()).to.equal(2);
         });
 
-        it('should discard every cached listing when the signed-in tenants change', async () => {
+        it('should re-merge without re-listing anything when the signed-in tenants change', async () => {
             const { provider, code, fetcher } = createProvider();
             let event: DataProviderChangeEvent<ConcreteAzureNode> | undefined;
             let fired = 0;
@@ -364,10 +365,10 @@ describe('AzureAccountDataProvider (unit)', () => {
 
             expect(fired).to.equal(1);
             expect(event?.target).to.equal(Everything);
-            // Manually-named tenants fold into the tenant listings, so those
-            // listings are now wrong in both directions.
+            // Manually-named tenants are merged over the cached listing on every
+            // read, so naming or un-naming one falsifies nothing.
             await collectPages(await provider.getChildren(account));
-            expect(fetcher.fetchTenants.mock.callCount()).to.equal(2);
+            expect(fetcher.fetchTenants.mock.callCount()).to.equal(1);
         });
 
         it('should re-apply the filter without re-listing anything when it changes', async () => {

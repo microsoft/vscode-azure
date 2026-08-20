@@ -59,17 +59,22 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
         }).inSingletonScope();
 
         container.bind(IAzureListingFetcher).toDynamicValue(context => {
-            const code = context.get(IVsCode);
             return new AzureListingFetcher(
                 context.get(ICodeContext),
                 context.get(IActionExecutor),
                 context.get(ICredentialFactory),
-                { additionalTenantIds: account => signedInTenantIdsFor(code, account.id) },
             );
         }).inSingletonScope();
 
         container.bind(IAzureListingCache).toDynamicValue(context => {
-            return new AzureListingCache(context.get(IAzureListingFetcher), context.get(IActionExecutor));
+            const code = context.get(IVsCode);
+            // Read on every listing rather than captured, so adding or removing a
+            // manually-entered tenant takes effect with nothing re-fetched.
+            return new AzureListingCache(
+                context.get(IAzureListingFetcher),
+                context.get(IActionExecutor),
+                { additionalTenantIds: account => signedInTenantIdsFor(code, account.id) },
+            );
         }).inSingletonScope();
 
         container.bind(ISubscriptionResolver).toDynamicValue(context => {

@@ -154,7 +154,7 @@ Two accounts are signed in, covering both shapes the account -> tenant -> subscr
 | Account | What it demonstrates |
 |---------|----------------------|
 | `Mock Account` | The ordinary path: a tenant that enumerates, holding one subscription with resource groups and resources beneath it. |
-| `Mock Account (Conditional Access)` | An account whose `tenants.list()` is blocked. It appears signed in but empty, which is what sends a user to `Azure: Sign In` -> **type a tenant ID**. The entered id is persisted to `vscode-azure.signedInTenants`, folded back into the account's tenant listing, and given a subscription of its own, so the whole manual-tenant path can be walked without an Azure account. |
+| `Mock Account (Conditional Access)` | An account whose `tenants.list()` is blocked. It appears signed in but empty, which is what sends a user to `Azure: Sign In` -> **type a tenant ID**. The entered id is persisted to `vscode-azure.signedInTenants`, merged over the account's tenant listing on read, and given a subscription of its own, so the whole manual-tenant path can be walked without an Azure account. |
 
 Because the mock credential factory has no cached session behind it, silent acquisition fails -- so a manually-entered tenant keeps showing its id as its display name rather than being enriched to its real name. That is the same outcome as a real session that conditional access still will not let list tenants.
 

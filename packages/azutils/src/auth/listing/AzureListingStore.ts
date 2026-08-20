@@ -5,44 +5,62 @@
 
 import { CaselessMap, type Page } from '@microsoft/vscode-azure-utils';
 import type { AzureAccount, AzureTenant } from '../AzureSubscription';
+import type { EnvironmentLike } from '../Environment';
 import type { AzureListingNode } from '../../models/AzureNode';
 import { isTenant } from '../../models/AzureNode';
 import { CachedPagedListing } from './CachedPagedListing';
 
 /**
- * The key of the synthetic parent whose children are the accounts. The empty
- * string keeps every real key a `parent/child` path beneath it, so the accounts
- * listing obeys the same eviction rules as the rest of the hierarchy.
+ * The key of the synthetic parent whose children are the accounts.
+ *
+ * Alone among the keys it carries no environment, because the accounts listing
+ * is the one read taken against the *ambient* configured cloud rather than
+ * against a node that already knows which cloud it came from. Re-listing it is a
+ * local `getAccounts()` call, so a cloud switch re-enumerates it and keeps
+ * everything below -- which is environment-keyed and therefore still true.
  */
 export const AzureListingRootKey = '';
 
 /**
+ * Distinguishes one cloud's listings from another's.
+ *
+ * The endpoint is part of the key, not just the name: a custom cloud is named by
+ * the user and its endpoints can be edited without the name changing, so keying
+ * by name alone would serve listings fetched from the previous endpoints.
+ */
+function environmentKey(environment: EnvironmentLike): string {
+    return `${environment.name}|${environment.resourceManagerEndpointUrl}`;
+}
+
+/**
  * Build the key of the listing whose children are the given parent's -- an
- * account's tenants (`{accountId}`) or a tenant's subscriptions
- * (`{accountId}/{tenantId}`).
+ * account's tenants (`{environment}/{accountId}`) or a tenant's subscriptions
+ * (`{environment}/{accountId}/{tenantId}`).
+ *
+ * The environment leads the key so listings from different clouds coexist rather
+ * than collide, which is what lets a cloud switch discard nothing: the same
+ * account id can be issued by both the public and the sovereign auth provider,
+ * and the data behind it is entirely different.
  *
  * Each segment is percent-encoded before being joined, because a VS Code
  * authentication account id is an opaque provider string that may itself
  * contain a `/` -- which would otherwise let one account's key masquerade as
- * another account's descendant and make subtree eviction delete the wrong
+ * another account's descendant and make prefix eviction delete the wrong
  * entries.
  *
  * Keys are compared case-insensitively by {@linkcode AzureListingStore}, so the
  * casing each id arrives with is preserved rather than folded here.
  */
-export function azureListingKeyFor(accountId: string, tenantId?: string): string {
-    const segments = tenantId === undefined ? [accountId] : [accountId, tenantId];
+export function azureListingKeyFor(environment: EnvironmentLike, accountId: string, tenantId?: string): string {
+    const segments = [environmentKey(environment), accountId, ...(tenantId === undefined ? [] : [tenantId])];
     return segments.map(segment => encodeURIComponent(segment)).join('/');
 }
 
 /** Build the key of the listing holding this node's children. See {@linkcode azureListingKeyFor}. */
 export function azureListingKey(node: AzureAccount | AzureTenant): string {
-    return isTenant(node) ? azureListingKeyFor(node.accountId, node.tenantId) : azureListingKeyFor(node.id);
-}
-
-/** The prefix every descendant key of `key` starts with. */
-function childPrefix(key: string): string {
-    return key === AzureListingRootKey ? key : `${key}/`;
+    return isTenant(node)
+        ? azureListingKeyFor(node.environment, node.accountId, node.tenantId)
+        : azureListingKeyFor(node.environment, node.id);
 }
 
 /**
@@ -55,11 +73,22 @@ function childPrefix(key: string): string {
  * that produced it. That is what lets a lookup apply a filter to a cached node's
  * ancestors for free: it had to pass through them to arrive. It also makes a
  * subscription reachable through two tenants two ordinary entries in two
- * listings, with no special case, and subtree eviction a single prefix scan.
+ * listings, with no special case.
  *
  * The store holds no notion of who wanted the data or which subset a product
  * currently shows: anything fetched is stored. Filtering happens above it, when
  * a listing is read.
+ *
+ * **Listings are expensive and rarely wrong.** The tenants an account can see,
+ * and the subscriptions in a tenant, change on the order of weeks, while
+ * fetching them costs a token and a round trip per tenant. So the store offers
+ * one narrow verb -- {@linkcode AzureListingStore.evictListing evictListing},
+ * "this child *set* may have changed" -- and one blunt one,
+ * {@linkcode AzureListingStore.clear clear}, for the rare case where the data is
+ * genuinely untrue or the user explicitly asked for it. Making data *unreachable*
+ * (by filtering it, or by its parent dropping out of a listing) is preferred over
+ * discarding it: an unreachable listing costs only memory, and re-earning it
+ * costs the user a wait.
  */
 export class AzureListingStore {
     private readonly listings = new CaselessMap<CachedPagedListing<AzureListingNode>>();
@@ -100,37 +129,27 @@ export class AzureListingStore {
     }
 
     /**
-     * Evict a parent's listing and every listing beneath it.
+     * Drop the cached listing of a parent's children, keeping everything
+     * beneath them.
      *
-     * Covers both "this node is gone" (an account that signed out) and "this
-     * node is still true, but nothing under it is" (an interactive sign-in can
-     * have authorized tenants that were invisible when the account was last
-     * listed): a node is not cached apart from its parent's listing, so there is
-     * nothing to keep or discard that would tell the two cases apart.
-     */
-    public evict(parentKey: string): void {
-        this.listings.delete(parentKey);
-
-        const prefix = childPrefix(parentKey).toLowerCase();
-        for (const [key] of this.listings) {
-            if (key.toLowerCase().startsWith(prefix)) {
-                this.listings.delete(key);
-            }
-        }
-    }
-
-    /**
-     * Drop only the cached listing of a parent's children, keeping everything
-     * beneath them -- the narrow invalidation for "the *set* may have changed,
-     * but what is under each surviving member has not". Re-listing accounts
-     * after a sign-in must not discard the tenants and subscriptions already
-     * fetched for the accounts that were already there.
+     * This is the store's only narrow invalidation, and it means "the child
+     * *set* may have changed", not "what I fetched was wrong". Re-listing is
+     * lossless here because keys are paths: the children come back under the
+     * keys they had, so every listing beneath them re-attaches untouched. A
+     * child that is genuinely new costs one listing; the rest costs nothing.
      */
     public evictListing(parentKey: string): void {
         this.listings.delete(parentKey);
     }
 
-    /** Drop everything. */
+    /**
+     * Drop everything.
+     *
+     * Reserved for the two cases that justify paying to re-fetch the whole
+     * hierarchy: the user explicitly asked for fresh data, or the data is
+     * genuinely untrue. Reach for {@linkcode AzureListingStore.evictListing evictListing}
+     * otherwise.
+     */
     public clear(): void {
         this.listings.clear();
     }

@@ -141,18 +141,20 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
 
         this.disposables.push(this.ctx.code.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(SovereignCloudConfigurationSection)) {
-                // The configured environment changed, so every cached listing
-                // was fetched against endpoints that are no longer the ones in
-                // use. Nothing cached is true any more.
-                this.executor.output.debug('[auth] sovereign cloud configuration changed; discarding all cached listings');
-                this.listings.clear();
+                // Only the accounts listing was taken against the ambient cloud;
+                // every key beneath it carries its own environment, so the two
+                // clouds' listings coexist rather than collide. Re-enumerating
+                // accounts is a local call, and switching back is free.
+                this.executor.output.debug('[auth] sovereign cloud configuration changed; re-enumerating accounts');
+                this.listings.reenumerateAccounts();
                 this.changeEmitter.fire({ target: Everything });
             } else if (e.affectsConfiguration(`${ConfigurationSection}.${SignedInTenantsConfigurationKey}`)) {
-                // Manually-entered tenants are folded into each account's tenant
-                // listing, so those listings are now wrong in both directions:
-                // an added tenant is missing and a removed one lingers.
-                this.executor.output.debug('[auth] signed-in tenants configuration changed; discarding all cached listings');
-                this.listings.clear();
+                // Deliberately no cache invalidation: manually-entered tenants
+                // are merged above the cache, on every read. An added tenant
+                // appears immediately (its subscriptions are simply a miss when
+                // something drills into it) and a removed one stops appearing
+                // while its subscriptions stay cached in case it returns.
+                this.executor.output.debug('[auth] signed-in tenants configuration changed; re-merging over cached listings');
                 this.changeEmitter.fire({ target: Everything });
             } else if (e.affectsConfiguration(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
                 // Deliberately no cache invalidation: a filter change alters
@@ -301,8 +303,9 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * signed in stay cached: a new account signing in does not make another
      * account's tenants untrue.
      *
-     * An account that signed out is evicted outright, since nothing beneath it
-     * is reachable any more.
+     * An account that signed out is left cached: it has dropped out of the
+     * accounts listing, so nothing beneath it is reachable any more, and
+     * discarding it would only make the next sign-in slower.
      *
      * @param providerId - The auth provider id that triggered the burst (logging only).
      */
@@ -332,10 +335,13 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             this.executor.output.debug(`[auth] sessions changed provider=${providerId}; account set changed (count=${currentIds.size}), re-listing accounts`);
             if (previousIds) {
                 const removedIds = [...previousIds].filter(id => !currentIds.has(id));
-                for (const removedId of removedIds) {
-                    this.listings.clearAccount(removedId);
-                }
                 if (removedIds.length > 0) {
+                    // Nothing is evicted for a signed-out account. Its listings
+                    // are already unreachable -- the account is gone from the
+                    // accounts listing, and a node is only reachable by
+                    // descending the listing that produced it -- so keeping them
+                    // costs memory only, and makes the re-sign-in that usually
+                    // follows a token expiry instant.
                     this.removeAccountsEmitter.fire(removedIds);
                 }
             }

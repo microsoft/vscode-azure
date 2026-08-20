@@ -342,7 +342,21 @@ describe('AzureListingCache (unit)', () => {
             assert.strictEqual(fetcher.fetchAccounts.mock.callCount(), 1);
         });
 
-        it('evicts one account subtree and leaves the others alone', async () => {
+        it('re-enumerates one account\'s tenants while keeping their subscriptions', async () => {
+            const { cache, fetcher } = createCache();
+            await collectAsync(cache.walkSubscriptions());
+
+            cache.reenumerateTenants(account.id);
+            fetcher.fetchTenants.mock.resetCalls();
+            fetcher.fetchSubscriptions.mock.resetCalls();
+            await collectAsync(cache.walkSubscriptions());
+
+            assert.deepStrictEqual(listedAccountIds(fetcher), [account.id], 'the tenant set is re-asked');
+            assert.deepStrictEqual(listedTenantIds(fetcher), [],
+                'tenants come back under the keys they had, so their subscriptions re-attach untouched');
+        });
+
+        it('re-enumerates one account\'s tenants and leaves the other accounts alone', async () => {
             const other = makeAccount({ id: 'other-acct', label: 'Other' });
             const otherTenant = makeTenant({ accountId: other.id, tenantId: 'tenant-c' });
             const otherSub = makeSubscription({ accountId: other.id, tenantId: otherTenant.tenantId, subscriptionId: 'sub-c' });
@@ -353,28 +367,26 @@ describe('AzureListingCache (unit)', () => {
             });
             await collectAsync(cache.walkSubscriptions());
 
-            cache.clearAccount(account.id);
+            cache.reenumerateTenants(account.id);
             fetcher.fetchTenants.mock.resetCalls();
-            fetcher.fetchSubscriptions.mock.resetCalls();
             await collectAsync(cache.walkSubscriptions());
 
             assert.deepStrictEqual(listedAccountIds(fetcher), [account.id]);
-            assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a', 'tenant-b']);
         });
 
-        it('evicts an account whose id differs only by case', async () => {
+        it('re-enumerates an account whose id differs only by case', async () => {
             const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());
 
-            cache.clearAccount(account.id.toUpperCase());
+            cache.reenumerateTenants(account.id.toUpperCase());
             fetcher.fetchTenants.mock.resetCalls();
             await collectAsync(cache.walkSubscriptions());
 
             assert.deepStrictEqual(listedAccountIds(fetcher), [account.id],
-                'account ids are case-insensitive, so a differently-cased id names the same subtree');
+                'account ids are case-insensitive, so a differently-cased id names the same listing');
         });
 
-        it('does not evict an account whose id merely starts with the evicted one', async () => {
+        it('does not re-enumerate an account whose id merely starts with the named one', async () => {
             // A VS Code account id is an opaque provider string and may contain
             // the separator the cache keys with.
             const nested = makeAccount({ id: 'acct/tenant', label: 'Nested' });
@@ -386,15 +398,52 @@ describe('AzureListingCache (unit)', () => {
             });
             await collectAsync(cache.walkSubscriptions());
 
-            cache.clearAccount(account.id);
+            cache.reenumerateTenants(account.id);
             fetcher.fetchTenants.mock.resetCalls();
             await collectAsync(cache.walkSubscriptions());
 
             assert.deepStrictEqual(listedAccountIds(fetcher), [account.id],
-                'the other account must survive -- its key is not a descendant, only a textual prefix match');
+                'the other account must survive -- its key is not the same, only a textual prefix match');
         });
 
-        it('discards everything when the data itself stops being true', async () => {
+        it('re-enumerates one tenant\'s subscriptions and no other listing', async () => {
+            const { cache, fetcher } = createCache();
+            await collectAsync(cache.walkSubscriptions());
+
+            cache.reenumerateSubscriptions(account.id, tenantA.tenantId);
+            fetcher.fetchTenants.mock.resetCalls();
+            fetcher.fetchSubscriptions.mock.resetCalls();
+            await collectAsync(cache.walkSubscriptions());
+
+            assert.deepStrictEqual(listedAccountIds(fetcher), [], 'the tenant set itself did not change');
+            assert.deepStrictEqual(listedTenantIds(fetcher), [tenantA.tenantId],
+                'signing in to one tenant says nothing about what another tenant contains');
+        });
+
+        it('keeps a signed-out account\'s listings, since nothing can reach them', async () => {
+            // Sign-out is modelled by the account leaving the accounts listing.
+            // Its tenants and subscriptions are then unreachable -- a node is
+            // only reachable by descending the listing that produced it -- so
+            // they are kept, and a re-sign-in costs nothing.
+            const accounts = [account];
+            const { cache, fetcher } = createCache({ accounts });
+            await collectAsync(cache.walkSubscriptions());
+
+            accounts.length = 0;
+            await cache.refreshAccounts();
+            assert.deepStrictEqual(pathIds(await collectAsync(cache.walkSubscriptions())), []);
+
+            accounts.push(account);
+            await cache.refreshAccounts();
+            fetcher.fetchTenants.mock.resetCalls();
+            fetcher.fetchSubscriptions.mock.resetCalls();
+
+            assert.deepStrictEqual(pathIds(await collectAsync(cache.walkSubscriptions())), ['tenant-a/sub-a', 'tenant-b/sub-b']);
+            assert.deepStrictEqual(listedAccountIds(fetcher), [], 'the signing-out must not have discarded the tenant listing');
+            assert.deepStrictEqual(listedTenantIds(fetcher), []);
+        });
+
+        it('discards everything only when asked outright', async () => {
             const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());
 
@@ -404,6 +453,90 @@ describe('AzureListingCache (unit)', () => {
             assert.strictEqual(fetcher.fetchAccounts.mock.callCount(), 2);
             assert.strictEqual(fetcher.fetchTenants.mock.callCount(), 2);
             assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), 4);
+        });
+    });
+
+    describe('manually named tenants', () => {
+        const namedId = 'AAAAAAAA-1111-2222-3333-444455556666';
+
+        /** A cache whose named tenants come from a mutable array, as the setting does. */
+        function createNamedCache(named: string[], options?: MockAzureListingFetcherOptions) {
+            const fetcher = createMockAzureListingFetcher({
+                accounts: [account],
+                tenants: [tenantA],
+                subscriptions: [subA],
+                ...options,
+            });
+            const { executor } = createTestActionExecutor();
+            return { fetcher, cache: new AzureListingCache(fetcher, executor, { additionalTenantIds: () => named }) };
+        }
+
+        it('merges named tenants into the terminal page', async () => {
+            const { cache } = createNamedCache([namedId]);
+
+            const pages = await collectAsync(cache.listTenants(account));
+
+            assert.deepStrictEqual(tenantIds(pages), [tenantA.tenantId, namedId.toLowerCase()]);
+            assert.strictEqual(pages[pages.length - 1].hasMore, false);
+            assert.strictEqual(pages[pages.length - 1].items[1].displayName, namedId,
+                'the id stands in as the name until something upgrades it');
+        });
+
+        it('reaches a named tenant when listing tenants is blocked outright', async () => {
+            const { cache } = createNamedCache([namedId], { unlistableAccountIds: [account.id] });
+
+            assert.deepStrictEqual(tenantIds(await collectAsync(cache.listTenants(account))), [namedId.toLowerCase()]);
+        });
+
+        it('keeps the listed display name for a tenant that is also named', async () => {
+            const { cache } = createNamedCache([tenantA.tenantId.toUpperCase()]);
+
+            const pages = await collectAsync(cache.listTenants(account));
+
+            assert.deepStrictEqual(tenantIds(pages), [tenantA.tenantId]);
+            assert.deepStrictEqual(pages[0].items.map(tenant => tenant.displayName), [tenantA.displayName]);
+        });
+
+        it('deduplicates named ids that differ only in casing', async () => {
+            const { cache } = createNamedCache([namedId, namedId.toLowerCase()], { tenants: [] });
+
+            assert.deepStrictEqual(tenantIds(await collectAsync(cache.listTenants(account))), [namedId.toLowerCase()]);
+        });
+
+        it('adds a newly named tenant without re-listing anything', async () => {
+            const named: string[] = [];
+            const { cache, fetcher } = createNamedCache(named);
+            await collectAsync(cache.walkSubscriptions());
+            fetcher.fetchAccounts.mock.resetCalls();
+            fetcher.fetchTenants.mock.resetCalls();
+            fetcher.fetchSubscriptions.mock.resetCalls();
+
+            // The setting is written; nothing tells the cache.
+            named.push(namedId);
+            const paths = await collectAsync(cache.walkSubscriptions());
+
+            assert.deepStrictEqual(pathIds(paths), ['tenant-a/sub-a'], 'the new tenant has no subscriptions in the fixture');
+            assert.strictEqual(fetcher.fetchAccounts.mock.callCount(), 0, 'naming a tenant falsifies no listing');
+            assert.deepStrictEqual(listedAccountIds(fetcher), [], 'the account\'s tenant listing is re-merged, not re-fetched');
+            assert.deepStrictEqual(listedTenantIds(fetcher), [namedId.toLowerCase()],
+                'only the tenant nothing had listed yet costs a request');
+        });
+
+        it('stops listing a tenant that is no longer named, keeping its subscriptions cached', async () => {
+            const namedSub = makeSubscription({ accountId: account.id, tenantId: namedId.toLowerCase(), subscriptionId: 'sub-n' });
+            const named = [namedId];
+            const { cache, fetcher } = createNamedCache(named, { subscriptions: [subA, namedSub] });
+            assert.deepStrictEqual(pathIds(await collectAsync(cache.walkSubscriptions())), ['tenant-a/sub-a', `${namedId.toLowerCase()}/sub-n`]);
+
+            named.length = 0;
+            assert.deepStrictEqual(pathIds(await collectAsync(cache.walkSubscriptions())), ['tenant-a/sub-a'],
+                'an unnamed tenant stops appearing');
+
+            named.push(namedId);
+            fetcher.fetchSubscriptions.mock.resetCalls();
+            assert.deepStrictEqual(pathIds(await collectAsync(cache.walkSubscriptions())), ['tenant-a/sub-a', `${namedId.toLowerCase()}/sub-n`]);
+            assert.deepStrictEqual(listedTenantIds(fetcher), [],
+                'un-naming must hide the tenant, not discard what it cost to list');
         });
     });
 

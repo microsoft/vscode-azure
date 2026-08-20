@@ -10,23 +10,20 @@ import { mock } from 'node:test';
 import type { AzureSubscription, AzureTenant } from '../../../src/auth/AzureSubscription';
 import type { CredentialFactoryOptions, ICredentialFactory } from '../../../src/auth/CredentialFactory';
 import { AzurePublicCloud } from '../../../src/auth/Environment';
-import { AzureListingFetcher, type AzureListingFetcherOptions } from '../../../src/auth/listing/AzureListingFetcher';
+import { AzureListingFetcher } from '../../../src/auth/listing/AzureListingFetcher';
 import { PublicAuthProviderId } from '../../../src/auth/Environment';
 import { SubscriptionClient } from '../../../src/rest/clients/SubscriptionClient';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeTenant, type MockSubscriptionClientOptions } from '../../mockAzure';
-
-const manualTenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
-const otherManualTenantId = 'bbbbbbbb-1111-2222-3333-444455556666';
 
 describe('AzureListingFetcher (unit)', () => {
     afterEach(() => {
         mock.restoreAll();
     });
 
-    function createFetcher(options?: AzureListingFetcherOptions, credentialFactory?: ICredentialFactory) {
+    function createFetcher(credentialFactory?: ICredentialFactory) {
         const { ctx, mock: code } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const fetcher = new AzureListingFetcher(ctx, executor, credentialFactory ?? (() => makeCredential()), options);
+        const fetcher = new AzureListingFetcher(ctx, executor, credentialFactory ?? (() => makeCredential()));
         return { fetcher, code };
     }
 
@@ -75,7 +72,7 @@ describe('AzureListingFetcher (unit)', () => {
 
         it('acquires no credential, so listing accounts cannot prompt', async () => {
             const credentialFactory = mock.fn<ICredentialFactory>(() => makeCredential());
-            const { fetcher, code } = createFetcher(undefined, credentialFactory);
+            const { fetcher, code } = createFetcher(credentialFactory);
             code.authentication.getAccounts.mock.mockImplementation(() => Promise.resolve([]));
 
             await fetcher.fetchAccounts();
@@ -129,52 +126,7 @@ describe('AzureListingFetcher (unit)', () => {
             assert.deepStrictEqual(tenantIds(pages), ['t3']);
         });
 
-        it('folds additional tenant ids into the terminal page', async () => {
-            const { fetcher } = createFetcher({ additionalTenantIds: () => [manualTenantId] });
-            mockSubscriptionClient({
-                tenantPages: [
-                    { items: [{ tenantId: 't1', displayName: 'Tenant One' }], hasMore: true },
-                    { items: [{ tenantId: 't2', displayName: 'Tenant Two' }], hasMore: false },
-                ],
-            });
-
-            const pages = await collectAsync(fetcher.fetchTenants(makeAccount()));
-
-            assert.deepStrictEqual(tenantIds(pages), ['t1', 't2', manualTenantId]);
-            assert.strictEqual(pages[1].items[1].displayName, manualTenantId, 'the id stands in until something upgrades it');
-        });
-
-        it('keeps the listed display name for a tenant that is also named manually', async () => {
-            const { fetcher } = createFetcher({ additionalTenantIds: () => [manualTenantId] });
-            mockSubscriptionClient({
-                tenantPages: [{ items: [{ tenantId: manualTenantId.toUpperCase(), displayName: 'Real Name' }], hasMore: false }],
-            });
-
-            const pages = await collectAsync(fetcher.fetchTenants(makeAccount()));
-
-            assert.deepStrictEqual(pages[0].items.map(tenant => tenant.displayName), ['Real Name']);
-        });
-
-        it('deduplicates additional ids that differ only in casing', async () => {
-            const { fetcher } = createFetcher({ additionalTenantIds: () => [manualTenantId, manualTenantId.toUpperCase(), otherManualTenantId] });
-            mockSubscriptionClient({ tenantPages: [{ items: [], hasMore: false }] });
-
-            const pages = await collectAsync(fetcher.fetchTenants(makeAccount()));
-
-            assert.deepStrictEqual(tenantIds(pages), [manualTenantId, otherManualTenantId]);
-        });
-
-        it('falls back to the additional tenants when listing is blocked outright', async () => {
-            const { fetcher } = createFetcher({ additionalTenantIds: () => [manualTenantId] });
-            mockFailingTenantList(new Error('conditional access'));
-
-            const pages = await collectAsync(fetcher.fetchTenants(makeAccount()));
-
-            assert.deepStrictEqual(tenantIds(pages), [manualTenantId]);
-            assert.strictEqual(pages[pages.length - 1].hasMore, false);
-        });
-
-        it('yields an empty terminal page when listing is blocked and nothing was named', async () => {
+        it('yields an empty terminal page when listing is blocked outright', async () => {
             const { fetcher } = createFetcher();
             mockFailingTenantList(new Error('conditional access'));
 
@@ -241,7 +193,7 @@ describe('AzureListingFetcher (unit)', () => {
 
         it('scopes the credential to the tenant and account, leaving interactivity to the caller', async () => {
             const inputs: CredentialFactoryOptions[] = [];
-            const { fetcher } = createFetcher(undefined, input => {
+            const { fetcher } = createFetcher(input => {
                 inputs.push(input as CredentialFactoryOptions);
                 return makeCredential();
             });
