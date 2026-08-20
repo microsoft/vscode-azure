@@ -215,11 +215,15 @@ export class AzureListingCache {
      *
      * A no-op when the account is not cached (see
      * {@linkcode AzureListingCache.reenumerateTenants reenumerateTenants}).
+     *
+     * @param tenant - The tenant to re-list, or any object naming its account
+     * and tenant ids -- so a caller holding an {@linkcode AzureTenant} can pass
+     * it straight through.
      */
-    public reenumerateSubscriptions(accountId: string, tenantId: string): void {
-        const account = this.cachedAccount(accountId);
+    public reenumerateSubscriptions(tenant: Pick<AzureTenant, 'accountId' | 'tenantId'>): void {
+        const account = this.cachedAccount(tenant.accountId);
         if (account) {
-            this.store.evictListing(azureListingKeyFor(account.environment, accountId, tenantId));
+            this.store.evictListing(azureListingKeyFor(account.environment, tenant.accountId, tenant.tenantId));
         }
     }
 

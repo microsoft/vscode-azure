@@ -121,7 +121,7 @@ export class SignIn implements ManagedCommand {
         // sign-in can have changed: it may have authorized subscriptions that
         // were invisible when the tenant was last listed. Nothing else is
         // touched, including every other tenant under the same account.
-        this.listings.reenumerateSubscriptions(accountId, pick.tenantId);
+        this.listings.reenumerateSubscriptions({ accountId, tenantId: pick.tenantId });
         this.tree.invalidate(byAccount(accountId));
     }
 

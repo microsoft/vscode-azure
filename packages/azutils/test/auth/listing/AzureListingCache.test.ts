@@ -533,7 +533,7 @@ describe('AzureListingCache (unit)', () => {
             const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());
 
-            cache.reenumerateSubscriptions(account.id, tenantA.tenantId);
+            cache.reenumerateSubscriptions(tenantA);
             fetcher.fetchTenants.mock.resetCalls();
             fetcher.fetchSubscriptions.mock.resetCalls();
             await collectAsync(cache.walkSubscriptions());

@@ -24,12 +24,13 @@ export const AzureListingRootKey = '';
 /**
  * Distinguishes one cloud's listings from another's.
  *
- * The endpoint is part of the key, not just the name: a custom cloud is named by
- * the user and its endpoints can be edited without the name changing, so keying
- * by name alone would serve listings fetched from the previous endpoints.
+ * The resource-manager endpoint alone: it is what the listings were actually
+ * fetched from, so two clouds that share it hold the same data whatever they are
+ * called, and a custom cloud whose endpoint the user edits gets a new key
+ * without having to rename it.
  */
 function environmentKey(environment: EnvironmentLike): string {
-    return `${environment.name}|${environment.resourceManagerEndpointUrl}`;
+    return environment.resourceManagerEndpointUrl;
 }
 
 /**
