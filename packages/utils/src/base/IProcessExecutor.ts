@@ -295,6 +295,13 @@ export class ProcessExecutor implements IProcessExecutor {
             throw asCancellation(e, signal);
         }
 
+        // Buffering starts here, before the caller gets control, because
+        // attaching the `'data'` handler is what puts the stream into flowing
+        // mode. An undrained stdout fills its OS pipe and blocks the child in
+        // `write()`. In JSON-lines mode that deadlocks rather than merely
+        // stalls: the blocked child stops emitting stderr, so the caller's loop
+        // over `jsonLines` never ends, so `completed` is never awaited, so
+        // nothing ever drains stdout.
         const stdout = readAll(child.stdout);
 
         // JSON-lines mode streams stderr line-by-line rather than buffering it,

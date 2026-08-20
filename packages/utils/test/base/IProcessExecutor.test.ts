@@ -733,6 +733,41 @@ describe('ProcessExecutor (integration)', () => {
             expect(completed.stderr).to.equal('');
         });
 
+        it('should stream JSON lines while stdout exceeds the OS pipe buffer', async function () {
+            this.timeout(20000);
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            // The child fills its stdout pipe before writing a single stderr
+            // line, so it blocks in write() unless stdout is drained
+            // concurrently. Because the caller drives stderr consumption, a
+            // regression deadlocks instead of merely stalling: no stderr is
+            // emitted, so the loop below never ends and never reaches
+            // `completed`. It manifests as a hang, not a failed assertion.
+            const size = 5 * 1024 * 1024;
+            const source = [
+                `process.stdout.write(JSON.stringify({ pad: 'x'.repeat(${size}) }));`,
+                `process.stderr.write(JSON.stringify({ i: 0 }) + '\\n');`,
+            ].join('\n');
+
+            const result = await executor.spawn<{ pad: string }>({
+                execution: 'background',
+                ...evalNode(source),
+                parseJson: true,
+                jsonLines: true,
+            });
+
+            const seen: unknown[] = [];
+            for await (const line of result.jsonLines) {
+                seen.push(line);
+            }
+
+            expect(seen).to.deep.equal([{ i: 0 }]);
+
+            const completed = await result.completed;
+            expect(completed.json.pad.length).to.equal(size);
+        });
+
         it('should reject completed with CancellationError when cancelled mid-stream', async () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
