@@ -100,15 +100,15 @@ The `enrich()` return value controls child invalidation:
 
 This is useful when enrichment discovers that the resource's children have changed (e.g. ARM deployment operations are fetched during enrichment of the deployment itself).
 
-Example from `AcrDataProvider`:
+The shape of an `enrich()` implementation is always the same: fetch the detail
+the listing did not include, copy it onto the *existing* object, and report
+whether children are affected.
 
 ```typescript
 public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
-    // Fetch details via ARM API
-    const registry = await client.registries.get(resourceGroupName, resource.name);
-    // Mutate in-place
-    Object.assign(resource, { loginServer: registry.loginServer, sku: registry.sku });
-    return false;
+    const details = await client.registries.get(resourceGroupName, resource.name);
+    Object.assign(resource, { loginServer: details.loginServer }); // never replace the object
+    return false;                                                  // label-only re-render
 }
 ```
 
@@ -132,17 +132,9 @@ Sits on top of a `DataItemTree` and implements VS Code's `TreeDataProvider`. Liv
 - Automatically injects "Load More" nodes for paginated branches when configured
 - **Telemetry scoping**: `getChildren()`, `getTreeItem()`, and `getParent()` are wrapped in `callWithTelemetryAndErrorHandling` with `suppress: 'onSuccess'` and `rethrow: true`, so only failures emit telemetry. This also establishes an `IActionContext` on the async stack for any downstream work.
 
-### `ViewProvider<TViewItem>`
+### `ViewProvider<TResource>`
 
-Extends `DataProvider` but **forbids `enrich`** (`enrich?: never`). Adds `getTreeItem()` for rendering. Lives in `packages/utils/src/tree/ViewProvider.ts`.
-
-```typescript
-interface ViewProvider<TViewItem> extends DataProvider<TViewItem> {
-    enrich?: never;  // View providers must not modify data
-    getTreeItem(resource: TViewItem): ITreeItem | Promise<ITreeItem>;
-    getParent?(resource: TViewItem): ProviderResult<TViewItem>;
-}
-```
+Extends `DataProvider` but **forbids both `enrich` and `getTtl`** (`enrich?: never`, `getTtl?: never`) — caching and mutation are data-layer concerns. It narrows `getChildren()` to return a plain array (never a paginated `AsyncIterable`) and adds `getTreeItem()` for rendering, plus an optional `getParent()` that enables `TreeView.reveal()` for nodes that have not been loaded yet. See [ViewProvider.ts](../packages/utils/src/tree/ViewProvider.ts) for the full interface.
 
 View providers control presentation without modifying the data layer. They may:
 - Inject virtual nodes (groupings, headers)
@@ -208,21 +200,11 @@ but with a short 60-second TTL so newly-added marker files
 
 ### Workspace Node Model
 
-All workspace items implement a small, common interface and are
-discriminated by `type`:
-
-```typescript
-interface WorkspaceNode {
-    readonly id: string;       // stable key, also used as VS Code TreeItem.id
-    readonly type: WorkspaceNodeType;
-    readonly label: string;
-    readonly resourceUri?: vscode.Uri; // file/folder on disk, drives "Reveal in Explorer"
-}
-type WorkspaceNodeType =
-    | 'azdProject' | 'azdService'
-    | 'functionsProject'
-    | 'emulatorsGroup' | 'emulator';
-```
+All workspace items implement a small, common interface
+([`WorkspaceNode`](../extensions/vscode-azure/src/tree/workspace/WorkspaceNode.ts)): a stable `id` that doubles as both the
+cache key and the VS Code `TreeItem.id`, a display `label`, a `type`
+discriminator, and an optional `resourceUri` naming the file or folder on disk
+that the node stands for (which is what makes "Reveal in Explorer" work).
 
 Each domain (azd, functions, emulators) owns its own concrete variant
 plus a matching pair of providers. There is **no shared mega-provider**
@@ -265,19 +247,11 @@ A second tree view tracks long-running operations (ARM deployments, code deploym
 
 ### Activity Model
 
-Activities implement a common interface:
-
-```typescript
-interface Activity {
-    readonly id: string;
-    readonly type: ActivityType;     // 'armDeployment' | 'armDeploymentOperation' | 'codeDeployment' | 'generic'
-    readonly status: ActivityStatus; // 'NotStarted' | 'InProgress' | 'Canceled' | 'Completed' | 'Failed'
-    readonly title: string;
-    readonly description?: string;
-    readonly startTime: number;
-    readonly endTime?: number;
-}
-```
+Activities implement a common interface
+([`Activity`](../extensions/vscode-azure/src/tree/activity/Activity.ts)): a stable `id`, a `type` discriminator, a
+mutable `status`, a title and optional description, and start/end timestamps.
+`status` is mutable because a provider advances it in place and then fires
+`onDidChange` — the node identity has to survive the transition.
 
 ### Activity Data Providers
 
@@ -287,15 +261,7 @@ interface Activity {
 | `CodeDeploymentDataProvider` | Yes | Tracks code deployments (e.g. `azd deploy`). `trackDeployment()` returns a `CodeDeploymentHandle` for controlling lifecycle and adding children. The handle exposes `complete(status, error?)` and `addChild(title, status?)` — the provider owns all mutations and fires change events internally. |
 | `GenericActivityDataProvider` | Yes | Tracks simple one-off activities (leaf nodes, no children). |
 
-Activity providers are registered as `[primaryId, Class]` tuples in the `dataProviders` array, which binds each as a singleton under its own identifier and aliases it into the collection. This allows commands (e.g. `ClearActivities`) to inject specific providers directly while the tree still retrieves all providers collectively:
-
-```typescript
-dataProviders: [
-    [IArmDeploymentDataProvider, ArmDeploymentDataProvider],
-    [ICodeDeploymentDataProvider, CodeDeploymentDataProvider],
-    [IGenericActivityDataProvider, GenericActivityDataProvider],
-],
-```
+Activity providers are registered as `[primaryId, Class]` tuples in the `dataProviders` array, which binds each as a singleton under its own identifier and aliases it into the collection. This allows commands (e.g. `ClearActivities`) to inject a specific provider directly while the tree still retrieves all providers collectively. See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers).
 
 ### Activity View Providers
 

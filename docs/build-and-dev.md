@@ -90,29 +90,24 @@ its own compatible TypeScript. No action is needed to keep the two in sync.
 > `"typescript"` at the appropriate version (re-adding it to `publicHoistPattern` if desired), since the
 > build compiler and the linter's compiler would then be the same package again.
 
-> Because TypeScript 7.0.2 was published very recently, `typescript` (and its platform-specific binary
-> sub-packages) are temporarily listed in `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`. Those
-> entries can be removed once the release ages past the 7-day minimum-release-age policy.
-
 #### esbuild Configuration
 
-`esbuild.mjs` uses shared configs from `@microsoft/vscode-azext-eng/esbuild`:
+`esbuild.mjs` starts from the shared configs in `@microsoft/vscode-azext-eng/esbuild`
+(`autoSelectEsbuildConfig()` yields an `extensionConfig` plus a `telemetryConfig` for
+the separate telemetry bundle) and then layers on three extension-specific things:
 
-```javascript
-const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig();
+- **Source aliases** for `@microsoft/vscode-azure-utils` and `@microsoft/vscode-azure-azutils`,
+  pointing at each package's `src/index.ts`. esbuild therefore bundles package *source*
+  and no prebuild step is needed.
+- **A copy plugin** that emits `packages/azutils/resources/azureIcons/**/*.svg` into
+  `dist/azureIcons/`, so resource icons ship with the extension (and get cleaned by
+  `pnpm run clean`). See [Tree Views — Resource Icons](tree-views.md#resource-icons).
+- **Secondary entry points** for the dev/test override bundles (`test/mock.bundle`,
+  `test/e2e.bundle`), which keeps the mock data and the E2E `@azure/identity` credential
+  out of the shipped extension bundle.
 
-extensionConfig.alias = {
-    ...extensionConfig.alias,
-    '@microsoft/vscode-azure-utils': '../../packages/utils/src/index.ts',
-    '@microsoft/vscode-azure-azutils': '../../packages/azutils/src/index.ts',
-};
-
-await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
-```
-
-- `autoSelectEsbuildConfig()` returns both an `extensionConfig` and a `telemetryConfig` (for the separate telemetry bundle). Output is CommonJS (`.js`), which the CJS `main.js` entry point loads with `require()`.
-- `autoEsbuildOrWatch` builds in production mode by default, or enters watch mode when `--watch` is passed on the command line.
-- The `alias` configuration resolves local package imports to their source files so esbuild bundles them directly.
+`autoEsbuildOrWatch` then builds in production mode, or enters watch mode when `--watch`
+is passed. Output is CommonJS, which the CJS `main.js` entry point loads with `require()`.
 
 ## Watch Mode / Iterative Development
 
@@ -213,17 +208,15 @@ pnpm --filter @microsoft/vscode-azure-utils run package  # pnpm pack
 
 ## Extension Entry Point
 
-The extension entry point is `main.js` (CommonJS), which measures bundle load time and delegates to the esbuild bundle:
+`main.js` is the extension's entry point and is deliberately *not* part of the bundle.
+It is a small CommonJS file that:
 
-```javascript
-const perfStats = { loadStartTime: Date.now(), loadEndTime: undefined };
-const extension = require('./dist/extension.bundle.js');
-
-exports.activate = async function activate(ctx) {
-    return await extension.activateInternal(ctx, perfStats);
-}
-
-perfStats.loadEndTime = Date.now();
-```
-
-This separation allows accurate measurement of the bundle loading time for telemetry.
+1. Stamps `loadStartTime`, `require()`s `dist/extension.bundle.js`, then stamps
+   `loadEndTime`. Keeping this outside the bundle is what makes the bundle load time
+   measurable at all — it is reported as the `loadTimeMs` measurement on the `activate`
+   telemetry event (see [Telemetry](telemetry.md#activation-telemetry)).
+2. Delegates `activate` / `deactivate` to `activateInternal` / `deactivateInternal`.
+3. In non-production extension modes only, loads a container-override bundle before
+   activating: `dist/test/mock.bundle.js` when `AZURE_MOCK_DATA=1`, or
+   `dist/test/e2e.bundle.js` when `ENABLE_LONG_RUNNING_TESTS=1`. Gating on
+   `ExtensionMode` means neither path can ever be reached in a released extension.

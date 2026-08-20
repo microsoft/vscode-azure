@@ -62,11 +62,11 @@ it('(unit) should invalidate the cache', async () => {
 - `registeredCommands` — commands registered via `commands.registerCommand`
 - `fs` — a `MockFileSystem` (in-memory `workspace.fs`; see below)
 - `workspaceFolders` — mutable array backing `workspace.workspaceFolders`
-- `messageResponses` — queue of button labels for `showInformationMessage` / `showWarningMessage` / `showErrorMessage`
+- `fileSystemWatchers` — every watcher created via `workspace.createFileSystemWatcher`; drive them with `fireFileSystemEvent`
 - `tasks` — the mock `tasks` namespace (includes `executeTask` with call tracking)
-- `taskProcessEndEmitter` — fire to simulate a task process ending with an exit code
 - `authentication`, `commands`, `env`, `window`, `workspace` — the mock namespace objects for direct call-count assertions
 - `textDocuments` / `shownDocuments` — documents opened via `workspace.openTextDocument` and passed to `window.showTextDocument`, in order
+- `configChangeEmitter`, `sessionsChangeEmitter`, `workspaceFoldersChangeEmitter`, `taskProcessEndEmitter` — fire these to simulate configuration changes, sign-in/sign-out, workspace folder changes, and task completion
 
 All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior. The namespace objects exposed on the result (`authentication`, `commands`, `env`, `window`, `workspace`, `tasks`) are typed so their methods expose `.mock` directly -- read `mockResult.window.showErrorMessage.mock.callCount()` with no cast. (Note: the namespaces on `mockResult.vscode` are typed as the real `IVsCode` module, so reach for the top-level handles when you need `.mock`.)
 
@@ -99,13 +99,7 @@ workspaceFolders.push({ uri: MockUri.file('/workspace'), name: 'my-project', ind
 
 #### Message Responses
 
-Push button labels to `messageResponses` to simulate the user clicking a button on notification messages. Responses are consumed in order across all three message types. When the queue is empty the mock returns `undefined` (dismissal):
-
-```typescript
-const mockResult = createMockVsCode();
-mockResult.messageResponses.push('Delete');  // first show*Message call returns 'Delete'
-// second call returns undefined (dismissed)
-```
+Button clicks on `showInformationMessage` / `showWarningMessage` / `showErrorMessage` are driven through `respondToPrompts()` with a `{ button: 'label' }` response (see [Driving Wizard UI in Tests](#driving-wizard-ui-in-tests)). The helper asserts that the message actually offered that button. Without `respondToPrompts()`, the three message methods resolve to `undefined` (dismissal).
 
 For tests that also need an `ICodeContext`, use `createMockCodeContext()`:
 
@@ -115,12 +109,12 @@ import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 const { ctx, mock: mockResult } = createMockCodeContext();
 // ctx has both .code (IVsCode) and .extensionContext (IExtensionContext)
 // extensionContext includes extensionUri, storageUri, globalStorageUri, etc.
-// mockResult is the full MockVsCodeResult with fs, workspaceFolders, messageResponses, etc.
+// mockResult is the full MockVsCodeResult with fs, workspaceFolders, etc.
 ```
 
 Key patterns:
 - Prefer `createMockVsCode()` / `createMockCodeContext()` over hand-rolled mocks for consistency and completeness
-- Use the built-in `fs`, `workspaceFolders`, and `messageResponses` on the result instead of passing `overrides` or using `mockImplementation` to set up workspace/fs/message state
+- Use the built-in `fs` and `workspaceFolders` on the result instead of passing `overrides` or using `mockImplementation` to set up workspace/fs state
 - Access namespace objects directly from the result (e.g. `mockResult.commands.executeCommand.mock.callCount()`) for call-count assertions -- they are typed to expose `.mock`, so no `as unknown as Mock<...>` cast is needed
 - Use real implementations (`ActionExecutor`, `createActionContext`, `TempDirManager`) instead of mocking them when they work against `MockVsCode` — they often do
 - Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` for the `ActionExecutor` constructor
@@ -408,11 +402,4 @@ Extension test configuration lives in `.vscode-test.mjs`:
 export { azExtTestConfig as default } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
 ```
 
-Package test configuration lives in `package.json`:
-
-```json
-"mocha": {
-    "node-option": ["import=tsx"],
-    "spec": ["test/**/*.test.ts"]
-}
-```
+Package test configuration lives in each package's `package.json` under the `mocha` key. Specs are `test/**/*.test.ts`, and Mocha runs them directly as TypeScript via Node's `--experimental-transform-types` plus the shared `@microsoft/vscode-azext-eng/mocha` loader.
