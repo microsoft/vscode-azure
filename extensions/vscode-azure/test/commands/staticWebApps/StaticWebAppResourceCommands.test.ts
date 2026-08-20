@@ -6,7 +6,6 @@
 import { CancellationError, createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { BrowseStaticWebApp } from '../../../src/commands/staticWebApps/BrowseStaticWebApp';
 import {
     CreateSwaConfigFile,
     staticWebAppExampleConfig,
@@ -33,16 +32,6 @@ describe('Static Web Apps resource commands (unit)', () => {
         const resolver = new StaticWebAppCommandResolver(ctx, cache as never, selector as never);
         return { ctx, mockResult, cache, invalidate, remove, resolver };
     }
-
-    it('should browse environment and site hostnames using HTTPS', async () => {
-        const environment = makeStaticWebAppEnvironment({ hostname: 'preview.azurestaticapps.net' });
-        const { mockResult, resolver } = createResolver(environment);
-        await new BrowseStaticWebApp(mockResult.vscode, resolver).execute('key');
-
-        expect(mockResult.env.openExternal.mock.calls[0].arguments[0].toString()).to.equal(
-            'https://preview.azurestaticapps.net/',
-        );
-    });
 
     it('should guard production environment deletion before prompting', async () => {
         const { mockResult, resolver } = createResolver(makeStaticWebAppEnvironment());

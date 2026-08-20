@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isGenericResource } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
@@ -14,9 +13,12 @@ import { OpenUrl } from '../OpenUrl';
 /**
  * Opens the website of the selected Azure resource tree node.
  *
- * The URL itself is attached to the resource by its data provider during
- * enrichment, so this only has to read it back; any resource type can become
- * browsable simply by having its provider attach one.
+ * The URL itself is attached to the resource by its data provider, so this only
+ * has to read it back; any node can become browsable simply by having its
+ * provider attach one. That includes virtual nodes -- a Static Web Apps
+ * environment carries its own hostname -- which is why the node is not required
+ * to be an ARM resource: carrying a URL is the capability, and
+ * {@linkcode getWebsiteUrl} is the exact test for it.
  *
  * Unlike {@linkcode OpenInPortal}, this cannot be a bare {@linkcode OpenUrl}
  * resolver: the URL is not derivable from the node key alone, so the resource
@@ -43,7 +45,7 @@ export class BrowseWebsite implements ManagedCommand {
     public async execute(...args: unknown[]): Promise<void> {
         const [key] = args;
         const resource = typeof key === 'string' ? this.dataTree.get(key) : undefined;
-        if (!resource || !isGenericResource(resource)) {
+        if (!resource) {
             throw new Error(this.code.l10n.t('Select an Azure resource with a website.'));
         }
 

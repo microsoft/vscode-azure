@@ -12,7 +12,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { BrowseStaticWebApp } from '../../../commands/staticWebApps/BrowseStaticWebApp';
+import { BrowseWebsite } from '../../../commands/tree/BrowseWebsite';
 import { DeleteStaticWebAppEnvironment } from '../../../commands/staticWebApps/DeleteStaticWebAppEnvironment';
 import { ShowFunctionsDocumentation } from '../../../commands/staticWebApps/ShowDocumentation';
 import { ViewStaticWebAppProperties } from '../../../commands/staticWebApps/ViewStaticWebAppProperties';
@@ -91,7 +91,7 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
         item.contextValue = resourceContextValue(
             site,
             StaticWebAppViewProvider.ContextValue,
-            BrowseStaticWebApp.ContextValue,
+            BrowseWebsite.ContextValue,
         );
         item.iconPath = getResourceTypeIconUri(this.ctx, site.logicalType);
         return item;
@@ -124,7 +124,7 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
             environment.displayLabel,
             combineContextValues(
                 'azureStaticEnvironment',
-                BrowseStaticWebApp.ContextValue,
+                BrowseWebsite.ContextValue,
                 DeleteStaticWebAppEnvironment.ContextValue,
                 ViewStaticWebAppProperties.ContextValue,
             ),

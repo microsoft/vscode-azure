@@ -120,6 +120,11 @@ export function isStaticWebAppVirtualNode(node: unknown): node is StaticWebAppVi
 }
 
 /** Normalizes Azure's `GitHubAccount:branch` preview-branch format. */
+/** Narrows any value to a Static Web Apps environment node. */
+export function isStaticWebAppEnvironment(node: unknown): node is StaticWebAppEnvironment {
+    return isStaticWebAppVirtualNode(node) && node.virtualType === StaticWebAppVirtualTypes.Environment;
+}
+
 export function normalizeStaticWebAppBranch(sourceBranch: string): string {
     const separator = sourceBranch.indexOf(':');
     return separator < 0 ? sourceBranch : sourceBranch.slice(separator + 1);

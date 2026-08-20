@@ -7,9 +7,8 @@ import { IStaticWebAppClientProvider, parseAzureResourceId } from '@microsoft/vs
 import { IActionContext, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
-import { StaticWebAppVirtualTypes, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
+import { isStaticWebAppEnvironment, StaticWebAppVirtualTypes, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
 import type { ManagedCommand } from '../ManagedCommand';
-import { isStaticWebAppEnvironment } from './BrowseStaticWebApp';
 import { StaticWebAppCommandResolver } from './StaticWebAppCommandResolver';
 
 /**

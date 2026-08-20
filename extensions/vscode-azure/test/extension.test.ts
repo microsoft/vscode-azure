@@ -10,7 +10,6 @@ import { ExtensionId } from '../src/constants';
 
 const swaCommandPrefix = 'vscode-azure/staticWebApps/';
 const retainedSwaCommands = [
-    `${swaCommandPrefix}browse`,
     `${swaCommandPrefix}createNew`,
     `${swaCommandPrefix}createAdvanced`,
     `${swaCommandPrefix}deleteEnvironment`,
@@ -124,7 +123,11 @@ describe('Static Web Apps manifest (integration)', () => {
 
         const viewContext = manifest.contributes.menus['view/item/context'];
         const swaEntries = viewContext.filter(entry => entry.command?.startsWith(swaCommandPrefix));
-        expect(swaEntries).to.have.length(5);
+        expect(swaEntries).to.have.length(4);
+        // Browsing a site or an environment goes through the shared browseWebsite
+        // command, which reads the URL its data provider attached, so Static Web
+        // Apps contributes no browse command of its own.
+        expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/browseWebsite')).to.be.true;
         expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/openInPortal')).to.be.true;
         expect(viewContext.some(entry => entry.command === 'vscode-azure/resources/refresh' && entry.when?.includes('azureStatic'))).to.be.true;
 
@@ -137,10 +140,12 @@ describe('Static Web Apps manifest (integration)', () => {
         }
 
         const swaWhenClauses = swaEntries.map(entry => entry.when).join(' ');
+        // 'azureStaticWebApp' is deliberately absent: the site node still carries it
+        // for user-authored when clauses, but no contribution gates on it now that
+        // browsing a site goes through the shared browseWebsite command.
         for (const context of [
             'StaticWebApps',
             'azureResourceTypeGroup',
-            'azureStaticWebApp',
             'azureStaticEnvironment',
         ]) {
             expect(swaWhenClauses, `Missing legacy context ${context}`).to.include(context);

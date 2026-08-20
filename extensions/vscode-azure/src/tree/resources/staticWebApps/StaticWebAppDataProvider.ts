@@ -16,6 +16,7 @@ import {
 import { collectPageItems, IActionExecutor, IVsCode, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { StaticWebAppSettingsAdapter } from '../../../settings/adapters/StaticWebAppSettingsAdapter';
+import { setWebsiteUrl } from '../websiteUrl';
 import { getSettingsNodes } from '../settings/SettingsNode';
 import {
     isStaticWebApp,
@@ -72,6 +73,9 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             branch: site.branch,
             defaultHostname: site.defaultHostname,
         });
+        // Advertises the site to the shared browse command, so Static Web Apps does
+        // not need a browse command of its own.
+        setWebsiteUrl(resource, site.defaultHostname);
         return false;
     }
 
@@ -146,7 +150,7 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             const isProduction = data.buildId === 'default';
             const sourceBranch = data.sourceBranch ?? site.branch ?? '';
             const branch = isProduction ? sourceBranch : normalizeStaticWebAppBranch(sourceBranch);
-            return {
+            const environment: StaticWebAppEnvironment = {
                 virtualType: StaticWebAppVirtualTypes.Environment,
                 virtualPath: `environments/${data.buildId}`,
                 azureResource: site,
@@ -160,6 +164,9 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
                     ? this.code.l10n.t('Production')
                     : (data.pullRequestTitle ?? data.name ?? data.buildId),
             };
+            // Each environment has its own hostname, so each is independently browsable.
+            setWebsiteUrl(environment, data.hostname);
+            return environment;
         } catch {
             return this.createInvalid(site, `environments/invalid/${sourceId}`, 'invalidStaticEnvironment', data.name ?? sourceId);
         }
