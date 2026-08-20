@@ -452,6 +452,66 @@ describe('AzureListingCache (unit)', () => {
             assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), 0, 'the overtaken result must not seed the memo');
         });
 
+        it('retries the accounts after a failed fetch, rather than replaying the failure', async () => {
+            const { cache, fetcher } = createCache();
+            let call = 0;
+            fetcher.fetchAccounts.mock.mockImplementation(async () => {
+                call++;
+                if (call === 1) {
+                    throw new Error('transient');
+                }
+                return Promise.resolve([account]);
+            });
+
+            await assert.rejects(cache.listAccounts(), /transient/);
+
+            // A failed fetch must not be retained, or one offline moment during
+            // the first root load would leave the tree empty for the session.
+            assert.deepStrictEqual(await cache.listAccounts(), [account]);
+        });
+
+        it('is not wiped by a failed fetch it overtook', async () => {
+            const { cache, fetcher } = createCache();
+            await collectAsync(cache.walkSubscriptions());
+
+            let release!: () => void;
+            const gate = new Promise<void>(resolve => { release = resolve; });
+            let call = 0;
+            fetcher.fetchAccounts.mock.mockImplementation(async () => {
+                call++;
+                if (call === 1) {
+                    throw new Error('transient');
+                }
+                await gate;
+                return [account];
+            });
+
+            // A fetch that fails after a later one has already replaced it must
+            // clean up only after itself. Clearing the memo unconditionally
+            // would deregister the newer fetch, which then declines to seed the
+            // accounts it successfully fetched.
+            cache.reenumerateAccounts();
+            const failing = cache.listAccounts();
+            const settled = failing.then(() => 'resolved', () => 'rejected');
+
+            cache.reenumerateAccounts();
+            const fresh = cache.listAccounts();
+
+            assert.strictEqual(await settled, 'rejected', 'the caller that asked still sees its failure');
+            release();
+            await fresh;
+
+            // Same door as the test above: the memo is only observable through
+            // the synchronous peek `reenumerateSubscriptions` uses to recover an
+            // account's environment.
+            cache.reenumerateSubscriptions(tenantA);
+            fetcher.fetchSubscriptions.mock.resetCalls();
+            await collectAsync(cache.walkSubscriptions());
+
+            assert.deepStrictEqual(listedTenantIds(fetcher), [tenantA.tenantId],
+                'the successful fetch must still seed the memo, or the eviction silently does nothing');
+        });
+
         it('re-enumerates one tenant\'s subscriptions and no other listing', async () => {
             const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());

@@ -98,13 +98,22 @@ export class AzureListingStore {
      *
      * A fetch that {@linkcode AzureListingStore.evictAccounts evictAccounts}
      * overtakes still returns to its own caller, but is abandoned rather than
-     * cached, so an eviction is never undone by a read that predates it.
+     * cached, so an eviction is never undone by a read that predates it. An
+     * overtaken fetch that *fails* likewise cleans up only after itself, since
+     * clearing the memo outright would deregister the fetch that replaced it and
+     * leave that one declining to cache the accounts it had just fetched.
      */
     public async accounts(factory: () => Promise<AzureAccount[]>): Promise<AzureAccount[]> {
-        const pending = this.accountsPromise ??= factory().catch((error: unknown) => {
-            this.accountsPromise = undefined;
-            throw error;
-        });
+        let pending = this.accountsPromise;
+        if (!pending) {
+            pending = factory().catch((error: unknown) => {
+                if (this.accountsPromise === pending) {
+                    this.accountsPromise = undefined;
+                }
+                throw error;
+            });
+            this.accountsPromise = pending;
+        }
 
         const accounts = await pending;
         if (this.accountsPromise === pending) {
