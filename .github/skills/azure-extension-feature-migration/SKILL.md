@@ -46,7 +46,8 @@ classes into the monorepo is wrong and will be rejected. Instead:
 | When AVM has no suitable module, generate one AVM-shaped local module plus a thin consumer | Inline a fallback module into one monolithic template |
 | Rebuild the tree as `DataProvider` + `ViewProvider` registered in `registerTrees.ts` | Re-create per-node tree-item classes that fetch their own children |
 | Write commands as `@injectable()` `ManagedCommand` classes with a static `ContextValue` | Register bare `vscode.commands.registerCommand` callbacks |
-| Reuse shared monorepo packages (azutils clients, generic commands) and product precedents (Functions app-settings) | Re-vendor the source's client / app-settings code |
+| Reuse shared monorepo packages (azutils clients, generic commands, shared settings framework) and product precedents (Functions `SettingsAdapter`) | Re-vendor the source's client/settings code, or hand-roll a helper the monorepo already has |
+| Leave `azure.yaml`, scaffolding, and project configuration to **azd**, and build only on capabilities that exist in this monorepo | Author/parse azd's files, store deployment config in VS Code settings, or call into the extension being retired |
 | Conform **all** new code to `docs/conventions.md` (DI interfaces, `l10n.t`, logging, headers) | Carry over the source's style, `vscode` imports, or string handling |
 
 **Features rarely map 1:1.** The target UX is different by design — most notably, deployment is delegated
@@ -56,11 +57,24 @@ than ported, and [pattern-mapping.md](references/pattern-mapping.md) for the sou
 
 ---
 
-## Prerequisite: a reviewed inventory
+## Prerequisite: a committed inventory (hard stop)
 
-This skill **consumes** an `INVENTORY.md`. If one does not exist for the source extension, run the
-`azure-extension-feature-inventory` skill first. The inventory is the checklist the migration is
-verified against — every feature must end up with an explicit disposition.
+This skill **consumes** an `INVENTORY.md`. It does not start without one that is **committed and tracked** at
+`docs/migrations/<service>/INVENTORY.md`. A copy that exists only in session scratch, in chat, or in a
+reviewer's memory does not count — it evaporates, and the migration then has no checklist to be verified
+against. If there is no tracked inventory, run the `azure-extension-feature-inventory` skill first and commit
+its output, then come back.
+
+All three process artifacts live in that same tracked folder and are part of the migration's deliverable:
+
+| Artifact | Produced by | Must be committed |
+|----------|-------------|-------------------|
+| `docs/migrations/<service>/INVENTORY.md` | inventory skill | before Phase 1 can start |
+| `docs/migrations/<service>/TRIAGE.md` | Phase 2 | on sign-off, on its own commit |
+| `docs/migrations/<service>/MIGRATION-PLAN.md` | Phase 4 | with `TRIAGE.md`, **before any feature code** |
+
+The migration PR's **first commit** is these artifacts. If the PR contains feature code but not all three
+artifacts, the migration is incomplete regardless of how much code landed.
 
 ---
 
@@ -69,9 +83,9 @@ verified against — every feature must end up with an explicit disposition.
 > 1. **INTAKE** — Load the source `INVENTORY.md` and the monorepo's pattern docs; confirm the target package + a precedent product.
 > 2. **TRIAGE (human gate)** — With a human, assign every feature a disposition: Migrate / Adapt / Reuse / Drop / Defer. **Hard stop until signed off**, then commit the decisions as `TRIAGE.md`.
 > 3. **MAP** — Map each *kept* feature (read from `TRIAGE.md`) onto a concrete monorepo pattern + target file location; for provisioning, record the AVM search and module decision.
-> 4. **SEQUENCE** — Order the work by dependency (constants -> clients -> data providers -> view providers -> registerTrees -> commands -> wizards -> package.json -> tests). Emit `MIGRATION-PLAN.md`, each task tagged with its `TRIAGE.md` ID.
-> 5. **IMPLEMENT** — Build feature-by-feature against a precedent product, conforming to standards; lint/build/test each slice.
-> 6. **VERIFY** — Parity check against `TRIAGE.md` (every ID accounted for) + conformance check against conventions; report gaps honestly.
+> 4. **SEQUENCE** — Order the work by dependency (constants -> clients -> data providers -> view providers -> registerTrees -> commands -> wizards -> package.json -> tests). Emit `MIGRATION-PLAN.md`, each task tagged with its `TRIAGE.md` ID, and commit it with `TRIAGE.md` as the PR's **first commit**.
+> 5. **IMPLEMENT** — Sweep for shared primitives first, then build feature-by-feature against a precedent product, conforming to standards; lint/build/test each slice; re-sweep after every rebase from `main`.
+> 6. **VERIFY** — Artifacts tracked, parity check against `TRIAGE.md` (every ID accounted for) + conformance check against conventions; report gaps honestly.
 
 ---
 
@@ -79,7 +93,7 @@ verified against — every feature must end up with an explicit disposition.
 
 | # | Action | Reference |
 |---|--------|-----------|
-| 1 | Locate the source `INVENTORY.md`. If missing, run the inventory skill first. Record the source repo + commit SHA it was taken from. | [intake.md](references/intake.md) |
+| 1 | Confirm a **committed, tracked** `docs/migrations/<service>/INVENTORY.md` exists (`git ls-files` it — an untracked or session-only file is a hard stop). If missing, run the inventory skill and commit its output first. Record the source repo + commit SHA it was taken from. | [intake.md](references/intake.md) |
 | 2 | Identify the target extension package (`extensions/vscode-azure`) and read the pattern docs (`docs/{commands,tree-views,wizard,resource-creation,dependency-injection,conventions,azure-clients}.md`). | [intake.md](references/intake.md) |
 | 3 | Pick a **precedent product** already migrated (`acr`, `functions`, `deploy`, `auth`, `tools`) whose shape most resembles the source; you will mirror its layout. | [target-patterns.md](references/target-patterns.md) |
 
@@ -93,7 +107,7 @@ verified against — every feature must end up with an explicit disposition.
 | # | Action | Reference |
 |---|--------|-----------|
 | 1 | Build a triage table: one row per inventory feature, each with a **stable ID** (`<PRODUCT>-NNN`), a **recommended** disposition + one-line rationale (you recommend; the human decides). | [triage.md](references/triage.md) |
-| 2 | Pre-flag features that **do not map 1:1** (deployment -> azd+Bicep, custom trees -> providers, vendored clients -> azutils/shared packages, dead/orphan -> Drop). | [does-not-map.md](references/does-not-map.md) |
+| 2 | Pre-flag features that **do not map 1:1** (deployment -> azd+Bicep, custom trees -> providers, vendored clients -> azutils/shared packages, dead/orphan -> Drop) and features that cross an **ownership boundary** (azd's `azure.yaml` and scaffolding, anything that calls into the extension being retired). | [does-not-map.md](references/does-not-map.md) |
 | 3 | Present the table to the human. Capture their decisions + rationale verbatim. Iterate until they explicitly sign off. | [triage.md](references/triage.md) |
 | 4 | On sign-off, write the decisions to **`TRIAGE.md`** in the tracked `docs/migrations/<service>/` folder (beside `INVENTORY.md`) and **commit it on its own** (separate from feature code). This committed artifact is the read-only source of truth for Phases 3-6 — dispositions are never changed in-flight, only by editing `TRIAGE.md` and re-confirming. | [triage.md](references/triage.md) |
 
@@ -120,6 +134,8 @@ verified against — every feature must end up with an explicit disposition.
 |---|--------|-----------|
 | 1 | Order features by dependency so each slice compiles on top of the last. | [sequencing.md](references/sequencing.md) |
 | 2 | Emit `MIGRATION-PLAN.md`: ordered, checkbox tasks grouped by slice, each tagged with its **`TRIAGE.md` ID** and linked to a target pattern. | [sequencing.md](references/sequencing.md) |
+| 3 | Commit `MIGRATION-PLAN.md` beside the signed `TRIAGE.md` in `docs/migrations/<service>/`. **These artifacts are the PR's first commit** — no feature code lands before them. | [sequencing.md](references/sequencing.md) |
+| 4 | Agree the **drift protocol** for this branch: migrations are long-lived, so every rebase/merge from `main` re-runs the shared-primitive sweep over already-landed slices. | [sequencing.md](references/sequencing.md) |
 
 ---
 
@@ -127,15 +143,19 @@ verified against — every feature must end up with an explicit disposition.
 
 | # | Action | Reference |
 |---|--------|-----------|
-| 1 | Implement one slice at a time, copying the **shape** (not the code) of the precedent product. Conform to `docs/conventions.md` on every file. | [implementation.md](references/implementation.md) |
-| 2 | Wire DI, register providers/commands, contribute to `package.json` + `package.nls.json`, localize strings, add the copyright header. | [implementation.md](references/implementation.md), [target-patterns.md](references/target-patterns.md) |
-| 3 | Lint + build + test the smallest scope that covers the slice before moving on. | [implementation.md](references/implementation.md) |
+| 1 | **Shared-primitive sweep (before writing anything).** Search `packages/utils/src`, `packages/azutils/src`, `extensions/vscode-azure/src`, and both testing barrels for the concept behind every helper, utility, service, wizard step, or fixture the slice needs. Record "reused `<symbol>`" or "searched `<terms>`, none exists" in the mapping record. | [implementation.md](references/implementation.md) |
+| 2 | Implement one slice at a time, copying the **shape** (not the code) of the precedent product. Conform to `docs/conventions.md` on every file. | [implementation.md](references/implementation.md) |
+| 3 | Wire DI, register providers/commands, contribute to `package.json` + `package.nls.json`, localize strings, add the copyright header. Justify every new `activationEvents` entry against the **activation budget**. | [implementation.md](references/implementation.md), [target-patterns.md](references/target-patterns.md) |
+| 4 | Verify every **external fact** written as authority (CLI minimum versions, file/schema names, URLs, package names, existing assets) against a real source, and record the source. | [implementation.md](references/implementation.md) |
+| 5 | Lint + build + test the smallest scope that covers the slice before moving on. Product docs go to `docs/products/<product>.md`, never into the framework docs. | [implementation.md](references/implementation.md) |
+| 6 | After every rebase/merge from `main`, re-run the sweep over already-landed slices per the drift protocol. | [sequencing.md](references/sequencing.md) |
 
 ---
 
 ## Phase 6: Verify
 
-Run the checklist in [verification.md](references/verification.md). Trace **every `TRIAGE.md` ID** to an
+Run the checklist in [verification.md](references/verification.md). First confirm the three process artifacts
+are present and tracked, then trace **every `TRIAGE.md` ID** to an
 outcome: kept features (Migrate/Adapt/Reuse) to landed code, Drop rows to a confirmed absence, Defer rows to
 a tracked item in `MIGRATION-PLAN.md`. Any inventory feature missing from `TRIAGE.md`, or any kept row with
 no landed code, is a gap. New code must pass lint/build/test and conform to conventions. Report gaps instead
@@ -147,9 +167,10 @@ of hiding them.
 
 | Artifact | Contents |
 |----------|----------|
-| `TRIAGE.md` (committed) | The signed-off decision record: every inventory feature with a stable ID, final disposition, rationale, and sign-off header. Read-only source of truth for Phases 3-6. |
-| `MIGRATION-PLAN.md` | Dependency-ordered, checkboxed implementation plan; each task tagged with its `TRIAGE.md` ID and a target pattern. |
+| `docs/migrations/<service>/TRIAGE.md` (committed) | The signed-off decision record: every inventory feature with a stable ID, final disposition, rationale, and sign-off header. Read-only source of truth for Phases 3-6. |
+| `docs/migrations/<service>/MIGRATION-PLAN.md` (committed) | Dependency-ordered, checkboxed implementation plan; each task tagged with its `TRIAGE.md` ID and a target pattern; carries the drift-protocol log. |
 | Migrated code | New feature code in `extensions/vscode-azure` (+ `packages/azutils`), conforming to monorepo patterns |
+| Product doc | `docs/products/<product>.md` — the one place product-specific documentation lives |
 | Parity report | `TRIAGE.md` ID -> disposition/landed-code coverage, with any gaps called out |
 
 ---

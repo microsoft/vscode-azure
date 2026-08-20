@@ -44,6 +44,12 @@ Before declaring the inventory done, confirm each item. Report gaps explicitly r
 - [ ] If the inventory is going to a **tracked/committed** folder, raw telemetry numbers are **redacted** —
       qualitative signal + suggestion + query link only; full counts kept in the session copy.
 
+## Placement (the artifact must survive)
+- [ ] The inventory is written to the tracked path `docs/migrations/<service>/INVENTORY.md` (not only a
+      session/scratch dir) and is **committed**. `git status` shows it tracked, not untracked.
+- [ ] The committed copy is the redacted one; the raw-number copy exists only in the session artifacts dir.
+- [ ] Both paths were printed.
+
 ## Header hygiene
 - [ ] Repo + exact commit SHA + version recorded at the top.
 

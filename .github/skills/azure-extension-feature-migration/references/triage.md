@@ -66,14 +66,17 @@ These are **not** user features, so they need a deliberate call:
 Use these to pre-fill the **recommended** column. They are defaults, not decisions.
 
 - **Deployment / provisioning / "create resource" commands** -> **Adapt** to azd+Bicep. Never recommend porting ARM-deploy code. See [does-not-map.md](does-not-map.md).
-- **App-settings / connection-strings features** -> **Migrate** by rebuilding against the Functions app-settings precedent. There is **no** shared package yet, so this is a rebuild-from-precedent, **not** wire-only Reuse (the inventory's contextValues like `applicationSettings.*<product>` are the tell). See [does-not-map.md](does-not-map.md) #5.
+- **Application settings / connection strings** -> **Reuse** the shared settings framework: implement one `SettingsAdapter` and bind it; the framework supplies the tree node, the JSONC editor, and the edit command. Never rebuild a product-specific settings UI or per-setting commands. See [does-not-map.md](does-not-map.md) #5 and `docs/settings.md`.
 - **Sign-in / account / subscription / tenant filtering** -> **Reuse** the existing auth + account providers.
 - **"Open in portal", resource-group grouping** -> **Reuse** generic commands/providers already in the tree.
 - **Tree nodes** -> **Migrate** as `DataProvider` + `ViewProvider`, but the *construction* is Adapt-shaped (no per-node classes). Flag in [does-not-map.md](does-not-map.md).
 - **Dead / orphan NLS keys and unused contributions** (inventory marked DEAD) -> **Drop**.
 - **Code-only / exported-API surfaces** (e.g. a `RemoteRepoApi`) -> usually **Drop** or **Defer** unless a monorepo consumer needs them; call out explicitly.
-- **Debuggers, task providers, problem matchers, framework detectors, CLI lifecycle** -> **judgment call** — these are the features most likely to be **Adapt** or **Drop** depending on whether the platform now owns them. Never silently assume; present the tradeoff.
-- **Settings** -> **Migrate** the ones that back a kept feature; **Drop** settings whose feature is dropped.
+- **Debuggers, task providers, problem matchers, framework detectors, CLI lifecycle** -> **judgment call** — these are the features most likely to be **Adapt** or **Drop** depending on whether the platform now owns them. Never silently assume; present the tradeoff. Their **activation cost** is part of the tradeoff: a debug provider or `workspaceContains` glob charges every user of the extension, including those who never touch this product.
+- **Anything that writes, parses, or scaffolds a file another tool owns** (`azure.yaml`, azd templates, build presets) -> **Drop** / **Defer**, or an upstream contribution. See [does-not-map.md](does-not-map.md) #8.
+- **Anything that only works by calling into the extension being retired** -> **Defer**, naming the capability the monorepo is missing. Never **Migrate** a dependency on an extension we are deleting.
+- **Commands whose value is incidental** (uninstall-the-CLI, reveal-in-tree, refresh-this-node, help links the platform already offers) -> **Drop** by default. "The source shipped it" is not a rationale; state what the user actually loses without it and let the human decide.
+- **Settings** -> **Migrate** the ones that back a kept feature; **Drop** settings whose feature is dropped. A setting that stores project/deployment configuration is a **Drop** even if its feature is kept — that data belongs in `azure.yaml`.
 
 ## The triage table (present this to the human)
 
@@ -113,8 +116,7 @@ Rules for the table:
 
 The signed-off table is not a scratch note; it is the **committed source of truth** for the whole migration.
 The moment the human signs off, write it to `TRIAGE.md` in the migration's **tracked artifacts folder** in the
-target repo — `docs/migrations/<service>/` (the same folder as `INVENTORY.md`; if the inventory is still in a
-session/scratch dir, move it here first so all migration artifacts are committed together). Then **commit it
+target repo — `docs/migrations/<service>/`, the same folder as the committed `INVENTORY.md`. Then **commit it
 as its own change**, separate from any feature code. Treat it like a decision record (ADR): it is
 read-only to every later phase, and the only way to change a disposition is to edit `TRIAGE.md` and re-confirm
 with the human — never silently in-flight while implementing.
