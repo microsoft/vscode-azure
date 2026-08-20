@@ -18,7 +18,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged, type ServiceIdentifier } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../constants';
-import { createSubscriptionFilter, type SelectedSubscriptionsFilter } from '../../utils/subscriptionFilter';
+import { createSubscriptionFilter } from '../../utils/subscriptionFilter';
 
 /**
  * Identifier for the root account/tenant/subscription data provider. Bound as a
@@ -199,13 +199,13 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             return this.listAccounts();
         }
 
-        const filter = this.filter();
+        const filter = createSubscriptionFilter(this.ctx.code);
 
         if (isAccount(resource)) {
             // Excluded tenants are skipped by the cache itself, so no
             // tenant-scoped token is minted for them and their subscriptions are
             // never listed.
-            return this.listings.listTenants(resource, { filter: filter?.admitsTenant });
+            return this.listings.listTenants(resource, filter?.admitsTenant);
         }
 
         if (isTenant(resource)) {
@@ -282,11 +282,6 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         Disposable.disposeAll(this.disposables);
     }
 
-    /** The filter currently configured, or `undefined` when nothing is filtered. */
-    private filter(): SelectedSubscriptionsFilter | undefined {
-        return createSubscriptionFilter(this.ctx.code);
-    }
-
     /** List accounts and record the resulting id set for session reconciliation. */
     private async listAccounts(): Promise<AzureAccount[]> {
         const accounts = await this.listings.listAccounts();
@@ -300,13 +295,12 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
      * the set of accounts actually changed**.
      *
      * The question "did the account set change?" cannot be asked of the cached
-     * listing -- it would replay the memo and always answer "no" -- so this goes
-     * through {@linkcode AzureListingCache.refreshAccounts refreshAccounts},
-     * which discards *only* the accounts listing and seeds the fresh result back
-     * in. The re-list this triggers is therefore served from cache, and the
-     * tenants and subscriptions already fetched under accounts that are still
-     * signed in stay cached: a new account signing in does not make another
-     * account's tenants untrue.
+     * listing -- it would replay the memo and always answer "no" -- so this
+     * discards *only* the accounts listing and seeds the fresh result back in.
+     * The re-list this triggers is therefore served from cache, and the tenants
+     * and subscriptions already fetched under accounts that are still signed in
+     * stay cached: a new account signing in does not make another account's
+     * tenants untrue.
      *
      * An account that signed out is left cached: it has dropped out of the
      * accounts listing, so nothing beneath it is reachable any more, and
@@ -324,7 +318,11 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             this.ignoreSessionChangesUntil = Date.now() + SelfInducedSessionEventMs;
             let accounts: AzureAccount[];
             try {
-                accounts = await this.listings.refreshAccounts();
+                // Discard first: asking the memo would replay it and always
+                // answer "no change". The fresh result is seeded back, so the
+                // re-list this triggers is served from cache.
+                this.listings.reenumerateAccounts();
+                accounts = await this.listings.listAccounts();
             } finally {
                 this.ignoreSessionChangesUntil = Date.now() + SelfInducedSessionEventMs;
             }

@@ -7,7 +7,7 @@ import type { AccessToken, TokenCredential } from '@azure/core-auth';
 import { CaselessSet, EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { isAzureSubscription, type AzureAccount, type AzureSubscription, type AzureTenant } from '../src/auth/AzureSubscription';
+import { isAzureSubscriptionTarget, type AzureAccount, type AzureSubscription, type AzureTenant } from '../src/auth/AzureSubscription';
 import type { ICredentialFactory } from '../src/auth/CredentialFactory';
 import type { IAzureListingFetcher } from '../src/auth/listing/AzureListingFetcher';
 import type { VsCodeExtensionCredential } from '../src/auth/VsCodeExtensionCredential';
@@ -125,7 +125,7 @@ export function createMockCredentialFactory(options?: MockCredentialFactoryOptio
     const token = options?.token ?? 'mock-token';
 
     return mock.fn<ICredentialFactory>((input) => {
-        const scope = isAzureSubscription(input)
+        const scope = isAzureSubscriptionTarget(input)
             ? { tenantId: input.tenantId, accountId: input.accountId, silent: false }
             : { tenantId: input?.tenantId, accountId: input?.sessionOptions?.account?.id, silent: input?.sessionOptions?.silent ?? false };
 

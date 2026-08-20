@@ -49,12 +49,11 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const abortCtl = new AbortController();
         const trackedIds = new CaselessSet();
 
-        // The hydrated tenant (when the env was fully configured) is the owning
-        // tenant of the subscription this provision targets -- forward it as a
-        // resolution hint for the deployments we discover. When the subscription
-        // was picked interactively it also carries its owning account -- forward
-        // that account id as an additional resolution hint.
-        const tenantId = context.hydratedTenantId;
+        // Scope the deployments we discover to the subscription this provision
+        // targets. A picked subscription names both its tenant and its account;
+        // a hydrated env names only the tenant (AZURE_TENANT_ID), which is
+        // enough to pin the token's authority.
+        const tenantId = context.subscription?.tenantId ?? context.hydratedTenantId;
         const accountId = context.subscription?.accountId;
 
         // Start polling in the background (fire-and-forget)
@@ -98,10 +97,9 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     /**
      * Reads the deployment ID file and starts tracking any entries
      * not already in {@linkcode trackedIds}. Best-effort: silently
-     * ignores missing files and parse errors. The activity provider
-     * resolves each deployment's subscription on demand, using the
-     * optional {@linkcode tenantId} and {@linkcode accountId} hints to speed up
-     * resolution.
+     * ignores missing files and parse errors. The optional
+     * {@linkcode tenantId} and {@linkcode accountId} scope the token each
+     * deployment's ARM requests are made with.
      */
     private async readAndTrack(fileUri: vscode.Uri, trackedIds: CaselessSet, tenantId?: string, accountId?: string): Promise<void> {
         const entries = await this.readDeploymentIdFile(fileUri);

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    type AzureSubscription,
+    type AzureSubscriptionTarget,
     type ConcreteAzureNode,
     type ConcreteAzureNodeTree,
     ICredentialFactory,
@@ -36,28 +36,6 @@ export type IAzureViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');
 export type IAzureResourceTreeView = vscode.TreeView<string>;
-
-/**
- * Identifier for a resolver that maps a bare subscription id to a fully-populated
- * {@linkcode AzureSubscription}, reading the shared Azure listing cache.
- *
- * Lets activity-tree components (e.g. the ARM deployment provider) obtain an
- * authenticatable subscription handle without taking a direct dependency on the
- * resource tree -- resolution must not depend on what a view has loaded, how far
- * a listing has been paged, or whether a refresh is in flight.
- *
- * Resolution is subject to the same subscription filter as the tree, so a
- * subscription in a tenant the user deselected does not resolve: `undefined` is
- * returned and the dependent feature degrades quietly. That is deliberate --
- * resolving it would mean minting a token for a tenant the user excluded
- * precisely to stop being prompted.
- *
- * An optional `tenantId` hint narrows the lookup to a single tenant when the
- * owning tenant is known (e.g. hydrated from azd). An optional `accountId` hint
- * likewise narrows it to a single account.
- */
-export const ISubscriptionResolver: ServiceIdentifier<ISubscriptionResolver> = Symbol.for('ISubscriptionResolver');
-export type ISubscriptionResolver = (subscriptionId: string, tenantId?: string, accountId?: string) => Promise<AzureSubscription | undefined>;
 
 // #endregion
 
@@ -112,22 +90,30 @@ export function pushDisposable<T>(context: Pick<ResolutionContext, 'get'>, injec
  */
 export type ProviderEntry<T> = Newable<T> | readonly [ServiceIdentifier<T>, Newable<T>];
 
-/** Signature shared by subscription-scoped Azure REST client `create` methods. */
-export type AzureClientCreate<TResult> = (
+/**
+ * Signature shared by subscription-scoped Azure REST client `create` methods.
+ *
+ * Generic in the subscription shape because clients need different amounts of
+ * it: issuing requests needs only an {@linkcode AzureSubscriptionTarget}, while
+ * a client that stamps the subscription onto what it returns (so the tree can
+ * build node ids from it) needs a listed {@linkcode AzureSubscription}. Each
+ * provider declares which, and gets exactly that.
+ */
+export type AzureClientCreate<TResult, TSubscription extends AzureSubscriptionTarget> = (
     context: ICodeContext,
     executor: IActionExecutor,
     credential: TokenCredential,
-    subscription: AzureSubscription,
+    subscription: TSubscription,
 ) => TResult;
 
 /**
  * Bind a subscription-scoped Azure client provider unless another product
  * already registered the same shared provider.
  */
-export function bindAzureClientProvider<TResult>(
+export function bindAzureClientProvider<TResult, TSubscription extends AzureSubscriptionTarget>(
     container: Container,
-    providerId: ServiceIdentifier<(subscription: AzureSubscription) => TResult>,
-    create: AzureClientCreate<TResult>,
+    providerId: ServiceIdentifier<(subscription: TSubscription) => TResult>,
+    create: AzureClientCreate<TResult, TSubscription>,
 ): void {
     if (container.isBound(providerId)) {
         return;
@@ -137,7 +123,7 @@ export function bindAzureClientProvider<TResult>(
         const codeContext = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription: AzureSubscription) => create(
+        return (subscription: TSubscription) => create(
             codeContext,
             executor,
             credentialFactory(subscription),

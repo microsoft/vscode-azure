@@ -27,7 +27,6 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { ISubscriptionResolver } from '../services';
 import {
     AzureAccountDataProvider,
     IAzureAccountDataProvider,
@@ -38,7 +37,6 @@ import { IResourceSelector, ResourceSelector } from '../tree/resources/ResourceS
 import { azdDetector } from '../tree/workspace/azd/AzdWorkspaceDataProvider';
 import { CredentialOptionsScope, ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
 import { signedInTenantIdsFor } from '../utils/signedInTenants';
-import { createSubscriptionFilter } from '../utils/subscriptionFilter';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /**
@@ -75,26 +73,6 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
                 context.get(IActionExecutor),
                 { additionalTenantIds: account => signedInTenantIdsFor(code, account.id) },
             );
-        }).inSingletonScope();
-
-        container.bind(ISubscriptionResolver).toDynamicValue(context => {
-            const code = context.get(IVsCode);
-            const listings = context.get(IAzureListingCache);
-            const scope = context.get(ICredentialOptionsScope);
-            return (subscriptionId: string, tenantId?: string, accountId?: string) => {
-                // Resolution happens in the background, for tenants the user
-                // never opened, so any credential minted along the way must be
-                // silent -- and it reads through the same filter the tree uses,
-                // so a deselected tenant is not walked at all.
-                return scope.run(
-                    { sessionOptions: { silent: true } },
-                    () => listings.findSubscription(subscriptionId, {
-                        tenantId,
-                        accountId,
-                        filter: createSubscriptionFilter(code)?.admitsTenant,
-                    }),
-                );
-            };
         }).inSingletonScope();
 
         container.bind(ISubscriptionClientProvider).toFactory(context => {

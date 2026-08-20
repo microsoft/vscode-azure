@@ -135,7 +135,8 @@ export class SignIn implements ManagedCommand {
      */
     private async refreshAccounts(): Promise<void> {
         try {
-            await this.listings.refreshAccounts();
+            this.listings.reenumerateAccounts();
+            await this.listings.listAccounts();
         } catch {
             // Deliberately ignored; see above.
         }

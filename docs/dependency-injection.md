@@ -224,7 +224,9 @@ bindAzureClientProvider(
 );
 ```
 
-The resulting `IResourceClientProvider` type is a `SyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `IResourceClient` directly. This matches `ResourceClient.create(...)`, which is synchronous. The sibling `AsyncFactory<T, TArgs>` type (same shape but returns `Promise<T>`) is used for providers whose `create()` is async. Both types are defined in `packages/utils/src/types/Factory.ts`. See [Azure Clients](azure-clients.md) for details on the client wrappers.
+The resulting `IResourceClientProvider` type is a `SyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `IResourceClient` directly. This matches `ResourceClient.create(...)`, which is synchronous. The sibling `AsyncFactory<T, TArgs>` type (same shape but returns `Promise<T>`) is used for providers whose `create()` is async. Both types are defined in `packages/utils/src/types/Factory.ts`.
+
+The helper is generic in the subscription argument, constrained to `AzureSubscriptionTarget`, so a provider whose client needs only an endpoint and a token (`IDeploymentClientProvider`) binds through the same call as one that needs a listed subscription. See [Azure Clients](azure-clients.md) for details on the client wrappers and which need which.
 
 The same pattern handles any class that needs **both** injected services and caller-supplied arguments — for example `GenerateBicepStep`, which needs an injected `ICodeContext` plus a per-command template name and parameter keys. `IGenerateBicepStepFactory` is bound with `.toFactory()`; it captures `ICodeContext` and returns a function taking the config, so the step is fully constructed in one call and its config fields stay `readonly`.
 

@@ -16,7 +16,7 @@ import {
 import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import type { AzureSubscription } from '../../auth/AzureSubscription';
+import type { AzureSubscriptionTarget } from '../../auth/AzureSubscription';
 import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
@@ -29,9 +29,16 @@ export type ProvisioningOperation = SdkProvisioningOperation;
 export type ProvisioningState = SdkProvisioningState;
 export { SdkKnownProvisioningState as KnownProvisioningState };
 
-/** Factory that creates an {@linkcode IDeploymentClient} for a given subscription. */
+/**
+ * Factory that creates an {@linkcode IDeploymentClient} for a given subscription.
+ *
+ * Takes an {@linkcode AzureSubscriptionTarget} rather than a listed
+ * {@linkcode AzureSubscription}, because a deployment is tracked by its ARM id
+ * -- the caller may know only the subscription it names and the cloud it lives
+ * in, having never enumerated the hierarchy.
+ */
 export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');
-export type IDeploymentClientProvider = SyncFactory<IDeploymentClient, [AzureSubscription]>;
+export type IDeploymentClientProvider = SyncFactory<IDeploymentClient, [AzureSubscriptionTarget]>;
 
 /**
  * Interface describing the deployment APIs we use.
@@ -63,7 +70,7 @@ export class DeploymentClient implements IDeploymentClient {
         ctx: ICodeContext,
         executor: IActionExecutor,
         credential: TokenCredential,
-        subscription: AzureSubscription,
+        subscription: AzureSubscriptionTarget,
         options?: DeploymentsClientOptionalParams,
     ): DeploymentClient {
         const context = createArmRestSubscriptionClient(

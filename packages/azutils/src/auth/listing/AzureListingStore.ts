@@ -5,9 +5,7 @@
 
 import { CaselessMap, type Page } from '@microsoft/vscode-azure-utils';
 import type { AzureAccount, AzureTenant } from '../AzureSubscription';
-import type { EnvironmentLike } from '../Environment';
 import type { AzureListingNode } from '../../models/AzureNode';
-import { isTenant } from '../../models/AzureNode';
 import { CachedPagedListing } from './CachedPagedListing';
 
 /**
@@ -22,16 +20,15 @@ import { CachedPagedListing } from './CachedPagedListing';
 export const AzureListingRootKey = '';
 
 /**
- * Distinguishes one cloud's listings from another's.
+ * A parent whose children are a cached listing: an account (whose children are
+ * tenants) or a tenant (whose children are subscriptions).
  *
- * The resource-manager endpoint alone: it is what the listings were actually
- * fetched from, so two clouds that share it hold the same data whatever they are
- * called, and a custom cloud whose endpoint the user edits gets a new key
- * without having to rename it.
+ * The tenant side is a {@linkcode Pick} rather than a whole
+ * {@linkcode AzureTenant} because a caller may hold only ids -- a tenant the
+ * user named by hand is never part of a cached tenant listing, yet its
+ * subscriptions are cached like any other's.
  */
-function environmentKey(environment: EnvironmentLike): string {
-    return environment.resourceManagerEndpointUrl;
-}
+export type AzureListingParent = AzureAccount | Pick<AzureTenant, 'environment' | 'accountId' | 'tenantId'>;
 
 /**
  * Build the key of the listing whose children are the given parent's -- an
@@ -41,33 +38,31 @@ function environmentKey(environment: EnvironmentLike): string {
  * The environment leads the key so listings from different clouds coexist rather
  * than collide, which is what lets a cloud switch discard nothing: the same
  * account id can be issued by both the public and the sovereign auth provider,
- * and the data behind it is entirely different.
+ * and the data behind it is entirely different. It is identified by its
+ * resource-manager endpoint alone -- that is what the listings were actually
+ * fetched from, so two clouds sharing it hold the same data whatever they are
+ * called, and a custom cloud whose endpoint the user edits gets a new key
+ * without having to be renamed.
  *
  * Each segment is percent-encoded before being joined, because a VS Code
  * authentication account id is an opaque provider string that may itself
  * contain a `/` -- which would otherwise let one account's key masquerade as
- * another account's descendant and make prefix eviction delete the wrong
- * entries.
+ * another account's descendant.
  *
  * Keys are compared case-insensitively by {@linkcode AzureListingStore}, so the
  * casing each id arrives with is preserved rather than folded here.
  */
-export function azureListingKeyFor(environment: EnvironmentLike, accountId: string, tenantId?: string): string {
-    const segments = [environmentKey(environment), accountId, ...(tenantId === undefined ? [] : [tenantId])];
+export function azureListingKey(parent: AzureListingParent): string {
+    const segments = 'tenantId' in parent
+        ? [parent.environment.resourceManagerEndpointUrl, parent.accountId, parent.tenantId]
+        : [parent.environment.resourceManagerEndpointUrl, parent.id];
     return segments.map(segment => encodeURIComponent(segment)).join('/');
-}
-
-/** Build the key of the listing holding this node's children. See {@linkcode azureListingKeyFor}. */
-export function azureListingKey(node: AzureAccount | AzureTenant): string {
-    return isTenant(node)
-        ? azureListingKeyFor(node.environment, node.accountId, node.tenantId)
-        : azureListingKeyFor(node.environment, node.id);
 }
 
 /**
  * The **unfiltered** cache behind {@linkcode AzureListingCache}: one paged
  * listing per parent, keyed by that parent's hierarchical id (see
- * {@linkcode azureListingKeyFor}).
+ * {@linkcode azureListingKey}).
  *
  * The listings are the whole cache -- there is no second index of individual
  * nodes, so a node cannot be reached except by descending through the listing

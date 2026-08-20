@@ -220,6 +220,20 @@ const client = this.getResourceClient(subscription);
 const resources = client.resources.listByResourceGroup(rgName);
 ```
 
+### How much subscription a client needs
+
+`ResourceClient` takes a full `AzureSubscription` because it stamps that object onto every `GenericResource` it returns, and the tree builds node ids from it. Most clients need far less: `DeploymentClient` is bound as `SyncFactory<IDeploymentClient, [AzureSubscriptionTarget]>`, because naming a deployment by its ARM id says nothing about having listed the hierarchy it lives in.
+
+So `registerAzureClientProvider` (and the `bindAzureClientProvider` / `AzureClientCreate` pair behind it) is generic in the subscription shape, constrained to `AzureSubscriptionTarget`:
+
+```typescript
+registrar.registerAzureClientProvider(IDeploymentClientProvider, (context, executor, credential, subscription) => {
+    return DeploymentClient.create(context, executor, credential, subscription);
+});
+```
+
+The provider's identifier declares the shape, and the `create` callback is checked against it. Every provider goes through this one path regardless — a client that needs less does not get a bespoke binding, and `ICredentialFactory` accepts a target just as it accepts a subscription.
+
 Each client wrapper exposes an interface (`IResourceClient`, `IDeploymentClient`, `ISubscriptionClient`, `IAcrClient`) that can be mocked in unit tests without needing the real Azure SDK.
 
 ## Type Re-exports
