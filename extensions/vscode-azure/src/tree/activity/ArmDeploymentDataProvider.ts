@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createHttpPoller, type OperationResponse, type OperationState } from '@azure/core-lro';
 import {
     getConfiguredAzureEnv, IDeploymentClientProvider, KnownProvisioningState, parseAzureResourceId,
-    type AzureSubscriptionTarget, type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
+    type AzureSubscriptionTarget, type DeploymentExtended, type DeploymentOperation, type IDeploymentClient,
+    type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    CaselessMap, CaselessSet, delay, Disposable, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
+    CaselessMap, CaselessSet, Disposable, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
     type DataProvider, type DataProviderChangeEvent
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
@@ -21,6 +23,18 @@ export const IArmDeploymentDataProvider: ServiceIdentifier<ArmDeploymentDataProv
 export type IArmDeploymentDataProvider = ArmDeploymentDataProvider;
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
+const DefaultPollingIntervalMs = 10 * 1000;
+/**
+ * How many back-to-back failed poll requests are tolerated before tracking is
+ * abandoned. Bounded so a deployment that has become permanently unreachable
+ * (deleted, or access revoked) stops issuing requests forever.
+ */
+const MaxConsecutivePollFailures = 5;
+
+/** Running count of consecutive failed poll requests, shared across one poller's requests. */
+interface PollFailureState {
+    consecutive: number;
+}
 
 /**
  * An {@linkcode Activity} representing a single ARM deployment (root or nested).
@@ -190,9 +204,9 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
     }
 
     /**
-     * Poll a deployment's status and refresh its operations. Fires targeted
-     * change events based on whether the operation count changed. The client
-     * resolved by {@linkcode enrich} is reused for this poll loop's lifetime.
+     * Track a deployment with the Azure SDK LRO poller and refresh its operations
+     * after each status response. The client resolved by {@linkcode enrich} is
+     * reused for this poller's lifetime.
      */
     private async poll(activity: ArmDeploymentActivity, client: IDeploymentClient): Promise<void> {
         try {
@@ -200,83 +214,112 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
             abortSignal.throwIfAborted();
 
             this.activePolls.add(activity.id);
+            const failures: PollFailureState = { consecutive: 0 };
+            const poller = createHttpPoller<undefined, OperationState<undefined>>(
+                {
+                    sendInitialRequest: () => this.pollOnce(client, activity, abortSignal, failures),
+                    sendPollRequest: () => this.pollOnce(client, activity, abortSignal, failures),
+                },
+                {
+                    intervalInMs: DefaultPollingIntervalMs,
+                    // A failed or canceled deployment is a normal terminal outcome
+                    // for a tracker, so resolve on it instead of rejecting.
+                    resolveOnUnsuccessful: true,
+                },
+            );
 
-            while (!abortSignal.aborted) {
-                let nextPollMs = 10 * 1000; // Default to 10s if server doesn't provide guidance
-                this.executor.output.debug(`[activity] poll cycle start deployment=${activity.id}`);
-
-                try {
-                    await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
-                        context.telemetry.suppress = 'onSuccess';
-                        context.telemetry.isUserEvent = false;
-                        context.errorHandling.rethrow = true;
-
-                        const [deployment, operations] = await Promise.all([
-                            client.deployments.getAtScope(
-                                activity.scope,
-                                activity.deploymentName,
-                                {
-                                    abortSignal,
-                                    onResponse: (response) => {
-                                        const retryAfter = response.headers.get('retry-after');
-                                        if (retryAfter) {
-                                            const seconds = parseInt(retryAfter, 10);
-                                            if (!isNaN(seconds) && seconds > 0) {
-                                                nextPollMs = seconds * 1000;
-                                            }
-                                        }
-                                    },
-                                },
-                            ),
-                            this.fetchOperations(client, activity, abortSignal),
-                        ]);
-
-                        abortSignal.throwIfAborted();
-
-                        const provisioningState = deployment.properties?.provisioningState;
-                        if (provisioningState) {
-                            const previousStatus = activity.status;
-                            activity.status = toActivityStatus(provisioningState);
-                            activity.description = provisioningState;
-                            if (activity.status !== previousStatus) {
-                                this.executor.output.debug(`[activity] deployment status transition deployment=${activity.id} status=${activity.status}`);
-                            }
-                        }
-
-                        // Detect structural changes in operations
-                        const prevCount = activity.operations?.length ?? 0;
-                        activity.operations = operations;
-                        const includeChildren = operations.length !== prevCount;
-
-                        if (isTerminalState(provisioningState)) {
-                            activity.endTime = new Date();
-                            this.executor.output.debug(`[activity] deployment reached terminal status deployment=${activity.id} status=${activity.status}`);
-                            this.onDidChangeEmitter.fire({ target: includeChildren ? activity : selfOnly(activity) });
-                            return;
-                        }
-
-                        this.onDidChangeEmitter.fire({ target: includeChildren ? activity : selfOnly(activity) });
-                    });
-
-                    // Exit the loop if the deployment reached a terminal state
-                    if (isTerminalActivityStatus(activity.status)) {
-                        return;
-                    }
-                } catch (error) {
-                    abortSignal.throwIfAborted();
-                    // Swallow other probably-transient errors and retry on next poll
-                    const message = stringifyError(error);
-                    this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
-                }
-
-                // Wait for the next poll interval (rejects with CancellationError on abort)
-                await delay(nextPollMs, abortSignal);
+            await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
+                context.telemetry.suppress = 'onSuccess';
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                await poller.pollUntilDone({ abortSignal });
+            });
+        } catch (error) {
+            if (!activity.abortController.signal.aborted) {
+                const message = stringifyError(error);
+                this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
             }
-        } catch {
-            // CancellationError, AbortError, or signal.throwIfAborted -- exit cleanly
         } finally {
             this.activePolls.delete(activity.id);
         }
+    }
+
+    /**
+     * Fetch the deployment's status and operations once, apply them to
+     * {@linkcode activity}, and describe the result to the poller.
+     *
+     * The activity is updated here rather than from the poller's result so that
+     * every response is applied, including the initial one.
+     *
+     * A request failure is treated as transient and reported as still running so
+     * the poller retries on its next interval, up to
+     * {@linkcode MaxConsecutivePollFailures} in a row. Past that the failure is
+     * rethrown, which ends tracking; the activity keeps its last known status and
+     * {@linkcode enrich} starts a fresh poller if the tree is refreshed later. An
+     * abort ends polling immediately and is never counted as a failure.
+     */
+    private async pollOnce(
+        client: IDeploymentClient,
+        activity: ArmDeploymentActivity,
+        abortSignal: AbortSignal,
+        failures: PollFailureState,
+    ): Promise<OperationResponse<undefined>> {
+        this.executor.output.debug(`[activity] poll request deployment=${activity.id}`);
+        let retryAfter: string | undefined;
+
+        try {
+            const [deployment, operations] = await Promise.all([
+                client.deployments.getAtScope(activity.scope, activity.deploymentName, {
+                    abortSignal,
+                    onResponse: response => {
+                        retryAfter = response.headers.get('retry-after');
+                    },
+                }),
+                this.fetchOperations(client, activity, abortSignal),
+            ]);
+
+            abortSignal.throwIfAborted();
+            failures.consecutive = 0;
+            this.applyPollResult(activity, deployment, operations);
+            return toPollResponse(activity, toLroProvisioningState(deployment.properties?.provisioningState), retryAfter);
+        } catch (error) {
+            abortSignal.throwIfAborted();
+            const message = stringifyError(error);
+            this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
+
+            if (++failures.consecutive > MaxConsecutivePollFailures) {
+                this.executor.output.warn(this.code.l10n.t('[activity] giving up tracking deployment={0} after {1} consecutive polling errors', activity.id, failures.consecutive));
+                throw error;
+            }
+
+            // Continue on a transient error: report the deployment as still
+            // running so the poller waits its current interval and retries.
+            return toPollResponse(activity, KnownProvisioningState.Running, retryAfter);
+        }
+    }
+
+    /** Apply a poll result to the activity and fire a targeted change event. */
+    private applyPollResult(activity: ArmDeploymentActivity, deployment: DeploymentExtended, operations: ArmDeploymentOperationActivity[]): void {
+        const provisioningState = deployment.properties?.provisioningState;
+        if (provisioningState) {
+            const previousStatus = activity.status;
+            activity.status = toActivityStatus(provisioningState);
+            activity.description = provisioningState;
+            if (activity.status !== previousStatus) {
+                this.executor.output.debug(`[activity] deployment status transition deployment=${activity.id} status=${activity.status}`);
+            }
+        }
+
+        const previousOperationCount = activity.operations?.length ?? 0;
+        activity.operations = operations;
+        const includeChildren = operations.length !== previousOperationCount;
+
+        if (isTerminalActivityStatus(activity.status)) {
+            activity.endTime = new Date();
+            this.executor.output.debug(`[activity] deployment reached terminal status deployment=${activity.id} status=${activity.status}`);
+        }
+
+        this.onDidChangeEmitter.fire({ target: includeChildren ? activity : selfOnly(activity) });
     }
 
     /**
@@ -462,12 +505,35 @@ function toActivityStatus(provisioningState: ProvisioningState | undefined): Act
     }
 }
 
-function isTerminalState(provisioningState: ProvisioningState | undefined): boolean {
-    return provisioningState === KnownProvisioningState.Succeeded
-        || provisioningState === KnownProvisioningState.Ready
-        || provisioningState === KnownProvisioningState.Deleted
-        || provisioningState === KnownProvisioningState.Failed
-        || provisioningState === KnownProvisioningState.Canceled;
+function toLroProvisioningState(provisioningState: ProvisioningState | undefined): ProvisioningState | undefined {
+    return provisioningState === KnownProvisioningState.Ready || provisioningState === KnownProvisioningState.Deleted
+        ? KnownProvisioningState.Succeeded
+        : provisioningState;
+}
+
+/**
+ * Describes a poll result to the LRO poller.
+ *
+ * The poller only needs the provisioning state to decide whether to keep
+ * polling and the `retry-after` header to pace itself; the deployment itself is
+ * applied to the activity as it arrives, so no payload is carried in
+ * `flatResponse`. `PUT` selects core-lro's Body polling mode, which reads the
+ * status from `properties.provisioningState`.
+ */
+function toPollResponse(
+    activity: ArmDeploymentActivity,
+    provisioningState: ProvisioningState | undefined,
+    retryAfter: string | undefined,
+): OperationResponse<undefined> {
+    return {
+        flatResponse: undefined,
+        rawResponse: {
+            statusCode: 200,
+            request: { method: 'PUT', url: activity.deploymentId },
+            headers: retryAfter ? { 'retry-after': retryAfter } : {},
+            body: { properties: { provisioningState } },
+        },
+    };
 }
 
 /**

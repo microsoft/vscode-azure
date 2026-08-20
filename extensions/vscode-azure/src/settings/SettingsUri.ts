@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
+import type { SettingsNode } from '../tree/resources/settings/SettingsNode';
 
 /** URI scheme under which settings documents are served. */
 export const SettingsScheme = 'azure-settings';
@@ -14,6 +15,8 @@ export const SettingsScheme = 'azure-settings';
 const SettingsFileExtension = '.settings.jsonc';
 
 const HexPattern = /^[0-9a-f]+$/i;
+
+const PathSeparators = /[/\\]/g;
 
 /**
  * Encodes and decodes the `azure-settings:` URIs that address settings documents.
@@ -37,9 +40,16 @@ const HexPattern = /^[0-9a-f]+$/i;
  */
 export const SettingsUri = {
     /** Build the document URI for a settings node. */
-    from(code: IVsCode, node: VirtualResource): vscode.Uri {
+    from(code: IVsCode, node: SettingsNode): vscode.Uri {
         const nodeKey = Buffer.from(AzureNodeId.from(node).toString(), 'utf8').toString('hex');
-        const fileName = `${node.azureResource.name}${SettingsFileExtension}`;
+
+        // A document name is display text and may carry anything a product names a settings owner
+        // after -- ARM names a deployment slot 'site/slot', and a Static Web Apps preview
+        // environment is named after a pull request title. Only a path separator is structural: it
+        // would split the file across two segments and defeat parseNodeKey. Everything else is
+        // percent-encoded on serialization and decoded back byte-for-byte, and an already-encoded
+        // '%2F' double-encodes rather than becoming a separator, so flattening is the whole job.
+        const fileName = `${node.documentName.replace(PathSeparators, '-')}${SettingsFileExtension}`;
 
         return code.Uri.from({ scheme: SettingsScheme, path: `/${nodeKey}/${fileName}` });
     },

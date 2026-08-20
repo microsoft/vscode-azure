@@ -19,7 +19,7 @@ export interface AbortSignalBridge {
 /**
  * Normalizes an optional cancellation source into an {@linkcode AbortSignal}
  * suitable for handing to APIs that speak the DOM abort protocol (e.g.
- * {@linkcode nano-spawn}).
+ * `@azure/core-process`).
  *
  * @remarks
  * - `undefined` yields no signal and {@linkcode Disposable.None}.

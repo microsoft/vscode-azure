@@ -99,13 +99,19 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 
 ## How to Lint, Build, and Test
 
-* Before submitting PRs, always lint, build, and test locally to catch errors early
+* Before submitting a PR, lint, build, and test locally to catch errors early -- that full sweep is the gate, and the judgment below is about which checks are worth repeating on intermediate turns, not about skipping it
 * Run `pnpm run lint` to check for linting errors
 * Run `pnpm run build` to compile TypeScript to JavaScript
 * Run `pnpm run test` to execute tests
 * Run `pnpm run testcov` to run tests with code coverage (via c8)
 * For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
 * **Scope validation to the workspace you changed.** A change confined to `packages/utils` does not need the extension's test suite (which launches VS Code) or the other packages' lints. Run the full `pnpm run lint`/`build`/`test` sweep once before submitting, not after every edit.
+* **Match the validation to what the change could actually break -- use judgment, don't reflexively run all three.** Ask what a given check could possibly catch for *this* edit; if the answer is "nothing", skip it. A check that cannot fail is not evidence, it is latency. Some rules of thumb:
+  - **Only non-source files changed** (`pnpm-workspace.yaml` policy fields, `.vscode/`, CI YAML, `docs/`, `CHANGELOG.md`): ESLint doesn't read them, so linting proves nothing. Validate the thing you actually changed instead -- for a dependency-policy edit that is `pnpm install`, not `tsc`.
+  - **Dependency manifests changed:** if `pnpm-lock.yaml` comes back unchanged, no installed code moved, so a previously-green build and test run still hold. Re-run them only if the lockfile actually changed.
+  - **Comments, JSDoc, or renames within one file:** lint and build cover it; the test suite has nothing new to exercise.
+  - **Source behavior changed:** run the changed workspace's tests, and lint if you touched anything with a plausible rule interaction (new imports, `any`, unused vars, naming).
+* Prefer re-running a check when the *inputs to that check* changed. Re-running a suite that already passed against byte-identical inputs is toil, and it is worth saying so out loud rather than quietly repeating it.
 * `lint` passes `--cache`, so repeat runs are much cheaper. There is a fixed per-invocation floor regardless, so prefer one lint of the changed workspace over several single-file lints.
 * Only the **builds** have dedicated watch scripts (`build:watch` for `utils`/`azutils`, `build:check:watch` and `build:esbuild:watch` for the extension). There is no lint watch, and bare `mocha --watch` does nothing useful in this repo because Mocha only watches `.js`/`.cjs`/`.mjs` by default while the specs are `.ts` — pass `--extension ts` if you want a test watch.
 * The extension has no test watch and no useful test filtering — most of its runtime is the VS Code launch, not the tests, so `--grep` saves very little.
@@ -117,7 +123,7 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * This is a pnpm workspace; its configuration lives in `pnpm-workspace.yaml`.
 * When a dependency is used by more than one workspace package, add it to the pnpm `catalog:` in `pnpm-workspace.yaml` and reference it from each `package.json` with the `"catalog:"` specifier. This keeps every package on a single, consistent version.
 * Keep dependencies that are only used by a single package as a direct version specifier in that package's `package.json` -- don't add them to the catalog, since a catalog entry provides no dedup benefit for a single consumer.
-* After changing any dependency versions or catalog entries, run `pnpm install` to update `pnpm-lock.yaml`, then build to confirm nothing broke.
+* After changing any dependency versions or catalog entries, run `pnpm install` to update `pnpm-lock.yaml`. If the lockfile changed, build to confirm nothing broke; if it came back unchanged, no installed code moved and a previously-green build still holds.
 
 
 ## Writing Tests

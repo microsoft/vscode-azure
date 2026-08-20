@@ -45,7 +45,7 @@
         ]
     },
     "dependencies": {
-        "nano-spawn": "^2.1.0",
+        "@azure/core-process": "^1.0.0",
         "vscode-uri": "^3.1.0"
     },
     "devDependencies": {

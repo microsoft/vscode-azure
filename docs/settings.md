@@ -16,11 +16,11 @@ extensions/vscode-azure/src/commands/settings/         The edit command
 
 `SettingsFileSystemProvider` resolves a document URI to the exact tree node and calls `read`/`write`
 on the adapter attached to that node. The product provider selects the adapter explicitly when it
-calls `getSettingsNodes(resource, adapter)`.
+calls `getSettingsNodes(owner, adapter)`.
 
 ## One command, one surface
 
-The tree shows a single leaf settings node per resource. Selecting it runs the one settings command,
+The tree shows a single leaf settings node per owner. Selecting it runs the one settings command,
 which opens the settings as an editable JSONC document:
 
 ```jsonc
@@ -80,14 +80,30 @@ registrar, and passing it to `getSettingsNodes` from the provider that owns the 
 ```typescript
 export interface SettingsAdapter {
     readonly label: string;
-    canHandle(resource: GenericResource): boolean;
-    read(resource: GenericResource): Promise<SettingsSnapshot>;
-    write(resource: GenericResource, entries: SettingsMap): Promise<void>;
+    canHandle(owner: SettingsOwner): boolean;
+    read(owner: SettingsOwner): Promise<SettingsSnapshot>;
+    write(owner: SettingsOwner, entries: SettingsMap): Promise<void>;
 }
 ```
 
 The product data provider can delegate its own `canHandle` decision to the adapter. Keep that check
 cheap -- a set lookup on `logicalType` is the norm.
+
+### Who owns a settings document
+
+`SettingsOwner` is `GenericResource | VirtualResource`, because settings do not always belong to the
+ARM resource as a whole:
+
+- **The resource owns them.** Call `getSettingsNodes(resource, adapter)`. The node's `owner` is the
+  resource and the document is named after it. This is App Service, Function Apps, and Logic Apps.
+- **A part of the resource owns them.** Call `getSettingsNodes(virtualNode, adapter, documentName)`.
+  The node is keyed beneath that virtual node, so sibling parts each get their own document, and
+  `documentName` is what keeps their editor tabs distinguishable. This is Static Web Apps, where
+  application settings belong to an environment and the site itself has none.
+
+An adapter that only ever serves whole resources should narrow the owner back with a guard and throw
+otherwise, as `WebAppSettingsAdapter` does -- an owner it cannot serve is a wiring bug, and failing
+at the boundary beats issuing a request against the wrong thing.
 
 ### Restricting what a product permits
 
@@ -96,10 +112,10 @@ context values, using the same mechanism as every other tree node. Settings that
 let the user edit set `writable: false` on the snapshot returned from `read`, which makes the editor
 document read-only.
 
-> **Not modeled:** services that refuse to return values on read, per-entry metadata (such as an
-> App Service connection string's database `type`), and more than one settings document per resource.
-> Model these alongside the first adapter that actually needs them, rather than carrying unexercised
-> machinery.
+> **Not modeled:** services that refuse to return values on read, and per-entry metadata -- an App
+> Service connection string's database `type`, or an App Service setting's sticky "deployment slot
+> setting" flag, which lives in a separate `slotConfigNames` resource on the parent site. Model these
+> alongside the first adapter that actually needs them, rather than carrying unexercised machinery.
 
 ## Secrets
 
@@ -111,15 +127,21 @@ document read-only.
 ## Document URIs
 
 ```
-azure-settings:/<nodeKey>/<resourceName>.settings.jsonc
+azure-settings:/<nodeKey>/<documentName>.settings.jsonc
 ```
 
 `<nodeKey>` is the hex-encoded `AzureNodeId` of the settings node -- the data tree's own primary key.
-`SettingsFileSystemProvider` resolves a URI with a single `tree.get(nodeKey)`, so the resource
-passed to the adapter is always **the object the tree loaded from Azure**.
+`SettingsFileSystemProvider` resolves a URI with a single `tree.get(nodeKey)`, so the owner passed to
+the adapter is always **the object the tree loaded from Azure**.
 
 The file name is cosmetic -- it makes the tab readable and selects the `jsonc` language mode. Nothing
-parses meaning out of it.
+parses meaning out of it. It is still arbitrary text, though: a product may name a settings document
+after an ARM child resource (a deployment slot is `site/slot`) or after something a user wrote (a
+Static Web Apps preview environment is named after a pull request title). Path separators are
+therefore flattened to `-`, since they are the one character class that would split the file across
+two path segments. Everything else survives on its own: `?`, `#`, `%`, spaces, and non-ASCII are
+percent-encoded on serialization and decoded back byte-for-byte, and an already-encoded `%2F`
+double-encodes rather than becoming a separator.
 
 Two encoding details are load-bearing:
 
@@ -139,7 +161,7 @@ one resource. The settings framework therefore splits along the resource/virtual
   settings nodes. They are thin tree-framework glue: the data provider reports a leaf, while the
   view provider delegates presentation to `createSettingsTreeItem`.
 - The product-specific provider owns the *resource*, injects its concrete adapter, and calls the pure
-  `getSettingsNodes(resource, adapter)` helper. The resulting virtual node retains that adapter.
+  `getSettingsNodes(owner, adapter)` helper. The resulting virtual node retains that adapter.
 - A product-specific view provider presents the owning resource as expandable. For ordinary ARM
   resources it can delegate shared presentation to `createGenericResourceTreeItem`.
 
@@ -165,8 +187,9 @@ document warns about this directly without adding a confirmation prompt to every
    any SDK types from the wrapper.
 2. Implement `SettingsAdapter` in `extensions/vscode-azure/src/settings/adapters/`.
 3. Bind the concrete adapter in the product registrar.
-4. Have the product data provider inject it and include `getSettingsNodes(resource, adapter)` in the
-   resource's children.
+4. Have the product data provider inject it and include `getSettingsNodes(owner, adapter)` in the
+   owner's children, passing a `documentName` when one resource can have more than one settings
+   document.
 5. Ensure the product view provider renders the owning resource as expandable.
 
 The settings virtual-node behavior, editor, and command then come from the shared framework.
