@@ -13,7 +13,7 @@ Each creation command receives an `AzdJob` that determines how the wizard behave
 
 ## Wizard Context
 
-All azd creation wizards share `AzdWizardContext`. Resource-specific commands extend it (e.g. `CreateFunctionAppContext` adds `runtime`, `runtimeVersion`, `hostingPlan`).
+All azd creation wizards share `AzdWizardContext`. Resource-specific commands extend it (e.g. `CreateFunctionAppContext` adds `functionWorkerRuntime`, `runtimeVersion`, `appServicePlanSkuName`).
 
 ### Core fields
 
@@ -55,7 +55,7 @@ Using `CreateFunctionApp` as the concrete example:
 | 5 | `ProjectNameStep` | Unless `environmentName` set | `environmentName`, `azdServiceName` (if not already hydrated) |
 | 6 | `PickRuntimeStep` | Unless `hasInfra` | `functionWorkerRuntime` |
 | 6a | `PickRuntimeVersionStep` (subprompt of `PickRuntimeStep`) | Unless `hasInfra` or version already set (only shows a pick when the runtime has more than one supported version) | `runtimeVersion` |
-| 7 | `PickHostingPlanStep` | Unless `hasInfra` | `hostingPlan` |
+| 7 | `PickHostingPlanStep` | Unless `hasInfra` | `appServicePlanSkuName` |
 | 8 | `ConfirmProvisionStep` | Only when Bootstrapped | `provision` (may flip to `false`) |
 
 ### Execute steps (in order)

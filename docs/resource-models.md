@@ -56,11 +56,11 @@ interface AzureSubscription extends WithRequired<Subscription, 'subscriptionId' 
 
 **Branded ids, not object embeds.** Tenants and subscriptions reference their owning account by `accountId` rather than embedding an `AzureAccount` object, and a subscription carries its `tenantId` directly rather than embedding an `AzureTenant`. This keeps every node a flat, immutable value object: re-listing one level (e.g. re-listing accounts after an auth-session change) never leaves stale embedded parent objects behind, and callers must not rely on reference equality against a shared account/tenant instance. The producer (`AzureAccountDataProvider`) lowercases `tenantId` and `subscriptionId` (case-insensitive GUIDs) but keeps `accountId` verbatim because it doubles as the VS Code `getSession` identity; case-insensitive cache keys are achieved by lowercasing `accountId`/`tenantId` inside `AzureNodeId.toString()` instead. The account's display label is **not** carried on tenants/subscriptions: `getSession` resolves the account by `id`, so the credential factory passes an empty `label`.
 
-**No credential on the subscription.** Unlike the removed `@microsoft/vscode-azext-azureauth` model, `AzureSubscription` carries no credential or authentication object — only the `environment` (an [`EnvironmentLike`](#environmentlike)) plus ids/displayName/account-id. Tokens are produced on demand via the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. See [Azure Client Wrappers — DI Integration](azure-clients.md#di-integration).
+**No credential on the subscription.** `AzureSubscription` carries no credential or authentication object — only the `environment` (an [`EnvironmentLike`](#environmentlike)) plus ids/displayName/account-id. Tokens are produced on demand via the credential-factory DI service (`ICredentialFactory`), which defaults to `VsCodeExtensionCredential`. See [Azure Client Wrappers — DI Integration](azure-clients.md#di-integration).
 
 ## `EnvironmentLike`
 
-`EnvironmentLike` (in `packages/azutils/src/auth/Environment.ts`) replaces the deprecated `Environment` type from `@azure/ms-rest-azure-env`. It captures only the endpoints the extension actually uses:
+`EnvironmentLike` (in `packages/azutils/src/auth/Environment.ts`) is the extension's cloud-endpoint model. It captures only the endpoints the extension actually uses:
 
 ```typescript
 interface EnvironmentLike {
@@ -76,7 +76,7 @@ interface EnvironmentLike {
 }
 ```
 
-Presets are provided for the three live clouds: `AzurePublicCloud`, `AzureUSGovernment`, and `AzureChinaCloud` (Azure Germany is deprecated and omitted). `getConfiguredAzureEnv(code)` reads the `microsoft-sovereign-cloud.{environment,customEnvironment}` setting to select the active cloud, and `getAuthProviderId(env)` maps it to the VS Code authentication provider id (`microsoft` or `microsoft-sovereign-cloud`). `createEnvironment` strips trailing slashes from the URL endpoints (`resourceManagerEndpointUrl`, `portalUrl`) so they match the Azure SDK convention and user-configured custom clouds are sanitized. It also derives `resourceManagerDefaultScope` (the pre-built `<resourceManagerEndpointUrl>/.default` token scope) from the stripped endpoint, so call sites should read that property instead of hand-building the scope.
+Presets are provided for the three live clouds: `AzurePublicCloud`, `AzureUSGovernment`, and `AzureChinaCloud`. `getConfiguredAzureEnv(code)` reads the `microsoft-sovereign-cloud.{environment,customEnvironment}` setting to select the active cloud, and `getAuthProviderId(env)` maps it to the VS Code authentication provider id (`microsoft` or `microsoft-sovereign-cloud`). `createEnvironment` strips trailing slashes from the URL endpoints (`resourceManagerEndpointUrl`, `portalUrl`) so they match the Azure SDK convention and user-configured custom clouds are sanitized. It also derives `resourceManagerDefaultScope` (the pre-built `<resourceManagerEndpointUrl>/.default` token scope) from the stripped endpoint, so call sites should read that property instead of hand-building the scope.
 
 ## `GenericResource`
 
@@ -96,17 +96,17 @@ Key points:
 
 ## `VirtualResource`
 
-Non-ARM nodes created by providers for grouping or organization:
+A non-ARM node created by a provider to represent a sub-resource that is not itself a
+top-level ARM resource -- container repositories and tags under an ACR registry, for
+example. It is identified by a provider-defined `virtualType` discriminator plus a
+`virtualPath` within its parent, and holds a reference to the owning
+`GenericResource`.
 
-```typescript
-interface VirtualResource {
-    virtualType: string;      // e.g. 'repository', 'tag'
-    virtualPath: string;      // path within parent resource
-    azureResource: GenericResource; // the parent ARM resource
-}
-```
-
-Used by service-specific providers (e.g. ACR) to represent sub-resources like container repositories that aren't top-level ARM resources.
+A virtual node may optionally carry its own `portalUrl` for the cases where the portal
+has a genuinely distinct page for it; when unset, "Open in Portal" falls back to the
+parent resource. Because that URL is carried in the node's `AzureNodeId`, it must be
+derived deterministically from the node's own data -- see the JSDoc on
+`packages/azutils/src/models/VirtualResource.ts` for the full constraints.
 
 ## `VirtualGroup` and `ResourceGroup`
 

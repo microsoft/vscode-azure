@@ -10,7 +10,7 @@ A wizard runs in two phases:
 2. **Execute phase** — After all prompts complete, execute steps run using the fully-populated context.
 
 ```typescript
-const wizard = new Wizard(baseContext, promptSteps, executeSteps);
+const wizard = new Wizard(output, baseContext, promptSteps, executeSteps);
 const finalContext = await wizard.run();
 ```
 
@@ -78,42 +78,29 @@ When the user navigates back past a prompt step that added children, those child
 
 ## Example
 
+A prompt step returns only the slice of context it owns, and can decide at runtime
+that a follow-up step is needed:
+
 ```typescript
 class SelectResourceStep extends PromptStep<MyContext> {
     async prompt(context: Readonly<MyContext>) {
         const resource = await showQuickPick(resources);
-        return { selectedResource: resource };
+        return { selectedResource: resource };   // merged into the context
     }
 
     getSubPromptSteps(context: Readonly<MyContext>) {
-        // Add a confirmation step only for production resources
-        if (context.selectedResource?.isProduction) {
-            return [new ConfirmProductionStep()];
-        }
-        return [];
+        // Only production resources need a confirmation
+        return context.selectedResource?.isProduction ? [new ConfirmProductionStep()] : [];
     }
 }
-
-class DeployStep extends ExecuteStep<MyContext> {
-    async execute(context: Readonly<MyContext>) {
-        await deploy(context.selectedResource);
-    }
-}
-
-const wizard = new Wizard(
-    { selectedResource: undefined },
-    [new SelectResourceStep()],
-    [new DeployStep()]
-);
-const result = await wizard.run();
 ```
 
 ## Reusable Azure Pick Steps
 
-`packages/azutils/src/wizard/` provides reusable prompt steps that extend `RecursivePickStep` for drilling through the Azure resource tree:
+`packages/azutils/src/wizard/` provides reusable Azure prompt steps. The first three extend `RecursivePickStep` and drill through the Azure resource tree; `ChooseLocationStep` is a plain `PromptStep` over a flat list from ARM:
 
-| Step | Drills Through | Sets on Context |
-|------|---------------|-----------------|
+| Step | Picks From | Sets on Context |
+|------|-----------|-----------------|
 | `ChooseSubscriptionStep` | Account > Tenant > Subscription | `subscription` |
 | `ChooseResourceGroupStep` | Account > Tenant > Subscription > Resource Group | `subscription`, `resourceGroup` |
 | `ChooseResourceStep<T>` | Full tree, filtering by `logicalType` | `resource` (single) or `resources` (multi-pick) |
