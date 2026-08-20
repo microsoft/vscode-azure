@@ -46,7 +46,7 @@ classes into the monorepo is wrong and will be rejected. Instead:
 | When AVM has no suitable module, generate one AVM-shaped local module plus a thin consumer | Inline a fallback module into one monolithic template |
 | Rebuild the tree as `DataProvider` + `ViewProvider` registered in `registerTrees.ts` | Re-create per-node tree-item classes that fetch their own children |
 | Write commands as `@injectable()` `ManagedCommand` classes with a static `ContextValue` | Register bare `vscode.commands.registerCommand` callbacks |
-| Reuse shared monorepo packages (azutils clients, generic commands) and product precedents (Functions app-settings) | Re-vendor the source's client / app-settings code, or hand-roll a helper the monorepo already has |
+| Reuse shared monorepo packages (azutils clients, generic commands, shared settings framework) and product precedents (Functions `SettingsAdapter`) | Re-vendor the source's client/settings code, or hand-roll a helper the monorepo already has |
 | Leave `azure.yaml`, scaffolding, and project configuration to **azd**, and build only on capabilities that exist in this monorepo | Author/parse azd's files, store deployment config in VS Code settings, or call into the extension being retired |
 | Conform **all** new code to `docs/conventions.md` (DI interfaces, `l10n.t`, logging, headers) | Carry over the source's style, `vscode` imports, or string handling |
 

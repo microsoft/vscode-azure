@@ -30,7 +30,7 @@ Read the precedent file, then mirror its **shape**. All paths are relative to th
 > Before adding anything to a product folder, run the
 > [shared-primitive sweep](implementation.md#before-you-write-the-shared-primitive-sweep). Cross-cutting
 > concerns — workspace folder/file pickers, URL-opening and browse commands, file existence, caseless
-> collections, shell task creation, process termination, workspace scanning/indexing, the settings framework,
+> collections, shell task creation, process termination, workspace scanning/indexing, the shared settings framework,
 > and every test fixture — already live in `packages/utils`, `packages/azutils`, or shared extension code.
 
 > New tree **views** are almost never added. Reuse the existing Resources / Workspace / Activity views;

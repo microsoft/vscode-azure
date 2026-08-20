@@ -53,8 +53,10 @@ For each migrated node type:
 - [ ] Status / `invalid*` variants from the inventory are preserved and their `when` clauses still match.
 - [ ] The node's icon resolves — either an existing `azureIcons/<logicalType>.svg` was reused, or (only when none matched) a new SVG was added to the **azutils** package. Its name equals `<logicalType>.toLowerCase()+'.svg'`.
 - [ ] `DataProvider`/`ViewProvider` are registered **before** the generic fallback in `registerTrees.ts`.
-- [ ] **Layering is clean in both directions:** the view provider does not mutate data, and no `DataProvider`
-      or data-layer resource carries a display label, description, tooltip, icon id, or `contextValue`.
+- [ ] **Layering is clean in both directions:** the view provider does not mutate data. `DataProvider`s
+      and data-layer resources carry intrinsic domain data/state (ARM `name`, status, flags, counts), not
+      presentation-only fields (formatted display strings, tree-item descriptions/tooltips, icon ids, or
+      `contextValue`s).
 
 ## Shared-primitive check
 
@@ -94,6 +96,8 @@ For each migrated node type:
 
 - [ ] Every version gate, file/schema name, URL, package name, and "this asset already exists" claim names the
       source it was verified against.
+- [ ] Any external fact that ships — in a committed doc, the PR description, a comment, or an error message —
+      carries a link to its authoritative source, not just an entry in the mapping record.
 - [ ] Version gates cite the release that introduced the capability, not the current release.
 - [ ] No invented asset: any added SVG/template/schema was preceded by a directory listing showing nothing
       correct already ships.

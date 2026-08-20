@@ -82,10 +82,10 @@ differently:
 - **`ViewProvider<T>`** — `canHandle()` + `getTreeItem()` + `getChildren()` + `getParent()`. Renders labels,
   icons, and `contextValue` (via `combineContextValues(...)`). Must **not** mutate data.
 - **The boundary runs both ways.** The view layer must not mutate data, *and* the data layer must not carry
-  presentation. No display label, description, tooltip, icon id, or `contextValue` is computed in a
-  `DataProvider` or stashed on a resource for the view to read. A data provider may compute **state** (a status
-  value, a flag, a count); turning that state into words or pixels is the view provider's job. A formatted
-  string on a data-layer resource is an architectural violation, not a shortcut.
+  presentation. A data provider may carry intrinsic domain data and compute **state** (ARM `name`, status
+  values, flags, counts), but it must not compute a formatted/derived display string, tree-item
+  description/tooltip text, icon id, or `contextValue`, or stash one on a resource for the view to read.
+  Turning state into words or pixels is the view provider's job.
 - Both are registered in `registerTrees.ts`, **specific before generic**, so dispatch order matters.
 - `contextValue` is no longer authored on a node class — it is assembled from each acting command's static
   `ContextValue`, and gated in `package.json` by a **regex `when`** with word boundaries.
@@ -127,7 +127,7 @@ a DI factory binding in `extension.ts`. Don't re-vendor the source's client code
 
 ---
 
-## 5. Solved generically (auth, "open in portal", resource groups, app settings -> Reuse)
+## 5. Solved generically (auth, "open in portal", resource groups, application settings -> Reuse)
 
 These are solved generically in the monorepo. If the source has them, **wire up the existing
 implementation** rather than re-vendoring the source's code:
@@ -147,7 +147,7 @@ implementation** rather than re-vendoring the source's code:
   `GenericAzureViewProvider`.
 
 > All of the above are true **Reuse**: wire straight to an existing generic command, provider, or
-> extension point. For app settings the product adds the adapter and thin resource-provider
+> extension point. For application settings the product adds the adapter and thin resource-provider
 > composition, not a settings UI. Say so in the mapping record, so the implementer does not rebuild
 > a settings UI that already exists.
 

@@ -13,7 +13,7 @@ is open. Search first:
 |-------------|-----|
 | `packages/utils/src` | generic primitives: workspace/file helpers, file existence, caseless collections, async iterables, settings, events |
 | `packages/azutils/src` | Azure primitives: client wrappers, auth, portal/resource URLs, paging |
-| `extensions/vscode-azure/src` | product-level shared code: generic commands (open-url, open-in-portal, browse, delete), shared wizard/pick steps, the workspace scanning service + workspace index, process/task services, the shared app-settings framework |
+| `extensions/vscode-azure/src` | product-level shared code: generic commands (open-url, open-in-portal, browse, delete), shared wizard/pick steps, the workspace scanning service + workspace index, process/task services, the shared settings framework |
 | `packages/utils/test/testing.ts`, `packages/azutils/test/testing.ts` | fixtures: entity `make*` factories, mock trees (incl. paged), mock VS Code, paging drains |
 
 Search by **concept, not by the name you were about to use** — the shared symbol is rarely named what the
@@ -98,6 +98,11 @@ that product. Activation is a budget, not a list.
 
 Anything the migration writes as authority about the world outside this repo must be checked against a real
 source before it is written, and the source recorded in the mapping record.
+
+**The citation travels with the claim.** A source recorded only in a scratch mapping record does not help the
+reader or the reviewer. When an external fact lands in something that ships — a committed doc, a PR
+description, a code comment, an error message — link the authoritative source next to it. A true claim with no
+citation still costs a review round-trip, because the reviewer's only move is to ask.
 
 | Claim | Verify against |
 |-------|----------------|

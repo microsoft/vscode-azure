@@ -66,7 +66,7 @@ These are **not** user features, so they need a deliberate call:
 Use these to pre-fill the **recommended** column. They are defaults, not decisions.
 
 - **Deployment / provisioning / "create resource" commands** -> **Adapt** to azd+Bicep. Never recommend porting ARM-deploy code. See [does-not-map.md](does-not-map.md).
-- **App-settings / connection-strings features** -> **Reuse** the shared settings framework: implement one `SettingsAdapter` and bind it; the framework supplies the tree node, the JSONC editor, and the edit command. Never rebuild a product-specific settings UI or per-setting commands. See [does-not-map.md](does-not-map.md) #5 and `docs/settings.md`.
+- **Application settings / connection strings** -> **Reuse** the shared settings framework: implement one `SettingsAdapter` and bind it; the framework supplies the tree node, the JSONC editor, and the edit command. Never rebuild a product-specific settings UI or per-setting commands. See [does-not-map.md](does-not-map.md) #5 and `docs/settings.md`.
 - **Sign-in / account / subscription / tenant filtering** -> **Reuse** the existing auth + account providers.
 - **"Open in portal", resource-group grouping** -> **Reuse** generic commands/providers already in the tree.
 - **Tree nodes** -> **Migrate** as `DataProvider` + `ViewProvider`, but the *construction* is Adapt-shaped (no per-node classes). Flag in [does-not-map.md](does-not-map.md).

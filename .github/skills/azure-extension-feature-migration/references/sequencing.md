@@ -15,7 +15,7 @@ Build bottom-up. A feature can't be wired before the things it depends on exist:
 6. Commands               ManagedCommand classes + static ContextValue + registerCommands.ts
 7. Wizards                AVM search/selection + Bicep consumer (or two-file fallback) + azd steps per AzdJob
 8. Manifest               package.json contributions + package.nls.json strings (+ new icon in azutils only if none matches)
-9. Reuse wiring           app-settings / auth / generic commands hooked up in extension.ts
+9. Reuse wiring           SettingsAdapter / auth / generic commands hooked up in extension.ts
 10. Tests                 unit (+ integration where the precedent has them)
 ```
 
@@ -70,7 +70,7 @@ Monorepo phase: <n>
 - [ ] Register Create<Product> per AzdJob (createNew / deploy)                           <- SWA-0xx (create/deploy cmds)
 
 ## Slice 4 — Reuse wiring
-- [ ] App settings (implement one `SettingsAdapter`; the shared framework supplies the rest)   <- SWA-0xx (app settings)
+- [ ] Shared settings framework (implement one `SettingsAdapter`; the framework supplies the rest)   <- SWA-0xx (application settings)
 - [ ] Auth / subscription filtering (if product-specific)  <- SWA-0xx (sign-in)
 
 ## Slice N — Settings & manifest cleanup
