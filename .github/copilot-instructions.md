@@ -124,7 +124,7 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * When a dependency is used by more than one workspace package, add it to the pnpm `catalog:` in `pnpm-workspace.yaml` and reference it from each `package.json` with the `"catalog:"` specifier. This keeps every package on a single, consistent version.
 * Keep dependencies that are only used by a single package as a direct version specifier in that package's `package.json` -- don't add them to the catalog, since a catalog entry provides no dedup benefit for a single consumer.
 * After changing any dependency versions or catalog entries, run `pnpm install` to update `pnpm-lock.yaml`. If the lockfile changed, build to confirm nothing broke; if it came back unchanged, no installed code moved and a previously-green build still holds.
-* `minimumReleaseAge` gates how new a package may be. A `minimumReleaseAgeExclude` entry added to take a package early is temporary -- comment it with the publish date and the date it can be dropped, and remove it once the package has aged out. Verify the removal by resolving the package fresh under the policy (a `--frozen-lockfile` install reuses the existing lockfile and will pass either way, so it proves nothing on its own).
+* `minimumReleaseAge` gates how new a package may be. A `minimumReleaseAgeExclude` entry is temporary -- comment it with the date it can be dropped, and remove it once the package has aged out.
 
 
 ## Writing Tests
