@@ -188,6 +188,7 @@ export class SwaCliService {
         if (installedVersion && semver.gte(installedVersion, minimumVersion)) {
             this.executor.setTelProp('swaCliValidationAction', 'none');
             this.executor.setTelProp('swaCliValidationOutcome', 'valid');
+            this.startUpdateCheck();
             return true;
         }
 
@@ -233,7 +234,29 @@ export class SwaCliService {
     }
 
     /**
-     * Shows the activation-time update warning when a newer CLI is available.
+     * Starts the "a newer CLI is available" check without waiting for it.
+     *
+     * Deliberately triggered from {@linkcode validateInstalled} rather than from
+     * activation: it spawns npm and queries the registry, which is too much to
+     * spend on someone who merely has a config file in their workspace. Reaching
+     * here means the user has actually asked for something that needs the CLI.
+     *
+     * Runs in its own telemetry action because it outlives the caller, and stays
+     * fire-and-forget so a slow or offline registry never delays a debug session.
+     */
+    private startUpdateCheck(): void {
+        void this.executor.callWithTelemetryAndErrorHandling(
+            'staticWebApps.validateStaticWebAppsCliIsLatest',
+            async context => {
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.suppress = 'display';
+                await this.warnIfOutdated();
+            },
+        );
+    }
+
+    /**
+     * Warns when a newer CLI is available.
      *
      * Callers own error handling because this check is intentionally fire-and-forget.
      */

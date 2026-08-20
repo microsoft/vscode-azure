@@ -62,11 +62,16 @@ describe('registerStaticWebApps (unit)', () => {
         expect(isLifecycleResolved()).to.equal(true);
     });
 
-    it('should skip the CLI update check when no workspace folder holds a static web app', async () => {
+    it('should not touch the CLI during activation', async () => {
+        // Activation used to probe the npm registry for a newer CLI whenever a
+        // workspace looked like a static web app, which put a network call on the
+        // startup path for every such folder. The version check now runs only when
+        // a command already needs the CLI, so activation must stay silent even for
+        // a workspace that would previously have triggered it.
         const { mockResult, warnIfOutdated, activate } = setup();
-        mockResult.workspaceFolders.push(
-            { uri: mockResult.vscode.Uri.file('/workspace'), name: 'workspace', index: 0 },
-        );
+        const folder = mockResult.vscode.Uri.file('/workspace');
+        mockResult.workspaceFolders.push({ uri: folder, name: 'workspace', index: 0 });
+        mockResult.fs.addFile(mockResult.vscode.Uri.joinPath(folder, 'swa-cli.config.json'));
 
         activate();
         await Promise.resolve();
@@ -74,22 +79,4 @@ describe('registerStaticWebApps (unit)', () => {
 
         expect(warnIfOutdated.mock.callCount()).to.equal(0);
     });
-
-    it('should run the CLI update check when a workspace folder holds a static web app', async () => {
-        const { mockResult, warnIfOutdated, activate } = setup();
-        const folder = mockResult.vscode.Uri.file('/workspace');
-        mockResult.workspaceFolders.push({ uri: folder, name: 'workspace', index: 0 });
-        mockResult.fs.addFile(mockResult.vscode.Uri.joinPath(folder, 'swa-cli.config.json'));
-
-        activate();
-        await waitForCallCount(warnIfOutdated);
-
-        expect(warnIfOutdated.mock.callCount()).to.equal(1);
-    });
 });
-
-async function waitForCallCount(fn: { mock: { callCount(): number } }): Promise<void> {
-    for (let attempt = 0; attempt < 100 && fn.mock.callCount() === 0; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 5));
-    }
-}

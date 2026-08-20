@@ -3,32 +3,24 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
-import type { ManagedCommand } from '../ManagedCommand';
 import { staticWebAppsDocumentationUrl, staticWebAppsFunctionsDocumentationUrl } from './staticWebAppLinks';
 
-/** Opens Azure Static Web Apps product documentation. */
-@injectable()
-export class ShowStaticWebAppsDocumentation implements ManagedCommand {
-    public constructor(@inject(IVsCode) private readonly code: IVsCode) { }
+/**
+ * Declarative metadata for the Static Web Apps product documentation command.
+ *
+ * These are plain URL commands, so they are registered as `OpenUrl` with the URL
+ * supplied as a prefix argument rather than as command classes of their own,
+ * which is what gives them the extension's shared scheme checking and telemetry.
+ * What remains here is the part registration cannot express: the context value
+ * the view provider stamps on the node that offers the command.
+ */
+export const ShowStaticWebAppsDocumentation = {
+    Url: staticWebAppsDocumentationUrl,
+} as const;
 
-    /** @inheritdoc */
-    public async execute(): Promise<void> {
-        await this.code.env.openExternal(this.code.Uri.parse(staticWebAppsDocumentationUrl));
-    }
-}
-
-/** Opens Functions API guidance for Azure Static Web Apps. */
-@injectable()
-export class ShowFunctionsDocumentation implements ManagedCommand {
+/** Declarative metadata for the Functions API documentation command. */
+export const ShowFunctionsDocumentation = {
     /** Context value for the no-functions help node. */
-    public static readonly ContextValue = 'showStaticWebAppFunctionsDocumentation';
-
-    public constructor(@inject(IVsCode) private readonly code: IVsCode) { }
-
-    /** @inheritdoc */
-    public async execute(): Promise<void> {
-        await this.code.env.openExternal(this.code.Uri.parse(staticWebAppsFunctionsDocumentationUrl));
-    }
-}
+    ContextValue: 'showStaticWebAppFunctionsDocumentation',
+    Url: staticWebAppsFunctionsDocumentationUrl,
+} as const;

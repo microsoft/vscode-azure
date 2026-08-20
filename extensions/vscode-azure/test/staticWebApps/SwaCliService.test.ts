@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, type IActionExecutor, type IProcessExecutor } from '@microsoft/vscode-azure-utils';
+import { CancellationError, createActionContext, type IActionContext, type IActionExecutor, type IProcessExecutor } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import {
@@ -163,6 +163,12 @@ function createServiceResult(
         setTelProp: mock.fn((name: string, value: string) => {
             telemetryProperties.set(name, value);
         }),
+        // Runs the callback inline against a real context so the background
+        // update check the service starts is actually exercised, not stubbed out.
+        callWithTelemetryAndErrorHandling: mock.fn(
+            (callbackId: string, callback: (context: IActionContext) => Promise<unknown>) =>
+                callback(createActionContext(callbackId)),
+        ),
     } as unknown as IActionExecutor;
     return {
         mockResult,
