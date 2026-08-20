@@ -4,7 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    createShellTask,
     IActionExecutor,
+    isProcessError,
     IVsCode,
     type IActionExecutor as ActionExecutor,
     type IVsCode as VsCode,
@@ -24,6 +26,16 @@ import { tryGetStaticWebAppsCliConfig } from '../../staticWebApps/SwaCliConfig';
 export const SwaTaskSource = 'swa';
 /** Problem matcher supplied by the following manifest slice. */
 export const SwaWatchProblemMatcher = '$swa-watch';
+
+/**
+ * Marks a task as one this provider generated.
+ *
+ * @remarks
+ * The executable cannot serve as the marker: {@linkcode createShellTask} pins a
+ * bare name to its absolute path on `PATH`, so the command a generated task
+ * carries is not the literal {@linkcode SwaCliCommand} it was built from.
+ */
+export const SwaTaskDefinition: vscode.TaskDefinition = { type: 'shell', swaCli: true };
 
 interface WorkspaceTaskDiscovery {
     readonly tasks: vscode.Task[];
@@ -105,8 +117,24 @@ export class SwaTaskProvider implements vscode.TaskProvider {
     private async discoverTasksForWorkspaceFolder(
         workspaceFolder: vscode.WorkspaceFolder,
     ): Promise<WorkspaceTaskDiscovery> {
-        const configTasks = await this.getConfigTasks(workspaceFolder);
-        const detectedTasks = await this.getDetectedTasks(workspaceFolder);
+        // The CLI is installed on demand, so discovery runs long before it is
+        // guaranteed to be on PATH -- and createShellTask rejects a bare name it
+        // cannot resolve rather than handing it to a shell. Reporting no tasks is
+        // the honest answer in that window, since a task naming a missing
+        // executable could only fail in the terminal. Discovery runs again once
+        // the debug flow has prompted the user to install, so the tasks appear
+        // then. Only that one cause is swallowed; anything else still surfaces.
+        let configTasks: vscode.Task[];
+        let detectedTasks: vscode.Task[];
+        try {
+            configTasks = await this.getConfigTasks(workspaceFolder);
+            detectedTasks = await this.getDetectedTasks(workspaceFolder);
+        } catch (error) {
+            if (isProcessError(error) && error.code === 'ENOENT') {
+                return { tasks: [], configCount: 0, detectedCount: 0 };
+            }
+            throw error;
+        }
         const uniqueTasks = new Map<string, vscode.Task>();
         for (const task of [...configTasks, ...detectedTasks]) {
             const label = `${task.source}: ${task.name}`;
@@ -170,21 +198,16 @@ export class SwaTaskProvider implements vscode.TaskProvider {
         args: readonly string[],
         env?: Readonly<Record<string, string>>,
     ): vscode.Task {
-        const execution = new this.code.ShellExecution(
-            SwaCliCommand,
-            [...args],
-            env ? { env: { ...env } } : undefined,
-        );
-        const task = new this.code.Task(
-            { type: 'shell' },
-            workspaceFolder,
+        return createShellTask(this.code, {
+            command: [SwaCliCommand, ...args],
+            definition: { ...SwaTaskDefinition },
+            scope: workspaceFolder,
             name,
-            SwaTaskSource,
-            execution,
-            SwaWatchProblemMatcher,
-        );
-        task.isBackground = true;
-        return task;
+            source: SwaTaskSource,
+            problemMatchers: SwaWatchProblemMatcher,
+            env,
+            isBackground: true,
+        });
     }
 }
 

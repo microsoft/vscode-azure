@@ -10,7 +10,6 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import { SwaCliCommand } from '../../staticWebApps/SwaCliService';
 import { SwaTaskSource } from './SwaTaskProvider';
 
 /** Injectable boundary around the one raw process signal needed to preserve task terminal output. */
@@ -110,9 +109,12 @@ export class SwaTaskLifecycle implements Disposable {
  * unrelated tasks.
  */
 export function getSwaTaskScopeKey(code: VsCode, task: vscode.Task): string | undefined {
+    // Matched on the definition rather than the command: createShellTask pins a
+    // bare name to its absolute path on PATH, so a generated task's command is
+    // no longer the literal name it was built from.
     if (task.source !== SwaTaskSource
         || !(task.execution instanceof code.ShellExecution)
-        || task.execution.command !== SwaCliCommand
+        || task.definition.swaCli !== true
         || task.scope === undefined) {
         return undefined;
     }

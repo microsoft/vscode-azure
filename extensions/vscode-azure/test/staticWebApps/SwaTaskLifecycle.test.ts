@@ -7,6 +7,7 @@ import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { getSwaTaskScopeKey, SwaTaskLifecycle } from '../../src/tasks/staticWebApps/SwaTaskLifecycle';
+import { SwaTaskDefinition } from '../../src/tasks/staticWebApps/SwaTaskProvider';
 
 describe('SwaTaskLifecycle (unit)', () => {
     it('should match only workspace-scoped SWA shell tasks', () => {
@@ -17,7 +18,7 @@ describe('SwaTaskLifecycle (unit)', () => {
             index: 0,
         } as vscode.WorkspaceFolder;
         const swaTask = new mockResult.vscode.Task(
-            { type: 'shell' },
+            { ...SwaTaskDefinition },
             folder,
             'start workspace',
             'swa',
@@ -31,10 +32,22 @@ describe('SwaTaskLifecycle (unit)', () => {
             new mockResult.vscode.ShellExecution('npm', ['start']),
         );
 
+        // A task this provider did not generate is not tracked even when it runs
+        // the CLI under the same source, because the definition marker -- not the
+        // command -- is what identifies a generated task.
+        const lookalike = new mockResult.vscode.Task(
+            { type: 'shell' },
+            folder,
+            'start workspace',
+            'swa',
+            new mockResult.vscode.ShellExecution('swa', ['start']),
+        );
+
         expect(getSwaTaskScopeKey(mockResult.vscode, swaTask)).to.equal(
             `folder:${folder.uri.toString()}`,
         );
         expect(getSwaTaskScopeKey(mockResult.vscode, otherTask)).to.equal(undefined);
+        expect(getSwaTaskScopeKey(mockResult.vscode, lookalike)).to.equal(undefined);
     });
 
     it('should stop the tracked process only for a top-level linked debug termination', () => {
@@ -45,7 +58,7 @@ describe('SwaTaskLifecycle (unit)', () => {
             index: 0,
         } as vscode.WorkspaceFolder;
         const task = new mockResult.vscode.Task(
-            { type: 'shell' },
+            { ...SwaTaskDefinition },
             folder,
             'start workspace',
             'swa',

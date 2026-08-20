@@ -5,11 +5,12 @@
 
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import type * as vscode from 'vscode';
-import { SwaTaskProvider } from '../../src/tasks/staticWebApps/SwaTaskProvider';
+import * as vscode from 'vscode';
+import { SwaTaskDefinition, SwaTaskProvider } from '../../src/tasks/staticWebApps/SwaTaskProvider';
+import { withSwaCliOnPath } from './swaCliOnPath';
 
 describe('SwaTaskProvider (unit)', () => {
-    it('should generate config and detected tasks with exact SWA arguments', async () => {
+    it('should generate config and detected tasks with exact SWA arguments', async () => { await withSwaCliOnPath(async executablePath => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
         const folder = { uri: root, name: 'workspace', index: 0 } as vscode.WorkspaceFolder;
@@ -45,7 +46,10 @@ describe('SwaTaskProvider (unit)', () => {
         ]);
         const detected = tasks[2];
         const execution = detected.execution as vscode.ShellExecution;
-        expect(execution.command).to.equal('swa');
+        // A bare name is pinned to the absolute path it resolves to on PATH, so a
+        // same-named binary in the working directory cannot be run instead. The
+        // path is strongly quoted because it may contain spaces.
+        expect(execution.command).to.deep.equal({ value: executablePath, quoting: vscode.ShellQuoting.Strong });
         expect(execution.args).to.deep.equal([
             'start',
             'http://localhost:3000',
@@ -60,7 +64,7 @@ describe('SwaTaskProvider (unit)', () => {
             '--devserver-timeout=90000',
         ]);
         expect(execution.options?.env).to.deep.equal({ BROWSER: 'none' });
-        expect(detected.definition).to.deep.equal({ type: 'shell' });
+        expect(detected.definition).to.deep.equal(SwaTaskDefinition);
         expect(detected.problemMatchers).to.deep.equal(['$swa-watch']);
         expect(detected.isBackground).to.equal(true);
         expect(detected.scope).to.equal(folder);
@@ -76,9 +80,34 @@ describe('SwaTaskProvider (unit)', () => {
             detectedCount: 1,
             taskCount: 3,
         });
+    }); });
+
+    it('should report no tasks when the SWA CLI is not on PATH', async () => {
+        // The CLI is installed on demand, so a task naming it could only fail in
+        // the terminal until then. Discovery runs again after the debug flow has
+        // prompted the user to install, which is when the tasks appear.
+        const mockResult = createMockVsCode();
+        const root = mockResult.vscode.Uri.file('/workspace');
+        const folder = { uri: root, name: 'workspace', index: 0 } as vscode.WorkspaceFolder;
+        mockResult.workspaceFolders.push(folder);
+        mockResult.fs.addFile(
+            mockResult.vscode.Uri.joinPath(root, 'swa-cli.config.json'),
+            JSON.stringify({ configurations: { app: {} } }),
+        );
+        const { executor } = createTestActionExecutor();
+
+        const originalPath = process.env.PATH;
+        process.env.PATH = '';
+        try {
+            const tasks = await new SwaTaskProvider(mockResult.vscode, executor)
+                .provideTasksForWorkspaceFolder(folder);
+            expect(tasks).to.have.lengthOf(0);
+        } finally {
+            process.env.PATH = originalPath;
+        }
     });
 
-    it('should avoid duplicate task labels within a workspace', async () => {
+    it('should avoid duplicate task labels within a workspace', async () => { await withSwaCliOnPath(async () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace/app');
         const folder = { uri: root, name: 'app', index: 0 } as vscode.WorkspaceFolder;
@@ -96,9 +125,9 @@ describe('SwaTaskProvider (unit)', () => {
             .provideTasksForWorkspaceFolder(folder);
 
         expect(tasks.filter(task => task.name === 'start app')).to.have.lengthOf(1);
-    });
+    }); });
 
-    it('should report aggregate task discovery without nested folder events', async () => {
+    it('should report aggregate task discovery without nested folder events', async () => { await withSwaCliOnPath(async () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
         const folder = { uri: root, name: 'workspace', index: 0 } as vscode.WorkspaceFolder;
@@ -126,5 +155,5 @@ describe('SwaTaskProvider (unit)', () => {
             configTaskCount: 2,
             detectedTaskCount: 0,
         });
-    });
+    }); });
 });
