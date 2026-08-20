@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 
@@ -63,7 +63,7 @@ interface GitRepository {
     };
 }
 
-const azureDevOpsHostnames = new Set(['dev.azure.com', 'ssh.dev.azure.com', 'vs-ssh.visualstudio.com']);
+const azureDevOpsHostnames = new CaselessSet(['dev.azure.com', 'ssh.dev.azure.com', 'vs-ssh.visualstudio.com']);
 
 /**
  * Read-only Git remote inspection used to route Static Web Apps deployment
@@ -190,6 +190,7 @@ function isAzureDevOpsRemoteUrl(url: string): boolean {
 }
 
 function isAzureDevOpsHostname(hostname: string): boolean {
-    const normalized = hostname.toLowerCase();
-    return azureDevOpsHostnames.has(normalized) || normalized.endsWith('.visualstudio.com');
+    // The set compares caselessly; the suffix test still has to lower-case, since
+    // DNS names are case-insensitive but `endsWith` is not.
+    return azureDevOpsHostnames.has(hostname) || hostname.toLowerCase().endsWith('.visualstudio.com');
 }

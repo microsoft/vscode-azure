@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, fileExists, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, fileExists, getWorkspaceFolder, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import type * as vscode from 'vscode';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /** Name of the Azure Static Web Apps runtime configuration file. */
@@ -31,9 +30,12 @@ export class CreateSwaConfigFile implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(): Promise<void> {
-        const folder = await this.selectWorkspaceFolder();
+        const folder = await getWorkspaceFolder(this.code, {
+            placeHolder: this.code.l10n.t('Select a workspace folder for \'{0}\'.', staticWebAppConfigFileName),
+            stepName: 'Select workspace folder',
+        });
         if (!folder) {
-            throw new CancellationError(undefined, 'Select workspace folder');
+            throw new Error(this.code.l10n.t('Open a workspace folder before creating a Static Web Apps configuration file.'));
         }
 
         const configUri = this.code.Uri.joinPath(folder.uri, staticWebAppConfigFileName);
@@ -52,18 +54,6 @@ export class CreateSwaConfigFile implements ManagedCommand {
         await this.code.workspace.fs.writeFile(configUri, new TextEncoder().encode(staticWebAppExampleConfig));
         const document = await this.code.workspace.openTextDocument(configUri);
         await this.code.window.showTextDocument(document);
-    }
-
-    private async selectWorkspaceFolder(): Promise<vscode.WorkspaceFolder | undefined> {
-        const folders = this.code.workspace.workspaceFolders;
-        if (!folders?.length) {
-            throw new Error(this.code.l10n.t('Open a workspace folder before creating a Static Web Apps configuration file.'));
-        } else if (folders.length === 1) {
-            return folders[0];
-        }
-        return this.code.window.showWorkspaceFolderPick({
-            placeHolder: this.code.l10n.t('Select a workspace folder for \'{0}\'.', staticWebAppConfigFileName),
-        });
     }
 
 }
