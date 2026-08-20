@@ -2,13 +2,17 @@
 
 Load the inputs the migration depends on, and confirm scope before touching any code.
 
-## 1. The source inventory (required)
+## 1. The source inventory (required — hard stop)
 
 This skill is driven by an `INVENTORY.md` produced by the `azure-extension-feature-inventory` skill.
 
-- If the user points you at an existing `INVENTORY.md`, read it in full.
-- If none exists, **run the inventory skill first**. Do not attempt to migrate directly from the source
-  extension's code — the inventory is what the migration is verified against.
+- The inventory must be **committed and tracked** at `docs/migrations/<service>/INVENTORY.md`. Confirm with
+  `git ls-files docs/migrations/<service>/INVENTORY.md` — an untracked file, a session artifact, or a copy
+  pasted into chat does not satisfy this. Those evaporate, and the migration is then unverifiable.
+- If none exists, **run the inventory skill first and commit its output**. Do not attempt to migrate directly
+  from the source extension's code — the inventory is what the migration is verified against.
+- `TRIAGE.md` (Phase 2) and `MIGRATION-PLAN.md` (Phase 4) land in that same folder and are the migration PR's
+  first commit, before any feature code.
 - Record the source repo + **exact commit SHA** the inventory was taken from. The migration is pinned to
   that snapshot; if the source has moved on, note it.
 
@@ -41,7 +45,7 @@ Read these before mapping anything. They are the contract every migrated feature
 - **Target package:** `extensions/vscode-azure` (feature code) plus `packages/azutils` (Azure SDK client wrappers). New tree views are almost never needed — reuse the existing Resources / Workspace / Activity views.
 - **Precedent product:** pick the already-migrated product whose shape most resembles the source and mirror its file layout. See [target-patterns.md](target-patterns.md) for the map of what each precedent demonstrates:
   - `acr` — resource tree with virtual child categories + resource-scoped commands.
-  - `functions` — full create wizard via azd+Bicep + workspace-view detection + the app-settings precedent (rebuild-against-precedent, not wire-only reuse).
+  - `functions` — full create wizard via azd+Bicep + workspace-view detection + the settings-adapter precedent (the settings framework itself is shared; the product supplies only the adapter).
   - `deploy` — azd deploy job wiring + deployment tracking in the Activity view.
   - `auth` — account/tenant/subscription and sign-in flows.
 

@@ -91,12 +91,15 @@ Telemetry usage: collected from `cluster('ddtelvscode')` (window: <e.g. 90d>; co
 
 ## Placement
 
-- Default: write to the current session's artifacts dir, or a path the user specifies.
-- If a migration workspace exists, offer to place it there. Prefer a **tracked** folder in the target repo
-  so it can be committed with the migration — `docs/migrations/<service>/INVENTORY.md`. `TRIAGE.md` and
-  `MIGRATION-PLAN.md` (produced later by the migration skill) live in that same folder.
-- **Before committing to a tracked folder, redact raw telemetry** (per `.github/copilot-instructions.md`):
-  keep the advisory suggestion, a qualitative rationale ("low external usage per telemetry"), and the ADX
-  deeplink; strip the ExternalUsers/Succeeded/Failed/Canceled counts and the Usage Summary numbers. Keep the
-  full-number copy in the session dir if the human wants it retained.
-- Always print the final path.
+- **Default (not optional): `docs/migrations/<service>/INVENTORY.md` in the target repo, committed.** The
+  inventory is the migration's contract, so it is tracked alongside the code it drives. `TRIAGE.md` and
+  `MIGRATION-PLAN.md` (produced later by the migration skill) live in that same folder. The migration skill
+  treats a missing tracked inventory as a hard stop.
+- **Before committing, redact raw telemetry** (per `.github/copilot-instructions.md`): keep the advisory
+  suggestion, a qualitative rationale ("low external usage per telemetry"), and the ADX deeplink; strip the
+  ExternalUsers/Succeeded/Failed/Canceled counts and the Usage Summary numbers.
+- Keep the full-number working copy in the session artifacts dir only. Never commit it, and never move it
+  into the tracked folder.
+- A user-specified path overrides the default only if they ask; say explicitly that the migration skill needs
+  a tracked copy before it can start.
+- Always print both paths (committed + session working copy).

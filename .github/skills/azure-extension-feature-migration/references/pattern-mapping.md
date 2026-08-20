@@ -12,7 +12,7 @@ it with [target-patterns.md](target-patterns.md) (concrete paths + snippets) and
 | `registerCommand` callback acting on a node | `ManagedCommand` class with static `ContextValue` | `commands/<product>/<Name>.ts` + `registerCommands.ts` + `package.json` menu with regex `when` | Use `IResourceSelector` for "node-or-pick"; telemetry/errors are automatic |
 | Palette-only command | `ManagedCommand` (no `ContextValue`) | `commands/<product>/<Name>.ts` + `registerCommands.ts` + `package.json` command | Add `category` for palette grouping |
 | One command, several fixed variants | one `ManagedCommand` + `prefixArgs` | multiple `registerManagedCommand(..., arg)` calls | e.g. per `AzdJob`, per mode |
-| Create / deploy / provision command | azd+Bicep wizard + AVM-first module selection | `commands/<product>/Create<Product>.ts` + steps + Bicep consumer (and local module only as fallback) | **Adapt** — see [does-not-map.md](does-not-map.md) #1 and [avm-provisioning.md](avm-provisioning.md); register twice (`createNew`/`deploy`) |
+| Create / deploy / provision command | azd+Bicep wizard + AVM-first module selection | `commands/<product>/Create<Product>.ts` + steps + Bicep consumer (and local module only as fallback) | **Adapt** — see [does-not-map.md](does-not-map.md) #1 and [avm-provisioning.md](avm-provisioning.md); register twice (`createNew`/`deploy`); obey the **prompt budget** — sensible defaults + editable Bicep, one command (no "advanced" variant) |
 | Tree parent/leaf node type | `DataProvider` branch + `ViewProvider` branch + type guard | `tree/resources/<product>/` (`<Product>DataProvider.ts`, `<Product>ViewProvider.ts`, `<Product>.ts`) | Register in `registerTrees.ts` specific-before-generic |
 | Computed / grouping node (e.g. "Settings") | **virtual node** in `DataProvider.getChildren` | same `DataProvider` | View provider renders it; give it a stable virtual key + own `contextValue`. For settings specifically, use the shared framework instead — see [does-not-map.md](does-not-map.md) #5 |
 | Node `contextValue` string(s) | assembled via `combineContextValues(...)` from command `ContextValue`s | `ViewProvider.getTreeItem` | Re-derive **fresh** `ContextValue`s from the command set (do **not** reuse source literals — see naming policy below); gate each in `package.json` with `\b...\b` regex |
@@ -21,14 +21,15 @@ it with [target-patterns.md](target-patterns.md) (concrete paths + snippets) and
 | Direct `@azure/arm-*` client use | azutils client wrapper | `packages/azutils/src/rest/clients/<Product>Client.ts` (+ re-export, + factory in `extension.ts`) | Consumers import from `@microsoft/vscode-azure-azutils`, never `@azure/*` |
 | App settings / connection strings | **Reuse** — implement one `SettingsAdapter` and bind it; the shared framework supplies the tree, editor, and commands | `settings/adapters/<Product>SettingsAdapter.ts` + `registerSettings.ts` | See [does-not-map.md](does-not-map.md) #5 and `docs/settings.md`. Express product differences as capability flags, never as branches |
 | Sign-in / accounts / subscriptions / filtering | **Reuse** existing account provider + `Select Subscriptions` | `extension.ts` wiring only | Don't rebuild |
-| "Open in portal" / resource-group grouping | **Reuse** generic commands + `AzureResourceDataProvider`/`GenericAzureViewProvider` | `combineContextValues(OpenInPortal.ContextValue, ...)` | Add the generic `ContextValue`s to your view items |
-| Setting (`configuration`) | `package.json` `contributes.configuration` + read via config service | `package.json` + consuming code | Migrate only settings whose feature is kept; localize `description`/enum labels |
-| Wizard prompt step (source `AzureWizardPromptStep`) | `PromptStep` subclass | `commands/<product>/steps/PickXStep.ts` | Check hydration flags (`hasInfra`) to skip when IaC exists; `@injectable`, resolved from container |
+| "Open in portal" / "browse website" / documentation link / resource-group grouping | **Reuse** the resource-generic commands already in the tree (open-in-portal, browse-website, open-url) | `combineContextValues(OpenInPortal.ContextValue, ...)` | Add the generic `ContextValue`s to your view items. Do not write a product-specific Browse or Show-Docs command |
+| Setting (`configuration`) | `package.json` `contributes.configuration` + read via config service | `package.json` + consuming code | Only *editor* preferences belong here. Project/deployment configuration belongs in `azure.yaml` ([does-not-map.md](does-not-map.md) #8). Migrate only settings whose feature is kept; localize `description`/enum labels |
+| Wizard prompt step (source `AzureWizardPromptStep`) | `PromptStep` subclass | `commands/<product>/steps/PickXStep.ts` | Gate with `shouldPrompt`/`shouldExecute` — never by conditionally assembling step arrays. Check hydration flags (`hasInfra`) to skip when IaC exists; `@injectable`, resolved from container. Reuse the shared workspace file/folder pick step instead of writing a product-specific one |
 | Wizard execute step (ARM work) | azd execute step (Generate*/Azd*) | `azd/wizard/` (reuse) | **Adapt** — no hand-written ARM; see [does-not-map.md](does-not-map.md) #1 |
-| Framework detection / build presets | azd detection or a create-wizard `PromptStep` | `commands/<product>/steps/` or drop | Judgment call in triage |
+| Framework detection / build presets | azd detection, or a create-wizard `PromptStep` fed by the workspace scanning service | `commands/<product>/steps/` or drop | Judgment call in triage; azd owns scaffolding ([does-not-map.md](does-not-map.md) #8). Never walk the workspace directly — add a rule to the detector / use the workspace index |
+| Config-file scaffolding or parsing (`azure.yaml`, tool config) | usually **Drop**/**Defer** | — | We do not author or parse files another tool owns; contribute upstream instead ([does-not-map.md](does-not-map.md) #8) |
 | Debug provider / `debuggers` contribution | keep / adapt / drop | `package.json` + provider | Judgment call; confirm platform doesn't own it |
 | Task provider / `taskDefinitions` / `problemMatchers` | keep / adapt / drop | `package.json` + provider | Keep only if the workflow still needs it |
-| CLI process lifecycle / emulators | workspace-view emulator model or drop | `tree/workspace/...` | Map to `EmulatorsWorkspaceDataProvider` shape or drop |
+| CLI process lifecycle / emulators | workspace-view emulator model or drop | `tree/workspace/...` | Map to `EmulatorsWorkspaceDataProvider` shape or drop. Spawning, shell-task creation, and process termination belong to the shared process/task service (`IProcessExecutor`, `createShellTask`) — never product-local |
 | Exported extension API (e.g. `RemoteRepoApi`) | usually **Drop**/**Defer** | — | Only migrate if a monorepo consumer needs it |
 | Orphan/dead NLS key or contribution | **Drop** | — | Never migrate |
 
@@ -42,13 +43,20 @@ Disposition:    Migrate | Adapt | Reuse   (from signed triage)
 Pattern:        <row from the table above>
 Target file(s): <exact paths>
 Precedent:      <file to copy the shape of>
+Shared-primitive sweep: reused <symbol> from <package> | searched <terms>, none exists -> new <symbol> at <path>
+Activation:     none | <activationEvents entry> + why the work cannot wait for a user gesture
+External facts: <claim> verified against <source/URL>            (versions, file/schema names, URLs, assets)
 Tree contract:  <contextValue(s) + package.json when clause>   (if applicable)
-Wizard:         <ordered prompt/execute steps + AzdJob>                  (if applicable)
+Wizard:         <ordered prompt/execute steps + AzdJob>; per prompt, why no default/detection answers it   (if applicable)
 Provisioning:   <topology; AVM search evidence; selected pinned module, or two-file fallback; parameter/output map>
 Client:         <azutils wrapper + SDK types to re-export>      (if applicable)
 Reuse:          <existing symbol/command to wire> + <where it's wired> + <how to verify it's wired>   (required for Reuse rows)
 Open questions: <anything to confirm with the human>
 ```
+
+The **shared-primitive sweep**, **activation**, and **external facts** lines are not optional prose — they are
+the reviewable evidence that [implementation.md](implementation.md) ran its gates. A record missing them is an
+unfinished mapping.
 
 ## Defining the tree contract precisely
 

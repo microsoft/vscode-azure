@@ -49,6 +49,21 @@ GitHub bootstrap into the azd wizard, and do **not** silently drop it either. In
 explicit decision: keep it (as a separate Git/GitHub service step outside provisioning), defer it, or drop
 it in favor of an azd-first UX. Flag it as an open question in the feature's mapping record.
 
+### Prompt budget
+
+A wizard's prompt count is a UX cost, and the azd+Bicep target is supposed to *reduce* it. A migrated wizard
+whose step list survived nearly intact is a signal the adaptation never happened.
+
+- **Ask only for what cannot be defaulted or detected.** Everything else gets a sensible default written into
+  the generated Bicep, which advanced users edit afterwards. Editable IaC replaces an interrogation.
+- **No "advanced" command variant.** One create command. Do not contribute a second "... (Advanced)" command,
+  a mode flag, or a basic-vs-advanced branch, even if the source had one — the source's advanced deltas become
+  Bicep parameters, not extra prompts.
+- **Express conditionality with `shouldPrompt` / `shouldExecute` on the step**, never by assembling different
+  step arrays per mode. The step list is static; each step decides whether it applies.
+- Justify every retained prompt in the mapping record: what it asks, and why no default or detection can
+  answer it.
+
 ---
 
 ## 2. Tree views -> DataProvider / ViewProvider registries
@@ -66,6 +81,11 @@ differently:
   (e.g. a "Settings" grouping under a resource). No rendering here.
 - **`ViewProvider<T>`** — `canHandle()` + `getTreeItem()` + `getChildren()` + `getParent()`. Renders labels,
   icons, and `contextValue` (via `combineContextValues(...)`). Must **not** mutate data.
+- **The boundary runs both ways.** The view layer must not mutate data, *and* the data layer must not carry
+  presentation. No display label, description, tooltip, icon id, or `contextValue` is computed in a
+  `DataProvider` or stashed on a resource for the view to read. A data provider may compute **state** (a status
+  value, a flag, a count); turning that state into words or pixels is the view provider's job. A formatted
+  string on a data-layer resource is an architectural violation, not a shortcut.
 - Both are registered in `registerTrees.ts`, **specific before generic**, so dispatch order matters.
 - `contextValue` is no longer authored on a node class — it is assembled from each acting command's static
   `ContextValue`, and gated in `package.json` by a **regex `when`** with word boundaries.
@@ -160,3 +180,34 @@ product calls, they **always** need explicit human confirmation, not a silent re
 
 Anything the inventory marked DEAD (orphan NLS keys, contributions with no backing behavior, deprecated
 commands) is a **Drop**. Do not migrate it "just in case".
+
+---
+
+## 8. Ownership boundaries — what we don't own
+
+Some source behavior is not ours to reimplement at all. Migrating it means owning code written against
+someone else's contract, which then breaks when that contract moves. Recognize these during triage and
+recommend **Drop**, **Defer**, or an upstream contribution.
+
+**`azure.yaml` is azd's file.** Do not author, template, patch, or parse it. `GenerateAzureYamlStep` is the
+one sanctioned writer, and it exists to hand azd a starting point — not to grow into a product-specific
+`azure.yaml` editor. If a feature needs a service path, build hook, or host setting expressed there, the fix
+is **a contribution to azd**, not a step in this repo that rewrites azd's file. If a feature cannot work
+without reading `azure.yaml`, that is an open question for the human, not a parser you write.
+
+**Product and deployment configuration belongs in `azure.yaml`, not VS Code settings.** App/API/output
+locations, build commands, and service topology describe the *project*, so they belong in the IaC/azd layer
+where every tool can see them. `contributes.configuration` is for *editor* preferences (verbosity, prompt
+suppression, enable/disable) only. A source extension that stored project layout in workspace settings did so
+because it had nowhere better; we do.
+
+**Scaffolding is azd's job too.** Build presets, framework-specific project templates, and config-file
+generation that azd already performs default to **Drop** / **Defer**. Framework detection stays only where it
+feeds a decision we own (a wizard default, a Bicep parameter) — and it goes through the monorepo's workspace
+scanning service and workspace index, not a bespoke walker.
+
+**Never depend on the extension being retired.** This monorepo replaces the per-service extensions, so
+migrated code must not call their commands (`azureFunctions.*`, `azureStaticWebApps.*`, ...), list them in
+`extensionDependencies`, read their settings or global state, or preserve compatibility with their
+contribution ids and `contextValue` literals. If a source feature only works by calling into a sibling
+extension, the capability must exist here or the feature is a **Defer** — record which capability is missing.

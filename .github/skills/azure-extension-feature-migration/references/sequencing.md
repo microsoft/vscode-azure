@@ -76,6 +76,7 @@ Monorepo phase: <n>
 ## Slice N — Settings & manifest cleanup
 - [ ] `contributes.configuration` for kept settings + nls  <- SWA-0xx (settings)
 - [ ] Debuggers / tasks / problemMatchers (per triage)     <- SWA-0xx (debuggers/tasks)
+- [ ] Product doc `docs/products/<product>.md`; framework docs get at most a link  <- —
 
 ## Deferred (tracked, not built now)
 - [ ] <feature> — reason, target phase                     <- SWA-0xx (Defer)
@@ -89,4 +90,31 @@ Rules:
   **Drop** is listed for the record. **Reuse** appears as a wiring task. Nothing from `TRIAGE.md` is
   silently absent — every ID appears somewhere, which is what makes verification possible.
 - Tag each task with its `TRIAGE.md` ID (`<- SWA-0xx`) so Phase 6 can trace it back to a signed disposition.
-- Save `MIGRATION-PLAN.md` alongside the signed `TRIAGE.md`. Print both paths.
+- Save `MIGRATION-PLAN.md` in the tracked `docs/migrations/<service>/` folder alongside the signed
+  `TRIAGE.md`, and **commit both before any feature code**. They are the migration PR's first commit; a PR
+  with feature code but no plan/triage/inventory is incomplete. Print both paths.
+
+## Branch drift protocol (long-lived migrations)
+
+A feature migration takes weeks, and `main` moves underneath it. The most common way a migration goes stale is
+that the monorepo grows the exact shared primitive a slice hand-rolled earlier — and nobody goes back.
+
+After **every** rebase or merge from `main`:
+
+1. **Read what arrived.** `git log --oneline <old-base>..main -- packages/utils/src packages/azutils/src
+   extensions/vscode-azure/src` plus the same for the two testing barrels. Skim for new shared services,
+   commands, wizard steps, utilities, and fixtures.
+2. **Re-run the [shared-primitive sweep](implementation.md#before-you-write-the-shared-primitive-sweep) over
+   already-landed slices**, not just the next one. Adopting a newly-shared primitive is in scope for the
+   migration; leaving a product-local duplicate behind is a review blocker.
+3. **Re-check the unbuilt slices.** A new shared primitive can turn a **Migrate** task into a **Reuse** wiring
+   task. If it changes a disposition, edit `TRIAGE.md` and re-confirm with the human — never re-decide
+   silently in-flight.
+4. **Log it in `MIGRATION-PLAN.md`** so a reviewer can see it happened:
+
+```markdown
+## Drift log
+- <date> rebased onto <sha> — adopted `getWorkspaceFolder` (replaces local helper in `steps/`); no other new shared surfaces.
+```
+
+A migration that has never logged a drift sweep, on a branch that has rebased, has not done this step.
