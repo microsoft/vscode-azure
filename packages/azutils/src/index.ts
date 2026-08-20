@@ -6,6 +6,7 @@
 export * from './auth/AzureSubscription';
 export * from './auth/CredentialFactory';
 export * from './auth/Environment';
+export * from './auth/NotSignedInError';
 export * from './auth/listing/AzureListingCache';
 export * from './auth/listing/AzureListingFetcher';
 export * from './auth/VsCodeExtensionCredential';

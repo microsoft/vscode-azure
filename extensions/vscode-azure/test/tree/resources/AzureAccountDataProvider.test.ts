@@ -394,6 +394,24 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(after).to.equal(before);
         });
 
+        it('should fire for every filter change, even in rapid succession', async () => {
+            // Unselecting and immediately re-selecting is an ordinary user
+            // gesture. If the second change were folded into the debounce or
+            // silence window that the first one opened, the tree would be left
+            // showing the first selection.
+            const { provider, code, scheduler } = createProvider();
+            let fired = 0;
+            provider.onDidChange(() => { fired++; });
+            await provider.getChildren();
+
+            const filterChange = { affectsConfiguration: (section: string) => section === selectedSubscriptionsKey };
+            code.configChangeEmitter.fire(filterChange);
+            code.configChangeEmitter.fire(filterChange);
+
+            expect(fired).to.equal(2, 'an explicit user action must never be suppressed');
+            expect(scheduler.hasPending, 'routing a filter change through the debouncer would collapse the second change into the first').to.be.false;
+        });
+
         it('should ignore unrelated configuration changes', () => {
             const { provider, code } = createProvider();
             let fired = 0;

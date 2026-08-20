@@ -9,6 +9,7 @@ import { SubscriptionClient } from '../../rest/clients/SubscriptionClient';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
 import type { ICredentialFactory } from '../CredentialFactory';
 import { getAuthProviderId, getConfiguredAzureEnv } from '../Environment';
+import { NotSignedInError } from '../NotSignedInError';
 
 /**
  * Fetches the account -> tenant -> subscription hierarchy from Azure.
@@ -112,9 +113,25 @@ export class AzureListingFetcher implements IAzureListingFetcher {
      * in order to reach it, which is not necessarily the tenant ARM reports as
      * its owner. The same subscription reached through two tenants is therefore
      * two distinct nodes, each authenticating the way it actually has to.
+     *
+     * @throws {@linkcode NotSignedInError} when no token can be obtained for the
+     * tenant. The token is acquired up front rather than left to the client's
+     * bearer policy, which on a missing token would send the request
+     * unauthenticated and surface a 401 -- indistinguishable from a real fault.
+     * A tenant the user has never signed in to is the *expected* case during a
+     * walk, so it has to be reported as itself.
      */
     public async *fetchSubscriptions(tenant: AzureTenant): AsyncIterable<Page<AzureSubscription>> {
         const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
+
+        // Scopes are left empty so the credential applies the environment's own
+        // resource-manager default -- the same scope the client below requests,
+        // so this resolves the session the request would have used rather than
+        // establishing a second one.
+        if (!await credential.getToken([], { tenantId: tenant.tenantId })) {
+            throw new NotSignedInError(`No session is available for tenant ${tenant.tenantId}`);
+        }
+
         const client = SubscriptionClient.create(this.ctx, this.executor, credential, tenant.environment, undefined, tenant);
         for await (const page of client.subscriptions.list()) {
             const items = page.items

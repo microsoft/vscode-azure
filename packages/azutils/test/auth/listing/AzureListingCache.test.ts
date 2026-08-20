@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { collectAsync, type Page } from '@microsoft/vscode-azure-utils';
+import { collectAsync, delay, type Page } from '@microsoft/vscode-azure-utils';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import * as assert from 'node:assert';
-import type { AzureSubscriptionPath, AzureTenantFilter } from '../../../src/auth/listing/AzureListingCache';
+import type { AzureListingFailure, AzureSubscriptionPath, AzureTenantFilter } from '../../../src/auth/listing/AzureListingCache';
 import { AzureListingCache } from '../../../src/auth/listing/AzureListingCache';
-import type { AzureSubscription, AzureTenant } from '../../../src/auth/AzureSubscription';
+import type { AzureAccount, AzureSubscription, AzureTenant } from '../../../src/auth/AzureSubscription';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '../../mockAzure';
 
 const account = makeAccount({ id: 'acct', label: 'Account' });
@@ -317,6 +317,129 @@ describe('AzureListingCache (unit)', () => {
             await assert.rejects(() => collectAsync(cache.listSubscriptions(tenantA)), /listing failed/);
             await assert.rejects(() => reader.next(), /listing failed/,
                 'resuming would splice a later attempt\'s tail onto this attempt\'s head');
+        });
+
+        it('keeps walking when an account\'s tenants cannot be listed', async () => {
+            const otherAccount = makeAccount({ id: 'acct-2', label: 'Other' });
+            const otherTenant = makeTenant({ accountId: otherAccount.id, tenantId: 'tenant-c' });
+            const otherSub = makeSubscription({ accountId: otherAccount.id, tenantId: otherTenant.tenantId, subscriptionId: 'sub-c' });
+            const { cache, fetcher } = createCache({
+                accounts: [account, otherAccount],
+                tenants: [tenantA, otherTenant],
+                subscriptions: [subA, otherSub],
+            });
+            fetcher.fetchTenants.mock.mockImplementation((target: AzureAccount) => {
+                if (target.id === account.id) {
+                    return {
+                        [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error('Mock: cannot list tenants')) }),
+                    } as AsyncIterable<Page<AzureTenant>>;
+                }
+                return (async function* () {
+                    yield await Promise.resolve({ items: [otherTenant], hasMore: false });
+                })();
+            });
+            const failures: AzureListingFailure[] = [];
+
+            const paths = await collectAsync(cache.walkSubscriptions({ onFailure: failure => failures.push(failure) }));
+
+            assert.deepStrictEqual(pathIds(paths), ['tenant-c/sub-c'],
+                'one account that cannot enumerate its tenants must not cost the user every other account');
+            assert.deepStrictEqual(failures.map(failure => failure.account.id), [account.id]);
+            assert.strictEqual(failures[0].tenant, undefined, 'the account itself failed, not a tenant under it');
+        });
+    });
+
+    describe('walk concurrency', () => {
+        /**
+         * A cache over `count` tenants whose subscription listings each take a
+         * measurable moment, recording how many were ever in flight at once.
+         */
+        function createOverlappingCache(count: number) {
+            const many = Array.from({ length: count }, (_unused, index) => makeTenant({
+                accountId: account.id,
+                tenantId: `tenant-${index}`,
+            }));
+            const subs = many.map(tenant => makeSubscription({
+                accountId: account.id,
+                tenantId: tenant.tenantId,
+                subscriptionId: `sub-${tenant.tenantId}`,
+            }));
+            const { cache, fetcher } = createCache({ tenants: many, subscriptions: subs });
+
+            let active = 0;
+            let peak = 0;
+            fetcher.fetchSubscriptions.mock.mockImplementation((tenant: AzureTenant) => (async function* () {
+                active++;
+                peak = Math.max(peak, active);
+                await delay(10);
+                active--;
+                yield { items: subs.filter(sub => sub.tenantId === tenant.tenantId), hasMore: false };
+            })());
+
+            return { cache, peak: () => peak };
+        }
+
+        it('lists one tenant at a time unless asked otherwise', async () => {
+            const { cache, peak } = createOverlappingCache(6);
+
+            await collectAsync(cache.walkSubscriptions());
+
+            assert.strictEqual(peak(), 1,
+                'a walk that may stop early must not mint tokens for tenants past the one being read');
+        });
+
+        it('lists several tenants at once when the caller opts in', async () => {
+            const { cache, peak } = createOverlappingCache(6);
+
+            await collectAsync(cache.walkSubscriptions({ concurrency: 3 }));
+
+            assert.strictEqual(peak(), 3, 'the window must actually fill, and never past its size');
+        });
+
+        it('yields the same subscriptions in the same order either way', async () => {
+            const sequential = createOverlappingCache(6);
+            const concurrent = createOverlappingCache(6);
+
+            const inOrder = await collectAsync(sequential.cache.walkSubscriptions());
+            const overlapped = await collectAsync(concurrent.cache.walkSubscriptions({ concurrency: 4 }));
+
+            assert.deepStrictEqual(pathIds(overlapped), pathIds(inOrder),
+                'concurrency is a latency choice; it must not be observable in the result');
+        });
+
+        it('still reaches every tenant when one of a concurrent batch fails', async () => {
+            const { cache } = createCache({ unreachableTenantIds: [tenantA.tenantId] });
+            const failures: string[] = [];
+
+            const paths = await collectAsync(cache.walkSubscriptions({
+                concurrency: 4,
+                onFailure: failure => failures.push(failure.tenant?.tenantId ?? '<account>'),
+            }));
+
+            assert.deepStrictEqual(pathIds(paths), ['tenant-b/sub-b']);
+            assert.deepStrictEqual(failures, ['tenant-a']);
+        });
+
+        it('walks every tenant of an account with far more than a window of them', async () => {
+            const count = 50;
+            const { cache, fetcher } = (() => {
+                const many = Array.from({ length: count }, (_unused, index) => makeTenant({
+                    accountId: account.id,
+                    tenantId: `tenant-${index}`,
+                }));
+                const subs = many.map(tenant => makeSubscription({
+                    accountId: account.id,
+                    tenantId: tenant.tenantId,
+                    subscriptionId: `sub-${tenant.tenantId}`,
+                }));
+                return createCache({ tenants: many, subscriptions: subs, pageSize: 7 });
+            })();
+
+            const paths = await collectAsync(cache.walkSubscriptions({ concurrency: 5 }));
+
+            assert.strictEqual(paths.length, count,
+                'a pick list over every reachable subscription must not quietly stop at some tenant count');
+            assert.strictEqual(listedTenantIds(fetcher).length, count);
         });
     });
 

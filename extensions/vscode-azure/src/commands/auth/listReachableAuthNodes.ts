@@ -4,8 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureAccount, AzureListingCache, AzureSubscription, AzureTenant } from '@microsoft/vscode-azure-azutils';
+import { isNotSignedInError } from '@microsoft/vscode-azure-azutils';
 import { CaselessMap } from '@microsoft/vscode-azure-utils';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
+
+/**
+ * How many tenants {@linkcode listReachableSubscriptions} lists at once.
+ *
+ * Matches the degree of parallelism the tree layer already uses for its own
+ * fan-out, and stays modest deliberately: the ceiling here is the auth
+ * provider's tolerance for simultaneous token requests, not ARM's.
+ */
+const DiscoveryConcurrency = 5;
 
 /**
  * A tenant that is reachable from a signed-in account.
@@ -25,16 +35,26 @@ export interface ReachableSubscription {
 }
 
 /**
+ * Why an account or tenant did not take part in a discovery walk.
+ *
+ * `notSignedIn` is the expected outcome, not a fault: an account with access to
+ * many tenants has usually signed in to only some of them, and the rest are
+ * reachable the moment the user signs in. `error` is everything else -- a
+ * network failure, a service error, a policy denial that signing in will not
+ * fix.
+ */
+export type UnreachableReason = 'notSignedIn' | 'error';
+
+/**
  * An account or tenant whose subscriptions could not be enumerated during
- * silent discovery -- typically because a token could not be obtained without
- * interactive sign-in (e.g. the tenant requires additional MFA / conditional
- * access). Recorded so the caller can surface it instead of aborting the whole
- * operation on the first un-authable tenant.
+ * silent discovery. Recorded so the caller can surface it instead of aborting
+ * the whole operation on the first tenant it cannot reach.
  */
 export interface UnreachableAuthNode {
     readonly account: AzureAccount;
     /** The tenant that failed, or `undefined` when the account's tenant list itself failed. */
     readonly tenant?: AzureTenant;
+    readonly reason: UnreachableReason;
     readonly error: unknown;
 }
 
@@ -104,7 +124,13 @@ export async function listFirstPageReachableTenants(listings: AzureListingCache)
  * {@linkcode ReachableSubscriptionsResult.failures} and does not abort the rest.
  * This matters because a single tenant that cannot mint a token (silently or
  * otherwise) would otherwise reject the whole walk and prevent the user from
- * selecting *any* subscription.
+ * selecting *any* subscription. Each failure carries an
+ * {@linkcode UnreachableReason} so a caller can tell the routine case -- a
+ * tenant nobody has signed in to -- from a real fault.
+ *
+ * Tenants are listed a few at a time, because this consumer drains the walk in
+ * full: every tenant's listing is going to be paid for, and each is a token
+ * request plus a round trip with no ordering dependency on any other.
  *
  * @param listings - The listing cache to walk.
  * @returns The reachable subscriptions (deduped and sorted) and any failures.
@@ -114,7 +140,13 @@ export async function listReachableSubscriptions(listings: AzureListingCache): P
     const failures: UnreachableAuthNode[] = [];
 
     const walk = listings.walkSubscriptions({
-        onFailure: failure => failures.push({ account: failure.account, tenant: failure.tenant, error: failure.error }),
+        concurrency: DiscoveryConcurrency,
+        onFailure: failure => failures.push({
+            account: failure.account,
+            tenant: failure.tenant,
+            reason: isNotSignedInError(failure.error) ? 'notSignedIn' : 'error',
+            error: failure.error,
+        }),
     });
 
     for await (const { account, tenant, subscription } of walk) {

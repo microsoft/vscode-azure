@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CaselessSet, filterPages, stringifyError, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, filterPages, Limiter, stringifyError, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
 import type { IAzureListingFetcher } from './AzureListingFetcher';
@@ -85,6 +85,22 @@ export interface AzureWalkOptions extends AzureListingOptions {
     readonly accountId?: string;
     /** Restrict the walk to one tenant. */
     readonly tenantId?: string;
+    /**
+     * How many tenants may have their subscriptions listed at once. Defaults to
+     * `1`, which walks strictly sequentially.
+     *
+     * Raise it for a consumer that is going to drain the walk anyway -- a pick
+     * list over every reachable subscription spends a token request plus a
+     * listing per tenant, and across dozens of tenants that is seconds of
+     * serialized latency for work with no ordering dependency between tenants.
+     *
+     * Leave it at `1` for anything that stops early. A walk with a window of `n`
+     * has up to `n - 1` tenants in flight past the one being read, so a consumer
+     * that breaks on the first match would issue token requests for tenants it
+     * never needed -- and a token request is the thing most capable of
+     * interrupting the user. Output order is unaffected either way.
+     */
+    readonly concurrency?: number;
     /**
      * Called for each account or tenant whose listing failed. A failure is
      * always isolated -- the walk continues -- so this is the only way to learn
@@ -242,34 +258,39 @@ export class AzureListingCache {
      * {@linkcode AzureWalkOptions.onFailure onFailure} and the walk continues,
      * so one unreachable tenant cannot cost the caller every other
      * subscription.
+     *
+     * Tenants may be listed concurrently -- see
+     * {@linkcode AzureWalkOptions.concurrency concurrency} -- but the order
+     * subscriptions are yielded in never varies with it.
      */
     public async *walkSubscriptions(options?: AzureWalkOptions): AsyncIterable<AzureSubscriptionPath> {
-        for (const account of await this.listAccounts()) {
-            if (!visitsAccount(account, options)) {
-                continue;
-            }
+        const concurrency = Math.max(1, Math.floor(options?.concurrency ?? 1));
 
-            try {
-                for await (const tenantPage of this.tenantPages(account)) {
-                    for (const tenant of tenantPage.items) {
-                        if (!visitsTenant(tenant, options)) {
-                            continue;
-                        }
-
-                        try {
-                            for await (const subscriptionPage of this.subscriptionListing(tenant).read()) {
-                                for (const subscription of subscriptionPage.items) {
-                                    yield { account, tenant, subscription };
-                                }
-                            }
-                        } catch (error) {
-                            options?.onFailure?.({ account, tenant, error });
-                        }
-                    }
-                }
-            } catch (error) {
-                options?.onFailure?.({ account, error });
+        if (concurrency === 1) {
+            for await (const { account, tenant } of this.walkTenants(options)) {
+                yield* this.tenantSubscriptions(account, tenant, options);
             }
+            return;
+        }
+
+        // A sliding window of in-flight tenant listings, drained oldest-first so
+        // the yield order matches the sequential walk exactly. The window is
+        // filled from the tenant walk itself, which stays lazy: tenant pages are
+        // pulled only as slots open up, so a huge account is never enumerated
+        // ahead of the work it feeds.
+        const limiter = new Limiter<AzureSubscriptionPath[]>(concurrency);
+        const inFlight: Array<Promise<AzureSubscriptionPath[]>> = [];
+
+        for await (const { account, tenant } of this.walkTenants(options)) {
+            inFlight.push(limiter.queue(() => this.collectTenantSubscriptions(account, tenant, options)));
+            while (inFlight.length >= concurrency) {
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                yield* await inFlight.shift()!;
+            }
+        }
+
+        for (const pending of inFlight) {
+            yield* await pending;
         }
     }
 
@@ -334,6 +355,65 @@ export class AzureListingCache {
      */
     public clear(): void {
         this.store.clear();
+    }
+
+    /**
+     * The account/tenant pairs a walk should descend into, in order.
+     *
+     * The tenant filter is applied here -- before the tenant is handed to
+     * anything that would touch it -- which is what makes an excluded tenant
+     * cost nothing at all: no token, no listing, no enrichment. A failure to
+     * enumerate one account's tenants is isolated so the walk still reaches
+     * every other account.
+     */
+    private async *walkTenants(options?: AzureWalkOptions): AsyncIterable<{ account: AzureAccount; tenant: AzureTenant }> {
+        for (const account of await this.listAccounts()) {
+            if (!visitsAccount(account, options)) {
+                continue;
+            }
+
+            try {
+                for await (const page of this.tenantPages(account)) {
+                    for (const tenant of page.items) {
+                        if (visitsTenant(tenant, options)) {
+                            yield { account, tenant };
+                        }
+                    }
+                }
+            } catch (error) {
+                options?.onFailure?.({ account, error });
+            }
+        }
+    }
+
+    /**
+     * One tenant's subscriptions as walk paths, streamed page by page. A listing
+     * that fails is reported and ends the tenant rather than the walk.
+     */
+    private async *tenantSubscriptions(account: AzureAccount, tenant: AzureTenant, options?: AzureWalkOptions): AsyncIterable<AzureSubscriptionPath> {
+        try {
+            for await (const page of this.subscriptionListing(tenant).read()) {
+                for (const subscription of page.items) {
+                    yield { account, tenant, subscription };
+                }
+            }
+        } catch (error) {
+            options?.onFailure?.({ account, tenant, error });
+        }
+    }
+
+    /**
+     * {@linkcode AzureListingCache.tenantSubscriptions tenantSubscriptions}
+     * buffered, for the concurrent walk -- which needs a promise per tenant to
+     * put in flight. Never rejects, so an abandoned window leaves no unhandled
+     * rejection behind.
+     */
+    private async collectTenantSubscriptions(account: AzureAccount, tenant: AzureTenant, options?: AzureWalkOptions): Promise<AzureSubscriptionPath[]> {
+        const paths: AzureSubscriptionPath[] = [];
+        for await (const path of this.tenantSubscriptions(account, tenant, options)) {
+            paths.push(path);
+        }
+        return paths;
     }
 
     /**

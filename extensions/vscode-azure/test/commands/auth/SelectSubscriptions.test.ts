@@ -127,6 +127,47 @@ describe('SelectSubscriptions (unit)', () => {
         expect(actionContext.errorHandling.suppress).to.equal('reportIssue');
     });
 
+    it('should offer sign-in rather than warn when a tenant is merely not signed in', async () => {
+        // An account with access to many tenants has usually signed in to only
+        // some of them. Reporting the rest as failures would fire on a healthy
+        // setup and train the user to ignore the warning.
+        const unvisited = makeTenant({ tenantId: 'tenant-2', displayName: 'Unvisited Tenant', accountId: account.id });
+        const { command, mockResult } = createCommand({
+            ...bothSubscriptions,
+            tenants: [tenant, unvisited],
+            signedOutTenantIds: [unvisited.tenantId],
+        });
+        respondToPrompts(mockResult, ['cancel', { pickMany: ['Sub One (sub-1)'] }]);
+
+        await command.execute();
+
+        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(0);
+        expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(1);
+        expect(mockResult.window.showInformationMessage.mock.calls[0].arguments[0])
+            .to.match(/not signed in.*Unvisited Tenant/);
+    });
+
+    it('should warn when a tenant fails for a reason signing in will not fix', async () => {
+        const broken = makeTenant({ tenantId: 'tenant-2', displayName: 'Broken Tenant', accountId: account.id });
+        const unvisited = makeTenant({ tenantId: 'tenant-3', displayName: 'Unvisited Tenant', accountId: account.id });
+        const { command, mockResult } = createCommand({
+            ...bothSubscriptions,
+            tenants: [tenant, broken, unvisited],
+            unreachableTenantIds: [broken.tenantId],
+            signedOutTenantIds: [unvisited.tenantId],
+        });
+        respondToPrompts(mockResult, ['cancel', { pickMany: ['Sub One (sub-1)'] }]);
+
+        await command.execute();
+
+        // One toast, not one per category, and the wording follows the worst
+        // outcome present.
+        expect(mockResult.window.showInformationMessage.mock.callCount()).to.equal(0);
+        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
+        expect(mockResult.window.showWarningMessage.mock.calls[0].arguments[0])
+            .to.match(/could not be loaded/);
+    });
+
     it('should fetch only the listings the filtered tree skipped', async () => {
         const excluded = makeTenant({ tenantId: 'tenant-2', displayName: 'Tenant Two', accountId: account.id });
         const sub3 = makeSubscription({ subscriptionId: 'sub-3', displayName: 'Sub Three', tenantId: excluded.tenantId, accountId: account.id });

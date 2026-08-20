@@ -12,6 +12,7 @@ import type { CredentialFactoryOptions, ICredentialFactory } from '../../../src/
 import { AzurePublicCloud } from '../../../src/auth/Environment';
 import { AzureListingFetcher } from '../../../src/auth/listing/AzureListingFetcher';
 import { PublicAuthProviderId } from '../../../src/auth/Environment';
+import { isNotSignedInError } from '../../../src/auth/NotSignedInError';
 import { SubscriptionClient } from '../../../src/rest/clients/SubscriptionClient';
 import { createMockSubscriptionClient, makeAccount, makeCredential, makeTenant, type MockSubscriptionClientOptions } from '../../mockAzure';
 
@@ -205,6 +206,19 @@ describe('AzureListingFetcher (unit)', () => {
             assert.strictEqual(inputs[0]?.tenantId, tenant.tenantId);
             assert.strictEqual(inputs[0]?.sessionOptions?.account?.id, tenant.accountId);
             assert.strictEqual(inputs[0]?.sessionOptions?.silent, undefined, 'ambient options belong to the credential factory');
+        });
+
+        it('reports a tenant with no session as not signed in, without issuing the listing', async () => {
+            const { fetcher } = createFetcher(() => ({ getToken: () => Promise.resolve(null) }));
+            const tenant = makeTenant();
+            const client = mockSubscriptionClient({ subscriptionPages: [{ items: [], hasMore: false }] });
+
+            await assert.rejects(
+                () => collectAsync(fetcher.fetchSubscriptions(tenant)),
+                (error: unknown) => isNotSignedInError(error),
+                'a tenant nobody has signed in to is the expected case, so it must be distinguishable from a fault');
+            assert.strictEqual(client.mock.callCount(), 0,
+                'sending the request unauthenticated would surface a 401 that reads like a real failure');
         });
     });
 });

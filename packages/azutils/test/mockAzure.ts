@@ -12,6 +12,7 @@ import type { ICredentialFactory } from '../src/auth/CredentialFactory';
 import type { IAzureListingFetcher } from '../src/auth/listing/AzureListingFetcher';
 import type { VsCodeExtensionCredential } from '../src/auth/VsCodeExtensionCredential';
 import { AzurePublicCloud, type EnvironmentLike } from '../src/auth/Environment';
+import { NotSignedInError } from '../src/auth/NotSignedInError';
 import { isAccount, isTenant, type ConcreteAzureNode } from '../src/models/AzureNode';
 import type { GenericResource } from '../src/models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
@@ -286,6 +287,12 @@ export interface MockAzureListingFetcherOptions {
     /** Tenant ids whose subscription listing rejects, simulating a tenant that cannot mint a token. */
     readonly unreachableTenantIds?: string[];
     /**
+     * Tenant ids whose subscription listing rejects with a
+     * {@linkcode NotSignedInError}, simulating a tenant the user has access to
+     * but has never signed in to -- the routine case, distinct from a fault.
+     */
+    readonly signedOutTenantIds?: string[];
+    /**
      * Account ids whose tenant listing is blocked, simulating conditional access
      * denying enumeration outright.
      *
@@ -341,6 +348,7 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
     const tenants = options?.tenants ?? [makeTenant()];
     const subscriptions = options?.subscriptions ?? [makeSubscription()];
     const unreachable = new CaselessSet(options?.unreachableTenantIds ?? []);
+    const signedOut = new CaselessSet(options?.signedOutTenantIds ?? []);
     const unlistable = new CaselessSet(options?.unlistableAccountIds ?? []);
 
     async function* paged<T>(listing: 'tenants' | 'subscriptions', items: T[]): AsyncIterable<Page<T>> {
@@ -358,10 +366,15 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
             ? []
             : tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase()))),
         fetchSubscriptions: mock.fn((tenant: AzureTenant) => {
-            if (unreachable.has(tenant.tenantId)) {
+            const error = signedOut.has(tenant.tenantId)
+                ? new NotSignedInError(`Mock: no session for tenant ${tenant.tenantId}`)
+                : unreachable.has(tenant.tenantId)
+                    ? new Error(`Mock: cannot list subscriptions for tenant ${tenant.tenantId}`)
+                    : undefined;
+            if (error) {
                 const rejecting: AsyncIterable<Page<AzureSubscription>> = {
                     [Symbol.asyncIterator]: () => ({
-                        next: () => Promise.reject(new Error(`Mock: cannot list subscriptions for tenant ${tenant.tenantId}`)),
+                        next: () => Promise.reject(error),
                     }),
                 };
                 return rejecting;

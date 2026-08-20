@@ -161,6 +161,11 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
                 // which cached nodes are admitted, not whether any of them are
                 // true. The tree re-walks, and everything it asks for that was
                 // fetched before is served without a single request.
+                //
+                // Fired directly, never through the session debouncer: this is
+                // an explicit user action, and unselecting then immediately
+                // re-selecting is ordinary. Collapsing the two would leave the
+                // tree showing the first selection.
                 this.executor.output.debug('[auth] subscription filter changed; re-applying filter to cached listings');
                 this.changeEmitter.fire({ target: Everything });
             }
