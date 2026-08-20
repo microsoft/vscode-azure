@@ -11,7 +11,7 @@ import type { IAzureListingFetcher } from './AzureListingFetcher';
 import { azureListingKey, AzureListingStore } from './AzureListingStore';
 
 /**
- * Decides whether a tenant takes part in a listing walk.
+ * Decides whether a tenant takes part in a listing.
  *
  * Returning `false` skips the tenant **and everything beneath it**, before any
  * work is done for it: no tenant-scoped token is minted and no subscription
@@ -73,12 +73,6 @@ export interface AzureListingFailure {
 /** Options for {@linkcode AzureListingCache.walkSubscriptions}. */
 export interface AzureWalkOptions {
     /**
-     * Skip predicate applied during the walk. Omit it to read the unfiltered
-     * truth -- which is what a flow that *edits* the filter must do, or the
-     * filter could only ever be narrowed.
-     */
-    readonly filter?: AzureTenantFilter;
-    /**
      * How many tenants may have their subscriptions listed at once. Defaults to
      * `1`, which walks strictly sequentially.
      *
@@ -107,12 +101,18 @@ export interface AzureWalkOptions {
  * already cached and caching everything it fetches.
  *
  * **The cache holds unfiltered truth; the filter is applied on read, above the
- * cache.** However data was obtained -- a filtered tree walk, an unfiltered pick
- * list, a subscription lookup -- all of it is stored, including the parts the
- * caller's filter excluded. Two consequences follow, and both are the point: a
- * filtered read followed by an unfiltered one fetches only the delta (caching is
- * per **parent listing**, not per query), and changing which subset a product
+ * cache.** However data was obtained -- a filtered descent for a tree, an
+ * unfiltered walk for a pick list -- all of it is stored, including the parts
+ * the caller's filter excluded. Two consequences follow, and both are the point:
+ * a filtered read followed by an unfiltered one fetches only the delta (caching
+ * is per **parent listing**, not per query), and changing which subset a product
  * shows needs no invalidation at all.
+ *
+ * The filter is a parameter of {@linkcode AzureListingCache.listTenants listTenants}
+ * alone, applied as a traversal-time skip so an excluded tenant is never handed
+ * to a caller that would drill it. Subscriptions are never filtered here: by the
+ * time one is listed its tenant's token and listing are already paid for, so
+ * which to *show* is the consumer's business.
  *
  * Invalidation is correspondingly narrow, because a listing is expensive to earn
  * and rarely becomes wrong. Almost every change makes some data *unreachable*
@@ -208,12 +208,19 @@ export class AzureListingCache {
     }
 
     /**
-     * Walk account -> tenant -> subscription, yielding each subscription with
-     * the account and tenant it was reached through.
+     * Walk account -> tenant -> subscription **unfiltered**, yielding each
+     * subscription with the account and tenant it was reached through.
      *
-     * This is the one traversal. A filtered consumer (a tree, a lookup) and an
-     * unfiltered one (a flow that edits the filter) differ only by the predicate
-     * they pass; there is no second code path and no second shape of data.
+     * For the consumer that must see everything reachable -- a flow that *edits*
+     * the tenant/subscription filter, which reading through that filter would
+     * leave able to narrow it but never widen it again. A consumer that shows a
+     * filtered view descends {@linkcode AzureListingCache.listTenants listTenants}
+     * and {@linkcode AzureListingCache.listSubscriptions listSubscriptions}
+     * instead, which is where the skip belongs.
+     *
+     * Sharing the cache is what keeps the two cheap together: a walk pays only
+     * for the listings a filtered descent had not already fetched, and vice
+     * versa.
      *
      * Failures are isolated: a tenant that cannot be listed is reported through
      * {@linkcode AzureWalkOptions.onFailure onFailure} and the walk continues,
@@ -268,22 +275,15 @@ export class AzureListingCache {
     }
 
     /**
-     * The account/tenant pairs a walk should descend into, in order.
-     *
-     * The tenant filter is applied here -- before the tenant is handed to
-     * anything that would touch it -- which is what makes an excluded tenant
-     * cost nothing at all: no token, no listing, no enrichment. A failure to
-     * enumerate one account's tenants is isolated so the walk still reaches
-     * every other account.
+     * Every account/tenant pair, in order. A failure to enumerate one account's
+     * tenants is isolated so the walk still reaches every other account.
      */
     private async *walkTenants(options?: AzureWalkOptions): AsyncIterable<{ account: AzureAccount; tenant: AzureTenant }> {
         for (const account of await this.listAccounts()) {
             try {
                 for await (const page of this.tenantPages(account)) {
                     for (const tenant of page.items) {
-                        if (options?.filter?.(tenant) ?? true) {
-                            yield { account, tenant };
-                        }
+                        yield { account, tenant };
                     }
                 }
             } catch (error) {

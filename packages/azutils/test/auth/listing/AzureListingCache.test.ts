@@ -34,6 +34,26 @@ function onlyTenants(...tenantIds: string[]): AzureTenantFilter {
     return (tenant: AzureTenant) => tenantIds.includes(tenant.tenantId);
 }
 
+/**
+ * The descent the tree's view layer makes: list an account's tenants through the
+ * filter, then drill each one it admitted.
+ *
+ * The filter is deliberately applied by `listTenants` rather than by this
+ * helper, because that is the whole guarantee under test -- an excluded tenant
+ * must never reach the code that would drill it.
+ */
+async function treeRead(cache: AzureListingCache, filter?: AzureTenantFilter): Promise<string[]> {
+    const paths: string[] = [];
+    for (const page of await collectAsync(cache.listTenants(account, filter))) {
+        for (const tenant of page.items) {
+            for (const subPage of await collectAsync(cache.listSubscriptions(tenant))) {
+                paths.push(...subPage.items.map(sub => `${tenant.tenantId}/${sub.subscriptionId}`));
+            }
+        }
+    }
+    return paths;
+}
+
 /** The tenant ids `fetchSubscriptions` was called for, in call order. */
 function listedTenantIds(fetcher: ReturnType<typeof createCache>['fetcher']): string[] {
     return fetcher.fetchSubscriptions.mock.calls.map(call => call.arguments[0].tenantId);
@@ -61,9 +81,9 @@ describe('AzureListingCache (unit)', () => {
         it('issues no request for a tenant the filter excludes', async () => {
             const { cache, fetcher } = createCache();
 
-            const paths = await collectAsync(cache.walkSubscriptions({ filter: onlyTenants('tenant-a') }));
+            const paths = await treeRead(cache, onlyTenants('tenant-a'));
 
-            assert.deepStrictEqual(pathIds(paths), ['tenant-a/sub-a']);
+            assert.deepStrictEqual(paths, ['tenant-a/sub-a']);
             assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a'],
                 'an excluded tenant must not have its subscriptions listed -- doing so mints a tenant-scoped token');
         });
@@ -79,9 +99,7 @@ describe('AzureListingCache (unit)', () => {
         it('treats an absent filter as "everything", not "nothing"', async () => {
             const { cache } = createCache();
 
-            const paths = await collectAsync(cache.walkSubscriptions());
-
-            assert.deepStrictEqual(pathIds(paths), ['tenant-a/sub-a', 'tenant-b/sub-b']);
+            assert.deepStrictEqual(await treeRead(cache), ['tenant-a/sub-a', 'tenant-b/sub-b']);
         });
 
         it('lists every subscription of an admitted tenant, leaving the choice to the caller', async () => {
@@ -100,12 +118,8 @@ describe('AzureListingCache (unit)', () => {
             const { cache, fetcher } = createCache();
 
             // The tree: expand the account through the filter, then drill each
-            // tenant it admitted -- the two calls the view layer actually makes.
-            for (const page of await collectAsync(cache.listTenants(account, onlyTenants('tenant-a')))) {
-                for (const tenant of page.items) {
-                    await collectAsync(cache.listSubscriptions(tenant));
-                }
-            }
+            // tenant it admitted.
+            await treeRead(cache, onlyTenants('tenant-a'));
             assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a'],
                 'the excluded tenant must cost nothing: no tenant-scoped token, no listing');
 
@@ -119,27 +133,14 @@ describe('AzureListingCache (unit)', () => {
             assert.strictEqual(fetcher.fetchAccounts.mock.callCount(), 1, 'the accounts were already cached');
         });
 
-        it('fetches only the delta when an unfiltered read follows a filtered one', async () => {
-            const { cache, fetcher } = createCache();
-
-            await collectAsync(cache.walkSubscriptions({ filter: onlyTenants('tenant-a') }));
-            const all = await collectAsync(cache.walkSubscriptions());
-
-            assert.deepStrictEqual(pathIds(all), ['tenant-a/sub-a', 'tenant-b/sub-b']);
-            assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a', 'tenant-b'],
-                'the unfiltered pass must list only the tenant the filtered pass skipped');
-            assert.strictEqual(fetcher.fetchTenants.mock.callCount(), 1, 'the tenant listing was already cached');
-            assert.strictEqual(fetcher.fetchAccounts.mock.callCount(), 1, 'the accounts listing was already cached');
-        });
-
         it('caches what a filtered read fetched, filter or no filter', async () => {
             const { cache, fetcher } = createCache();
 
-            await collectAsync(cache.walkSubscriptions({ filter: onlyTenants('tenant-a') }));
+            await treeRead(cache, onlyTenants('tenant-a'));
             fetcher.fetchSubscriptions.mock.resetCalls();
-            const again = await collectAsync(cache.walkSubscriptions({ filter: onlyTenants('tenant-a') }));
+            const again = await treeRead(cache, onlyTenants('tenant-a'));
 
-            assert.deepStrictEqual(pathIds(again), ['tenant-a/sub-a']);
+            assert.deepStrictEqual(again, ['tenant-a/sub-a']);
             assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), 0);
         });
 
@@ -161,10 +162,10 @@ describe('AzureListingCache (unit)', () => {
 
             await collectAsync(cache.walkSubscriptions());
             const before = fetcher.fetchSubscriptions.mock.callCount() + fetcher.fetchTenants.mock.callCount();
-            const narrowed = await collectAsync(cache.walkSubscriptions({ filter: onlyTenants('tenant-b') }));
+            const narrowed = await treeRead(cache, onlyTenants('tenant-b'));
             const after = fetcher.fetchSubscriptions.mock.callCount() + fetcher.fetchTenants.mock.callCount();
 
-            assert.deepStrictEqual(pathIds(narrowed), ['tenant-b/sub-b']);
+            assert.deepStrictEqual(narrowed, ['tenant-b/sub-b']);
             assert.strictEqual(after, before, 'a filter change makes no cached listing untrue');
         });
 

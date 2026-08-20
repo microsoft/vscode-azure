@@ -115,8 +115,9 @@ describe('listReachableAuthNodes (unit)', () => {
             const tenant = makeTenant({ tenantId: 'tenant-1', accountId: account.id });
             const sub = makeSubscription({ subscriptionId: 'sub-1', tenantId: tenant.tenantId, accountId: account.id });
             const { listings } = createCache({ accounts: [account], tenants: [tenant], subscriptions: [sub] });
-            // Something the tree's (filtered) reads would have skipped entirely.
-            await collectAsync(listings.walkSubscriptions({ filter: () => false }));
+            // A tree read that admits nothing: the tenant listing is cached, but
+            // the tenant itself was skipped, so its subscriptions never were.
+            await collectAsync(listings.listTenants(account, () => false));
 
             const { subscriptions } = await listReachableSubscriptions(listings);
 

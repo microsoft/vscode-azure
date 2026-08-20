@@ -179,10 +179,14 @@ describe('SelectSubscriptions (unit)', () => {
         const { command, mockResult, listings } = createCommand({}, fetcher);
         respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)'] }]);
 
-        // Stand in for the tree: a walk through the very filter the tree passes.
+        // Stand in for the tree: the filtered descent its view layer makes.
         await withSettings(mockResult, { [selectedSubscriptionsKey]: ['tenant-1/sub-1'] }, async () => {
             const filter = createSubscriptionFilter(mockResult.vscode);
-            await collectAsync(listings.walkSubscriptions({ filter: filter?.admitsTenant }));
+            for (const page of await collectAsync(listings.listTenants(account, filter?.admitsTenant))) {
+                for (const admitted of page.items) {
+                    await collectAsync(listings.listSubscriptions(admitted));
+                }
+            }
         });
         fetcher.fetchSubscriptions.mock.resetCalls();
 
