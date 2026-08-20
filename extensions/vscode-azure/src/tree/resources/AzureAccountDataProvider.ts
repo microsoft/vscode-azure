@@ -196,7 +196,14 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
             // Lists already-signed-in accounts without prompting. The user is
             // prompted to sign in lazily when an operation actually needs a
             // credential (the default credential uses `createIfNone`).
-            return this.listAccounts();
+            //
+            // The id set is recorded because session reconciliation compares
+            // against it to decide whether an `onDidChangeSessions` burst
+            // actually changed anything.
+            return this.listings.listAccounts().then(accounts => {
+                this.knownAccountIds = new CaselessSet(accounts.map(account => account.id));
+                return accounts;
+            });
         }
 
         const filter = createSubscriptionFilter(this.ctx.code);
@@ -280,13 +287,6 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     /** @inheritdoc */
     public dispose(): void {
         Disposable.disposeAll(this.disposables);
-    }
-
-    /** List accounts and record the resulting id set for session reconciliation. */
-    private async listAccounts(): Promise<AzureAccount[]> {
-        const accounts = await this.listings.listAccounts();
-        this.knownAccountIds = new CaselessSet(accounts.map(account => account.id));
-        return accounts;
     }
 
     /**
