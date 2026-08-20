@@ -41,15 +41,19 @@ export interface CreateShellTaskOptions {
  * exactly the case where a planted binary would be the only candidate.
  *
  * A command carrying a path separator is a deliberate choice by the caller, so
- * it is passed through unchanged and the terminal reports any failure. This is
- * what keeps script targets such as `./deploy.ps1` working: they never resolve,
- * because {@linkcode resolveExecutable} only accepts executable extensions.
+ * it is passed through unchanged and the terminal reports any failure. It is
+ * never rewritten to an absolute path: the task's working directory is the
+ * shell's, not this process's, so a path resolved here could name a different
+ * file than the one the caller meant. This is also what keeps script targets
+ * such as `./deploy.ps1` working: they never resolve, because
+ * {@linkcode resolveExecutable} only accepts executable extensions.
  *
  * The resolved path is strongly quoted, since it may contain spaces.
  *
  * @throws {Error} When the command vector does not contain an executable.
  * @throws {ProcessError} With code `ENOENT` when a bare command name is not
- *   found on `PATH`.
+ *   found on `PATH`, or `ERR_INVALID_EXECUTABLE` when the name contains a NUL
+ *   or newline.
  */
 export function createShellTask(code: IVsCode, options: CreateShellTaskOptions): vscode.Task {
     const [executable, ...args] = options.command;
@@ -60,8 +64,15 @@ export function createShellTask(code: IVsCode, options: CreateShellTaskOptions):
         throw new Error('A command line must include at least the executable as its first element.');
     }
 
+    // Resolution serves two purposes. It validates the name -- a NUL or newline
+    // is rejected here rather than reaching a shell that would read the newline
+    // as a command separator -- and it yields the absolute path a bare name
+    // must be pinned to.
+    //
+    // `cwd` is deliberately not passed: a bare name never resolves against it,
+    // and an explicit path keeps the caller's own spelling (see below), so the
+    // resolver never needs it.
     const resolved = resolveExecutable(name, {
-        cwd: options.cwd?.fsPath,
         // Resolved against the environment the task will actually run under,
         // since VS Code merges `env` over the parent environment. A caller that
         // overrides `PATH` must not have the executable looked up on a
@@ -72,13 +83,17 @@ export function createShellTask(code: IVsCode, options: CreateShellTaskOptions):
         allowWindowsBatchFiles: true,
     });
 
-    if (resolved === undefined && isBareName(name)) {
+    const bare = isBareName(name);
+    if (bare && resolved === undefined) {
         // Matches the code the background path surfaces for a missing
         // executable, so callers can treat both the same way.
         throw new ProcessError(`The executable '${name}' could not be found on PATH.`, { code: 'ENOENT' });
     }
 
-    const command = toExecutableArg(executable, resolved);
+    // Only a bare name adopts the resolved path. An explicit path is resolved
+    // against the resolver's working directory, which is not the one the task
+    // will run in, so substituting it could launch a different program.
+    const command = toExecutableArg(executable, bare ? resolved : undefined);
 
     const execution = new code.ShellExecution(
         command,
@@ -128,10 +143,12 @@ function isBareName(command: string): boolean {
  * quoting, so the shell runs exactly the file the resolver picked rather than
  * repeating the search itself.
  *
- * When resolution fails the caller's own {@linkcode CommandLineArg} is passed
- * through untouched, preserving any quoting they asked for. Only an unquoted
- * string is adjusted, and only when it contains a space: without quoting the
- * shell would split it and run the wrong program.
+ * When {@linkcode resolved} is `undefined` -- either resolution failed, or the
+ * command is an explicit path that keeps the caller's spelling -- the caller's
+ * own {@linkcode CommandLineArg} is passed through untouched, preserving any
+ * quoting they asked for. Only an unquoted string is adjusted, and only when it
+ * contains a space: without quoting the shell would split it and run the wrong
+ * program.
  */
 function toExecutableArg(executable: CommandLineArg, resolved: string | undefined): CommandLineArg {
     if (resolved !== undefined) {

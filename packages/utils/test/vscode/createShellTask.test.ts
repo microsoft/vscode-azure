@@ -233,4 +233,40 @@ describe('createShellTask (unit)', () => {
             await fs.rm(directory, { recursive: true, force: true });
         }
     });
+
+    it('does not rewrite an explicit relative path to one under this process\'s directory', async () => {
+        // The task runs in the shell's working directory, not this process's, so
+        // resolving the caller's relative path here could name a different file.
+        const m = createMockVsCode();
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'shell-task-'));
+        const originalCwd = process.cwd();
+        try {
+            // A real executable, so resolution would genuinely succeed.
+            const planted = path.join(directory, `planted${path.extname(process.execPath)}`);
+            await fs.copyFile(process.execPath, planted);
+            process.chdir(directory);
+
+            const relative = `./${path.basename(planted)}`;
+            const task = createShellTask(m.vscode, {
+                command: [relative],
+                name: 'Example task',
+            });
+
+            const execution = task.execution as vscode.ShellExecution;
+            expect(execution.command).to.equal(relative);
+        } finally {
+            process.chdir(originalCwd);
+            await fs.rm(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects an executable containing a shell command separator', () => {
+        // A newline would otherwise reach the shell as a second command.
+        const m = createMockVsCode();
+
+        expect(() => createShellTask(m.vscode, {
+            command: ['./tool\nwhoami'],
+            name: 'Example task',
+        })).to.throw();
+    });
 });
