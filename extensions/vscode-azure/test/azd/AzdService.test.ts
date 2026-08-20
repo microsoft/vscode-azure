@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
+import { ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
 import { MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
@@ -31,10 +31,10 @@ type SpawnOpts = Omit<ProcessExecutorOptions, 'cwd'> & {
     readonly source?: string;
 };
 
-function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => Promise<boolean>) {
+function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => boolean) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
-    const isOnPathMock = isOnPathFn ?? mock.fn(() => Promise.resolve(false));
+    const isOnPathMock = isOnPathFn ?? mock.fn(() => false);
     const processExecutor = { spawn: spawnMock, isOnPath: isOnPathMock } as unknown as IProcessExecutor;
     const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
     const { executor } = createTestActionExecutor();
@@ -246,7 +246,7 @@ describe('AzdService (unit)', () => {
 
     describe('ENOENT handling', () => {
         it('should wrap ENOENT errors with an install hint and suppress display', async () => {
-            const enoent = Object.assign(new Error('spawn azd ENOENT'), { code: 'ENOENT' });
+            const enoent = new ProcessError('The executable could not be found.', { code: 'ENOENT' });
             const spawnFn = mock.fn(() => Promise.reject(enoent));
             const { service, executor } = createService(spawnFn);
 
@@ -260,30 +260,6 @@ describe('AzdService (unit)', () => {
                 }
             })).to.be.rejectedWith(Error, 'Azure Developer CLI (azd) was not found')
                 .and.eventually.have.property('cause', enoent);
-            expect(suppress).to.equal('display');
-        });
-
-        it('should treat a non-ENOENT failure as not-installed when azd is unrunnable (Windows forced-shell)', async () => {
-            // On Windows, nano-spawn falls back to `shell: true` whenever the target
-            // isn't a resolvable *.exe/*.com (see its windows.js `shouldForceShell`).
-            // A missing command like `azd` never resolves, so it's run through cmd.exe,
-            // which reports "not recognized" as a generic non-zero exit instead of an
-            // ENOENT spawn error. Both the failing command and the follow-up
-            // `checkVersion` probe fail, so azd is effectively absent.
-            const exitError = new Error("'azd' is not recognized as an internal or external command");
-            const spawnFn = mock.fn(() => Promise.reject(exitError));
-            const { service, executor } = createService(spawnFn);
-
-            let suppress: string | boolean | undefined;
-            await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
-                ctx.errorHandling.rethrow = true;
-                try {
-                    await service.init(MockUri.file('/project'));
-                } finally {
-                    suppress = ctx.errorHandling.suppress;
-                }
-            })).to.be.rejectedWith(Error, 'Azure Developer CLI (azd) was not found')
-                .and.eventually.have.property('cause', exitError);
             expect(suppress).to.equal('display');
         });
 
@@ -424,7 +400,7 @@ describe('AzdService (unit)', () => {
             const mockResult = createMockVsCode();
             const processExecutor = {
                 spawn: spawnFn,
-                isOnPath: mock.fn(() => Promise.resolve(false)),
+                isOnPath: mock.fn(() => false),
             } as unknown as IProcessExecutor;
             const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH: 'token' })) }; // eslint-disable-line @typescript-eslint/naming-convention
             const { executor } = createTestActionExecutor();
@@ -604,7 +580,7 @@ describe('AzdService (unit)', () => {
 
             it('should use winget on Windows when winget is available', async () => {
                 setPlatform('win32');
-                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'winget'));
+                const isOnPathFn = mock.fn((cmd: string) => cmd === 'winget');
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -616,7 +592,7 @@ describe('AzdService (unit)', () => {
 
             it('should use choco on Windows when winget is unavailable', async () => {
                 setPlatform('win32');
-                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'choco'));
+                const isOnPathFn = mock.fn((cmd: string) => cmd === 'choco');
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -628,7 +604,7 @@ describe('AzdService (unit)', () => {
 
             it('should use powershell script on Windows when no package manager is available', async () => {
                 setPlatform('win32');
-                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const isOnPathFn = mock.fn(() => false);
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -641,7 +617,7 @@ describe('AzdService (unit)', () => {
 
             it('should use brew on macOS when brew is available', async () => {
                 setPlatform('darwin');
-                const isOnPathFn = mock.fn((cmd: string) => Promise.resolve(cmd === 'brew'));
+                const isOnPathFn = mock.fn((cmd: string) => cmd === 'brew');
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -653,7 +629,7 @@ describe('AzdService (unit)', () => {
 
             it('should use bash curl script on macOS when brew is unavailable', async () => {
                 setPlatform('darwin');
-                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const isOnPathFn = mock.fn(() => false);
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
@@ -665,7 +641,7 @@ describe('AzdService (unit)', () => {
 
             it('should use bash curl script on Linux', async () => {
                 setPlatform('linux');
-                const isOnPathFn = mock.fn(() => Promise.resolve(false));
+                const isOnPathFn = mock.fn(() => false);
                 const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
 
                 await service.install();
