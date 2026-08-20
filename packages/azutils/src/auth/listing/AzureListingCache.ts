@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { filterPages, Limiter, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
+import { filterPages, Limiter, stringifyError, type IActionExecutor, type Page } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
 import { additionalTenantsFor, withAdditionalTenants } from './additionalTenants';
@@ -280,14 +280,10 @@ export class AzureListingCache {
      */
     private async *walkTenants(options?: AzureWalkOptions): AsyncIterable<{ account: AzureAccount; tenant: AzureTenant }> {
         for (const account of await this.listAccounts()) {
-            try {
-                for await (const page of this.tenantPages(account)) {
-                    for (const tenant of page.items) {
-                        yield { account, tenant };
-                    }
+            for await (const page of this.tenantPages(account, options?.onFailure)) {
+                for (const tenant of page.items) {
+                    yield { account, tenant };
                 }
-            } catch (error) {
-                options?.onFailure?.({ account, error });
             }
         }
     }
@@ -327,11 +323,32 @@ export class AzureListingCache {
      * {@linkcode AzureListingCacheOptions.additionalTenantIds additionalTenantIds}
      * merged in above the cache.
      */
-    private tenantPages(account: AzureAccount): AsyncIterable<Page<AzureTenant>> {
+    private tenantPages(account: AzureAccount, onFailure?: (failure: AzureListingFailure) => void): AsyncIterable<Page<AzureTenant>> {
         return withAdditionalTenants(
-            this.tenantListing(account).read(),
+            this.listedTenants(account, onFailure),
             additionalTenantsFor(account, this.options?.additionalTenantIds?.(account) ?? []),
         );
+    }
+
+    /**
+     * The cached tenant listing, ending early rather than throwing if it fails.
+     *
+     * Conditional access blocks enumeration for exactly the accounts whose
+     * tenants have to be named by hand, so a failure here must not take out the
+     * fallback for it: ending the stream lets
+     * {@linkcode withAdditionalTenants} still emit the named tenants as its
+     * terminal page. The failure is reported rather than swallowed, and the
+     * listing beneath is left poisoned, so the store discards it and the next
+     * read tries again -- an account is never left cached as *complete and
+     * empty* because one request failed.
+     */
+    private async *listedTenants(account: AzureAccount, onFailure?: (failure: AzureListingFailure) => void): AsyncIterable<Page<AzureTenant>> {
+        try {
+            yield* this.tenantListing(account).read();
+        } catch (error) {
+            this.executor.output.warn(`[listing] listing tenants failed for account ${account.id}; only manually-entered tenants are reachable: ${stringifyError(error)}`);
+            onFailure?.({ account, error });
+        }
     }
 
     /** The cached account with this id, without fetching. */

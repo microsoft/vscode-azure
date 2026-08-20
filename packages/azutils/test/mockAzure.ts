@@ -293,13 +293,13 @@ export interface MockAzureListingFetcherOptions {
      */
     readonly signedOutTenantIds?: string[];
     /**
-     * Account ids whose tenant listing is blocked, simulating conditional access
+     * Account ids whose tenant listing rejects, simulating conditional access
      * denying enumeration outright.
      *
-     * Such an account lists no tenants at all -- degrading rather than throwing,
-     * the way the real fetcher does, since a tenant-scoped sign-in still reaches
-     * a tenant the user can name. Those named tenants are merged in above the
-     * fetcher, by {@linkcode AzureListingCache}.
+     * The real fetcher propagates such a failure rather than degrading to an
+     * empty listing, so that a transient one is not cached as the complete truth
+     * about the account. Degrading to the manually-named tenants is
+     * {@linkcode AzureListingCache}'s job, above the cache.
      */
     readonly unlistableAccountIds?: string[];
     /**
@@ -360,11 +360,15 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
         }
     }
 
+    function rejecting<T>(error: Error): AsyncIterable<Page<T>> {
+        return { [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }) };
+    }
+
     return {
         fetchAccounts: mock.fn(() => Promise.resolve([...accounts])),
-        fetchTenants: mock.fn((account: AzureAccount) => paged('tenants', unlistable.has(account.id)
-            ? []
-            : tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase()))),
+        fetchTenants: mock.fn((account: AzureAccount) => unlistable.has(account.id)
+            ? rejecting<AzureTenant>(new Error(`Mock: cannot list tenants for account ${account.id}`))
+            : paged('tenants', tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase()))),
         fetchSubscriptions: mock.fn((tenant: AzureTenant) => {
             const error = signedOut.has(tenant.tenantId)
                 ? new NotSignedInError(`Mock: no session for tenant ${tenant.tenantId}`)
@@ -372,12 +376,7 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
                     ? new Error(`Mock: cannot list subscriptions for tenant ${tenant.tenantId}`)
                     : undefined;
             if (error) {
-                const rejecting: AsyncIterable<Page<AzureSubscription>> = {
-                    [Symbol.asyncIterator]: () => ({
-                        next: () => Promise.reject(error),
-                    }),
-                };
-                return rejecting;
+                return rejecting<AzureSubscription>(error);
             }
             return paged('subscriptions', subscriptions.filter(sub =>
                 sub.accountId.toLowerCase() === tenant.accountId.toLowerCase()

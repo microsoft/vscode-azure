@@ -8,7 +8,7 @@ import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing'
 import * as assert from 'node:assert';
 import type { AzureListingFailure, AzureSubscriptionPath, AzureTenantFilter } from '../../../src/auth/listing/AzureListingCache';
 import { AzureListingCache } from '../../../src/auth/listing/AzureListingCache';
-import type { AzureAccount, AzureSubscription, AzureTenant } from '../../../src/auth/AzureSubscription';
+import type { AzureSubscription, AzureTenant } from '../../../src/auth/AzureSubscription';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '../../mockAzure';
 
 const account = makeAccount({ id: 'acct', label: 'Account' });
@@ -257,20 +257,11 @@ describe('AzureListingCache (unit)', () => {
             const otherAccount = makeAccount({ id: 'acct-2', label: 'Other' });
             const otherTenant = makeTenant({ accountId: otherAccount.id, tenantId: 'tenant-c' });
             const otherSub = makeSubscription({ accountId: otherAccount.id, tenantId: otherTenant.tenantId, subscriptionId: 'sub-c' });
-            const { cache, fetcher } = createCache({
+            const { cache } = createCache({
                 accounts: [account, otherAccount],
                 tenants: [tenantA, otherTenant],
                 subscriptions: [subA, otherSub],
-            });
-            fetcher.fetchTenants.mock.mockImplementation((target: AzureAccount) => {
-                if (target.id === account.id) {
-                    return {
-                        [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error('Mock: cannot list tenants')) }),
-                    } as AsyncIterable<Page<AzureTenant>>;
-                }
-                return (async function* () {
-                    yield await Promise.resolve({ items: [otherTenant], hasMore: false });
-                })();
+                unlistableAccountIds: [account.id],
             });
             const failures: AzureListingFailure[] = [];
 
@@ -280,6 +271,23 @@ describe('AzureListingCache (unit)', () => {
                 'one account that cannot enumerate its tenants must not cost the user every other account');
             assert.deepStrictEqual(failures.map(failure => failure.account.id), [account.id]);
             assert.strictEqual(failures[0].tenant, undefined, 'the account itself failed, not a tenant under it');
+        });
+
+        it('retries an account\'s tenants after a failed listing, rather than caching it as empty', async () => {
+            const { cache, fetcher } = createCache({ unlistableAccountIds: [account.id] });
+
+            assert.deepStrictEqual(await treeRead(cache), [], 'the listing failed, so nothing is reachable');
+
+            // The failure must not have been retained as a complete, empty
+            // listing -- a transient one would otherwise blank the account for
+            // the rest of the session, recoverable only by an explicit refresh.
+            fetcher.fetchTenants.mock.mockImplementation(createMockAzureListingFetcher({
+                accounts: [account],
+                tenants: [tenantA, tenantB],
+                subscriptions: [subA, subB],
+            }).fetchTenants);
+
+            assert.deepStrictEqual(await treeRead(cache), ['tenant-a/sub-a', 'tenant-b/sub-b']);
         });
     });
 

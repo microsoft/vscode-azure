@@ -127,14 +127,26 @@ describe('AzureListingFetcher (unit)', () => {
             assert.deepStrictEqual(tenantIds(pages), ['t3']);
         });
 
-        it('yields an empty terminal page when listing is blocked outright', async () => {
+        it('propagates a listing failure rather than degrading to an empty listing', async () => {
             const { fetcher } = createFetcher();
             mockFailingTenantList(new Error('conditional access'));
 
-            const pages = await collectAsync(fetcher.fetchTenants(makeAccount()));
+            // Degrading here would be cached as the complete truth about the
+            // account, so a transient failure would blank it until a refresh.
+            await assert.rejects(() => collectAsync(fetcher.fetchTenants(makeAccount())), /conditional access/);
+        });
 
-            assert.deepStrictEqual(tenantIds(pages), []);
-            assert.strictEqual(pages[pages.length - 1].hasMore, false);
+        it('resolves its session silently, so enumerating an account cannot prompt', async () => {
+            const credentialFactory = mock.fn<ICredentialFactory>(() => makeCredential());
+            const { fetcher } = createFetcher(credentialFactory);
+            mockSubscriptionClient({ tenantPages: [{ items: [], hasMore: false }] });
+
+            await collectAsync(fetcher.fetchTenants(makeAccount()));
+
+            const options = credentialFactory.mock.calls.map(call => call.arguments[0] as CredentialFactoryOptions);
+            assert.ok(options.length > 0, 'a credential is needed to list tenants');
+            assert.ok(options.every(option => option.sessionOptions?.silent === true && option.sessionOptions.createIfNone === false),
+                'both are pinned because VS Code treats them as mutually exclusive');
         });
     });
 
