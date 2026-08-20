@@ -124,12 +124,6 @@ When the default env is partially configured (Post-clone), the wizard never muta
 
 `provision` is seeded to `true` by the command entry point. Only the Bootstrapped state shows a confirmation prompt — this is the one case where re-provisioning could affect an existing live deployment. Fresh and Post-clone paths provision unconditionally (the environment is new, so there's nothing to overwrite).
 
-## Static Web Apps
-
-Static Web Apps has its own creation wizard and a deployment-routing decision
-layered on top of this framework. Both are documented in
-[Static Web Apps](static-web-apps.md).
-
 ## Adding a New Resource Type
 
 To add a new creation wizard (e.g. Static Web App):

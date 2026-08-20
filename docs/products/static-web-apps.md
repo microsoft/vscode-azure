@@ -1,8 +1,8 @@
 # Static Web Apps
 
 How the Static Web Apps product is built on the shared monorepo frameworks.
-For the frameworks themselves see [Resource Creation](resource-creation.md),
-[Settings](settings.md), and [Tree Views](tree-views.md).
+For the frameworks themselves see [Resource Creation](../resource-creation.md),
+[Settings](../settings.md), and [Tree Views](../tree-views.md).
 
 ## Creation
 
@@ -47,6 +47,23 @@ create a managed Functions workflow. Direct azd deployments also do not poll
 GitHub Actions; the existing 15-second/20-minute poller is reserved for actual
 linked workflow runs.
 
+## Local Tooling
+
+Static Web Apps owns its local CLI, task, and debug integration through
+product-specific DI bindings:
+
+- `ISwaCliService` wraps `IProcessExecutor`, `IOutputChannel`, and `IVsCode`.
+- Task and debug providers are singleton bindings so commands and VS Code
+  registrations share state.
+- `SwaTaskLifecycle` is activated through `pushDisposable`; its event
+  subscriptions are disposed with the extension.
+- `registerStaticWebApps()` declares activations on the `ProductRegistrar` that
+  push every VS Code task and debug registration into
+  `IExtensionContext.subscriptions`.
+
+Raw process signaling is isolated behind `IProcessTerminator`; tests replace
+that service and never signal a real process.
+
 ## Settings
 
 Static Web Apps keeps no application settings on the site itself, so the site
@@ -60,7 +77,7 @@ environment is keyed by its build id.
 beneath the environment at `environments/<buildId>/settings`, and passes a
 document name so sibling environments open as distinguishable editor tabs.
 `StaticWebAppSettingsAdapter` reads the environment back off the owner it is
-handed and picks the matching endpoint. See [Settings](settings.md) for the
+handed and picks the matching endpoint. See [Settings](../settings.md) for the
 framework's ownership model.
 
 ## CI/CD Routing
@@ -109,11 +126,11 @@ GitHub PR preview environments the way the native Static Web Apps GitHub
 Actions workflow does. This is a known, disclosed limitation, not something
 this feature works around.
 
-**Known gap:** `workflowParser.ts` / `OpenWorkflowConfigFile` (in
-`src/tree/resources/staticWebApps/`) only understand the legacy native
-`Azure/static-web-apps-deploy` GitHub Actions workflow shape. They do not yet
-recognize a generic azd-generated `azure-dev.yml`, so a project deployed
-through this feature's CI/CD path will not show its workflow runs in the
-existing GitHub Actions tree nodes. Extending the parser for the generic
-workflow shape is tracked as a follow-up, not implemented as part of this
-feature.
+**Known gap:** Existing GitHub Actions tree support recognizes only the legacy
+native `Azure/static-web-apps-deploy` workflow shape. It does not yet recognize
+azd-generated pipeline workflow files such as
+`.github/workflows/azure-dev.yml` or `.github/workflows/azure-dev.yaml`
+(GitHub Actions) and their Azure Pipelines equivalents. A project deployed
+through this feature's CI/CD path therefore will not show its workflow runs in
+those tree nodes. Extending the parser for the generic workflow shape is tracked
+as a follow-up, not implemented as part of this feature.

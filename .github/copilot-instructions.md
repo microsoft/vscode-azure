@@ -9,7 +9,7 @@ For detailed documentation on the project architecture and patterns, see the `do
 * `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers, comment/doc hygiene
 * `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
 * `docs/resource-creation.md` -- AzdJob, wizard step sequence, scenario matrix, hydration, adding new resource types
-* `docs/static-web-apps.md` -- Static Web Apps creation wizard, deployment routing, CI/CD decisions
+* `docs/products/static-web-apps.md` -- Static Web Apps creation wizard, deployment routing, CI/CD decisions
 * `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, fixture reuse, what not to test, coverage
 * `docs/resource-models.md` -- AzureNode union, GenericResource, AzureNodeId URI scheme
 * `docs/telemetry.md` -- IActionContext, ActionExecutor, telemetry suppression
@@ -148,4 +148,3 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * **Don't write tests that assert removed behavior stays removed.** After deleting a feature, flag, command, or code path, delete its tests too -- do not add a test asserting the thing is gone (`expect(commands).to.not.include('legacy.command')`). Such tests pass trivially forever and keep the deleted concept alive in the suite. The narrow exception is a regression test for a real bug, which must assert the correct *positive* behavior today, not the absence of the old code.
 * **Don't write tests whose subject is a test fixture.** Mocks and factories (`makeSubscription()`, `MockVsCode`, `MockFileSystem`, ...) are test infrastructure; asserting that a factory returns the defaults it literally declares proves nothing, and exercising a mock's own read/write round-trip tests the mock instead of the product code. Fixtures are validated implicitly by the tests that consume them. Only test fixture logic when it is genuinely non-trivial and a bug in it would cause silent false passes (e.g. `respondToPrompts()` back-navigation, `MockHttpClient` request matching).
 * Testing Azure SDK clients: use `MockHttpClient` injected via the `options` parameter on the client's `create()` method
-
