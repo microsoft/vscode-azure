@@ -6,6 +6,7 @@
 import { isProcessError, ProcessError, resolveExecutable, spawn, type SpawnOptions } from '@azure/core-process';
 import type { ServiceIdentifier } from 'inversify';
 import type { ChildProcess } from 'node:child_process';
+import * as readline from 'node:readline';
 import type { Readable } from 'node:stream';
 import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
@@ -169,15 +170,7 @@ export interface IProcessExecutor {
     /** Runs a background process and captures raw stdout and stderr. */
     spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
 
-    /**
-     * Tests whether a command is available on the system `PATH`.
-     *
-     * @remarks
-     * Resolution is a synchronous filesystem lookup, so this returns a plain
-     * `boolean` rather than a promise.
-     *
-     * @returns `true` when the command can be resolved, `false` otherwise.
-     */
+    /** Tests whether a command is available on the system `PATH`. */
     isOnPath(command: string): boolean;
 }
 
@@ -444,7 +437,8 @@ function readAll(stream: Readable | null): Promise<string> {
 }
 
 /**
- * Splits a child stream into lines as they arrive.
+ * Splits a child stream into lines as they arrive, accepting either `\n` or
+ * `\r\n` as the terminator.
  *
  * @remarks
  * Ends silently on a stream error; the failure is surfaced by awaiting the
@@ -455,27 +449,14 @@ async function* readLines(stream: Readable | null): AsyncGenerator<string> {
         return;
     }
 
-    stream.setEncoding('utf8');
+    const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
-    let buffer = '';
     try {
-        for await (const chunk of stream as AsyncIterable<string>) {
-            buffer += chunk;
-
-            let newline = buffer.indexOf('\n');
-            while (newline >= 0) {
-                yield buffer.slice(0, newline);
-                buffer = buffer.slice(newline + 1);
-                newline = buffer.indexOf('\n');
-            }
-        }
+        yield* lines;
     } catch {
         // The failure is surfaced by awaiting the process in `completed`.
-        return;
-    }
-
-    if (buffer.length > 0) {
-        yield buffer;
+    } finally {
+        lines.close();
     }
 }
 
