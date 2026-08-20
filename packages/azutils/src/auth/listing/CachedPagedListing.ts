@@ -48,17 +48,6 @@ export class CachedPagedListing<T> {
     }
 
     /**
-     * The pages pulled so far, as a snapshot, without pulling another.
-     *
-     * This is what makes a cache-only traversal possible: it is synchronous, so
-     * it cannot fetch, mint a token, or prompt -- a caller can descend the whole
-     * hierarchy knowing it pays for nothing that was not already paid for.
-     */
-    public cachedPages(): Page<T>[] {
-        return [...this.pages];
-    }
-
-    /**
      * Read the listing from the beginning, replaying cached pages first and
      * fetching further pages only if the reader keeps asking.
      *

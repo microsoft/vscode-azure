@@ -377,6 +377,35 @@ describe('AzureListingCache (unit)', () => {
             assert.strictEqual(fetcher.fetchAccounts.mock.callCount(), 1);
         });
 
+        it('is not undone by a fetch it overtook', async () => {
+            const { cache, fetcher } = createCache();
+            await collectAsync(cache.walkSubscriptions());
+
+            let release!: () => void;
+            const gate = new Promise<void>(resolve => { release = resolve; });
+            fetcher.fetchAccounts.mock.mockImplementationOnce(async () => {
+                await gate;
+                return [account];
+            });
+
+            cache.reenumerateAccounts();
+            const inFlight = cache.listAccounts();
+            cache.reenumerateAccounts();
+            release();
+            assert.deepStrictEqual(await inFlight, [account], 'the caller that asked still gets its answer');
+
+            // The abandoned accounts are only observable through the synchronous
+            // peek that `reenumerateSubscriptions` uses to recover an account's
+            // environment, so that is the door this looks through. It matters
+            // after a cloud switch, where a key built from the previous cloud's
+            // account would name a listing in the wrong environment.
+            cache.reenumerateSubscriptions(tenantA);
+            fetcher.fetchSubscriptions.mock.resetCalls();
+            await collectAsync(cache.walkSubscriptions());
+
+            assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), 0, 'the overtaken result must not seed the memo');
+        });
+
         it('re-enumerates one tenant\'s subscriptions and no other listing', async () => {
             const { cache, fetcher } = createCache();
             await collectAsync(cache.walkSubscriptions());

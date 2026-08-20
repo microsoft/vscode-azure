@@ -9,17 +9,6 @@ import type { AzureListingNode } from '../../models/AzureNode';
 import { CachedPagedListing } from './CachedPagedListing';
 
 /**
- * The key of the synthetic parent whose children are the accounts.
- *
- * Alone among the keys it carries no environment, because the accounts listing
- * is the one read taken against the *ambient* configured cloud rather than
- * against a node that already knows which cloud it came from. Re-listing it is a
- * local `getAccounts()` call, so a cloud switch re-enumerates it and keeps
- * everything below -- which is environment-keyed and therefore still true.
- */
-export const AzureListingRootKey = '';
-
-/**
  * A parent whose children are a cached listing: an account (whose children are
  * tenants) or a tenant (whose children are subscriptions).
  *
@@ -60,16 +49,23 @@ export function azureListingKey(parent: AzureListingParent): string {
 }
 
 /**
- * The **unfiltered** cache behind {@linkcode AzureListingCache}: one paged
- * listing per parent, keyed by that parent's hierarchical id (see
- * {@linkcode azureListingKey}).
+ * The **unfiltered** cache behind {@linkcode AzureListingCache}: the accounts,
+ * plus one paged listing per parent below them, keyed by that parent's
+ * hierarchical id (see {@linkcode azureListingKey}).
  *
- * The listings are the whole cache -- there is no second index of individual
- * nodes, so a node cannot be reached except by descending through the listing
- * that produced it. That is what lets a lookup apply a filter to a cached node's
- * ancestors for free: it had to pass through them to arrive. It also makes a
- * subscription reachable through two tenants two ordinary entries in two
- * listings, with no special case.
+ * The accounts are held apart from the keyed listings because they are not one.
+ * They arrive unpaged from a local `getAccounts()` call, and alone among the
+ * cached sets they are read against the *ambient* configured cloud rather than
+ * against a node that already knows which cloud it came from -- so there is no
+ * environment to lead a key with. A cloud switch therefore re-enumerates the
+ * accounts and keeps everything below them, which is environment-keyed and so
+ * still true.
+ *
+ * Neither half is an index of individual nodes: a node cannot be reached except
+ * by descending through the listing that produced it. That is what lets a lookup
+ * apply a filter to a cached node's ancestors for free -- it had to pass through
+ * them to arrive. It also makes a subscription reachable through two tenants two
+ * ordinary entries in two listings, with no special case.
  *
  * The store holds no notion of who wanted the data or which subset a product
  * currently shows: anything fetched is stored. Filtering happens above it, when
@@ -88,6 +84,54 @@ export function azureListingKey(parent: AzureListingParent): string {
  */
 export class AzureListingStore {
     private readonly listings = new CaselessMap<CachedPagedListing<AzureListingNode>>();
+    private accountsPromise: Promise<AzureAccount[]> | undefined;
+    private accountsResult: AzureAccount[] | undefined;
+
+    /**
+     * The signed-in accounts, fetched through `factory` on first use and
+     * replayed afterwards.
+     *
+     * Concurrent callers share one fetch. A failed fetch is not retained, so the
+     * next call retries -- the same "poisoned listings are replaced" rule the
+     * keyed listings follow, which is safe here only because the accounts arrive
+     * whole: there is no partial result a retry could splice onto.
+     *
+     * A fetch that {@linkcode AzureListingStore.evictAccounts evictAccounts}
+     * overtakes still returns to its own caller, but is abandoned rather than
+     * cached, so an eviction is never undone by a read that predates it.
+     */
+    public async accounts(factory: () => Promise<AzureAccount[]>): Promise<AzureAccount[]> {
+        const pending = this.accountsPromise ??= factory().catch((error: unknown) => {
+            this.accountsPromise = undefined;
+            throw error;
+        });
+
+        const accounts = await pending;
+        if (this.accountsPromise === pending) {
+            this.accountsResult = accounts;
+        }
+        return accounts;
+    }
+
+    /**
+     * The accounts already fetched, without fetching -- `undefined` when none
+     * have been.
+     *
+     * Synchronous by design, so a caller that only needs to *name* something it
+     * has already paid for cannot accidentally pay again.
+     */
+    public cachedAccounts(): AzureAccount[] | undefined {
+        return this.accountsResult;
+    }
+
+    /**
+     * Discard the accounts so the next read asks again, keeping every listing
+     * beneath them.
+     */
+    public evictAccounts(): void {
+        this.accountsPromise = undefined;
+        this.accountsResult = undefined;
+    }
 
     /**
      * The cached listing of the given parent's children, created from `factory`
@@ -97,8 +141,7 @@ export class AzureListingStore {
      * the next read starts a clean listing. Anything already fetched *beneath*
      * the failed parent stays cached: it was paid for and is still true.
      *
-     * @param parentKey - The parent's hierarchical key, or
-     *   {@linkcode AzureListingRootKey} for the accounts listing.
+     * @param parentKey - The parent's hierarchical key.
      * @param factory - Produces the underlying listing on a cache miss.
      */
     public listing<T extends AzureListingNode>(parentKey: string, factory: () => AsyncIterable<Page<T>>): CachedPagedListing<T> {
@@ -110,18 +153,6 @@ export class AzureListingStore {
         const created = new CachedPagedListing<T>(factory);
         this.listings.set(parentKey, created);
         return created;
-    }
-
-    /**
-     * The pages already fetched for a parent, without fetching another -- empty
-     * when nothing is cached for it.
-     *
-     * Synchronous by design: a traversal built on this provably issues no
-     * request and mints no token.
-     */
-    public cachedPages<T extends AzureListingNode>(parentKey: string): Page<T>[] {
-        const listing = this.listings.get(parentKey);
-        return listing && !listing.hasFailed ? listing.cachedPages() as Page<T>[] : [];
     }
 
     /**
@@ -147,6 +178,7 @@ export class AzureListingStore {
      * otherwise.
      */
     public clear(): void {
+        this.evictAccounts();
         this.listings.clear();
     }
 }

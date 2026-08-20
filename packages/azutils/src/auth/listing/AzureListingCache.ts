@@ -8,7 +8,7 @@ import type { ServiceIdentifier } from 'inversify';
 import type { AzureAccount, AzureSubscription, AzureTenant } from '../AzureSubscription';
 import { additionalTenantsFor, withAdditionalTenants } from './additionalTenants';
 import type { IAzureListingFetcher } from './AzureListingFetcher';
-import { AzureListingRootKey, azureListingKey, AzureListingStore } from './AzureListingStore';
+import { azureListingKey, AzureListingStore } from './AzureListingStore';
 
 /**
  * Decides whether a tenant takes part in a listing walk.
@@ -140,11 +140,7 @@ export class AzureListingCache {
      * failed fetch is not retained, so the next call retries.
      */
     public async listAccounts(): Promise<AzureAccount[]> {
-        const accounts: AzureAccount[] = [];
-        for await (const page of this.accountListing().read()) {
-            accounts.push(...page.items);
-        }
-        return accounts;
+        return this.store.accounts(() => this.fetcher.fetchAccounts());
     }
 
     /**
@@ -163,7 +159,7 @@ export class AzureListingCache {
      * listings neither collide with the new cloud's nor need discarding.
      */
     public reenumerateAccounts(): void {
-        this.store.evictListing(AzureListingRootKey);
+        this.store.evictAccounts();
     }
 
     /**
@@ -341,13 +337,7 @@ export class AzureListingCache {
     /** The cached account with this id, without fetching. */
     private cachedAccount(accountId: string): AzureAccount | undefined {
         const wanted = accountId.toLowerCase();
-        return this.store.cachedPages<AzureAccount>(AzureListingRootKey)
-            .flatMap(page => page.items)
-            .find(account => account.id.toLowerCase() === wanted);
-    }
-
-    private accountListing() {
-        return this.store.listing<AzureAccount>(AzureListingRootKey, () => this.fetchAccountsAsPage());
+        return this.store.cachedAccounts()?.find(account => account.id.toLowerCase() === wanted);
     }
 
     private tenantListing(account: AzureAccount) {
@@ -356,11 +346,6 @@ export class AzureListingCache {
 
     private subscriptionListing(tenant: AzureTenant) {
         return this.store.listing<AzureSubscription>(azureListingKey(tenant), () => this.fetcher.fetchSubscriptions(tenant));
-    }
-
-    /** Adapt the unpaged accounts fetch to the paged listing the store caches. */
-    private async *fetchAccountsAsPage(): AsyncIterable<Page<AzureAccount>> {
-        yield { items: await this.fetcher.fetchAccounts(), hasMore: false };
     }
 }
 
