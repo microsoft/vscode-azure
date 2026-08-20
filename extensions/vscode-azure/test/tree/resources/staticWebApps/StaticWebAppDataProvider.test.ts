@@ -20,7 +20,7 @@ import { makeStaticWebApp, makeStaticWebAppEnvironment, singlePage } from './moc
 describe('StaticWebAppDataProvider (unit)', () => {
     function createProvider(options?: {
         readonly builds?: StaticSiteBuildARMResource[];
-        readonly settingsProbeError?: boolean;
+        readonly functionsProbeError?: boolean;
         readonly functions?: { readonly id?: string; readonly name?: string; readonly functionName?: string }[];
     }) {
         const { executor } = createTestActionExecutor();
@@ -34,10 +34,10 @@ describe('StaticWebAppDataProvider (unit)', () => {
             status: 'Ready',
         }];
         const probeResult = { properties: { ALPHA: 'a' } };
-        const productionProbe = options?.settingsProbeError
+        const productionProbe = options?.functionsProbeError
             ? mock.fn(() => Promise.reject(new Error('No Functions API')))
             : mock.fn(() => Promise.resolve(probeResult));
-        const buildProbe = options?.settingsProbeError
+        const buildProbe = options?.functionsProbeError
             ? mock.fn(() => Promise.reject(new Error('No Functions API')))
             : mock.fn(() => Promise.resolve(probeResult));
         const mockClient = {
@@ -189,7 +189,7 @@ describe('StaticWebAppDataProvider (unit)', () => {
     });
 
     it('should expose Functions help when the environment has no Functions API', async () => {
-        const { provider } = createProvider({ settingsProbeError: true });
+        const { provider } = createProvider({ functionsProbeError: true });
         const environment = makeStaticWebAppEnvironment();
 
         const children = await provider.getChildren(environment);
@@ -199,6 +199,16 @@ describe('StaticWebAppDataProvider (unit)', () => {
         ]);
         const help = children[1];
         expect(isStaticWebAppVirtualNode(help) && help.virtualType === StaticWebAppVirtualTypes.NoFunctions && help.kind).to.equal('help');
+    });
+
+    it('should still offer application settings when no function is deployed', async () => {
+        // App settings live on the site and its builds regardless of whether a managed API exists,
+        // so a failing Functions probe must not take the settings node with it.
+        const { provider } = createProvider({ functionsProbeError: true });
+
+        const children = await provider.getChildren(makeStaticWebAppEnvironment());
+
+        expect(children.some(child => isSettingsNode(child))).to.equal(true);
     });
 
     it('should use production and build function-list operations and preserve empty-list semantics', async () => {

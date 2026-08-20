@@ -24,10 +24,19 @@ import type { SettingsMap, SettingsSnapshot } from '../SettingsModel';
  * here is the environment's virtual node rather than the ARM resource.
  *
  * @remarks
- * The settings surfaced are the ones ARM calls *function app settings*. Static Web Apps has only
- * this one settings dictionary -- it is what the portal and the standalone Static Web Apps
- * extension both label "Application Settings" -- and it is read by the site's managed API as well
- * as by the build. There is no second, non-Functions dictionary to disambiguate it from.
+ * ARM exposes **two** settings dictionaries per static site, and this adapter deliberately uses the
+ * *app settings* pair (`config/appsettings`) rather than the *function app settings* pair:
+ *
+ * - App settings are what the portal's "Environment variables" blade and
+ *   `az staticwebapp appsettings` read and write, so they are what a user means by a site's
+ *   settings. They are readable and writable whether or not the site has a managed API.
+ * - Function app settings reflect a *deployed* managed function. ARM rejects both reading and
+ *   writing them with `Operation not supported: A function must first be deployed to use this
+ *   method.` until one exists, so an editor built on them is unusable on any site without an API.
+ *
+ * The standalone Static Web Apps extension used the function app settings pair, which is why its
+ * Application Settings node only appeared once an API had been deployed. That was a limitation of
+ * the extension, not of the product.
  *
  * Production reads and writes the site-level endpoints; every other environment uses the
  * build-level endpoints keyed by its build id. The two are distinct dictionaries in ARM, so
@@ -59,8 +68,8 @@ export class StaticWebAppSettingsAdapter implements SettingsAdapter {
         const { client, resourceGroupName, siteName } = this.resolveClient(environment);
 
         const properties = environment.isProduction
-            ? (await client.staticSites.listStaticSiteFunctionAppSettings(resourceGroupName, siteName)).properties
-            : (await client.staticSites.listStaticSiteBuildFunctionAppSettings(resourceGroupName, siteName, environment.buildId)).properties;
+            ? (await client.staticSites.listStaticSiteAppSettings(resourceGroupName, siteName)).properties
+            : (await client.staticSites.listStaticSiteBuildAppSettings(resourceGroupName, siteName, environment.buildId)).properties;
 
         return {
             entries: toSettingsMap(properties),
@@ -78,9 +87,9 @@ export class StaticWebAppSettingsAdapter implements SettingsAdapter {
 
         const properties = fromSettingsMap(entries);
         if (environment.isProduction) {
-            await client.staticSites.createOrUpdateStaticSiteFunctionAppSettings(resourceGroupName, siteName, { properties });
+            await client.staticSites.createOrUpdateStaticSiteAppSettings(resourceGroupName, siteName, { properties });
         } else {
-            await client.staticSites.createOrUpdateStaticSiteBuildFunctionAppSettings(
+            await client.staticSites.createOrUpdateStaticSiteBuildAppSettings(
                 resourceGroupName,
                 siteName,
                 environment.buildId,

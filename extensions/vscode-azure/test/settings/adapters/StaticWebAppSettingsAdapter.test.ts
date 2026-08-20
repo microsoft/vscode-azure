@@ -11,6 +11,11 @@ import { makeStaticWebApp, makeStaticWebAppEnvironment } from '../../tree/resour
 function createAdapter(properties: Record<string, string> = {}) {
     const code = createMockVsCode();
     const staticSites = {
+        listStaticSiteAppSettings: mock.fn(() => Promise.resolve({ properties })),
+        listStaticSiteBuildAppSettings: mock.fn(() => Promise.resolve({ properties })),
+        createOrUpdateStaticSiteAppSettings: mock.fn(() => Promise.resolve({ properties })),
+        createOrUpdateStaticSiteBuildAppSettings: mock.fn(() => Promise.resolve({ properties })),
+        // Present so the tests below can assert this adapter never reaches for them.
         listStaticSiteFunctionAppSettings: mock.fn(() => Promise.resolve({ properties })),
         listStaticSiteBuildFunctionAppSettings: mock.fn(() => Promise.resolve({ properties })),
         createOrUpdateStaticSiteFunctionAppSettings: mock.fn(() => Promise.resolve({ properties })),
@@ -38,8 +43,8 @@ describe('StaticWebAppSettingsAdapter (unit)', () => {
         expect(snapshot.entries).to.deep.equal([{ key: 'ALPHA', value: '1' }, { key: 'ZED', value: '2' }]);
         expect(snapshot.resourceName).to.equal('mySwa (Production)');
         expect(snapshot.writable).to.be.true;
-        expect(staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(1);
-        expect(staticSites.listStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.listStaticSiteAppSettings.mock.callCount()).to.equal(1);
+        expect(staticSites.listStaticSiteBuildAppSettings.mock.callCount()).to.equal(0);
     });
 
     it('should read preview settings from the build-level endpoint keyed by build id', async () => {
@@ -47,9 +52,9 @@ describe('StaticWebAppSettingsAdapter (unit)', () => {
 
         await adapter.read(makeStaticWebAppEnvironment({ isProduction: false, buildId: '7', displayLabel: 'pr-7' }));
 
-        expect(staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
-        expect(staticSites.listStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(1);
-        expect(staticSites.listStaticSiteBuildFunctionAppSettings.mock.calls[0].arguments).to.deep.equal(['rg1', 'mySwa', '7']);
+        expect(staticSites.listStaticSiteAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.listStaticSiteBuildAppSettings.mock.callCount()).to.equal(1);
+        expect(staticSites.listStaticSiteBuildAppSettings.mock.calls[0].arguments).to.deep.equal(['rg1', 'mySwa', '7']);
     });
 
     it('should write production settings as a whole dictionary', async () => {
@@ -57,10 +62,10 @@ describe('StaticWebAppSettingsAdapter (unit)', () => {
 
         await adapter.write(makeStaticWebAppEnvironment(), [{ key: 'A', value: '1' }]);
 
-        expect(staticSites.createOrUpdateStaticSiteFunctionAppSettings.mock.calls[0].arguments).to.deep.equal([
+        expect(staticSites.createOrUpdateStaticSiteAppSettings.mock.calls[0].arguments).to.deep.equal([
             'rg1', 'mySwa', { properties: { A: '1' } },
         ]);
-        expect(staticSites.createOrUpdateStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.createOrUpdateStaticSiteBuildAppSettings.mock.callCount()).to.equal(0);
     });
 
     it('should write preview settings against the build', async () => {
@@ -68,23 +73,40 @@ describe('StaticWebAppSettingsAdapter (unit)', () => {
 
         await adapter.write(makeStaticWebAppEnvironment({ isProduction: false, buildId: '7' }), [{ key: 'A', value: '1' }]);
 
-        expect(staticSites.createOrUpdateStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
-        expect(staticSites.createOrUpdateStaticSiteBuildFunctionAppSettings.mock.calls[0].arguments).to.deep.equal([
+        expect(staticSites.createOrUpdateStaticSiteAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.createOrUpdateStaticSiteBuildAppSettings.mock.calls[0].arguments).to.deep.equal([
             'rg1', 'mySwa', '7', { properties: { A: '1' } },
         ]);
+    });
+
+    it('should use the app settings dictionary, never the function app settings one', async () => {
+        // ARM rejects the function app settings endpoints with 'A function must first be deployed
+        // to use this method.' until a managed API exists, so reaching for them would make the
+        // document unopenable on any site without one. App settings have no such precondition.
+        const { adapter, staticSites } = createAdapter({ A: '1' });
+
+        await adapter.read(makeStaticWebAppEnvironment());
+        await adapter.read(makeStaticWebAppEnvironment({ isProduction: false, buildId: '7' }));
+        await adapter.write(makeStaticWebAppEnvironment(), [{ key: 'A', value: '1' }]);
+        await adapter.write(makeStaticWebAppEnvironment({ isProduction: false, buildId: '7' }), [{ key: 'A', value: '1' }]);
+
+        expect(staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.listStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.createOrUpdateStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.createOrUpdateStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(0);
     });
 
     it('should reject a blank setting name before calling Azure', async () => {
         const { adapter, staticSites } = createAdapter();
 
         await expect(adapter.write(makeStaticWebAppEnvironment(), [{ key: '  ', value: '1' }])).to.be.rejected;
-        expect(staticSites.createOrUpdateStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.createOrUpdateStaticSiteAppSettings.mock.callCount()).to.equal(0);
     });
 
     it('should refuse an owner that is not an environment', async () => {
         const { adapter, staticSites } = createAdapter();
 
         await expect(adapter.read(makeStaticWebApp())).to.be.rejected;
-        expect(staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
+        expect(staticSites.listStaticSiteAppSettings.mock.callCount()).to.equal(0);
     });
 });

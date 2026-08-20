@@ -5,23 +5,31 @@
 
 import { createWebSiteManagement, type WebSiteManagementClientOptionalParams, type WebSiteManagementContext } from '@azure/arm-appservice/api';
 import {
+    createOrUpdateStaticSiteAppSettings as sdkCreateOrUpdateStaticSiteAppSettings,
+    createOrUpdateStaticSiteBuildAppSettings as sdkCreateOrUpdateStaticSiteBuildAppSettings,
     createOrUpdateStaticSiteBuildFunctionAppSettings as sdkCreateOrUpdateStaticSiteBuildFunctionAppSettings,
     createOrUpdateStaticSiteFunctionAppSettings as sdkCreateOrUpdateStaticSiteFunctionAppSettings,
     deleteStaticSite as sdkDeleteStaticSite,
     deleteStaticSiteBuild as sdkDeleteStaticSiteBuild,
     getStaticSite as sdkGetStaticSite,
     getStaticSiteBuild as sdkGetStaticSiteBuild,
+    listStaticSiteAppSettings as sdkListStaticSiteAppSettings,
+    listStaticSiteBuildAppSettings as sdkListStaticSiteBuildAppSettings,
     listStaticSiteBuildFunctionAppSettings as sdkListStaticSiteBuildFunctionAppSettings,
     listStaticSiteBuildFunctions as sdkListStaticSiteBuildFunctions,
     listStaticSiteBuilds as sdkListStaticSiteBuilds,
     listStaticSiteFunctionAppSettings as sdkListStaticSiteFunctionAppSettings,
     listStaticSiteFunctions as sdkListStaticSiteFunctions,
+    type StaticSitesCreateOrUpdateStaticSiteAppSettingsOptionalParams,
+    type StaticSitesCreateOrUpdateStaticSiteBuildAppSettingsOptionalParams,
     type StaticSitesCreateOrUpdateStaticSiteBuildFunctionAppSettingsOptionalParams,
     type StaticSitesCreateOrUpdateStaticSiteFunctionAppSettingsOptionalParams,
     type StaticSitesDeleteStaticSiteBuildOptionalParams,
     type StaticSitesDeleteStaticSiteOptionalParams,
     type StaticSitesGetStaticSiteBuildOptionalParams,
     type StaticSitesGetStaticSiteOptionalParams,
+    type StaticSitesListStaticSiteAppSettingsOptionalParams,
+    type StaticSitesListStaticSiteBuildAppSettingsOptionalParams,
     type StaticSitesListStaticSiteBuildFunctionAppSettingsOptionalParams,
     type StaticSitesListStaticSiteBuildFunctionsOptionalParams,
     type StaticSitesListStaticSiteBuildsOptionalParams,
@@ -43,12 +51,16 @@ import { toPages } from '../toPages';
 
 export type { WebSiteManagementClientOptionalParams } from '@azure/arm-appservice/api';
 export type {
+    StaticSitesCreateOrUpdateStaticSiteAppSettingsOptionalParams,
+    StaticSitesCreateOrUpdateStaticSiteBuildAppSettingsOptionalParams,
     StaticSitesCreateOrUpdateStaticSiteBuildFunctionAppSettingsOptionalParams,
     StaticSitesCreateOrUpdateStaticSiteFunctionAppSettingsOptionalParams,
     StaticSitesDeleteStaticSiteBuildOptionalParams,
     StaticSitesDeleteStaticSiteOptionalParams,
     StaticSitesGetStaticSiteBuildOptionalParams,
     StaticSitesGetStaticSiteOptionalParams,
+    StaticSitesListStaticSiteAppSettingsOptionalParams,
+    StaticSitesListStaticSiteBuildAppSettingsOptionalParams,
     StaticSitesListStaticSiteBuildFunctionAppSettingsOptionalParams,
     StaticSitesListStaticSiteBuildFunctionsOptionalParams,
     StaticSitesListStaticSiteBuildsOptionalParams,
@@ -81,6 +93,10 @@ export interface IStaticWebAppClient {
         deleteStaticSiteBuild(resourceGroupName: string, name: string, environmentName: string, options?: StaticSitesDeleteStaticSiteBuildOptionalParams): Promise<void>;
         listStaticSiteFunctions(resourceGroupName: string, name: string, options?: StaticSitesListStaticSiteFunctionsOptionalParams): AsyncIterable<Page<StaticSiteFunctionOverviewARMResource>>;
         listStaticSiteBuildFunctions(resourceGroupName: string, name: string, environmentName: string, options?: StaticSitesListStaticSiteBuildFunctionsOptionalParams): AsyncIterable<Page<StaticSiteFunctionOverviewARMResource>>;
+        listStaticSiteAppSettings(resourceGroupName: string, name: string, options?: StaticSitesListStaticSiteAppSettingsOptionalParams): Promise<StringDictionary>;
+        listStaticSiteBuildAppSettings(resourceGroupName: string, name: string, environmentName: string, options?: StaticSitesListStaticSiteBuildAppSettingsOptionalParams): Promise<StringDictionary>;
+        createOrUpdateStaticSiteAppSettings(resourceGroupName: string, name: string, appSettings: StringDictionary, options?: StaticSitesCreateOrUpdateStaticSiteAppSettingsOptionalParams): Promise<StringDictionary>;
+        createOrUpdateStaticSiteBuildAppSettings(resourceGroupName: string, name: string, environmentName: string, appSettings: StringDictionary, options?: StaticSitesCreateOrUpdateStaticSiteBuildAppSettingsOptionalParams): Promise<StringDictionary>;
         listStaticSiteFunctionAppSettings(resourceGroupName: string, name: string, options?: StaticSitesListStaticSiteFunctionAppSettingsOptionalParams): Promise<StringDictionary>;
         listStaticSiteBuildFunctionAppSettings(resourceGroupName: string, name: string, environmentName: string, options?: StaticSitesListStaticSiteBuildFunctionAppSettingsOptionalParams): Promise<StringDictionary>;
         createOrUpdateStaticSiteFunctionAppSettings(resourceGroupName: string, name: string, appSettings: StringDictionary, options?: StaticSitesCreateOrUpdateStaticSiteFunctionAppSettingsOptionalParams): Promise<StringDictionary>;
@@ -126,6 +142,10 @@ export class StaticWebAppClient implements IStaticWebAppClient {
             },
             listStaticSiteFunctions: (...args) => toPages(sdkListStaticSiteFunctions(this.inner, ...args)),
             listStaticSiteBuildFunctions: (...args) => toPages(sdkListStaticSiteBuildFunctions(this.inner, ...args)),
+            listStaticSiteAppSettings: (...args) => sdkListStaticSiteAppSettings(this.inner, ...args),
+            listStaticSiteBuildAppSettings: (...args) => sdkListStaticSiteBuildAppSettings(this.inner, ...args),
+            createOrUpdateStaticSiteAppSettings: (...args) => sdkCreateOrUpdateStaticSiteAppSettings(this.inner, ...args),
+            createOrUpdateStaticSiteBuildAppSettings: (...args) => sdkCreateOrUpdateStaticSiteBuildAppSettings(this.inner, ...args),
             listStaticSiteFunctionAppSettings: (...args) => sdkListStaticSiteFunctionAppSettings(this.inner, ...args),
             listStaticSiteBuildFunctionAppSettings: (...args) => sdkListStaticSiteBuildFunctionAppSettings(this.inner, ...args),
             createOrUpdateStaticSiteFunctionAppSettings: (...args) => sdkCreateOrUpdateStaticSiteFunctionAppSettings(this.inner, ...args),

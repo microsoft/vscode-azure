@@ -111,7 +111,9 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
 
     private async getEnvironmentChildren(environment: StaticWebAppEnvironment): Promise<ConcreteAzureNode[]> {
         // Settings first: they belong to the environment itself, whereas everything below is a
-        // category of things deployed into it.
+        // category of things deployed into it. They are contributed unconditionally because the
+        // app settings dictionary exists whether or not the environment has a managed API -- only
+        // the Functions node below depends on one being deployed.
         const children: ConcreteAzureNode[] = [
             ...getSettingsNodes(environment, this.settingsAdapter, `${environment.azureResource.name}-${environment.displayLabel}`),
         ];
@@ -243,8 +245,11 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             }
             return true;
         } catch {
-            // This endpoint is the service's feature probe. A rejection means
-            // the environment has no Functions API and is represented by help.
+            // This endpoint is the service's feature probe: it is rejected with 'Operation not
+            // supported: A function must first be deployed to use this method.' until a managed
+            // API exists. A rejection therefore means the environment has no Functions API and is
+            // represented by help. Note this is *not* the dictionary the settings editor uses --
+            // see StaticWebAppSettingsAdapter, which reads the always-available app settings.
             return false;
         }
     }
