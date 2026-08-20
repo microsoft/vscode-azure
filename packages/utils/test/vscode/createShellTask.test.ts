@@ -22,9 +22,12 @@ describe('createShellTask (unit)', () => {
         };
         const definition = { type: 'example', id: 'task' };
         const cwd = m.vscode.Uri.file('cwd');
+        // An explicit path, so the assertion below does not depend on what
+        // happens to be installed on the machine running the test.
+        const executable = '/opt/contoso/tool';
 
         const task = createShellTask(m.vscode, {
-            command: command(process.execPath)
+            command: command(executable)
                 .arg('plain')
                 .quotedArg('quoted value'),
             definition,
@@ -49,9 +52,8 @@ describe('createShellTask (unit)', () => {
         expect(task.presentationOptions).to.deep.equal({ focus: true });
 
         const execution = task.execution as vscode.ShellExecution;
-        // The executable is resolved to an absolute path and strongly quoted so
-        // the shell cannot mis-split a path containing spaces.
-        expect(execution.command).to.deep.equal({ value: process.execPath, quoting: ShellQuoting.Strong });
+        // An explicit path keeps the caller's own spelling.
+        expect(execution.command).to.equal(executable);
         expect(execution.args).to.deep.equal([
             'plain',
             { value: 'quoted value', quoting: ShellQuoting.Strong },
