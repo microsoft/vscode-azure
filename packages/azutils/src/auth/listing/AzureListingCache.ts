@@ -74,7 +74,7 @@ export interface AzureListingFailure {
 export interface AzureWalkOptions {
     /**
      * How many tenants may have their subscriptions listed at once. Defaults to
-     * `1`, which walks strictly sequentially.
+     * `1`, which lists them strictly one after another.
      *
      * Raise it for a consumer that is going to drain the walk anyway -- a pick
      * list over every reachable subscription spends a token request plus a
@@ -204,7 +204,7 @@ export class AzureListingCache {
      * committed. Which of them to *show* is the consumer's business.
      */
     public listSubscriptions(tenant: AzureTenant): AsyncIterable<Page<AzureSubscription>> {
-        return this.subscriptionListing(tenant).read();
+        return this.store.listing<AzureSubscription>(azureListingKey(tenant), () => this.fetcher.fetchSubscriptions(tenant)).read();
     }
 
     /**
@@ -229,36 +229,24 @@ export class AzureListingCache {
      *
      * Tenants may be listed concurrently -- see
      * {@linkcode AzureWalkOptions.concurrency concurrency} -- but the order
-     * subscriptions are yielded in never varies with it.
+     * subscriptions are yielded in never varies with it. A tenant's
+     * subscriptions are gathered before any of them is yielded, so the walk
+     * streams tenant by tenant rather than page by page.
      */
     public async *walkSubscriptions(options?: AzureWalkOptions): AsyncIterable<AzureSubscriptionPath> {
         const concurrency = Math.max(1, Math.floor(options?.concurrency ?? 1));
 
-        if (concurrency === 1) {
-            for await (const { account, tenant } of this.walkTenants(options)) {
-                yield* this.tenantSubscriptions(account, tenant, options);
-            }
-            return;
-        }
-
-        // A sliding window of in-flight tenant listings, drained oldest-first so
-        // the yield order matches the sequential walk exactly. The window is
-        // filled from the tenant walk itself, which stays lazy: tenant pages are
-        // pulled only as slots open up, so a huge account is never enumerated
-        // ahead of the work it feeds.
+        // The window is filled from the tenant walk itself, which stays lazy:
+        // tenant pages are pulled only as slots open up, so a huge account is
+        // never enumerated ahead of the work it feeds. At a window of 1 exactly
+        // one tenant is ever listed, and it is awaited before the next is pulled.
         const limiter = new Limiter<AzureSubscriptionPath[]>(concurrency);
-        const inFlight: Array<Promise<AzureSubscriptionPath[]>> = [];
+        const perTenant = limiter.map(this.walkTenants(options), ({ account, tenant }) => {
+            return this.tenantSubscriptions(account, tenant, options);
+        });
 
-        for await (const { account, tenant } of this.walkTenants(options)) {
-            inFlight.push(limiter.queue(() => this.collectTenantSubscriptions(account, tenant, options)));
-            while (inFlight.length >= concurrency) {
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                yield* await inFlight.shift()!;
-            }
-        }
-
-        for (const pending of inFlight) {
-            yield* await pending;
+        for await (const paths of perTenant) {
+            yield* paths;
         }
     }
 
@@ -289,31 +277,22 @@ export class AzureListingCache {
     }
 
     /**
-     * One tenant's subscriptions as walk paths, streamed page by page. A listing
-     * that fails is reported and ends the tenant rather than the walk.
+     * One tenant's subscriptions as walk paths.
+     *
+     * Buffered rather than streamed, because the walk needs a promise per tenant
+     * to put in flight. **Never rejects**: a listing that fails is reported
+     * through {@linkcode AzureWalkOptions.onFailure onFailure} and ends that
+     * tenant rather than the walk, which also means an abandoned window leaves
+     * no unhandled rejection behind.
      */
-    private async *tenantSubscriptions(account: AzureAccount, tenant: AzureTenant, options?: AzureWalkOptions): AsyncIterable<AzureSubscriptionPath> {
+    private async tenantSubscriptions(account: AzureAccount, tenant: AzureTenant, options?: AzureWalkOptions): Promise<AzureSubscriptionPath[]> {
+        const paths: AzureSubscriptionPath[] = [];
         try {
             for await (const page of this.listSubscriptions(tenant)) {
-                for (const subscription of page.items) {
-                    yield { account, tenant, subscription };
-                }
+                paths.push(...page.items.map(subscription => ({ account, tenant, subscription })));
             }
         } catch (error) {
             options?.onFailure?.({ account, tenant, error });
-        }
-    }
-
-    /**
-     * {@linkcode AzureListingCache.tenantSubscriptions tenantSubscriptions}
-     * buffered, for the concurrent walk -- which needs a promise per tenant to
-     * put in flight. Never rejects, so an abandoned window leaves no unhandled
-     * rejection behind.
-     */
-    private async collectTenantSubscriptions(account: AzureAccount, tenant: AzureTenant, options?: AzureWalkOptions): Promise<AzureSubscriptionPath[]> {
-        const paths: AzureSubscriptionPath[] = [];
-        for await (const path of this.tenantSubscriptions(account, tenant, options)) {
-            paths.push(path);
         }
         return paths;
     }
@@ -331,20 +310,20 @@ export class AzureListingCache {
     }
 
     /**
-     * The cached tenant listing, ending early rather than throwing if it fails.
+     * The cached tenant listing, ending the stream rather than throwing if it
+     * fails.
      *
      * Conditional access blocks enumeration for exactly the accounts whose
      * tenants have to be named by hand, so a failure here must not take out the
-     * fallback for it: ending the stream lets
-     * {@linkcode withAdditionalTenants} still emit the named tenants as its
-     * terminal page. The failure is reported rather than swallowed, and the
-     * listing beneath is left poisoned, so the store discards it and the next
-     * read tries again -- an account is never left cached as *complete and
-     * empty* because one request failed.
+     * fallback for it: ending the stream lets {@linkcode withAdditionalTenants}
+     * still emit the named tenants as its terminal page. The failure is reported
+     * rather than swallowed, and the listing beneath is left poisoned, so the
+     * store discards it and the next read tries again -- an account is never
+     * left cached as *complete and empty* because one request failed.
      */
     private async *listedTenants(account: AzureAccount, onFailure?: (failure: AzureListingFailure) => void): AsyncIterable<Page<AzureTenant>> {
         try {
-            yield* this.tenantListing(account).read();
+            yield* this.store.listing<AzureTenant>(azureListingKey(account), () => this.fetcher.fetchTenants(account)).read();
         } catch (error) {
             this.executor.output.warn(`[listing] listing tenants failed for account ${account.id}; only manually-entered tenants are reachable: ${stringifyError(error)}`);
             onFailure?.({ account, error });
@@ -355,14 +334,6 @@ export class AzureListingCache {
     private cachedAccount(accountId: string): AzureAccount | undefined {
         const wanted = accountId.toLowerCase();
         return this.store.cachedAccounts()?.find(account => account.id.toLowerCase() === wanted);
-    }
-
-    private tenantListing(account: AzureAccount) {
-        return this.store.listing<AzureTenant>(azureListingKey(account), () => this.fetcher.fetchTenants(account));
-    }
-
-    private subscriptionListing(tenant: AzureTenant) {
-        return this.store.listing<AzureSubscription>(azureListingKey(tenant), () => this.fetcher.fetchSubscriptions(tenant));
     }
 }
 

@@ -151,6 +151,12 @@ export async function listReachableSubscriptions(listings: AzureListingCache): P
 
     for await (const { account, tenant, subscription } of walk) {
         const key = subscriptionFilterKey(tenant.tenantId, subscription.subscriptionId);
+        // The key is tenant-scoped, so one subscription reachable through two
+        // tenants is two entries and both survive. This only collides when two
+        // signed-in accounts reach the same subscription through the *same*
+        // tenant, and then first-wins picks the account. That is deterministic
+        // only because the walk yields in source order regardless of how many
+        // tenants it lists at once.
         if (!subscriptions.has(key)) {
             subscriptions.set(key, { account, tenant, subscription });
         }

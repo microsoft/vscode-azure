@@ -330,6 +330,20 @@ describe('AzureListingCache (unit)', () => {
                 'a walk that may stop early must not mint tokens for tenants past the one being read');
         });
 
+        it('lists no further tenant when the reader stops early', async () => {
+            const { cache, fetcher } = createCache();
+
+            for await (const path of cache.walkSubscriptions()) {
+                assert.ok(path);
+                break;
+            }
+
+            // The reason the default window is 1: a wider one would have tenants
+            // in flight past the one being read, minting tokens for tenants the
+            // reader turned out not to want.
+            assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a']);
+        });
+
         it('lists several tenants at once when the caller opts in', async () => {
             const { cache, peak } = createOverlappingCache(6);
 
