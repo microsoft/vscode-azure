@@ -120,15 +120,30 @@ export class AzureListingFetcher implements IAzureListingFetcher {
      * unauthenticated and surface a 401 -- indistinguishable from a real fault.
      * A tenant the user has never signed in to is the *expected* case during a
      * walk, so it has to be reported as itself.
+     *
+     * The probe is pinned silent rather than inheriting the ambient credential
+     * scope, so this can only ever answer "is there already a session" -- a
+     * caller that forgot to establish a silent scope gets `NotSignedInError`
+     * instead of an interactive prompt raised by an enumeration it did not ask
+     * to be interactive. Listing the subscriptions is still done with an
+     * unpinned credential, so a real fetch prompts exactly as the caller
+     * intended.
      */
     public async *fetchSubscriptions(tenant: AzureTenant): AsyncIterable<Page<AzureSubscription>> {
-        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account: { id: tenant.accountId, label: '' } } });
+        const account = { id: tenant.accountId, label: '' };
+        const credential = this.credentialFactory({ tenantId: tenant.tenantId, sessionOptions: { account } });
 
         // Scopes are left empty so the credential applies the environment's own
         // resource-manager default -- the same scope the client below requests,
         // so this resolves the session the request would have used rather than
-        // establishing a second one.
-        if (!await credential.getToken([], { tenantId: tenant.tenantId })) {
+        // establishing a second one. `createIfNone` is pinned off as well as
+        // `silent` on, because the two are mutually exclusive to VS Code and an
+        // ambient scope could otherwise supply the former.
+        const probe = this.credentialFactory({
+            tenantId: tenant.tenantId,
+            sessionOptions: { account, silent: true, createIfNone: false },
+        });
+        if (!await probe.getToken([], { tenantId: tenant.tenantId })) {
             throw new NotSignedInError(`No session is available for tenant ${tenant.tenantId}`);
         }
 

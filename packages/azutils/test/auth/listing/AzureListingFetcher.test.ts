@@ -208,6 +208,29 @@ describe('AzureListingFetcher (unit)', () => {
             assert.strictEqual(inputs[0]?.sessionOptions?.silent, undefined, 'ambient options belong to the credential factory');
         });
 
+        it('pins the probe silent, so an enumeration cannot prompt on the caller\'s behalf', async () => {
+            const probed: CredentialFactoryOptions[] = [];
+            const { fetcher } = createFetcher(input => {
+                const options = input as CredentialFactoryOptions;
+                return {
+                    getToken: () => {
+                        probed.push(options);
+                        return Promise.resolve({ token: 'mock-token', expiresOnTimestamp: Date.now() + 3600000 });
+                    },
+                };
+            });
+            const tenant = makeTenant();
+            mockSubscriptionClient({ subscriptionPages: [{ items: [], hasMore: false }] });
+
+            await collectAsync(fetcher.fetchSubscriptions(tenant));
+
+            assert.strictEqual(probed.length, 1, 'only the up-front probe requests a token here; the client has its own pipeline');
+            assert.strictEqual(probed[0]?.sessionOptions?.silent, true,
+                'no ambient scope was established, so an unpinned probe would prompt for a tenant the walk merely asked about');
+            assert.strictEqual(probed[0]?.sessionOptions?.createIfNone, false,
+                'silent and createIfNone are mutually exclusive to VS Code, so an ambient createIfNone must not survive');
+        });
+
         it('reports a tenant with no session as not signed in, without issuing the listing', async () => {
             const { fetcher } = createFetcher(() => ({ getToken: () => Promise.resolve(null) }));
             const tenant = makeTenant();
