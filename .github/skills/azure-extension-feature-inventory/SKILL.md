@@ -53,7 +53,7 @@ Treat **code as authoritative for behavior** and use the manifest/NLS/docs to cr
 > 3. **CODE** — Traverse the source for code-only/behavioral features (providers, wizards, tree, CLI, debug, API, telemetry).
 > 4. **RECONCILE** — Cross-reference the layers; flag code-only features and orphan strings.
 > 5. **TELEMETRY** — Run one generic query to collect real per-feature usage for the whole extension, attach it to each feature, and offer an **advisory** Migrate/Drop suggestion (numbers + window + confidence; verdict stays with the human). Fall back to emitting links only when telemetry is unreachable.
-> 6. **EMIT** — Write a normalized, migration-ready `INVENTORY.md`.
+> 6. **EMIT** — Write a normalized, migration-ready `INVENTORY.md` to the tracked `docs/migrations/<service>/` folder and commit it.
 > 7. **VERIFY** — Self-check the inventory for completeness against the checklist.
 
 ---
@@ -131,7 +131,7 @@ window + confidence). The final verdict stays with the human and the migration s
 | # | Action | Reference |
 |---|--------|-----------|
 | 1 | Write `INVENTORY.md` following the template's section order and tables. Include the per-feature usage numbers + advisory suggestion and the top-of-file usage summary (real data + roll-up link, or links-only if telemetry was unreachable). | [inventory-template.md](references/inventory-template.md) |
-| 2 | Save it where the user asked (default: alongside the migration workspace, or a session artifact). **If the destination is tracked/committed (`docs/migrations/<service>/`), redact raw telemetry numbers first** (keep suggestion + qualitative rationale + query link); keep the raw-number copy in the session dir only. Print the path. | [inventory-template.md](references/inventory-template.md) |
+| 2 | Save it to the tracked path **`docs/migrations/<service>/INVENTORY.md`** and **commit it**. This is the default, not an option — an inventory that lives only in session scratch is lost, and the migration skill will refuse to start without a tracked copy. **Redact raw telemetry numbers from the committed copy** (keep suggestion + qualitative rationale + query link); keep the raw-number copy in the session dir only. Print both paths. | [inventory-template.md](references/inventory-template.md) |
 
 ---
 
@@ -147,7 +147,7 @@ layer and (where relevant) its exact `contextValue`/`when` clause. Report any ga
 
 | Artifact | Contents |
 |----------|----------|
-| `INVENTORY.md` | Normalized, migration-ready feature catalog (see template) |
+| `docs/migrations/<service>/INVENTORY.md` (committed) | Normalized, migration-ready feature catalog (see template), with raw telemetry numbers redacted |
 | Source ref record | Repo + exact commit SHA the inventory was taken from |
 | Orphan/dead list | NLS keys / contributions with no backing behavior |
 | Telemetry usage | Per-feature real usage (external users, Succeeded/Failed/Canceled, last-seen) from one generic query, each with an advisory Migrate/Drop suggestion; an extension-wide usage summary + roll-up deeplink. Falls back to links-only when telemetry is unreachable. Verdict left to the human. |

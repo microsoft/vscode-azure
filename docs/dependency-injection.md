@@ -4,68 +4,36 @@ The extension uses [inversify](https://inversify.io/) for dependency injection. 
 
 ## Service Identifiers
 
-Service identifiers use the `I`-prefix convention and are created with `Symbol.for()`:
-
-```typescript
-// In packages/utils
-export const IVsCode: ServiceIdentifier<IVsCode> = Symbol.for('IVsCode');
-export const IExtensionContext: ServiceIdentifier<IExtensionContext> = Symbol.for('IExtensionContext');
-export const ICodeContext: ServiceIdentifier<ICodeContext> = Symbol.for('ICodeContext');
-export const IActionExecutor: ServiceIdentifier<IActionExecutor> = Symbol.for('IActionExecutor');
-export const ICommandRegistry: ServiceIdentifier<ICommandRegistry> = Symbol.for('ICommandRegistry');
-export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
-export const IOutputChannel: ServiceIdentifier<IOutputChannel> = Symbol.for('OutputChannel');
-export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for('IProcessExecutor');
-
-// In extensions/vscode-azure/src/services.ts
-export const IResourceClientProvider: ServiceIdentifier<...> = Symbol.for('IResourceClientProvider');
-export const IDeploymentClientProvider: ServiceIdentifier<...> = Symbol.for('IDeploymentClientProvider');
-export const IAcrClientProvider: ServiceIdentifier<...> = Symbol.for('IAcrClientProvider');
-export const IAzureViewDataTree: ServiceIdentifier<...> = Symbol.for('IAzureViewDataTree');
-export const IAzureViewViewItemTree: ServiceIdentifier<...> = Symbol.for('IAzureViewViewItemTree');
-export const IAzureResourceTreeView: ServiceIdentifier<...> = Symbol.for('IAzureResourceTreeView');
-export const IActivityViewDataTree: ServiceIdentifier<...> = Symbol.for('IActivityViewDataTree');
-export const IActivityViewViewItemTree: ServiceIdentifier<...> = Symbol.for('IActivityViewViewItemTree');
-export const IActivityTreeView: ServiceIdentifier<...> = Symbol.for('IActivityTreeView');
-```
-
-Each identifier doubles as both the type alias and the DI token using TypeScript's declaration merging:
+Service identifiers use the `I`-prefix convention and are created with `Symbol.for()`. Each identifier doubles as both the type and the DI token, using TypeScript's declaration merging:
 
 ```typescript
 export const IVsCode: ServiceIdentifier<IVsCode> = Symbol.for('IVsCode');
 export type IVsCode = typeof vscode;
 ```
 
+Framework-level identifiers (`IVsCode`, `IExtensionContext`, `ICodeContext`, `IActionExecutor`, `ICommandRegistry`, `ITelemetryReporter`, `IOutputChannel`, `IProcessExecutor`) are declared alongside the services they front in `packages/utils`. Extension-level identifiers -- client providers, tree instances, tree views -- live in `extensions/vscode-azure/src/services.ts`.
+
 ## Container Setup
 
-The container is created in `extension.ts` during activation:
+The container is created by `setUpContainer()` in `extension.ts` during activation. Bindings there come in two flavours:
 
 ```typescript
-function setUpContainer(extensionContext: IExtensionContext): Container {
-    const container = new Container();
+// Values that already exist -- bound as constants
+container.bind(IVsCode).toConstantValue(vscode);
 
-    // Constants
-    container.bind(IVsCode).toConstantValue(vscode);
-    container.bind(IExtensionContext).toConstantValue(extensionContext);
-    container.bind(ICodeContext).toConstantValue({ code: vscode, extensionContext });
-
-    // Singletons with automatic disposable management
-    container.bind(IActionExecutor).toDynamicValue(context => {
-        return new ActionExecutor(context.get(ITelemetryReporter));
-    }).inSingletonScope().onActivation(pushDisposable);
-
-    container.bind(IProcessExecutor).toDynamicValue(context => {
-        return new ProcessExecutor(context.get(IVsCode));
-    }).inSingletonScope();
-
-    container.bind(ITelemetryReporter).toDynamicValue(context => {
-        return createTelemetryReporter(context.get(IExtensionContext), TelemetryReporter);
-    }).inSingletonScope().onActivation(pushDisposable);
-
-    // ... more bindings
-    return container;
-}
+// Services the container constructs -- one instance, disposed on deactivation
+container.bind(IActionExecutor)
+    .toDynamicValue(context => new ActionExecutor(
+        context.get(IVsCode),
+        context.get(ITelemetryReporter),
+        context.get(IExtensionContext).extension.id,
+        context.get(IOutputChannel)
+    ))
+    .inSingletonScope()
+    .onActivation(pushDisposable);
 ```
+
+Nearly every service follows the second form, so `.inSingletonScope().onActivation(pushDisposable)` is the default shape for a new binding.
 
 ## Product Registration
 
@@ -97,18 +65,12 @@ timing.
 
 ## Disposable Management
 
-The `pushDisposable` helper (in `services.ts`) registers disposable services with the extension context so they're cleaned up on deactivation:
-
-```typescript
-export function pushDisposable<T>(context: ResolutionContext, injectable: T): T {
-    if (Disposable.test(injectable)) {
-        context.get(IExtensionContext).subscriptions.push(injectable);
-    }
-    return injectable;
-}
-```
-
-It uses the inversify `ResolutionContext` to look up `IExtensionContext` and `Disposable.test()` to check disposability. All singleton bindings use `.onActivation(pushDisposable)` to opt into this pattern.
+`pushDisposable` (in `services.ts`) is an inversify activation hook: given a newly
+resolved service, it checks `Disposable.test()` and, if the service is disposable,
+pushes it onto `IExtensionContext.subscriptions` so VS Code cleans it up on
+deactivation. Because it resolves `IExtensionContext` from the `ResolutionContext`
+it is handed, a binding opts in with nothing more than `.onActivation(pushDisposable)`
+-- there is no separate list of disposables to keep in sync.
 
 ## Scoped Command Execution
 
@@ -128,17 +90,8 @@ function registerManagedCommand(container, commandId, commandClass) {
 }
 ```
 
-This means a command like `Hello` can inject `IActionContext` alongside other services:
-
-```typescript
-@injectable()
-export class Hello implements ManagedCommand {
-    public constructor(
-        @inject(IActionContext) private readonly context: IActionContext,
-        @inject(IVsCode) private readonly code: IVsCode
-    ) { }
-}
-```
+This means a command can inject `IActionContext` alongside its other services and
+get the telemetry context for *its own* invocation -- see [Commands](commands.md).
 
 ### Autobind and wizard step resolution
 
@@ -157,41 +110,12 @@ type ProviderEntry<T> = Newable<T> | readonly [ServiceIdentifier<T>, Newable<T>]
 - **Bare class** — bound directly to the collection identifier
 - **`[primaryId, Class]` tuple** — bound as a singleton under `primaryId`, then aliased into the collection so commands can `@inject(primaryId)` directly
 
-The `bindProviders` helper iterates the array and handles both cases:
+The `bindProviders` helper walks the array and applies whichever of the two shapes
+each entry uses. For a tuple it guards the singleton binding with `isBound`, which
+lets a test (or the mock-data entry point) rebind a provider under its `primaryId`
+*before* registration without the product registration overwriting it.
 
-```typescript
-export function bindProviders<T>(
-    container: Container,
-    collectionId: ServiceIdentifier<T>,
-    entries: readonly ProviderEntry<T>[],
-): void {
-    for (const entry of entries) {
-        if (typeof entry === 'function') {
-            container.bind(collectionId).to(entry).onActivation(pushDisposable);
-        } else {
-            const [primaryId, providerClass] = entry;
-            if (!container.isBound(primaryId)) {
-                container.bind(primaryId).to(providerClass).inSingletonScope().onActivation(pushDisposable);
-            }
-            container.bind(collectionId).toService(primaryId);
-        }
-    }
-}
-```
-
-The `isBound` guard lets a test (or the mock-data entry point) rebind a provider under its `primaryId` before registration, without the product registration overwriting it.
-
-For the Azure resources tree the entries come from `ProductRegistrar`, so **dispatch order is the order products register** — specific products first, the generic fallback last:
-
-```typescript
-// registerProducts.ts
-registerSettings(registrar);     // claims only the settings virtual nodes, so it goes first
-registerAcr(registrar);
-registerFunctions(registrar);
-registerGenericAzure(registrar); // root and fallback providers last
-```
-
-Each product contributes its own entries with `registrar.registerResourceDataProvider()` and `registrar.registerResourceViewProvider()`. See [Tree Views](tree-views.md) for why order matters. The workspace and activity trees, which have no product registration, still pass literal arrays to `registerTree`.
+For the Azure resources tree the entries come from `ProductRegistrar`, so **dispatch order is the order products register** -- specific products first, the generic fallback last. Each product contributes its own entries with `registrar.registerResourceDataProvider()` and `registrar.registerResourceViewProvider()`. See [Tree Views](tree-views.md#provider-dispatch) for the ordering rules and why they matter. The workspace and activity trees, which have no product registration, still pass literal arrays to `registerTree`.
 
 ## VS Code API Abstraction
 
@@ -209,18 +133,17 @@ This makes code testable — unit tests can provide a mock `IVsCode` with only t
 
 ## Factory Bindings for Azure Clients
 
-Azure SDK client providers use `.toFactory()` bindings. The shared
-`bindAzureClientProvider()` helper captures `ICodeContext`, `IActionExecutor`,
-and `ICredentialFactory`, then returns a function that creates the client for a
-given subscription:
+Azure SDK client providers use `.toFactory()` bindings. Products declare one with
+`registrar.registerAzureClientProvider(<providerId>, create)`; underneath, the shared
+`bindAzureClientProvider()` helper resolves `ICodeContext`, `IActionExecutor`, and
+`ICredentialFactory` once and hands them to `create` along with the caller's
+subscription:
 
 ```typescript
-bindAzureClientProvider(
-    container,
+registrar.registerAzureClientProvider(
     IResourceClientProvider,
-    (context, executor, credential, subscription) => {
-        return ResourceClient.create(context, executor, credential, subscription);
-    },
+    (context, executor, credential, subscription) =>
+        ResourceClient.create(context, executor, credential, subscription),
 );
 ```
 
@@ -232,19 +155,9 @@ The same pattern handles any class that needs **both** injected services and cal
 
 ## Multi-Binding with Dual Registration
 
-Some providers need to be injected directly by commands *and* retrieved collectively by the tree. The `[primaryId, Class]` tuple form of `ProviderEntry` handles this declaratively:
+Some providers need to be injected directly by commands *and* retrieved collectively by the tree. The `[primaryId, Class]` tuple form of `ProviderEntry` handles this declaratively -- every activity provider is registered that way. A tuple expands to two bindings:
 
-```typescript
-// Activity tree — all providers use singleton+alias tuples
-dataProviders: [
-    [IArmDeploymentDataProvider, ArmDeploymentDataProvider],
-    [ICodeDeploymentDataProvider, CodeDeploymentDataProvider],
-    [IGenericActivityDataProvider, GenericActivityDataProvider],
-],
-```
-
-This expands to:
 1. `container.bind(IArmDeploymentDataProvider).to(ArmDeploymentDataProvider).inSingletonScope()`
 2. `container.bind(IActivityViewDataProviders).toService(IArmDeploymentDataProvider)`
 
-Commands like `ClearActivities` inject `IArmDeploymentDataProvider` directly, while the tree retrieves all providers via `container.getAll(IActivityViewDataProviders)`.
+So `ClearActivities` can inject `IArmDeploymentDataProvider` directly and get the *same instance* the tree sees through `container.getAll(IActivityViewDataProviders)`. Without the singleton scope the two would be different objects, and the command's mutations would never reach the tree.

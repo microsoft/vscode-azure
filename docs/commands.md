@@ -42,27 +42,7 @@ Key points:
 
 ## Registration
 
-Core commands are registered in `registerCommands.ts` using `registerManagedCommand`:
-
-```typescript
-export function registerCommands(container: Container): void {
-    registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
-    registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
-
-    registerManagedCommand(container, 'vscode-azure/workspace/refresh', RefreshWorkspaceView);
-    registerManagedCommand(container, 'vscode-azure/workspace/revealInExplorer', RevealInExplorer);
-
-    // ...
-
-    registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
-    registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
-    registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
-
-    // ...
-}
-```
-
-Product commands are declared from that product's registration entry point:
+Core commands are registered in `registerCommands.ts` with `registerManagedCommand(container, commandId, commandClass, ...prefixArgs)`. Product commands are declared from that product's registration entry point instead:
 
 ```typescript
 export function registerFunctions(registrar: ProductRegistrar): void {
@@ -78,6 +58,11 @@ export function registerFunctions(registrar: ProductRegistrar): void {
 been applied. Product command classes therefore do not need to be imported by
 the shared command registration module.
 
+Either way, each registration:
+1. Binds the command class to itself in the container (if not already)
+2. Registers it with `ICommandRegistry`, which wraps execution in `callWithTelemetryAndErrorHandling`
+3. Creates a scoped child container per execution with `IActionContext` bound
+
 ### Resource deletion
 
 Products should use the shared Delete Resource command rather than shipping
@@ -90,25 +75,16 @@ A product only needs its own delete command for targets the generic command
 cannot express -- for example a virtual child node that maps to a
 service-specific API rather than an ARM resource ID.
 
-Each call:
-1. Binds the command class to itself in the container (if not already)
-2. Registers it with `ICommandRegistry`, which wraps execution in `callWithTelemetryAndErrorHandling`
-3. Creates a scoped child container per execution with `IActionContext` bound
-
 ### `prefixArgs` Pattern
 
-`registerManagedCommand` accepts optional trailing `...prefixArgs` that are prepended to the command's `execute()` arguments:
+Both registration functions accept optional trailing `...prefixArgs`, which are prepended to the arguments VS Code passes to `execute()`. This lets one command class be registered several times with different fixed arguments instead of being split into near-identical subclasses:
 
 ```typescript
-function registerManagedCommand(
-    container: Container,
-    commandId: string,
-    commandClass: new (...ctorArgs: any[]) => ManagedCommand,
-    ...prefixArgs: unknown[]
-): void
+registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
+registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
 ```
 
-This enables a single command class to be registered multiple times with different fixed arguments. For example, `ClearActivities` is registered three times with different modes (`'completed'`, `'successful'`, `'all'`) rather than needing three separate classes. `CreateFunctionApp` uses it to distinguish `'createNew'` vs `'deploy'` jobs — see [Resource Creation](resource-creation.md).
+`ClearActivities.execute(mode)` then receives `'completed'` or `'all'` as its first argument, ahead of anything VS Code supplies. `CreateFunctionApp` uses the same mechanism to distinguish its `'createNew'` and `'deploy'` jobs — see [Resource Creation](resource-creation.md).
 
 ### Open-a-URL Commands
 
@@ -138,21 +114,18 @@ provided by the normal managed-command registration path.
 
 ## Context Values for Tree Item Commands
 
-Commands that act on tree items define a static `ContextValue` property:
+Commands that act on tree items define a static `ContextValue` property, so the string lives with the command that consumes it rather than being repeated in each view provider:
 
 ```typescript
 @injectable()
-export class OpenInPortal implements ManagedCommand {
-    public static ContextValue = 'openInPortal';
-    // ...
-}
-
-@injectable()
 export class DisableAcrAdminUser implements ManagedCommand {
+    /** Context value gating this command's visibility in the tree view. */
     public static ContextValue = 'disableAcrAdminUser';
     // ...
 }
 ```
+
+Commands with no behavior of their own can instead export a plain metadata object that pairs the context value with a resolver. `OpenInPortal` does this: it exports `ContextValue` and a `getUrl` resolver, and is registered against the shared `OpenUrl` command.
 
 View providers assign these to tree items using `combineContextValues` (from `src/tree/contextValueHelpers.ts`):
 
@@ -190,46 +163,28 @@ Note that a context value only controls *menu visibility*. The command palette i
 
 Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command prompts the user to select a resource.
 
-The `ResourceSelector` service encapsulates this pattern. It resolves a resource from the data cache when a key is provided, or prompts the user via `resourceExperience` when no key is given:
+The `ResourceSelector` service encapsulates this pattern. It resolves a resource from the data cache when a key is provided, or prompts the user via `resourceExperience` when no key is given. A command therefore handles both entry points in one line:
 
 ```typescript
-@injectable()
-export class DisableAcrAdminUser implements ManagedCommand {
-    public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IResourceSelector) private readonly selector: IResourceSelector,
-    ) { }
-
-    public async execute(key?: string): Promise<void> {
-        const resource = await this.selector.select(AcrResourceType, key);
-
-        if (!isAcrRegistry(resource)) {
-            return;
-        }
-
-        const enriched = await withDelayedProgress(this.code, { ... },
-            this.selector.whenEnriched<EnrichedAcrRegistry>(resource)
-        );
-        // ... use enriched resource
+public async execute(key?: string): Promise<void> {
+    const resource = await this.selector.select(AcrResourceType, key);
+    if (!isAcrRegistry(resource)) {
+        return;
     }
+
+    // Enrichment is background work, so wait for it explicitly when the command needs it
+    const enriched = await this.selector.whenEnriched<EnrichedAcrRegistry>(resource);
+    // ...
 }
 ```
+
+Wrap that wait in `withDelayedProgress` when enrichment may not have landed yet, so a slow ARM call shows progress instead of appearing to hang.
 
 For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
 
 ## Activity Commands
 
-### `ClearActivities`
-
-Clears activities from all three activity providers. Uses the `prefixArgs` pattern to receive a `ClearMode` (`'completed'` | `'successful'` | `'all'`) without needing separate classes:
-
-```typescript
-export class ClearActivities implements ManagedCommand {
-    public execute(mode: ClearMode): void {
-        // ...
-    }
-}
-```
+`ClearActivities` clears activities from all three activity providers. It uses the `prefixArgs` pattern to receive a `ClearMode` (`'completed'` | `'successful'` | `'all'`) rather than existing as three separate classes, and injects each provider by its own identifier — see [Dependency Injection](dependency-injection.md#multi-binding-with-dual-registration).
 
 ## Telemetry
 

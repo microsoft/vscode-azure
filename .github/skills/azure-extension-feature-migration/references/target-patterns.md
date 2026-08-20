@@ -24,6 +24,14 @@ Read the precedent file, then mirror its **shape**. All paths are relative to th
 | Manifest | `extensions/vscode-azure/package.json` | — |
 | NLS strings | `extensions/vscode-azure/package.nls.json` | — |
 | Resource icons (reuse first) | `packages/azutils/resources/azureIcons/<logicalType>.svg` | existing shared icons in that folder — **only add a new one if none matches** |
+| Product documentation | `docs/products/<product>.md` | existing product docs — framework docs under `docs/` stay framework-level |
+| Process artifacts | `docs/migrations/<service>/` | `INVENTORY.md`, `TRIAGE.md`, `MIGRATION-PLAN.md` — all committed |
+
+> Before adding anything to a product folder, run the
+> [shared-primitive sweep](implementation.md#before-you-write-the-shared-primitive-sweep). Cross-cutting
+> concerns — workspace folder/file pickers, URL-opening and browse commands, file existence, caseless
+> collections, shell task creation, process termination, workspace scanning/indexing, the shared settings framework,
+> and every test fixture — already live in `packages/utils`, `packages/azutils`, or shared extension code.
 
 > New tree **views** are almost never added. Reuse the existing Resources / Workspace / Activity views;
 > register a new **provider** into the relevant tree, not a new container.
