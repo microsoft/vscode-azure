@@ -134,7 +134,7 @@ Sits on top of a `DataItemTree` and implements VS Code's `TreeDataProvider`. Liv
 
 ### `ViewProvider<TResource>`
 
-Extends `DataProvider` but **forbids both `enrich` and `getTtl`** (`enrich?: never`, `getTtl?: never`) — caching and mutation are data-layer concerns. It narrows `getChildren()` to return a plain array (never a paginated `AsyncIterable`) and adds `getTreeItem()` for rendering, plus an optional `getParent()` that enables `TreeView.reveal()` for nodes that have not been loaded yet. See [ViewProvider.ts](/packages/utils/src/tree/ViewProvider.ts) for the full interface.
+Extends `DataProvider` but **forbids both `enrich` and `getTtl`** (`enrich?: never`, `getTtl?: never`) — caching and mutation are data-layer concerns. It narrows `getChildren()` to return a plain array (never a paginated `AsyncIterable`) and adds `getTreeItem()` for rendering, plus an optional `getParent()` that enables `TreeView.reveal()` for nodes that have not been loaded yet. See [ViewProvider.ts](../packages/utils/src/tree/ViewProvider.ts) for the full interface.
 
 View providers control presentation without modifying the data layer. They may:
 - Inject virtual nodes (groupings, headers)
@@ -200,8 +200,8 @@ but with a short 60-second TTL so newly-added marker files
 
 ### Workspace Node Model
 
-All workspace items implement a small, common interface (`WorkspaceNode` in
-`src/tree/workspace/WorkspaceNode.ts`): a stable `id` that doubles as both the
+All workspace items implement a small, common interface
+([`WorkspaceNode`](../extensions/vscode-azure/src/tree/workspace/WorkspaceNode.ts)): a stable `id` that doubles as both the
 cache key and the VS Code `TreeItem.id`, a display `label`, a `type`
 discriminator, and an optional `resourceUri` naming the file or folder on disk
 that the node stands for (which is what makes "Reveal in Explorer" work).
@@ -247,8 +247,8 @@ A second tree view tracks long-running operations (ARM deployments, code deploym
 
 ### Activity Model
 
-Activities implement a common interface (`Activity` in
-`src/tree/activity/Activity.ts`): a stable `id`, a `type` discriminator, a
+Activities implement a common interface
+([`Activity`](../extensions/vscode-azure/src/tree/activity/Activity.ts)): a stable `id`, a `type` discriminator, a
 mutable `status`, a title and optional description, and start/end timestamps.
 `status` is mutable because a provider advances it in place and then fires
 `onDidChange` — the node identity has to survive the transition.
