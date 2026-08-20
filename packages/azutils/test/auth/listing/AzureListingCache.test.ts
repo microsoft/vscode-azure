@@ -96,6 +96,29 @@ describe('AzureListingCache (unit)', () => {
     });
 
     describe('caching', () => {
+        it('fetches only the delta when the pick list follows a filtered tree read', async () => {
+            const { cache, fetcher } = createCache();
+
+            // The tree: expand the account through the filter, then drill each
+            // tenant it admitted -- the two calls the view layer actually makes.
+            for (const page of await collectAsync(cache.listTenants(account, onlyTenants('tenant-a')))) {
+                for (const tenant of page.items) {
+                    await collectAsync(cache.listSubscriptions(tenant));
+                }
+            }
+            assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a'],
+                'the excluded tenant must cost nothing: no tenant-scoped token, no listing');
+
+            // Select Subscriptions: unfiltered, because it edits the filter.
+            const all = await collectAsync(cache.walkSubscriptions());
+
+            assert.deepStrictEqual(pathIds(all), ['tenant-a/sub-a', 'tenant-b/sub-b']);
+            assert.deepStrictEqual(listedTenantIds(fetcher), ['tenant-a', 'tenant-b'],
+                'only the tenant the tree skipped is paid for; the one it loaded must not be re-listed');
+            assert.strictEqual(fetcher.fetchTenants.mock.callCount(), 1, 'the tenant listing was already cached');
+            assert.strictEqual(fetcher.fetchAccounts.mock.callCount(), 1, 'the accounts were already cached');
+        });
+
         it('fetches only the delta when an unfiltered read follows a filtered one', async () => {
             const { cache, fetcher } = createCache();
 
