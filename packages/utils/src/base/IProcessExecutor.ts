@@ -117,9 +117,11 @@ export interface JsonProcessResult<T> extends ProcessResult {
  * stderr is streamed live, so it is not buffered: {@linkcode JsonProcessResult}'s
  * `stderr` on {@linkcode completed} is always an empty string in this mode.
  *
- * The caller **must** drain {@linkcode jsonLines} (e.g. via `for await`) --
- * because stderr buffering is disabled, an undrained stream can backpressure and
- * stall a chatty child process.
+ * The caller **must** start iterating {@linkcode jsonLines} (e.g. via
+ * `for await`). Nothing reads stderr until the first line is pulled, so a
+ * result whose stream is never touched leaves a chatty child blocked on its
+ * own output, and {@linkcode completed} then never settles. Stopping early is
+ * safe: the remainder is discarded and the process runs to completion.
  *
  * The caller is also responsible for awaiting {@linkcode completed} or attaching
  * a `.catch()` handler. If the process fails and `completed` is never awaited,
@@ -443,6 +445,11 @@ function readAll(stream: Readable | null): Promise<string> {
  * @remarks
  * Ends silently on a stream error; the failure is surfaced by awaiting the
  * process instead.
+ *
+ * A consumer that stops early (`break`, `return`, or a `throw`) leaves the
+ * stream paused, which would block the child on its next write and prevent it
+ * from ever exiting. Resuming discards the remainder instead, so the process
+ * still runs to completion and its result stays observable.
  */
 async function* readLines(stream: Readable | null): AsyncGenerator<string> {
     if (!stream) {
@@ -457,6 +464,7 @@ async function* readLines(stream: Readable | null): AsyncGenerator<string> {
         // The failure is surfaced by awaiting the process in `completed`.
     } finally {
         lines.close();
+        stream.resume();
     }
 }
 

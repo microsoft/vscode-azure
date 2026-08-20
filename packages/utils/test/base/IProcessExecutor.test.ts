@@ -768,6 +768,39 @@ describe('ProcessExecutor (integration)', () => {
             expect(completed.json.pad.length).to.equal(size);
         });
 
+        it('should let the process finish when the caller stops reading JSON lines early', async function () {
+            this.timeout(20000);
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code);
+
+            // Far more stderr than the OS pipe holds, so the child blocks on
+            // write() the moment the stream stops being read. Breaking out of
+            // the loop must release it rather than wedge it: a regression here
+            // hangs, because a blocked child never closes and `completed` never
+            // settles.
+            const source = [
+                `const line = JSON.stringify({ i: 0 }) + '\\n';`,
+                `for (let i = 0; i < 200000; i++) { process.stderr.write(line); }`,
+                `process.stdout.write(JSON.stringify({ done: true }));`,
+            ].join('\n');
+
+            const result = await executor.spawn<{ done: boolean }>({
+                execution: 'background',
+                ...evalNode(source),
+                parseJson: true,
+                jsonLines: true,
+            });
+
+            for await (const line of result.jsonLines) {
+                expect(line).to.deep.equal({ i: 0 });
+                break;
+            }
+
+            // The child still exits normally, so its result stays observable.
+            const completed = await result.completed;
+            expect(completed.json).to.deep.equal({ done: true });
+        });
+
         it('should reject completed with CancellationError when cancelled mid-stream', async () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
