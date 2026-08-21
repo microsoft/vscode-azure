@@ -25,11 +25,11 @@ A command's handler, telemetry and menu entry are **one** row. Commands are neve
 
 | Disposition | Count | Meaning |
 |---|---|---|
-| Migrate | 19 | Rebuild with the same UX, using monorepo patterns |
-| Adapt | 12 | Rebuild with **changed** behaviour/UX (azd+Bicep, provider registries) |
+| Migrate | 12 | Rebuild with the same UX, using monorepo patterns |
+| Adapt | 15 | Rebuild with **changed** behaviour/UX (azd+Bicep, provider registries, tree flattening) |
 | Reuse | 11 | Already provided by a shared monorepo package/command; wire it up |
 | Defer | 13 | Keep, but a later phase -- the blocker is named in the rationale |
-| Drop | 85 | Do not migrate |
+| Drop | 89 | Do not migrate |
 | **Total** | **140** | |
 
 ## How decisions were reached
@@ -56,6 +56,54 @@ cited **qualitatively only** -- raw counts are deliberately not committed. Re-ru
 | 7 | Copilot deploy | 2 | **Drop** |
 | 8 | `deployImage` exported API | 2 | **Defer** -- live cross-extension contract |
 
+## Tree shape directives (Phase 3)
+
+Cross-cutting guidance agreed during review. These do not change *what* is built, only *where it surfaces*,
+and they apply to every kept row in the Tree nodes section.
+
+**1. Prefer a command over a leaf node.** A leaf whose only purpose is to be clicked is a command wearing a
+node costume. Rebuild it as a `ManagedCommand` on the nearest real resource node (the container app, or a
+container), contributed to **both** surfaces:
+
+- `view/item/context` for the right-click menu, and
+- the same command again with `"group": "inline"` so it appears as a hover button on the row.
+
+Precedent already in the monorepo: `vscode-azure/settings/edit` is contributed with `"group": "inline@1"`.
+Commands acting on a node need a static `ContextValue` and a `\b`-anchored regex `when` clause.
+
+**2. Prefer `description` / `tooltip` over child rows.** A child node that only displays a value should be
+folded into its parent's `description` (short, inline) or `tooltip` (long, markdown). `AcrViewProvider`
+already does both. This removes a level of expansion for information the user can read at a glance.
+
+**3. Collapse single-child grouping nodes.** A grouping node that almost always holds exactly one child adds
+a click without adding information. The `Containers` group is dropped outright (ACA-068): containers hang
+directly off the container app node whether there is one or many.
+
+**4. Model properties as properties, not as parent nodes.** A container is not "an instance of an image" --
+the image is one of the container's properties, so it renders in the container node's `description` /
+`tooltip` rather than as a node above or below it. The image *artifact* (its repositories and tags) is owned
+by the registry it lives in, so browsing it belongs to the ACR / Docker Hub products, not to the container
+app tree.
+
+**5. Keep the data/view split.** Flattening is a *view* concern. Node removal happens in the `ViewProvider`
+(what renders) -- the `DataProvider` still returns the underlying resources. Do not push display strings into
+the data layer to make flattening easier.
+
+### Resulting shape
+
+```
+Container Apps Environment
+└── Container App                     [inline: browse, stream logs]
+    └── Container xN                  description: <registry>/<image>:<tag>
+```
+
+Four levels of expansion in the source (`App > Containers > Container > Image > Name/Registry`) become one.
+Everything else that used to hang off the app -- Configurations, Scaling, Logs, Revision Management -- is
+either expressed in Bicep, surfaced as a command, or deferred.
+
+Rows carrying these directives: ACA-013, ACA-016, ACA-017, ACA-041, ACA-068, ACA-069, ACA-070, ACA-083,
+ACA-084, ACA-085, ACA-093, ACA-094.
+
 ## Commands (54)
 
 | ID | Feature | Kind | Layer | Disposition | Rationale | Usage consulted |
@@ -72,11 +120,11 @@ cited **qualitatively only** -- raw counts are deliberately not committed. Re-ru
 | ACA-010 | `deployContainerAppInternal` | cmd | B | **Drop** | Internal plumbing; ManagedCommand + IResourceSelector replace it | yes |
 | ACA-011 | `deleteContainerApp` | cmd | A+B | **Reuse** | Generic DeleteAzureResource | yes |
 | ACA-012 | `editContainerApp (Advanced)` | cmd | A+B | **Drop** | Prompt budget bans "Advanced" variants; also depends on revision drafts (ACA-034) | yes |
-| ACA-013 | `browse` | cmd | A+B | **Reuse** | Generic BrowseWebsite | yes |
+| ACA-013 | `browse` | cmd | A+B | **Reuse** | Generic BrowseWebsite. Surface on the container app node in both the context menu and the `inline` group. | yes |
 | ACA-014 | `revealInEnvironment` | cmd | A+B | **Drop** | Bridges two ACA-specific trees that won't exist; generic grouping covers it. Shipped 0.11.1 -- small-N | yes |
 | ACA-015 | `openConsoleInPortal` | cmd | A+B | **Reuse** | Generic OpenInPortal with a URL suffix | yes |
-| ACA-016 | `startStreamingLogs` | cmd | A+B | **Migrate** | Highest-usage command. Needs new data-plane transport (ACA-118) | yes |
-| ACA-017 | `stopStreamingLogs` | cmd | A+B | **Migrate** | Pairs with ACA-016 | yes |
+| ACA-016 | `startStreamingLogs` | cmd | A+B | **Migrate** | Highest-usage command. Needs new data-plane transport (ACA-118). Surface on the container app node in both the context menu and the `inline` group -- it absorbs the `logStreamItem` leaf (ACA-093), so no Logs group node is needed. See [Tree shape directives](#tree-shape-directives-phase-3). | yes |
+| ACA-017 | `stopStreamingLogs` | cmd | A+B | **Migrate** | Pairs with ACA-016; same context-menu + `inline` treatment, gated on an active stream. | yes |
 | ACA-018 | `editContainer` | cmd+wizard | A+B | **Drop** | Folds into the azd deploy job (ACA-008) plus the image-source pick (ACA-096); no distinct behaviour remains once revision drafts are dropped. | yes |
 | ACA-019 | `editContainerImage` | cmd+wizard | A+B | **Drop** | Folds into the azd deploy job (ACA-008) plus the image-source pick (ACA-096). | yes |
 | ACA-020 | `addEnvironmentVariable` | cmd | A+B | **Drop** | Settings framework: one document, no per-setting commands Reviewer (verbatim): "For env, agreed, Bicep is easy here. We already have a need and an issue to steer users from editing settings directly toward doing it in the Bicep, so nothing to add there." | yes |
@@ -100,7 +148,7 @@ cited **qualitatively only** -- raw counts are deliberately not committed. Re-ru
 | ACA-038 | `chooseRevisionMode` | cmd+wizard | A+B | **Drop** | `activeRevisionsMode` is a Bicep template property, so revision mode is configuration and belongs in IaC alongside ingress and scaling. | yes |
 | ACA-039 | `activateRevision` | cmd | A+B | **Defer** | Same group; zero successes in-window **Blocked by:** Revision management beyond restart; revisit post-MVP if users ask. | yes |
 | ACA-040 | `deactivateRevision` | cmd | A+B | **Defer** | Same group **Blocked by:** Revision management beyond restart; revisit post-MVP if users ask. | yes |
-| ACA-041 | `restartRevision` | cmd | A+B | **Migrate** | Moderate real usage; simple ARM op, maps cleanly | yes |
+| ACA-041 | `restartRevision` | cmd | A+B | **Migrate** | Moderate real usage; simple ARM op, maps cleanly. Surface on the container app node in both the context menu and the `inline` group. | yes |
 | ACA-042 | `editScaleRange` | cmd+wizard | A+B | **Drop** | Scaling belongs in Bicep -- judgment call, group | yes |
 | ACA-043 | `addScaleRule` | cmd+wizard | A+B | **Drop** | Same group | yes |
 | ACA-044 | `deleteScaleRule` | cmd+wizard | A+B | **Drop** | Same group | yes |
@@ -137,9 +185,9 @@ cited **qualitatively only** -- raw counts are deliberately not committed. Re-ru
 | ACA-065 | `revisionsItem` | node | B | **Defer** | Revision-management group **Blocked by:** Needed only if revision management (ACA-039/040) is built. | n/a -- no telemetry event |
 | ACA-066 | `revisionDraftItem` | node | B | **Drop** | JC1 revision drafts -> Bicep/IaC. | n/a -- no telemetry event |
 | ACA-067 | `revisionItem` | node | B | **Defer** | Revision-management group **Blocked by:** Needed only if revision management (ACA-039/040) is built. | n/a -- no telemetry event |
-| ACA-068 | `containersItem` | node | B | **Migrate** | Virtual child category (ACR precedent) | n/a -- no telemetry event |
-| ACA-069 | `containerItem` | node | B | **Migrate** | Same | n/a -- no telemetry event |
-| ACA-070 | `imageItem` | node | B | **Migrate** | Same | n/a -- no telemetry event |
+| ACA-068 | `containersItem` | node | B | **Drop** | No grouping node. Containers hang directly off the container app node, single or multiple -- the group adds a click without adding information, and in the single-container case the source already made it masquerade as the container itself. | n/a -- no telemetry event |
+| ACA-069 | `containerItem` | node | B | **Adapt** | Becomes the direct child of the container app node and carries the image as its own `description` / `tooltip`. The container is the thing; the image is one of its properties, not its parent. | n/a -- no telemetry event |
+| ACA-070 | `imageItem` | node | B | **Drop** | Not a node. The image is a property of the container (ACA-069), not a level above it -- a container is not "an instance of an image". Browsing images themselves (repositories, tags) belongs to the registry products (ACR / Docker Hub), not the container app tree. | n/a -- no telemetry event |
 | ACA-071 | `environmentVariablesItem` | node | B | **Drop** | Replaced by the shared settings node | n/a -- no telemetry event |
 | ACA-072 | `environmentVariableItem` | node | B | **Drop** | Framework shows no values in the tree | n/a -- no telemetry event |
 | ACA-073 | `scaleItem` | node | B | **Drop** | Scaling moves to IaC | n/a -- no telemetry event |
@@ -152,9 +200,9 @@ cited **qualitatively only** -- raw counts are deliberately not committed. Re-ru
 | ACA-080 | `secretItem` | node | B | **Drop** | No values in the tree | n/a -- no telemetry event |
 | ACA-081 | `containerAppsActionsItem (GitHub)` | node | B | **Drop** | JC5. Nothing to display without the connect flow. | n/a -- no telemetry event |
 | ACA-082 | `daprEnabledItem` | node | B | **Defer** | Dapr config surface; low value pre-GA **Blocked by:** Dapr surface; out of scope pre-GA. | n/a -- no telemetry event |
-| ACA-083 | `logsGroupItem` | node | B | **Migrate** | Entry point for log streaming (ACA-016) | n/a -- no telemetry event |
-| ACA-084 | `containerImageNameItem` | node | B | **Migrate** | Detail row under image | n/a -- no telemetry event |
-| ACA-085 | `containerImageRegistryItem` | node | B | **Migrate** | Detail row under image | n/a -- no telemetry event |
+| ACA-083 | `logsGroupItem` | node | B | **Adapt** | The Logs group node disappears; its two leaves become commands on the container app node (ACA-016 stream, ACA-094 open-in-portal), each in the context menu and the `inline` group. Capability preserved, surface changed. | n/a -- no telemetry event |
+| ACA-084 | `containerImageNameItem` | node | B | **Drop** | Not a node. The image name is part of the container node's `description` / `tooltip` (ACA-069). | n/a -- no telemetry event |
+| ACA-085 | `containerImageRegistryItem` | node | B | **Drop** | Not a node. The registry is part of the container node's `tooltip` (ACA-069); registry browsing belongs to the ACR product. | n/a -- no telemetry event |
 | ACA-086 | `minMaxReplicaItem` | node | B | **Drop** | Scaling group | n/a -- no telemetry event |
 | ACA-087 | `visibilityItem` | node | B | **Drop** | Ingress group | n/a -- no telemetry event |
 | ACA-088 | `targetPortItem` | node | B | **Drop** | Ingress group | n/a -- no telemetry event |
@@ -162,8 +210,8 @@ cited **qualitatively only** -- raw counts are deliberately not committed. Re-ru
 | ACA-090 | `daprAppIdItem` | node | B | **Defer** | Dapr group **Blocked by:** Dapr surface; out of scope pre-GA. | n/a -- no telemetry event |
 | ACA-091 | `daprAppPortItem` | node | B | **Defer** | Dapr group **Blocked by:** Dapr surface; out of scope pre-GA. | n/a -- no telemetry event |
 | ACA-092 | `daprAppProtocol` | node | B | **Defer** | Dapr group; fix the description/contextValue swap if kept **Blocked by:** Dapr surface; out of scope pre-GA. Fix the description/contextValue swap if ever built. | n/a -- no telemetry event |
-| ACA-093 | `logStreamItem` | node | B | **Migrate** | Click target for ACA-016 | n/a -- no telemetry event |
-| ACA-094 | `logsItem` | node | B | **Reuse** | Generic open-in-portal | n/a -- no telemetry event |
+| ACA-093 | `logStreamItem` | node | B | **Adapt** | Not a node. Becomes the `inline` + context-menu affordance for ACA-016 on the container app node. | n/a -- no telemetry event |
+| ACA-094 | `logsItem` | node | B | **Reuse** | Not a node. Generic open-in-portal command on the container app node, pointed at the app's logs blade. | n/a -- no telemetry event |
 
 ## Wizard flows & sub-flows (16)
 
@@ -236,6 +284,10 @@ they are recorded so the reasoning is not lost.
   helpful to have a command that can jump the user from app to its hosting environment, using the tree view
   Reveal feature." Note the host's reveal walks ancestry by ARM id prefix, and a container app's id is a
   *sibling* of its environment's, so this needs an explicit lookup rather than a plain reveal.
+- **Image browsing belongs to the registry products.** Container images (repositories, tags, manifests) are
+  ACR / Docker Hub artifacts, not container app children. If image browsing is wanted, it belongs in the ACR
+  product tree, where `AcrClient` and the ACR data/view providers already exist. The container app tree only
+  ever shows *which* image a container runs, as a property of that container.
 - **CI/CD story is `azd pipeline config`.** If GitHub deployment is wanted later, surface azd's OIDC-first
   pipeline configuration rather than rebuilding the ACA `sourcecontrols` flow.
 - **Emit `docker.remoteBuild: true`** when generating `azure.yaml`. azd defaults to a *local* Docker build;
