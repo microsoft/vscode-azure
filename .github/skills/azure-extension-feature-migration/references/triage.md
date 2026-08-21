@@ -20,13 +20,13 @@ The inventory (from the feature-inventory skill) carries **collected** per-featu
 suggestion as **input to the human's decision**, not a verdict: a low count is context, never an automatic
 Drop, and the guardrails still apply — a suppressed or renamed event reads as near-zero without being unused,
 high `Failed` is a fix signal, high `Canceled` is a friction signal. If the human wants fresh or deeper
-numbers (a different window, a version/platform breakdown), prefer the Azure MCP server's Kusto query tools.
-Use the `kusto` tool's `kusto_query` command with `cluster-uri`, `database`, `query`, and the corporate
-`tenant`. The corporate VPN is still required because the telemetry cluster is unreachable otherwise. If
-Azure MCP or that command is unavailable, fall back to the inventory skill's direct `az` token + ADX REST
-procedure; if telemetry is unreachable, emit the matching ADX deeplink. The triage decision remains the
-human's. **Raw counts stay in the session/working copy** — a committed `TRIAGE.md` cites telemetry only
-qualitatively (see the decision-artifact section below).
+numbers (a different window, a version/platform breakdown), first confirm the user is on the corporate VPN;
+the telemetry cluster is unreachable otherwise. Then prefer the Azure MCP server's `kusto` tool and its
+`kusto_query` command with `cluster-uri`, `database`, `query`, and the corporate `tenant`. If Azure MCP or
+that command is unavailable, fall back to the inventory skill's direct `az` token + ADX REST procedure; if
+telemetry is unreachable, emit the matching ADX deeplink. The triage decision remains the human's. **Raw
+counts stay in the session/working copy** — a committed `TRIAGE.md` cites telemetry only qualitatively (see
+the decision-artifact section below).
 
 ## Feature granularity (what counts as one row)
 
