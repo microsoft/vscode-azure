@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, CaselessSet, delay, ExecuteStep, stringifyError, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
-import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { CancellationError, CaselessMap, CaselessSet, delay, ExecuteStep, stringifyError, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
@@ -20,6 +20,16 @@ interface DeploymentIdEntry {
 
 /** Interval in milliseconds between polls for the deployment ID file. */
 const pollIntervalMs = 3000;
+
+/**
+ * Scopes the token a tracked deployment's ARM requests are made with. The
+ * tenant pins the token's authority; the account breaks the tie when more than
+ * one signed-in account reaches that tenant.
+ */
+interface TokenScope {
+    readonly tenantId?: string;
+    readonly accountId?: string;
+}
 
 /**
  * Runs `azd provision` as a visible VS Code task.
@@ -52,18 +62,13 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const abortCtl = new AbortController();
         const trackedIds = new CaselessSet();
 
-        // Scope the deployments we discover to the subscription this provision
-        // targets, so their ARM requests authenticate to the tenant that owns it
-        // rather than to the home tenant, whose token ARM would reject. A picked
-        // subscription names its tenant; a hydrated env may not (AZURE_TENANT_ID
-        // is optional), so look it up once here rather than per deployment.
-        const subscription = context.subscription
-            ?? (context.hydratedTenantId ? undefined : await this.resolveTenantOf(context.hydratedSubscriptionId));
-        const tenantId = subscription?.tenantId ?? context.hydratedTenantId;
-        const accountId = subscription?.accountId;
+        // Scope each deployment to the tenant that owns its subscription, so its
+        // ARM requests do not authenticate to the home tenant -- a token ARM
+        // rejects outright for a subscription owned by another tenant.
+        const scopes = this.createScopeResolver(context);
 
         // Start polling in the background (fire-and-forget)
-        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal, tenantId, accountId);
+        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal, scopes);
 
         try {
             await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
@@ -72,8 +77,41 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         } finally {
             abortCtl.abort();
             // Final read to catch any entries written just before exit
-            await this.readAndTrack(deployIdFileUri, trackedIds, tenantId, accountId);
+            await this.readAndTrack(deployIdFileUri, trackedIds, scopes);
         }
+    }
+
+    /**
+     * Builds the function that names the tenant to authenticate a deployment to.
+     *
+     * A picked subscription names its tenant, and a fully-configured azd env may
+     * name it too. Neither is guaranteed: `azd up` on an existing project runs no
+     * pick step, and `AZURE_TENANT_ID` is optional in an env. So the fallback
+     * looks the tenant up from the subscription id embedded in the deployment id,
+     * which is the one identifier always in hand.
+     *
+     * Lookups are memoized per subscription: a provision emits many deployments,
+     * and they share a subscription.
+     */
+    private createScopeResolver(context: Readonly<TContext>): (deploymentId: string) => Promise<TokenScope> {
+        const known: TokenScope | undefined = context.subscription
+            ? { tenantId: context.subscription.tenantId, accountId: context.subscription.accountId }
+            : context.hydratedTenantId ? { tenantId: context.hydratedTenantId } : undefined;
+
+        if (known) {
+            return () => Promise.resolve(known);
+        }
+
+        const memo = new CaselessMap<Promise<TokenScope>>();
+        return (deploymentId: string) => {
+            const { subscriptionId } = parseAzureResourceId(deploymentId);
+            let pending = memo.get(subscriptionId);
+            if (!pending) {
+                pending = this.lookupScope(subscriptionId);
+                memo.set(subscriptionId, pending);
+            }
+            return pending;
+        };
     }
 
     /**
@@ -81,20 +119,17 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * signed-in account reaches (a stale env, another account's subscription)
      * leaves the deployment tracked but unenriched.
      */
-    private async resolveTenantOf(subscriptionId?: string): Promise<AzureSubscription | undefined> {
-        if (!subscriptionId) {
-            return undefined;
-        }
-
+    private async lookupScope(subscriptionId: string): Promise<TokenScope> {
         try {
             const subscription = await this.resolveSubscription(subscriptionId);
             if (!subscription) {
                 this.output.debug(`[provision] no signed-in account reaches subscription ${subscriptionId}`);
+                return {};
             }
-            return subscription;
+            return { tenantId: subscription.tenantId, accountId: subscription.accountId };
         } catch (e) {
             this.output.debug(`[provision] failed to resolve subscription ${subscriptionId}: ${stringifyError(e)}`);
-            return undefined;
+            return {};
         }
     }
 
@@ -109,10 +144,10 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
      * still-running provision -- a brand new deployment is a brand new event
      * and should appear in the tree.
      */
-    private async pollLoop(fileUri: vscode.Uri, trackedIds: CaselessSet, signal: AbortSignal, tenantId?: string, accountId?: string): Promise<void> {
+    private async pollLoop(fileUri: vscode.Uri, trackedIds: CaselessSet, signal: AbortSignal, scopes: (deploymentId: string) => Promise<TokenScope>): Promise<void> {
         try {
             while (!signal.aborted) {
-                await this.readAndTrack(fileUri, trackedIds, tenantId, accountId);
+                await this.readAndTrack(fileUri, trackedIds, scopes);
                 await delay(pollIntervalMs, signal);
             }
         } catch (e) {
@@ -125,11 +160,9 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
     /**
      * Reads the deployment ID file and starts tracking any entries
      * not already in {@linkcode trackedIds}. Best-effort: silently
-     * ignores missing files and parse errors. The optional
-     * {@linkcode tenantId} and {@linkcode accountId} scope the token each
-     * deployment's ARM requests are made with.
+     * ignores missing files and parse errors.
      */
-    private async readAndTrack(fileUri: vscode.Uri, trackedIds: CaselessSet, tenantId?: string, accountId?: string): Promise<void> {
+    private async readAndTrack(fileUri: vscode.Uri, trackedIds: CaselessSet, scopes: (deploymentId: string) => Promise<TokenScope>): Promise<void> {
         const entries = await this.readDeploymentIdFile(fileUri);
         for (const entry of entries) {
             if (trackedIds.has(entry.deploymentId)) {
@@ -139,7 +172,8 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             this.output.debug(`[provision] found deployment ID: ${entry.deploymentId}`);
 
             try {
-                this.armProvider.trackDeployment(entry.deploymentId, tenantId, accountId);
+                const scope = await scopes(entry.deploymentId);
+                this.armProvider.trackDeployment(entry.deploymentId, scope.tenantId, scope.accountId);
             } catch (e) {
                 this.output.debug(`[provision] failed to track deployment ${entry.deploymentId}: ${stringifyError(e)}`);
             }

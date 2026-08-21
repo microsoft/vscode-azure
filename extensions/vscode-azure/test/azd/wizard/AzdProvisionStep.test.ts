@@ -176,6 +176,33 @@ describe('AzdProvisionStep (unit)', () => {
             expect(armProvider.trackDeployment.mock.calls[0].arguments[2]).to.equal('acct-9');
         });
 
+        it('should look up the tenant from the deployment id when nothing names it', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, resolveSubscription, fs } = createStep(
+                makeSubscription({ subscriptionId: 'sub-1', tenantId: 'tenant-owning', accountId: 'acct-owning' }),
+            );
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            // `azd up` on an existing project runs no pick step and no hydration,
+            // so the deployment id is the only thing naming the subscription.
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            expect(resolveSubscription.mock.calls.map(call => call.arguments[0])).to.deep.equal(['sub-1']);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.equal('tenant-owning');
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[2]).to.equal('acct-owning');
+        });
+
         it('should look up the tenant when a hydrated env names only the subscription', async () => {
             const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
             const { azd, step, armProvider, resolveSubscription, fs } = createStep(
@@ -202,6 +229,34 @@ describe('AzdProvisionStep (unit)', () => {
             expect(resolveSubscription.mock.calls.map(call => call.arguments[0])).to.deep.equal(['sub-1']);
             expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.equal('tenant-owning');
             expect(armProvider.trackDeployment.mock.calls[0].arguments[2]).to.equal('acct-owning');
+        });
+
+        it('should look the tenant up once for deployments sharing a subscription', async () => {
+            const id1 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const id2 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-2';
+            const { azd, step, armProvider, resolveSubscription, fs } = createStep(
+                makeSubscription({ subscriptionId: 'sub-1', tenantId: 'tenant-owning' }),
+            );
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(id1, id2));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            // A provision emits many deployments into one subscription, and a walk
+            // per deployment would list every tenant again.
+            expect(resolveSubscription.mock.callCount()).to.equal(1);
+            expect(armProvider.trackDeployment.mock.callCount()).to.equal(2);
+            expect(armProvider.trackDeployment.mock.calls[1].arguments[1]).to.equal('tenant-owning');
         });
 
         it('should not look up a tenant the env already names', async () => {
