@@ -97,6 +97,22 @@ expressed as a *command* (ACA-014) rather than as containment.
 (what renders) -- the `DataProvider` still returns the underlying resources. Do not push display strings into
 the data layer to make flattening easier.
 
+### ARM model facts behind the flattening
+
+Verified against the Container Apps REST API and ARM template reference during review. These are the
+evidence base for directive 5; a future reader should not have to re-derive them.
+
+| Question | Answer |
+|---|---|
+| Is a container app an ARM child of its environment? | **No.** Both are top-level resources under `Microsoft.App`. The app's id contains no trace of the environment; Bicep sets `environmentId`, never `parent:`. Nesting was pure client-side invention. |
+| Deleting an environment -- cascade? | **No, blocked.** The API is documented as "Delete a Managed Environment if it does not have any container apps." Apps are never auto-deleted and never orphaned. |
+| Can the environment id be derived from the app id? | **No.** GET the app and read `properties.environmentId` (`managedEnvironmentId` is the deprecated alias). |
+| Environment -> apps listing? | **No such endpoint.** `managedEnvironments/{name}/containerApps` does not exist; it requires a list plus a client-side filter on `environmentId`. |
+| App and environment in different resource groups? | **Yes** -- the reference is a full ARM id. Not explicitly documented as a tested configuration. |
+| Different subscriptions? | **No** (strong inference: no examples, shared-VNet model, no linked-subscription support; no explicit prohibition found). |
+| Different regions? | **No** -- they share a VNet, so the app runs on the environment's regional infrastructure. |
+| True ARM children of an environment | `certificates`, `managedCertificates`, `daprComponents`, `storages` -- their ids *do* contain the environment name. `Microsoft.App/jobs` are siblings, like apps. |
+
 ### Resulting shape
 
 ```
@@ -122,7 +138,7 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-001 | `reportIssue` | cmd | A+B | **Drop** | VS Code's built-in issue reporter covers it; no per-product equivalent here | yes |
 | ACA-002 | `createContainerApp` | cmd+wizard | A+B | **Adapt** | Deploy -> azd+Bicep AzdJob('createNew'); not 1:1 | yes |
 | ACA-003 | `createManagedEnvironment` | cmd+wizard | A+B | **Adapt** | Environment becomes supporting infra in the Bicep topology; may lose its standalone command. Failures exceed successes today | yes |
-| ACA-004 | `deleteManagedEnvironment` | cmd | A+B | **Reuse** | Generic DeleteAzureResource | yes |
+| ACA-004 | `deleteManagedEnvironment` | cmd | A+B | **Reuse** | Generic `DeleteAzureResource`. Note ARM **blocks** deleting an environment that still contains container apps ("Delete a Managed Environment if it does not have any container apps"), so the generic delete will fail there rather than cascading -- the source's delete-all-apps-first step was required, not defensive. Accepted as a known limitation rather than rebuilding a cascade. Reviewer (verbatim): "For the delete, I'm not worried at the moment--it's a bearable limitation for users who aren't using AZD, and for those who are, `azd down` is the answer." | yes |
 | ACA-005 | `deployWorkspaceProject` | cmd+wizard | A+B | **Adapt** | Flagship. -> azd deploy job + GenerateBicepStep / AzdProvisionStep / AzdDeployStep; not 1:1 | yes |
 | ACA-006 | `deployWorkspaceProjectApi` | cmd | A | **Drop** | Contributed with no handler -- broken today (inventory-flagged) | yes |
 | ACA-007 | `deployImageApi (compat shim)` | cmd | A+B | **Defer** | Tied to the exported API consumed by the Containers extension (ACA-127) **Blocked by:** Blocked on ACA-127 -- the shim only exists to serve the exported API. | yes |
@@ -132,7 +148,7 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-011 | `deleteContainerApp` | cmd | A+B | **Reuse** | Generic DeleteAzureResource | yes |
 | ACA-012 | `editContainerApp (Advanced)` | cmd | A+B | **Drop** | Prompt budget bans "Advanced" variants; also depends on revision drafts (ACA-034) | yes |
 | ACA-013 | `browse` | cmd | A+B | **Reuse** | Generic BrowseWebsite. Surface on the container app node in both the context menu and the `inline` group. | yes |
-| ACA-014 | `revealInEnvironment` | cmd | A+B | **Adapt** | Reinstated. With container apps flattened out to first-class resources (ACA-063), this is the navigation *from* an app *to* its hosting environment, via the tree's reveal API. Context menu on the container app node. Unlike the source -- which revealed the environment only because the host could not reveal the app -- this is a deliberate cross-resource jump: read `managedEnvironmentId` off the app and reveal that node. | yes |
+| ACA-014 | `revealInEnvironment` | cmd | A+B | **Adapt** | Reinstated. With container apps flattened out to first-class resources (ACA-063), this is the navigation *from* an app *to* its hosting environment. Implementation: `await whenEnriched(app)` to get `environmentId`, derive the environment's `AzureNodeId`, then reveal it. Use `environmentId` -- **not** `managedEnvironmentId`, which the SDK marks `Deprecated` and which the source uses in ~40 places. Two Phase 3 notes: `AzureNodeId`'s constructor is private (only `parse()` is public), so deriving a sibling node id needs either a public factory or `azr://` string substitution plus `parse()`; and `TreeView.reveal` takes a single element, so this is a one-target jump. | yes |
 | ACA-015 | `openConsoleInPortal` | cmd | A+B | **Reuse** | Generic OpenInPortal with a URL suffix | yes |
 | ACA-016 | `startStreamingLogs` | cmd | A+B | **Migrate** | Highest-usage command. Needs new data-plane transport (ACA-118). Surface on the container app node in both the context menu and the `inline` group -- it absorbs the `logStreamItem` leaf (ACA-093), so no Logs group node is needed. See [Tree shape directives](#tree-shape-directives-phase-3). | yes |
 | ACA-017 | `stopStreamingLogs` | cmd | A+B | **Migrate** | Pairs with ACA-016; same context-menu + `inline` treatment, gated on an active stream. | yes |
@@ -190,7 +206,7 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 
 | ID | Feature | Kind | Layer | Disposition | Rationale | Usage consulted |
 |---|---|---|---|---|---|---|
-| ACA-062 | `managedEnvironmentItem` | node | B | **Adapt** | First-class resource node on `microsoft.app/managedenvironments`, but **no longer the parent of container apps** -- apps are flattened out (ACA-063). The environment renders as a sibling resource, reached on its own or jumped to from an app via ACA-014. | n/a -- no telemetry event |
+| ACA-062 | `managedEnvironmentItem` | node | B | **Adapt** | First-class resource node on `microsoft.app/managedenvironments`, but **no longer the parent of container apps** -- apps are flattened out (ACA-063). Renders as a leaf. Note that leaf status is a *scope* choice, not a structural one: environments do have true ARM child resources whose ids contain the environment name (`certificates`, `managedCertificates`, `daprComponents`, `storages`). None are in scope, but a future reader should not conclude environments cannot have children. | n/a -- no telemetry event |
 | ACA-063 | `containerAppItem` | node | B | **Adapt** | First-class resource node on `microsoft.app/containerapps`, rooted directly in the resource group / resource-type group rather than nested under an environment. Status tokens become command `ContextValue`s. See [Tree shape directives](#tree-shape-directives-phase-3). | n/a -- no telemetry event |
 | ACA-064 | `containerAppResourceItem (flat)` | node | B | **Drop** | The *concept* -- container apps as a flat, first-class list -- becomes the primary model (ACA-063), but this class does not migrate: it existed only to stop the host's secondary resource-type group rendering an unhandled stub, and the monorepo's resource providers render every type correctly. Drops the `#flat` id-disambiguation hack with it, since an app now appears exactly once. | n/a -- no telemetry event |
 | ACA-065 | `revisionsItem` | node | B | **Defer** | Revision-management group **Blocked by:** Needed only if revision management (ACA-039/040) is built. | n/a -- no telemetry event |
@@ -292,8 +308,11 @@ they are recorded so the reasoning is not lost.
 
 - **Environment -> apps browsing.** Flattening apps out from under environments (ACA-063) removes the only
   path for "show me every app in this environment". The inverse jump exists as a command (ACA-014), but not
-  this direction. If it is wanted later, the natural shape is a filter or a "reveal apps in this environment"
-  command rather than re-nesting the resources.
+  this direction. There is no ARM endpoint for it either, so it would need a list plus a client-side filter
+  on `environmentId` -- and because an app may sit in a *different* resource group than its environment, a
+  resource-group-scoped list can miss apps. A subscription-scoped list or Azure Resource Graph would be
+  required. If wanted later, the natural shape is a filter or a "reveal apps in this environment" command
+  rather than re-nesting the resources.
 - **Image browsing belongs to the registry products.** Container images (repositories, tags, manifests) are
   ACR / Docker Hub artifacts, not container app children. If image browsing is wanted, it belongs in the ACR
   product tree, where `AcrClient` and the ACR data/view providers already exist. The container app tree only
