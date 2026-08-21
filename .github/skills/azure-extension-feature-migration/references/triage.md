@@ -125,16 +125,19 @@ review surface and draft synchronized and catches counting errors before review.
 Use `openpyxl` to generate and read the workbook. It is not present by default, so install it with
 `pip install openpyxl` when needed. The workbook must have:
 
-- A **How to use** sheet as the first tab. Explain that `DECISION` is pre-filled, changed decisions are
-  highlighted, notes flow verbatim into `TRIAGE.md`, the file must be saved as `.xlsx`, and nothing is
-  committed until sign-off.
+- A **How to use** sheet as the first tab. Explain that a blank `DECISION` accepts Recommended, a filled
+  `DECISION` overrides it, overrides are highlighted, notes flow verbatim into `TRIAGE.md`, the file must be
+  saved as `.xlsx`, and nothing is committed until sign-off.
 - A **Triage** sheet with one parsed row per feature and columns for ID, inventory section, feature, kind,
   source layer, Recommended, `DECISION`, `Your notes (verbatim into TRIAGE.md)`, Judgment call, proposed
   rationale, and the relevant telemetry/ADX query.
-- `DECISION` pre-filled from Recommended so the human edits only exceptions. Apply list data validation with
-  exactly `Migrate`, `Adapt`, `Reuse`, `Drop`, and `Defer`; blanks and arbitrary text are invalid.
-- Distinct disposition colors in both Recommended and `DECISION`, plus conditional formatting that
-  highlights each row where `DECISION` differs from Recommended.
+- `DECISION` empty by default so filled cells form a visible override worklist. A blank means "accept
+  Recommended"; the human fills only exceptions. Apply list data validation with exactly `Migrate`, `Adapt`,
+  `Reuse`, `Drop`, and `Defer`, setting `allow_blank=True`; arbitrary non-list text is invalid.
+- Distinct disposition colors in both Recommended and non-blank `DECISION` cells. Highlight overrides with a
+  formula rule that requires a non-blank decision and a difference from Recommended, for example
+  `FormulaRule(formula=['AND($G2<>"",$G2<>$F2)'], fill=...)`. A plain `notEqual` cell rule is incorrect
+  because it highlights every blank decision.
 - A **Judgment calls** sheet grouping the product-specific rows that need genuine product judgment. Include
   the affected IDs, why the decision needs a human, and any relevant query link. Derive the groups for the
   current product; do not hardcode another migration's groups.
@@ -146,18 +149,29 @@ The draft Markdown table, generator script, and workbook are **session scratch a
 Only the signed-off `TRIAGE.md` is a tracked migration artifact. If the workbook is open in Excel, it cannot
 be overwritten: ask the human to close it or write a new file path.
 
+Blank-as-agreement is the default. Because blank cannot distinguish "reviewed and agreed" from "not yet
+reviewed", offer the human an optional `Agree (as recommended)` dropdown entry when review-progress tracking
+matters. Resolve that entry exactly like blank; do not write it as a disposition in `TRIAGE.md`.
+
 ## Running the gate
 
 1. Present the full review surface and stop. For a workbook, give the human its path and ask them to save it
    and confirm when review is complete. For an in-chat table, request decisions through an interactive prompt
    such as `ask_user` rather than free-text narration.
 2. Read the saved workbook back; do not rely on remembered chat decisions or the pre-review draft. Validate
-   that every draft ID appears exactly once and every `DECISION` contains one of the five dispositions.
-3. Preserve `Your notes` **verbatim** as the human rationale. If a changed decision has no note, ask for the
+   that every draft ID appears exactly once and every non-blank `DECISION` contains one of the five
+   dispositions (or the optional explicit-agreement entry when enabled).
+3. Resolve every final disposition as `DECISION or Recommended`; resolve the optional
+   `Agree (as recommended)` entry to Recommended as well. A blank is valid in the workbook but must never
+   remain blank in `TRIAGE.md`.
+4. Preserve `Your notes` **verbatim** as the human rationale. If a changed decision has no note, ask for the
    rationale rather than inventing one.
-4. Summarize the final dispositions from the reviewed data and request explicit human sign-off.
-5. If the human changes dispositions, update the review surface and re-confirm.
-6. Only after explicit sign-off ("approved", "go", etc.) generate `TRIAGE.md` from the reviewed data.
+5. Before writing `TRIAGE.md`, report both the final disposition summary and the review split: how many rows
+   contained an explicit override versus how many accepted Recommended by being blank (and, if enabled, how
+   many used explicit agreement). Ask the human to confirm that blank rows represent agreement, not unfinished
+   review.
+6. If the human changes dispositions, update the review surface and re-confirm.
+7. Only after explicit sign-off ("approved", "go", etc.) generate `TRIAGE.md` from the resolved dispositions.
 
 ## The decision artifact (`TRIAGE.md`) — commit it
 
