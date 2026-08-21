@@ -165,6 +165,19 @@ export class AzureListingStore {
     }
 
     /**
+     * The children already fetched for a parent, without fetching -- an empty
+     * array when that parent has no listing yet, or one that has only been
+     * created and not yet read.
+     *
+     * Synchronous by design, and it never creates a listing, so a caller that
+     * only wants what has already been paid for cannot start a request.
+     */
+    public cachedListing<T extends AzureListingNode>(parentKey: string): T[] {
+        const existing = this.listings.get(parentKey);
+        return existing ? existing.cachedItems() as T[] : [];
+    }
+
+    /**
      * Drop the cached listing of a parent's children, keeping everything
      * beneath them.
      *

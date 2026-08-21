@@ -214,6 +214,33 @@ export class AzureListingCache {
     }
 
     /**
+     * Every subscription already in the cache, without issuing a request.
+     *
+     * The cheap half of a lookup:
+     * {@linkcode AzureListingCache.walkSubscriptions walkSubscriptions} visits
+     * tenants in listing order, so a tenant whose subscriptions are already
+     * cached is still reached only *after* the uncached tenants ahead of it have
+     * been fetched. A caller searching for one subscription should exhaust this
+     * first, and fall back to the walk only when it comes up empty.
+     *
+     * Synchronous, so there is no window in which it could start one. It reports
+     * whatever has been paid for so far, which for a partly-paged tenant is the
+     * pages pulled so far, and never the manually-named tenants that are merged
+     * in above the store. A miss here is therefore never evidence a subscription
+     * does not exist, only that the cache cannot name it yet.
+     */
+    public *walkCachedSubscriptions(): Iterable<AzureSubscriptionPath> {
+        for (const account of this.store.cachedAccounts() ?? []) {
+            const tenants = this.store.cachedListing<AzureTenant>(azureListingKey(account));
+            for (const tenant of tenants) {
+                for (const subscription of this.store.cachedListing<AzureSubscription>(azureListingKey(tenant))) {
+                    yield { account, tenant, subscription };
+                }
+            }
+        }
+    }
+
+    /**
      * Walk account -> tenant -> subscription **unfiltered**, yielding each
      * subscription with the account and tenant it was reached through.
      *

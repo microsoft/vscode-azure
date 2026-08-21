@@ -73,6 +73,20 @@ export class CachedPagedListing<T> {
     }
 
     /**
+     * The items already pulled, without pulling any more.
+     *
+     * Synchronous by design, so a caller that only needs to *name* something
+     * already paid for cannot accidentally pay again. A poisoned listing reports
+     * nothing, since its pages are a truncated result no reader may replay.
+     */
+    public cachedItems(): T[] {
+        if (this.failure) {
+            return [];
+        }
+        return this.pages.flatMap(page => page.items);
+    }
+
+    /**
      * Pull one more page, coalescing with any pull already in flight so
      * concurrent readers share a single request.
      *

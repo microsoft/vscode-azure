@@ -47,6 +47,39 @@ describe('findSubscriptionById (unit)', () => {
         assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
     });
 
+    it('answers from the cache without listing any tenant the walk had not reached', async () => {
+        const { cache, fetcher } = createCache();
+
+        // Warm the cache the way the tree does: accounts, tenants, then tenant
+        // B's subscriptions. B is last in the listing order.
+        await cache.listAccounts();
+        await collectAsync(cache.listTenants(account));
+        await collectAsync(cache.listSubscriptions(tenantB));
+        const beforeResolve = fetcher.fetchSubscriptions.mock.callCount();
+
+        const resolved = await findSubscriptionById(cache, subB.subscriptionId);
+
+        // The walk visits tenants in order, so without a cache-first pass this
+        // would list tenant A -- work the answer never needed.
+        assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
+        assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), beforeResolve,
+            'a subscription already in the cache must cost no listing at all');
+    });
+
+    it('falls back to the walk for a subscription the cache cannot name', async () => {
+        const { cache, fetcher } = createCache();
+
+        await cache.listAccounts();
+        await collectAsync(cache.listTenants(account));
+        await collectAsync(cache.listSubscriptions(tenantA));
+
+        const resolved = await findSubscriptionById(cache, subB.subscriptionId);
+
+        assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
+        assert.ok(fetcher.fetchSubscriptions.mock.calls.some(call => call.arguments[0].tenantId === tenantB.tenantId),
+            'the uncached tenant must still be listed');
+    });
+
     it('replays a listing the tree already paid for instead of re-fetching it', async () => {
         const { cache, fetcher } = createCache();
 
