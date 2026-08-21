@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    type AzureSubscription,
     type AzureSubscriptionTarget,
     type ConcreteAzureNode,
     type ConcreteAzureNodeTree,
@@ -36,6 +37,22 @@ export type IAzureViewViewItemTree = ViewItemTree<string, ConcreteAzureNode>;
 /** Identifier for the Azure resource VSCode tree view */
 export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> = Symbol.for('IAzureResourceTreeView');
 export type IAzureResourceTreeView = vscode.TreeView<string>;
+
+/**
+ * Identifier for a resolver that maps a bare subscription id -- an azd
+ * environment's `AZURE_SUBSCRIPTION_ID`, a deep link -- to the
+ * {@linkcode AzureSubscription} carrying it, so a caller can learn which tenant
+ * to authenticate to. Bound to `findSubscriptionById` over the listing cache,
+ * which keeps components that merely need a tenant off the cache itself.
+ *
+ * Resolve up front rather than on a background path: the answer is stable for
+ * the lifetime of the thing being tracked, so one lookup beats one per retry.
+ *
+ * Returns `undefined` when no signed-in account reaches the id, which callers
+ * must degrade on rather than treat as an error.
+ */
+export const ISubscriptionResolver: ServiceIdentifier<ISubscriptionResolver> = Symbol.for('ISubscriptionResolver');
+export type ISubscriptionResolver = (subscriptionId: string) => Promise<AzureSubscription | undefined>;
 
 // #endregion
 

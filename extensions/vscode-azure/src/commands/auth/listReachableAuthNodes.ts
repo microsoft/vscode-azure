@@ -4,18 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureAccount, AzureListingCache, AzureSubscription, AzureTenant } from '@microsoft/vscode-azure-azutils';
-import { isNotSignedInError } from '@microsoft/vscode-azure-azutils';
+import { DiscoveryConcurrency, isNotSignedInError } from '@microsoft/vscode-azure-azutils';
 import { CaselessMap } from '@microsoft/vscode-azure-utils';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
-
-/**
- * How many tenants {@linkcode listReachableSubscriptions} lists at once.
- *
- * Matches the degree of parallelism the tree layer already uses for its own
- * fan-out, and stays modest deliberately: the ceiling here is the auth
- * provider's tolerance for simultaneous token requests, not ARM's.
- */
-const DiscoveryConcurrency = 5;
 
 /**
  * A tenant that is reachable from a signed-in account.

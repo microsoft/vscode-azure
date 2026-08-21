@@ -4,9 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError, CaselessSet, delay, ExecuteStep, stringifyError, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
+import { ISubscriptionResolver } from '../../services';
 import { IAzdService } from '../AzdService';
 import { ITempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
@@ -33,6 +35,7 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IArmDeploymentDataProvider) private readonly armProvider: IArmDeploymentDataProvider,
+        @inject(ISubscriptionResolver) private readonly resolveSubscription: ISubscriptionResolver,
         @inject(ITempDirManager) private readonly tempDirManager: ITempDirManager,
     ) {
         super();
@@ -50,11 +53,14 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const trackedIds = new CaselessSet();
 
         // Scope the deployments we discover to the subscription this provision
-        // targets. A picked subscription names both its tenant and its account;
-        // a hydrated env names only the tenant (AZURE_TENANT_ID), which is
-        // enough to pin the token's authority.
-        const tenantId = context.subscription?.tenantId ?? context.hydratedTenantId;
-        const accountId = context.subscription?.accountId;
+        // targets, so their ARM requests authenticate to the tenant that owns it
+        // rather than to the home tenant, whose token ARM would reject. A picked
+        // subscription names its tenant; a hydrated env may not (AZURE_TENANT_ID
+        // is optional), so look it up once here rather than per deployment.
+        const subscription = context.subscription
+            ?? (context.hydratedTenantId ? undefined : await this.resolveTenantOf(context.hydratedSubscriptionId));
+        const tenantId = subscription?.tenantId ?? context.hydratedTenantId;
+        const accountId = subscription?.accountId;
 
         // Start polling in the background (fire-and-forget)
         void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal, tenantId, accountId);
@@ -67,6 +73,28 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             abortCtl.abort();
             // Final read to catch any entries written just before exit
             await this.readAndTrack(deployIdFileUri, trackedIds, tenantId, accountId);
+        }
+    }
+
+    /**
+     * Look up the tenant that owns `subscriptionId`. Best-effort: an id no
+     * signed-in account reaches (a stale env, another account's subscription)
+     * leaves the deployment tracked but unenriched.
+     */
+    private async resolveTenantOf(subscriptionId?: string): Promise<AzureSubscription | undefined> {
+        if (!subscriptionId) {
+            return undefined;
+        }
+
+        try {
+            const subscription = await this.resolveSubscription(subscriptionId);
+            if (!subscription) {
+                this.output.debug(`[provision] no signed-in account reaches subscription ${subscriptionId}`);
+            }
+            return subscription;
+        } catch (e) {
+            this.output.debug(`[provision] failed to resolve subscription ${subscriptionId}: ${stringifyError(e)}`);
+            return undefined;
         }
     }
 

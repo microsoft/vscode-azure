@@ -9,6 +9,7 @@ export * from './auth/Environment';
 export * from './auth/NotSignedInError';
 export * from './auth/listing/AzureListingCache';
 export * from './auth/listing/AzureListingFetcher';
+export * from './auth/listing/findSubscriptionById';
 export * from './auth/VsCodeExtensionCredential';
 export * from './models/AzureNode';
 export * from './models/AzureNodeId';

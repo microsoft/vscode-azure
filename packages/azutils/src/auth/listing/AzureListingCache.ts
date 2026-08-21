@@ -70,22 +70,28 @@ export interface AzureListingFailure {
     readonly error: unknown;
 }
 
+/**
+ * How many tenants a walk lists at once when the caller opts into concurrency.
+ * Deliberately modest: the ceiling is the auth provider's tolerance for
+ * simultaneous token requests, not ARM's.
+ */
+export const DiscoveryConcurrency = 5;
+
 /** Options for {@linkcode AzureListingCache.walkSubscriptions}. */
 export interface AzureWalkOptions {
     /**
      * How many tenants may have their subscriptions listed at once. Defaults to
      * `1`, which lists them strictly one after another.
      *
-     * Raise it for a consumer that is going to drain the walk anyway -- a pick
-     * list over every reachable subscription spends a token request plus a
-     * listing per tenant, and across dozens of tenants that is seconds of
-     * serialized latency for work with no ordering dependency between tenants.
+     * Raise it -- to {@linkcode DiscoveryConcurrency} -- whenever latency
+     * matters. A walk spends a token request plus a listing per tenant, and
+     * across dozens of tenants that is seconds of serialized latency for work
+     * with no ordering dependency. Output order is unaffected.
      *
-     * Leave it at `1` for anything that stops early. A walk with a window of `n`
-     * has up to `n - 1` tenants in flight past the one being read, so a consumer
-     * that breaks on the first match would issue token requests for tenants it
-     * never needed -- and a token request is the thing most capable of
-     * interrupting the user. Output order is unaffected either way.
+     * A window of `n` keeps up to `n - 1` tenants in flight past the one being
+     * read, so a consumer that stops early lists tenants it never consumes.
+     * Those listings are cached rather than wasted, so the cost is usually a
+     * step-up prompt on a tenant whose session needs one -- not a wasted request.
      */
     readonly concurrency?: number;
     /**

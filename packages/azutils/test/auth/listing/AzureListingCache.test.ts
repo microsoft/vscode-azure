@@ -741,6 +741,18 @@ describe('AzureListingCache (unit)', () => {
             assert.deepStrictEqual(tenantIds(second), tenantIds(first));
             assert.deepStrictEqual(pulled, ['tenants-0', 'tenants-1']);
         });
+
+        it('caches a listing that produced nothing, rather than re-fetching it as a miss', async () => {
+            const { cache, fetcher } = createCache({ subscriptions: [] });
+
+            const first = await collectAsync(cache.listSubscriptions(tenantA));
+            const second = await collectAsync(cache.listSubscriptions(tenantA));
+
+            assert.deepStrictEqual(subscriptionIds(first), []);
+            assert.deepStrictEqual(subscriptionIds(second), []);
+            assert.strictEqual(fetcher.fetchSubscriptions.mock.callCount(), 1,
+                '"cached, and there are none" must be distinct from "not cached" -- re-listing mints the tenant token again');
+        });
     });
 });
 

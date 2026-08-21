@@ -15,6 +15,7 @@ import {
     IResourceClientProvider,
     ISubscriptionClientProvider,
     ResourceClient,
+    findSubscriptionById,
     SubscriptionClient,
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
@@ -27,6 +28,7 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
+import { ISubscriptionResolver } from '../services';
 import {
     AzureAccountDataProvider,
     IAzureAccountDataProvider,
@@ -73,6 +75,11 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
                 context.get(IActionExecutor),
                 { additionalTenantIds: account => signedInTenantIdsFor(code, account.id) },
             );
+        }).inSingletonScope();
+
+        container.bind(ISubscriptionResolver).toDynamicValue(context => {
+            const cache = context.get(IAzureListingCache);
+            return (subscriptionId: string) => findSubscriptionById(cache, subscriptionId);
         }).inSingletonScope();
 
         container.bind(ISubscriptionClientProvider).toFactory(context => {

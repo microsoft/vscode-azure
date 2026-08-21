@@ -337,6 +337,27 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(observed?.sessionOptions?.silent).to.be.true;
         });
 
+        it('should leave the deployment unenriched instead of throwing when the fetch fails', async () => {
+            const failingClient = {
+                deployments: { getAtScope: mock.fn(() => Promise.reject(new Error('Pagination failed with unexpected statusCode 401'))) },
+                deploymentOperations: {
+                    listAtScope() {
+                        return (async function* () {
+                            yield await Promise.reject(new Error('Pagination failed with unexpected statusCode 401'));
+                        })();
+                    },
+                },
+            };
+            const provider = createProvider(failingClient);
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+
+            // The tree turns a rejected enrichment into an error notification,
+            // for work the user never asked for.
+            const changed = await provider.enrich(provider.getChildren()[0]);
+
+            expect(changed).to.be.false;
+        });
+
         it('should create a client for each enrichment', async () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();

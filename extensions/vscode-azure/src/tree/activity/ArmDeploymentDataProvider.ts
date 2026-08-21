@@ -141,6 +141,11 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
      * Fetch all operations for the deployment and store them in-place.
      * Starts polling for non-terminal deployments. Called automatically
      * by {@linkcode DataItemTree} after a resource is loaded.
+     *
+     * A failed fetch reports "nothing changed" rather than throwing. The tree
+     * surfaces a rejection as an error notification, and enrichment is work the
+     * user never asked for -- so the deployment stays visible but unenriched,
+     * and a refresh retries.
      */
     public async enrich(resource: ArmDeploymentActivity): Promise<boolean> {
         if (resource.abortController.signal.aborted) {
@@ -148,7 +153,13 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
         }
 
         const client = this.getClient(resource);
-        resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
+
+        try {
+            resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
+        } catch (error) {
+            this.executor.output.warn(this.code.l10n.t('[activity] could not fetch operations for deployment {0}: {1}', resource.deploymentId, stringifyError(error)));
+            return false;
+        }
 
         // Start polling if not terminal and not already polling
         if (!isTerminalActivityStatus(resource.status) && !this.activePolls.has(resource.id)) {

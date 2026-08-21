@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { delay } from '@microsoft/vscode-azure-utils';
+import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
@@ -12,17 +14,19 @@ import { AzdProvisionStep } from '../../../src/azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { createMockAzdService } from '../MockAzdService';
 
-function createStep() {
+function createStep(resolved?: AzureSubscription) {
     const { ctx, mock: mockResult } = createMockCodeContext();
     const azd = createMockAzdService();
     const output = new MockOutputChannel('test');
     const armProvider = { trackDeployment: mock.fn() } as never;
     const tempDirManager = new TempDirManager(ctx);
-    const step = new AzdProvisionStep(ctx, azd, output, armProvider, tempDirManager);
+    const resolveSubscription = mock.fn((_subscriptionId: string) => Promise.resolve(resolved));
+    const step = new AzdProvisionStep(ctx, azd, output, armProvider, resolveSubscription, tempDirManager);
     return {
         azd,
         step,
         armProvider: armProvider as unknown as { trackDeployment: ReturnType<typeof mock.fn> },
+        resolveSubscription,
         output,
         fs: mockResult.fs,
     };
@@ -170,6 +174,81 @@ describe('AzdProvisionStep (unit)', () => {
 
             expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
             expect(armProvider.trackDeployment.mock.calls[0].arguments[2]).to.equal('acct-9');
+        });
+
+        it('should look up the tenant when a hydrated env names only the subscription', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, resolveSubscription, fs } = createStep(
+                makeSubscription({ subscriptionId: 'sub-1', tenantId: 'tenant-owning', accountId: 'acct-owning' }),
+            );
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                hydratedSubscriptionId: 'sub-1',
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            // AZURE_TENANT_ID is optional, and without the lookup the deployment
+            // authenticates to the home tenant, which ARM rejects.
+            expect(resolveSubscription.mock.calls.map(call => call.arguments[0])).to.deep.equal(['sub-1']);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.equal('tenant-owning');
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[2]).to.equal('acct-owning');
+        });
+
+        it('should not look up a tenant the env already names', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, resolveSubscription, fs } = createStep();
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                hydratedSubscriptionId: 'sub-1',
+                hydratedTenantId: 'tenant-9',
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            expect(resolveSubscription.mock.callCount()).to.equal(0);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.equal('tenant-9');
+        });
+
+        it('should still track the deployment when the subscription cannot be resolved', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, fs } = createStep(undefined);
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                const filePath = env.AZD_DEPLOYMENT_ID_FILE;
+                fs.addFile(MockUri.file(filePath), makeJsonl(deploymentId));
+                return Promise.resolve();
+            });
+
+            const context = {
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                hydratedSubscriptionId: 'sub-1',
+            } as AzdWizardContext;
+
+            await step.execute(context);
+            await delay(0);
+
+            expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.be.undefined;
         });
 
         it('should track multiple deployments from JSONL', async () => {
