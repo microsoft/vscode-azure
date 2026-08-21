@@ -25,11 +25,11 @@ A command's handler, telemetry and menu entry are **one** row. Commands are neve
 
 | Disposition | Count | Meaning |
 |---|---|---|
-| Migrate | 12 | Rebuild with the same UX, using monorepo patterns |
-| Adapt | 15 | Rebuild with **changed** behaviour/UX (azd+Bicep, provider registries, tree flattening) |
+| Migrate | 10 | Rebuild with the same UX, using monorepo patterns |
+| Adapt | 18 | Rebuild with **changed** behaviour/UX (azd+Bicep, provider registries, tree flattening) |
 | Reuse | 11 | Already provided by a shared monorepo package/command; wire it up |
 | Defer | 13 | Keep, but a later phase -- the blocker is named in the rationale |
-| Drop | 89 | Do not migrate |
+| Drop | 88 | Do not migrate |
 | **Total** | **140** | |
 
 ## How decisions were reached
@@ -85,24 +85,35 @@ the image is one of the container's properties, so it renders in the container n
 by the registry it lives in, so browsing it belongs to the ACR / Docker Hub products, not to the container
 app tree.
 
-**5. Keep the data/view split.** Flattening is a *view* concern. Node removal happens in the `ViewProvider`
+**5. Do not nest one first-class Azure resource under another.** A container app is a real ARM resource, so
+it belongs where every other resource lives -- directly in its resource group / resource-type group -- not
+underneath its managed environment. Nesting fights the generic resource providers: the source had to build a
+hierarchy provider to nest apps, a second provider to surface them flat, an id suffix to stop one resource
+matching two nodes, and a reveal command to bridge the two views. Flattening deletes all four. The
+environment stays a first-class resource in its own right, and the app-to-environment relationship is
+expressed as a *command* (ACA-014) rather than as containment.
+
+**6. Keep the data/view split.** Flattening is a *view* concern. Node removal happens in the `ViewProvider`
 (what renders) -- the `DataProvider` still returns the underlying resources. Do not push display strings into
 the data layer to make flattening easier.
 
 ### Resulting shape
 
 ```
-Container Apps Environment
-└── Container App                     [inline: browse, stream logs]
+Resource group (or resource-type group)
+├── Container Apps Environment        first-class resource
+└── Container App                     first-class resource
+    │                                 [inline: browse, stream logs]
     └── Container xN                  description: <registry>/<image>:<tag>
 ```
 
-Four levels of expansion in the source (`App > Containers > Container > Image > Name/Registry`) become one.
-Everything else that used to hang off the app -- Configurations, Scaling, Logs, Revision Management -- is
-either expressed in Bicep, surfaced as a command, or deferred.
+The source nests five levels deep before showing a container
+(`Environment > App > Containers > Container > Image`); this shows one. Everything that used to hang off the
+app -- Configurations, Scaling, Logs, Revision Management -- is either expressed in Bicep, surfaced as a
+command, or deferred.
 
-Rows carrying these directives: ACA-013, ACA-016, ACA-017, ACA-041, ACA-068, ACA-069, ACA-070, ACA-083,
-ACA-084, ACA-085, ACA-093, ACA-094.
+Rows carrying these directives: ACA-013, ACA-014, ACA-016, ACA-017, ACA-041, ACA-062, ACA-063, ACA-064,
+ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 
 ## Commands (54)
 
@@ -121,7 +132,7 @@ ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-011 | `deleteContainerApp` | cmd | A+B | **Reuse** | Generic DeleteAzureResource | yes |
 | ACA-012 | `editContainerApp (Advanced)` | cmd | A+B | **Drop** | Prompt budget bans "Advanced" variants; also depends on revision drafts (ACA-034) | yes |
 | ACA-013 | `browse` | cmd | A+B | **Reuse** | Generic BrowseWebsite. Surface on the container app node in both the context menu and the `inline` group. | yes |
-| ACA-014 | `revealInEnvironment` | cmd | A+B | **Drop** | Bridges two ACA-specific trees that won't exist; generic grouping covers it. Shipped 0.11.1 -- small-N | yes |
+| ACA-014 | `revealInEnvironment` | cmd | A+B | **Adapt** | Reinstated. With container apps flattened out to first-class resources (ACA-063), this is the navigation *from* an app *to* its hosting environment, via the tree's reveal API. Context menu on the container app node. Unlike the source -- which revealed the environment only because the host could not reveal the app -- this is a deliberate cross-resource jump: read `managedEnvironmentId` off the app and reveal that node. | yes |
 | ACA-015 | `openConsoleInPortal` | cmd | A+B | **Reuse** | Generic OpenInPortal with a URL suffix | yes |
 | ACA-016 | `startStreamingLogs` | cmd | A+B | **Migrate** | Highest-usage command. Needs new data-plane transport (ACA-118). Surface on the container app node in both the context menu and the `inline` group -- it absorbs the `logStreamItem` leaf (ACA-093), so no Logs group node is needed. See [Tree shape directives](#tree-shape-directives-phase-3). | yes |
 | ACA-017 | `stopStreamingLogs` | cmd | A+B | **Migrate** | Pairs with ACA-016; same context-menu + `inline` treatment, gated on an active stream. | yes |
@@ -179,9 +190,9 @@ ACA-084, ACA-085, ACA-093, ACA-094.
 
 | ID | Feature | Kind | Layer | Disposition | Rationale | Usage consulted |
 |---|---|---|---|---|---|---|
-| ACA-062 | `managedEnvironmentItem` | node | B | **Migrate** | -> DataProvider + ViewProvider; construction is Adapt-shaped | n/a -- no telemetry event |
-| ACA-063 | `containerAppItem` | node | B | **Migrate** | Same; status tokens become command ContextValues | n/a -- no telemetry event |
-| ACA-064 | `containerAppResourceItem (flat)` | node | B | **Drop** | The monorepo's `GenericAzureViewProvider` renders any unclaimed resource type with a correct label and icon, so the flat node's reason for existing (an unhandled host stub) does not arise. Drops the `#flat` id-disambiguation hack with it. Reviewer (verbatim): "Maybe just add a note that it would be helpful to have a command that can jump the user from app to its hosting environment, using the tree view Reveal feature." | n/a -- no telemetry event |
+| ACA-062 | `managedEnvironmentItem` | node | B | **Adapt** | First-class resource node on `microsoft.app/managedenvironments`, but **no longer the parent of container apps** -- apps are flattened out (ACA-063). The environment renders as a sibling resource, reached on its own or jumped to from an app via ACA-014. | n/a -- no telemetry event |
+| ACA-063 | `containerAppItem` | node | B | **Adapt** | First-class resource node on `microsoft.app/containerapps`, rooted directly in the resource group / resource-type group rather than nested under an environment. Status tokens become command `ContextValue`s. See [Tree shape directives](#tree-shape-directives-phase-3). | n/a -- no telemetry event |
+| ACA-064 | `containerAppResourceItem (flat)` | node | B | **Drop** | The *concept* -- container apps as a flat, first-class list -- becomes the primary model (ACA-063), but this class does not migrate: it existed only to stop the host's secondary resource-type group rendering an unhandled stub, and the monorepo's resource providers render every type correctly. Drops the `#flat` id-disambiguation hack with it, since an app now appears exactly once. | n/a -- no telemetry event |
 | ACA-065 | `revisionsItem` | node | B | **Defer** | Revision-management group **Blocked by:** Needed only if revision management (ACA-039/040) is built. | n/a -- no telemetry event |
 | ACA-066 | `revisionDraftItem` | node | B | **Drop** | JC1 revision drafts -> Bicep/IaC. | n/a -- no telemetry event |
 | ACA-067 | `revisionItem` | node | B | **Defer** | Revision-management group **Blocked by:** Needed only if revision management (ACA-039/040) is built. | n/a -- no telemetry event |
@@ -279,11 +290,10 @@ ACA-084, ACA-085, ACA-093, ACA-094.
 Raised during review. These are **not** dispositioned features and carry no migration obligation --
 they are recorded so the reasoning is not lost.
 
-- **App -> environment navigation.** A command to jump from a container app to its hosting environment using
-  the tree's Reveal feature would be useful. Reviewer (verbatim): "Maybe just add a note that it would be
-  helpful to have a command that can jump the user from app to its hosting environment, using the tree view
-  Reveal feature." Note the host's reveal walks ancestry by ARM id prefix, and a container app's id is a
-  *sibling* of its environment's, so this needs an explicit lookup rather than a plain reveal.
+- **Environment -> apps browsing.** Flattening apps out from under environments (ACA-063) removes the only
+  path for "show me every app in this environment". The inverse jump exists as a command (ACA-014), but not
+  this direction. If it is wanted later, the natural shape is a filter or a "reveal apps in this environment"
+  command rather than re-nesting the resources.
 - **Image browsing belongs to the registry products.** Container images (repositories, tags, manifests) are
   ACR / Docker Hub artifacts, not container app children. If image browsing is wanted, it belongs in the ACR
   product tree, where `AcrClient` and the ACR data/view providers already exist. The container app tree only
