@@ -4,40 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    IOutputChannel,
     IVsCode,
+    stringifyError,
     type Disposable,
+    type IOutputChannel as OutputChannel,
     type IVsCode as VsCode,
 } from '@microsoft/vscode-azure-utils';
-import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
+import { IProcessTerminator } from '../../utils/ProcessTerminator';
 import { SwaTaskSource } from './SwaTaskProvider';
-
-/** Injectable boundary around the one raw process signal needed to preserve task terminal output. */
-export const IProcessTerminator: ServiceIdentifier<IProcessTerminator> = Symbol.for('IProcessTerminator');
-
-/** Stops one known process without invoking broad process-name matching. */
-export interface IProcessTerminator {
-    stop(processId: number): void;
-}
-
-/**
- * Default process terminator used after a linked top-level debug session ends.
- *
- * A process that already exited is benign. Every other signal error is rethrown.
- */
-@injectable()
-export class ProcessTerminator implements IProcessTerminator {
-    /** @inheritdoc */
-    public stop(processId: number): void {
-        try {
-            process.kill(processId);
-        } catch (error) {
-            if (!isProcessMissing(error)) {
-                throw error;
-            }
-        }
-    }
-}
 
 /**
  * Tracks generated SWA task process IDs and stops only the process linked to a
@@ -52,6 +29,7 @@ export class SwaTaskLifecycle implements Disposable {
     public constructor(
         @inject(IVsCode) private readonly code: VsCode,
         @inject(IProcessTerminator) private readonly processTerminator: IProcessTerminator,
+        @inject(IOutputChannel) private readonly output: OutputChannel,
     ) {
         this.disposables = [
             this.code.tasks.onDidStartTaskProcess(event => {
@@ -100,7 +78,11 @@ export class SwaTaskLifecycle implements Disposable {
         }
 
         this.runningProcesses.delete(key);
-        this.processTerminator.stop(processId);
+        this.processTerminator.stop(processId).catch((error: unknown) => {
+            // Leaves the emulator running rather than the debug session hanging: the user
+            // can still stop the task from its terminal.
+            this.output.debug(`[swa] could not stop process ${processId}: ${stringifyError(error)}`);
+        });
     }
 }
 
@@ -128,9 +110,3 @@ function workspaceFolderScopeKey(folder: vscode.WorkspaceFolder): string {
     return `folder:${folder.uri.toString()}`;
 }
 
-function isProcessMissing(error: unknown): boolean {
-    return !!error
-        && typeof error === 'object'
-        && 'code' in error
-        && error.code === 'ESRCH';
-}

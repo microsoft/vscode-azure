@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { getSwaTaskScopeKey, SwaTaskLifecycle } from '../../src/tasks/staticWebApps/SwaTaskLifecycle';
@@ -65,10 +65,11 @@ describe('SwaTaskLifecycle (unit)', () => {
             new mockResult.vscode.ShellExecution('swa', ['start']),
         );
         const execution = { task } as vscode.TaskExecution;
-        const stop = mock.fn();
+        const stop = mock.fn((_processId: number) => Promise.resolve());
         const lifecycle = new SwaTaskLifecycle(
             mockResult.vscode,
             { stop },
+            new MockOutputChannel('test'),
         );
 
         mockResult.taskProcessStartEmitter.fire({ execution, processId: 1234 });
