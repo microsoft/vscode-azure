@@ -10,7 +10,20 @@ import { IAzdService } from '../../../azd/AzdService';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 import { canAzdDeployStaticWebApp } from './locationUtils';
 
-/** Adds an azd-supported Static Web Apps service without replacing user YAML. */
+/**
+ * Adds an azd-supported Static Web Apps service without replacing user YAML.
+ *
+ * azd itself cannot scaffold this entry -- `azd add` offers only
+ * `host.appservice` and `host.containerapp`, and `StaticWebAppTarget` exists
+ * only on azd's deploy side -- so the wizard writes it or `azd deploy` has
+ * nothing to target. See Azure/azure-dev#9718.
+ *
+ * Restricted to the `deploy` job. A `createNew` run provisions from a
+ * {@linkcode TempDirManager} directory that is deleted afterwards, and its
+ * `azure.yaml` is never deployed from ({@linkcode AzdDeployStep} requires
+ * {@linkcode AzdWizardContext.deploy deploy}), so a `services:` entry there
+ * would have no reader.
+ */
 @injectable()
 export class ConfigureStaticWebAppAzureYamlStep extends ExecuteStep<CreateStaticWebAppContext> {
     public constructor(
@@ -21,7 +34,8 @@ export class ConfigureStaticWebAppAzureYamlStep extends ExecuteStep<CreateStatic
     }
 
     public override async shouldExecute(context: Readonly<CreateStaticWebAppContext>): Promise<boolean> {
-        return !context.hasServices
+        return context.job === 'deploy'
+            && !context.hasServices
             && !!context.iacFolder
             && !!context.azdServiceName
             && context.appLocation !== undefined

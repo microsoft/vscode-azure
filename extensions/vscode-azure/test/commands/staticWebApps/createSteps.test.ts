@@ -148,6 +148,7 @@ describe('Static Web Apps creation steps (unit)', () => {
         const step = new ConfigureStaticWebAppAzureYamlStep(ctx, azd);
         const context = {
             mode: 'basic',
+            job: 'deploy',
             iacFolder: MockUri.file('/workspace'),
             azdServiceName: 'web',
             appLocation: '/app',
@@ -179,10 +180,32 @@ describe('Static Web Apps creation steps (unit)', () => {
         expect(await step.shouldExecute({
             resourceDisplayName: 'Static Web App',
             mode: 'basic',
+            job: 'deploy',
             iacFolder: MockUri.file('/workspace'),
             azdServiceName: 'web',
             appLocation: '/',
             outputLocation: '/',
+        })).to.be.false;
+    });
+
+    it('should not touch azure.yaml for a createNew job', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const yamlUri = MockUri.file('/workspace/azure.yaml');
+        mock.fs.addFile(yamlUri, 'name: test\n');
+        const azd = createMockAzdService();
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([yamlUri]));
+        const step = new ConfigureStaticWebAppAzureYamlStep(ctx, azd);
+
+        // The createNew iacFolder is a temp dir that is provisioned from and
+        // then deleted; nothing ever deploys from its azure.yaml.
+        expect(await step.shouldExecute({
+            resourceDisplayName: 'Static Web App',
+            mode: 'basic',
+            job: 'createNew',
+            iacFolder: MockUri.file('/workspace'),
+            azdServiceName: 'web',
+            appLocation: 'app',
+            outputLocation: 'dist',
         })).to.be.false;
     });
 });
