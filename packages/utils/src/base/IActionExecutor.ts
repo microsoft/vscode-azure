@@ -161,6 +161,9 @@ export class ActionExecutor implements IActionExecutor {
 
         if (choice === reportIssue) {
             const data = [
+                'Error:',
+                error.stack ?? stringifyError(error),
+                '',
                 `App Host: ${this.code.env.appHost}`,
                 `Remote Name: ${this.code.env.remoteName ?? '<none>'}`,
                 `Language: ${this.code.env.language}`,
