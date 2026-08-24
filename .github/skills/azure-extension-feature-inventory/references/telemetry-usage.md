@@ -8,6 +8,9 @@ follow-up questions by running scoped queries (or handing back a one-click link)
 > **Posture**
 > - **Collect, don't guess.** When telemetry is reachable (see auth below), run the one generic query and use
 >   the numbers. Only when telemetry is *not* reachable do you fall back to emitting links for the human.
+> - **Prefer Azure MCP.** Use the Azure MCP server's `kusto` tool with the `kusto_query` command when it is
+>   available. It does not remove the corporate VPN requirement. If Azure MCP or that command is unavailable,
+>   use the direct `az` token + ADX REST procedure below.
 > - **Suggest, don't decree.** A usage-based suggestion (`lean Migrate` / `candidate Drop` / `needs a human`)
 >   is a recommendation with its numbers, window, and confidence attached. The **final Migrate/Drop call stays
 >   with the human** (and the migration skill's triage gate). Never silently turn a low count into a verdict.
@@ -135,7 +138,20 @@ query call fails (timeout / connection refused), wasting a round of tokens and t
 explicitly if unsure. If they aren't (or can't) connect, skip straight to the deeplink fallback rather than
 retrying the query.
 
-**1. Get a token for the cluster, from the corp tenant explicitly:**
+**1. Prefer the Azure MCP server's `kusto` tool.** Invoke its `kusto_query` command with:
+
+| Parameter | Value |
+|-----------|-------|
+| `cluster-uri` | `https://ddtelvscode.kusto.windows.net` |
+| `database` | `VSCodeExt` |
+| `query` | The KQL from this procedure |
+| `tenant` | `72f988bf-86f1-41af-91ab-2d7cd011db47` |
+
+The Azure MCP path still requires the corporate VPN. Treat a missing Azure MCP server, missing `kusto` tool,
+or missing `kusto_query` command as "MCP unavailable" and continue with the direct approach below; do not
+treat MCP availability as telemetry availability.
+
+**2. Direct fallback: get a token for the cluster, from the corp tenant explicitly:**
 
 ```powershell
 $tenant = '72f988bf-86f1-41af-91ab-2d7cd011db47'   # microsoft.com
@@ -150,7 +166,8 @@ $token = az account get-access-token `
 > `--tenant 72f988bf-...`.** Decode the token and confirm `tid` is the corp tenant and `upn` is your
 > `@microsoft.com` before blaming the query.
 
-**2. POST the KQL to the REST endpoint** (v1 is the simplest to parse; `db` names the database):
+**3. Direct fallback: POST the KQL to the REST endpoint** (v1 is the simplest to parse; `db` names the
+database):
 
 ```powershell
 $body = @{ db = 'VSCodeExt'; csl = $query } | ConvertTo-Json
@@ -163,6 +180,8 @@ $t.Rows | ForEach-Object { $row = $_; ($cols | ForEach-Object { "$_=$($row[[arra
 ```
 
 Execution notes:
+- Azure MCP is the preferred query transport, but the query text, cluster, database, VPN requirement, result
+  interpretation, and raw-data handling rules are identical for both transports.
 - **Token acquisition and the query must run in the same shell invocation** — env vars don't persist between
   this runtime's separate command calls. Acquire `$token` and POST in one call (or re-acquire each call).
 - The KQL body may keep the fully-qualified `cluster('ddtelvscode').database('VSCodeExt').RawEventsVSCodeExt`

@@ -20,10 +20,13 @@ The inventory (from the feature-inventory skill) carries **collected** per-featu
 suggestion as **input to the human's decision**, not a verdict: a low count is context, never an automatic
 Drop, and the guardrails still apply — a suppressed or renamed event reads as near-zero without being unused,
 high `Failed` is a fix signal, high `Canceled` is a friction signal. If the human wants fresh or deeper
-numbers (a different window, a version/platform breakdown), the inventory skill can run the targeted query
-(**requires corporate VPN** — the telemetry cluster is unreachable otherwise); the triage decision remains
-the human's. **Raw counts stay in the session/working copy** — a committed `TRIAGE.md` cites telemetry only
-qualitatively (see the decision-artifact section below).
+numbers (a different window, a version/platform breakdown), first confirm the user is on the corporate VPN;
+the telemetry cluster is unreachable otherwise. Then prefer the Azure MCP server's `kusto` tool and its
+`kusto_query` command with `cluster-uri`, `database`, `query`, and the corporate `tenant`. If Azure MCP or
+that command is unavailable, fall back to the inventory skill's direct `az` token + ADX REST procedure; if
+telemetry is unreachable, emit the matching ADX deeplink. The triage decision remains the human's. **Raw
+counts stay in the session/working copy** — a committed `TRIAGE.md` cites telemetry only qualitatively (see
+the decision-artifact section below).
 
 ## Feature granularity (what counts as one row)
 
@@ -78,7 +81,7 @@ Use these to pre-fill the **recommended** column. They are defaults, not decisio
 - **Commands whose value is incidental** (uninstall-the-CLI, reveal-in-tree, refresh-this-node, help links the platform already offers) -> **Drop** by default. "The source shipped it" is not a rationale; state what the user actually loses without it and let the human decide.
 - **Settings** -> **Migrate** the ones that back a kept feature; **Drop** settings whose feature is dropped. A setting that stores project/deployment configuration is a **Drop** even if its feature is kept — that data belongs in `azure.yaml`.
 
-## The triage table (present this to the human)
+## The draft triage table
 
 One row per inventory feature. Keep it exhaustive — every inventory line gets a row, so nothing is silently
 lost. Group by inventory section (Commands, Settings, Tree, Wizards, Integrations, Debuggers/Tasks, Dead).
@@ -88,38 +91,96 @@ the join key the rest of the migration uses: `MIGRATION-PLAN.md` tasks, code com
 all reference decisions by ID, so they never re-litigate a disposition.
 
 ```
-| ID | Feature (from inventory) | Kind | Src layer | Recommended | Rationale / 1:1? | Decision |
-|--------|--------------------------|------|-----------|-------------|------------------|----------|
-| SWA-001 | createStaticWebApp      | cmd+wizard | A+B | Adapt | Deploy -> azd+Bicep; wizard steps change | (await human) |
-| SWA-002 | browse                  | cmd  | A+B | Reuse | Generic open-in-portal already exists    | (await human) |
-| SWA-003 | revealResource (orphan) | nls  | -   | Drop  | Dead NLS key, no behavior                 | (await human) |
-| ...     |                          |      |     |       |                                          |                |
+| ID | Feature (from inventory) | Kind | Src layer | Recommended | Rationale / 1:1? |
+|--------|--------------------------|------|-----------|-------------|------------------|
+| SWA-001 | createStaticWebApp      | cmd+wizard | A+B | Adapt | Deploy -> azd+Bicep; wizard steps change |
+| SWA-002 | browse                  | cmd  | A+B | Reuse | Generic open-in-portal already exists    |
+| SWA-003 | revealResource (orphan) | nls  | -   | Drop  | Dead NLS key, no behavior                 |
+| ...     |                          |      |     |       |                                          |
 ```
 
 Rules for the table:
-- **You fill every column except the last.** The last column is the human's.
 - **IDs are permanent.** Assign them once and never renumber — downstream artifacts point at them. If a
   feature is split or merged after sign-off, allocate new IDs; don't recycle old ones.
 - Put a clear **"does not map 1:1"** note in the rationale whenever behavior/UX changes, and link the
   reason to [does-not-map.md](does-not-map.md).
 - Do not collapse or omit rows to shorten the table. Completeness is the point.
 
+## Presenting the table for review
+
+Choose the review surface by scale:
+
+- **Roughly 40 rows or fewer:** an in-chat Markdown table is acceptable.
+- **More than roughly 40 rows:** generate an Excel workbook (`.xlsx`). Do not dump a large table into chat
+  or ask the human to edit pipe-delimited Markdown.
+- **Small, high-stakes subset:** offer to walk through those rows with `ask_user` multiple-choice prompts.
+  This pairs well with bulk-accepting the mechanical remainder in the workbook.
+
+For a workbook, first save the complete draft Markdown table in session scratch. **Generate the workbook by
+parsing that draft; never retype or separately re-emit its rows.** The parser must fail on duplicate IDs,
+unknown recommendations, malformed rows, or a parsed row count that differs from the draft's computed count.
+Compute disposition summaries from the parsed rows rather than copying hand-written totals. This keeps the
+review surface and draft synchronized and catches counting errors before review.
+
+Use `openpyxl` to generate and read the workbook. It is not present by default, so install it with
+`pip install openpyxl` when needed. The workbook must have:
+
+- A **How to use** sheet as the first tab. Explain that a blank `DECISION` accepts Recommended, a filled
+  `DECISION` overrides it, overrides are highlighted, notes flow verbatim into `TRIAGE.md`, the file must be
+  saved as `.xlsx`, and nothing is committed until sign-off.
+- A **Triage** sheet with one parsed row per feature and columns for ID, inventory section, feature, kind,
+  source layer, Recommended, `DECISION`, `Your notes (verbatim into TRIAGE.md)`, Judgment call, proposed
+  rationale, and the relevant telemetry/ADX query.
+- `DECISION` empty by default so filled cells form a visible override worklist. A blank means "accept
+  Recommended"; the human fills only exceptions. Apply list data validation with exactly `Migrate`, `Adapt`,
+  `Reuse`, `Drop`, and `Defer`, setting `allow_blank=True`; arbitrary non-list text is invalid.
+- Distinct disposition colors in both Recommended and non-blank `DECISION` cells. Highlight overrides with a
+  formula rule that requires a non-blank decision and a difference from Recommended, for example
+  `FormulaRule(formula=['AND($G2<>"",$G2<>$F2)'], fill=...)`. A plain `notEqual` cell rule is incorrect
+  because it highlights every blank decision.
+- A **Judgment calls** sheet grouping the product-specific rows that need genuine product judgment. Include
+  the affected IDs, why the decision needs a human, and any relevant query link. Derive the groups for the
+  current product; do not hardcode another migration's groups.
+- Per-row hyperlinks to the telemetry/ADX query that informs the decision, plus a dedicated query sheet when
+  several rows share named queries. Query links are allowed; raw telemetry results are not.
+- Frozen panes, autofilters, readable column widths, wrapped long text, and a visually distinct header row.
+
+The draft Markdown table, generator script, and workbook are **session scratch and must not be committed**.
+Only the signed-off `TRIAGE.md` is a tracked migration artifact. If the workbook is open in Excel, it cannot
+be overwritten: ask the human to close it or write a new file path.
+
+Blank-as-agreement is the default. Because blank cannot distinguish "reviewed and agreed" from "not yet
+reviewed", offer the human an optional `Agree (as recommended)` dropdown entry when review-progress tracking
+matters. Resolve that entry exactly like blank; do not write it as a disposition in `TRIAGE.md`.
+
 ## Running the gate
 
-1. Present the full table and **stop for explicit human sign-off** — request the decision through an
-   interactive prompt (e.g. the `ask_user` tool) rather than free-text narration, so the answer is captured.
-2. Record the human's decision + any rationale they give, **verbatim**, in the table's last column.
-3. If they change dispositions, re-render and re-confirm.
-4. Only when the human explicitly signs off ("approved", "go", etc.) do you write the decision artifact.
+1. Present the full review surface and stop. For a workbook, give the human its path and ask them to save it
+   and confirm when review is complete. For an in-chat table, request decisions through an interactive prompt
+   such as `ask_user` rather than free-text narration.
+2. Read the saved workbook back; do not rely on remembered chat decisions or the pre-review draft. Validate
+   that every draft ID appears exactly once and every non-blank `DECISION` contains one of the five
+   dispositions (or the optional explicit-agreement entry when enabled).
+3. Resolve every final disposition as `DECISION or Recommended`; resolve the optional
+   `Agree (as recommended)` entry to Recommended as well. A blank is valid in the workbook but must never
+   remain blank in `TRIAGE.md`.
+4. Preserve `Your notes` **verbatim** as the human rationale. If a changed decision has no note, ask for the
+   rationale rather than inventing one.
+5. Before writing `TRIAGE.md`, report both the final disposition summary and the review split: how many rows
+   contained an explicit override versus how many accepted Recommended by being blank (and, if enabled, how
+   many used explicit agreement). Ask the human to confirm that blank rows represent agreement, not unfinished
+   review.
+6. If the human changes dispositions, update the review surface and re-confirm.
+7. Only after explicit sign-off ("approved", "go", etc.) generate `TRIAGE.md` from the resolved dispositions.
 
 ## The decision artifact (`TRIAGE.md`) — commit it
 
-The signed-off table is not a scratch note; it is the **committed source of truth** for the whole migration.
-The moment the human signs off, write it to `TRIAGE.md` in the migration's **tracked artifacts folder** in the
-target repo — `docs/migrations/<service>/`, the same folder as the committed `INVENTORY.md`. Then **commit it
-as its own change**, separate from any feature code. Treat it like a decision record (ADR): it is
-read-only to every later phase, and the only way to change a disposition is to edit `TRIAGE.md` and re-confirm
-with the human — never silently in-flight while implementing.
+The reviewed data becomes the **committed source of truth** only through `TRIAGE.md`. The moment the human
+signs off, write it to `TRIAGE.md` in the migration's **tracked artifacts folder** in the target repo —
+`docs/migrations/<service>/`, the same folder as the committed `INVENTORY.md`. Then **commit it as its own
+change**, separate from any feature code. Treat it like a decision record (ADR): it is read-only to every
+later phase, and the only way to change a disposition is to edit `TRIAGE.md` and re-confirm with the human —
+never silently in-flight while implementing.
 
 `TRIAGE.md` contract:
 
