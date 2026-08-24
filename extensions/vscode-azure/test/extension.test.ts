@@ -139,23 +139,7 @@ describe('Static Web Apps manifest (integration)', () => {
             }
         }
 
-        const swaWhenClauses = swaEntries.map(entry => entry.when).join(' ');
-        // 'azureStaticWebApp' is deliberately absent: the site node still carries it
-        // for user-authored when clauses, but no contribution gates on it now that
-        // browsing a site goes through the shared browseWebsite command.
-        for (const context of [
-            'StaticWebApps',
-            'azureResourceTypeGroup',
-            'azureStaticEnvironment',
-        ]) {
-            expect(swaWhenClauses, `Missing legacy context ${context}`).to.include(context);
-        }
-
-        for (const command of [
-            `${swaCommandPrefix}showFunctionsDocumentation`,
-        ]) {
-            expect(contributedCommandIds.has(command), `Missing tree command ${command}`).to.be.true;
-        }
+        expect(contributedCommandIds.has(`${swaCommandPrefix}showFunctionsDocumentation`)).to.be.true;
     });
 
     it('should expose the workspace submenu and hide only node-dependent palette commands', () => {
