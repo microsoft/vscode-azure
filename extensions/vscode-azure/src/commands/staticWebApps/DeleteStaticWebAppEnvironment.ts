@@ -6,8 +6,9 @@
 import { IStaticWebAppClientProvider, parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { IAzureViewDataTree } from '../../services';
 import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
-import { isStaticWebAppEnvironment, StaticWebAppVirtualTypes, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
+import { getStaticWebAppEnvironmentLabel, isStaticWebAppEnvironment, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
 import type { ManagedCommand } from '../ManagedCommand';
 import { StaticWebAppCommandResolver } from './StaticWebAppCommandResolver';
 
@@ -33,24 +34,23 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IStaticWebAppClientProvider) private readonly createClient: IStaticWebAppClientProvider,
         @inject(StaticWebAppCommandResolver) private readonly resolver: StaticWebAppCommandResolver,
+        @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IGenericActivityDataProvider) private readonly activityProvider: IGenericActivityDataProvider,
     ) { }
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const environment = this.resolver.resolveVirtual<StaticWebAppEnvironment>(
-            key,
-            resource => resource.virtualType === StaticWebAppVirtualTypes.Environment && isStaticWebAppEnvironment(resource),
-        );
+        const environment = this.resolver.resolveVirtual<StaticWebAppEnvironment>(key, isStaticWebAppEnvironment);
         this.context.telemetry.properties.isProduction = String(environment.isProduction);
         if (environment.isProduction) {
             this.context.errorHandling.suppress = 'reportIssue';
             throw new Error(this.code.l10n.t('Cannot delete the production environment directly. Delete the Static Web App instead.'));
         }
 
+        const label = getStaticWebAppEnvironmentLabel(this.code, environment);
         await showMessage(
             this.code,
-            this.code.l10n.t('Are you sure you want to delete environment \'{0}\'? This cannot be undone.', environment.displayLabel),
+            this.code.l10n.t('Are you sure you want to delete environment \'{0}\'? This cannot be undone.', label),
             { modal: true, severity: 'warning', stepName: 'confirmStaticWebAppEnvironmentDeletion' },
             this.code.l10n.t('Delete'),
         );
@@ -61,7 +61,7 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
         }
         const client = this.createClient(environment.azureResource.subscription);
         const activity = this.activityProvider.trackActivity({
-            title: this.code.l10n.t('Delete environment \'{0}\'', environment.displayLabel),
+            title: this.code.l10n.t('Delete environment \'{0}\'', label),
         });
 
         try {
@@ -76,6 +76,6 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
             throw error;
         }
 
-        this.resolver.dataTree.remove(environment);
+        this.dataTree.remove(environment);
     }
 }

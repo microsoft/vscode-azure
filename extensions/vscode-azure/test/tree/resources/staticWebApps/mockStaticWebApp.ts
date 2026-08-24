@@ -5,7 +5,6 @@
 
 import { StaticWebAppResourceType, type StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import type { Page } from '@microsoft/vscode-azure-utils';
 import type { StaticWebApp, StaticWebAppEnvironment } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
 import { StaticWebAppVirtualTypes } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
 
@@ -23,46 +22,35 @@ export function makeStaticWebApp(overrides?: Partial<StaticWebApp>): StaticWebAp
     });
 }
 
-/** Creates a Static Web Apps environment virtual node. */
+/**
+ * Creates a Static Web Apps environment virtual node.
+ *
+ * `buildId` drives the defaults for the ARM payload, so a test asking for a preview
+ * environment gets one whose `data` agrees with it. Any `data` supplied in `overrides` is
+ * merged over those defaults rather than replacing them.
+ */
 export function makeStaticWebAppEnvironment(overrides?: Partial<StaticWebAppEnvironment>): StaticWebAppEnvironment {
-    const site = makeStaticWebApp();
+    const site = overrides?.azureResource ?? makeStaticWebApp();
+    const buildId = overrides?.buildId ?? 'default';
     const data: StaticSiteBuildARMResource = {
-        id: `${site.id}/builds/default`,
-        name: 'default',
-        buildId: 'default',
+        id: `${site.id}/builds/${buildId}`,
+        name: buildId,
+        buildId,
         sourceBranch: 'main',
         hostname: site.defaultHostname,
         status: 'Ready',
+        ...overrides?.data,
     };
     return {
         virtualType: StaticWebAppVirtualTypes.Environment,
-        virtualPath: 'environments/default',
+        virtualPath: `environments/${buildId}`,
         azureResource: site,
-        data,
-        buildId: 'default',
+        buildId,
         branch: 'main',
-        isProduction: true,
-        hostname: site.defaultHostname,
-        status: 'Ready',
-        displayLabel: 'Production',
+        isProduction: buildId === 'default',
+        hostname: data.hostname,
+        status: data.status,
         ...overrides,
-    };
-}
-
-/** Wraps items in the single-page shape returned by Azure client wrappers. */
-export function singlePage<T>(items: T[]): AsyncIterable<Page<T>> {
-    return {
-        [Symbol.asyncIterator]: () => {
-            let done = false;
-            return {
-                next: () => {
-                    if (done) {
-                        return Promise.resolve({ done: true, value: undefined });
-                    }
-                    done = true;
-                    return Promise.resolve({ done: false, value: { items, hasMore: false } });
-                },
-            };
-        },
+        data,
     };
 }

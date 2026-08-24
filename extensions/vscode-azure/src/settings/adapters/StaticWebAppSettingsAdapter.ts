@@ -10,7 +10,8 @@ import {
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import {
-    isStaticWebAppVirtualNode, StaticWebAppVirtualTypes,
+    getStaticWebAppEnvironmentLabel,
+    isStaticWebAppEnvironment,
     type StaticWebAppEnvironment,
 } from '../../tree/resources/staticWebApps/StaticWebApp';
 import type { SettingsAdapter, SettingsOwner } from '../SettingsAdapter';
@@ -64,8 +65,7 @@ export class StaticWebAppSettingsAdapter implements SettingsAdapter {
 
     /** @inheritdoc */
     public async read(owner: SettingsOwner): Promise<SettingsSnapshot> {
-        const environment = this.resolveEnvironment(owner);
-        const { client, resourceGroupName, siteName } = this.resolveClient(environment);
+        const { environment, client, resourceGroupName, siteName } = this.resolveClient(owner);
 
         const properties = environment.isProduction
             ? (await client.staticSites.listStaticSiteAppSettings(resourceGroupName, siteName)).properties
@@ -73,7 +73,7 @@ export class StaticWebAppSettingsAdapter implements SettingsAdapter {
 
         return {
             entries: toSettingsMap(properties),
-            resourceName: `${siteName} (${environment.displayLabel})`,
+            resourceName: `${siteName} (${getStaticWebAppEnvironmentLabel(this.code, environment)})`,
             label: this.label,
             writable: true,
         };
@@ -81,8 +81,7 @@ export class StaticWebAppSettingsAdapter implements SettingsAdapter {
 
     /** @inheritdoc */
     public async write(owner: SettingsOwner, entries: SettingsMap): Promise<void> {
-        const environment = this.resolveEnvironment(owner);
-        const { client, resourceGroupName, siteName } = this.resolveClient(environment);
+        const { environment, client, resourceGroupName, siteName } = this.resolveClient(owner);
         this.validateKeys(entries);
 
         const properties = fromSettingsMap(entries);
@@ -110,28 +109,31 @@ export class StaticWebAppSettingsAdapter implements SettingsAdapter {
         }
     }
 
-    private resolveEnvironment(owner: SettingsOwner): StaticWebAppEnvironment {
+    /**
+     * Narrows an owner to an environment and derives everything an ARM call needs from it.
+     *
+     * The narrowing lives here rather than in a separate step because neither result is useful
+     * alone: the client is addressed by the site the environment belongs to, and every operation
+     * needs the environment as well to pick between the site-level and build-level endpoints.
+     */
+    private resolveClient(owner: SettingsOwner): {
+        environment: StaticWebAppEnvironment;
+        client: IStaticWebAppClient;
+        resourceGroupName: string;
+        siteName: string;
+    } {
         if (!isStaticWebAppEnvironment(owner)) {
             throw new Error(this.code.l10n.t('These settings are only available on a Static Web Apps environment.'));
         }
 
-        return owner;
-    }
-
-    private resolveClient(environment: StaticWebAppEnvironment): { client: IStaticWebAppClient; resourceGroupName: string; siteName: string } {
-        const site = environment.azureResource;
+        const site = owner.azureResource;
         const { resourceGroup: resourceGroupName } = parseAzureResourceId(site.id);
         if (!resourceGroupName) {
-            throw new Error(`Cannot extract resource group name from resource ID: ${site.id}`);
+            throw new Error(this.code.l10n.t('Could not determine the resource group for the selected Static Web App.'));
         }
 
-        return { client: this.createClient(site.subscription), resourceGroupName, siteName: site.name };
+        return { environment: owner, client: this.createClient(site.subscription), resourceGroupName, siteName: site.name };
     }
-}
-
-/** Type guard narrowing a settings owner to a Static Web Apps environment node. */
-function isStaticWebAppEnvironment(owner: SettingsOwner): owner is StaticWebAppEnvironment {
-    return isStaticWebAppVirtualNode(owner) && owner.virtualType === StaticWebAppVirtualTypes.Environment;
 }
 
 /** Sorted so the document presents settings in a stable, predictable order. */

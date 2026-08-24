@@ -21,6 +21,8 @@ import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues, resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import {
+    getInvalidStaticWebAppNodeLabel,
+    getStaticWebAppEnvironmentLabel,
     isStaticWebApp,
     isStaticWebAppVirtualNode,
     StaticWebAppVirtualTypes,
@@ -121,7 +123,7 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
     private getEnvironmentTreeItem(key: string, environment: StaticWebAppEnvironment): ITreeItem {
         const item = this.treeItem(
             key,
-            environment.displayLabel,
+            getStaticWebAppEnvironmentLabel(this.ctx.code, environment),
             combineContextValues(
                 'azureStaticEnvironment',
                 BrowseWebsite.ContextValue,
@@ -168,7 +170,7 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
     }
 
     private getInvalidTreeItem(key: string, invalid: InvalidStaticWebAppNode): ITreeItem {
-        return this.treeItem(key, invalid.displayLabel, invalid.invalidContextValue, false, 'warning');
+        return this.treeItem(key, getInvalidStaticWebAppNodeLabel(this.ctx.code, invalid), invalid.invalidContextValue, false, 'warning');
     }
 
     private treeItem(

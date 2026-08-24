@@ -32,5 +32,4 @@ describe('OpenInPortal (unit)', () => {
 
         expect(mockResult.env.openExternal.mock.callCount()).to.equal(1);
     });
-
 });

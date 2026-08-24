@@ -4,9 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, isVirtualResource, type ConcreteAzureNode, type StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
-import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { asPages, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import {
+    getStaticWebAppEnvironmentSortKey,
+    isStaticWebAppEnvironment,
     isStaticWebAppVirtualNode,
     StaticWebAppVirtualTypes,
     type StaticWebAppEnvironment,
@@ -15,7 +17,7 @@ import {
 import { StaticWebAppSettingsAdapter } from '../../../../src/settings/adapters/StaticWebAppSettingsAdapter';
 import { isSettingsNode, SettingsVirtualType } from '../../../../src/tree/resources/settings/SettingsNode';
 import { StaticWebAppDataProvider } from '../../../../src/tree/resources/staticWebApps/StaticWebAppDataProvider';
-import { makeStaticWebApp, makeStaticWebAppEnvironment, singlePage } from './mockStaticWebApp';
+import { makeStaticWebApp, makeStaticWebAppEnvironment } from './mockStaticWebApp';
 
 describe('StaticWebAppDataProvider (unit)', () => {
     function createProvider(options?: {
@@ -46,9 +48,9 @@ describe('StaticWebAppDataProvider (unit)', () => {
                     branch: 'main',
                     defaultHostname: 'site.azurestaticapps.net',
                 })),
-                listStaticSiteBuilds: mock.fn(() => singlePage(builds)),
-                listStaticSiteFunctions: mock.fn(() => singlePage(options?.functions ?? [])),
-                listStaticSiteBuildFunctions: mock.fn(() => singlePage(options?.functions ?? [])),
+                listStaticSiteBuilds: mock.fn(() => asPages(builds)),
+                listStaticSiteFunctions: mock.fn(() => asPages(options?.functions ?? [])),
+                listStaticSiteBuildFunctions: mock.fn(() => asPages(options?.functions ?? [])),
                 listStaticSiteFunctionAppSettings: productionProbe,
                 listStaticSiteBuildFunctionAppSettings: buildProbe,
             },
@@ -81,8 +83,8 @@ describe('StaticWebAppDataProvider (unit)', () => {
         const { provider } = createProvider({ builds });
 
         const children = await provider.getChildren(makeStaticWebApp());
-        expect(children.map(node => isStaticWebAppVirtualNode(node) && 'displayLabel' in node ? node.displayLabel : '')).to.deep.equal([
-            'Production',
+        expect(children.map(node => isStaticWebAppEnvironment(node) ? getStaticWebAppEnvironmentSortKey(node) : '')).to.deep.equal([
+            'default',
             'Alpha',
             'Zulu',
         ]);
@@ -158,7 +160,6 @@ describe('StaticWebAppDataProvider (unit)', () => {
             virtualPath: 'environments/42',
             buildId: '42',
             isProduction: false,
-            displayLabel: 'PR 42',
             data: { name: '42', buildId: '42', sourceBranch: 'feature' },
         });
 
@@ -180,7 +181,6 @@ describe('StaticWebAppDataProvider (unit)', () => {
             buildId: '42',
             branch: 'feature',
             isProduction: false,
-            displayLabel: 'PR 42',
         });
 
         await provider.getChildren(environment);

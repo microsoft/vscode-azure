@@ -19,6 +19,8 @@ import { StaticWebAppSettingsAdapter } from '../../../settings/adapters/StaticWe
 import { setWebsiteUrl } from '../websiteUrl';
 import { getSettingsNodes } from '../settings/SettingsNode';
 import {
+    getStaticWebAppEnvironmentLabel,
+    getStaticWebAppEnvironmentSortKey,
     isStaticWebApp,
     isStaticWebAppVirtualNode,
     normalizeStaticWebAppBranch,
@@ -119,7 +121,11 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         // app settings dictionary exists whether or not the environment has a managed API -- only
         // the Functions node below depends on one being deployed.
         const children: ConcreteAzureNode[] = [
-            ...getSettingsNodes(environment, this.settingsAdapter, `${environment.azureResource.name}-${environment.displayLabel}`),
+            ...getSettingsNodes(
+                environment,
+                this.settingsAdapter,
+                `${environment.azureResource.name}-${getStaticWebAppEnvironmentLabel(this.code, environment)}`,
+            ),
         ];
         if (await this.hasFunctionsApi(environment)) {
             children.push(this.createFunctionsGroup(environment));
@@ -160,9 +166,6 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
                 isProduction,
                 hostname: data.hostname,
                 status: data.status,
-                displayLabel: isProduction
-                    ? this.code.l10n.t('Production')
-                    : (data.pullRequestTitle ?? data.name ?? data.buildId),
             };
             // Each environment has its own hostname, so each is independently browsable.
             setWebsiteUrl(environment, data.hostname);
@@ -234,7 +237,7 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             virtualPath,
             azureResource: site,
             invalidContextValue,
-            displayLabel: sourceLabel || this.code.l10n.t('Some items could not be displayed'),
+            sourceLabel,
         };
     }
 
@@ -261,22 +264,26 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
         }
     }
 
+    /**
+     * Returns the client for a site's subscription along with its resource group, which every
+     * ARM call here needs together.
+     *
+     * Clients are cached per subscription because one is built per credential exchange and a
+     * subscription's worth of nodes would otherwise rebuild it on every expansion.
+     */
     private resolveClient(site: StaticWebApp): { readonly client: IStaticWebAppClient; readonly resourceGroupName: string } {
         const { resourceGroup: resourceGroupName } = parseAzureResourceId(site.id);
         if (!resourceGroupName) {
-            throw new Error(`Cannot extract resource group name from resource ID: ${site.id}`);
+            throw new Error(this.code.l10n.t('Could not determine the resource group for the selected Static Web App.'));
         }
-        return { client: this.getClient(site), resourceGroupName };
-    }
 
-    private getClient(site: StaticWebApp): IStaticWebAppClient {
         const subscriptionId = site.subscription.subscriptionId;
         let client = this.clients.get(subscriptionId);
         if (!client) {
             client = this.createClient(site.subscription);
             this.clients.set(subscriptionId, client);
         }
-        return client;
+        return { client, resourceGroupName };
     }
 
 }
@@ -287,14 +294,14 @@ function compareEnvironments(left: ConcreteAzureNode, right: ConcreteAzureNode):
     if (leftProduction !== rightProduction) {
         return leftProduction ? -1 : 1;
     }
-    return displayLabel(left).localeCompare(displayLabel(right));
+    return sortKey(left).localeCompare(sortKey(right));
 }
 
-function displayLabel(node: ConcreteAzureNode): string {
+function sortKey(node: ConcreteAzureNode): string {
     if (isEnvironment(node)) {
-        return node.displayLabel;
+        return getStaticWebAppEnvironmentSortKey(node);
     } else if (isInvalid(node)) {
-        return node.displayLabel;
+        return node.sourceLabel ?? '';
     }
     return '';
 }

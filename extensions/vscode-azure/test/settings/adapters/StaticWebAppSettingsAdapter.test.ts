@@ -50,7 +50,7 @@ describe('StaticWebAppSettingsAdapter (unit)', () => {
     it('should read preview settings from the build-level endpoint keyed by build id', async () => {
         const { adapter, staticSites } = createAdapter({ A: '1' });
 
-        await adapter.read(makeStaticWebAppEnvironment({ isProduction: false, buildId: '7', displayLabel: 'pr-7' }));
+        await adapter.read(makeStaticWebAppEnvironment({ buildId: '7' }));
 
         expect(staticSites.listStaticSiteAppSettings.mock.callCount()).to.equal(0);
         expect(staticSites.listStaticSiteBuildAppSettings.mock.callCount()).to.equal(1);

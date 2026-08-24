@@ -83,7 +83,7 @@ describe('StaticWebAppViewProvider (unit)', () => {
             virtualPath: 'environments/invalid/broken',
             azureResource: makeStaticWebApp(),
             invalidContextValue: 'invalidStaticEnvironment',
-            displayLabel: 'broken',
+            sourceLabel: 'broken',
         };
         expect(render(invalid).item.contextValue).to.equal('invalidStaticEnvironment');
     });

@@ -34,13 +34,14 @@ describe('Static Web Apps resource commands (unit)', () => {
     }
 
     it('should guard production environment deletion before prompting', async () => {
-        const { mockResult, resolver } = createResolver(makeStaticWebAppEnvironment());
+        const { mockResult, resolver, cache } = createResolver(makeStaticWebAppEnvironment());
         const deleteBuild = mock.fn(() => Promise.resolve());
         const command = new DeleteStaticWebAppEnvironment(
             createActionContext('test'),
             mockResult.vscode,
             (() => ({ staticSites: { deleteStaticSiteBuild: deleteBuild } })) as never,
             resolver,
+            cache as never,
             new GenericActivityDataProvider(),
         );
 
@@ -60,9 +61,9 @@ describe('Static Web Apps resource commands (unit)', () => {
         const environment = makeStaticWebAppEnvironment({
             buildId: '42',
             isProduction: false,
-            displayLabel: 'PR 42',
+            data: { pullRequestTitle: 'PR 42' },
         });
-        const { mockResult, resolver, remove } = createResolver(environment);
+        const { mockResult, resolver, cache, remove } = createResolver(environment);
         respondToPrompts(mockResult, [{ button: 'Delete' }]);
         const deleteBuild = mock.fn(() => Promise.resolve());
         const command = new DeleteStaticWebAppEnvironment(
@@ -70,6 +71,7 @@ describe('Static Web Apps resource commands (unit)', () => {
             mockResult.vscode,
             (() => ({ staticSites: { deleteStaticSiteBuild: deleteBuild } })) as never,
             resolver,
+            cache as never,
             new GenericActivityDataProvider(),
         );
 

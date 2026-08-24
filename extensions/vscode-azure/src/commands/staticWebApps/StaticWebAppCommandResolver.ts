@@ -48,11 +48,6 @@ export class StaticWebAppCommandResolver {
         throw new Error(this.ctx.code.l10n.t('The selected resource is not an Azure Static Web App.'));
     }
 
-    /** Waits for the provider to populate source-link and hostname details. */
-    public whenSiteEnriched(site: StaticWebApp): Promise<StaticWebApp> {
-        return this.cache.whenEnriched<StaticWebApp>(site);
-    }
-
     /** Resolves and validates a tree-only virtual node. */
     public resolveVirtual<T extends StaticWebAppVirtualNode>(
         key: string | undefined,
@@ -67,11 +62,6 @@ export class StaticWebAppCommandResolver {
             throw new Error(this.ctx.code.l10n.t('The selected Azure Static Web Apps item does not support this command.'));
         }
         return resource;
-    }
-
-    /** Returns the cache used for narrow command-driven refreshes. */
-    public get dataTree(): IAzureViewDataTree {
-        return this.cache;
     }
 
     private resolveKey(key: string): unknown {
