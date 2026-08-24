@@ -157,7 +157,7 @@ export interface AzdShowResult {
      * Map of `azd-service-name` -> service descriptor as declared under
      * `services:` in `azure.yaml`. An empty / missing object means no
      * services are configured -- `azd deploy` will not have anything to
-     * target until the user runs `azd add`.
+     * target until an entry is added.
      */
     readonly services?: Readonly<Record<string, AzdServiceDescriptor>>;
 }

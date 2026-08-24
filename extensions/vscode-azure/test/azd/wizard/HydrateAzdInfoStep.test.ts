@@ -93,6 +93,18 @@ describe('HydrateAzdInfoStep (unit)', () => {
             expect(showWarning.mock.calls[0].arguments[0]).to.include('services');
         });
 
+        it('does not warn about a missing services entry when the wizard adds one', async () => {
+            const { step, context, window } = makeStep({ show: { name: 'my-app' } });
+            const result = await step.prompt({ ...context, addsServiceEntry: true });
+
+            // Still classified, so downstream steps see the same flags...
+            expect(result.hasAzureYaml).to.be.true;
+            expect(result.hasServices).to.be.false;
+
+            // ...but the warning would contradict the step that writes the entry.
+            expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
+        });
+
         it('detects azure.yaml with services entry via azd show', async () => {
             const { step, context, window } = makeStep({
                 show: { name: 'my-app', services: { myfunc: { project: { path: '.', language: 'node' } } } },
