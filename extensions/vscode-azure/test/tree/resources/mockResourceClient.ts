@@ -4,21 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IResourceClient } from '@microsoft/vscode-azure-azutils';
-import type { Page } from '@microsoft/vscode-azure-utils';
-
-/**
- * Wraps a single array of items in a one-page {@linkcode AsyncIterable} of
- * {@linkcode Page Pages}, matching the paged-iteration contract that
- * `IResourceClient` exposes.
- */
-function singlePage<T>(items: T[]): AsyncIterable<Page<T>> {
-    return {
-        // eslint-disable-next-line @typescript-eslint/require-await -- minimal one-page async iterable for tests
-        [Symbol.asyncIterator]: async function* () {
-            yield { items, hasMore: false };
-        },
-    };
-}
+import { asPages } from '@microsoft/vscode-azure-utils/testing';
 
 /**
  * Creates an {@linkcode IResourceClient} that returns fixed resource groups and
@@ -34,11 +20,11 @@ export function createMockResourceClient(
     resourcesByRg: Record<string, unknown[]> | unknown[],
 ): IResourceClient {
     return {
-        resourceGroups: { list: () => singlePage(resourceGroups) },
+        resourceGroups: { list: () => asPages(resourceGroups) },
         resources: {
             listByResourceGroup: Array.isArray(resourcesByRg)
-                ? () => singlePage(resourcesByRg)
-                : (rgName: string) => singlePage(resourcesByRg[rgName] ?? []),
+                ? () => asPages(resourcesByRg)
+                : (rgName: string) => asPages(resourcesByRg[rgName] ?? []),
         },
     } as unknown as IResourceClient;
 }
