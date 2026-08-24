@@ -4,8 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    CancellationError,
     IActionExecutor,
     IVsCode,
+    throwIfCancelled,
     type IActionExecutor as ActionExecutor,
     type IActionContext,
     type IVsCode as VsCode,
@@ -111,7 +113,15 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
                 context.errorHandling.rethrow = true;
                 return this.resolveSwaDebugConfiguration(folder, debugConfiguration, cancellationToken, context);
             },
-        );
+        ).catch((error: unknown) => {
+            // Returning undefined aborts the launch without further UI, which is what a
+            // cancelled resolve should do. Anything else is a genuine failure and is
+            // rethrown so VS Code reports it rather than launching a half-prepared session.
+            if (CancellationError.test(error)) {
+                return undefined;
+            }
+            throw error;
+        });
     }
 
     private async resolveSwaDebugConfiguration(
@@ -151,7 +161,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
             }
         }
 
-        context.telemetry.properties.cancellationRequested = String(cancellationToken.isCancellationRequested);
+        throwIfCancelled(cancellationToken, 'resolveDebugConfiguration');
         context.telemetry.properties.resolveOutcome = 'resolved';
         return debugConfiguration;
     }

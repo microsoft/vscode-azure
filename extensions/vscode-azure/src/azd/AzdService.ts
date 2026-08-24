@@ -18,10 +18,12 @@ export const MinAzdVersion = '1.25.0-0';
 /** Minimum `azd` version that supports the `azd update` command (public preview). */
 export const MinAzdUpdateVersion = '1.23.14';
 /**
- * Minimum `azd` version that supports `azd pipeline config` scaffolding a
- * missing workflow definition (`.github/workflows/azure-dev.yml` /
- * `.azdo/pipelines/azure-dev.yml`) automatically. Feature-specific gate,
- * independent of the repo-wide {@linkcode MinAzdVersion}.
+ * Minimum `azd` version required to configure CI/CD through `azd pipeline config`.
+ *
+ * 1.30.0 is the first release in which `--provider azdo` accepts federated
+ * authentication, which is the default `azd` picks for Azure DevOps; earlier versions
+ * reject it and the command fails part-way through. Feature-specific gate, independent
+ * of the repo-wide {@linkcode MinAzdVersion}.
  */
 export const MinAzdPipelineVersion = '1.30.0';
 
