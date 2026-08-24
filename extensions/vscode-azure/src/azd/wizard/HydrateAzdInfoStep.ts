@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PromptStep, fileExists, type AsWritable, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { PromptStep, fileExists, type AsWritable, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import type { AzdEnvironment, IAzdService } from '../AzdService';
+import { type AzdEnvironment, IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
 
@@ -25,6 +26,9 @@ import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
  *   fully-configured env's values; used by the
  *   {@linkcode HydratableChooseSubscriptionStep} /
  *   {@linkcode HydratableChooseLocationStep} to skip their pickers.
+ * - `hydratedTenantId` -- `AZURE_TENANT_ID` from the fully-configured env;
+ *   forwarded as a hint when resolving the subscription of deployments this
+ *   env provisions.
  *
  * If a default env exists but is *partially* configured (missing one or both
  * azure values), this step intentionally treats the wizard as Post-clone:
@@ -36,10 +40,11 @@ import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
  * For the `createNew` job this step is a no-op: the temp `iacFolder` is
  * always empty, so all flags would be `false` anyway.
  */
+@injectable()
 export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
-        private readonly code: IVsCode,
-        private readonly azd: IAzdService,
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IAzdService) private readonly azd: IAzdService,
     ) {
         super();
     }
@@ -68,9 +73,9 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
                 // Surface a non-blocking warning. Provisioning will still
                 // succeed, but `azd deploy` won't be able to target the new
                 // resource until the user adds a `services:` entry.
-                void this.code.window.showWarningMessage(this.code.l10n.t(
+                void showMessage(this.code, this.code.l10n.t(
                     'azure.yaml has no `services` entry. `azd deploy` and `azd up` will not be able to target this resource until you add a service (e.g. by running `azd add`).',
-                ));
+                ), { severity: 'warning' });
             }
         }
 
@@ -89,6 +94,12 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
                 result.environmentName = defaultEnv;
                 result.hydratedSubscriptionId = sub;
                 result.hydratedLocationName = loc;
+                // The env is fully configured, so AZURE_TENANT_ID (when present)
+                // is the owning tenant of the hydrated subscription -- safe to use
+                // as a resolution hint for the deployments this env provisions.
+                if (values.AZURE_TENANT_ID) {
+                    result.hydratedTenantId = values.AZURE_TENANT_ID;
+                }
             } else {
                 // Partial Bootstrapped: the existing default env is missing
                 // one or both azure values, so it can't be provisioned. Treat

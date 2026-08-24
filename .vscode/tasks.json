@@ -4,13 +4,12 @@
         {
             "label": "Extension: ESBuild+Watch",
             "type": "shell",
-            "command": "npm",
+            "command": "pnpm",
             "args": [
+                "--filter",
+                "vscode-azure",
                 "run",
-                "--workspace=extensions/vscode-azure",
-                "build:esbuild",
-                "--",
-                "--watch"
+                "build:esbuild:watch"
             ],
             "problemMatcher": "$esbuild-watch",
             "presentation": {
@@ -24,13 +23,12 @@
         {
             "label": "Extension: Check+Watch",
             "type": "shell",
-            "command": "npm",
+            "command": "pnpm",
             "args": [
+                "--filter",
+                "vscode-azure",
                 "run",
-                "--workspace=extensions/vscode-azure",
-                "build:check",
-                "--",
-                "--watch"
+                "build:check:watch"
             ],
             "problemMatcher": {
                 "base": "$tsc-watch",
@@ -51,13 +49,12 @@
         {
             "label": "azutils: Build+Watch",
             "type": "shell",
-            "command": "npm",
+            "command": "pnpm",
             "args": [
+                "--filter",
+                "@microsoft/vscode-azure-azutils",
                 "run",
-                "--workspace=packages/azutils",
-                "build",
-                "--",
-                "--watch",
+                "build:watch",
             ],
             "group": {
                 "kind": "build"
@@ -77,13 +74,12 @@
         {
             "label": "utils: Build+Watch",
             "type": "shell",
-            "command": "npm",
+            "command": "pnpm",
             "args": [
+                "--filter",
+                "@microsoft/vscode-azure-utils",
                 "run",
-                "--workspace=packages/utils",
-                "build",
-                "--",
-                "--watch",
+                "build:watch",
             ],
             "group": {
                 "kind": "build"

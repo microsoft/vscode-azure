@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import {
     getLastPick, RecursivePickStep,
     type ExclusivePickManyOrCreate, type GenericPickOptions, type IOutputChannel, type ITreeItem, type PickClassification, type PickContext
 } from '@microsoft/vscode-azure-utils';
+import type { AzureSubscription } from '../auth/AzureSubscription';
 import { isAccount, isResourceGroup, isSubscription, isTenant, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../models/AzureNode';
 import { AzureNodeId } from '../models/AzureNodeId';
 import type { ResourceGroup } from '../models/Grouping';
@@ -124,7 +124,7 @@ class ResourceGroupViewItemTree {
             case isTenant(node):
                 return { label: node.displayName, id: key };
             case isSubscription(node):
-                return { label: node.name, id: key };
+                return { label: node.displayName, id: key };
             case isResourceGroup(node):
                 return { label: node.name, id: key };
             default:

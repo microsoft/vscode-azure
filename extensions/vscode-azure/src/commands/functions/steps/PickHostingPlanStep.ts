@@ -3,15 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, PromptStep, type QuickPickItemWithData, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import type { AppServicePlanSku, CreateFunctionAppContext } from '../CreateFunctionAppContext';
 
 /**
  * Prompts the user to pick a hosting plan.
  */
+@injectable()
 export class PickHostingPlanStep extends PromptStep<CreateFunctionAppContext> {
     public constructor(
-        private readonly ctx: ICodeContext,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
     ) {
         super();
     }

@@ -10,9 +10,6 @@
  * - Only `ServiceIdentifier` type imports from `inversify` (keeps the
  *   package DI-agnostic at runtime).
  * - Only type imports of `vscode` (pass the API down as `IVsCode`).
- * - `@azure/*` packages must be lazily imported inside functions to reduce
- *   extension activation time (except `@azure/ms-rest-azure-env`, which is
- *   tiny and safe to eager-import).
  *
  * Uses `tsconfig.lint.json` so the linter can resolve the sibling `utils`
  * package without requiring it to be built first.
@@ -46,11 +43,6 @@ export default defineConfig([
                         allowTypeImports: true,
                     },
                 ],
-                patterns: [{
-                    group: ['@azure/*', '!@azure/ms-rest-azure-env'],
-                    message: 'Please lazily import this package within the function that uses it to reduce extension activation time.',
-                    allowTypeImports: true,
-                }],
             }],
         },
     },

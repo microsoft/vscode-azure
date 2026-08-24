@@ -3,6 +3,10 @@
 .github/**
 .gitattributes
 .gitignore
+# Both entries are needed: `.vscode-test/**` covers the contents, while the bare `.vscode-test`
+# covers the entry itself, which `pnpm run link-test-cache` creates as a junction. Without it,
+# `vsce package` treats the junction as a file and fails to read it (EISDIR).
+.vscode-test
 .vscode-test/**
 .vscode/**
 *.tgz
@@ -11,7 +15,6 @@
 **/*.ts
 build/**
 dist/test/**
-dist/debug.bundle*
 docs/**
 gulp*
 node_modules/**
@@ -30,6 +33,7 @@ esbuild.mjs
 .eslintignore
 eslint.config.mjs
 esbuild.meta.json
+.eslintcache
 .vscode-test.mjs
 .nvmrc
 component-detection-pip-report.json

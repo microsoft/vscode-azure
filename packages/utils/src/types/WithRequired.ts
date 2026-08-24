@@ -13,7 +13,7 @@
  *
  * @example
  * ```ts
- * import type { ResourceGroup as SdkResourceGroup } from '@azure/arm-resources';
+ * import type { ResourceGroup as SdkResourceGroup } from '@azure/arm-resources/models';
  *
  * // SDK declares id, name, type as optional--they never are in practice
  * type ResourceGroup = WithRequired<SdkResourceGroup, 'id' | 'name' | 'type'>;

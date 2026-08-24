@@ -13,7 +13,7 @@ Each creation command receives an `AzdJob` that determines how the wizard behave
 
 ## Wizard Context
 
-All azd creation wizards share `AzdWizardContext`. Resource-specific commands extend it (e.g. `CreateFunctionAppContext` adds `runtime`, `runtimeVersion`, `hostingPlan`).
+All azd creation wizards share `AzdWizardContext`. Resource-specific commands extend it (e.g. `CreateFunctionAppContext` adds `functionWorkerRuntime`, `runtimeVersion`, `appServicePlanSkuName`).
 
 ### Core fields
 
@@ -53,8 +53,9 @@ Using `CreateFunctionApp` as the concrete example:
 | 3 | `HydratableChooseSubscriptionStep` | Unless hydrated | `subscription` |
 | 4 | `HydratableChooseLocationStep` | Unless hydrated | `location` |
 | 5 | `ProjectNameStep` | Unless `environmentName` set | `environmentName`, `azdServiceName` (if not already hydrated) |
-| 6 | `PickRuntimeStep` | Unless `hasInfra` | `runtimeVersion` |
-| 7 | `PickHostingPlanStep` | Unless `hasInfra` | `hostingPlan` |
+| 6 | `PickRuntimeStep` | Unless `hasInfra` | `functionWorkerRuntime` |
+| 6a | `PickRuntimeVersionStep` (subprompt of `PickRuntimeStep`) | Unless `hasInfra` or version already set (only shows a pick when the runtime has more than one supported version) | `runtimeVersion` |
+| 7 | `PickHostingPlanStep` | Unless `hasInfra` | `appServicePlanSkuName` |
 | 8 | `ConfirmProvisionStep` | Only when Bootstrapped | `provision` (may flip to `false`) |
 
 ### Execute steps (in order)
@@ -130,5 +131,7 @@ To add a new creation wizard (e.g. Static Web App):
 1. **Create a context type** extending `AzdWizardContext` with resource-specific fields.
 2. **Add resource-specific prompt steps** (e.g. `PickFrameworkStep`). These should check `hasInfra` to skip when infrastructure already exists.
 3. **Add a Bicep template** in `resources/templates/` (e.g. `staticWebApp.bicep`).
-4. **Create a command class** implementing `ManagedCommand`. Assemble the wizard with the shared steps (`SelectIacFolderStep`, `HydrateAzdInfoStep`, `HydratableChooseSubscriptionStep`, `HydratableChooseLocationStep`, `ProjectNameStep`) plus your resource-specific steps and a `GenerateBicepStep` parameterized with your template name and context keys.
+4. **Create a command class** implementing `ManagedCommand`. Inject `Container` and resolve each step via `this.container.get(SomeStep)` -- steps are `@injectable`, so the per-execution child container (which has `autobind` enabled) constructs them with their dependencies. Assemble the wizard with the shared steps (`SelectIacFolderStep`, `HydrateAzdInfoStep`, `HydratableChooseSubscriptionStep`, `HydratableChooseLocationStep`, `ProjectNameStep`) plus your resource-specific steps. Add your new template name to the `BicepTemplateName` union in `GenerateBicepStep.ts` (which is resolved through a factory rather than autobind -- see [Dependency Injection](dependency-injection.md#factory-bindings-for-azure-clients)).
 5. **Register the command** in `registerCommands.ts` with `prefixArgs` for each `AzdJob`. See [Commands](commands.md) for the registration pattern.
+
+> Wizard steps are resolved from the container rather than constructed with `new`. A step that needs DI services declares them with `@inject(<token>)` on its constructor and is marked `@injectable()`; the command never threads those services through. See [Dependency Injection](dependency-injection.md) for how the per-execution child container enables `autobind`.

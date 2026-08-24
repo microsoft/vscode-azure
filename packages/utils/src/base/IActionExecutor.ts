@@ -9,8 +9,10 @@ import type { AsWritable } from '../types/AsWritable';
 import { CancellationError } from '../vscode/CancellationError';
 import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { IVsCode } from '../vscode/IVsCode';
+import { showMessage } from '../ui/uiHelpers';
 import { createActionContext, type IActionContext, type KnownTelemetryProperty, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
+import { stringifyError } from './stringifyError';
 
 export const IActionExecutor: ServiceIdentifier<IActionExecutor> = Symbol.for('IActionExecutor');
 
@@ -118,7 +120,7 @@ export class ActionExecutor implements IActionExecutor {
 
                     if (error instanceof Error) {
                         properties.error = error.name;
-                        properties.errorMessage = error.message;
+                        properties.errorMessage = stringifyError(error);
                         properties.stack = error.stack;
                     }
 
@@ -155,10 +157,15 @@ export class ActionExecutor implements IActionExecutor {
             : this.code.l10n.t('Report Issue');
 
         const items = reportIssue ? [reportIssue] : [];
-        const choice = await this.code.window.showErrorMessage(error.message, ...items);
+        const choice = await showMessage(this.code, stringifyError(error), { severity: 'error' }, ...items);
 
         if (choice === reportIssue) {
             const data = [
+                `Error Name: ${error.name}`,
+                `Error Message: ${stringifyError(error)}`,
+                'Call Stack:',
+                error.stack ?? '<none>',
+                '',
                 `App Host: ${this.code.env.appHost}`,
                 `Remote Name: ${this.code.env.remoteName ?? '<none>'}`,
                 `Language: ${this.code.env.language}`,

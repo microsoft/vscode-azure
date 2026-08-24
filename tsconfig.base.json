@@ -2,15 +2,18 @@
     "compilerOptions": {
         "module": "es2022",
         "moduleResolution": "bundler",
-        "target": "es2022",
+        "target": "ESNext",
         "lib": [
-            "es2022",
+            "ESNext",
         ],
         "types": [
-            "node"
+            "node",
+            "@microsoft/vscode-azext-eng/mocha/test-globals",
         ],
         "sourceMap": true,
         "strict": true,
+        "noImplicitOverride": true,
+        "verbatimModuleSyntax": true,
         "incremental": true,
         "declaration": true,
         "declarationMap": true,
@@ -18,5 +21,6 @@
     "exclude": [
         "**/node_modules",
         "**/dist",
+        "**/testProjects",
     ],
 }

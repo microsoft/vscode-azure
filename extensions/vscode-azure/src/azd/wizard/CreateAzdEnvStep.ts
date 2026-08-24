@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExecuteStep } from '@microsoft/vscode-azure-utils';
-import type { IAzdService } from '../AzdService';
+import { inject, injectable } from 'inversify';
+import { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -18,9 +19,10 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * there, this step is a no-op (no `envUpdate` fallback; the wizard never
  * mutates an existing user environment).
  */
+@injectable()
 export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
-        private readonly azd: IAzdService,
+        @inject(IAzdService) private readonly azd: IAzdService,
     ) {
         super();
     }
@@ -35,7 +37,7 @@ export class CreateAzdEnvStep<TContext extends AzdWizardContext> extends Execute
         );
     }
 
-    public async execute(context: TContext): Promise<void> {
+    public async execute(context: Readonly<TContext>): Promise<void> {
         /* eslint-disable @typescript-eslint/no-non-null-assertion */
         const name = context.environmentName!;
         const location = context.hydratedLocationName ?? context.location!.name!;

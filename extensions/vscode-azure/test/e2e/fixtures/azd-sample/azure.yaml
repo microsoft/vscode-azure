@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+# Minimal azd project used by the azd-up E2E test. It provisions a single
+# Standard_LRS storage account (cheap, fast) and declares no services, so the
+# test exercises `azd provision` end-to-end without a deployable app.
+name: vscode-azure-e2e-sample

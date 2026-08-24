@@ -65,14 +65,27 @@ export function parseAzureResourceId(resourceId: string): ParsedAzureResourceId 
 
     // Optional: /resourceGroups/{name}
     if (i < segments.length && segments[i].toLowerCase() === 'resourcegroups') {
+        if (i + 1 >= segments.length) {
+            throw new Error(`Invalid ARM resource ID (missing resource group name): ${resourceId}`);
+        }
         resourceGroup = segments[i + 1];
         i += 2;
     }
 
     // Optional: /providers/{namespace}/{type}/{name}[/{childType}/{childName}...]
     if (i < segments.length && segments[i].toLowerCase() === 'providers') {
+        if (i + 1 >= segments.length) {
+            throw new Error(`Invalid ARM resource ID (missing provider namespace): ${resourceId}`);
+        }
         provider = segments[i + 1]; // e.g. Microsoft.ContainerRegistry
         i += 2;
+
+        // After the namespace, the remainder must be one or more {type}/{name}
+        // pairs -- an empty, odd, or dangling tail is a malformed ARM ID.
+        const remaining = segments.length - i;
+        if (remaining < 2 || remaining % 2 !== 0) {
+            throw new Error(`Invalid ARM resource ID (expected provider type/name pairs): ${resourceId}`);
+        }
 
         // Collect type/name pairs -- the type path can be nested (e.g. registries/replications)
         const typeParts: string[] = [];
@@ -98,13 +111,26 @@ export function getSubscriptionArmId(resourceId: string): string {
 }
 
 /**
+ * Extracts the resource group name from a full ARM resource ID.
+ *
+ * @throws Error if the ID has no resource group segment.
+ */
+export function getResourceGroupName(resourceId: string): string {
+    return requireResourceGroup(parseAzureResourceId(resourceId));
+}
+
+/**
  * Extracts the resource group ARM ID from a full ARM resource ID.
  * @throws Error if the ID has no resource group segment.
  */
 export function getResourceGroupArmId(resourceId: string): string {
     const parsed = parseAzureResourceId(resourceId);
+    return `/subscriptions/${parsed.subscriptionId}/resourceGroups/${requireResourceGroup(parsed)}`;
+}
+
+function requireResourceGroup(parsed: ParsedAzureResourceId): string {
     if (!parsed.resourceGroup) {
-        throw new Error(`ARM resource ID does not contain a resource group: ${resourceId}`);
+        throw new Error(`ARM resource ID does not contain a resource group: ${parsed.resourceId}`);
     }
-    return `/subscriptions/${parsed.subscriptionId}/resourceGroups/${parsed.resourceGroup}`;
+    return parsed.resourceGroup;
 }

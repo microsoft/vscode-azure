@@ -15,25 +15,22 @@
     "author": "Microsoft Corporation",
     "scripts": {
         "postinstall": "node ./scripts/postinstall.mjs",
-        "lint": "npm run --workspaces lint",
-        "build": "npm run --workspaces build",
-        "package": "npm run --workspaces package",
-        "test": "npm run --workspaces test",
-        "clean": "npm run --workspaces clean"
+        "lint": "pnpm -r --parallel run lint",
+        "build": "pnpm -r run build",
+        "package": "pnpm -r --parallel run package",
+        "test": "pnpm -r run test",
+        "clean": "pnpm -r --parallel run clean",
+        "link-test-cache": "node ./scripts/linkTestCache.mjs",
+        "all": "pnpm clean && pnpm lint && pnpm build && pnpm package && pnpm test"
     },
-    "workspaces": [
-        "packages/utils",
-        "packages/azutils",
-        "extensions/vscode-azure"
-    ],
+    "packageManager": "pnpm@11.8.0",
     "engines": {
-        "vscode": "^1.106.0"
+        "vscode": "^1.123.0"
     },
     "devDependencies": {
-        "@microsoft/vscode-azext-eng": "^1.1.0-alpha.1",
-        "@types/node": "^22.19.17",
-        "@types/vscode": "1.106.0",
-        "@typescript/native-preview": "^7.0.0-dev.20260428.1",
-        "which": "^5.0.0"
+        "@microsoft/vscode-azext-eng": "^1.1.0-alpha.6",
+        "@types/node": "~24",
+        "@types/vscode": "1.120.0",
+        "@typescript/native": "npm:typescript@7.0.2"
     }
 }

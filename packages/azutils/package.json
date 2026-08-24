@@ -14,53 +14,50 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "type": "module",
-    "module": "dist/esm/index.js",
-    "types": "dist/esm/index.d.ts",
+    "module": "dist/esm/src/index.js",
+    "types": "dist/esm/src/index.d.ts",
     "exports": {
         ".": {
-            "types": "./dist/esm/index.d.ts",
-            "import": "./dist/esm/index.js"
+            "types": "./dist/esm/src/index.d.ts",
+            "import": "./dist/esm/src/index.js"
         },
         "./testing": {
-            "types": "./dist/esm/testing.d.ts",
-            "import": "./dist/esm/testing.js"
+            "types": "./dist/esm/test/testing.d.ts",
+            "import": "./dist/esm/test/testing.js"
         }
     },
     "scripts": {
-        "lint": "eslint --max-warnings 0",
-        "build": "tsgo",
-        "package": "npm pack",
+        "lint": "eslint --max-warnings 0 --cache",
+        "build": "tsc",
+        "build:watch": "pnpm run build --watch",
+        "package": "pnpm pack",
         "test": "mocha",
-        "testcov": "npx c8 --clean --reporter=html --exclude=\"**/test/**\" mocha",
+        "testcov": "pnpx c8 --clean --reporter=html --exclude=\"**/test/**\" mocha",
         "clean": "node ../../scripts/clean.mjs"
     },
     "dependencies": {
-        "@azure/arm-appservice": "^18.0.0",
+        "@azure/arm-appservice": "^19.0.0",
         "@azure/arm-containerregistry": "^12.0.0",
-        "@azure/arm-resources": "^7.0.0",
+        "@azure/arm-resources": "^8.0.0-beta.1",
         "@azure/arm-resources-subscriptions": "^3.0.0-beta.1",
         "@azure/arm-resourcesdeployments": "^1.0.0-beta.2",
         "@azure/logger": "^1.3.0",
-        "@azure/ms-rest-azure-env": "^2.0.0",
-        "@microsoft/vscode-azure-utils": "^1.0.0"
+        "@microsoft/vscode-azure-utils": "workspace:^"
     },
     "devDependencies": {
-        "@azure-rest/core-client": "^2.6.0",
+        "@azure-rest/core-client": "^2.6.1",
         "@azure/core-auth": "^1.10.1",
-        "@azure/core-client": "^1.10.1",
         "@azure/core-paging": "^1.6.2",
-        "@azure/core-rest-pipeline": "^1.23.0",
-        "@microsoft/vscode-azext-azureauth": "^6.1.0-alpha.1",
-        "inversify": "*"
+        "@azure/core-rest-pipeline": "^1.24.0",
+        "inversify": "catalog:"
     },
     "mocha": {
         "node-option": [
             "experimental-transform-types",
-            "disable-warning=ExperimentalWarning",
             "import=@microsoft/vscode-azext-eng/mocha"
         ],
         "spec": [
-            "src/test/**/*.test.ts"
+            "test/**/*.test.ts"
         ]
     }
 }

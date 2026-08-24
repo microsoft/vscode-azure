@@ -3,40 +3,48 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    AccumulatorStream, ChildProcessError, getSafeExecPath,
-    isChildProcessError,
-    isCancellationError as isProcessUtilsCancellationError,
-    spawnStreamAsync,
-    type CancellationTokenLike, type CommandLineArgs
-} from '@microsoft/vscode-processutils';
+import { isProcessError, ProcessError, resolveExecutable, spawn, type SpawnOptions } from '@azure/core-process';
 import type { ServiceIdentifier } from 'inversify';
-import { createInterface } from 'node:readline';
-import { PassThrough } from 'node:stream';
+import type { ChildProcess } from 'node:child_process';
+import * as readline from 'node:readline';
+import type { Readable } from 'node:stream';
 import type * as vscode from 'vscode';
-import { default as which } from 'which';
 import { CancellationError } from '../vscode/CancellationError';
-import type { Disposable } from '../vscode/Disposable';
+import { createShellTask } from '../vscode/createShellTask';
 import type { IVsCode } from '../vscode/IVsCode';
+import { argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
+import { mergeProcessEnv } from './mergeProcessEnv';
+import { toAbortSignal } from './toAbortSignal';
 
-export {
-    ChildProcessError, isChildProcessError,
-    type CancellationTokenLike, type CommandLineArgs
-} from '@microsoft/vscode-processutils';
+export * from './CommandLineBuilder';
+export { isProcessError, ProcessError } from '@azure/core-process';
 
 /**
- * Signature matching {@linkcode spawnStreamAsync}. Exposed so tests can
- * inject a mock without replacing the module.
+ * Signature matching {@linkcode spawn} from `@azure/core-process`. Exposed so
+ * tests can inject a mock subprocess factory without replacing the module.
  */
-export type SpawnFn = typeof spawnStreamAsync;
+export type SpawnFn = (command: string, args?: readonly string[], options?: SpawnOptions) => ChildProcess;
 
 /**
  * Shared options for all process execution modes.
  */
 export interface ProcessExecutorOptions {
-    readonly command: string;
-    readonly args?: CommandLineArgs;
+    /**
+     * The full command line to run as an argument vector: the executable
+     * followed by its arguments. The first element is the executable.
+     *
+     * @remarks
+     * Build one fluently with {@linkcode command} (a {@linkcode CommandLineBuilder}
+     * is itself a valid value here) or pass a plain {@linkcode CommandLineArgs}
+     * array such as `['winget', 'install', 'microsoft.azd']`.
+     */
+    readonly command: CommandLineArgs;
     readonly cwd?: vscode.Uri;
+    /**
+     * Environment variables layered on top of the extension host's own
+     * environment. The child always inherits `process.env`; these override
+     * individual entries.
+     */
     readonly env?: Readonly<Record<string, string>>;
 }
 
@@ -101,9 +109,23 @@ export interface JsonProcessResult<T> extends ProcessResult {
 }
 
 /**
- * The caller is responsible for awaiting {@linkcode completed} or attaching
- * a `.catch()` handler. If the process fails and `completed` is never
- * awaited, the rejection will be unhandled.
+ * A streaming JSON-lines result: {@linkcode jsonLines} yields each stderr line
+ * parsed as JSON as the process emits it, and {@linkcode completed} resolves with
+ * the buffered stdout parsed as JSON once the process exits.
+ *
+ * @remarks
+ * stderr is streamed live, so it is not buffered: {@linkcode JsonProcessResult}'s
+ * `stderr` on {@linkcode completed} is always an empty string in this mode.
+ *
+ * The caller **must** start iterating {@linkcode jsonLines} (e.g. via
+ * `for await`). Nothing reads stderr until the first line is pulled, so a
+ * result whose stream is never touched leaves a chatty child blocked on its
+ * own output, and {@linkcode completed} then never settles. Stopping early is
+ * safe: the remainder is discarded and the process runs to completion.
+ *
+ * The caller is also responsible for awaiting {@linkcode completed} or attaching
+ * a `.catch()` handler. If the process fails and `completed` is never awaited,
+ * the rejection will be unhandled.
  */
 export interface JsonLinesProcessResult<TOut = unknown, TLines = unknown> {
     readonly jsonLines: AsyncGenerator<TLines>;
@@ -119,215 +141,345 @@ export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for(
  * The `execution` discriminant on the options object determines the execution
  * mode:
  *
- * - `'background'` -- runs via {@linkcode spawnStreamAsync} and captures
+ * - `'background'` -- runs via `@azure/core-process` and captures
  *   stdout/stderr. Supports optional JSON parsing and JSON-lines streaming.
  * - `'foreground'` -- runs as a {@linkcode vscode.Task Task} visible in the
  *   integrated terminal. Returns `Promise<void>` since task output is not
  *   capturable.
  *
- * On failure, background execution throws {@linkcode ChildProcessError}
- * enriched with captured stderr. Cancellation (via {@linkcode CancellationTokenLike})
- * throws {@linkcode CancellationError} in both modes.
+ * Background execution never involves a shell: the executable is resolved
+ * against `PATH` and launched with its argument vector intact, so arguments
+ * containing spaces, quotes, or shell metacharacters reach the child verbatim.
+ * On Windows a `.cmd`/`.bat` shim (such as the Azure CLI's `az.cmd`) is invoked
+ * through a pinned `cmd.exe` with each argument escaped individually; an
+ * argument that cannot be transported safely is rejected before the process
+ * starts rather than silently corrupted.
+ *
+ * On failure, background execution throws {@linkcode ProcessError}: `code` is
+ * the exit code for a process that ran, or an error code such as `'ENOENT'`
+ * when the executable could not be found. Foreground failure throws a plain
+ * {@linkcode Error}. Cancellation -- via a
+ * {@linkcode vscode.CancellationToken CancellationToken} or an
+ * {@linkcode AbortSignal} -- throws {@linkcode CancellationError} in both modes.
  */
 export interface IProcessExecutor {
     /** Runs a process as a VS Code task. Resolves when the task exits with code 0. */
-    spawn(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void>;
+    spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
     /** Runs a background process, parses stdout as JSON, and streams stderr as newline-delimited JSON objects. */
-    spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonLinesProcessResult<TOut, TLines>>;
+    spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonLinesProcessResult<TOut, TLines>>;
     /** Runs a background process and parses stdout as JSON. */
-    spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonProcessResult<T>>;
+    spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonProcessResult<T>>;
     /** Runs a background process and captures raw stdout and stderr. */
-    spawn(options: BackgroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<ProcessResult>;
+    spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
 
-    /**
-     * Tests whether a command is available on the system `PATH`.
-     *
-     * @returns `true` when the command can be resolved, `false` otherwise.
-     */
-    isOnPath(command: string): Promise<boolean>;
+    /** Tests whether a command is available on the system `PATH`. */
+    isOnPath(command: string): boolean;
 }
 
 /**
  * Default implementation of {@linkcode IProcessExecutor}.
  *
  * @param code - The VS Code API surface for task execution.
- * @param spawnFn - Optional override for {@linkcode spawnStreamAsync}, primarily
- *   for injecting a mock in unit tests. Defaults to the real implementation.
+ * @param spawnFn - Optional override for `@azure/core-process`'s
+ *   {@linkcode spawn}, primarily for injecting a mock in unit tests. Defaults to
+ *   the real implementation.
  */
 export class ProcessExecutor implements IProcessExecutor {
     public constructor(
         private readonly code: IVsCode,
-        private readonly spawnFn: SpawnFn = spawnStreamAsync,
+        private readonly spawnFn: SpawnFn = spawn,
     ) { }
 
-    public async spawn(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void>;
-    public async spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonLinesProcessResult<TOut, TLines>>;
-    public async spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellationToken?: CancellationTokenLike): Promise<JsonProcessResult<T>>;
-    public async spawn(options: BackgroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<ProcessResult>;
+    public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
+    public async spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonLinesProcessResult<TOut, TLines>>;
+    public async spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonProcessResult<T>>;
+    public async spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
     public async spawn(
         options: ForegroundProcessOptions | BackgroundJsonLinesProcessOptions | BackgroundJsonProcessOptions | BackgroundProcessOptions,
-        cancellationToken?: CancellationTokenLike,
+        cancellation?: vscode.CancellationToken | AbortSignal,
     ): Promise<void | ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
         if (options.execution === 'foreground') {
-            return this.spawnForeground(options, cancellationToken);
+            return this.spawnForeground(options, cancellation);
         } else {
-            return this.spawnBackground(options, cancellationToken);
+            return this.spawnBackground(options, cancellation);
         }
     }
 
     /** @inheritdoc */
-    public async isOnPath(command: string): Promise<boolean> {
-        try {
-            await which(command);
-            return true;
-        } catch {
-            return false;
-        }
+    public isOnPath(command: string): boolean {
+        // Batch files are allowed so `.cmd` shims (the Azure CLI's `az.cmd`,
+        // the Functions Core Tools' `func.cmd`) are reported as installed.
+        return resolveExecutable(command, { allowWindowsBatchFiles: true }) !== undefined;
     }
 
-    private async spawnForeground(options: ForegroundProcessOptions, cancellationToken?: CancellationTokenLike): Promise<void> {
-        const shellExecution = new this.code.ShellExecution(
-            getSafeExecPath(options.command),
-            options.args ?? [],
-            { cwd: options.cwd?.fsPath, env: { ...options.env } },
-        );
-
-        const task = new this.code.Task(
-            { type: 'shell' },
-            options.workspaceFolder ?? this.code.TaskScope.Workspace,
-            options.name,
-            options.source ?? 'process',
-            shellExecution,
-        );
-
-        if (options.alwaysRunNew) {
-            task.definition.idRandomizer = Math.random();
-        }
-
-        if (options.focus) {
-            task.presentationOptions = { focus: true };
-        }
+    private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
+        const task = createShellTask(this.code, {
+            ...options,
+            scope: options.workspaceFolder,
+            presentationOptions: options.focus ? { focus: true } : undefined,
+        });
 
         const taskExecution = await this.code.tasks.executeTask(task);
 
+        const { signal, disposable } = toAbortSignal(cancellation);
+
         return new Promise<void>((resolve, reject) => {
-            let ctDisposable: Disposable | undefined;
-
-            if (cancellationToken) {
-                ctDisposable = cancellationToken.onCancellationRequested(() => {
-                    taskExecution.terminate();
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
-                    reject(new CancellationError());
-                });
-            }
-
             const endDisposable = this.code.tasks.onDidEndTaskProcess((e) => {
                 if (e.execution === taskExecution) {
-                    ctDisposable?.dispose();
-                    endDisposable.dispose();
+                    finish();
                     if (e.exitCode === 0) {
                         resolve();
                     } else {
-                        reject(new ChildProcessError(
-                            this.code.l10n.t(
-                                "'{0}' failed with exit code {1}. See the '{0}' terminal for the full output.",
-                                options.name,
-                                e.exitCode ?? -1,
-                            ),
+                        reject(new Error(this.code.l10n.t(
+                            "'{0}' failed with exit code {1}. See the '{0}' terminal for the full output.",
+                            options.name,
                             e.exitCode ?? -1,
-                            null,
-                        ));
+                        )));
                     }
                 }
             });
+
+            const onAbort = () => {
+                finish();
+                taskExecution.terminate();
+                reject(new CancellationError());
+            };
+
+            const finish = () => {
+                endDisposable.dispose();
+                signal?.removeEventListener('abort', onAbort);
+                disposable.dispose();
+            };
+
+            if (signal?.aborted) {
+                onAbort();
+            } else {
+                signal?.addEventListener('abort', onAbort, { once: true });
+            }
         });
     }
 
     private async spawnBackground(
         options: BackgroundProcessOptions | BackgroundJsonProcessOptions | BackgroundJsonLinesProcessOptions,
-        cancellationToken?: CancellationTokenLike,
+        cancellation?: vscode.CancellationToken | AbortSignal,
     ): Promise<ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
-        const stdErrPassThrough = 'jsonLines' in options && options.jsonLines
-            ? new PassThrough()
-            : undefined;
-        const stdErrAccumulator = new AccumulatorStream();
+        const [executable, ...args] = argsToStrings(options.command);
+        if (!executable) {
+            throw new Error('A command line must include at least the executable as its first element.');
+        }
 
-        stdErrPassThrough?.pipe(stdErrAccumulator);
+        const { signal, disposable } = toAbortSignal(cancellation);
 
-        const stdOutStream = new AccumulatorStream();
-        const stdErrStream = stdErrPassThrough ?? stdErrAccumulator;
-
-        const spawnPromise = this.spawnFn(options.command, options.args ?? [], {
-            cwd: options.cwd?.fsPath,
-            env: options.env ? { ...process.env, ...options.env } : undefined,
-            cancellationToken,
-            stdOutPipe: stdOutStream,
-            stdErrPipe: stdErrStream,
-        });
-
-        if (stdErrPassThrough) {
-            const completed = spawnPromise.then(async () => {
-                const stdout = await stdOutStream.getString();
-                const stderr = await stdErrAccumulator.getString();
-                const json: unknown = JSON.parse(stdout);
-                return { stdout, stderr, json };
-            }, async (e: unknown) => {
-                const stderr = await stdErrAccumulator.getString();
-                throw enrichError(e, stderr);
+        let child: ChildProcess;
+        try {
+            child = this.spawnFn(executable, args, {
+                cwd: options.cwd?.fsPath,
+                // The child environment replaces `process.env` rather than
+                // layering onto it, so merge the caller's overrides here.
+                env: mergeProcessEnv(options.env),
+                // An explicit opt-in: without it, resolution of a `.cmd`/`.bat`
+                // target fails with ENOENT, so Windows shims (the Azure CLI's
+                // `az.cmd`) would never launch. Only resolution is gated -- the
+                // batch-specific argument escaping is applied automatically once
+                // the resolved target turns out to be a batch file.
+                allowWindowsBatchFiles: true,
+                signal,
             });
+        } catch (e) {
+            disposable.dispose();
+            throw asCancellation(e, signal);
+        }
+
+        // Buffering starts here, before the caller gets control, because
+        // attaching the `'data'` handler is what puts the stream into flowing
+        // mode. An undrained stdout fills its OS pipe and blocks the child in
+        // `write()`. In JSON-lines mode that deadlocks rather than merely
+        // stalls: the blocked child stops emitting stderr, so the caller's loop
+        // over `jsonLines` never ends, so `completed` is never awaited, so
+        // nothing ever drains stdout.
+        const stdout = readAll(child.stdout);
+
+        // JSON-lines mode streams stderr line-by-line rather than buffering it,
+        // so the caller can observe progress while the process is still running.
+        if ('jsonLines' in options && options.jsonLines) {
+            const completed = (async (): Promise<JsonProcessResult<unknown>> => {
+                try {
+                    // stderr is streamed rather than buffered, so it is not
+                    // captured on the completed result -- the caller consumes it
+                    // live via `jsonLines`.
+                    const out = await finish(child, stdout, Promise.resolve(''), signal);
+                    return { stdout: out.stdout, stderr: '', json: JSON.parse(out.stdout) as unknown };
+                } finally {
+                    disposable.dispose();
+                }
+            })();
+
+            // Mark the rejection as handled so a caller that only drains
+            // `jsonLines` (and never awaits `completed`) doesn't trigger an
+            // unhandled-rejection warning when the process fails. The original
+            // `completed` promise is still returned, so awaiting it observes the
+            // rejection normally.
+            void completed.catch(() => undefined);
 
             return {
-                jsonLines: parseJsonLines(stdErrPassThrough),
+                jsonLines: parseJsonLines(readLines(child.stderr)),
                 completed,
             };
         }
 
+        let result: ProcessResult;
         try {
-            await spawnPromise;
-        } catch (e) {
-            const stderr = await stdErrAccumulator.getString();
-            throw enrichError(e, stderr);
+            result = await finish(child, stdout, readAll(child.stderr), signal);
+        } finally {
+            disposable.dispose();
         }
-
-        const stdout = await stdOutStream.getString();
-        const stderr = await stdErrAccumulator.getString();
 
         if (options.parseJson) {
-            const json: unknown = JSON.parse(stdout);
-            return { stdout, stderr, json };
+            const json: unknown = JSON.parse(result.stdout);
+            return { ...result, json };
         }
 
-        return { stdout, stderr };
+        return result;
     }
 }
 
-function enrichError(e: unknown, stderr: string): unknown {
-    if (isProcessUtilsCancellationError(e)) {
-        return new CancellationError();
-    } else if (isChildProcessError(e)) {
-        const msg = stderr.trim() || e.message;
-        const enriched = new ChildProcessError(msg, e.code, e.signal);
-        enriched.cause = e;
-        return enriched;
+/**
+ * Awaits process exit alongside its captured output, and converts a failure
+ * into the error callers expect.
+ *
+ * @throws {CancellationError} When the process was aborted via {@linkcode signal}.
+ * @throws {ProcessError} When the process exited non-zero, was terminated by a
+ *   signal, or failed to start.
+ */
+async function finish(
+    child: ChildProcess,
+    stdoutPromise: Promise<string>,
+    stderrPromise: Promise<string>,
+    signal: AbortSignal | undefined,
+): Promise<ProcessResult> {
+    const exit = new Promise<{ code: number | null; signalName: NodeJS.Signals | null }>((resolve, reject) => {
+        child.once('error', reject);
+        // 'close' rather than 'exit' so the stdio streams are fully flushed.
+        child.once('close', (code: number | null, signalName: NodeJS.Signals | null) => { resolve({ code, signalName }); });
+    });
+
+    let stdout: string;
+    let stderr: string;
+    let code: number | null;
+    let signalName: NodeJS.Signals | null;
+
+    try {
+        [stdout, stderr, { code, signalName }] = await Promise.all([stdoutPromise, stderrPromise, exit]);
+    } catch (e) {
+        throw asCancellation(e, signal);
     }
+
+    if (signal?.aborted) {
+        throw new CancellationError();
+    }
+
+    if (code === 0) {
+        return { stdout, stderr };
+    }
+
+    // Append the captured stderr -- the tool's actual error text -- to the
+    // generic exit-status message so callers surface something actionable.
+    const summary = signalName !== null
+        ? `The process was terminated by signal ${signalName}.`
+        : `The process exited with code ${code}.`;
+    const trimmed = stderr.trim();
+
+    throw new ProcessError(trimmed ? `${summary}\n${trimmed}` : summary, {
+        code: signalName !== null ? null : code,
+        signal: signalName,
+        killed: child.killed,
+        stdout,
+        stderr,
+    });
+}
+
+/**
+ * Maps an abort into {@linkcode CancellationError}, leaving every other error
+ * unchanged.
+ *
+ * @remarks
+ * An aborted child surfaces as a {@linkcode ProcessError} with code
+ * `'ABORT_ERR'`, but a process killed just before its abort listener runs can
+ * instead close normally, so {@linkcode signal} is consulted as well.
+ */
+function asCancellation(e: unknown, signal: AbortSignal | undefined): unknown {
+    if (signal?.aborted || (isProcessError(e) && e.code === 'ABORT_ERR')) {
+        return new CancellationError();
+    }
+
     return e;
 }
 
-async function* parseJsonLines(input: NodeJS.ReadableStream): AsyncGenerator {
-    const rl = createInterface({ input });
+/**
+ * Buffers a child stream to a string.
+ *
+ * @remarks
+ * A stream error resolves with whatever was buffered rather than rejecting:
+ * the child's `'error'`/`'close'` event is the authoritative failure signal, and
+ * rejecting here would race it.
+ */
+function readAll(stream: Readable | null): Promise<string> {
+    if (!stream) {
+        return Promise.resolve('');
+    }
+
+    stream.setEncoding('utf8');
+
+    return new Promise<string>((resolve) => {
+        let buffer = '';
+        stream.on('data', (chunk: string) => { buffer += chunk; });
+        stream.once('end', () => { resolve(buffer); });
+        stream.once('error', () => { resolve(buffer); });
+    });
+}
+
+/**
+ * Splits a child stream into lines as they arrive, accepting either `\n` or
+ * `\r\n` as the terminator.
+ *
+ * @remarks
+ * Ends silently on a stream error; the failure is surfaced by awaiting the
+ * process instead.
+ *
+ * A consumer that stops early (`break`, `return`, or a `throw`) leaves the
+ * stream paused, which would block the child on its next write and prevent it
+ * from ever exiting. Resuming discards the remainder instead, so the process
+ * still runs to completion and its result stays observable.
+ */
+async function* readLines(stream: Readable | null): AsyncGenerator<string> {
+    if (!stream) {
+        return;
+    }
+
+    const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
     try {
-        for await (const line of rl) {
-            const trimmed = line.trim();
-            if (trimmed.length > 0) {
-                try {
-                    yield JSON.parse(trimmed);
-                } catch {
-                    // Not valid JSON -- skip the line
-                }
-            }
-        }
+        yield* lines;
+    } catch {
+        // The failure is surfaced by awaiting the process in `completed`.
     } finally {
-        rl.close();
+        lines.close();
+        stream.resume();
+    }
+}
+
+/** Parses newline-delimited JSON, skipping blank and non-JSON lines. */
+async function* parseJsonLines(lines: AsyncIterable<string>): AsyncGenerator {
+    for await (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.length === 0) {
+            continue;
+        }
+
+        try {
+            yield JSON.parse(trimmed);
+        } catch {
+            // Not valid JSON -- skip the line
+        }
     }
 }

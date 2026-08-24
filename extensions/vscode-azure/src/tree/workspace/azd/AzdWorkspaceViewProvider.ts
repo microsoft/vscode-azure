@@ -6,9 +6,9 @@
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, ICodeContext, basename } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { RevealInExplorer } from '../../../commands/RevealInExplorer';
+import { RevealInExplorer } from '../../../commands/tree/RevealInExplorer';
 import { IWorkspaceViewDataTree } from '../../../services';
-import { combineContextValues } from '../../combineContextValues';
+import { combineContextValues } from '../../contextValueHelpers';
 import { getAzureIconUri } from '../../iconPath';
 import { AzdProjectKeyPrefix, AzdServiceKeyPrefix, isAzdProjectNode, isAzdServiceNode, type AzdProjectNode, type AzdServiceNode } from '../WorkspaceNode';
 

@@ -3,26 +3,30 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, fileExists, type ICodeContext } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, fileExists, ICodeContext } from '@microsoft/vscode-azure-utils';
+import type { ServiceIdentifier } from 'inversify';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 export const InfraFolderName = 'infra';
 export const MainBicepFileName = 'main.bicep';
 const MainParametersFileName = 'main.parameters.json';
 
+/** Name of a bundled bicep template under `resources/templates/`. */
+export type BicepTemplateName = 'functionApp.bicep'; // | 'staticWebApp.bicep' | ...
+
 /**
- * Generates infra files: copies `main.bicep` from the extension's
- * bundled templates and writes a `main.parameters.json` with the
- * user's chosen values.
+ * Generates infra files: copies the chosen bicep template from the
+ * extension's bundled templates and writes a `main.parameters.json` with
+ * the user's chosen values.
  *
- * @param parameterKeys - Keys of the wizard context to emit as bicep
- *   parameters (in addition to the always-included `environmentName`
- *   and `location` azd placeholders).
+ * Constructed via {@linkcode IGenerateBicepStepFactory} -- the template name
+ * and emitted parameter keys are per-command config supplied by the caller,
+ * while {@linkcode ICodeContext} is injected.
  */
 export class GenerateBicepStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
         private readonly ctx: ICodeContext,
-        private readonly templateName: 'functionApp.bicep', // | 'staticWebApp.bicep' | ...
+        private readonly templateName: BicepTemplateName,
         private readonly parameterKeys: readonly (keyof TContext & string)[],
     ) {
         super();
@@ -52,7 +56,7 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         return true;
     }
 
-    public async execute(context: TContext): Promise<void> {
+    public async execute(context: Readonly<TContext>): Promise<void> {
         const templateUri = this.ctx.code.Uri.joinPath(this.ctx.extensionContext.extensionUri, 'resources', 'templates', this.templateName);
         const bicepFolder = this.ctx.code.Uri.joinPath(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
@@ -80,7 +84,7 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         ]);
     }
 
-    private pickParameters(context: TContext): Record<string, { value: unknown }> {
+    private pickParameters(context: Readonly<TContext>): Record<string, { value: unknown }> {
         const result: Record<string, { value: unknown }> = {};
         for (const key of this.parameterKeys) {
             const value = context[key];
@@ -90,4 +94,32 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         }
         return result;
     }
+}
+
+/** Identifier for the {@linkcode GenerateBicepStep} factory. */
+export const IGenerateBicepStepFactory: ServiceIdentifier<IGenerateBicepStepFactory> = Symbol.for('IGenerateBicepStepFactory');
+
+/**
+ * Factory that creates a {@linkcode GenerateBicepStep} for a wizard context,
+ * parameterized with the bicep template to copy and the context keys to emit
+ * as bicep parameters (in addition to the always-included `environmentName`
+ * and `location` azd placeholders). The step's {@linkcode ICodeContext}
+ * dependency is supplied by the factory.
+ */
+export type IGenerateBicepStepFactory = <TContext extends AzdWizardContext>(
+    templateName: BicepTemplateName,
+    parameterKeys: readonly (keyof TContext & string)[],
+) => GenerateBicepStep<TContext>;
+
+/**
+ * Builds an {@linkcode IGenerateBicepStepFactory} that captures the injected
+ * {@linkcode ICodeContext}. Bind this with `toFactory` so commands can
+ * construct configured steps without taking {@linkcode ICodeContext} as a
+ * caller argument.
+ */
+export function createGenerateBicepStepFactory(ctx: ICodeContext): IGenerateBicepStepFactory {
+    return <TContext extends AzdWizardContext>(
+        templateName: BicepTemplateName,
+        parameterKeys: readonly (keyof TContext & string)[],
+    ): GenerateBicepStep<TContext> => new GenerateBicepStep<TContext>(ctx, templateName, parameterKeys);
 }

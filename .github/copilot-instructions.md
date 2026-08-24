@@ -5,10 +5,11 @@ For detailed documentation on the project architecture and patterns, see the `do
 * `docs/tree-views.md` -- Data/view layer separation, providers, enrichment, caching, pagination, activity tree, resource icons
 * `docs/dependency-injection.md` -- Container setup, service identifiers, scoped execution, factory bindings
 * `docs/commands.md` -- ManagedCommand pattern, registration, context values, prefixArgs
-* `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers
+* `docs/settings.md` -- Shared settings framework: adapters, JSONC editor, document URIs, secrets
+* `docs/conventions.md` -- Naming, imports, localization, ARM types, copyright headers, comment/doc hygiene
 * `docs/wizard.md` -- PromptStep/ExecuteStep, back navigation, dynamic steps
 * `docs/resource-creation.md` -- AzdJob, wizard step sequence, scenario matrix, hydration, adding new resource types
-* `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, coverage
+* `docs/testing.md` -- Unit vs integration tests, mocking with `createMockVsCode()`, fixture reuse, what not to test, coverage
 * `docs/resource-models.md` -- AzureNode union, GenericResource, AzureNodeId URI scheme
 * `docs/telemetry.md` -- IActionContext, ActionExecutor, telemetry suppression
 * `docs/build-and-dev.md` -- Build commands, esbuild, watch mode, linting, cleaning
@@ -31,17 +32,21 @@ For detailed documentation on the project architecture and patterns, see the `do
   - `Disposable` instead of `vscode.Disposable`
 * Mark interface properties as `readonly` by default, unless the property is intentionally mutable (e.g. set by a later step in a pipeline)
 * Use PascalCase for files containing classes/interfaces, camelCase for function-oriented files
-* Label test cases with `(unit)` or `(integration)` **after** the name in the root `describe` description (e.g., `describe('AzureNodeId (unit)', ...)`)
+* Label test cases with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description (e.g., `describe('AzureNodeId (unit)', ...)`)
 * Include the Microsoft copyright header on every TypeScript/JavaScript file
 * Use `void` prefix for intentionally un-awaited promises, unless they have a `.then()` with two arguments (for resolve and reject), or a `.catch()` handler
 * Use scoped `eslint-disable` comments on specific lines, avoid file-wide unless it requires repeating the same disable many times
 * Strings that will be seen by the user must use `IVsCode.l10n.t()` for localization (debug and trace output to the output channel is exempt from this requirement)
 * Logging must follow `docs/conventions.md` (Logging section), and log messages must never include PII/secrets (tokens, auth secrets, user emails/display names, request/response bodies, or file contents)
+* Never commit **raw telemetry query results** to the repo (e.g. Kusto/ADX output from `RawEventsVSCodeExt`: per-feature counts, user/machine counts, result-state tables, exported CSV/JSON). A **decision and its rationale are fine to commit** even when the rationale is telemetry-derived (e.g. "dropped: low external usage per telemetry"), but state it **qualitatively** — do not paste the counts, result tables, or raw rows. Query **text/links** (KQL, ADX deeplinks) are queries, not data, and may be committed. Keep raw telemetry output in session/scratch space only.
+* When coercing a caught `unknown` error into a message string (for logging, telemetry, or display), use `stringifyError()` from `@microsoft/vscode-azure-utils` instead of hand-rolling an `error instanceof Error ? error.message : String(error)` check
 * In product code, use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` and string paths. Use `Uri.fsPath` only when an API requires a string (e.g., `child_process` `cwd`). Use `vscode.workspace.fs.stat()` to check file existence (prefer over `workspace.findFiles()` which is workspace-scoped). Use `extensionContext.extensionUri` with `Uri.joinPath()` instead of `extensionContext.asAbsolutePath()`.
 * Any time ARM resource types (`GenericResource.type`) or logical types (`GenericResource.logicalType`) are checked, they should be compared **case-insensitively** to a constant (e.g., `AcrResourceType`) rather than a string literal
+* When a case-insensitive Azure identifier (ARM resource ID, resource type, tenant ID, subscription ID, account ID) is a `Set` value or a `Map` key, use `CaselessSet` / `CaselessMap<V>` from `@microsoft/vscode-azure-utils` instead of calling `.toLowerCase()` at construction and again at every lookup. Declare read-only holders as `ICaselessSetReader` / `ICaselessMapReader<V>`. Plain string comparisons still fold inline. Both classes carry only the members that are currently used -- add more (`keys()`, `forEach`, ...) when a call site needs them. See `docs/conventions.md` (Case-Insensitive Collections).
 * Azure SDK types used in client wrapper public APIs must be re-exported from the wrapper file in `packages/azutils/src/rest/clients/`. The extension and other consumers import these types from `@microsoft/vscode-azure-azutils`, never directly from `@azure/*` packages.
 * Commands that act on tree items should define a static `ContextValue` property. The view provider should use that in the tree item's `contextValue`. In `package.json`, the command's `when` clause should check for the context value with a regex (e.g., `viewItem =~ /\\bmyContextValue\\b/i`) rather than an equality check, to allow for multiple context values. The `\b` in the regex is important to prevent unintended matches (e.g., `myContextValue` matching `myContextValueWithSuffix`).
 * Resource icon SVGs in `packages/azutils/resources/azureIcons/` are resolved by convention: the filename **must** equal `<logicalType>.toLowerCase() + '.svg'`, with `/` acting as directory separators. A mismatch causes VS Code to silently show no icon. When adding a new resource type that shares an ARM type with other products (e.g., `Microsoft.Web/sites`), add a logical type constant and a `logicalType()` branch in `ResourceClient.ts`, then name the icon to match the new logical type. See `docs/tree-views.md` (Resource Icons) for the full convention.
+* **Comments and docs describe the code as it is now, never the edit that produced it.** Do not write comments, JSDoc, `docs/` prose, or test names that narrate a change -- no "removed X", "no longer supports Y", "this used to be Z", "kept for the old behavior", and no placeholder comment marking where deleted code used to live. A reader who never saw the old code should not learn it existed. When updating an existing doc, delete the stale prose instead of appending a note that it is obsolete. Change history belongs in the diff, the commit message, and the PR description. The only exception is a deliberate deprecation contract on a symbol that still exists (`@deprecated` JSDoc) or a CHANGELOG entry.
 
 
 ## Understanding the Data Model
@@ -55,7 +60,7 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 ### Data layer (`DataItemTree` + `DataProvider`)
 
 * `DataItemTree<T>` is the single source of truth for data. It lazily loads children via registered `DataProvider<T>` implementations and caches them with a configurable TTL.
-* Children are fetched on first access and re-fetched once stale (`staleAt` timestamp). Callers can force a refresh with `invalidate(resource)` or `invalidateAll()`.
+* Children are fetched on first access and re-fetched once stale (`staleAt` timestamp). Callers force a refresh through one of two methods that share a `Target<T>` surface: `invalidate(target)` (mark matched nodes stale and re-fetch on next access) and `remove(target)` (evict matched nodes and splice them out). A target may be a bare resource/key/array (matched by key, subtree scope), `selfOnly(...)` / `subtreeOf(...)`, a `Selector<T>` verdict predicate (e.g. `bySubscription(id)`), or the `Roots` / `Everything` sentinels. Prefer the narrowest target that's correct (`Roots` or a selector over `Everything`). See `docs/tree-views.md` (Targets & selectors).
 * **Enrichment** -- after children are loaded, `DataItemTree` calls each provider's optional `enrich(resource)` method in the background. Enrichment mutates the resource in-place (keeping the same object reference) and fires `onDidChange` when done. Callers that need the enriched data can `await cache.whenEnriched(resource)`.
 * A `NodeMap` provides O(1) key-based lookup and recursive subtree removal for cache eviction.
 
@@ -69,7 +74,7 @@ Both layers extend `ProviderRegistry`, which maintains an ordered list of provid
 
 ### Concrete Azure implementation
 
-* `GenericAzureDataProvider` (extension layer) is a `DataProvider` that fetches Azure accounts, tenants, subscriptions, and resource groups via the Azure SDK.
+* `AzureResourceDataProvider` (extension layer) is a `DataProvider` that fetches resource groups and their resources via the Azure SDK.
 * `GenericAzureViewProvider` (extension layer) is a `ViewProvider` that maps Azure resources to tree items with icons, context values, grouping strategies, etc.
 * Service-specific providers (e.g. ACR) handle narrower resource types and are registered alongside the generic ones.
 
@@ -86,6 +91,7 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 * Use plain backticks (`` `...` ``) for things that are **not** resolvable symbols: file names (`main.js`), environment variables (`AZURE_MOCK_DATA=1`), CLI flags, JSON keys, shell commands, and literal code fragments.
 * Use standard tags where appropriate: `@param`, `@returns`, `@throws`, `@example`, `@remarks`, `@see`, `@deprecated`. Don't add a `@param`/`@returns` tag that just repeats the type -- omit it or add meaningful prose.
 * Keep claims in JSDoc **honest and verifiable** against the code. If a file still imports `vscode` for types, don't claim it "doesn't depend on vscode" -- qualify it (e.g. "no runtime/value-side dependency; the import is type-only and erased at compile time").
+* Document the current contract only. Don't mention parameters, options, or behaviors that were removed, and don't explain how the symbol differs from a previous version -- see the comment/doc hygiene rule under General Instructions.
 * When documenting an `@example`, make sure the example package / API actually matches the function's contract (e.g. don't show a class-based SDK as an example for a REST-style helper).
 * Prefer a single concise summary line, followed by a blank line and more detail if needed. Wrap long paragraphs at a reasonable width for readability in hover tooltips.
 * Don't duplicate the copyright header as JSDoc; the file header comment is separate from symbol-level documentation.
@@ -93,23 +99,52 @@ All trees are wired up declaratively via `registerTree()` which takes a `TreeCon
 
 ## How to Lint, Build, and Test
 
-* Before submitting PRs, always lint, build, and test locally to catch errors early
-* Run `npm run lint` to check for linting errors
-* Run `npm run build` to compile TypeScript to JavaScript
-* Run `npm run test` to execute tests
-* Run `npm run testcov` to run tests with code coverage (via c8)
-* For individual workspaces, use the above commands, adding `--workspace=<workspace-name>` to target a specific package
+* Always run the full `pnpm run lint`/`build`/`test` sweep locally before submitting a PR. The judgment calls below apply to intermediate turns, not to this final sweep.
+* Run `pnpm run lint` to check for linting errors
+* Run `pnpm run build` to compile TypeScript to JavaScript
+* Run `pnpm run test` to execute tests
+* Run `pnpm run testcov` to run tests with code coverage (via c8)
+* For individual workspaces, use the above commands with a `--filter <package-name>` flag (e.g. `pnpm --filter @microsoft/vscode-azure-utils run test`) to target a specific package
+* **Scope validation to the workspace you changed.** A change confined to `packages/utils` does not need the extension's test suite (which launches VS Code) or the other packages' lints.
+* **Match the validation to what the change could actually break -- use judgment, don't reflexively run all three.** Ask what a given check could possibly catch for *this* edit; if the answer is "nothing", skip it. A check that cannot fail is not evidence, it is latency. Some rules of thumb:
+  - **Only non-source files changed** (`pnpm-workspace.yaml` policy fields, `.vscode/`, CI YAML, `docs/`, `CHANGELOG.md`): ESLint doesn't read them, so linting proves nothing. Validate the thing you actually changed instead -- for a dependency-policy edit that is `pnpm install`, not `tsc`.
+  - **Dependency manifests changed:** let the lockfile decide -- see Managing Dependencies below.
+  - **Comments, JSDoc, or renames within one file:** lint and build cover it; the test suite has nothing new to exercise.
+  - **Source behavior changed:** run the changed workspace's tests, and lint if you touched anything with a plausible rule interaction (new imports, `any`, unused vars, naming).
+* When you skip a check, say so and why. A suite re-run against byte-identical inputs is toil, but a silent skip is indistinguishable from an oversight.
+* `lint` passes `--cache`, so repeat runs are much cheaper. There is a fixed per-invocation floor regardless, so prefer one lint of the changed workspace over several single-file lints.
+* Only the **builds** have dedicated watch scripts (`build:watch` for `utils`/`azutils`, `build:check:watch` and `build:esbuild:watch` for the extension). There is no lint watch, and bare `mocha --watch` does nothing useful in this repo because Mocha only watches `.js`/`.cjs`/`.mjs` by default while the specs are `.ts` — pass `--extension ts` if you want a test watch.
+* The extension has no test watch and no useful test filtering — most of its runtime is the VS Code launch, not the tests, so `--grep` saves very little.
+* In a fresh clone or worktree, the extension's first test run downloads ~1 GB of VS Code into `extensions/vscode-azure/.vscode-test`. Run `pnpm run link-test-cache` once beforehand to share that download across worktrees; linked worktrees share one VS Code profile, so don't run their tests concurrently.
+
+
+## Managing Dependencies
+
+* This is a pnpm workspace; its configuration lives in `pnpm-workspace.yaml`.
+* When a dependency is used by more than one workspace package, add it to the pnpm `catalog:` in `pnpm-workspace.yaml` and reference it from each `package.json` with the `"catalog:"` specifier. This keeps every package on a single, consistent version.
+* Keep dependencies that are only used by a single package as a direct version specifier in that package's `package.json` -- don't add them to the catalog, since a catalog entry provides no dedup benefit for a single consumer.
+* After changing any dependency versions or catalog entries, run `pnpm install` to update `pnpm-lock.yaml`. If the lockfile changed, build to confirm nothing broke; if it came back unchanged, no installed code moved and a previously-green build still holds.
 
 
 ## Writing Tests
 
+* **Prefer existing test helpers over hand-rolling.** Before writing any fixture, mock, or drain/collect loop, look for an existing helper in the two testing barrels (`@microsoft/vscode-azure-utils/testing` and `@microsoft/vscode-azure-azutils/testing`) and use it. Duplicating or re-authoring near-identical fixtures is the single most common test smell in this repo -- search first, then reuse.
+* **Adapt, don't fork.** When a shared fixture is close but not an exact fit, extend it *additively* -- add an optional override field, an optional parameter with a backward-compatible default, or a thin wrapper beside it -- rather than copying it into your test file and tweaking. Write a local fixture only when it is genuinely single-use; the moment a second file needs the same shape, promote it to the shared barrel. See `docs/testing.md` (Reusing and Adapting Fixtures).
+* **Entity fixtures (azutils)** -- build mock Azure resources with the shared `make*` factories instead of object literals: `makeAccount`, `makeTenant`, `makeSubscription`, `makeResourceGroup`, `makeGenericResource`, `makeVirtualGroup`, `makeVirtualResource`, and `makeCredential` (all from `@microsoft/vscode-azure-azutils/testing`, defined in `src/test/mockAzure.ts`). Each takes a `Partial<...>` overrides argument -- pass only the fields your test cares about.
+* **Tree / provider fixtures (azutils)** -- don't hand-roll a `getChildren`/`hasMore`/`loadMore` object. Use `createMockDataItemTree`, `createMockHierarchicalDataItemTree`, `createMockPagedDataItemTree`, or `createMockViewItemTree` (from `src/test/tree/mockTree.ts`), and `createMockAccountDataProvider` / `createMockSubscriptionClient` for provider/client stand-ins.
+* **Paging / async-iterable drains (utils)** -- use `collectPages` (drain a `ChildResult`/`getChildren` result into `Page[]`), `collectPageItems` (drain + flatten pages to items), or `collectAsync` (drain any `AsyncIterable`) from `@microsoft/vscode-azure-utils/testing`. Do not re-write the `for await (const page of ...) { ... }` loop inline.
+* **When a helper doesn't exist yet:** if the same fixture/mock/loop pattern appears more than once, extract a single shared helper into the appropriate testing barrel rather than copying it -- entity/tree fixtures belong in azutils (`mockAzure.ts` / `mockTree.ts`), generic primitives (settings, async-iterable, action-context helpers) belong in utils. Export it from that package's `testing.ts` barrel. Extending an existing helper additively is preferred over adding a parallel near-duplicate.
+* **Prefer Node's `mock` framework over hand-rolled mocking.** Use `mock.fn()` (optionally wrapping a real implementation, e.g. `mock.fn(createDefaultCredentialFactory(code))`) and `mock.method(obj, 'name', impl)` to stub and to record calls. Assert via `.mock.calls` / `.mock.callCount()` rather than manual counter variables, closures over an `inputs` array, or bespoke stub objects. Call `mock.restoreAll()` in `afterEach` when you patch with `mock.method`.
 * Use `createMockCodeContext()` or `createMockVsCode()` from `@microsoft/vscode-azure-utils/testing` instead of hand-rolling `IVsCode`, `IExtensionContext`, or `ICodeContext` mocks. If the mock needs new capabilities, add them to `MockVsCode.ts` in the utils package.
+* Use `withSettings(mockResult, overrides, callback)` from `@microsoft/vscode-azure-utils/testing` to seed configuration for the duration of a test (arrange side), instead of raw `mock.settings.set(...)`.
 * Use real `ActionExecutor` (with `NullTelemetryReporter`) instead of mocking `IActionExecutor`
 * Use real `createActionContext()` instead of mocking `IActionContext`
 * Use `NullTelemetryReporter` from `@microsoft/vscode-azure-utils/testing` (not from the main entry point)
-* Use `mock.fn()` from `node:test` to track call counts and arguments — prefer over manual counters
 * Use `respondToPrompts()` from the testing package to drive wizard / pick-step UI flows
-* In azutils, use the shared fixtures in `src/test/mockAzure.ts` and `src/test/mockPipeline.ts` instead of creating local mocks
-* For Azure environments, use `Environment.AzureCloud` from `@azure/ms-rest-azure-env` instead of hand-rolled environment objects
-* Don't test that constants equal their literal values — those tests add no value
+* In azutils, use the shared fixtures in `test/mockAzure.ts` and `test/mockPipeline.ts` instead of creating local mocks
+* For Azure environments, use the `AzurePublicCloud` preset (or `AzureUSGovernment` / `AzureChinaCloud`) from `@microsoft/vscode-azure-azutils` instead of hand-rolled environment objects. These are `EnvironmentLike` values from the azutils auth module, which replaces the deprecated `@azure/ms-rest-azure-env` package. Test credentials come from `makeCredential()` in `mockAzure.ts`.
+* **Don't write tests that only pin a constant to its current value.** Tests exist to catch regressions, and nobody accidentally changes the value of a constant -- so `expect(AcrResourceType).to.equal('Microsoft.ContainerRegistry/registries')` can never catch a mistake. It fails only when someone deliberately changes the value, by which point the test is stale and the failure is needless toil: update the literal, learn nothing. The same applies to snapshot-style assertions that freeze a literal object/array shape without exercising behavior. Test what the constant *does* instead (referencing the constant inside a behavioral assertion is fine and encouraged -- the problem is when the constant is the subject). Exception: genuine cross-boundary contracts where two independent sources can drift apart (a command ID in `package.json` vs. its registration, an icon filename vs. its logical type) -- write those as consistency checks that read both sides and compare, not as assertions against a hardcoded literal. See `docs/testing.md` (What Not to Test).
+* **Don't write tests that assert removed behavior stays removed.** After deleting a feature, flag, command, or code path, delete its tests too -- do not add a test asserting the thing is gone (`expect(commands).to.not.include('legacy.command')`). Such tests pass trivially forever and keep the deleted concept alive in the suite. The narrow exception is a regression test for a real bug, which must assert the correct *positive* behavior today, not the absence of the old code.
+* **Don't write tests whose subject is a test fixture.** Mocks and factories (`makeSubscription()`, `MockVsCode`, `MockFileSystem`, ...) are test infrastructure; asserting that a factory returns the defaults it literally declares proves nothing, and exercising a mock's own read/write round-trip tests the mock instead of the product code. Fixtures are validated implicitly by the tests that consume them. Only test fixture logic when it is genuinely non-trivial and a bug in it would cause silent false passes (e.g. `respondToPrompts()` back-navigation, `MockHttpClient` request matching).
 * Testing Azure SDK clients: use `MockHttpClient` injected via the `options` parameter on the client's `create()` method
+

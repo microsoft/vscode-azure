@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    getNodeType, IAcrClientProvider, isVirtualResource, parseAzureResourceId,
-    type ConcreteAzureNode, type GenericResource, type IAcrClient, type VirtualResource
+    getNodeType, getResourceGroupName, IAcrClientProvider, isVirtualResource,
+    type ConcreteAzureNode, type VirtualResource
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, type DataProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -22,17 +22,11 @@ import { isAcrRegistry } from './AcrRegistry';
  * - **`getChildren`**: stubbed -- will return repositories and tags once
  *   the data-plane client is integrated.
  *
- * TODO: this is a demonstration provider and needs to be removed
+ * @remarks This is demonstration code; removal is tracked by
+ * {@link https://github.com/microsoft/vscode-azure/issues/177}.
  */
 @injectable()
 export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
-
-    /**
-     * Cached ARM management clients per subscription ID, so all calls for
-     * the same subscription share one client instance.
-     */
-    private readonly clientCache = new Map<string, IAcrClient>();
-
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAcrClientProvider) private readonly createClient: IAcrClientProvider,
@@ -59,11 +53,8 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
 
-        const client = this.getOrCreateClient(resource);
-        const { resourceGroup: resourceGroupName } = parseAzureResourceId(resource.id);
-        if (!resourceGroupName) {
-            throw new Error(`Cannot extract resource group name from resource ID: ${resource.id}`);
-        }
+        const client = this.createClient(resource.subscription);
+        const resourceGroupName = getResourceGroupName(resource.id);
 
         const registry = await client.registries.get(resourceGroupName, resource.name);
 
@@ -112,19 +103,6 @@ export class AcrDataProvider implements DataProvider<ConcreteAzureNode> {
         }
 
         return [];
-    }
-
-    /**
-     * Get or create a cached ARM management client for the given resource's
-     * subscription.
-     */
-    private getOrCreateClient(resource: GenericResource): IAcrClient {
-        let client = this.clientCache.get(resource.subscription.subscriptionId);
-        if (!client) {
-            client = this.createClient(resource.subscription);
-            this.clientCache.set(resource.subscription.subscriptionId, client);
-        }
-        return client;
     }
 }
 

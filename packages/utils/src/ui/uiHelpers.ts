@@ -10,6 +10,66 @@ import { CancellationError } from '../vscode/CancellationError';
 import type { ICodeContext, IVsCode } from '../vscode/IVsCode';
 import { GoBackError } from '../wizard/GoBackError';
 
+/** Severity used by {@linkcode showMessage} to select the corresponding VS Code message API. */
+export type MessageSeverity = 'info' | 'warning' | 'error';
+
+/** Options forwarded to the selected VS Code message API. */
+export interface ShowMessageOptions extends vscode.MessageOptions {
+    /** Message severity. Defaults to `info`. */
+    readonly severity?: MessageSeverity;
+
+    /** Optional name of the operation, included in a modal cancellation error for diagnostics. */
+    readonly stepName?: string;
+}
+
+/**
+ * Shows a message using the VS Code API selected by {@linkcode ShowMessageOptions.severity}.
+ *
+ * Dismissing a modal message rejects with {@linkcode CancellationError}. Dismissing a
+ * non-modal message resolves to `undefined`, matching the underlying VS Code APIs.
+ */
+export function showMessage<T extends string>(
+    code: IVsCode,
+    message: string,
+    options: ShowMessageOptions & { readonly modal: true },
+    ...items: T[]
+): Promise<T>;
+export function showMessage<T extends string>(
+    code: IVsCode,
+    message: string,
+    options?: ShowMessageOptions,
+    ...items: T[]
+): Promise<T | undefined>;
+export async function showMessage<T extends string>(
+    code: IVsCode,
+    message: string,
+    options: ShowMessageOptions = {},
+    ...items: T[]
+): Promise<T | undefined> {
+    const { severity = 'info', stepName, ...messageOptions } = options;
+    let result: T | undefined;
+
+    switch (severity) {
+        case 'error':
+            result = await code.window.showErrorMessage(message, messageOptions, ...items);
+            break;
+        case 'warning':
+            result = await code.window.showWarningMessage(message, messageOptions, ...items);
+            break;
+        case 'info':
+            result = await code.window.showInformationMessage(message, messageOptions, ...items);
+            break;
+        default:
+            throw new Error(`Unsupported message severity: ${String(severity)}`);
+    }
+
+    if (messageOptions.modal && result === undefined) {
+        throw new CancellationError(undefined, stepName);
+    }
+
+    return result;
+}
+
 /** A {@linkcode vscode.QuickPickItem} with associated underlying data */
 export interface QuickPickItemWithData<T> extends vscode.QuickPickItem {
     readonly data: T;
@@ -28,6 +88,26 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
 
     /** Called when a button on a specific quick pick item is triggered. */
     readonly onDidTriggerItemButton?: (event: vscode.QuickPickItemButtonEvent<TItem>) => void;
+
+    /**
+     * Turns the quick pick into a combo box ("pick or enter"): builds a synthetic,
+     * always-shown item from the user's typed text whenever it does not already match
+     * a suggestion. It receives the **trimmed** typed value and should return `undefined`
+     * when no custom item should be offered (typically when the value is empty).
+     *
+     * If the returned item's `label` duplicates one of the existing `items`, the
+     * synthetic item is suppressed and that real suggestion is shown instead, so
+     * the user never sees two identical-looking rows. Otherwise the synthetic item is
+     * listed *after* the suggestions, so any real item matching the current filter is
+     * shown -- and highlighted -- first, with the synthetic "use what I typed" entry as
+     * the fallback below them. When the user accepts the synthetic item, it is returned
+     * from {@linkcode showSmartQuickPick} like any other item, but is intentionally not
+     * stored as the "recently picked" choice (its label is not one of the suggestions,
+     * so it could never be restored).
+     *
+     * Ignored when {@linkcode vscode.QuickPickOptions.canPickMany} is `true` (combo box is single-select only).
+     */
+    readonly createItemFromValue?: (value: string) => TItem | undefined;
 }
 
 /**
@@ -36,6 +116,8 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
  * **Key features:**
  *   - If {@linkcode ExtendedQuickPickOptions.isActiveItem} is not provided, the most recently picked item (based
  *     on `label`) will be pre-highlighted. For multi-select, recently picked items will be pre-checked.
+ *   - If {@linkcode ExtendedQuickPickOptions.createItemFromValue} is provided, the quick pick acts as a combo box
+ *     ("pick or enter"): the user can type a free-form value that is turned into a selectable item.
  *   - If {@linkcode ExtendedQuickPickOptions.showBack} is `true`, a back button will be shown that rejects with
  *     {@linkcode GoBackError} when pressed.
  *   - If the user cancels the quick pick, it rejects with {@linkcode CancellationError}.
@@ -65,6 +147,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     quickPick.step = options?.step;
     quickPick.totalSteps = options?.totalSteps;
     quickPick.value = options?.value ?? '';
+    quickPick.prompt = options?.prompt;
 
     // Filter items through predicates to safely set active/selected items
     if (options?.isActiveItem) {
@@ -105,68 +188,119 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         }
     }
 
-    return new Promise<TItem | TItem[]>((resolve, reject) => {
-        let settled = false;
-        const finish = (finishAction: () => void) => {
-            if (!settled) {
-                settled = true;
-                quickPick.dispose();
-                finishAction();
+    // Combo box ("pick or enter"): when a factory is provided (single-select only),
+    // let the user type a free-form value that becomes a selectable item.
+    const createItemFromValue = quickPick.canSelectMany ? undefined : options?.createItemFromValue;
+    // The synthetic item currently offered for the typed value, if any. Tracked so
+    // accepting it does not pollute the "recently picked" memory with an
+    // un-restorable label (it is never part of `items`).
+    let syntheticItem: TItem | undefined;
+    if (createItemFromValue) {
+        // Snapshot the current item list (after any recent-item reordering above)
+        // so the synthetic item can be appended/removed without losing the
+        // suggestions. We deliberately do not manage `activeItems` here: VS Code
+        // highlights the first item that matches the typed value, so a real
+        // suggestion takes precedence and the synthetic is highlighted only when
+        // nothing else matches (and a removed synthetic can never linger active).
+        const baseItems = quickPick.items;
+        const syncItems = (rawValue: string) => {
+            const typedItem = createItemFromValue(rawValue.trim());
+            // If the typed value resolves to a label that already matches a real
+            // suggestion, prefer that suggestion over offering a duplicate
+            // synthetic row -- this keeps "pick or enter" from showing two
+            // identical-looking entries and lets the accepted choice be remembered.
+            const existing = typedItem ? baseItems.find(item => item.label === typedItem.label) : undefined;
+            if (typedItem && !existing) {
+                // List the synthetic item *after* the suggestions and mark it
+                // alwaysShow so it stays visible as a fallback below any real item
+                // that matches the current filter.
+                syntheticItem = { ...typedItem, alwaysShow: true };
+                quickPick.items = [...baseItems, syntheticItem];
+            } else {
+                syntheticItem = undefined;
+                quickPick.items = baseItems;
             }
         };
 
-        quickPick.onDidAccept(() => {
-            try {
-                if (quickPick.canSelectMany) {
-                    const selected = [...quickPick.selectedItems];
-                    if (selected.length > 0) {
-                        finish(() => {
-                            void ctx.extensionContext.workspaceState.update(recentKey, selected.map(s => s.label));
-                            resolve(selected);
-                        });
-                    } else {
-                        // If no items are selected, treat it as a cancellation (similar to how hitting escape with no active item doesn't select the active item)
-                        finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
-                    }
+        // Honor a preset value so a synthetic item is offered before the first keystroke.
+        if (quickPick.value) {
+            syncItems(quickPick.value);
+        }
+        quickPick.onDidChangeValue(value => { syncItems(value); });
+    }
+
+    const { promise, resolve, reject } = Promise.withResolvers<TItem | TItem[]>();
+    let settled = false;
+    const finish = (finishAction: () => void) => {
+        if (!settled) {
+            settled = true;
+            quickPick.dispose();
+            finishAction();
+        }
+    };
+
+    quickPick.onDidAccept(() => {
+        try {
+            if (quickPick.canSelectMany) {
+                const selected = [...quickPick.selectedItems];
+                if (selected.length > 0) {
+                    finish(() => {
+                        void ctx.extensionContext.workspaceState.update(recentKey, selected.map(s => s.label));
+                        resolve(selected);
+                    });
                 } else {
-                    const selected = quickPick.activeItems[0] as TItem | undefined;
-                    if (selected) {
-                        finish(() => {
-                            void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
-                            resolve(selected);
-                        });
-                    }
+                    // If no items are selected, treat it as a cancellation (similar to how hitting escape with no active item doesn't select the active item)
+                    finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
                 }
+            } else {
+                // Fall back to the synthetic item when nothing is active: we rely
+                // on VS Code auto-highlighting the first visible item after each
+                // `items` reassignment, but if no item is active (e.g. the typed
+                // value matched no real suggestion and the synthetic was not
+                // auto-focused), accepting should still resolve the synthetic
+                // rather than silently doing nothing and leaving the picker open.
+                const selected = (quickPick.activeItems[0] as TItem | undefined) ?? syntheticItem;
+                if (selected) {
+                    finish(() => {
+                        // Don't remember a typed/synthesized value: its label is not
+                        // one of the suggestions, so it could never be restored and
+                        // would clobber a genuinely-pickable recent choice.
+                        if (selected !== syntheticItem) {
+                            void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
+                        }
+                        resolve(selected);
+                    });
+                }
+            }
+        } catch (e: unknown) {
+            finish(() => { reject(e); });
+        }
+    });
+
+    quickPick.onDidTriggerButton((button) => {
+        if (button === ctx.code.QuickInputButtons.Back) {
+            finish(() => { reject(new GoBackError()); });
+        }
+    });
+
+    const itemButtonHandler = options?.onDidTriggerItemButton;
+    if (itemButtonHandler) {
+        quickPick.onDidTriggerItemButton((event) => {
+            try {
+                itemButtonHandler(event);
             } catch (e: unknown) {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
                 finish(() => { reject(e); });
             }
         });
+    }
 
-        quickPick.onDidTriggerButton((button) => {
-            if (button === ctx.code.QuickInputButtons.Back) {
-                finish(() => { reject(new GoBackError()); });
-            }
-        });
-
-        const itemButtonHandler = options?.onDidTriggerItemButton;
-        if (itemButtonHandler) {
-            quickPick.onDidTriggerItemButton((event) => {
-                try {
-                    itemButtonHandler(event);
-                } catch (e: unknown) {
-                    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-                    finish(() => { reject(e); });
-                }
-            });
-        }
-
-        quickPick.onDidHide(() => {
-            finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
-        });
-
-        quickPick.show();
+    quickPick.onDidHide(() => {
+        finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
     });
+
+    quickPick.show();
+
+    return promise;
 }
 
 /**
@@ -184,6 +318,27 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
      * Use this instead of {@link value} to allow the recently entered value to take precedence.
      */
     readonly fallbackValue?: string;
+
+    /**
+     * Whether the accepted value may be persisted to workspace state and offered back as the
+     * pre-filled value next time this prompt appears. Defaults to `true`.
+     *
+     * Set to `false` for anything the user would not want written to disk in cleartext or replayed
+     * into an unrelated prompt -- secrets, connection strings, keys, tokens. Setting
+     * {@link vscode.InputBoxOptions.password password} implies `false`, so a masked prompt can never
+     * leak its value through this path by omission.
+     */
+    readonly rememberRecent?: boolean;
+}
+
+/**
+ * Whether {@linkcode showSmartInputBox} may persist and restore this prompt's value.
+ *
+ * A masked prompt is treated as opted out regardless of {@linkcode ExtendedInputBoxOptions.rememberRecent},
+ * so that forgetting the flag fails safe.
+ */
+function mayRememberRecent(options: ExtendedInputBoxOptions): boolean {
+    return options.rememberRecent !== false && !options.password;
 }
 
 /**
@@ -207,7 +362,7 @@ export interface ExtendedInputBoxOptions extends vscode.InputBoxOptions, StepOpt
 export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxOptions): Promise<string> {
     const showBack = options?.showBack ?? false;
     const input = ctx.code.window.createInputBox();
-    const recentKey = options ? inputBoxRecentKey(options) : undefined;
+    const recentKey = options && mayRememberRecent(options) ? inputBoxRecentKey(options) : undefined;
 
     if (showBack) {
         input.buttons = [ctx.code.QuickInputButtons.Back];
@@ -224,9 +379,11 @@ export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxO
     input.step = options?.step;
     input.totalSteps = options?.totalSteps;
 
-    // If the caller did not provide a default value, try to pre-fill based on recent input
-    if (recentKey && options?.value === undefined) {
-        const recentValue = ctx.extensionContext.workspaceState.get<string>(recentKey);
+    // If the caller did not provide a default value, try to pre-fill based on recent input.
+    // `fallbackValue` is independent of persistence, so it still applies when the prompt opted
+    // out of remembering its value.
+    if (options?.value === undefined) {
+        const recentValue = recentKey ? ctx.extensionContext.workspaceState.get<string>(recentKey) : undefined;
         if (recentValue) {
             input.value = recentValue;
         } else if (options?.fallbackValue !== undefined) {
@@ -234,93 +391,91 @@ export function showSmartInputBox(ctx: ICodeContext, options?: ExtendedInputBoxO
         }
     }
 
-    return new Promise<string>((resolve, reject) => {
-        let settled = false;
-        const finish = (finishAction: () => void) => {
-            if (!settled) {
-                settled = true;
-                input.dispose();
-                finishAction();
-            }
-        };
+    const { promise, resolve, reject } = Promise.withResolvers<string>();
+    let settled = false;
+    const finish = (finishAction: () => void) => {
+        if (!settled) {
+            settled = true;
+            input.dispose();
+            finishAction();
+        }
+    };
 
-        input.onDidAccept(() => {
-            try {
-                const value = input.value;
+    input.onDidAccept(() => {
+        try {
+            const value = input.value;
 
-                // Run sync validation first
-                if (options?.validateInput) {
-                    const syncMsg = options.validateInput(value);
-                    if (syncMsg) {
-                        input.validationMessage = syncMsg;
-                        return;
-                    }
-                }
-
-                // Run async validation if provided
-                if (options?.validateInputAsync) {
-                    input.enabled = false;
-                    input.busy = true;
-                    options.validateInputAsync(value).then((msg) => {
-                        if (!settled) {
-                            input.enabled = true;
-                            input.busy = false;
-                            if (msg) {
-                                input.validationMessage = msg;
-                            } else {
-                                finish(() => {
-                                    if (recentKey) {
-                                        void ctx.extensionContext.workspaceState.update(recentKey, value);
-                                    }
-                                    resolve(value);
-                                });
-                            }
-                        }
-                    }, (e: unknown) => {
-                        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-                        finish(() => { reject(e); });
-                    });
+            // Run sync validation first
+            if (options?.validateInput) {
+                const syncMsg = options.validateInput(value);
+                if (syncMsg) {
+                    input.validationMessage = syncMsg;
                     return;
                 }
+            }
 
-                finish(() => {
-                    if (recentKey) {
-                        void ctx.extensionContext.workspaceState.update(recentKey, value);
+            // Run async validation if provided
+            if (options?.validateInputAsync) {
+                input.enabled = false;
+                input.busy = true;
+                options.validateInputAsync(value).then((msg) => {
+                    if (!settled) {
+                        input.enabled = true;
+                        input.busy = false;
+                        if (msg) {
+                            input.validationMessage = msg;
+                        } else {
+                            finish(() => {
+                                if (recentKey) {
+                                    void ctx.extensionContext.workspaceState.update(recentKey, value);
+                                }
+                                resolve(value);
+                            });
+                        }
                     }
-                    resolve(value);
+                }, (e: unknown) => {
+                    finish(() => { reject(e); });
                 });
-            } catch (e: unknown) {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-                finish(() => { reject(e); });
+                return;
             }
-        });
 
-        input.onDidChangeValue((value) => {
-            try {
-                // Run sync validation on every keystroke
-                if (options?.validateInput) {
-                    input.validationMessage = options.validateInput(value);
-                } else {
-                    input.validationMessage = undefined;
+            finish(() => {
+                if (recentKey) {
+                    void ctx.extensionContext.workspaceState.update(recentKey, value);
                 }
-            } catch (e: unknown) {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-                finish(() => { reject(e); });
-            }
-        });
-
-        input.onDidTriggerButton((button) => {
-            if (button === ctx.code.QuickInputButtons.Back) {
-                finish(() => { reject(new GoBackError()); });
-            }
-        });
-
-        input.onDidHide(() => {
-            finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
-        });
-
-        input.show();
+                resolve(value);
+            });
+        } catch (e: unknown) {
+            finish(() => { reject(e); });
+        }
     });
+
+    input.onDidChangeValue((value) => {
+        try {
+            // Run sync validation on every keystroke
+            if (options?.validateInput) {
+                input.validationMessage = options.validateInput(value);
+            } else {
+                input.validationMessage = undefined;
+            }
+        } catch (e: unknown) {
+            finish(() => { reject(e); });
+        }
+    });
+
+    input.onDidTriggerButton((button) => {
+        if (button === ctx.code.QuickInputButtons.Back) {
+            finish(() => { reject(new GoBackError()); });
+        }
+    });
+
+    input.onDidHide(() => {
+        finish(() => { reject(new CancellationError(undefined, options?.stepName)); });
+    });
+
+    input.show();
+
+    return promise;
 }
 
 /**
@@ -363,6 +518,12 @@ function inputBoxRecentKey(options: ExtendedInputBoxOptions): string {
 
 const Pending: unique symbol = Symbol('Pending');
 
+/** Options for selecting a workspace folder. */
+export interface GetWorkspaceFolderOptions extends vscode.WorkspaceFolderPickOptions {
+    /** Optional name of the operation, included in a cancellation error for diagnostics. */
+    readonly stepName?: string;
+}
+
 /**
  * Returns the single workspace folder, or prompts the user to pick one
  * when multiple folders are open.
@@ -374,7 +535,7 @@ const Pending: unique symbol = Symbol('Pending');
  *   matching {@linkcode showSmartQuickPick} / {@linkcode showSmartInputBox}
  *   so callers can rely on the same cancellation contract.
  */
-export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): Promise<vscode.WorkspaceFolder | undefined> {
+export async function getWorkspaceFolder(code: IVsCode, options: GetWorkspaceFolderOptions = {}): Promise<vscode.WorkspaceFolder | undefined> {
     const folders = code.workspace.workspaceFolders;
     if (!folders?.length) {
         return undefined;
@@ -382,9 +543,10 @@ export async function getWorkspaceFolder(code: IVsCode, placeHolder?: string): P
         return folders[0];
     }
 
-    const picked = await code.window.showWorkspaceFolderPick({ placeHolder });
+    const { stepName, ...pickOptions } = options;
+    const picked = await code.window.showWorkspaceFolderPick(pickOptions);
     if (!picked) {
-        throw new CancellationError();
+        throw new CancellationError(undefined, stepName);
     }
     return picked;
 }

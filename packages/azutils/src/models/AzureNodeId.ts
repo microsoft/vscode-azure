@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureAccount } from '@microsoft/vscode-azext-azureauth';
+import type { EnvironmentLike } from '../auth/Environment';
 import { getResourceGroupArmId, getSubscriptionArmId, parseAzureResourceId } from '../utils/azureResourceId';
 import { type AzureNode, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, isVirtualGroup, isVirtualResource } from './AzureNode';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
@@ -12,6 +12,7 @@ import type { VirtualResource } from './VirtualResource';
 const scheme = 'azr' as const;
 const schemePrefix = `${scheme}://` as const;
 const virtualGroupingPrefix = '~' as const;
+const portalQueryParam = 'portal' as const;
 
 /**
  * A fully-opaque, URI-based identifier for nodes in the Azure resource tree.
@@ -24,6 +25,8 @@ const virtualGroupingPrefix = '~' as const;
  *  - Virtual Grouping: `azr://{accountId}@{portalHost}/tenants/{tenantId}/subscriptions/{subscriptionId}/~{groupingStrategy}/{groupingValue}`
  *  - Resource: `azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}`
  *  - Virtual Resource: `azr://{accountId}@{portalHost}/tenants/{tenantId}/{armResourceId}#/{virtualType}/{virtualPath}`
+ *  - Virtual Resource with a distinct portal page: as above, plus a
+ *    `?{portalQueryParam}={portalUrl}` query string before the fragment.
  */
 export class AzureNodeId {
     private static readonly parseCache = new Map<string, AzureNodeId>();
@@ -113,6 +116,7 @@ export class AzureNodeId {
                 virtual: {
                     virtualType: hashParts[0],
                     virtualPath: decodeURIComponent(hashParts.slice(1).join('/')),
+                    portalUrl: validatePortalUrl(url.searchParams.get(portalQueryParam) ?? undefined, portalHost),
                 },
             });
         }
@@ -174,16 +178,16 @@ export class AzureNodeId {
             case isTenant(node):
                 result = new AzureNodeId({
                     kind: 'tenant',
-                    accountId: node.account.id,
-                    portalHost: portalHost(node.account),
+                    accountId: node.accountId,
+                    portalHost: portalHost(node),
                     tenantId: node.tenantId,
                 });
                 break;
             case isSubscription(node):
                 result = new AzureNodeId({
                     kind: 'subscription',
-                    accountId: node.account.id,
-                    portalHost: portalHost(node.account),
+                    accountId: node.accountId,
+                    portalHost: portalHost(node),
                     tenantId: node.tenantId,
                     armResourceId: `/subscriptions/${node.subscriptionId}`,
                 });
@@ -191,8 +195,8 @@ export class AzureNodeId {
             case isResourceGroup(node):
                 result = new AzureNodeId({
                     kind: 'grouping',
-                    accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account),
+                    accountId: node.subscription.accountId,
+                    portalHost: portalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                     grouping: {
@@ -204,8 +208,8 @@ export class AzureNodeId {
             case isVirtualGroup(node):
                 result = new AzureNodeId({
                     kind: 'grouping',
-                    accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account),
+                    accountId: node.subscription.accountId,
+                    portalHost: portalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: `/subscriptions/${node.subscription.subscriptionId}/${virtualGroupingPrefix}${node.groupingStrategy}/${encodeURIComponent(node.groupingValue)}`,
                     grouping: node,
@@ -214,22 +218,28 @@ export class AzureNodeId {
             case isGenericResource(node):
                 result = new AzureNodeId({
                     kind: 'resource',
-                    accountId: node.subscription.account.id,
-                    portalHost: portalHost(node.subscription.account),
+                    accountId: node.subscription.accountId,
+                    portalHost: portalHost(node.subscription),
                     tenantId: node.subscription.tenantId,
                     armResourceId: node.id,
                 });
                 break;
-            case isVirtualResource(node):
+            case isVirtualResource(node): {
+                const host = portalHost(node.azureResource.subscription);
                 result = new AzureNodeId({
                     kind: 'virtual',
-                    accountId: node.azureResource.subscription.account.id,
-                    portalHost: portalHost(node.azureResource.subscription.account),
+                    accountId: node.azureResource.subscription.accountId,
+                    portalHost: host,
                     tenantId: node.azureResource.subscription.tenantId,
                     armResourceId: node.azureResource.id,
-                    virtual: node,
+                    virtual: {
+                        virtualType: node.virtualType,
+                        virtualPath: node.virtualPath,
+                        portalUrl: validatePortalUrl(node.portalUrl, host),
+                    },
                 });
                 break;
+            }
             default:
                 throw new Error(`Unsupported node type: ${JSON.stringify(node)}`);
         }
@@ -246,10 +256,17 @@ export class AzureNodeId {
      */
     public toString(): string {
         const d = this.data;
-        const parts = [schemePrefix, d.accountId, '@', d.portalHost];
+        // The account id and tenant id are case-insensitive identities (the
+        // account id is an AAD/object id, the tenant id is a GUID), so they are
+        // lowercased here to give every node a single canonical key regardless
+        // of the casing the provider happened to emit. The id is treated as
+        // opaque elsewhere, so normalizing only at serialization time keeps the
+        // verbatim values on the in-memory data objects (where the account id
+        // doubles as the VS Code `getSession` identity).
+        const parts = [schemePrefix, d.accountId.toLowerCase(), '@', d.portalHost];
 
         if (d.kind !== 'account') {
-            parts.push('/tenants/', d.tenantId);
+            parts.push('/tenants/', d.tenantId.toLowerCase());
         }
 
         if (d.kind !== 'account' && d.kind !== 'tenant') {
@@ -257,6 +274,14 @@ export class AzureNodeId {
         }
 
         if (d.kind === 'virtual') {
+            if (d.virtual.portalUrl) {
+                // A query string keeps the portal target out of both the ARM path
+                // and the fragment, so existing ids parse unchanged and the
+                // armResourceId is still reconstructed verbatim from the pathname.
+                // Per RFC 3986 the query must precede the fragment; anything after
+                // the "#" would be swallowed into the fragment instead.
+                parts.push('?', portalQueryParam, '=', encodeURIComponent(d.virtual.portalUrl));
+            }
             parts.push('#/', d.virtual.virtualType, '/', encodeURIComponent(d.virtual.virtualPath));
         }
 
@@ -265,7 +290,12 @@ export class AzureNodeId {
 
     /**
      * Builds a portal URL for this node. Only applicable to subscriptions,
-     * resource groups, and resources. Throws for accounts, tenants, and non-RG groupings.
+     * resource groups, resources, and virtual resources. Throws for accounts,
+     * tenants, and non-RG groupings.
+     *
+     * A virtual resource resolves to its parent resource's page unless it
+     * declared a {@linkcode VirtualResource.portalUrl}, in which case that URL
+     * is returned verbatim.
      *
      * @returns A URL like `https://portal.azure.com/#@{tenantId}/resource/subscriptions/{subId}/...`
      */
@@ -282,11 +312,13 @@ export class AzureNodeId {
                     throw new Error(`Cannot create a portal URL for a virtual grouping`);
                 }
 
-            // eslint-disable-next-line no-fallthrough -- Fallthrough is **intentional**, subs/resource groups/resources/virtuals all use ARM resource ID-based URLs
+            // eslint-disable-next-line no-fallthrough -- Fallthrough is **intentional**, subs/resource groups/resources all use ARM resource ID-based URLs
             case 'subscription':
             case 'resource':
+                return buildPortalUrl(d.portalHost, d.tenantId, d.armResourceId);
+
             case 'virtual':
-                return `https://${d.portalHost}/#@${d.tenantId}/resource${d.armResourceId}`;
+                return d.virtual.portalUrl ?? buildPortalUrl(d.portalHost, d.tenantId, d.armResourceId);
         }
     }
 
@@ -413,10 +445,58 @@ export class AzureNodeId {
 
 /**
  * Extracts the portal hostname (e.g. `"portal.azure.com"`) from an
- * {@linkcode AzureSubscription.environment}'s `portalUrl`.
+ * {@linkcode EnvironmentLike}'s `portalUrl`.
+ *
+ * Accepts any value carrying an `environment` (account, tenant, or
+ * subscription) so callers can pass the node directly without first
+ * resolving its owning account object.
  */
-function portalHost(account: AzureAccount): string {
-    return new URL(account.environment.portalUrl).hostname;
+function portalHost(entity: { readonly environment: EnvironmentLike }): string {
+    return new URL(entity.environment.portalUrl).hostname;
+}
+
+/** Builds the Azure Portal deep link for an absolute ARM resource id. */
+function buildPortalUrl(portalHostName: string, tenantId: string, armResourceId: string): string {
+    return `https://${portalHostName}/#@${tenantId}/resource${armResourceId}`;
+}
+
+/**
+ * Rejects portal URLs a virtual node must not be allowed to declare.
+ *
+ * {@linkcode AzureNodeId} is the single authority for which cloud and tenant a
+ * node belongs to, so an override is only honored when it stays inside the
+ * account's own portal host. Requiring `https:` and a matching host keeps a
+ * provider bug (or a hand-edited node id) from turning "Open in Portal" into a
+ * link to an arbitrary site, and stops a sovereign-cloud node from silently
+ * deep-linking into the commercial portal.
+ *
+ * Failing loudly here surfaces the bug in the provider that produced the node,
+ * rather than at the point a user clicks "Open in Portal".
+ *
+ * @throws if the value is present but is not an absolute `https:` URL on
+ * {@linkcode portalHostName}.
+ */
+function validatePortalUrl(value: string | undefined, portalHostName: string): string | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    let parsed: URL;
+    try {
+        parsed = new URL(value);
+    } catch {
+        throw new Error(`Invalid portal URL "${value}": expected an absolute URL`);
+    }
+
+    if (parsed.protocol !== 'https:') {
+        throw new Error(`Invalid portal URL "${value}": expected the "https:" protocol`);
+    }
+
+    if (parsed.hostname.toLowerCase() !== portalHostName.toLowerCase()) {
+        throw new Error(`Invalid portal URL "${value}": expected the host to be "${portalHostName}"`);
+    }
+
+    return value;
 }
 
 //#region Internal interfaces for narrowing AzureNodeId.data based on kind
@@ -438,5 +518,5 @@ type SubscriptionData = SubscriptionFields & { readonly kind: 'subscription' };
 
 type GroupingData = SubscriptionFields & { readonly kind: 'grouping'; readonly grouping: Pick<ResourceGroup | VirtualGroup, 'groupingStrategy' | 'groupingValue'> };
 type ResourceData = SubscriptionFields & { readonly kind: 'resource'; };
-type VirtualData = SubscriptionFields & { readonly kind: 'virtual'; readonly virtual: Pick<VirtualResource, 'virtualType' | 'virtualPath'> };
+type VirtualData = SubscriptionFields & { readonly kind: 'virtual'; readonly virtual: Pick<VirtualResource, 'virtualType' | 'virtualPath' | 'portalUrl'> };
 //#endregion

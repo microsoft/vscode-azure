@@ -9,7 +9,7 @@ The tree UI is split into two independent layers: a **data layer** and a **view 
 The single source of truth for tree data. Lives in `packages/utils/src/tree/DataItemTree.ts`.
 
 - **Lazy loading**: Children are fetched on first access via registered `DataProvider`s
-- **Caching with TTL**: Results are cached and re-fetched once stale (default: 5 minutes, configured in `registerTrees.ts`)
+- **Caching with TTL**: Results are cached and re-fetched once stale. The default TTL is configured in `registerTrees.ts` (5 minutes for the resources tree), but a provider may override it per-resource via `getTtl` (see below) — e.g. the account/tenant/subscription provider returns `Infinity`
 - **Pagination**: Providers can return `AsyncIterable<Page<T>>` for paged results. The tree stores the iterator and pulls pages on demand via `loadMore()`/`loadAll()`
 - **Enrichment**: After children load, the tree calls each provider's `enrich()` in the background, then fires `onDidChange` when done
 - **Telemetry scoping**: Every `getChildren()`, `enrich()`, and page-load call is wrapped in `callWithTelemetryAndErrorHandling`, establishing an `IActionContext` on the async call stack via `AsyncLocalStorage`. Pipeline policies (e.g. `CorrelationIdPolicy`) pick up this context automatically without any changes to provider or client signatures. See [Telemetry](telemetry.md).
@@ -20,8 +20,8 @@ Key methods:
 | Method | Description |
 |--------|-------------|
 | `getChildren(resource?)` | Fetch and cache children (root if undefined) |
-| `invalidate(resource, includeChildren?)` | Clear a resource's cached data (optionally invalidate children) |
-| `invalidateAll()` | Clear the entire tree |
+| `invalidate(target)` | Mark matched nodes stale (re-fetched on next access) and fire `onDidChange`. See [Targets & selectors](#targets--selectors) |
+| `remove(target)` | Evict matched nodes (and their subtrees) from the cache entirely, splicing them out of their parent. See [Targets & selectors](#targets--selectors) |
 | `whenEnriched<T>(resource)` | Await background enrichment completion |
 | `hasMore(resource)` | Whether more pages are available |
 | `loadMore(resource)` | Pull the next page |
@@ -37,6 +37,7 @@ interface DataProvider<TResource> {
     canHandle(resource: unknown): resource is TResource;                        // Type guard
     getChildren(resource?: TResource): ProviderResult<ChildResult<TResource>>; // Fetch children
     enrich?(resource: TResource): boolean | Promise<boolean>;                  // Background enrichment (mutate in-place); return true to invalidate children
+    getTtl?(resource?: TResource): number;                                     // Per-resource cache TTL in ms (overrides DataItemTree default)
     readonly isRoot?: boolean;                                                 // Whether this provider returns root-level items
     readonly onDidChange?: Event<DataProviderChangeEvent<TResource>>;          // Provider-initiated change notifications
 }
@@ -44,16 +45,42 @@ interface DataProvider<TResource> {
 
 `ChildResult<T>` can be either `T[]` (simple array) or `AsyncIterable<Page<T>>` (paginated).
 
-`DataProviderChangeEvent<T>` allows providers to push changes without going through invalidation:
+#### `getTtl`
+
+When a provider implements `getTtl`, `DataItemTree` uses its return value (in milliseconds) as the cache TTL for that resource's children instead of the tree-wide default; otherwise the default applies. It is consulted for both root (`getTtl()` with no argument) and branch (`getTtl(resource)`) loads. Returning `Infinity` makes the cached children never go stale — they only refresh on an explicit `invalidate` / `remove` or a provider `onDidChange`. The account/tenant/subscription data provider uses `Infinity` because account/tenant/subscription lists change only on auth or cloud-configuration events, which it signals via `onDidChange`.
+
+#### Targets & selectors
+
+`invalidate(target)` and `remove(target)` are the two entry points for cache mutation. Both accept the same `Target<T>` union (defined in `packages/utils/src/tree/Selector.ts`), so a single, broad surface covers every case:
+
+| Target form | Meaning |
+|-------------|---------|
+| a bare resource `T` | matched by key, treated as `'subtree'` (the node and its descendants) |
+| a `string` key | same, addressed by key |
+| an array of resources/keys | each entry matched by key, `'subtree'` |
+| `selfOnly(...resources/keys)` | matched by key, `'self'` — re-render the node's label only, keep its cached children |
+| `subtreeOf(...resources/keys)` | matched by key, `'subtree'` — the explicit, named form of passing a bare resource |
+| a `Selector<T>` — `(resource) => 'self' \| 'subtree' \| undefined` | a verdict predicate evaluated over every **loaded** node (e.g. `bySubscription(id)`) |
+| `Roots` (sentinel) | reconciling root re-list: re-list the top level, preserve surviving roots' subtrees, evict departed roots. Use when the *set* of roots changed (sign-in/out, activity add/clear, workspace marker change) but the data under survivors is still valid |
+| `Everything` (sentinel) | wipe the entire cache (all nodes, roots, enrichment promises) and fire a full refresh. Use only when a global precondition changed (e.g. sovereign cloud / page size) |
+
+Key semantics:
+
+- **`'self'` vs `'subtree'`** controls whether cached children are *evicted*. A `'subtree'` verdict wipes the matched node's whole cached subtree (re-fetched on next access) and stops descending — the apex absorbs everything beneath it. A `'self'` verdict keeps the cached children and keeps descending, so deeper nodes can still match independently.
+- **Apex-only firing.** A selector walk fires `onDidChange` once per apex (a matched node with no matched ancestor), after the whole traversal completes. This keeps the event count minimal and is re-entrancy-safe. Prefer narrow targets (`Roots`, `bySubscription(id)`, a specific resource) over `Everything` so the view re-renders the smallest possible subtree.
+- **`remove` vs `invalidate`.** `remove` evicts matched nodes and splices them out of their parent (firing the parent, or a single `undefined` full-refresh if any root was removed); `invalidate` keeps the node and re-fetches. `remove` does **not** accept the `Roots` / `Everything` sentinels — it throws.
+- Pre-canned Azure selectors live in `packages/azutils/src/tree/azureSelectors.ts`: `byAccount(id)`, `bySubscription(id)`, `byResource(armId)`, `byType(type)` (all case-insensitive, all `'subtree'`). They key on fields populated from the listing, so they are safe to evaluate over partially-enriched nodes. Selectors run over **data-layer** resources only, never view-layer virtual grouping nodes.
+
+`DataProviderChangeEvent<T>` lets providers push changes without holding a tree reference:
 
 ```typescript
 interface DataProviderChangeEvent<TResource> {
-    readonly resource?: TResource;     // Undefined = root changed
-    readonly includeChildren: boolean; // Whether to clear cached children too
+    readonly target: Target<TResource>; // What changed (selector, resource, key, array, or a Roots / Everything sentinel)
+    readonly remove?: boolean;          // When true, route to remove() instead of invalidate(); not valid for the sentinels
 }
 ```
 
-`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it. This is used by activity providers that need to push real-time status updates.
+`DataItemTree.registerProvider()` automatically subscribes to `onDidChange` if a provider exposes it and routes each event's `target` to `invalidate` (or `remove` when `remove: true`). This is used by activity providers that push real-time status updates — e.g. a per-activity update fires `{ target: selfOnly(activity) }` (label only) or `{ target: activity }` (subtree), while adding or clearing root activities fires `{ target: Roots }`.
 
 ### Enrichment Pattern
 
@@ -65,7 +92,7 @@ Resources can be enriched with additional data lazily after loading:
 4. When enrichment completes, `onDidChange` fires so the view re-renders
 5. Commands that need enriched data call `await cache.whenEnriched<EnrichedType>(resource)`
 
-**Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (e.g. `id`, `name`, `type`, `subscription`). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
+**Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (for generic resources, effectively `id` plus subscription identity fields used by `AzureNodeId.from`, such as account id and tenant id). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
 
 The `enrich()` return value controls child invalidation:
 - Return `false` (or resolve to `false`) — only re-render the resource itself
@@ -73,17 +100,25 @@ The `enrich()` return value controls child invalidation:
 
 This is useful when enrichment discovers that the resource's children have changed (e.g. ARM deployment operations are fetched during enrichment of the deployment itself).
 
-Example from `AcrDataProvider`:
+The shape of an `enrich()` implementation is always the same: fetch the detail
+the listing did not include, copy it onto the *existing* object, and report
+whether children are affected.
 
 ```typescript
 public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
-    // Fetch details via ARM API
-    const registry = await client.registries.get(resourceGroupName, resource.name);
-    // Mutate in-place
-    Object.assign(resource, { loginServer: registry.loginServer, sku: registry.sku });
-    return false;
+    const details = await client.registries.get(resourceGroupName, resource.name);
+    Object.assign(resource, { loginServer: details.loginServer }); // never replace the object
+    return false;                                                  // label-only re-render
 }
 ```
+
+#### Capabilities attached by enrichment
+
+Enrichment is also how a resource advertises a *capability* that is not derivable from its type alone. The website URL used by the Browse Website command works this way: the data provider that owns a resource attaches it via `setWebsiteUrl()` (in `src/tree/resources/websiteUrl.ts`), and view providers add the corresponding context value when `getWebsiteUrl()` returns a value.
+
+A module-private symbol is used as the property key so the capability can never collide with an ARM property, and so it can be detected exactly instead of by re-checking the resource type. Making any new resource type browsable therefore requires no change to the command or to the generic view provider — only that its data provider call `setWebsiteUrl()` during `enrich()`. A resource type with a dedicated view provider must add the context value itself (via the shared `resourceContextValue()` helper in `src/tree/contextValueHelpers.ts`); everything else is covered by `GenericAzureViewProvider`.
+
+Because the context value is derived from enriched state, a node rendered before enrichment lands simply lacks it; the `onDidChange` fired at step 4 re-renders the node with the capability present. `setWebsiteUrl()` also *clears* a previously attached URL when the resource stops reporting one, so a node cannot keep advertising a website that no longer resolves.
 
 ## View Layer
 
@@ -97,17 +132,9 @@ Sits on top of a `DataItemTree` and implements VS Code's `TreeDataProvider`. Liv
 - Automatically injects "Load More" nodes for paginated branches when configured
 - **Telemetry scoping**: `getChildren()`, `getTreeItem()`, and `getParent()` are wrapped in `callWithTelemetryAndErrorHandling` with `suppress: 'onSuccess'` and `rethrow: true`, so only failures emit telemetry. This also establishes an `IActionContext` on the async stack for any downstream work.
 
-### `ViewProvider<TViewItem>`
+### `ViewProvider<TResource>`
 
-Extends `DataProvider` but **forbids `enrich`** (`enrich?: never`). Adds `getTreeItem()` for rendering. Lives in `packages/utils/src/tree/ViewProvider.ts`.
-
-```typescript
-interface ViewProvider<TViewItem> extends DataProvider<TViewItem> {
-    enrich?: never;  // View providers must not modify data
-    getTreeItem(resource: TViewItem): ITreeItem | Promise<ITreeItem>;
-    getParent?(resource: TViewItem): ProviderResult<TViewItem>;
-}
-```
+Extends `DataProvider` but **forbids both `enrich` and `getTtl`** (`enrich?: never`, `getTtl?: never`) — caching and mutation are data-layer concerns. It narrows `getChildren()` to return a plain array (never a paginated `AsyncIterable`) and adds `getTreeItem()` for rendering, plus an optional `getParent()` that enables `TreeView.reveal()` for nodes that have not been loaded yet. See [ViewProvider.ts](../packages/utils/src/tree/ViewProvider.ts) for the full interface.
 
 View providers control presentation without modifying the data layer. They may:
 - Inject virtual nodes (groupings, headers)
@@ -118,18 +145,50 @@ View providers control presentation without modifying the data layer. They may:
 
 Both layers extend `ProviderRegistry`, which maintains an ordered list of providers. `findProvider(resource)` returns the **first** provider whose `canHandle(resource)` returns `true`.
 
-**Registration order matters** — specific providers must be registered before broader fallback providers. In `registerTrees.ts`, each tree is configured via a `TreeConfig` object whose `dataProviders` and `viewProviders` arrays are processed in order:
+**Registration order matters** — specific providers must be registered before broader fallback providers. All resource providers, including the generic Azure root and fallback providers, are collected by `ProductRegistrar` in registration order:
 
 ```typescript
-// In registerTrees.ts — AcrDataProvider before GenericAzureDataProvider
-dataProviders: [
-    AcrDataProvider,
-    [IFunctionAppDataProvider, FunctionAppDataProvider], // singleton+alias tuple
-    GenericAzureDataProvider,                            // fallback
-],
+// Product registrations run in this order.
+registerSettings(registrar);     // settings virtual nodes only, so it goes first
+registerAcr(registrar);
+registerFunctions(registrar);
+registerGenericAzure(registrar); // root and fallback providers last
 ```
 
-Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly). See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
+Each entry is a `ProviderEntry<T>`: either a bare class (bound directly to the collection identifier) or a `[primaryId, Class]` tuple (bound as a singleton under `primaryId` and aliased into the collection, so commands can `@inject(primaryId)` directly. See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers) for details.
+
+Products add both sides of their resource presentation from their single entry
+point with `registerResourceDataProvider()` and
+`registerResourceViewProvider()`. The generic Azure registration is deliberately
+last so its providers remain fallbacks.
+
+### Composing children instead of competing for a resource
+
+Because dispatch stops at the first match, **only one provider can serve a given resource**. Two providers that both want to contribute children to the same resource cannot both `canHandle` it.
+
+The settings framework shows the resolution: `SettingsDataProvider` claims only the *virtual* settings nodes, never the owning resource. The product-specific provider injects its concrete adapter and calls the pure `getSettingsNodes(resource, adapter)` helper to compose those nodes into its own children.
+
+The consequence to remember: **a product `DataProvider` that claims a resource takes it away from the generic provider** and owns all of that resource's children. Settings are an explicit capability of that provider rather than a second provider aggregated at runtime. See [Settings](settings.md).
+
+## Azure Resources Tree Providers
+
+The Azure resources tree composes three data providers. They split responsibility so each level can have its own caching and refresh semantics:
+
+| Provider | Root? | Handles | TTL | Refresh trigger |
+|----------|-------|---------|-----|-----------------|
+| `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud` configuration change |
+| `AcrDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
+| `SettingsDataProvider` | No | Settings virtual-node leaves created by product providers | default | default TTL |
+| `WebAppDataProvider` | No | Function App, App Service, and Logic App resources; composes their settings nodes | default | default TTL |
+| `AzureResourceDataProvider` | No | Resource groups (under a subscription), and generic resources as the leaf fallback | default | default TTL |
+
+`AzureAccountDataProvider` lazily signs in by requesting a token from the credential-factory DI service (`ICredentialFactory`, which defaults to `VsCodeExtensionCredential`). The credential defaults to `createIfNone`, so the first token request prompts interactive sign-in when no session exists. It then lists accounts → tenants → subscriptions itself, reading signed-in accounts via the VS Code `authentication` API and tenants/subscriptions via `SubscriptionClient`. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth or the sovereign-cloud setting changes. An auth session change fires a reconciling root re-list (`{ target: Roots }`) that re-lists accounts — preserving tenant/subscription caches under surviving accounts and evicting a signed-out account's subtree because it drops out of the new listing. (This event is noisy — it also fires on individual token acquisitions — but an unchanged account set reconciles to a no-op.) A sovereign-cloud configuration change fires a full `{ target: Everything }` since the endpoint itself changed.
+
+### Subscription / tenant filtering
+
+Tenant and subscription filtering is a **view-layer** concern, implemented in `GenericAzureViewProvider.applyFilter`. It reads `vscode-azure.selectedSubscriptions` (an array of `tenantId/subscriptionId` strings, written by the `Azure: Select Subscriptions` command). When the list is empty, no filtering applies. Otherwise, tenant nodes survive only when their `tenantId` is in the filter, and subscription nodes only when their `subscriptionId` is. Other node types pass through.
+
+Because the tree loads lazily, a filtered-out tenant is never expanded, so its subscriptions are never requested from Azure. The data layer may still cache subscriptions that don't pass the filter when they arrive in the *same* response as ones that do (e.g. two subscriptions in one tenant) — that's acceptable since it costs no extra request. The view provider fires `onDidChange` when the filter setting changes so the tree re-renders.
 
 ## Workspace (Local) Tree
 
@@ -141,21 +200,11 @@ but with a short 60-second TTL so newly-added marker files
 
 ### Workspace Node Model
 
-All workspace items implement a small, common interface and are
-discriminated by `type`:
-
-```typescript
-interface WorkspaceNode {
-    readonly id: string;       // stable key, also used as VS Code TreeItem.id
-    readonly type: WorkspaceNodeType;
-    readonly label: string;
-    readonly resourceUri?: vscode.Uri; // file/folder on disk, drives "Reveal in Explorer"
-}
-type WorkspaceNodeType =
-    | 'azdProject' | 'azdService'
-    | 'functionsProject'
-    | 'emulatorsGroup' | 'emulator';
-```
+All workspace items implement a small, common interface
+([`WorkspaceNode`](../extensions/vscode-azure/src/tree/workspace/WorkspaceNode.ts)): a stable `id` that doubles as both the
+cache key and the VS Code `TreeItem.id`, a display `label`, a `type`
+discriminator, and an optional `resourceUri` naming the file or folder on disk
+that the node stands for (which is what makes "Reveal in Explorer" work).
 
 Each domain (azd, functions, emulators) owns its own concrete variant
 plus a matching pair of providers. There is **no shared mega-provider**
@@ -165,8 +214,8 @@ plus a matching pair of providers. There is **no shared mega-provider**
 
 | Provider | Root? | Description |
 |----------|-------|-------------|
-| `AzdWorkspaceDataProvider` | Yes | Discovers azd projects via a single `IAzdService.findAzureYaml` call across the workspace, mapping results to their containing workspace folders. Enumerates services via `IAzdService.show` (which shells out to `azd show --output json`). Caching is handled by the surrounding `DataItemTree` TTL. |
-| `FunctionsWorkspaceDataProvider` | Yes | Detects an Azure Functions project from a top-level `host.json`. |
+| `AzdWorkspaceDataProvider` | Yes | Discovers azd projects from the shared workspace index (`IWorkspaceIndexService`), which tags every `azure.yaml`. Enumerates services via `IAzdService.show` (which shells out to `azd show --output json`). Caching is handled by the surrounding `DataItemTree` TTL. |
+| `FunctionsWorkspaceDataProvider` | Yes | Detects Azure Functions projects from the shared workspace index (`IWorkspaceIndexService`), which tags every `host.json`. |
 | `EmulatorsWorkspaceDataProvider` | Yes | Surfaces a fixed "Emulators" group with stubbed entries for Azurite and Functions Core Tools. |
 
 All three are `isRoot: true`, so they each contribute their detected
@@ -189,7 +238,7 @@ discriminator), keeping their `canHandle` checks self-contained.
 
 | Command | Context value | Behaviour |
 |---------|---------------|-----------|
-| `vscode-azure/workspace/refresh` | View title | `IWorkspaceViewDataTree.invalidateAll()` |
+| `vscode-azure/workspace/refresh` | View title | `IWorkspaceViewDataTree.invalidate(Everything)` |
 | `vscode-azure/workspace/revealInExplorer` | `revealInExplorer` (any node with `resourceUri`) | Forwards to VS Code's built-in `revealInExplorer` command. |
 
 ## Activity Tree
@@ -198,19 +247,11 @@ A second tree view tracks long-running operations (ARM deployments, code deploym
 
 ### Activity Model
 
-Activities implement a common interface:
-
-```typescript
-interface Activity {
-    readonly id: string;
-    readonly type: ActivityType;     // 'armDeployment' | 'armDeploymentOperation' | 'codeDeployment' | 'generic'
-    readonly status: ActivityStatus; // 'NotStarted' | 'InProgress' | 'Canceled' | 'Completed' | 'Failed'
-    readonly title: string;
-    readonly description?: string;
-    readonly startTime: number;
-    readonly endTime?: number;
-}
-```
+Activities implement a common interface
+([`Activity`](../extensions/vscode-azure/src/tree/activity/Activity.ts)): a stable `id`, a `type` discriminator, a
+mutable `status`, a title and optional description, and start/end timestamps.
+`status` is mutable because a provider advances it in place and then fires
+`onDidChange` — the node identity has to survive the transition.
 
 ### Activity Data Providers
 
@@ -220,15 +261,7 @@ interface Activity {
 | `CodeDeploymentDataProvider` | Yes | Tracks code deployments (e.g. `azd deploy`). `trackDeployment()` returns a `CodeDeploymentHandle` for controlling lifecycle and adding children. The handle exposes `complete(status, error?)` and `addChild(title, status?)` — the provider owns all mutations and fires change events internally. |
 | `GenericActivityDataProvider` | Yes | Tracks simple one-off activities (leaf nodes, no children). |
 
-Activity providers are registered as `[primaryId, Class]` tuples in the `dataProviders` array, which binds each as a singleton under its own identifier and aliases it into the collection. This allows commands (e.g. `ClearActivities`) to inject specific providers directly while the tree still retrieves all providers collectively:
-
-```typescript
-dataProviders: [
-    [IArmDeploymentDataProvider, ArmDeploymentDataProvider],
-    [ICodeDeploymentDataProvider, CodeDeploymentDataProvider],
-    [IGenericActivityDataProvider, GenericActivityDataProvider],
-],
-```
+Activity providers are registered as `[primaryId, Class]` tuples in the `dataProviders` array, which binds each as a singleton under its own identifier and aliases it into the collection. This allows commands (e.g. `ClearActivities`) to inject a specific provider directly while the tree still retrieves all providers collectively. See [Dependency Injection — Multi-Binding](dependency-injection.md#multi-binding-for-providers).
 
 ### Activity View Providers
 
@@ -295,6 +328,21 @@ Most resources use their raw ARM `type` as the icon key. However, some ARM types
 1. Drop an SVG file into the matching subfolder of `packages/azutils/resources/azureIcons/`. The filename **must** be `<logicalType>.toLowerCase() + '.svg'`.
 2. If the ARM type needs kind-based disambiguation, add a logical type constant and a branch to `logicalType()` in `ResourceClient.ts`.
 3. No view provider changes are needed — `GenericAzureViewProvider` already passes `resource.logicalType` to `getResourceTypeIconUri()`.
+
+### Resource-type group presentation
+
+Resource-type grouping keeps `GenericResource.logicalType` as the stable group
+identity and node key. `GenericAzureViewProvider` owns the mapping from logical
+types to localized group labels. It resolves group icons directly from the
+logical type using the convention above. Unknown logical types retain their raw
+type label and generic `symbol-namespace` icon.
+
+To add group presentation for a supported service:
+
+1. Ensure the resource has a stable logical type and matching icon file.
+2. Add a case-insensitive branch to the resource-type label mapping in
+   `GenericAzureViewProvider`. Localize the display name with `IVsCode.l10n.t()`.
+3. Test the localized label, convention-based icon path, and generic fallback.
 
 ## Putting It Together
 

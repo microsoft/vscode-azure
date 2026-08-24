@@ -3,17 +3,34 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import type { AzureNode, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
+import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, LogicAppLogicalType, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { EventEmitter, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent, type Disposable } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { OpenInPortal } from '../../commands/OpenInPortal';
-import { AzdEnvNameTag, ConfigurationSection } from '../../constants';
+import { DeleteAzureResource } from '../../commands/tree/DeleteAzureResource';
+import { OpenInPortal } from '../../commands/tree/OpenInPortal';
+import { AzdEnvNameTag, ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
-import { combineContextValues } from '../combineContextValues';
+import { parseSubscriptionFilterKey } from '../../utils/subscriptionFilter';
+import { combineContextValues, resourceContextValue } from '../contextValueHelpers';
 import { getResourceTypeIconUri } from '../iconPath';
+import { AcrResourceType } from './acr/AcrRegistry';
+
+/** Render a generic ARM resource with the collapsibility chosen by its owning product provider. */
+export function createGenericResourceTreeItem(
+    ctx: ICodeContext,
+    resource: GenericResource,
+    key: string,
+    collapsibleState: NonNullable<ITreeItem['collapsibleState']>,
+): ITreeItem {
+    const item = new ctx.code.TreeItem(resource.name, collapsibleState);
+    item.id = key;
+    item.description = resource.logicalType;
+    item.contextValue = resourceContextValue(resource);
+    item.iconPath = getResourceTypeIconUri(ctx, resource.logicalType);
+    return item;
+}
 
 /**
  * Root view-layer provider for the Azure resources tree.
@@ -58,7 +75,10 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 || e.affectsConfiguration(`${ConfigurationSection}.groupBy`)
                 || e.affectsConfiguration(`${ConfigurationSection}.groupByTag`)) {
                 this.executor.output.debug('[view] resources grouping configuration changed');
-                this.changeEmitter.fire({ resource: undefined, includeChildren: true });
+                this.changeEmitter.fire({ target: Everything });
+            } else if (e.affectsConfiguration(`${ConfigurationSection}.${SelectedSubscriptionsConfigurationKey}`)) {
+                this.executor.output.debug('[view] subscription filter configuration changed');
+                this.changeEmitter.fire({ target: Everything });
             }
         }));
     }
@@ -92,13 +112,14 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (nodeId.isVirtualGroupNodeId()) {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
-            const grouping = nodeId.getGrouping();
-            const label = grouping?.groupingValue === untaggedSentinel
-                ? this.ctx.code.l10n.t('(No Tag)')
-                : grouping?.groupingValue ?? key;
+            const { label, resourceType } = this.getVirtualGroupPresentation(key);
             const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
-            item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
+            if (resourceType) {
+                item.iconPath = getResourceTypeIconUri(this.ctx, resourceType);
+            } else {
+                item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
+            }
             return item;
         }
 
@@ -118,7 +139,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
 
             case isTenant(resource): {
-                const label = resource.displayName ?? resource.tenantId;
+                const label = resource.displayName;
                 const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.iconPath = new this.ctx.code.ThemeIcon('organization');
@@ -126,7 +147,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
 
             case isSubscription(resource): {
-                const item = new this.ctx.code.TreeItem(resource.name, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
+                const item = new this.ctx.code.TreeItem(resource.displayName, this.isOneRootSub ? this.ctx.code.TreeItemCollapsibleState.Expanded : this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
                 item.contextValue = combineContextValues(OpenInPortal.ContextValue);
                 item.iconPath = getResourceTypeIconUri(this.ctx, SubscriptionArmType);
@@ -136,7 +157,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             case isResourceGroup(resource): {
                 const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.contextValue = combineContextValues(OpenInPortal.ContextValue);
+                item.contextValue = combineContextValues(OpenInPortal.ContextValue, DeleteAzureResource.ResourceGroupContextValue);
                 const azdEnvName = resource.tags?.[AzdEnvNameTag];
                 if (azdEnvName) {
                     item.iconPath = new this.ctx.code.ThemeIcon('rocket');
@@ -148,12 +169,12 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
 
             case isGenericResource(resource): {
-                const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.None);
-                item.id = key;
-                item.description = resource.logicalType;
-                item.contextValue = combineContextValues(OpenInPortal.ContextValue);
-                item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
-                return item;
+                return createGenericResourceTreeItem(
+                    this.ctx,
+                    resource,
+                    key,
+                    this.ctx.code.TreeItemCollapsibleState.None,
+                );
             }
 
             default: {
@@ -230,7 +251,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
      * exactly one tenant.
      */
     private async getRootChildren(): Promise<string[]> {
-        let nodes = await this.cache.getChildren(undefined);
+        let nodes = this.applyFilter(await this.cache.getChildren(undefined));
         this.rootKind = 'account';
         this.isOneRootSub = false;
 
@@ -238,13 +259,13 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (skip && nodes.length === 1 && isAccount(nodes[0])) {
             this.executor.output.debug('[view] skipping account level');
-            nodes = await this.cache.getChildren(nodes[0]);
+            nodes = this.applyFilter(await this.cache.getChildren(nodes[0]));
             this.rootKind = 'tenant';
         }
 
         if (skip && nodes.length === 1 && isTenant(nodes[0])) {
             this.executor.output.debug('[view] skipping tenant level');
-            nodes = await this.cache.getChildren(nodes[0]);
+            nodes = this.applyFilter(await this.cache.getChildren(nodes[0]));
             this.rootKind = 'subscription';
 
             if (nodes.length === 1) {
@@ -267,7 +288,15 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             }
             const groups = await this.groupResources(subscription);
             this.executor.output.debug(`[view] grouped subscription=${subscription.subscriptionId} strategy=${this.groupingStrategy} groups=${groups.size}`);
-            return [...groups.keys()].sort();
+            const groupKeys = [...groups.keys()];
+            if (this.groupingStrategy === 'resourceType') {
+                return groupKeys
+                    .map(groupKey => ({ groupKey, label: this.getVirtualGroupPresentation(groupKey).label }))
+                    .sort((a, b) => a.label.localeCompare(b.label))
+                    .map(({ groupKey }) => groupKey);
+            } else {
+                return groupKeys.sort();
+            }
         }
 
         // Virtual group: find the matching bucket from the parent subscription
@@ -289,8 +318,44 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             return [];
         } else {
             this.executor.setTelProp('nodeType', getNodeType(resource));
-            return (await this.cache.getChildren(resource)).map(toKey);
+            return this.applyFilter(await this.cache.getChildren(resource)).map(toKey);
         }
+    }
+
+    /**
+     * Apply the tenant/subscription filter from
+     * `vscode-azure.selectedSubscriptions`.
+     *
+     * Each configured entry is a `tenantId/subscriptionId` pair. When the
+     * setting is empty, no filtering is applied. Tenant nodes are kept only when
+     * their tenant id appears in the filter; subscription nodes only when their
+     * subscription id appears. Other node types pass through unchanged.
+     *
+     * Because the tree loads lazily, filtered-out tenants are never expanded, so
+     * their subscriptions are never requested from Azure.
+     */
+    private applyFilter(nodes: ConcreteAzureNode[]): ConcreteAzureNode[] {
+        const selected = this.ctx.code.workspace
+            .getConfiguration(ConfigurationSection)
+            .get<string[]>(SelectedSubscriptionsConfigurationKey, []);
+
+        if (selected.length === 0) {
+            return nodes;
+        }
+
+        const parsed = selected.map(parseSubscriptionFilterKey);
+        const tenantFilter = new CaselessSet(parsed.map(entry => entry.tenantId).filter(id => id !== undefined));
+        const subscriptionFilter = new CaselessSet(parsed.map(entry => entry.subscriptionId).filter(id => id !== undefined));
+
+        return nodes.filter(node => {
+            if (isTenant(node)) {
+                return tenantFilter.has(node.tenantId);
+            } else if (isSubscription(node)) {
+                return subscriptionFilter.has(node.subscriptionId);
+            } else {
+                return true;
+            }
+        });
     }
 
     /**
@@ -355,7 +420,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
     /** @inheritdoc */
     public dispose(): void {
-        this.disposables.forEach(d => void d.dispose());
+        Disposable.disposeAll(this.disposables);
     }
 
     private get groupingStrategy(): GroupingStrategy {
@@ -364,6 +429,48 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
     private get groupByTag(): string {
         return this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<string>('groupByTag', '');
+    }
+
+    private getVirtualGroupPresentation(key: string): { readonly label: string; readonly resourceType?: string } {
+        const grouping = AzureNodeId.parse(key).getGrouping();
+        if (!grouping) {
+            return { label: key };
+        } else if (grouping.groupingValue === untaggedSentinel) {
+            return { label: this.ctx.code.l10n.t('(No Tag)') };
+        } else if (grouping.groupingStrategy === 'resourceType') {
+            const label = this.getResourceTypeGroupLabel(grouping.groupingValue);
+            return {
+                label: label ?? grouping.groupingValue,
+                resourceType: label ? grouping.groupingValue : undefined,
+            };
+        } else {
+            return { label: grouping.groupingValue };
+        }
+    }
+
+    private getResourceTypeGroupLabel(logicalType: string): string | undefined {
+        switch (logicalType.toLowerCase()) {
+            case AcrResourceType.toLowerCase():
+                return this.ctx.code.l10n.t('Container Registries');
+            case AIFoundryProjectLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('AI Foundry Projects');
+            case AIServicesLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('AI Services');
+            case AppServiceLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('App Services');
+            case CosmosDBLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Azure Cosmos DB');
+            case CosmosDBMongoLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Azure Cosmos DB for MongoDB');
+            case DurableTaskHubLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Durable Task Hubs');
+            case FunctionAppLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Function Apps');
+            case LogicAppLogicalType.toLowerCase():
+                return this.ctx.code.l10n.t('Logic Apps');
+            default:
+                return undefined;
+        }
     }
 
     /**
@@ -383,7 +490,6 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
     }
 }
 
-// TODO: future: can we eliminate this? Make the providers all return `AzureNodeId`?
 function toKey(node: AzureNode): string {
     return AzureNodeId.from(node).toString();
 }

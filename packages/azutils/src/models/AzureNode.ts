@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureAccount, AzureSubscription, AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import type { DataItemTree } from '@microsoft/vscode-azure-utils';
+import type { AzureAccount, AzureSubscription, AzureTenant } from '../auth/AzureSubscription';
 import type { GenericResource } from './GenericResource';
 import type { ResourceGroup, VirtualGroup } from './Grouping';
 import type { VirtualResource } from './VirtualResource';
@@ -33,7 +33,7 @@ export function isAccount(node: AzureNode): node is AzureAccount {
 
 /** Narrows this node to an {@linkcode AzureTenant} node. */
 export function isTenant(node: AzureNode): node is AzureTenant {
-    return 'tenantId' in node && 'account' in node && !isSubscription(node);
+    return 'tenantId' in node && 'accountId' in node && !isSubscription(node);
 }
 
 /** Narrows this node to an {@linkcode AzureSubscription} node. */
@@ -52,8 +52,13 @@ export function isVirtualGroup(node: AzureNode): node is VirtualGroup {
 }
 
 /** Narrows this node to a {@linkcode GenericResource} node. {@linkcode ResourceGroup} nodes do **not** match, though they do conform to `GenericResource`. */
-export function isGenericResource(node: AzureNode): node is GenericResource {
-    return !isResourceGroup(node) && 'id' in node && 'name' in node && 'type' in node && 'logicalType' in node;
+export function isGenericResource(node: unknown): node is GenericResource {
+    if (!node || typeof node !== 'object') {
+        return false;
+    }
+
+    const candidate = node as AzureNode;
+    return !isResourceGroup(candidate) && 'id' in candidate && 'name' in candidate && 'type' in candidate && 'logicalType' in candidate;
 }
 
 /** Narrows this node to a {@linkcode VirtualResource} node. */

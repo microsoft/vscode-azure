@@ -3,16 +3,18 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import { createHttpPoller, type OperationResponse, type OperationState } from '@azure/core-lro';
 import {
-    IDeploymentClientProvider,
-    type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
+    IDeploymentClientProvider, KnownProvisioningState, parseAzureResourceId,
+    type DeploymentExtended, type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
-    EventEmitter, flattenPages, IActionExecutor, IVsCode,
-    type DataProvider, type DataProviderChangeEvent, type Disposable
+    CaselessMap, CaselessSet, Disposable, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
+    type DataProvider, type DataProviderChangeEvent
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import { ISubscriptionResolver } from '../../services';
+import { IAzureAccountDataProvider } from '../resources/AzureAccountDataProvider';
 import { isActivity, isTerminalActivityStatus, type Activity } from './Activity';
 
 /** Identifier for the ARM deployment data provider */
@@ -20,6 +22,18 @@ export const IArmDeploymentDataProvider: ServiceIdentifier<ArmDeploymentDataProv
 export type IArmDeploymentDataProvider = ArmDeploymentDataProvider;
 
 const DeploymentResourceType = 'Microsoft.Resources/deployments';
+const DefaultPollingIntervalMs = 10 * 1000;
+/**
+ * How many back-to-back failed poll requests are tolerated before tracking is
+ * abandoned. Bounded so a deployment that has become permanently unreachable
+ * (deleted, or access revoked) stops issuing requests forever.
+ */
+const MaxConsecutivePollFailures = 5;
+
+/** Running count of consecutive failed poll requests, shared across one poller's requests. */
+interface PollFailureState {
+    consecutive: number;
+}
 
 /**
  * An {@linkcode Activity} representing a single ARM deployment (root or nested).
@@ -31,7 +45,12 @@ const DeploymentResourceType = 'Microsoft.Resources/deployments';
 export interface ArmDeploymentActivity extends Activity {
     readonly type: 'armDeployment';
     readonly deploymentId: string;
-    readonly subscription: AzureSubscription;
+    /** The id of the subscription the deployment targets, parsed from {@linkcode deploymentId}. Resolved to a full subscription on demand when a client is needed. */
+    readonly subscriptionId: string;
+    /** Optional id of the owning tenant, used as a hint when resolving {@linkcode subscriptionId} to a full subscription. */
+    readonly tenantId?: string;
+    /** Optional id of the owning account, used as a hint when resolving {@linkcode subscriptionId} to a full subscription. */
+    readonly accountId?: string;
     /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
     readonly scope: string;
     readonly deploymentName: string;
@@ -69,26 +88,31 @@ export interface ArmDeploymentOperationActivity extends Activity {
  * preserve object identity.
  */
 @injectable()
-export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActivity>, Disposable {
+export class ArmDeploymentDataProvider implements DataProvider<Activity>, Disposable {
     public readonly isRoot = true;
 
-    /** Top-level tracked deployments (user-initiated). */
-    private readonly trackedRoots = new Map<string, ArmDeploymentActivity>();
-    /** All known deployment activities by ID, preserving object identity across re-fetches. */
-    private readonly knownDeployments = new Map<string, ArmDeploymentActivity>();
+    /** Top-level tracked deployments (user-initiated), keyed by their case-insensitive ARM deployment ID. */
+    private readonly trackedRoots = new CaselessMap<ArmDeploymentActivity>();
+    /** All known deployment activities by ARM deployment ID, preserving object identity across re-fetches. */
+    private readonly knownDeployments = new CaselessMap<ArmDeploymentActivity>();
     /** Deployment IDs currently being polled, to prevent duplicate poll loops. */
-    private readonly activePolls = new Set<string>();
-    /** Shared deployment clients per subscription to reuse pipelines and dedupe identical GET requests. */
-    private readonly clientCache = new Map<string, IDeploymentClient>();
-
-    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<ArmDeploymentActivity>>();
+    private readonly activePolls = new CaselessSet();
+    private readonly onDidChangeEmitter = new EventEmitter<DataProviderChangeEvent<Activity>>();
+    private readonly disposables: Disposable[] = [this.onDidChangeEmitter];
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
-    ) { }
+        @inject(ISubscriptionResolver) private readonly resolveSubscription: ISubscriptionResolver,
+        @inject(IAzureAccountDataProvider) accountProvider: IAzureAccountDataProvider,
+    ) {
+        this.disposables.push(accountProvider.onDidRemoveAccounts(accountIds => {
+            const removedIds = new CaselessSet(accountIds);
+            this.clearActivities(activity => !!activity.accountId && removedIds.has(activity.accountId));
+        }));
+    }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is ArmDeploymentActivity {
@@ -119,12 +143,18 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             return false;
         }
 
-        const client = this.getClient(resource.subscription);
+        const client = await this.getClient(resource.subscriptionId, resource.tenantId, resource.accountId);
+        if (!client) {
+            // Subscription not resolvable (e.g. not signed in to the owning
+            // account). Leave the deployment visible but unenriched; a manual
+            // refresh can retry once the account is available.
+            return false;
+        }
         resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
 
         // Start polling if not terminal and not already polling
         if (!isTerminalActivityStatus(resource.status) && !this.activePolls.has(resource.id)) {
-            void this.poll(resource);
+            void this.poll(resource, client);
         }
 
         // Children depend on operations, so signal that children changed
@@ -137,9 +167,18 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * {@linkcode ArmDeploymentActivity}, registers it as a root, and fires
      * an `onDidChange` so the tree picks it up. Enrichment (and polling)
      * will start on first access by the tree.
+     *
+     * The target subscription is parsed from {@linkcode deploymentId} and
+     * resolved to an authenticatable handle lazily, the first time a client is
+     * needed (see {@linkcode getClient}). An optional {@linkcode tenantId} hint
+     * and {@linkcode accountId} hint (e.g. hydrated from azd) speed up that
+     * resolution.
+     *
+     * @throws if {@linkcode deploymentId} is not a valid ARM deployment id.
      */
-    public trackDeployment(deploymentId: string, subscription: AzureSubscription): void {
+    public trackDeployment(deploymentId: string, tenantId?: string, accountId?: string): void {
         const { scope, deploymentName } = parseDeploymentId(deploymentId);
+        const { subscriptionId } = parseAzureResourceId(deploymentId);
 
         const activity: ArmDeploymentActivity = {
             id: deploymentId,
@@ -148,7 +187,9 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             title: deploymentName,
             startTime: new Date(),
             deploymentId,
-            subscription,
+            subscriptionId,
+            tenantId,
+            accountId,
             scope,
             deploymentName,
             rootDeploymentId: deploymentId,
@@ -157,108 +198,126 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 
         this.trackedRoots.set(activity.id, activity);
         this.knownDeployments.set(activity.id, activity);
-        this.onDidChangeEmitter.fire({ includeChildren: true });
+        this.onDidChangeEmitter.fire({ target: Roots });
     }
 
     /**
-     * Poll a deployment's status and refresh its operations. Fires targeted
-     * change events based on whether the operation count changed.
+     * Track a deployment with the Azure SDK LRO poller and refresh its operations
+     * after each status response. The client resolved by {@linkcode enrich} is
+     * reused for this poller's lifetime.
      */
-    private async poll(activity: ArmDeploymentActivity): Promise<void> {
+    private async poll(activity: ArmDeploymentActivity, client: IDeploymentClient): Promise<void> {
         try {
             const abortSignal = activity.abortController.signal;
             abortSignal.throwIfAborted();
 
             this.activePolls.add(activity.id);
+            const failures: PollFailureState = { consecutive: 0 };
+            const poller = createHttpPoller<undefined, OperationState<undefined>>(
+                {
+                    sendInitialRequest: () => this.pollOnce(client, activity, abortSignal, failures),
+                    sendPollRequest: () => this.pollOnce(client, activity, abortSignal, failures),
+                },
+                {
+                    intervalInMs: DefaultPollingIntervalMs,
+                    // A failed or canceled deployment is a normal terminal outcome
+                    // for a tracker, so resolve on it instead of rejecting.
+                    resolveOnUnsuccessful: true,
+                },
+            );
 
-            // Single abort handler that clears the pending timer.
-            // `currentTimer` is updated each iteration so only one listener is needed.
-            let currentTimer: ReturnType<typeof setTimeout> | undefined;
-            abortSignal.addEventListener('abort', () => {
-                if (currentTimer !== undefined) {
-                    clearTimeout(currentTimer);
-                }
-            }, { once: true });
-
-            while (!abortSignal.aborted) {
-                let nextPollMs = 10 * 1000; // Default to 10s if server doesn't provide guidance
-                this.executor.output.debug(`[activity] poll cycle start deployment=${activity.id}`);
-
-                try {
-                    await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
-                        context.telemetry.suppress = 'onSuccess';
-                        context.telemetry.isUserEvent = false;
-                        context.errorHandling.rethrow = true;
-                        const client = this.getClient(activity.subscription);
-
-                        const [deployment, operations] = await Promise.all([
-                            client.deployments.getAtScope(
-                                activity.scope,
-                                activity.deploymentName,
-                                {
-                                    abortSignal,
-                                    onResponse: (response) => {
-                                        const retryAfter = response.headers.get('retry-after');
-                                        if (retryAfter) {
-                                            const seconds = parseInt(retryAfter, 10);
-                                            if (!isNaN(seconds) && seconds > 0) {
-                                                nextPollMs = seconds * 1000;
-                                            }
-                                        }
-                                    },
-                                },
-                            ),
-                            this.fetchOperations(client, activity, abortSignal),
-                        ]);
-
-                        abortSignal.throwIfAborted();
-
-                        const provisioningState = deployment.properties?.provisioningState;
-                        if (provisioningState) {
-                            const previousStatus = activity.status;
-                            activity.status = toActivityStatus(provisioningState);
-                            activity.description = provisioningState;
-                            if (activity.status !== previousStatus) {
-                                this.executor.output.debug(`[activity] deployment status transition deployment=${activity.id} status=${activity.status}`);
-                            }
-                        }
-
-                        // Detect structural changes in operations
-                        const prevCount = activity.operations?.length ?? 0;
-                        activity.operations = operations;
-                        const includeChildren = operations.length !== prevCount;
-
-                        if (isTerminalState(provisioningState)) {
-                            activity.endTime = new Date();
-                            this.executor.output.debug(`[activity] deployment reached terminal status deployment=${activity.id} status=${activity.status}`);
-                            this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
-                            return;
-                        }
-
-                        this.onDidChangeEmitter.fire({ resource: activity, includeChildren });
-                    });
-
-                    // Exit the loop if the deployment reached a terminal state
-                    if (isTerminalActivityStatus(activity.status)) {
-                        return;
-                    }
-                } catch (error) {
-                    abortSignal.throwIfAborted();
-                    // Swallow other probably-transient errors and retry on next poll
-                    const message = error instanceof Error ? error.message : String(error);
-                    this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
-                }
-
-                // Wait for the next poll interval
-                await new Promise<void>(resolve => {
-                    currentTimer = setTimeout(resolve, nextPollMs);
-                });
+            await this.executor.callWithTelemetryAndErrorHandling('tree.pollArmDeployments', async (context) => {
+                context.telemetry.suppress = 'onSuccess';
+                context.telemetry.isUserEvent = false;
+                context.errorHandling.rethrow = true;
+                await poller.pollUntilDone({ abortSignal });
+            });
+        } catch (error) {
+            if (!activity.abortController.signal.aborted) {
+                const message = stringifyError(error);
+                this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
             }
-        } catch {
-            // AbortError or signal.throwIfAborted -- exit cleanly
         } finally {
             this.activePolls.delete(activity.id);
         }
+    }
+
+    /**
+     * Fetch the deployment's status and operations once, apply them to
+     * {@linkcode activity}, and describe the result to the poller.
+     *
+     * The activity is updated here rather than from the poller's result so that
+     * every response is applied, including the initial one.
+     *
+     * A request failure is treated as transient and reported as still running so
+     * the poller retries on its next interval, up to
+     * {@linkcode MaxConsecutivePollFailures} in a row. Past that the failure is
+     * rethrown, which ends tracking; the activity keeps its last known status and
+     * {@linkcode enrich} starts a fresh poller if the tree is refreshed later. An
+     * abort ends polling immediately and is never counted as a failure.
+     */
+    private async pollOnce(
+        client: IDeploymentClient,
+        activity: ArmDeploymentActivity,
+        abortSignal: AbortSignal,
+        failures: PollFailureState,
+    ): Promise<OperationResponse<undefined>> {
+        this.executor.output.debug(`[activity] poll request deployment=${activity.id}`);
+        let retryAfter: string | undefined;
+
+        try {
+            const [deployment, operations] = await Promise.all([
+                client.deployments.getAtScope(activity.scope, activity.deploymentName, {
+                    abortSignal,
+                    onResponse: response => {
+                        retryAfter = response.headers.get('retry-after');
+                    },
+                }),
+                this.fetchOperations(client, activity, abortSignal),
+            ]);
+
+            abortSignal.throwIfAborted();
+            failures.consecutive = 0;
+            this.applyPollResult(activity, deployment, operations);
+            return toPollResponse(activity, toLroProvisioningState(deployment.properties?.provisioningState), retryAfter);
+        } catch (error) {
+            abortSignal.throwIfAborted();
+            const message = stringifyError(error);
+            this.executor.output.warn(this.code.l10n.t('[activity] polling error deployment={0} message={1}', activity.id, message));
+
+            if (++failures.consecutive > MaxConsecutivePollFailures) {
+                this.executor.output.warn(this.code.l10n.t('[activity] giving up tracking deployment={0} after {1} consecutive polling errors', activity.id, failures.consecutive));
+                throw error;
+            }
+
+            // Continue on a transient error: report the deployment as still
+            // running so the poller waits its current interval and retries.
+            return toPollResponse(activity, KnownProvisioningState.Running, retryAfter);
+        }
+    }
+
+    /** Apply a poll result to the activity and fire a targeted change event. */
+    private applyPollResult(activity: ArmDeploymentActivity, deployment: DeploymentExtended, operations: ArmDeploymentOperationActivity[]): void {
+        const provisioningState = deployment.properties?.provisioningState;
+        if (provisioningState) {
+            const previousStatus = activity.status;
+            activity.status = toActivityStatus(provisioningState);
+            activity.description = provisioningState;
+            if (activity.status !== previousStatus) {
+                this.executor.output.debug(`[activity] deployment status transition deployment=${activity.id} status=${activity.status}`);
+            }
+        }
+
+        const previousOperationCount = activity.operations?.length ?? 0;
+        activity.operations = operations;
+        const includeChildren = operations.length !== previousOperationCount;
+
+        if (isTerminalActivityStatus(activity.status)) {
+            activity.endTime = new Date();
+            this.executor.output.debug(`[activity] deployment reached terminal status deployment=${activity.id} status=${activity.status}`);
+        }
+
+        this.onDidChangeEmitter.fire({ target: includeChildren ? activity : selfOnly(activity) });
     }
 
     /**
@@ -299,7 +358,9 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
                     description: op.provisioningState,
                     startTime: activity.startTime,
                     deploymentId: op.targetResourceId,
-                    subscription: activity.subscription,
+                    subscriptionId: activity.subscriptionId,
+                    tenantId: activity.tenantId,
+                    accountId: activity.accountId,
                     scope,
                     deploymentName,
                     rootDeploymentId: activity.rootDeploymentId,
@@ -320,7 +381,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
      * operation per resource (Create/Delete over read-only ops).
      */
     private async fetchOperations(client: IDeploymentClient, activity: ArmDeploymentActivity, abortSignal: AbortSignal): Promise<ArmDeploymentOperationActivity[]> {
-        const byTargetId = new Map<string, { op: DeploymentOperation; rank: number }>();
+        const byTargetId = new CaselessMap<{ op: DeploymentOperation; rank: number }>();
 
         for await (const op of flattenPages(client.deploymentOperations.listAtScope(activity.scope, activity.deploymentName, { abortSignal }))) {
             const targetResource = op.properties?.targetResource;
@@ -359,13 +420,25 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         return results;
     }
 
-    private getClient(subscription: AzureSubscription): IDeploymentClient {
-        let client = this.clientCache.get(subscription.subscriptionId);
-        if (!client) {
-            client = this.createClient(subscription);
-            this.clientCache.set(subscription.subscriptionId, client);
+    /**
+     * Returns a deployment client for {@linkcode subscriptionId}, resolving the
+     * current full subscription before creating the lightweight client.
+     * An optional {@linkcode tenantId} hint narrows the resolution drill to the
+     * owning tenant, and an optional {@linkcode accountId} hint narrows it to the
+     * owning account. Returns `undefined` when the subscription cannot be resolved
+     * (e.g. the owning account is not signed in).
+     *
+     * The injected subscription resolver owns its lookup and caching semantics;
+     * this provider retains the resulting client only for the operation that
+     * requested it (including the lifetime of a poll loop).
+     */
+    private async getClient(subscriptionId: string, tenantId?: string, accountId?: string): Promise<IDeploymentClient | undefined> {
+        const subscription = await this.resolveSubscription(subscriptionId, tenantId, accountId);
+        if (!subscription) {
+            this.executor.output.debug(`[activity] could not resolve subscription ${subscriptionId} for deployment client`);
+            return undefined;
         }
-        return client;
+        return this.createClient(subscription);
     }
 
     /**
@@ -383,7 +456,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
             }
         }
         if (changed) {
-            this.onDidChangeEmitter.fire({ includeChildren: true });
+            this.onDidChangeEmitter.fire({ target: Roots });
         }
     }
 
@@ -394,7 +467,7 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
         }
         this.knownDeployments.clear();
         this.activePolls.clear();
-        this.onDidChangeEmitter.dispose();
+        Disposable.disposeAll(this.disposables);
     }
 
     /**
@@ -412,30 +485,57 @@ export class ArmDeploymentDataProvider implements DataProvider<ArmDeploymentActi
 }
 
 function toActivityStatus(provisioningState: ProvisioningState | undefined): Activity['status'] {
-    // TODO: future: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
-    switch (provisioningState?.toLowerCase()) {
-        case 'succeeded':
+    switch (provisioningState) {
+        case KnownProvisioningState.Succeeded:
+        case KnownProvisioningState.Ready:
+        case KnownProvisioningState.Deleted:
             return 'Completed';
-        case 'failed':
+        case KnownProvisioningState.Failed:
             return 'Failed';
-        case 'canceled':
+        case KnownProvisioningState.Canceled:
             return 'Canceled';
-        case 'running':
-        case 'accepted':
-        case 'creating':
-        case 'created':
-        case 'deleting':
-        case 'updating':
+        case KnownProvisioningState.Running:
+        case KnownProvisioningState.Accepted:
+        case KnownProvisioningState.Creating:
+        case KnownProvisioningState.Created:
+        case KnownProvisioningState.Deleting:
+        case KnownProvisioningState.Updating:
             return 'InProgress';
+        case KnownProvisioningState.NotSpecified:
         default:
             return 'NotStarted';
     }
 }
 
-function isTerminalState(provisioningState: ProvisioningState | undefined): boolean {
-    const lower = provisioningState?.toLowerCase();
-    // TODO: future: replace with `KnownProvisioningState` if we can use it without sync-importing the entire package
-    return lower === 'succeeded' || lower === 'failed' || lower === 'canceled';
+function toLroProvisioningState(provisioningState: ProvisioningState | undefined): ProvisioningState | undefined {
+    return provisioningState === KnownProvisioningState.Ready || provisioningState === KnownProvisioningState.Deleted
+        ? KnownProvisioningState.Succeeded
+        : provisioningState;
+}
+
+/**
+ * Describes a poll result to the LRO poller.
+ *
+ * The poller only needs the provisioning state to decide whether to keep
+ * polling and the `retry-after` header to pace itself; the deployment itself is
+ * applied to the activity as it arrives, so no payload is carried in
+ * `flatResponse`. `PUT` selects core-lro's Body polling mode, which reads the
+ * status from `properties.provisioningState`.
+ */
+function toPollResponse(
+    activity: ArmDeploymentActivity,
+    provisioningState: ProvisioningState | undefined,
+    retryAfter: string | undefined,
+): OperationResponse<undefined> {
+    return {
+        flatResponse: undefined,
+        rawResponse: {
+            statusCode: 200,
+            request: { method: 'PUT', url: activity.deploymentId },
+            headers: retryAfter ? { 'retry-after': retryAfter } : {},
+            body: { properties: { provisioningState } },
+        },
+    };
 }
 
 /**

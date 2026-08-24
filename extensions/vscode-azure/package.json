@@ -38,6 +38,21 @@
                 "title": "%commands.vscode-azure/resources/openInPortal%"
             },
             {
+                "command": "vscode-azure/resources/delete",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/resources/delete%"
+            },
+            {
+                "command": "vscode-azure/resourceGroups/delete",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/resourceGroups/delete%"
+            },
+            {
+                "command": "vscode-azure/resources/browseWebsite",
+                "icon": "$(globe)",
+                "title": "%commands.vscode-azure/resources/browseWebsite%"
+            },
+            {
                 "command": "vscode-azure/installAzd",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/installAzd%"
@@ -72,19 +87,9 @@
                 "title": "%commands.vscode-azure/activity/clearAll%"
             },
             {
-                "command": "vscode-azure/functionApp/appSettings/add",
-                "icon": "$(add)",
-                "title": "%commands.vscode-azure/functionApp/appSettings/add%"
-            },
-            {
-                "command": "vscode-azure/functionApp/appSettings/edit",
+                "command": "vscode-azure/settings/edit",
                 "icon": "$(edit)",
-                "title": "%commands.vscode-azure/functionApp/appSettings/edit%"
-            },
-            {
-                "command": "vscode-azure/functionApp/appSettings/delete",
-                "icon": "$(trash)",
-                "title": "%commands.vscode-azure/functionApp/appSettings/delete%"
+                "title": "%commands.vscode-azure/settings/edit%"
             },
             {
                 "command": "vscode-azure/functions/createNew",
@@ -101,6 +106,24 @@
                 "category": "%commands.category.azure%",
                 "icon": "$(rocket)",
                 "title": "%commands.vscode-azure/azdUp%"
+            },
+            {
+                "command": "vscode-azure/azdDown",
+                "category": "%commands.category.azure%",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/azdDown%"
+            },
+            {
+                "command": "vscode-azure/signIn",
+                "category": "%commands.category.azure%",
+                "icon": "$(sign-in)",
+                "title": "%commands.vscode-azure/signIn%"
+            },
+            {
+                "command": "vscode-azure/selectSubscriptions",
+                "category": "%commands.category.azure%",
+                "icon": "$(filter)",
+                "title": "%commands.vscode-azure/selectSubscriptions%"
             }
         ],
         "menus": {
@@ -126,6 +149,18 @@
                     "when": "false"
                 },
                 {
+                    "command": "vscode-azure/resources/delete",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/resourceGroups/delete",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/resources/browseWebsite",
+                    "when": "false"
+                },
+                {
                     "command": "vscode-azure/resources/loadMore",
                     "when": "false"
                 },
@@ -146,15 +181,7 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/functionApp/appSettings/add",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functionApp/appSettings/edit",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functionApp/appSettings/delete",
+                    "command": "vscode-azure/settings/edit",
                     "when": "false"
                 }
             ],
@@ -165,9 +192,14 @@
                     "group": "navigation@1"
                 },
                 {
-                    "command": "vscode-azure/resources/refresh",
+                    "command": "vscode-azure/selectSubscriptions",
                     "when": "view == vscode-azure/resources",
                     "group": "navigation@2"
+                },
+                {
+                    "command": "vscode-azure/resources/refresh",
+                    "when": "view == vscode-azure/resources",
+                    "group": "navigation@3"
                 },
                 {
                     "command": "vscode-azure/workspace/refresh",
@@ -200,16 +232,21 @@
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bopenInPortal\\b/i"
                 },
                 {
-                    "command": "vscode-azure/functionApp/appSettings/add",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\baddFunctionAppSetting\\b/i"
+                    "command": "vscode-azure/resources/delete",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResource\\b/i"
                 },
                 {
-                    "command": "vscode-azure/functionApp/appSettings/edit",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\beditFunctionAppSetting\\b/i"
+                    "command": "vscode-azure/resourceGroups/delete",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResourceGroup\\b/i"
                 },
                 {
-                    "command": "vscode-azure/functionApp/appSettings/delete",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteFunctionAppSetting\\b/i"
+                    "command": "vscode-azure/resources/browseWebsite",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bbrowseWebsite\\b/i"
+                },
+                {
+                    "command": "vscode-azure/settings/edit",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\beditSettings\\b/i",
+                    "group": "inline@1"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",
@@ -220,6 +257,11 @@
             "explorer/context": [
                 {
                     "command": "vscode-azure/azdUp",
+                    "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
+                    "group": "navigation"
+                },
+                {
+                    "command": "vscode-azure/azdDown",
                     "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
                     "group": "navigation"
                 }
@@ -268,6 +310,12 @@
                 }
             ]
         },
+        "viewsWelcome": [
+            {
+                "view": "vscode-azure/resources",
+                "contents": "%views.vscode-azure/resources.welcome%"
+            }
+        ],
         "configuration": {
             "title": "%settings.title%",
             "properties": {
@@ -304,39 +352,74 @@
                     "type": "string",
                     "default": "",
                     "description": "%settings.vscode-azure.groupByTag%"
+                },
+                "vscode-azure.signedInTenants": {
+                    "type": "array",
+                    "default": [],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "accountId": {
+                                "type": "string"
+                            },
+                            "tenantId": {
+                                "type": "string",
+                                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                "patternErrorMessage": "%settings.vscode-azure.signedInTenants.tenantId.patternError%"
+                            }
+                        },
+                        "required": [
+                            "accountId",
+                            "tenantId"
+                        ]
+                    },
+                    "scope": "machine-overridable",
+                    "description": "%settings.vscode-azure.signedInTenants%"
+                },
+                "vscode-azure.selectedSubscriptions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                        "patternErrorMessage": "%settings.vscode-azure.selectedSubscriptions.patternError%"
+                    },
+                    "default": [],
+                    "description": "%settings.vscode-azure.selectedSubscriptions%"
                 }
             }
         }
     },
     "scripts": {
-        "lint": "eslint --max-warnings 0",
-        "build": "npm run build:esbuild & npm run build:check",
+        "lint": "eslint --max-warnings 0 --cache",
+        "build": "pnpm run --parallel \"/^build:(esbuild|check)$/\"",
         "build:esbuild": "node esbuild.mjs",
-        "build:check": "tsgo --noEmit",
-        "package": "vsce package",
+        "build:esbuild:watch": "pnpm run build:esbuild --watch",
+        "build:check": "tsc --noEmit",
+        "build:check:watch": "pnpm run build:check --watch",
+        "package": "pnpx @vscode/vsce@latest package --no-dependencies",
         "test": "vscode-test",
         "testcov": "vscode-test --coverage",
         "clean": "node ../../scripts/clean.mjs"
     },
     "engines": {
-        "vscode": "^1.106.0"
+        "vscode": "^1.123.0"
     },
     "devDependencies": {
+        "@azure/identity": "^4.13.1",
         "@types/semver": "^7.7.1",
-        "@vscode/test-cli": "*",
-        "@vscode/test-electron": "*",
-        "@vscode/vsce": "*",
-        "esbuild": "*",
-        "esbuild-plugin-copy": "*",
-        "tsx": "*"
+        "@vscode/test-cli": "catalog:",
+        "@vscode/test-electron": "catalog:",
+        "esbuild": "catalog:",
+        "esbuild-plugin-copy": "catalog:",
+        "tsx": "catalog:"
     },
     "dependencies": {
-        "@microsoft/vscode-azext-azureauth": "^6.1.0-alpha.1",
-        "@microsoft/vscode-azure-azutils": "*",
-        "@microsoft/vscode-azure-utils": "*",
-        "@microsoft/vscode-processutils": "^0.2.2",
-        "@vscode/extension-telemetry": "^1.5.1",
-        "inversify": "^8.1.0",
-        "semver": "^7.8.0"
+        "@azure/core-lro": "^3.4.0",
+        "@microsoft/vscode-azure-azutils": "workspace:*",
+        "@microsoft/vscode-azure-utils": "workspace:*",
+        "@vscode/extension-telemetry": "catalog:",
+        "inversify": "catalog:",
+        "jsonc-parser": "^3.3.1",
+        "semver": "^7.8.4"
     }
 }

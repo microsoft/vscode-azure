@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getWorkspaceFolder, type IActionContext, type ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { getWorkspaceFolder, IActionContext, ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import type { IAzdService } from '../AzdService';
-import type { ITempDirManager } from '../TempDirManager';
+import { IAzdService } from '../AzdService';
+import { ITempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -30,12 +31,13 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * Skipped when {@linkcode AzdWizardContext.iacFolder iacFolder} is already
  * set (e.g. when invoked from a right-click on `azure.yaml`).
  */
+@injectable()
 export class SelectIacFolderStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
-        private readonly actionContext: IActionContext,
-        private readonly ctx: ICodeContext,
-        private readonly tempManager: ITempDirManager,
-        private readonly azd: IAzdService,
+        @inject(IActionContext) private readonly actionContext: IActionContext,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
+        @inject(IAzdService) private readonly azd: IAzdService,
     ) {
         super();
     }
@@ -61,7 +63,10 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
     private async promptDeployFolder(): Promise<Partial<TContext>> {
         const folder = await getWorkspaceFolder(
             this.ctx.code,
-            this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
+            {
+                placeHolder: this.ctx.code.l10n.t('Select a workspace folder to deploy as a Function App'),
+                stepName: this.constructor.name,
+            },
         );
         if (!folder) {
             this.actionContext.errorHandling.suppress = 'reportIssue';

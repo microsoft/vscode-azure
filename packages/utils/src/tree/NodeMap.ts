@@ -37,14 +37,26 @@ export class NodeMap<TNode extends { children: TNode[] | undefined }> {
 
     /**
      * Recursively remove nodes and all their descendants from the map.
+     *
+     * @returns The keys of every node that was evicted (the given nodes plus
+     *   all their descendants). Callers use this to clean up side tables keyed
+     *   by the same keys (e.g. enrichment promises) that the map does not own.
      */
-    public removeSubtrees(nodes: TNode[] | undefined): void {
+    public removeSubtrees(nodes: TNode[] | undefined): string[] {
+        const removed: string[] = [];
+        this.collectAndRemove(nodes, removed);
+        return removed;
+    }
+
+    private collectAndRemove(nodes: TNode[] | undefined, removed: string[]): void {
         if (!nodes) {
             return;
         }
         for (const node of nodes) {
-            this.removeSubtrees(node.children);
-            this.map.delete(this.getKey(node));
+            this.collectAndRemove(node.children, removed);
+            const key = this.getKey(node);
+            this.map.delete(key);
+            removed.push(key);
         }
     }
 }

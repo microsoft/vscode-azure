@@ -6,6 +6,7 @@
 import type { ServiceIdentifier } from 'inversify';
 import { format } from 'util';
 import type * as vscode from 'vscode';
+import { stringifyError } from '../base/stringifyError';
 import type { Disposable } from './Disposable';
 import { EventEmitter } from './EventEmitter';
 import type { IVsCode } from './IVsCode';
@@ -77,7 +78,7 @@ export class DebugOutputChannel implements IOutputChannel {
     }
 
     public error(error: string | Error, ...args: any[]): void {
-        const message = error instanceof Error ? error.message : error;
+        const message = stringifyError(error);
         this.appendLine(`[ERROR] ${format(message, ...args)}`);
     }
 

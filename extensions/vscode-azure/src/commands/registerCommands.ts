@@ -5,51 +5,42 @@
 
 import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
-import { LoadMoreCommandId } from '../constants';
-import { DisableAcrAdminUser } from './acr/DisableAcrAdminUser';
-import { AzdUp } from './AzdUp';
-import { ClearActivities } from './ClearActivities';
-import { InstallAzd } from './InstallAzd';
-import { AddOrEditAppSetting } from './functions/AddOrEditAppSetting';
-import { CreateFunctionApp } from './functions/CreateFunctionApp';
-import { DeleteAppSetting } from './functions/DeleteAppSetting';
-import { GroupBy } from './GroupBy';
-import { LoadMore } from './LoadMore';
+import { AzdDownCommandId, AzdUpCommandId, LoadMoreCommandId } from '../constants';
+import type { ManagedCommandRegistration } from '../registration/ProductRegistrar';
+import { AzdDown } from './deploy/AzdDown';
+import { AzdUp } from './deploy/AzdUp';
+import { ClearActivities } from './deploy/ClearActivities';
 import type { ManagedCommand } from './ManagedCommand';
-import { OpenInPortal } from './OpenInPortal';
-import { RefreshResourcesView } from './RefreshResourcesView';
-import { RefreshWorkspaceView } from './RefreshWorkspaceView';
-import { RevealInExplorer } from './RevealInExplorer';
+import { InstallAzd } from './tools/InstallAzd';
+import { LoadMore } from './tree/LoadMore';
+import { RefreshWorkspaceView } from './tree/RefreshWorkspaceView';
+import { RevealInExplorer } from './tree/RevealInExplorer';
 
 /**
  * Registers every {@linkcode ManagedCommand} exposed by the extension
  * against the {@linkcode ICommandRegistry} bound on the container. Called
  * once from `activateInternal()` during activation.
  */
-export function registerCommands(container: Container): void {
-    registerManagedCommand(container, 'vscode-azure/resources/refresh', RefreshResourcesView);
-    registerManagedCommand(container, 'vscode-azure/resources/groupBy', GroupBy);
-    registerManagedCommand(container, 'vscode-azure/resources/openInPortal', OpenInPortal);
+export function registerCommands(
+    container: Container,
+    productCommands: readonly ManagedCommandRegistration[] = [],
+): void {
     registerManagedCommand(container, LoadMoreCommandId, LoadMore);
 
     registerManagedCommand(container, 'vscode-azure/workspace/refresh', RefreshWorkspaceView);
     registerManagedCommand(container, 'vscode-azure/workspace/revealInExplorer', RevealInExplorer);
 
-    registerManagedCommand(container, 'vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
-
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/add', AddOrEditAppSetting, 'add');
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/edit', AddOrEditAppSetting, 'edit');
-    registerManagedCommand(container, 'vscode-azure/functionApp/appSettings/delete', DeleteAppSetting);
-
     registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
     registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');
     registerManagedCommand(container, 'vscode-azure/activity/clearAll', ClearActivities, 'all');
 
-    registerManagedCommand(container, 'vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
-    registerManagedCommand(container, 'vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
-
-    registerManagedCommand(container, 'vscode-azure/azdUp', AzdUp);
+    registerManagedCommand(container, AzdUpCommandId, AzdUp);
+    registerManagedCommand(container, AzdDownCommandId, AzdDown);
     registerManagedCommand(container, 'vscode-azure/installAzd', InstallAzd);
+
+    for (const command of productCommands) {
+        registerManagedCommand(container, command.commandId, command.commandClass, ...command.prefixArgs);
+    }
 }
 
 /**
@@ -72,9 +63,15 @@ function registerManagedCommand(
 
     const registry = container.get(ICommandRegistry);
     registry.registerCommand(commandId, (context, ...args) => {
-        // Create child container for this command execution
-        const executionContainer = new Container({ parent: container });
+        // Create child container for this command execution. autobind lets the
+        // command resolve wizard steps (and other @injectable classes) with
+        // executionContainer.get(Step) -- no explicit binding needed -- while
+        // their IActionContext resolves to this execution's context.
+        const executionContainer = new Container({ parent: container, autobind: true });
         executionContainer.bind(IActionContext).toConstantValue(context);
+        // Bind the container to itself so commands can @inject(Container) and
+        // resolve their wizard steps from this execution scope.
+        executionContainer.bind(Container).toConstantValue(executionContainer);
 
         return executionContainer.get(commandClass).execute(...prefixArgs, ...args);
     });

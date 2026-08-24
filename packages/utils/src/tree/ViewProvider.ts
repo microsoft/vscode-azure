@@ -46,4 +46,5 @@ export interface ViewProvider<TResource> extends DataProvider<TResource> {
     getParent?(resource: Readonly<TResource>): ProviderResult<TResource | undefined>;
 
     enrich?: never; // View providers are not allowed to enrich data resources
+    getTtl?: never; // View providers are not allowed to specify TTL for data resources
 }

@@ -3,21 +3,21 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type {
-    DeploymentExtended as SdkDeploymentExtended,
-    DeploymentOperation as SdkDeploymentOperation,
-    ProvisioningOperation as SdkProvisioningOperation,
-    ProvisioningState as SdkProvisioningState,
-} from '@azure/arm-resourcesdeployments/models';
-/* eslint-disable @typescript-eslint/no-restricted-imports -- The new-style SDK actually bundles smaller if it is eagerly imported */
 import { createDeployments, type DeploymentsClientOptionalParams, type DeploymentsContext } from '@azure/arm-resourcesdeployments/api';
 import { listAtScope as sdkListAtScope, type DeploymentOperationsListAtScopeOptionalParams } from '@azure/arm-resourcesdeployments/api/deploymentOperations';
 import { getAtScope as sdkGetAtScope, type DeploymentsGetAtScopeOptionalParams } from '@azure/arm-resourcesdeployments/api/deployments';
-/* eslint-enable @typescript-eslint/no-restricted-imports */
-import type { AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import {
+    KnownProvisioningState as SdkKnownProvisioningState,
+    type DeploymentExtended as SdkDeploymentExtended,
+    type DeploymentOperation as SdkDeploymentOperation,
+    type ProvisioningOperation as SdkProvisioningOperation,
+    type ProvisioningState as SdkProvisioningState,
+} from '@azure/arm-resourcesdeployments/models';
+import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import { createAzureRestSubscriptionClient } from '../createAzureClient';
+import type { AzureSubscription } from '../../auth/AzureSubscription';
+import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 /**
@@ -27,6 +27,7 @@ export type DeploymentExtended = WithRequired<SdkDeploymentExtended, 'id' | 'nam
 export type DeploymentOperation = SdkDeploymentOperation;
 export type ProvisioningOperation = SdkProvisioningOperation;
 export type ProvisioningState = SdkProvisioningState;
+export { SdkKnownProvisioningState as KnownProvisioningState };
 
 /** Factory that creates an {@linkcode IDeploymentClient} for a given subscription. */
 export const IDeploymentClientProvider: ServiceIdentifier<IDeploymentClientProvider> = Symbol.for('IDeploymentClientProvider');
@@ -61,13 +62,15 @@ export class DeploymentClient implements IDeploymentClient {
     public static create(
         ctx: ICodeContext,
         executor: IActionExecutor,
+        credential: TokenCredential,
         subscription: AzureSubscription,
         options?: DeploymentsClientOptionalParams,
     ): DeploymentClient {
-        const context = createAzureRestSubscriptionClient(
+        const context = createArmRestSubscriptionClient(
             ctx,
             executor,
             createDeployments,
+            credential,
             subscription,
             options,
         );

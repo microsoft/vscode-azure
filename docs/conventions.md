@@ -17,7 +17,7 @@ Coding conventions and best practices established in this project.
 
 - **`I`-prefix** for DI service identifier interfaces: `IVsCode`, `IActionExecutor`, `IOutputChannel`
 - **PascalCase** for files containing classes/interfaces: `DataItemTree.ts`, `GenericResource.ts`
-- **camelCase** for function-oriented files: `combineContextValues.ts`, `registerCommands.ts`
+- **camelCase** for function-oriented files: `contextValueHelpers.ts`, `registerCommands.ts`
 
 ## VS Code API
 
@@ -94,6 +94,27 @@ void this.code.window.showInformationMessage(message);
 promise.catch(() => { /* noop */ });
 ```
 
+## Error Handling
+
+A value caught in a `catch` clause has type `unknown`, so it may not be an `Error`. When you need a human-readable message string from it (for logging, telemetry, or display), use `stringifyError()` from `@microsoft/vscode-azure-utils` instead of hand-rolling the `instanceof Error` check.
+
+```typescript
+import { stringifyError } from '@microsoft/vscode-azure-utils';
+
+try {
+    await doWork();
+} catch (error) {
+    this.output.warn(this.code.l10n.t('[cmd] work failed: {0}', stringifyError(error)));
+}
+```
+
+```typescript
+// Bad — repeated inline coercion
+const message = error instanceof Error ? error.message : String(error);
+```
+
+`stringifyError()` returns the `message` for `Error` values, returns strings unchanged, and falls back to `util.inspect()` for everything else.
+
 ## ARM Resource Types
 
 When checking `GenericResource.type` or `GenericResource.logicalType`, always compare **case-insensitively** against a constant:
@@ -106,6 +127,29 @@ if (resource.type.toLowerCase() === AcrResourceType.toLowerCase()) { ... }
 // Bad — string literal, case-sensitive
 if (resource.type === 'Microsoft.ContainerRegistry/registries') { ... }
 ```
+
+## Case-Insensitive Collections
+
+Azure identifiers -- ARM resource IDs, resource types, tenant IDs, subscription IDs, and account IDs -- are case-insensitive. When one of them is a `Set` value or a `Map` key, use `CaselessSet` / `CaselessMap<V>` from `@microsoft/vscode-azure-utils` rather than folding by hand:
+
+```typescript
+// Good -- the invariant lives in the collection
+const knownTenantIds = new CaselessSet(tenants.map(t => t.tenantId));
+knownTenantIds.has(value);
+
+// Bad -- folding has to be remembered on both sides, and a missed
+// fold silently returns false instead of failing
+const knownTenantIds = new Set(tenants.map(t => t.tenantId.toLowerCase()));
+knownTenantIds.has(value.toLowerCase());
+```
+
+Both classes fold with `toLowerCase()` (locale-independent, so a Turkish locale cannot change matching) and iterate in the **original** casing, so display sites get the string as it was written. Neither inherits from `Set`/`Map`: an inherited member would read internal slots and bypass folding.
+
+Declare read-only holders as `ICaselessSetReader` / `ICaselessMapReader<V>` so they cannot mutate the collection.
+
+Plain string comparisons still use `toLowerCase()` directly -- these classes are only for collections.
+
+Both carry only the members call sites currently use, so `CaselessSet` has no `keys()`/`values()`/`entries()`/`forEach` and `CaselessMap` has no `size`/`keys()`/`forEach`. Add a member when something needs it -- adding it to the matching reader interface too if it is read-only -- rather than mirroring the whole built-in surface up front.
 
 ## Context Values
 
@@ -120,6 +164,37 @@ Commands that appear in tree item context menus should:
 ```
 
 The `\b` prevents unintended partial matches.
+
+## Comments and Documentation
+
+Comments and docs describe the code **as it is now**, not how it got that way. The
+diff, the commit message, and the PR description are where change history belongs.
+
+Don't write change-log commentary in the source or in `docs/`:
+
+```typescript
+// BAD -- describes a change, not the code
+// Removed the legacy retry helper; callers now use RetryPolicy directly.
+// Note: this used to accept a string; it no longer does.
+// (previously handled in AzureResourceProvider before it was deleted)
+
+// GOOD -- describes current behavior, or nothing at all
+// Retries are capped so a throttled subscription can't stall activation.
+```
+
+This applies to every kind of prose: inline comments, JSDoc, `docs/` pages,
+README updates, and test names. A reader who has never seen the old code should
+not encounter references to it. In particular:
+
+- Don't document that a function/option/setting "no longer" exists, or that a
+  behavior "was removed". If it's gone, say nothing.
+- Don't leave a comment marking where deleted code used to live.
+- When editing an existing doc, delete the stale prose outright rather than
+  appending a note that it's obsolete.
+
+The exception is a deliberate, user-facing deprecation contract -- `@deprecated`
+JSDoc on a symbol that still exists, or a CHANGELOG entry. Those describe the
+current API surface, not the edit that produced it.
 
 ## ESLint
 

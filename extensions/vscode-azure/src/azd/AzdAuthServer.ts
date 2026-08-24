@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
-import { IOutputChannel, IVsCode, type Disposable } from '@microsoft/vscode-azure-utils';
+import { ICredentialFactory, type TokenCredential } from '@microsoft/vscode-azure-azutils';
+import { IOutputChannel, IVsCode, stringifyError, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -41,8 +41,10 @@ interface StartedState {
  * `AZD_AUTH_KEY` environment variables. The endpoint is a
  * platform-local-only transport (Unix Domain Socket on POSIX, Named
  * Pipe on Windows) so the bytes never leave the machine and TLS is
- * unnecessary. {@linkcode VsCodeExtensionCredential} acquires tokens
- * from the VS Code authentication API on behalf of azd.
+ * unnecessary. The injected {@linkcode ICredentialFactory} acquires
+ * tokens. By default this produces a `VsCodeExtensionCredential`
+ * backed by the VS Code authentication API, while tests can supply a
+ * factory backed by another {@linkcode TokenCredential}.
  *
  * @remarks
  * The protocol is defined by the azd CLI's `RemoteCredential`
@@ -56,6 +58,7 @@ interface StartedState {
 @injectable()
 export class AzdAuthServer implements IAzdAuthServer, Disposable {
     private startPromise: Promise<StartedState> | undefined;
+    private disposed = false;
     /**
      * Set once {@linkcode createServer} returns, before {@linkcode listen}
      * is awaited, so {@linkcode dispose} can tear down even a partially
@@ -74,6 +77,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
+        @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
     ) { }
 
     public async getEnv(): Promise<Readonly<Record<string, string>>> {
@@ -88,12 +92,25 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
     }
 
     public dispose(): void {
-        // `Server.close()` is async; clean up the temp dir from its
-        // callback so we never race the listening socket's fd.
-        this.server?.close(() => { removeCleanupDir(this.cleanupDir); });
+        this.disposed = true;
+
+        if (this.startPromise) {
+            // Startup may still be allocating the socket path. Close the server
+            // once startup settles so disposal cannot leak a late-starting server.
+            this.startPromise.then(
+                () => { this.closeServer(); },
+                () => { this.closeServer(); },
+            );
+        } else {
+            this.closeServer();
+        }
     }
 
     private ensureStarted(): Promise<StartedState> {
+        if (this.disposed) {
+            throw new Error(this.code.l10n.t('The AZD authentication server has been disposed.'));
+        }
+
         this.startPromise ??= this.start();
         return this.startPromise;
     }
@@ -101,11 +118,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
     private async start(): Promise<StartedState> {
         const key = randomUUID();
 
-        const credential = new VsCodeExtensionCredential({
-            authentication: this.code.authentication,
-            output: this.output,
-            code: this.code,
-        });
+        const credential = this.credentialFactory();
 
         const { socketPath, cleanupDir } = await createSocketPath();
         this.cleanupDir = cleanupDir;
@@ -115,10 +128,16 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         });
         this.server = server;
 
+        // Without a permanent handler, an error emitted after listen() succeeds
+        // would have no listeners and crash the extension host.
+        server.on('error', (err) => {
+            this.output.warn(this.code.l10n.t('[auth] AZD auth server error: {0}', stringifyError(err)));
+        });
+
         try {
             await listen(server, socketPath);
         } catch (err) {
-            removeCleanupDir(cleanupDir);
+            this.removeCleanupDir(cleanupDir);
             this.cleanupDir = undefined;
             this.server = undefined;
             throw err;
@@ -129,11 +148,35 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         return { socketPath, key };
     }
 
+    private closeServer(): void {
+        const server = this.server;
+        if (!server) {
+            return;
+        }
+
+        this.server = undefined;
+        // Clean up only after the listening socket closes so its file
+        // descriptor cannot race removal of the containing directory.
+        server.close(() => {
+            const cleanupDir = this.cleanupDir;
+            this.cleanupDir = undefined;
+            this.removeCleanupDir(cleanupDir);
+        });
+    }
+
+    private removeCleanupDir(dir: string | undefined): void {
+        if (dir) {
+            void rm(dir, { recursive: true, force: true }).catch(() => {
+                this.output.warn(this.code.l10n.t('[auth] Failed to clean up the AZD authentication server socket directory.'));
+            });
+        }
+    }
+
     private async handleRequest(
         req: IncomingMessage,
         res: ServerResponse,
         expectedKey: string,
-        credential: VsCodeExtensionCredential,
+        credential: TokenCredential,
     ): Promise<void> {
         try {
             // Only POST /token is supported. Protocol-level rejections return a
@@ -198,7 +241,7 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
 
             sendJson(res, 200, { status: 'success', token: token.token, expiresOn });
         } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
+            const message = stringifyError(e);
             this.output.warn(this.code.l10n.t('[auth] AZD auth server token request failed: {0}', message));
             sendJson(res, 200, { status: 'error', code: 'GetTokenError', message: this.code.l10n.t('Token request failed: {0}', message) });
         }
@@ -212,14 +255,18 @@ function sendJson(res: ServerResponse, statusCode: number, body: Record<string, 
 
 /** Waits for {@linkcode server} to be listening on {@linkcode socketPath}. */
 function listen(server: Server, socketPath: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        const onError = (err: Error): void => { reject(err); };
-        server.once('error', onError);
-        server.listen(socketPath, () => {
-            server.off('error', onError);
-            resolve();
-        });
+    const { promise, resolve, reject } = Promise.withResolvers<undefined>();
+
+    // Use .once so this temporary listener doesn't fire on later runtime errors;
+    // the caller installs a permanent 'error' listener before calling listen().
+    const onError = (err: Error): void => { reject(err); };
+    server.once('error', onError);
+    server.listen(socketPath, () => {
+        server.off('error', onError);
+        resolve(undefined);
     });
+
+    return promise;
 }
 
 /**
@@ -251,15 +298,4 @@ function socketPathToUrl(socketPath: string): string {
         return `npipe://${socketPath.replace(/^\\\\/, '').replace(/\\/g, '/')}`;
     }
     return `unix://${socketPath}`;
-}
-
-/**
- * Best-effort, fire-and-forget removal of the temporary directory that
- * held the Unix Domain Socket file. No-op on Windows (where {@linkcode dir}
- * is `undefined`) and silently swallows filesystem errors.
- */
-function removeCleanupDir(dir: string | undefined): void {
-    if (dir) {
-        void rm(dir, { recursive: true, force: true });
-    }
 }

@@ -4,169 +4,141 @@ Azure SDK client wrappers live in `packages/azutils/src/rest/`. They provide typ
 
 ## Factory Functions
 
-Four factory functions in `createAzureClient.ts` create Azure SDK clients with custom pipeline policies injected:
+Two REST-style factory functions in `createAzureClient.ts` create Azure SDK clients with custom pipeline policies injected:
 
 | Function | SDK Style | Subscription-Scoped? |
 |----------|-----------|---------------------|
-| `createAzureClient` | Classic `ServiceClient` | No |
-| `createAzureSubscriptionClient` | Classic `ServiceClient` | Yes |
-| `createAzureRestClient` | REST-style `@azure-rest/core-client` | No |
-| `createAzureRestSubscriptionClient` | REST-style `@azure-rest/core-client` | Yes |
+| `createArmRestClient` | REST-style `@azure-rest/core-client` | No |
+| `createArmRestSubscriptionClient` | REST-style `@azure-rest/core-client` | Yes |
 
-All four accept `ICodeContext` and `IActionExecutor` (for telemetry context and user agent) and inject the same set of pipeline policies. Usage:
+Both accept `ICodeContext`, `IActionExecutor` (for telemetry context and user agent), and a `TokenCredential`, and inject the same set of pipeline policies. Both also take an optional trailing `dedupeIdentity` that gives `DedupeRequestPolicy` a stable account/tenant key; when omitted, deduplication is scoped to clients that share the same `credential` instance. Client construction is lightweight: consumers should create a client at the point of use rather than cache clients by subscription.
+
+### Credential Handling
+
+Both functions take an explicit `TokenCredential` (produced by the credential-factory DI service `ICredentialFactory`, which by default builds a `VsCodeExtensionCredential`). The subscription-scoped factory also takes the `AzureSubscription` itself, and the non-subscription factory takes an `EnvironmentLike` — each factory derives the subscription ID and/or ARM endpoint internally, so callers don't compute endpoints:
 
 ```typescript
-// Classic SDK (constructor-based)
-const client = createAzureSubscriptionClient(
+// Subscription-scoped REST client — pass the AzureSubscription
+const client = createArmRestSubscriptionClient(
     ctx, executor,
-    ResourceManagementClient,     // SDK class constructor
-    subscription.credential,
-    subscription.subscriptionId,
+    createContainerRegistryManagement,
+    credential,     // TokenCredential from ICredentialFactory
+    subscription,   // AzureSubscription (empty subscriptionId throws TypeError)
+    options,        // optional ClientOptions
 );
 
-// REST-style SDK (factory-function-based)
-const context = createAzureRestSubscriptionClient(
+// Non-subscription REST client — pass the environment
+const context = createArmRestClient(
     ctx, executor,
-    createContainerRegistryManagement, // SDK factory function
-    subscription.credential,
-    subscription.subscriptionId,
+    createSubscription,
+    credential,     // TokenCredential
+    environment,    // EnvironmentLike (its resourceManagerEndpointUrl is used)
+    options,        // optional ClientOptions
 );
 ```
+
+**Endpoint behavior:** The factories set the SDK endpoint to `environment.resourceManagerEndpointUrl` — taken from `subscription.environment` for the subscription-scoped factory, or from the supplied `environment` for the non-subscription one. Endpoints are already stored without a trailing slash (`createEnvironment` strips them, which also sanitizes user-configured custom clouds), so the factory forwards the value as-is. For token acquisition, `EnvironmentLike` also exposes a derived `resourceManagerDefaultScope` (the pre-built `<resourceManagerEndpointUrl>/.default` scope) so callers don't hand-build the `.default` scope. The subscription-scoped factory also extracts `subscription.subscriptionId` (throwing a `TypeError` if it is empty). Concrete client wrappers (`ResourceClient`, `SubscriptionClient`, etc.) simply forward their `AzureSubscription`/`EnvironmentLike` to the factory.
+
+**CAE / MFA step-up:** Conditional Access Evaluation and MFA step-up challenges are handled by the SDK's built-in `bearerTokenAuthenticationPolicy` together with `VsCodeExtensionCredential`. The credential reads `GetTokenOptions.claims` and forwards them to VS Code's `getSession` as a synthetic `WWW-Authenticate` / claims challenge. There is no custom MFA policy.
+
+### User Agent Prefix
+
+All factory functions set a `userAgentPrefix` that includes the extension's ID and version. If the caller supplies its own `userAgentOptions.userAgentPrefix`, the two are concatenated -- e.g. `my-publisher.my-extension/1.0.0 CustomClient/2.0.0`.
+
+### Custom Policies
+
+Callers can provide custom pipeline policies via `options.additionalPolicies`. These are preserved and placed **before** the standard factory policies, so a caller policy sees a request first on the way out.
 
 ## Pipeline Policies
 
-Every client created through the factory functions gets five custom pipeline policies:
+Every client created through the factory functions gets three custom pipeline policies:
 
 | Policy | Position | Description |
 |--------|----------|-------------|
-| `DedupeRequestPolicy` | perCall | Deduplicates concurrent identical GET requests using `InflightMap`. If two concurrent calls hit the same URL, the second reuses the first's response (with a cloned response object). Streaming requests are excluded. |
+| `DedupeRequestPolicy` | perCall | Deduplicates concurrent equivalent GET operations across independently created clients. In-flight state is transient and partitioned by Azure identity plus selected response-affecting headers. Streaming and abortable requests are excluded. |
 | `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command or tree operation that initiated them. The context is looked up via `IActionExecutor.currentContext` (backed by `AsyncLocalStorage`), so policies don't need `IActionContext` passed explicitly — it's established by whichever scope wraps the call (command execution or `DataItemTree` provider call). |
 | `AcceptLanguagePolicy` | perCall | Sets the `accept-language` header to VS Code's UI language (`vscode.env.language`), so ARM responses match the user's locale. |
-| `MFAChallengePolicy` | perRetry | Handles 401 responses with a `WWW-Authenticate` header by requesting a stepped-up token. Records `challenge` and `challengeSuccess` telemetry properties. |
-| `RemoveBOMPolicy` | perRetry | Strips a leading UTF-8 BOM (`U+FEFF`) from response body text, which some Azure endpoints include. |
+
+Authentication (including CAE/MFA step-up) is handled by the SDK's built-in `bearerTokenAuthenticationPolicy`, which is wired up by the SDK's own credential plumbing from the supplied `TokenCredential` — not added by these factories.
 
 The factory also sets a `userAgentPrefix` combining the extension's ID and version with any caller-provided prefix.
 
+### Client Lifetime and Request Deduplication
+
+Do not cache Azure management clients to reuse pipelines or deduplicate requests. The standard factory installs `DedupeRequestPolicy` as a per-call policy, and all policy instances share only currently in-flight requests. Equivalent concurrent GETs can therefore coalesce even when each caller creates its own client.
+
+The dedupe key includes a lowercased Azure account-and-tenant partition, the request URL, and selected headers that affect the returned representation (such as `Accept`, `Accept-Language`, range, and conditional headers). Clients scoped to the same account and tenant share a partition across instances. When no stable Azure identity is available, clients created with the same credential object share an object-identity partition. Clients created with response-affecting options, such as custom transports, policies, retry settings, or credentials, use a client-local partition. Harmless options such as logging, telemetry, and user-agent customization preserve cross-client deduplication. Authentication, observability, and unrelated headers are ignored, so token rotation does not prevent deduplication. Anonymous policy instances share their own partition. Completed requests, responses, credentials, and clients are not retained. Callers that need durable data caching should cache the resulting domain data explicitly rather than extending client lifetime.
+
 ## Client Wrappers
 
-Three concrete client classes wrap Azure SDK clients with typed interfaces:
+The concrete wrappers live in `packages/azutils/src/rest/clients/`. Each exposes an
+interface (`IResourceClient`, `IDeploymentClient`, `ISubscriptionClient`, `IAcrClient`,
+`IWebAppClient`) that can be mocked in unit tests without the real Azure SDK; read the
+wrapper file for the current operation surface.
 
-### `ResourceClient`
+| Wrapper | Azure SDK | Scoped by | Consumed by |
+|---------|-----------|-----------|-------------|
+| `ResourceClient` | `@azure/arm-resources` | Subscription | Resource-group and resource listing in the resources tree |
+| `DeploymentClient` | `@azure/arm-resourcesdeployments` | Subscription | `ArmDeploymentDataProvider`, for deployment status and operations |
+| `AcrClient` | `@azure/arm-containerregistry` | Subscription | ACR data provider and commands |
+| `WebAppClient` | `@azure/arm-appservice` | Subscription | Web App / Function App / Logic App nodes and their settings |
+| `SubscriptionClient` | `@azure/arm-resources-subscriptions` | `EnvironmentLike` | `AzureAccountDataProvider`, plus `ChooseLocationStep` |
 
-Wraps `@azure/arm-resources` (`ResourceManagementClient`). Provides:
+`SubscriptionClient` is scoped by environment rather than by subscription because
+listing tenants and subscriptions happens *before* any specific subscription is
+known. Its `listLocations` result is cached by subscription ID in a static `Map`
+shared across instances, since locations rarely change; the tenant and subscription
+listings return `AsyncIterable<Page<T>>` (via [`toPages`](#topages)) so a large
+tenant set streams into the tree lazily instead of being buffered.
 
-```typescript
-interface IResourceClient {
-    readonly resourceGroups: {
-        list(options?): AsyncIterable<Page<ResourceGroup>>;
-    };
-    readonly resources: {
-        listByResourceGroup(resourceGroupName, options?): AsyncIterable<Page<GenericResource>>;
-    };
-}
-```
+### `ResourceClient` and resource metadata
 
-Key behaviors:
-- **Lazy SDK import**: The `@azure/arm-resources` module is imported dynamically on first `create()` call and cached in a static field, keeping activation fast.
-- **`attachMetadata()`**: After fetching resources from ARM, attaches `subscription` and `logicalType` properties to each resource, converting raw SDK types into `GenericResource`.
-- **`logicalType()`**: Classifies `Microsoft.Web/sites` by `kind` into more specific logical types:
-  - `Microsoft.Web/sites~functionapp` — Function Apps
-  - `Microsoft.Web/sites~workflowapp` — Logic Apps (Standard)
-  - `Microsoft.Web/sites~app` — App Service web apps
+`ResourceClient` is the one wrapper that does more than pass calls through. As
+resources come back from ARM, `attachMetadata()` turns raw SDK types into
+`GenericResource` by attaching `subscription` and `logicalType` -- it is passed to
+[`toPages`](#topages) as the per-item `map`, so every page is normalized on the way out.
 
-Exported type constants: `SiteType`, `FunctionAppLogicalType`, `WorkflowAppLogicalType`, `AppServiceLogicalType`.
-
-### `DeploymentClient`
-
-Wraps `@azure/arm-resourcesdeployments` using the REST-style SDK pattern (free functions + context, created via `createDeployments`). Provides:
-
-```typescript
-interface IDeploymentClient {
-    readonly deployments: {
-        getAtScope(scope, deploymentName, options?): Promise<DeploymentExtended>;
-    };
-    readonly deploymentOperations: {
-        listAtScope(scope, deploymentName, options?): AsyncIterable<Page<DeploymentOperation>>;
-    };
-}
-```
-
-Used by `ArmDeploymentDataProvider` to track ARM deployment status and operations in the Activity view.
-
-### `AcrClient`
-
-Wraps `@azure/arm-containerregistry` using the REST-style SDK pattern (free functions + context). Provides:
-
-```typescript
-interface IAcrClient {
-    readonly registries: {
-        get(resourceGroupName, registryName, options?): Promise<Registry>;
-    };
-}
-```
-
-Unlike the other clients, ACR uses `createAzureRestSubscriptionClient` because the `@azure/arm-containerregistry` SDK follows the newer REST-style pattern with `createContainerRegistryManagement` and free function operations.
-
-### `SubscriptionClient`
-
-Wraps `@azure/arm-resources-subscriptions` using the REST-style SDK pattern (free functions + context, created via `createSubscription`). Provides:
-
-```typescript
-interface ISubscriptionClient {
-    readonly subscriptions: {
-        listLocations(subscriptionId, options?): Promise<Location[]>;
-    };
-}
-```
-
-Key behaviors:
-- **Static location cache**: Location lists are cached by subscription ID in a static `Map` across all instances, since locations rarely change.
-- Used by `ChooseLocationStep` to populate the location picker.
+`logicalType()` is where an ARM type that covers several visually distinct products
+gets split -- `Microsoft.Web/sites` becomes a Function App, Logic App, or App Service
+depending on the resource's `kind`. The resulting constants (`SiteType`,
+`FunctionAppLogicalType`, `LogicAppLogicalType`, `AppServiceLogicalType`, and the
+Cosmos DB / AI Foundry / Durable Task equivalents) are exported from the same file and
+are what icon resolution and resource-type grouping key off. See
+[Tree Views — Resource Icons](tree-views.md#resource-icons).
 
 ## `toPages`
 
-Converts Azure SDK's `PagedAsyncIterableIterator` to the project-standard `AsyncIterable<Page<T>>`:
+Converts Azure SDK's `PagedAsyncIterableIterator` to the project-standard
+`AsyncIterable<Page<T>>`, iterating via `.byPage()`. It takes an optional `map` to
+transform each item on the way out (`ResourceClient` uses this to run
+`attachMetadata()` over every resource), and an optional `getContinuationToken`
+helper.
 
-```typescript
-function toPages<T>(
-    iterator: PagedAsyncIterableIterator<T, T[]>,
-): AsyncIterable<Page<T>>;
-
-// With item mapping (and optional classic-SDK continuation token helper)
-function toPages<T, U>(
-    iterator: PagedAsyncIterableIterator<T, T[]>,
-    map: (item: T) => U,
-    getContinuationToken?: (page: unknown) => string | undefined,
-): AsyncIterable<Page<U>>;
-```
-
-Uses `.byPage()` for page-level iteration. By default `hasMore` is derived from the `continuationToken` property attached to each page array, which matches the modular REST-style SDK `ContinuablePage` shape (e.g. `@azure/arm-resources-subscriptions/api`, `@azure/arm-resourcesdeployments/api`).
-
-For classic `ServiceClient`-style SDKs (e.g. `@azure/arm-resources`), the continuation token is stored in a `WeakMap` and accessed via the SDK's exported `getContinuationToken(page)` helper rather than on the page array. Pass that helper as the third argument -- `ResourceClient` does exactly this. The `map` parameter is also used by `ResourceClient` to call `attachMetadata()` on each resource.
+By default `hasMore` is derived from the `continuationToken` property attached to
+each page array, which is the modular REST-style SDK's `ContinuablePage` shape and
+covers every client here. The `getContinuationToken` parameter exists for
+classic `ServiceClient`-style SDKs, which instead stash the token in a `WeakMap`
+reachable only through their own exported `getContinuationToken(page)` helper --
+pass that helper through so `hasMore` stays correct.
 
 ## DI Integration
 
-Client providers are registered as factory bindings in `extension.ts`:
+Client providers are registered as factory bindings by each product's registration
+entry point (see [Dependency Injection — Factory Bindings](dependency-injection.md#factory-bindings-for-azure-clients)).
+The binding resolves a `TokenCredential` from `ICredentialFactory` before
+constructing the client, so nothing downstream of the factory deals with auth.
 
-```typescript
-container.bind(IResourceClientProvider).toFactory(context => {
-    const ctx = context.get(ICodeContext);
-    const executor = context.get(IActionExecutor);
-    return (subscription) => ResourceClient.create(ctx, executor, subscription);
-});
-```
+`ICredentialFactory` is bound in singleton scope to `createDefaultCredentialFactory(code, output)`, which produces `VsCodeExtensionCredential` instances. The credential owns sovereign-cloud detection and CAE/MFA claims handling, so client wrappers and the pipeline stay auth-agnostic. The factory accepts either explicit `CredentialFactoryOptions` or an `AzureSubscription` directly (shorthand for `{ tenantId: subscription.tenantId, sessionOptions: { account: { id: subscription.accountId, label: '' } } }`; `getSession` resolves the account by `id`, so the `label` is left empty).
 
-The resulting type is `AsyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `Promise<IResourceClient>`. Clients whose `create()` is synchronous (the REST-style SDK clients `DeploymentClient` and `SubscriptionClient`) use the sibling `SyncFactory<T, TArgs>` type instead, which returns `T` directly. Both types live in `packages/utils/src/types/Factory.ts`. Commands and data providers inject the factory and call it with the relevant subscription:
+The resulting type is `SyncFactory<IResourceClient, [AzureSubscription]>` — a function that takes a subscription and returns `IResourceClient` directly. This matches `ResourceClient.create(...)`, which is synchronous. The sibling `AsyncFactory<T, TArgs>` type is used for clients whose `create()` returns a promise. Both types live in `packages/utils/src/types/Factory.ts`. Commands and data providers inject the factory and call it with the relevant subscription:
 
 ```typescript
 @inject(IResourceClientProvider) private readonly getResourceClient: IResourceClientProvider
 
 // Later, in a method:
-const client = await this.getResourceClient(subscription);
+const client = this.getResourceClient(subscription);
 const resources = client.resources.listByResourceGroup(rgName);
 ```
-
-Each client wrapper exposes an interface (`IResourceClient`, `IDeploymentClient`, `ISubscriptionClient`, `IAcrClient`) that can be mocked in unit tests without needing the real Azure SDK.
 
 ## Type Re-exports
 
@@ -177,8 +149,8 @@ Client wrappers **re-export** any Azure SDK types that appear in their public AP
 export type Registry = SdkRegistry;
 export type Sku = SdkSku;
 
-// In SubscriptionClient.ts — direct re-export
-export type { Location } from '@azure/arm-resources-subscriptions';
+// In SubscriptionClient.ts — re-export the imported SDK model types
+export type { Location, Subscription, TenantIdDescription };
 ```
 
 When adding a new client or exposing a new SDK type:
@@ -186,6 +158,4 @@ When adding a new client or exposing a new SDK type:
 1. Import the SDK type in the client wrapper file
 2. Re-export it (with an alias if the SDK name is awkward)
 3. Re-export the client file from `packages/azutils/src/index.ts` (already done via `export * from './rest/clients/...'`)
-4. Consumers import from `@microsoft/vscode-azure-azutils`, never from `@azure/*`
-
-The extension has **zero direct `@azure/*` imports** — all Azure SDK access flows through these wrappers.
+Consumers import from `@microsoft/vscode-azure-azutils`, never from `@azure/*`. The one deliberate exception in the extension is `ArmDeploymentDataProvider`, which uses `@azure/core-lro` directly to poll long-running ARM deployments.

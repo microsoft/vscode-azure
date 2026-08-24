@@ -9,6 +9,9 @@
 
 // @ts-check
 
+/** @type {import('vscode').ExtensionMode.Production} */
+const extensionModeProduction = 1;
+
 /** @type {{ loadStartTime: number, loadEndTime: number }} */
 const perfStats = {
     loadStartTime: Date.now(),
@@ -21,18 +24,28 @@ const extension = require('./dist/extension.bundle.js');
 /**
  * VS Code extension activation entry point.
  *
- * When `AZURE_MOCK_DATA=1` is set and the extension is running in Development
- * mode, mock bindings from `debug.bundle.js` are applied to the DI container
- * before activation so the tree views render deterministic fake data.
+ * In specific dev/test scenarios, container overrides are applied before
+ * activation by loading a separate bundle (see {@link activateWithOverrides}):
+ * - `AZURE_MOCK_DATA=1` in Development mode rebinds services with mock data so
+ *   the tree views render deterministic fake data.
+ * - `ENABLE_LONG_RUNNING_TESTS=1` injects a real Azure credential factory so the in-process
+ *   AzdAuthServer can acquire live tokens without an interactive sign-in.
  *
  * @param {import('vscode').ExtensionContext} ctx
  */
 exports.activate = async function activate(ctx) {
-    // ExtensionMode.Development === 2
-    if (process.env.AZURE_MOCK_DATA === '1' && ctx.extensionMode === 2) {
-        /** @type {typeof import('./src/debug/mockData')} */
-        const { applyMockData } = require('./dist/debug.bundle.js');
-        return await extension.activateInternal(ctx, perfStats, applyMockData);
+    if (ctx.extensionMode !== extensionModeProduction) {
+        let overrideBundlePath;
+        if (process.env.AZURE_MOCK_DATA === '1') {
+            overrideBundlePath = './dist/test/mock.bundle.js';
+        } else if (process.env.ENABLE_LONG_RUNNING_TESTS === '1') {
+            overrideBundlePath = './dist/test/e2e.bundle.js';
+        }
+
+        if (overrideBundlePath) {
+            const { applyOverrides } = require(overrideBundlePath);
+            return extension.activateInternal(ctx, perfStats, applyOverrides);
+        }
     }
 
     return await extension.activateInternal(ctx, perfStats);

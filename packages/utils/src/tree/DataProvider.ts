@@ -6,17 +6,27 @@
 import type { Page } from '../data/Page';
 import type { Event } from '../vscode/EventEmitter';
 import type { ProviderResult } from '../vscode/ProviderResult';
+import type { Target } from './Selector';
 
 /**
  * Event fired by a {@linkcode DataProvider} when its data changes externally
  * (e.g. polling, user action). The tree subscribes to this automatically
- * when the provider is registered.
+ * when the provider is registered and routes it to
+ * {@linkcode DataItemTree.invalidate} (or `.remove` when {@linkcode remove}
+ * is `true`).
  */
 export interface DataProviderChangeEvent<TResource> {
-    /** The resource that changed, or `undefined` for root-level changes. */
-    readonly resource?: TResource;
-    /** When `true`, cached children are invalidated and re-fetched. */
-    readonly includeChildren: boolean;
+    /**
+     * What changed. Accepts the full {@linkcode Target} surface -- a selector,
+     * a resource, a key, an array, or the `Roots` / `Everything` sentinels.
+     */
+    readonly target: Target<TResource>;
+    /**
+     * When `true`, the matched target is *removed* from the cache (evicted and
+     * spliced out) rather than invalidated/re-fetched. Not applicable to the
+     * `Roots` / `Everything` sentinels.
+     */
+    readonly remove?: boolean;
 }
 
 /**
@@ -87,10 +97,25 @@ export interface DataProvider<TResource> {
     readonly isRoot?: boolean;
 
     /**
+     * Optionally override the cache time-to-live (TTL), in milliseconds, for the
+     * children of the given resource.
+     *
+     * Called by {@linkcode DataItemTree} after children are fetched to decide
+     * when they become stale. When omitted, the tree's default TTL is used.
+     * Return `Infinity` to mark children as never-expiring (invalidated only by
+     * explicit {@linkcode DataItemTree.invalidate} / {@linkcode DataItemTree.remove}
+     * calls or {@linkcode onDidChange} events).
+     *
+     * @param resource - The parent resource whose children were fetched, or
+     *   `undefined` for the root (root providers only).
+     */
+    getTtl?(resource?: TResource): number;
+
+    /**
      * Optional event fired when the provider's data changes externally.
      * The tree automatically subscribes when the provider is registered
-     * and calls {@linkcode DataItemTree.invalidate} or {@linkcode DataItemTree.invalidateAll}
-     * accordingly.
+     * and routes the event to {@linkcode DataItemTree.invalidate} or
+     * {@linkcode DataItemTree.remove} accordingly.
      *
      * This is appropriate when the provider is aware of changes to its data that the
      * tree is not (e.g. polling, user action in another view, etc.). When practical,
