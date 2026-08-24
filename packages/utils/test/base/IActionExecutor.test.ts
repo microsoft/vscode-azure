@@ -247,8 +247,10 @@ describe('ActionExecutor (unit)', () => {
                 ((...args: unknown[]) => Promise.resolve(args[2])),
             );
 
+            const error = new Error('bug');
+            error.stack = 'Error: bug\n    at test-command';
             await executor.callWithTelemetryAndErrorHandling('test', () => {
-                throw new Error('bug');
+                throw error;
             });
 
             // Give the async toast handler a tick to complete
@@ -258,6 +260,9 @@ describe('ActionExecutor (unit)', () => {
             expect(executeCommand.mock.calls[0].arguments[0]).to.equal('vscode.openIssueReporter');
             const options = executeCommand.mock.calls[0].arguments[1] as { extensionId: string; data: string };
             expect(options.extensionId).to.equal('test-extension');
+            expect(options.data).to.include('Error Name: Error');
+            expect(options.data).to.include('Error Message: bug');
+            expect(options.data).to.include(`Call Stack:\n${error.stack}`);
             expect(options.data).to.include('App Host:');
             expect(options.data).to.include('Language:');
         });
