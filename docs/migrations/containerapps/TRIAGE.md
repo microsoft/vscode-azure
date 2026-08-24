@@ -47,7 +47,7 @@ cited **qualitatively only** -- raw counts are deliberately not committed. Re-ru
 
 | # | Call | Rows | Decision |
 |---|---|---|---|
-| 1 | Revision drafts | 9 | **Drop** -- an extension invention, not an ACA platform concept; Bicep/IaC replaces the staging model |
+| 1 | Revision drafts | 9 | **Drop** -- although the concept is not unique to this extension, Bicep/IaC replaces its client-side staging model |
 | 2 | Env vars + secrets | 14 | **Drop** -- env vars move to Bicep; secrets avoided entirely via managed identity + Key Vault references |
 | 3 | Ingress + scaling | 15 | **Drop** -- expressed in Bicep |
 | 4 | Remote ACR build | 4 | **Drop** -- rely entirely on azd (`docker.remoteBuild: true`) |
@@ -168,7 +168,7 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-031 | `addSecret` | cmd+wizard | A+B | **Drop** | JC2. Registry auth uses managed identity (`RegistryCredentials.identity`) and application secrets become Key Vault references (`Secret.keyVaultUrl` + `Secret.identity`), so no secret value ever enters Bicep, ARM or the extension. No settings adapter needed. Reviewer (verbatim): "For secrets, what I'm really wondering is, if we can avoid them altogether. For example, in our Functions template, we use a managed identity, assigned to the app itself, and granted access to storage, app insights, etc. etc. Not a single secret anywhere." | yes |
 | ACA-032 | `editSecretValue` | cmd+wizard | A+B | **Drop** | No per-setting commands | yes |
 | ACA-033 | `deleteSecret` | cmd+wizard | A+B | **Drop** | No per-setting commands | yes |
-| ACA-034 | `createRevisionDraft` | cmd | A+B | **Drop** | JC1. Revision drafts are an extension invention, not an ACA platform concept -- the ACA ARM SDK has no draft resource or API. The draft is a client-side staging buffer over the ARM `template` property, and deploying one is an ordinary container app update. Bicep + re-provision provides the same batching, with a real diff and git as the discard mechanism. Reviewer (verbatim): "I agree, drop revision drafts. Bicep / IaC is the way." | yes |
+| ACA-034 | `createRevisionDraft` | cmd | A+B | **Drop** | JC1. Although revision drafts are not unique to this extension, this implementation is a client-side staging buffer over the ARM `template` property rather than a distinct ARM resource; deploying one is an ordinary container app update. Bicep + re-provision provides the same batching, with a real diff and git as the discard mechanism. Reviewer (verbatim): "I agree, drop revision drafts. Bicep / IaC is the way." | yes |
 | ACA-035 | `editRevisionDraft` | cmd | A+B | **Drop** | JC1 revision drafts -> Bicep/IaC. | yes |
 | ACA-036 | `deployRevisionDraft` | cmd+wizard | A+B | **Drop** | JC1 revision drafts -> Bicep/IaC. | yes |
 | ACA-037 | `discardRevisionDraft` | cmd | A+B | **Drop** | JC1 revision drafts -> Bicep/IaC. | yes |
