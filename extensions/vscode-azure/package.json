@@ -535,21 +535,6 @@
                     "default": [],
                     "description": "%settings.vscode-azure.selectedSubscriptions%"
                 },
-                "vscode-azure.staticWebApps.appSubpath": {
-                    "type": "string",
-                    "scope": "resource",
-                    "description": "%settings.vscode-azure.staticWebApps.appSubpath%"
-                },
-                "vscode-azure.staticWebApps.apiSubpath": {
-                    "type": "string",
-                    "scope": "resource",
-                    "description": "%settings.vscode-azure.staticWebApps.apiSubpath%"
-                },
-                "vscode-azure.staticWebApps.outputSubpath": {
-                    "type": "string",
-                    "scope": "resource",
-                    "description": "%settings.vscode-azure.staticWebApps.outputSubpath%"
-                },
                 "vscode-azure.staticWebApps.showStaticWebAppsCliWarning": {
                     "type": "boolean",
                     "default": true,

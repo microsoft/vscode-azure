@@ -245,19 +245,6 @@ describe('Static Web Apps manifest (integration)', () => {
         ]);
 
         const settings = manifest.contributes.configuration?.properties ?? {};
-        expect(Object.keys(settings).filter(key => key.includes('staticWebApps'))).to.have.members([
-            'vscode-azure.staticWebApps.appSubpath',
-            'vscode-azure.staticWebApps.apiSubpath',
-            'vscode-azure.staticWebApps.outputSubpath',
-            'vscode-azure.staticWebApps.showStaticWebAppsCliWarning',
-        ]);
-        for (const key of [
-            'vscode-azure.staticWebApps.appSubpath',
-            'vscode-azure.staticWebApps.apiSubpath',
-            'vscode-azure.staticWebApps.outputSubpath',
-        ]) {
-            expect(settings[key]).to.deep.include({ type: 'string', scope: 'resource' });
-        }
         expect(settings['vscode-azure.staticWebApps.showStaticWebAppsCliWarning']).to.deep.include({
             type: 'boolean',
             default: true,

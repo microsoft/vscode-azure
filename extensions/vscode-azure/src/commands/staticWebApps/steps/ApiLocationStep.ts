@@ -6,7 +6,7 @@
 import { IActionContext, ICodeContext, PromptStep, showSmartInputBox, showSmartQuickPick, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
-import { getStaticWebAppPathSetting } from '../StaticWebAppSettings';
+import { getStaticWebAppCliLocation } from '../../../staticWebApps/SwaCliConfig';
 import { staticWebAppsApiLocationUrl } from '../staticWebAppLinks';
 import { addLocationTelemetry, isYamlSafeLocation } from './locationUtils';
 
@@ -31,7 +31,7 @@ export class ApiLocationStep extends PromptStep<CreateStaticWebAppContext> {
 
     public async prompt(context: Readonly<CreateStaticWebAppContext>): Promise<Partial<CreateStaticWebAppContext>> {
         const defaultValue = context.buildPreset?.apiLocation ?? 'api';
-        const setting = getStaticWebAppPathSetting(this.ctx.code, 'apiLocation', context.iacFolder);
+        const declared = await getStaticWebAppCliLocation(this.ctx.code, 'apiLocation', context.iacFolder);
         const detected = context.detectedApiLocations ?? [];
         let apiLocation: string;
 
@@ -53,14 +53,14 @@ export class ApiLocationStep extends PromptStep<CreateStaticWebAppContext> {
                 showBack: true,
             });
             apiLocation = selected.data.custom
-                ? await this.promptForLocation(setting || defaultValue)
+                ? await this.promptForLocation(declared || defaultValue)
                 : selected.data.location ?? '';
         } else {
-            apiLocation = await this.promptForLocation(setting || defaultValue);
+            apiLocation = await this.promptForLocation(declared || defaultValue);
         }
 
         apiLocation = apiLocation.trim();
-        addLocationTelemetry(this.actionContext, 'apiLocation', apiLocation, defaultValue, setting);
+        addLocationTelemetry(this.actionContext, 'apiLocation', apiLocation, defaultValue, declared);
         return { apiLocation };
     }
 

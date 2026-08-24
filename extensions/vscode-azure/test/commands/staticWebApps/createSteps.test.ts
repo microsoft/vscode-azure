@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockUri, respondToPrompts, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { parse } from 'yaml';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
@@ -47,25 +47,67 @@ describe('Static Web Apps creation steps (unit)', () => {
         expect(resolveDefaultOutputLocation(context)).to.equal('dist/my-portal');
     });
 
-    it('should use the configured app path as the editable default', async () => {
+    it('should offer the path already declared to the SWA CLI as the editable default', async () => {
         const { ctx, mock } = createMockCodeContext();
         const actionContext = createActionContext('test');
         const step = new AppLocationStep(actionContext, ctx);
         respondToPrompts(mock, ['acceptDefault']);
+        mock.fs.addFile(
+            MockUri.file('/workspace/swa-cli.config.json'),
+            JSON.stringify({ configurations: { app: { appLocation: 'frontend' } } }),
+        );
 
-        const result = await withSettings(
-            mock,
-            { 'vscode-azure.staticWebApps.appSubpath': 'frontend' },
-            () => step.prompt({
-                resourceDisplayName: 'Static Web App',
-                mode: 'basic',
-                iacFolder: MockUri.file('/workspace'),
-                buildPreset: getStaticWebAppBuildPreset('react'),
+        const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
+            mode: 'basic',
+            iacFolder: MockUri.file('/workspace'),
+            buildPreset: getStaticWebAppBuildPreset('react'),
+        });
+
+        // The preset would otherwise win, so this also pins that a declared
+        // path outranks the framework guess.
+        expect(result.appLocation).to.equal('frontend');
+        expect(actionContext.telemetry.properties.appLocation).to.equal('setting');
+    });
+
+    it('should resolve the first configuration when the SWA CLI config names several', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const step = new AppLocationStep(createActionContext('test'), ctx);
+        respondToPrompts(mock, ['acceptDefault']);
+        // No caller passes --config-name, so the CLI resolves the first entry.
+        // Prefilling anything else would show a path the build would not use.
+        mock.fs.addFile(
+            MockUri.file('/workspace/swa-cli.config.json'),
+            JSON.stringify({
+                configurations: { app: { appLocation: 'frontend' }, docs: { appLocation: 'website' } },
             }),
         );
 
+        const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
+            mode: 'basic',
+            iacFolder: MockUri.file('/workspace'),
+            buildPreset: getStaticWebAppBuildPreset('react'),
+        });
+
         expect(result.appLocation).to.equal('frontend');
-        expect(actionContext.telemetry.properties.appLocation).to.equal('setting');
+    });
+
+    it('should fall back to the detected path when the SWA CLI config is unreadable', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const step = new AppLocationStep(createActionContext('test'), ctx);
+        respondToPrompts(mock, ['acceptDefault']);
+        mock.fs.addFile(MockUri.file('/workspace/swa-cli.config.json'), '{ not json');
+
+        const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
+            mode: 'basic',
+            iacFolder: MockUri.file('/workspace'),
+            detectedAppLocation: 'src',
+            buildPreset: getStaticWebAppBuildPreset('react'),
+        });
+
+        expect(result.appLocation).to.equal('src');
     });
 
     it('should auto-select exactly one detected Functions API', async () => {
