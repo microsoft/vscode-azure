@@ -380,6 +380,22 @@ describe('uiHelpers (unit)', () => {
             expect(cItem?.description).to.include('recently selected');
         });
 
+        it('should retain excluded recent items without pre-selecting them', async () => {
+            const { ctx, mock } = createMockCodeContext();
+            const items = [{ label: 'A' }, { label: 'Action' }];
+
+            respondToPrompts(mock, [{ pickMany: ['Action'] }, { pickMany: ['A'] }]);
+            await showSmartQuickPick(ctx, items, { canPickMany: true });
+
+            await showSmartQuickPick(ctx, items, {
+                canPickMany: true,
+                shouldRememberItem: item => item.label !== 'Action',
+            });
+
+            const qp = mock.quickPicks[1];
+            expect(qp.items.map(item => item.label)).to.deep.equal(['A', 'Action']);
+        });
+
         it('should use isActiveItem to pre-highlight an item', async () => {
             const { ctx, mock } = createMockCodeContext();
 

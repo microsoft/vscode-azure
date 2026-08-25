@@ -293,6 +293,7 @@ export async function pickTenantOrEnterId(ctx: ICodeContext, tenantPages: AsyncI
                 : code.l10n.t('Type the ID of the tenant to sign in to'),
             matchOnDescription: true,
             shouldRememberItem: item => !('loadMore' in item.data),
+            isActionItem: item => 'loadMore' in item.data,
             // Combo box: offer a "sign in to <typed id>" item only when the value
             // is a tenant GUID that isn't already one of the suggestions. Users
             // paste tenant IDs rather than typing them, so any non-GUID value is a

@@ -13,6 +13,24 @@ interface ILimitedTaskFactory<T> {
     readonly e: (error?: unknown) => void;
 }
 
+type SettledResult<T> =
+    | { readonly fulfilled: true; readonly value: T }
+    | { readonly fulfilled: false; readonly error: unknown };
+
+function settle<T>(promise: Promise<T>): Promise<SettledResult<T>> {
+    return promise.then(
+        value => ({ fulfilled: true, value }),
+        (error: unknown) => ({ fulfilled: false, error }),
+    );
+}
+
+function unwrap<T>(result: SettledResult<T>): T {
+    if (result.fulfilled) {
+        return result.value;
+    }
+    throw result.error;
+}
+
 /**
  * Limits the number of promises that may run concurrently.
  *
@@ -66,24 +84,23 @@ export class Limiter<T> {
      * Tasks are submitted through {@linkcode queue}, so a limiter shared with
      * other callers still bounds total concurrency across all of them.
      *
-     * @remarks A caller that abandons the iteration early leaves the in-flight
-     * tasks unawaited. If `factory` can reject, it must settle its own failures
-     * (or the caller must consume to completion), or an abandoned task will
-     * surface as an unhandled rejection.
+     * Rejections are handled as soon as work is queued, then rethrown when their
+     * source-order position is consumed. Abandoning the iterator therefore does
+     * not surface an unhandled rejection from already-started work.
      */
     async *map<I>(source: AsyncIterable<I>, factory: (item: I) => Promise<T>): AsyncIterable<T> {
-        const inFlight: Array<Promise<T>> = [];
+        const inFlight: Array<Promise<SettledResult<T>>> = [];
 
         for await (const item of source) {
-            inFlight.push(this.queue(() => factory(item)));
+            inFlight.push(settle(this.queue(() => factory(item))));
             while (inFlight.length >= this.maxDegreeOfParallelism) {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                yield await inFlight.shift()!;
+                yield unwrap(await inFlight.shift()!);
             }
         }
 
         for (const pending of inFlight) {
-            yield await pending;
+            yield unwrap(await pending);
         }
     }
 

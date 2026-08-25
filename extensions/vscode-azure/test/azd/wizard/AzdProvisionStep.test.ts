@@ -259,6 +259,35 @@ describe('AzdProvisionStep (unit)', () => {
             expect(armProvider.trackDeployment.mock.calls[1].arguments[1]).to.equal('tenant-owning');
         });
 
+        it('should retry an unresolved subscription for a later deployment', async () => {
+            const id1 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const id2 = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-2';
+            const resolved = makeSubscription({
+                subscriptionId: 'sub-1',
+                tenantId: 'tenant-owning',
+                accountId: 'acct-owning',
+            });
+            const { azd, step, armProvider, resolveSubscription, fs } = createStep();
+            let lookup = 0;
+            resolveSubscription.mock.mockImplementation(() => Promise.resolve(lookup++ === 0 ? undefined : resolved));
+
+            azd.provision.mock.mockImplementation((_cwd: unknown, env: Record<string, string>) => {
+                fs.addFile(MockUri.file(env.AZD_DEPLOYMENT_ID_FILE), makeJsonl(id1, id2));
+                return Promise.resolve();
+            });
+
+            await step.execute({
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+            });
+            await delay(0);
+
+            expect(resolveSubscription.mock.callCount()).to.equal(2);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[1]).to.be.undefined;
+            expect(armProvider.trackDeployment.mock.calls[1].arguments[1]).to.equal('tenant-owning');
+            expect(armProvider.trackDeployment.mock.calls[1].arguments[2]).to.equal('acct-owning');
+        });
+
         it('should not look up a tenant the env already names', async () => {
             const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
             const { azd, step, armProvider, resolveSubscription, fs } = createStep();

@@ -5,6 +5,7 @@
 
 import { CaselessMap, type Page } from '@microsoft/vscode-azure-utils';
 import type { AzureAccount, AzureTenant } from '../AzureSubscription';
+import type { EnvironmentLike } from '../Environment';
 import type { AzureListingNode } from '../../models/AzureNode';
 import { CachedPagedListing } from './CachedPagedListing';
 
@@ -28,10 +29,9 @@ export type AzureListingParent = AzureAccount | Pick<AzureTenant, 'environment' 
  * than collide, which is what lets a cloud switch discard nothing: the same
  * account id can be issued by both the public and the sovereign auth provider,
  * and the data behind it is entirely different. It is identified by its
- * resource-manager endpoint alone -- that is what the listings were actually
- * fetched from, so two clouds sharing it hold the same data whatever they are
- * called, and a custom cloud whose endpoint the user edits gets a new key
- * without having to be renamed.
+ * request-relevant endpoints. Cached nodes retain their environment for portal
+ * links and service-specific requests, so two configurations share descendants
+ * only when all of those endpoints match.
  *
  * Each segment is percent-encoded before being joined, because a VS Code
  * authentication account id is an opaque provider string that may itself
@@ -43,9 +43,21 @@ export type AzureListingParent = AzureAccount | Pick<AzureTenant, 'environment' 
  */
 export function azureListingKey(parent: AzureListingParent): string {
     const segments = 'tenantId' in parent
-        ? [parent.environment.resourceManagerEndpointUrl, parent.accountId, parent.tenantId]
-        : [parent.environment.resourceManagerEndpointUrl, parent.id];
+        ? [environmentIdentity(parent.environment), parent.accountId, parent.tenantId]
+        : [environmentIdentity(parent.environment), parent.id];
     return segments.map(segment => encodeURIComponent(segment)).join('/');
+}
+
+/** Values on an environment that can affect requests or links made from cached nodes. */
+function environmentIdentity(environment: EnvironmentLike): string {
+    const probe = 'azure-listing-cache-key';
+    return JSON.stringify([
+        environment.resourceManagerEndpointUrl,
+        environment.portalUrl,
+        environment.storageEndpoint(probe),
+        environment.containerRegistryEndpoint(probe),
+        environment.azureWebSitesEndpoint(probe),
+    ]);
 }
 
 /**

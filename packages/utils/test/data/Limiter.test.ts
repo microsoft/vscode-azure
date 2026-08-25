@@ -170,6 +170,30 @@ describe('Limiter (unit)', () => {
             }))).to.be.rejectedWith('boom');
         });
 
+        it('handles an out-of-order rejection until its source position is consumed', async () => {
+            const limiter = new Limiter<number>(2);
+            const first = Promise.withResolvers<number>();
+            const unhandled: unknown[] = [];
+            const onUnhandled = (reason: unknown): void => { unhandled.push(reason); };
+            process.on('unhandledRejection', onUnhandled);
+
+            try {
+                const iterator = limiter.map(range(2), item =>
+                    item === 0 ? first.promise : Promise.reject(new Error('boom')))[Symbol.asyncIterator]();
+                const firstResult = iterator.next();
+
+                await new Promise(resolve => setImmediate(resolve));
+                expect(unhandled).to.deep.equal([]);
+
+                first.resolve(0);
+                expect(await firstResult).to.deep.equal({ done: false, value: 0 });
+                await expect(iterator.next()).to.be.rejectedWith('boom');
+            } finally {
+                first.resolve(0);
+                process.off('unhandledRejection', onUnhandled);
+            }
+        });
+
         it('yields nothing for an empty source', async () => {
             const limiter = new Limiter<number>(2);
             expect(await collect(limiter.map(range(0), item => Promise.resolve(item)))).to.deep.equal([]);

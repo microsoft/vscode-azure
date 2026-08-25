@@ -253,13 +253,13 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         const skip = !this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<boolean>('alwaysShowAccountNodes', false);
 
-        if (skip && nodes.length === 1 && isAccount(nodes[0])) {
+        if (skip && nodes.length === 1 && isAccount(nodes[0]) && !this.cache.hasMore(nodes[0])) {
             this.executor.output.debug('[view] skipping account level');
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'tenant';
         }
 
-        if (skip && nodes.length === 1 && isTenant(nodes[0])) {
+        if (skip && nodes.length === 1 && isTenant(nodes[0]) && !this.cache.hasMore(nodes[0])) {
             this.executor.output.debug('[view] skipping tenant level');
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'subscription';

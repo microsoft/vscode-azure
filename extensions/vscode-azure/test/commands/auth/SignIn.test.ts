@@ -388,6 +388,11 @@ describe('pickTenantOrEnterId (unit)', () => {
         };
     }
 
+    async function flushMicrotasks(): Promise<void> {
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
     it('should offer a synthetic sign-in item for a pasted tenant GUID', async () => {
         const { ctx, mock } = createMockCodeContext();
         const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
@@ -396,7 +401,7 @@ describe('pickTenantOrEnterId (unit)', () => {
             items: [makeReachableTenant('tenant-1', 'Tenant One')],
             hasMore: false,
         }));
-        await new Promise(resolve => setImmediate(resolve));
+        await flushMicrotasks();
 
         const qp = mock.quickPicks[0];
         qp.changeValue(tenantId);
@@ -419,7 +424,7 @@ describe('pickTenantOrEnterId (unit)', () => {
             items: [makeReachableTenant('tenant-1', 'Tenant One')],
             hasMore: false,
         }));
-        await new Promise(resolve => setImmediate(resolve));
+        await flushMicrotasks();
 
         const qp = mock.quickPicks[0];
         // Users never type a tenant GUID -- a non-GUID value is a filter, so no
@@ -452,7 +457,7 @@ describe('pickTenantOrEnterId (unit)', () => {
             { items: [first, second], hasMore: true },
             { items: [first, second], hasMore: false },
         ));
-        await new Promise(resolve => setImmediate(resolve));
+        await flushMicrotasks();
 
         const firstPick = mock.quickPicks[0];
         const loadMore = firstPick.items.find(item => item.label === 'Load more tenants...');
@@ -460,7 +465,7 @@ describe('pickTenantOrEnterId (unit)', () => {
         firstPick.activeItems = loadMore ? [loadMore] : [];
         firstPick.accept();
 
-        await new Promise(resolve => setImmediate(resolve));
+        await flushMicrotasks();
         const secondPick = mock.quickPicks[1];
         expect(secondPick.items.map(item => item.label)).to.deep.equal([
             'Tenant One (tenant-1)',
@@ -475,6 +480,31 @@ describe('pickTenantOrEnterId (unit)', () => {
         expect(pick).to.deep.equal({ tenantId: 'tenant-2', accountId: 'acct-2' });
     });
 
+    it('should prioritize a pasted tenant GUID over load more', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
+        const first = makeReachableTenant('tenant-1', 'Tenant One');
+
+        const resultPromise = pickTenantOrEnterId(ctx, pages(
+            { items: [first], hasMore: true },
+            { items: [first], hasMore: false },
+        ));
+        await flushMicrotasks();
+
+        const qp = mock.quickPicks[0];
+        qp.changeValue(tenantId);
+        expect(qp.activeItems[0].label).to.equal(`Sign in to tenant: ${tenantId}`);
+        expect(qp.items.map(item => item.label)).to.deep.equal([
+            'Tenant One (tenant-1)',
+            `Sign in to tenant: ${tenantId}`,
+            'Load more tenants...',
+        ]);
+        qp.accept();
+
+        expect(await resultPromise).to.deep.equal({ tenantId });
+        expect(mock.quickPicks).to.have.lengthOf(1);
+    });
+
     it('should allow a pasted tenant GUID when tenant listing fails', async () => {
         const { ctx, mock } = createMockCodeContext();
         const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
@@ -485,7 +515,7 @@ describe('pickTenantOrEnterId (unit)', () => {
         };
 
         const resultPromise = pickTenantOrEnterId(ctx, failedPages);
-        await new Promise(resolve => setImmediate(resolve));
+        await flushMicrotasks();
         const qp = mock.quickPicks[0];
         expect(qp.items).to.deep.equal([]);
         qp.changeValue(tenantId);

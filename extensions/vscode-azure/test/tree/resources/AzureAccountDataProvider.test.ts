@@ -319,6 +319,21 @@ describe('AzureAccountDataProvider (unit)', () => {
             expect(fetcher.fetchAccounts.mock.callCount()).to.equal(1);
         });
 
+        it('should reconcile an additional session change during the echo window', async () => {
+            const { provider, code, scheduler } = createProvider();
+            await provider.getChildren();
+
+            code.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            await scheduler.flush();
+
+            // The first event is the expected getAccounts echo. A second event
+            // in the same window is independent and must not be discarded.
+            code.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+            code.sessionsChangeEmitter.fire({ provider: { id: PublicAuthProviderId, label: 'Microsoft' } });
+
+            expect(scheduler.hasPending).to.be.true;
+        });
+
         it('should swallow a listing failure during reconcile instead of rejecting', async () => {
             const { provider, code, scheduler, fetcher } = createProvider();
             fetcher.fetchAccounts.mock.mockImplementation(() => Promise.reject(new Error('transient auth failure')));

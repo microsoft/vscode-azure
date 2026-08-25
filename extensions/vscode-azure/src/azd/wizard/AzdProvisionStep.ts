@@ -107,7 +107,12 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
             const { subscriptionId } = parseAzureResourceId(deploymentId);
             let pending = memo.get(subscriptionId);
             if (!pending) {
-                pending = this.lookupScope(subscriptionId);
+                pending = this.lookupScope(subscriptionId).then(scope => {
+                    if (!scope.tenantId && memo.get(subscriptionId) === pending) {
+                        memo.delete(subscriptionId);
+                    }
+                    return scope;
+                });
                 memo.set(subscriptionId, pending);
             }
             return pending;

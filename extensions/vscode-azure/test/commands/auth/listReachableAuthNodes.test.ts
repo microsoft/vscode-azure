@@ -173,5 +173,23 @@ describe('listReachableAuthNodes (unit)', () => {
 
             expect(await collectAsync(listReachableTenantPages(listings))).to.deep.equal([]);
         });
+
+        it('keeps pages from healthy accounts when another account cannot list tenants', async () => {
+            const blockedAccount = makeAccount({ id: 'blocked-account' });
+            const healthyAccount = makeAccount({ id: 'healthy-account' });
+            const tenant = makeTenant({ accountId: healthyAccount.id, tenantId: 'tenant-1' });
+            const { listings } = createCache({
+                accounts: [blockedAccount, healthyAccount],
+                tenants: [tenant],
+                subscriptions: [],
+                unlistableAccountIds: [blockedAccount.id],
+            });
+
+            const pages = await collectAsync(listReachableTenantPages(listings));
+
+            expect(pages).to.have.lengthOf(1);
+            expect(pages[0].items).to.deep.equal([{ account: healthyAccount, tenant }]);
+            expect(pages[0].hasMore).to.be.false;
+        });
     });
 });

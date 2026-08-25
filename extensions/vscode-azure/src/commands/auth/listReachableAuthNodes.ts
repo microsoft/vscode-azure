@@ -82,12 +82,12 @@ export async function* listReachableTenantPages(listings: AzureListingCache): As
     while (listingsToAdvance.length > 0) {
         const results = await Promise.all(listingsToAdvance.map(async listing => ({
             listing,
-            result: await listing.iterator.next(),
+            result: await listing.iterator.next().catch(() => undefined),
         })));
-        const remaining = [];
+        const remaining: typeof listingsToAdvance = [];
 
         for (const { listing, result } of results) {
-            if (result.done) {
+            if (!result || result.done) {
                 continue;
             }
 

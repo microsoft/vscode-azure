@@ -22,6 +22,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         nodes?: ConcreteAzureNode[],
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
         onGetChildren?: (node: ConcreteAzureNode) => void,
+        hasMore?: (node: ConcreteAzureNode) => boolean,
     ) {
         const { executor } = createTestActionExecutor();
         const allNodes = nodes ?? [];
@@ -41,6 +42,7 @@ describe('GenericAzureViewProvider (unit)', () => {
                 onGetChildren?.(node);
                 return Promise.resolve(children.get(node) ?? []);
             },
+            hasMore: (node: ConcreteAzureNode) => hasMore?.(node) ?? false,
             loadAll: () => Promise.resolve(),
         };
         return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
@@ -96,6 +98,44 @@ describe('GenericAzureViewProvider (unit)', () => {
             for (const key of roots) {
                 expect(AzureNodeId.parse(key).isAccountNodeId()).to.be.true;
             }
+        });
+
+        it('should keep a single account visible while its tenant listing has more pages', async () => {
+            const account = makeAccount();
+            const tenant = makeTenant();
+            const provider = createProvider(
+                [account, tenant],
+                new Map([[account, [tenant]]]),
+                undefined,
+                node => node === account,
+            );
+
+            const roots = await provider.getChildren();
+
+            expect(roots).to.deep.equal([AzureNodeId.from(account).toString()]);
+        });
+
+        it('should keep a single tenant visible while its subscription listing has more pages', async () => {
+            const account = makeAccount();
+            const tenant = makeTenant();
+            const subscription = makeSubscription({
+                accountId: account.id,
+                tenantId: tenant.tenantId,
+                environment: tenant.environment,
+            });
+            const provider = createProvider(
+                [account, tenant, subscription],
+                new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
+                    [account, [tenant]],
+                    [tenant, [subscription]],
+                ]),
+                undefined,
+                node => node === tenant,
+            );
+
+            const roots = await provider.getChildren();
+
+            expect(roots).to.deep.equal([AzureNodeId.from(tenant).toString()]);
         });
 
         it('should return resource group keys for a subscription branch', async () => {

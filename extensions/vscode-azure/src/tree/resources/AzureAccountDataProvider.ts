@@ -105,14 +105,10 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
     private knownAccountIds: ICaselessSetReader | undefined;
 
     /**
-     * Timestamp (epoch ms) before which `onDidChangeSessions` is ignored.
-     *
-     * Reconciling calls `getAccounts()`, which itself raises a session-change
-     * event, so without this the reconcile would re-trigger itself forever. Only
-     * this provider's own echo needs suppressing: an event provoked by anything
-     * else costs one reconcile that finds the account set unchanged and stops.
+     * The one session-change echo expected from the current `getAccounts()`.
+     * Only one event is consumed; further events in the window are reconciled.
      */
-    private ignoreSessionChangesUntil = 0;
+    private expectedSessionChangeEcho: { readonly providerId: string; until: number } | undefined;
 
     public readonly onDidChange = this.changeEmitter.event;
     public readonly onDidRemoveAccounts = this.removeAccountsEmitter.event;
@@ -130,9 +126,13 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
                 return;
             }
 
-            if (Date.now() < this.ignoreSessionChangesUntil) {
-                this.executor.output.trace(`[auth] sessions changed provider=${e.provider.id}; suppressed (self-induced window)`);
-                return;
+            const expectedEcho = this.expectedSessionChangeEcho;
+            if (expectedEcho?.providerId === e.provider.id) {
+                this.expectedSessionChangeEcho = undefined;
+                if (this.sessionChangeScheduler.now() < expectedEcho.until) {
+                    this.executor.output.trace(`[auth] sessions changed provider=${e.provider.id}; suppressed expected self-induced echo`);
+                    return;
+                }
             }
 
             const providerId = e.provider.id;
@@ -312,10 +312,14 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
         try {
             const previousIds = this.knownAccountIds;
 
-            // Armed on both sides of the call: the event this provokes can
-            // arrive while `getAccounts()` is still outstanding, or just after
-            // it settles -- including when it throws.
-            this.ignoreSessionChangesUntil = Date.now() + SelfInducedSessionEventMs;
+            // The event this provokes can arrive while `getAccounts()` is still
+            // outstanding or just after it settles. Consume at most one event;
+            // any additional event is a real change that must be reconciled.
+            const expectedEcho = {
+                providerId,
+                until: this.sessionChangeScheduler.now() + SelfInducedSessionEventMs,
+            };
+            this.expectedSessionChangeEcho = expectedEcho;
             let accounts: AzureAccount[];
             try {
                 // Discard first: asking the memo would replay it and always
@@ -324,7 +328,9 @@ export class AzureAccountDataProvider implements IAzureAccountDataProvider, Disp
                 this.listings.reenumerateAccounts();
                 accounts = await this.listings.listAccounts();
             } finally {
-                this.ignoreSessionChangesUntil = Date.now() + SelfInducedSessionEventMs;
+                if (this.expectedSessionChangeEcho === expectedEcho) {
+                    expectedEcho.until = this.sessionChangeScheduler.now() + SelfInducedSessionEventMs;
+                }
             }
 
             const currentIds = new CaselessSet(accounts.map(account => account.id));

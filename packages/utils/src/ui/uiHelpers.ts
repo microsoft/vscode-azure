@@ -97,6 +97,12 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
     readonly shouldRememberItem?: (item: TItem) => boolean;
 
     /**
+     * Identifies command-like rows that should remain after a synthetic
+     * free-form item, so accepting typed input takes precedence over actions.
+     */
+    readonly isActionItem?: (item: TItem) => boolean;
+
+    /**
      * Turns the quick pick into a combo box ("pick or enter"): builds a synthetic,
      * always-shown item from the user's typed text whenever it does not already match
      * a suggestion. It receives the **trimmed** typed value and should return `undefined`
@@ -187,12 +193,13 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
             const recentSet = new Set(recentLabels);
             const recentItems = items.filter(item =>
                 recentSet.has(item.label) && (options?.shouldRememberItem?.(item) ?? true));
+            const recentItemsSet = new Set(recentItems);
             for (const item of recentItems) {
                 item.description = item.description ?
                     ctx.code.l10n.t('{0} (recently selected)', item.description) :
                     ctx.code.l10n.t('(recently selected)');
             }
-            quickPick.items = [...recentItems, ...items.filter(item => !recentSet.has(item.label))];
+            quickPick.items = [...recentItems, ...items.filter(item => !recentItemsSet.has(item))];
             quickPick.selectedItems = recentItems;
         }
     }
@@ -224,7 +231,12 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                 // alwaysShow so it stays visible as a fallback below any real item
                 // that matches the current filter.
                 syntheticItem = { ...typedItem, alwaysShow: true };
-                quickPick.items = [...baseItems, syntheticItem];
+                const firstActionIndex = options?.isActionItem
+                    ? baseItems.findIndex(options.isActionItem)
+                    : -1;
+                quickPick.items = firstActionIndex < 0
+                    ? [...baseItems, syntheticItem]
+                    : [...baseItems.slice(0, firstActionIndex), syntheticItem, ...baseItems.slice(firstActionIndex)];
             } else {
                 syntheticItem = undefined;
                 quickPick.items = baseItems;

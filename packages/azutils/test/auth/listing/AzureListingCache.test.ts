@@ -8,7 +8,9 @@ import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing'
 import * as assert from 'node:assert';
 import type { AzureListingFailure, AzureSubscriptionPath, AzureTenantFilter } from '../../../src/auth/listing/AzureListingCache';
 import { AzureListingCache } from '../../../src/auth/listing/AzureListingCache';
+import { azureListingKey } from '../../../src/auth/listing/AzureListingStore';
 import type { AzureSubscription, AzureTenant } from '../../../src/auth/AzureSubscription';
+import { createEnvironment } from '../../../src/auth/Environment';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '../../mockAzure';
 
 const account = makeAccount({ id: 'acct', label: 'Account' });
@@ -77,6 +79,30 @@ function tenantIds(pages: Array<Page<AzureTenant>>): string[] {
 }
 
 describe('AzureListingCache (unit)', () => {
+    describe('azureListingKey', () => {
+        it('separates environments when any request-relevant endpoint changes', () => {
+            const parameters = {
+                name: 'Custom',
+                resourceManagerEndpointUrl: 'https://management.example',
+                portalUrl: 'https://portal.example',
+                storageEndpointSuffix: 'storage.example',
+                containerRegistryDnsSuffix: 'registry.example',
+                azureWebSitesEndpointSuffix: 'websites.example',
+            };
+            const environments = [
+                createEnvironment(parameters, true),
+                createEnvironment({ ...parameters, portalUrl: 'https://other-portal.example' }, true),
+                createEnvironment({ ...parameters, storageEndpointSuffix: 'other-storage.example' }, true),
+                createEnvironment({ ...parameters, containerRegistryDnsSuffix: 'other-registry.example' }, true),
+                createEnvironment({ ...parameters, azureWebSitesEndpointSuffix: 'other-websites.example' }, true),
+            ];
+            const keys = environments.map(environment =>
+                azureListingKey(makeAccount({ id: 'account', environment })));
+
+            assert.strictEqual(new Set(keys).size, environments.length);
+        });
+    });
+
     describe('filtering', () => {
         it('issues no request for a tenant the filter excludes', async () => {
             const { cache, fetcher } = createCache();
