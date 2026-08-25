@@ -6,6 +6,8 @@
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import * as vscode from 'vscode';
+import { staticWebAppDatabaseDetector } from '../../src/staticWebApps/DatabaseConfigDetector';
+import { createTestIndexService } from '../utils/workspaceIndex/createTestIndexService';
 import { SwaTaskDefinition, SwaTaskProvider } from '../../src/tasks/staticWebApps/SwaTaskProvider';
 import { withSwaCliOnPath } from './swaCliOnPath';
 
@@ -36,7 +38,7 @@ describe('SwaTaskProvider (unit)', () => {
             },
         });
 
-        const tasks = await new SwaTaskProvider(mockResult.vscode, executor)
+        const tasks = await new SwaTaskProvider(mockResult.vscode, executor, createTestIndexService(mockResult.vscode, [staticWebAppDatabaseDetector]))
             .provideTasksForWorkspaceFolder(folder);
 
         expect(tasks.map(task => `${task.source}: ${task.name}`)).to.deep.equal([
@@ -99,7 +101,7 @@ describe('SwaTaskProvider (unit)', () => {
         const originalPath = process.env.PATH;
         process.env.PATH = '';
         try {
-            const tasks = await new SwaTaskProvider(mockResult.vscode, executor)
+            const tasks = await new SwaTaskProvider(mockResult.vscode, executor, createTestIndexService(mockResult.vscode, [staticWebAppDatabaseDetector]))
                 .provideTasksForWorkspaceFolder(folder);
             expect(tasks).to.have.lengthOf(0);
         } finally {
@@ -121,7 +123,7 @@ describe('SwaTaskProvider (unit)', () => {
         );
         const { executor } = createTestActionExecutor();
 
-        const tasks = await new SwaTaskProvider(mockResult.vscode, executor)
+        const tasks = await new SwaTaskProvider(mockResult.vscode, executor, createTestIndexService(mockResult.vscode, [staticWebAppDatabaseDetector]))
             .provideTasksForWorkspaceFolder(folder);
 
         expect(tasks.filter(task => task.name === 'start app')).to.have.lengthOf(1);
@@ -144,7 +146,7 @@ describe('SwaTaskProvider (unit)', () => {
             },
         });
 
-        const tasks = await new SwaTaskProvider(mockResult.vscode, executor).provideTasks();
+        const tasks = await new SwaTaskProvider(mockResult.vscode, executor, createTestIndexService(mockResult.vscode, [staticWebAppDatabaseDetector])).provideTasks();
 
         expect(tasks).to.have.lengthOf(2);
         expect(sendTelemetryErrorEvent.mock.callCount()).to.equal(1);

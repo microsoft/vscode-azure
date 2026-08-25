@@ -16,6 +16,7 @@ import type * as vscode from 'vscode';
 import { getStaticWebAppBuildPreset } from '../../commands/staticWebApps/buildPresets';
 import { detectStaticWebAppProject } from '../../commands/staticWebApps/steps/frameworkDetection';
 import { getFolderContainingDatabaseConfig } from '../../staticWebApps/DatabaseConfigDetector';
+import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 import {
     FunctionsEmulatorAddress,
     SwaCliCommand,
@@ -54,6 +55,7 @@ export class SwaTaskProvider implements vscode.TaskProvider {
     public constructor(
         @inject(IVsCode) private readonly code: VsCode,
         @inject(IActionExecutor) private readonly executor: ActionExecutor,
+        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) { }
 
     /** Generated tasks are authoritative and are not resolved from persisted definitions. */
@@ -168,7 +170,7 @@ export class SwaTaskProvider implements vscode.TaskProvider {
         const preset = getStaticWebAppBuildPreset(detection.primaryPresetId);
         const appLocation = detection.appLocation;
         const appName = getDetectedAppName(workspaceFolder, appLocation);
-        const databaseConfigFolder = await getFolderContainingDatabaseConfig(this.code, workspaceFolder.uri);
+        const databaseConfigFolder = await getFolderContainingDatabaseConfig(this.code, this.indexService, workspaceFolder.uri);
         const args = [
             'start',
             `http://localhost:${preset.port}`,

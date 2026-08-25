@@ -21,9 +21,11 @@ import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
 import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
+import { staticWebAppDatabaseDetector } from '../staticWebApps/DatabaseConfigDetector';
 import { ISwaCliService, SwaCliService } from '../staticWebApps/SwaCliService';
 import { SwaTaskLifecycle } from '../tasks/staticWebApps/SwaTaskLifecycle';
 import { IProcessTerminator, ProcessTerminator } from '../utils/ProcessTerminator';
+import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 import { SwaTaskProvider } from '../tasks/staticWebApps/SwaTaskProvider';
 import { IStaticWebAppDataProvider, StaticWebAppDataProvider } from '../tree/resources/staticWebApps/StaticWebAppDataProvider';
 import { StaticWebAppViewProvider } from '../tree/resources/staticWebApps/StaticWebAppViewProvider';
@@ -44,6 +46,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
             context.get(IOutputChannel),
             context.get(IActionExecutor),
         )).inSingletonScope();
+        container.bind(IWorkspaceDetector).toConstantValue(staticWebAppDatabaseDetector);
         container.bind(SwaTaskProvider).toSelf().inSingletonScope();
         container.bind(SwaDebugConfigurationProvider).toSelf().inSingletonScope();
         container.bind(IProcessTerminator).to(ProcessTerminator).inSingletonScope();
