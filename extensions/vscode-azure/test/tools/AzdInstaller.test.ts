@@ -83,13 +83,15 @@ describe('AzdInstaller (unit)', () => {
             expect(installedWith(spawn)).to.deep.equal(['/tools/azd', 'update']);
         });
 
-        it('should prefer winget on Windows', async () => {
+        it('should prefer winget on Windows, accepting source agreements up front', async () => {
             setPlatform('win32');
             const { installer, spawn } = createInstaller(['winget', 'choco']);
 
             await installer.install(installOptions());
 
-            expect(installedWith(spawn)).to.deep.equal(['winget', 'install', 'microsoft.azd']);
+            expect(installedWith(spawn)).to.deep.equal([
+                'winget', 'install', 'microsoft.azd', '--accept-source-agreements',
+            ]);
         });
 
         it('should fall back to choco on Windows when winget is unavailable', async () => {
@@ -108,30 +110,7 @@ describe('AzdInstaller (unit)', () => {
             await installer.install(installOptions());
 
             expect(installedWith(spawn)[0]).to.equal('powershell');
-            expect(output.warn.mock.callCount()).to.equal(0);
-        });
-
-        it('should verify the Windows install script is signed by Microsoft before running it', async () => {
-            setPlatform('win32');
-            const { installer, spawn } = createInstaller();
-
-            await installer.install(installOptions());
-
-            // The script path is only offered as a verified method because it
-            // performs this check itself; losing it would silently downgrade
-            // every `requireSignature` caller on a machine with no package manager.
-            const script = installedWith(spawn).join(' ');
-            expect(script).to.include('Get-AuthenticodeSignature');
-            expect(script).to.include('O=Microsoft Corporation');
-        });
-
-        it('should satisfy a required signature on Windows with no package manager', async () => {
-            setPlatform('win32');
-            const { installer, spawn } = createInstaller();
-
-            await installer.install(installOptions({ requireSignature: true }));
-
-            expect(installedWith(spawn)[0]).to.equal('powershell');
+            expect(output.warn.mock.callCount()).to.equal(1);
         });
 
         it('should prefer brew on macOS', async () => {
@@ -157,6 +136,26 @@ describe('AzdInstaller (unit)', () => {
             setPlatform('linux');
             const { installer, spawn } = createInstaller();
 
+            await expect(installer.install(installOptions({ requireSignature: true })))
+                .to.be.rejectedWith(/No way to install/);
+            expect(spawn.mock.callCount()).to.equal(0);
+        });
+
+        it('should satisfy a required signature through winget on Windows', async () => {
+            setPlatform('win32');
+            const { installer, spawn } = createInstaller(['winget']);
+
+            await installer.install(installOptions({ requireSignature: true }));
+
+            expect(installedWith(spawn)[0]).to.equal('winget');
+        });
+
+        it('should refuse a required signature on Windows with no package manager', async () => {
+            setPlatform('win32');
+            const { installer, spawn } = createInstaller();
+
+            // The install script is the only method left, and nothing about
+            // piping it into PowerShell establishes where it came from.
             await expect(installer.install(installOptions({ requireSignature: true })))
                 .to.be.rejectedWith(/No way to install/);
             expect(spawn.mock.callCount()).to.equal(0);

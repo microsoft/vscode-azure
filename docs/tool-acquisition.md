@@ -57,12 +57,12 @@ reaches the API.
 rather than fall back to a method that cannot establish that what it downloads
 came from the publisher it claims.
 
-Package managers do this for us. Where a platform offers only an install script,
-the installer verifies it directly if it can: the Windows script is downloaded,
-checked for a valid Microsoft Authenticode signature, and only then run.
-PowerShell's execution policy is deliberately not relied on for this -- it does
-not apply to `-Command`, and `AllSigned` further requires the publisher be
-enrolled in the machine's `TrustedPublisher` store, which Microsoft is not by
-default, so a validly signed script would still prompt or fail. The Linux/macOS
-shell script has no equivalent, so it stays unverified and runs only after a
-warning to the output channel.
+Package managers do this for us, which is what makes them the preferred method
+rather than merely the convenient one. Install scripts piped into a shell cannot,
+so they are marked unverified and run only after a warning to the output channel.
+Note that PowerShell's `-ExecutionPolicy AllSigned` does *not* change this: it
+does not apply to `-Command`, so it does not gate the piped script.
+
+In practice winget covers the large majority of Windows machines. Where it is
+absent -- Windows Server, LTSC, or a Store-blocked fleet -- a caller passing
+`requireSignature` gets a clean failure rather than an unverified install.
