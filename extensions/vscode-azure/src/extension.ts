@@ -4,7 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    IToolAcquisitionService,
     setUpAzureSdkLogging,
+    ToolAcquisitionService,
 } from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
@@ -147,6 +149,13 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     container.bind(IProcessExecutor).toDynamicValue(context => {
         return new ProcessExecutor(context.get(IVsCode));
     }).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IToolAcquisitionService).toDynamicValue(context => {
+        return new ToolAcquisitionService(
+            context.get(IVsCode),
+            context.get(IProcessExecutor),
+        );
+    }).inSingletonScope();
 
     container.bind(IWorkspaceIndexService).to(WorkspaceIndexService).inSingletonScope().onActivation(pushDisposable);
 

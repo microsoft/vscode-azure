@@ -5,6 +5,9 @@
     "publisher": "ms-azuretools",
     "displayName": "Azure for Visual Studio Code",
     "description": "%extension.description%",
+    "activationEvents": [
+        "onCommand:vscode-azure/acquireTool"
+    ],
     "homepage": "https://github.com/microsoft/vscode-azure#readme",
     "bugs": {
         "url": "https://github.com/microsoft/vscode-azure/issues"
@@ -406,7 +409,7 @@
     },
     "devDependencies": {
         "@azure/identity": "^4.13.1",
-        "@types/semver": "^7.7.1",
+        "@types/semver": "catalog:",
         "@vscode/test-cli": "catalog:",
         "@vscode/test-electron": "catalog:",
         "esbuild": "catalog:",
@@ -420,6 +423,6 @@
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:",
         "jsonc-parser": "^3.3.1",
-        "semver": "^7.8.4"
+        "semver": "catalog:"
     }
 }

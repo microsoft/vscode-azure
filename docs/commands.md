@@ -63,6 +63,11 @@ Either way, each registration:
 2. Registers it with `ICommandRegistry`, which wraps execution in `callWithTelemetryAndErrorHandling`
 3. Creates a scoped child container per execution with `IActionContext` bound
 
+Commands used only as an API boundary may be registered without a corresponding
+`package.json` contribution. For example, `vscode-azure/acquireTool` is callable
+by other extensions but is intentionally absent from the Command Palette. See
+[Tool Acquisition](tool-acquisition.md).
+
 ### Resource deletion
 
 Products should use the shared Delete Resource command rather than shipping

@@ -24,6 +24,8 @@ export * from './tree/findSubscriptionById';
 export * from './tree/pick/resourceExperience';
 export * from './tree/pick/resourceGroupExperience';
 export * from './tree/pick/subscriptionExperience';
+export * from './tools/ToolAcquisition';
+export * from './tools/azdTool';
 export * from './utils/azureResourceId';
 export * from './wizard/ChooseLocationStep';
 export * from './wizard/ChooseResourceGroupStep';

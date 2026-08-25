@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@types/semver':
+      specifier: ^7.7.1
+      version: 7.7.1
     '@vscode/extension-telemetry':
       specifier: ^1.5.2
       version: 1.5.2
@@ -24,6 +27,9 @@ catalogs:
     inversify:
       specifier: ^8.1.1
       version: 8.2.3
+    semver:
+      specifier: ^7.8.4
+      version: 7.8.5
     tsx:
       specifier: ^4.22.4
       version: 4.23.1
@@ -70,14 +76,14 @@ importers:
         specifier: ^3.3.1
         version: 3.3.1
       semver:
-        specifier: ^7.8.4
+        specifier: 'catalog:'
         version: 7.8.5
     devDependencies:
       '@azure/identity':
         specifier: ^4.13.1
         version: 4.13.1
       '@types/semver':
-        specifier: ^7.7.1
+        specifier: 'catalog:'
         version: 7.7.1
       '@vscode/test-cli':
         specifier: 'catalog:'
@@ -118,6 +124,9 @@ importers:
       '@microsoft/vscode-azure-utils':
         specifier: workspace:^
         version: link:../utils
+      semver:
+        specifier: 'catalog:'
+        version: 7.8.5
     devDependencies:
       '@azure-rest/core-client':
         specifier: ^2.6.1
@@ -131,6 +140,9 @@ importers:
       '@azure/core-rest-pipeline':
         specifier: ^1.24.0
         version: 1.25.0
+      '@types/semver':
+        specifier: 'catalog:'
+        version: 7.7.1
       inversify:
         specifier: 'catalog:'
         version: 8.2.3(reflect-metadata@0.2.2)

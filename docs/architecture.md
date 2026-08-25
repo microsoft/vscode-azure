@@ -44,6 +44,7 @@ Azure-specific models and helpers that build on `utils`:
 - **Client factories**: `createArmRestClient`, `createArmRestSubscriptionClient` — inject custom pipeline policies (deduplication, correlation ID, accept language). Authentication, including CAE/MFA step-up, is handled by the SDK's built-in `bearerTokenAuthenticationPolicy` driven by the supplied `TokenCredential`.
 - **Pagination**: `toPages` — converts Azure SDK `PagedAsyncIterableIterator` to `AsyncIterable<Page<T>>`
 - **Tree pick**: `ChooseSubscriptionStep`, `ChooseResourceGroupStep`, `ChooseResourceStep` — reusable wizard prompt steps for resource selection. Convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, `resourceExperience` run a single-step wizard and return the picked object directly.
+- **Tool acquisition**: `IToolAcquisitionService` resolves, verifies, and installs typed Azure developer tools. See [Tool Acquisition](tool-acquisition.md).
 
 ### `extensions/vscode-azure` — The Extension
 

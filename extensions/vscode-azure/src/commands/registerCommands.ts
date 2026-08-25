@@ -11,6 +11,7 @@ import { AzdDown } from './deploy/AzdDown';
 import { AzdUp } from './deploy/AzdUp';
 import { ClearActivities } from './deploy/ClearActivities';
 import type { ManagedCommand } from './ManagedCommand';
+import { AcquireTool, AcquireToolCommandId } from './tools/AcquireTool';
 import { InstallAzd } from './tools/InstallAzd';
 import { LoadMore } from './tree/LoadMore';
 import { RefreshWorkspaceView } from './tree/RefreshWorkspaceView';
@@ -36,6 +37,7 @@ export function registerCommands(
 
     registerManagedCommand(container, AzdUpCommandId, AzdUp);
     registerManagedCommand(container, AzdDownCommandId, AzdDown);
+    registerManagedCommand(container, AcquireToolCommandId, AcquireTool);
     registerManagedCommand(container, 'vscode-azure/installAzd', InstallAzd);
 
     for (const command of productCommands) {

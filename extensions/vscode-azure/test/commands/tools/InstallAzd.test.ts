@@ -3,16 +3,34 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AcquireToolCommandId } from '@microsoft/vscode-azure-azutils';
+import { createActionContext } from '@microsoft/vscode-azure-utils';
+import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
+import { MinAzdVersion } from '../../../src/azd/AzdService';
 import { InstallAzd } from '../../../src/commands/tools/InstallAzd';
-import { createMockAzdService } from '../../azd/MockAzdService';
 
 describe('InstallAzd (unit)', () => {
-    it('should delegate to IAzdService.install', async () => {
-        const azd = createMockAzdService();
-        const command = new InstallAzd(azd);
+    it('should call the API-level acquisition command with user progress', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const command = new InstallAzd(
+            ctx.code,
+            ctx.extensionContext,
+            createActionContext('test'),
+        );
 
         await command.execute();
 
-        expect(azd.install.mock.callCount()).to.equal(1);
+        expect(mock.commands.executeCommand.mock.calls[0].arguments).to.deep.equal([
+            AcquireToolCommandId,
+            {
+                toolId: 'azd',
+                requestingExtensionId: 'test-publisher.test-extension',
+                versionRange: `>=${MinAzdVersion}`,
+                progress: {
+                    showNotification: true,
+                    focusInstallTask: true,
+                },
+            },
+        ]);
     });
 });
