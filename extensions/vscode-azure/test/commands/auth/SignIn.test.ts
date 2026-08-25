@@ -5,7 +5,7 @@
 
 import { AzureListingCache, createDefaultCredentialFactory, type AzureAccount, type AzureTenant, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, makeAccount, makeTenant, type MockAzureListingFetcher } from '@microsoft/vscode-azure-azutils/testing';
-import { CancellationError, collectPages, Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, collectPages, Everything, Roots, type IVsCode, type Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
 import { pickTenantOrEnterId, SignIn } from '../../../src/commands/auth/SignIn';
@@ -20,14 +20,14 @@ describe('SignIn (unit)', () => {
      * `invalidate` is a spy, so tests can assert both what was re-listed and
      * what was discarded from the cache.
      */
-    function createHarness(accounts: AzureAccount[], tenants: AzureTenant[] = []): {
+    function createHarness(accounts: AzureAccount[], tenants: AzureTenant[] = [], pageSize?: number): {
         tree: IAzureViewDataTree;
         invalidate: Mock<(target: unknown) => void>;
         listings: AzureListingCache;
         fetcher: MockAzureListingFetcher;
     } {
         const { executor } = createTestActionExecutor();
-        const fetcher = createMockAzureListingFetcher({ accounts, tenants, subscriptions: [] });
+        const fetcher = createMockAzureListingFetcher({ accounts, tenants, subscriptions: [], pageSize });
         const invalidate = mock.fn((_target: unknown) => { /* spy */ });
         return {
             tree: { invalidate } as unknown as IAzureViewDataTree,
@@ -375,11 +375,28 @@ describe('pickTenantOrEnterId (unit)', () => {
         return { account, tenant: makeTenant({ tenantId, displayName, accountId: account.id }) };
     }
 
+    function pages(...values: Page<ReachableTenant>[]): AsyncIterable<Page<ReachableTenant>> {
+        return {
+            [Symbol.asyncIterator]: () => {
+                let index = 0;
+                return {
+                    next: () => Promise.resolve(index < values.length
+                        ? { done: false, value: values[index++] }
+                        : { done: true, value: undefined }),
+                };
+            },
+        };
+    }
+
     it('should offer a synthetic sign-in item for a pasted tenant GUID', async () => {
         const { ctx, mock } = createMockCodeContext();
         const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
 
-        const resultPromise = pickTenantOrEnterId(ctx, [makeReachableTenant('tenant-1', 'Tenant One')]);
+        const resultPromise = pickTenantOrEnterId(ctx, pages({
+            items: [makeReachableTenant('tenant-1', 'Tenant One')],
+            hasMore: false,
+        }));
+        await new Promise(resolve => setImmediate(resolve));
 
         const qp = mock.quickPicks[0];
         qp.changeValue(tenantId);
@@ -398,7 +415,11 @@ describe('pickTenantOrEnterId (unit)', () => {
     it('should not offer a synthetic item when the typed value is not a GUID', async () => {
         const { ctx, mock } = createMockCodeContext();
 
-        const resultPromise = pickTenantOrEnterId(ctx, [makeReachableTenant('tenant-1', 'Tenant One')]);
+        const resultPromise = pickTenantOrEnterId(ctx, pages({
+            items: [makeReachableTenant('tenant-1', 'Tenant One')],
+            hasMore: false,
+        }));
+        await new Promise(resolve => setImmediate(resolve));
 
         const qp = mock.quickPicks[0];
         // Users never type a tenant GUID -- a non-GUID value is a filter, so no
@@ -415,5 +436,61 @@ describe('pickTenantOrEnterId (unit)', () => {
         const pick = await resultPromise;
         expect(pick.tenantId).to.equal('tenant-1');
         expect(pick.accountId).to.equal('acct-1');
+    });
+
+    it('should load another page and retain the selected tenant account', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const first = makeReachableTenant('tenant-1', 'Tenant One');
+        const secondAccount = makeAccount({ id: 'acct-2', label: 'Account Two' });
+        const second: ReachableTenant = {
+            account: secondAccount,
+            tenant: makeTenant({ tenantId: 'tenant-2', displayName: 'Tenant Two', accountId: secondAccount.id }),
+        };
+
+        const resultPromise = pickTenantOrEnterId(ctx, pages(
+            { items: [first], hasMore: true },
+            { items: [first, second], hasMore: true },
+            { items: [first, second], hasMore: false },
+        ));
+        await new Promise(resolve => setImmediate(resolve));
+
+        const firstPick = mock.quickPicks[0];
+        const loadMore = firstPick.items.find(item => item.label === 'Load more tenants...');
+        expect(loadMore?.alwaysShow).to.be.true;
+        firstPick.activeItems = loadMore ? [loadMore] : [];
+        firstPick.accept();
+
+        await new Promise(resolve => setImmediate(resolve));
+        const secondPick = mock.quickPicks[1];
+        expect(secondPick.items.map(item => item.label)).to.deep.equal([
+            'Tenant One (tenant-1)',
+            'Tenant Two (tenant-2)',
+            'Load more tenants...',
+        ]);
+        const tenantTwo = secondPick.items[1];
+        secondPick.activeItems = [tenantTwo];
+        secondPick.accept();
+
+        const pick = await resultPromise;
+        expect(pick).to.deep.equal({ tenantId: 'tenant-2', accountId: 'acct-2' });
+    });
+
+    it('should allow a pasted tenant GUID when tenant listing fails', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
+        const failedPages: AsyncIterable<Page<ReachableTenant>> = {
+            [Symbol.asyncIterator]: () => ({
+                next: () => Promise.reject(new Error('conditional access denied tenant listing')),
+            }),
+        };
+
+        const resultPromise = pickTenantOrEnterId(ctx, failedPages);
+        await new Promise(resolve => setImmediate(resolve));
+        const qp = mock.quickPicks[0];
+        expect(qp.items).to.deep.equal([]);
+        qp.changeValue(tenantId);
+        qp.accept();
+
+        expect(await resultPromise).to.deep.equal({ tenantId });
     });
 });

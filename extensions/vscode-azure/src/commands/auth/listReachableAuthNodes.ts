@@ -5,7 +5,7 @@
 
 import type { AzureAccount, AzureListingCache, AzureSubscription, AzureTenant } from '@microsoft/vscode-azure-azutils';
 import { DiscoveryConcurrency, isNotSignedInError } from '@microsoft/vscode-azure-azutils';
-import { CaselessMap } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, type Page } from '@microsoft/vscode-azure-utils';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 
 /**
@@ -59,40 +59,58 @@ export interface ReachableSubscriptionsResult {
 }
 
 /**
- * Enumerate the first page of reachable tenants across all signed-in accounts.
+ * Enumerate reachable tenants across all signed-in accounts one aggregate page
+ * at a time.
  *
  * An account can have access to a very large number of tenants (hundreds), so
- * this deliberately reads only the first page of each account's tenants. The
- * result is intended to seed a combobox where the user can either pick a
- * suggested tenant or type any tenant ID directly, so an exhaustive list is
- * neither needed nor desirable.
+ * each advance pulls one page from every account that still has more. This lets
+ * a picker seed itself cheaply, then opt in to further round trips only when the
+ * user asks for more. Each yielded page contains all tenants discovered so far,
+ * deduplicated and sorted for direct display.
  *
  * Read **unfiltered**: this feeds a flow that decides which tenants to sign in
  * to, and a list narrowed by the current filter could only ever narrow it
  * further.
  */
-export async function listFirstPageReachableTenants(listings: AzureListingCache): Promise<ReachableTenant[]> {
+export async function* listReachableTenantPages(listings: AzureListingCache): AsyncIterable<Page<ReachableTenant>> {
     const tenants = new CaselessMap<ReachableTenant>();
+    let listingsToAdvance = (await listings.listAccounts()).map(account => ({
+        account,
+        iterator: listings.listTenants(account)[Symbol.asyncIterator](),
+    }));
 
-    for (const account of await listings.listAccounts()) {
-        // First page only -- the loop breaks rather than draining the listing,
-        // so later pages are never pulled.
-        for await (const page of listings.listTenants(account)) {
-            for (const tenant of page.items) {
-                const key = `${account.id}/${tenant.tenantId}`;
+    while (listingsToAdvance.length > 0) {
+        const results = await Promise.all(listingsToAdvance.map(async listing => ({
+            listing,
+            result: await listing.iterator.next(),
+        })));
+        const remaining = [];
+
+        for (const { listing, result } of results) {
+            if (result.done) {
+                continue;
+            }
+
+            for (const tenant of result.value.items) {
+                const key = `${listing.account.id}/${tenant.tenantId}`;
                 if (!tenants.has(key)) {
-                    tenants.set(key, { account, tenant });
+                    tenants.set(key, { account: listing.account, tenant });
                 }
             }
-            break;
-        }
-    }
 
-    return [...tenants.values()].sort((a, b) => {
-        return a.tenant.displayName.localeCompare(b.tenant.displayName)
-            || a.tenant.tenantId.localeCompare(b.tenant.tenantId)
-            || a.account.label.localeCompare(b.account.label);
-    });
+            if (result.value.hasMore) {
+                remaining.push(listing);
+            }
+        }
+
+        listingsToAdvance = remaining;
+        const items = [...tenants.values()].sort((a, b) => {
+            return a.tenant.displayName.localeCompare(b.tenant.displayName)
+                || a.tenant.tenantId.localeCompare(b.tenant.tenantId)
+                || a.account.label.localeCompare(b.account.label);
+        });
+        yield { items, hasMore: listingsToAdvance.length > 0 };
+    }
 }
 
 /**

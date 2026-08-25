@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { byAccount, ICredentialFactory, IAzureListingCache, VsCodeExtensionCredential, type AzureListingCache } from '@microsoft/vscode-azure-azutils';
-import { CaselessSet, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, ICodeContext, type Page, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { GuidPattern } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { addSignedInTenant } from '../../utils/signedInTenants';
 import type { ManagedCommand } from '../ManagedCommand';
-import { listFirstPageReachableTenants, type ReachableTenant } from './listReachableAuthNodes';
+import { listReachableTenantPages, type ReachableTenant } from './listReachableAuthNodes';
 
 /**
  * Signs the user in to Azure, adapting to what they actually need.
@@ -27,8 +27,8 @@ import { listFirstPageReachableTenants, type ReachableTenant } from './listReach
  *   specific tenant by ID instead.
  * - **Already signed in:** the user is signing in again to reach a tenant they
  *   can't yet see (for example one behind stricter MFA), so it shows a combobox
- *   of the first page of reachable tenants and also lets them type any tenant ID
- *   directly (see {@linkcode pickTenantOrEnterId}).
+ *   of reachable tenants, lets them load later pages on demand, and also lets
+ *   them type any tenant ID directly (see {@linkcode pickTenantOrEnterId}).
  *
  * After a successful sign-in it invalidates the resources tree so the freshly
  * added account or tenant appears, and touches the listing cache as little as
@@ -87,13 +87,7 @@ export class SignIn implements ManagedCommand {
         // Tolerate a listing failure: tenant listing can be blocked outright
         // (e.g. conditional access), and the combobox still lets the user type a
         // tenant ID, so a failure is treated as "no suggestions".
-        let tenants: ReachableTenant[];
-        try {
-            tenants = await listFirstPageReachableTenants(this.listings);
-        } catch {
-            tenants = [];
-        }
-        const pick = await pickTenantOrEnterId(this.ctx, tenants);
+        const pick = await pickTenantOrEnterId(this.ctx, listReachableTenantPages(this.listings));
         const session = await this.signInToTenant(pick);
 
         // A tenant-targeted sign-in can surface an account that was not signed
@@ -240,52 +234,95 @@ interface TenantPick {
     readonly accountId?: string;
 }
 
+interface LoadMoreTenantsPick {
+    readonly loadMore: true;
+}
+
 /**
  * Show a combobox-style quick pick for choosing a tenant to sign in to.
  *
- * Behaves like a combo box: the {@linkcode tenants} are shown as suggestions
- * (typically only the first page, to avoid enumerating accounts with hundreds of
- * tenants), but the user can also type any tenant ID directly. When the typed
- * value does not match a suggested tenant, a synthetic "sign in to tenant `<id>`"
- * item is offered, so the control works even when tenants cannot be listed at all
+ * Behaves like a combo box: reachable tenants are shown as suggestions one
+ * aggregate page at a time, with an opt-in load-more action while another page
+ * exists. The user can also type any tenant ID directly. When the typed value
+ * does not match a suggested tenant, a synthetic "sign in to tenant `<id>`" item
+ * is offered, so the control works even when tenants cannot be listed at all
  * (e.g. conditional-access restrictions).
  *
  * @param ctx - VS Code dependencies.
- * @param tenants - Suggested tenants to list (may be empty).
+ * @param tenantPages - Resumable pages of suggested tenants.
  * @returns The chosen {@linkcode TenantPick}.
  * @throws {@linkcode CancellationError} if the user dismisses the quick pick.
  * @internal Exported only for tests.
  */
-export async function pickTenantOrEnterId(ctx: ICodeContext, tenants: ReachableTenant[]): Promise<TenantPick> {
+export async function pickTenantOrEnterId(ctx: ICodeContext, tenantPages: AsyncIterable<Page<ReachableTenant>>): Promise<TenantPick> {
     const code = ctx.code;
+    const iterator = tenantPages[Symbol.asyncIterator]();
+    let tenants: ReachableTenant[] = [];
+    let hasMore = false;
 
-    const items: QuickPickItemWithData<TenantPick>[] = tenants.map(item => ({
-        label: code.l10n.t('{0} ({1})', item.tenant.displayName, item.tenant.tenantId),
-        description: code.l10n.t('Account: {0}', item.account.label),
-        data: { tenantId: item.tenant.tenantId, accountId: item.account.id },
-    }));
-    const knownTenantIds = new CaselessSet(tenants.map(item => item.tenant.tenantId));
+    try {
+        const firstPage = await iterator.next();
+        if (!firstPage.done) {
+            tenants = firstPage.value.items;
+            hasMore = firstPage.value.hasMore;
+        }
+    } catch {
+        // Tenant enumeration may be denied by conditional access. Manual tenant
+        // ID entry remains available without suggestions.
+    }
 
-    const picked = await showSmartQuickPick(ctx, items, {
-        title: code.l10n.t('Sign in to a Tenant'),
-        placeHolder: tenants.length > 0
-            ? code.l10n.t('Select a tenant, or type a tenant ID to sign in to')
-            : code.l10n.t('Type the ID of the tenant to sign in to'),
-        matchOnDescription: true,
-        // Combo box: offer a "sign in to <typed id>" item only when the value
-        // is a tenant GUID that isn't already one of the suggestions. Users
-        // paste tenant IDs rather than typing them, so any non-GUID value is a
-        // filter over the suggestions, not a sign-in target.
-        createItemFromValue: (value) => {
-            if (!GuidPattern.test(value) || knownTenantIds.has(value)) {
-                return undefined;
+    for (; ;) {
+        const knownTenantIds = new CaselessSet(tenants.map(item => item.tenant.tenantId));
+        const items: QuickPickItemWithData<TenantPick | LoadMoreTenantsPick>[] = tenants.map(item => ({
+            label: code.l10n.t('{0} ({1})', item.tenant.displayName, item.tenant.tenantId),
+            description: code.l10n.t('Account: {0}', item.account.label),
+            data: { tenantId: item.tenant.tenantId, accountId: item.account.id },
+        }));
+        if (hasMore) {
+            items.push({
+                label: code.l10n.t('Load more tenants...'),
+                alwaysShow: true,
+                data: { loadMore: true },
+            });
+        }
+
+        const picked = await showSmartQuickPick(ctx, items, {
+            title: code.l10n.t('Sign in to a Tenant'),
+            placeHolder: tenants.length > 0
+                ? code.l10n.t('Select a tenant, or type a tenant ID to sign in to')
+                : code.l10n.t('Type the ID of the tenant to sign in to'),
+            matchOnDescription: true,
+            shouldRememberItem: item => !('loadMore' in item.data),
+            // Combo box: offer a "sign in to <typed id>" item only when the value
+            // is a tenant GUID that isn't already one of the suggestions. Users
+            // paste tenant IDs rather than typing them, so any non-GUID value is a
+            // filter over the suggestions, not a sign-in target.
+            createItemFromValue: (value) => {
+                if (!GuidPattern.test(value) || knownTenantIds.has(value)) {
+                    return undefined;
+                }
+                return {
+                    label: code.l10n.t('Sign in to tenant: {0}', value),
+                    data: { tenantId: value },
+                };
+            },
+        });
+
+        if (!('loadMore' in picked.data)) {
+            return picked.data;
+        }
+
+        try {
+            const nextPage = await iterator.next();
+            if (nextPage.done) {
+                hasMore = false;
+            } else {
+                tenants = nextPage.value.items;
+                hasMore = nextPage.value.hasMore;
             }
-            return {
-                label: code.l10n.t('Sign in to tenant: {0}', value),
-                data: { tenantId: value },
-            };
-        },
-    });
-
-    return picked.data;
+        } catch {
+            // Keep the tenants already discovered and fall back to manual entry.
+            hasMore = false;
+        }
+    }
 }

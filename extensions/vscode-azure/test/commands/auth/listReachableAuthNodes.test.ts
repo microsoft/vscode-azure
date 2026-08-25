@@ -7,7 +7,7 @@ import { AzureListingCache } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { collectAsync } from '@microsoft/vscode-azure-utils';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { listFirstPageReachableTenants, listReachableSubscriptions } from '../../../src/commands/auth/listReachableAuthNodes';
+import { listReachableSubscriptions, listReachableTenantPages } from '../../../src/commands/auth/listReachableAuthNodes';
 
 describe('listReachableAuthNodes (unit)', () => {
     function createCache(options: MockAzureListingFetcherOptions) {
@@ -125,29 +125,53 @@ describe('listReachableAuthNodes (unit)', () => {
         });
     });
 
-    describe('listFirstPageReachableTenants', () => {
-        it('reads only the first page of each account, sorted by display name', async () => {
-            const account = makeAccount({ id: 'acct-1' });
+    describe('listReachableTenantPages', () => {
+        it('advances one page for every account that still has more', async () => {
+            const firstAccount = makeAccount({ id: 'acct-1' });
+            const secondAccount = makeAccount({ id: 'acct-2' });
             const tenants = [
-                makeTenant({ tenantId: 'tenant-2', displayName: 'Zulu', accountId: account.id }),
-                makeTenant({ tenantId: 'tenant-1', displayName: 'Alpha', accountId: account.id }),
-                makeTenant({ tenantId: 'tenant-3', displayName: 'Mike', accountId: account.id }),
+                makeTenant({ tenantId: 'tenant-2', displayName: 'Zulu', accountId: firstAccount.id }),
+                makeTenant({ tenantId: 'tenant-1', displayName: 'Alpha', accountId: firstAccount.id }),
+                makeTenant({ tenantId: 'tenant-4', displayName: 'Yankee', accountId: secondAccount.id }),
+                makeTenant({ tenantId: 'tenant-3', displayName: 'Bravo', accountId: secondAccount.id }),
             ];
-            const { listings } = createCache({ accounts: [account], tenants, subscriptions: [], pageSize: 2 });
+            const pulledPages: number[] = [];
+            const { listings } = createCache({
+                accounts: [firstAccount, secondAccount],
+                tenants,
+                subscriptions: [],
+                pageSize: 1,
+                onPagePulled: (listing, pageIndex) => {
+                    if (listing === 'tenants') {
+                        pulledPages.push(pageIndex);
+                    }
+                },
+            });
 
-            const reachable = await listFirstPageReachableTenants(listings);
+            const iterator = listReachableTenantPages(listings)[Symbol.asyncIterator]();
+            const first = await iterator.next();
 
-            // Accounts can belong to hundreds of tenants, and this only seeds a
-            // combobox where any tenant id can be typed, so page two is never
-            // pulled.
-            expect(reachable.map(t => t.tenant.displayName)).to.deep.equal(['Alpha', 'Zulu']);
-            expect(reachable[0].account).to.equal(account);
+            if (first.done) {
+                throw new Error('Expected a first tenant page.');
+            }
+            expect(first.value.items.map(t => t.tenant.displayName)).to.deep.equal(['Yankee', 'Zulu']);
+            expect(first.value.hasMore).to.be.true;
+            expect(pulledPages).to.deep.equal([0, 0]);
+
+            const second = await iterator.next();
+
+            if (second.done) {
+                throw new Error('Expected a second tenant page.');
+            }
+            expect(second.value.items.map(t => t.tenant.displayName)).to.deep.equal(['Alpha', 'Bravo', 'Yankee', 'Zulu']);
+            expect(second.value.hasMore).to.be.false;
+            expect(pulledPages).to.deep.equal([0, 0, 1, 1]);
         });
 
         it('returns nothing when no account is signed in', async () => {
             const { listings } = createCache({ accounts: [], tenants: [], subscriptions: [] });
 
-            expect(await listFirstPageReachableTenants(listings)).to.deep.equal([]);
+            expect(await collectAsync(listReachableTenantPages(listings))).to.deep.equal([]);
         });
     });
 });

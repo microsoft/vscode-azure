@@ -90,6 +90,13 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
     readonly onDidTriggerItemButton?: (event: vscode.QuickPickItemButtonEvent<TItem>) => void;
 
     /**
+     * Controls whether a selected item is stored and restored as the recent
+     * choice. Use this for action rows that should retain their declared
+     * position rather than becoming the next default selection.
+     */
+    readonly shouldRememberItem?: (item: TItem) => boolean;
+
+    /**
      * Turns the quick pick into a combo box ("pick or enter"): builds a synthetic,
      * always-shown item from the user's typed text whenever it does not already match
      * a suggestion. It receives the **trimmed** typed value and should return `undefined`
@@ -159,7 +166,8 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         // For single-select, try to pre-highlight a recently chosen item
         const recentLabels = ctx.extensionContext.workspaceState.get<string[]>(recentKey);
         if (recentLabels && recentLabels.length > 0) {
-            const recentItem = items.find(item => item.label === recentLabels[0]);
+            const recentItem = items.find(item =>
+                item.label === recentLabels[0] && (options?.shouldRememberItem?.(item) ?? true));
             if (recentItem) {
                 recentItem.description = recentItem.description ?
                     ctx.code.l10n.t('{0} (recently selected)', recentItem.description) :
@@ -177,7 +185,8 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         const recentLabels = ctx.extensionContext.workspaceState.get<string[]>(recentKey);
         if (recentLabels && recentLabels.length > 0) {
             const recentSet = new Set(recentLabels);
-            const recentItems = items.filter(item => recentSet.has(item.label));
+            const recentItems = items.filter(item =>
+                recentSet.has(item.label) && (options?.shouldRememberItem?.(item) ?? true));
             for (const item of recentItems) {
                 item.description = item.description ?
                     ctx.code.l10n.t('{0} (recently selected)', item.description) :
@@ -245,7 +254,10 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                 const selected = [...quickPick.selectedItems];
                 if (selected.length > 0) {
                     finish(() => {
-                        void ctx.extensionContext.workspaceState.update(recentKey, selected.map(s => s.label));
+                        void ctx.extensionContext.workspaceState.update(
+                            recentKey,
+                            selected.filter(item => options?.shouldRememberItem?.(item) ?? true).map(item => item.label),
+                        );
                         resolve(selected);
                     });
                 } else {
@@ -265,7 +277,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                         // Don't remember a typed/synthesized value: its label is not
                         // one of the suggestions, so it could never be restored and
                         // would clobber a genuinely-pickable recent choice.
-                        if (selected !== syntheticItem) {
+                        if (selected !== syntheticItem && (options?.shouldRememberItem?.(selected) ?? true)) {
                             void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
                         }
                         resolve(selected);
