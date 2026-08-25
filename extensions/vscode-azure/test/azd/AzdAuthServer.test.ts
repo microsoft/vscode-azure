@@ -7,6 +7,7 @@ import { createDefaultCredentialFactory } from '@microsoft/vscode-azure-azutils'
 import { makeCredential } from '@microsoft/vscode-azure-azutils/testing';
 import { Disposable } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { stat } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { mock } from 'node:test';
 import { AzdAuthApiVersion, AzdAuthServer } from '../../src/azd/AzdAuthServer';
@@ -125,6 +126,21 @@ describe('AzdAuthServer (unit)', () => {
 
             expect(env1.AZD_AUTH_ENDPOINT).to.equal(env2.AZD_AUTH_ENDPOINT);
             expect(env1.AZD_AUTH_KEY).to.equal(env2.AZD_AUTH_KEY);
+        });
+
+        it('should restrict the Unix socket to the current user', async function () {
+            if (process.platform === 'win32') {
+                this.skip();
+            }
+
+            const { vscode: code } = createMockVsCode();
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'), createDefaultCredentialFactory(code));
+            servers.push(server);
+            const env = await server.getEnv();
+            const socketPath = env.AZD_AUTH_ENDPOINT.slice('unix://'.length);
+
+            const socketStat = await stat(socketPath);
+            expect(socketStat.mode & 0o777).to.equal(0o600);
         });
     });
 

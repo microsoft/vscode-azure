@@ -7,7 +7,7 @@ import { ICredentialFactory, type TokenCredential } from '@microsoft/vscode-azur
 import { IOutputChannel, IVsCode, stringifyError, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -136,10 +136,11 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
 
         try {
             await listen(server, socketPath);
+            if (process.platform !== 'win32') {
+                await chmod(socketPath, 0o600);
+            }
         } catch (err) {
-            this.removeCleanupDir(cleanupDir);
-            this.cleanupDir = undefined;
-            this.server = undefined;
+            this.closeServer();
             throw err;
         }
 
