@@ -30,7 +30,6 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         });
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
-            { validateInstalled: mock.fn(() => Promise.resolve(true)) } as never,
             executor,
         );
 
@@ -81,10 +80,8 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
                 dispose: () => Promise.resolve(),
             },
         });
-        const validateInstalled = mock.fn(() => Promise.resolve(true));
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
-            { validateInstalled } as never,
             executor,
         );
         const configuration = { name: 'Launch Chrome', request: 'launch', type: 'pwa-chrome' };
@@ -94,7 +91,6 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
             configuration,
             { isCancellationRequested: false } as vscode.CancellationToken,
         )).to.equal(configuration);
-        expect(validateInstalled.mock.callCount()).to.equal(0);
         expect(sendTelemetryErrorEvent.mock.callCount()).to.equal(0);
     });
 
@@ -121,7 +117,6 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         });
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
-            { validateInstalled: mock.fn(() => Promise.resolve(true)) } as never,
             executor,
         );
 
@@ -144,7 +139,6 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         expect(sendTelemetryErrorEvent.mock.calls[0].arguments[0])
             .to.equal('staticWebApps.resolveDebugConfiguration');
         expect(sendTelemetryErrorEvent.mock.calls[0].arguments[1]).to.include({
-            cliAvailable: 'true',
             hasApi: 'true',
             hasSwaCliConfigFile: 'true',
             functionsProxyFix: 'fixed',

@@ -4,17 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, StaticWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, IExtensionContext, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { DeployStaticWebAppCommandId } from '../constants';
 import { CreateStaticWebApp } from '../commands/staticWebApps/CreateStaticWebApp';
 import { CreateSwaConfigFile } from '../commands/staticWebApps/CreateSwaConfigFile';
 import { DeleteStaticWebAppEnvironment } from '../commands/staticWebApps/DeleteStaticWebAppEnvironment';
 import { DeployStaticWebApp } from '../commands/staticWebApps/DeployStaticWebApp';
-import { InstallOrUpdateSwaCli } from '../commands/staticWebApps/InstallOrUpdateSwaCli';
 import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from '../commands/staticWebApps/ShowDocumentation';
 import { OpenUrl } from '../commands/OpenUrl';
 import { StaticWebAppCommandResolver } from '../commands/staticWebApps/StaticWebAppCommandResolver';
-import { UninstallSwaCli } from '../commands/staticWebApps/UninstallSwaCli';
 import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStaticWebAppProperties';
 import { PwaChromeDebugType, SwaDebugConfigurationProvider, SwaDebugType } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
@@ -22,7 +20,6 @@ import { pushDisposable } from '../services';
 import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
 import { staticWebAppDatabaseDetector } from '../staticWebApps/DatabaseConfigDetector';
-import { ISwaCliService, SwaCliService } from '../staticWebApps/SwaCliService';
 import { SwaTaskLifecycle } from '../tasks/staticWebApps/SwaTaskLifecycle';
 import { IProcessTerminator, ProcessTerminator } from '../utils/ProcessTerminator';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
@@ -40,12 +37,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
         container.bind(StaticWebAppCommandResolver).toSelf();
         container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();
         container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
-        container.bind(ISwaCliService).toDynamicValue(context => new SwaCliService(
-            context.get(IVsCode),
-            context.get(IProcessExecutor),
-            context.get(IOutputChannel),
-            context.get(IActionExecutor),
-        )).inSingletonScope();
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppDatabaseDetector);
         container.bind(SwaTaskProvider).toSelf().inSingletonScope();
         container.bind(SwaDebugConfigurationProvider).toSelf().inSingletonScope();
@@ -61,8 +52,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/staticWebApps/showDocumentation', OpenUrl, ShowStaticWebAppsDocumentation.Url);
     registrar.registerCommand('vscode-azure/staticWebApps/showFunctionsDocumentation', OpenUrl, ShowFunctionsDocumentation.Url);
     registrar.registerCommand('vscode-azure/staticWebApps/viewProperties', ViewStaticWebAppProperties);
-    registrar.registerCommand('vscode-azure/staticWebApps/installOrUpdateCli', InstallOrUpdateSwaCli);
-    registrar.registerCommand('vscode-azure/staticWebApps/uninstallCli', UninstallSwaCli);
 
     registrar.registerResourceDataProvider([IStaticWebAppDataProvider, StaticWebAppDataProvider]);
     registrar.registerResourceViewProvider(StaticWebAppViewProvider);

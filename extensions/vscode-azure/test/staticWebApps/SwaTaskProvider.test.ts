@@ -9,10 +9,10 @@ import * as vscode from 'vscode';
 import { staticWebAppDatabaseDetector } from '../../src/staticWebApps/DatabaseConfigDetector';
 import { createTestIndexService } from '../utils/workspaceIndex/createTestIndexService';
 import { SwaTaskDefinition, SwaTaskProvider } from '../../src/tasks/staticWebApps/SwaTaskProvider';
-import { withSwaCliOnPath } from './swaCliOnPath';
+import { withNpxOnPath } from './npxOnPath';
 
 describe('SwaTaskProvider (unit)', () => {
-    it('should generate config and detected tasks with exact SWA arguments', async () => { await withSwaCliOnPath(async executablePath => {
+    it('should generate config and detected tasks with exact SWA arguments', async () => { await withNpxOnPath(async executablePath => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
         const folder = { uri: root, name: 'workspace', index: 0 } as vscode.WorkspaceFolder;
@@ -53,6 +53,8 @@ describe('SwaTaskProvider (unit)', () => {
         // path is strongly quoted because it may contain spaces.
         expect(execution.command).to.deep.equal({ value: executablePath, quoting: vscode.ShellQuoting.Strong });
         expect(execution.args).to.deep.equal([
+            '-y',
+            '@azure/static-web-apps-cli@latest',
             'start',
             'http://localhost:3000',
             '--app-location',
@@ -109,7 +111,7 @@ describe('SwaTaskProvider (unit)', () => {
         }
     });
 
-    it('should avoid duplicate task labels within a workspace', async () => { await withSwaCliOnPath(async () => {
+    it('should avoid duplicate task labels within a workspace', async () => { await withNpxOnPath(async () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace/app');
         const folder = { uri: root, name: 'app', index: 0 } as vscode.WorkspaceFolder;
@@ -129,7 +131,7 @@ describe('SwaTaskProvider (unit)', () => {
         expect(tasks.filter(task => task.name === 'start app')).to.have.lengthOf(1);
     }); });
 
-    it('should report aggregate task discovery without nested folder events', async () => { await withSwaCliOnPath(async () => {
+    it('should report aggregate task discovery without nested folder events', async () => { await withNpxOnPath(async () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
         const folder = { uri: root, name: 'workspace', index: 0 } as vscode.WorkspaceFolder;

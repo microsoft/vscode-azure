@@ -19,8 +19,8 @@ import { getFolderContainingDatabaseConfig } from '../../staticWebApps/DatabaseC
 import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 import {
     FunctionsEmulatorAddress,
-    SwaCliCommand,
-} from '../../staticWebApps/SwaCliService';
+    swaCliCommandLine,
+} from '../../staticWebApps/swaCli';
 import { tryGetStaticWebAppsCliConfig } from '../../staticWebApps/SwaCliConfig';
 
 /** Source assigned to all generated Static Web Apps tasks. */
@@ -32,9 +32,8 @@ export const SwaWatchProblemMatcher = '$swa-watch';
  * Marks a task as one this provider generated.
  *
  * @remarks
- * The executable cannot serve as the marker: {@linkcode createShellTask} pins a
- * bare name to its absolute path on `PATH`, so the command a generated task
- * carries is not the literal {@linkcode SwaCliCommand} it was built from.
+ * The executable cannot serve as the marker: every generated task now runs
+ * `npx`, which no more identifies a SWA task than it would any other package's.
  */
 export const SwaTaskDefinition: vscode.TaskDefinition = { type: 'shell', swaCli: true };
 
@@ -119,13 +118,12 @@ export class SwaTaskProvider implements vscode.TaskProvider {
     private async discoverTasksForWorkspaceFolder(
         workspaceFolder: vscode.WorkspaceFolder,
     ): Promise<WorkspaceTaskDiscovery> {
-        // The CLI is installed on demand, so discovery runs long before it is
-        // guaranteed to be on PATH -- and createShellTask rejects a bare name it
-        // cannot resolve rather than handing it to a shell. Reporting no tasks is
-        // the honest answer in that window, since a task naming a missing
-        // executable could only fail in the terminal. Discovery runs again once
-        // the debug flow has prompted the user to install, so the tasks appear
-        // then. Only that one cause is swallowed; anything else still surfaces.
+        // Task discovery runs for any workspace, including one on a machine
+        // without Node, and createShellTask rejects an executable it cannot
+        // resolve rather than handing it to a shell. Reporting no tasks is the
+        // honest answer there, since a task naming a missing `npx` could only
+        // fail in the terminal. Only that one cause is swallowed; anything else
+        // still surfaces.
         let configTasks: vscode.Task[];
         let detectedTasks: vscode.Task[];
         try {
@@ -201,7 +199,7 @@ export class SwaTaskProvider implements vscode.TaskProvider {
         env?: Readonly<Record<string, string>>,
     ): vscode.Task {
         return createShellTask(this.code, {
-            command: [SwaCliCommand, ...args],
+            command: swaCliCommandLine(...args),
             definition: { ...SwaTaskDefinition },
             scope: workspaceFolder,
             name,

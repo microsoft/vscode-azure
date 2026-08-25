@@ -534,11 +534,6 @@
                     },
                     "default": [],
                     "description": "%settings.vscode-azure.selectedSubscriptions%"
-                },
-                "vscode-azure.staticWebApps.showStaticWebAppsCliWarning": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "%settings.vscode-azure.staticWebApps.showStaticWebAppsCliWarning%"
                 }
             }
         },

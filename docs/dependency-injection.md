@@ -164,7 +164,6 @@ So `ClearActivities` can inject `IArmDeploymentDataProvider` directly and get th
 
 Static Web Apps local tooling follows the same ownership model as tree providers:
 
-- `ISwaCliService` wraps `IProcessExecutor`, `IOutputChannel`, and `IVsCode`.
 - Task and debug providers are singleton bindings so commands and VS Code
   registrations share state.
 - `SwaTaskLifecycle` is activated through `pushDisposable`; its event subscriptions

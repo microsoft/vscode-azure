@@ -18,10 +18,8 @@ import { staticWebAppsCliSetupUrl } from '../../commands/staticWebApps/staticWeb
 import { detectStaticWebAppProject } from '../../commands/staticWebApps/steps/frameworkDetection';
 import {
     FunctionsEmulatorAddress,
-    ISwaCliService,
     SwaEmulatorAddress,
-    type ISwaCliService as SwaCli,
-} from '../../staticWebApps/SwaCliService';
+} from '../../staticWebApps/swaCli';
 import {
     SwaCliConfigFileName,
     tryGetStaticWebAppsCliConfig,
@@ -61,7 +59,6 @@ type FunctionsProxyFixOutcome = 'notApplicable' | 'alreadyConfigured' | 'fixed' 
 export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
     public constructor(
         @inject(IVsCode) private readonly code: VsCode,
-        @inject(ISwaCliService) private readonly swaCli: SwaCli,
         @inject(IActionExecutor) private readonly executor: ActionExecutor,
     ) { }
 
@@ -140,15 +137,6 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         context.telemetry.properties.hasWorkspaceFolder = String(!!folder);
         if (!folder) {
             context.telemetry.properties.resolveOutcome = 'missingWorkspaceFolder';
-            return undefined;
-        }
-
-        const installed = await this.swaCli.validateInstalled(this.code.l10n.t(
-            'Install the Azure Static Web Apps CLI to debug this static web app.',
-        ));
-        context.telemetry.properties.cliAvailable = String(installed);
-        if (!installed) {
-            context.telemetry.properties.resolveOutcome = 'cliUnavailable';
             return undefined;
         }
 
