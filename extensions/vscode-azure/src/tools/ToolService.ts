@@ -43,6 +43,16 @@ export interface AcquireToolRequest {
     readonly existingPath?: string;
 
     /**
+     * Installs even when an acceptable executable is already present, so the
+     * tool is updated to the newest version its installer can reach. Defaults
+     * to `false`, which returns the first acceptable executable found.
+     *
+     * Ignored when {@linkcode existingPath} is set, since a caller-managed
+     * executable is never installed over.
+     */
+    readonly force?: boolean;
+
+    /**
      * Fails rather than installing through a method that cannot verify what it
      * downloads. Defaults to `false`, in which case an unverified fallback is
      * used only after logging a warning.
@@ -73,12 +83,11 @@ export const IToolService: ServiceIdentifier<IToolService> = Symbol.for('IToolSe
 export interface IToolService {
     /**
      * Returns an executable satisfying {@linkcode request}, installing the tool
-     * if no acceptable one is found.
+     * if no acceptable one is found -- or, when the request is forced, even if
+     * one is.
      *
      * Concurrent requests for the same tool and version range share a single
-     * installation, so callers cannot race each other's package manager. A
-     * shared installation follows the cancellation of whichever request started
-     * it.
+     * installation, so callers cannot race each other's package manager.
      *
      * @throws When the request is malformed, or when no acceptable executable
      *   can be produced.
@@ -96,13 +105,17 @@ export interface IToolService {
 }
 
 /**
- * Builds the request used by the extension's own "install this tool" commands,
- * which want the tool's own default version range and visible progress.
+ * Builds the request used by the extension's own "install this tool" commands.
+ *
+ * Those commands are how a user asks for the newest tool, so they force the
+ * install rather than stopping at a merely acceptable version, and they show
+ * their progress.
  */
 export function userToolRequest(toolId: ToolId): AcquireToolRequest {
     return {
         toolId,
         requestingExtensionId: ExtensionId,
+        force: true,
         showProgressNotification: true,
         revealInstallTask: true,
     };
@@ -140,7 +153,7 @@ export function validateAcquireToolRequest(
         && (typeof request.existingPath !== 'string' || !path.isAbsolute(request.existingPath))) {
         throw new Error('existingPath must be an absolute path.');
     }
-    for (const flag of ['requireSignature', 'showProgressNotification', 'revealInstallTask'] as const) {
+    for (const flag of ['force', 'requireSignature', 'showProgressNotification', 'revealInstallTask'] as const) {
         if (request[flag] !== undefined && typeof request[flag] !== 'boolean') {
             throw new Error(`${flag} must be a boolean.`);
         }
@@ -174,8 +187,12 @@ export class ToolService implements IToolService {
             return this.acquireCore(installer, validated, versionRange);
         }
 
+        // Callers share one install so they cannot race the same package
+        // manager. A forced request gets its own key, since it must not be
+        // satisfied by an in-flight request that may stop at a version that is
+        // merely acceptable.
         return this.inflight.getOrRun(
-            `${installer.id}|${versionRange ?? '*'}`,
+            `${installer.id}|${versionRange ?? '*'}${validated.force ? '|force' : ''}`,
             () => this.acquireCore(installer, validated, versionRange),
         );
     }
@@ -192,21 +209,29 @@ export class ToolService implements IToolService {
     ): Promise<AcquireToolResult> {
         request.progress?.(this.code.l10n.t('Looking for {0}...', installer.displayName));
         const found = await this.resolve(installer, request, versionRange);
-        if (found.satisfying) {
+
+        // A caller-managed executable is used as-is or not at all -- it is
+        // never installed over, so `force` does not apply to it.
+        if (request.existingPath) {
+            if (!found.satisfying) {
+                throw new Error(this.code.l10n.t(
+                    'The specified {0} executable is missing, or does not satisfy version "{1}".',
+                    installer.displayName,
+                    versionRange ?? '*',
+                ));
+            }
             return this.succeed(installer, found.satisfying.executablePath);
         }
 
-        if (request.existingPath) {
-            throw new Error(this.code.l10n.t(
-                'The specified {0} executable is missing, or does not satisfy version "{1}".',
-                installer.displayName,
-                versionRange ?? '*',
-            ));
+        // A forced request resolves first anyway, so the installer can offer
+        // the existing install an update instead of a fresh install.
+        if (found.satisfying && !request.force) {
+            return this.succeed(installer, found.satisfying.executablePath);
         }
 
         request.progress?.(this.code.l10n.t('Installing {0}...', installer.displayName));
         await installer.install({
-            current: found.rejected,
+            current: found.satisfying ?? found.rejected,
             requireSignature: request.requireSignature ?? false,
             reveal: request.revealInstallTask ?? false,
             cancellationToken: request.cancellationToken,

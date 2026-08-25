@@ -22,8 +22,8 @@ an `Error` whose message is meant to be read by a user.
 
 The extension's own install commands are that same `AcquireTool` command
 registered with a `userToolRequest('<toolId>')` prefix argument, which asks for
-the tool's default version range with a progress notification and a revealed
-install task.
+the tool's default version range, forces the install so an existing tool is
+updated, and shows progress with a revealed install task.
 
 ## Resolution
 
@@ -37,6 +37,12 @@ re-checking known locations is what makes the tool usable without a reload.
 
 Concurrent requests for the same tool and version range share one install, so
 two callers cannot race the same package manager.
+
+A request may set `force` to install even when an acceptable version is already
+present, which is how a tool gets updated. The extension's own install commands
+do this, so "Install Azure Developer CLI" updates an existing `azd` rather than
+reporting success and doing nothing. Forced requests do not share an install
+with unforced ones, which may stop at a merely acceptable version.
 
 ## Adding a tool
 

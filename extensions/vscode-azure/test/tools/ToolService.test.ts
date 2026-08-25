@@ -7,7 +7,7 @@ import type { IProcessExecutor } from '@microsoft/vscode-azure-utils';
 import { MockUri, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { ToolInstallOptions, ToolInstaller } from '../../src/tools/ToolInstaller';
-import { ToolService, userToolRequest, validateAcquireToolRequest } from '../../src/tools/ToolService';
+import { ToolService, userToolRequest, validateAcquireToolRequest, type AcquireToolRequest } from '../../src/tools/ToolService';
 
 /**
  * A stand-in installer whose versions are keyed by path, so a test can make an
@@ -42,12 +42,17 @@ function createService(installer: ToolInstaller, pathResult?: string, existingFi
     return new ToolService(mockResult.vscode, processExecutor, [installer]);
 }
 
+/** The plain request another extension would make: resolve, install only if needed. */
+function request(overrides: Partial<AcquireToolRequest> = {}): AcquireToolRequest {
+    return { toolId: 'azd', requestingExtensionId: 'publisher.name', ...overrides };
+}
+
 describe('ToolService (unit)', () => {
     it('should return an executable already on the PATH without installing', async () => {
         const { installer, install } = createInstaller(new Map([['/tools/azd', '1.25.1']]));
         const service = createService(installer, '/tools/azd', ['/tools/azd']);
 
-        const result = await service.acquire(userToolRequest('azd'));
+        const result = await service.acquire(request());
 
         expect(result.executablePath).to.equal('/tools/azd');
         expect(service.getResolvedPath('azd')).to.equal('/tools/azd');
@@ -61,7 +66,7 @@ describe('ToolService (unit)', () => {
         );
         const service = createService(installer, undefined, ['/opt/azd']);
 
-        const result = await service.acquire(userToolRequest('azd'));
+        const result = await service.acquire(request());
 
         expect(result.executablePath).to.equal('/opt/azd');
     });
@@ -75,7 +80,7 @@ describe('ToolService (unit)', () => {
         const { installer } = createInstaller(versions, { install });
         const service = createService(installer, '/tools/azd', ['/tools/azd']);
 
-        const result = await service.acquire(userToolRequest('azd'));
+        const result = await service.acquire(request());
 
         expect(result.executablePath).to.equal('/tools/azd');
         expect(install.mock.calls[0].arguments[0].current).to.deep.equal({
@@ -84,11 +89,35 @@ describe('ToolService (unit)', () => {
         });
     });
 
+    it('should install over an acceptable version when forced, offering it for self-update', async () => {
+        const { installer, install } = createInstaller(new Map([['/tools/azd', '1.25.1']]));
+        const service = createService(installer, '/tools/azd', ['/tools/azd']);
+
+        const result = await service.acquire(request({ force: true }));
+
+        expect(result.executablePath).to.equal('/tools/azd');
+        expect(install.mock.callCount()).to.equal(1);
+        expect(install.mock.calls[0].arguments[0].current).to.deep.equal({
+            executablePath: '/tools/azd',
+            version: '1.25.1',
+        });
+    });
+
+    it('should not install over a caller-supplied path even when forced', async () => {
+        const { installer, install } = createInstaller(new Map([['/caller/azd', '1.25.1']]));
+        const service = createService(installer);
+
+        const result = await service.acquire(request({ existingPath: '/caller/azd', force: true }));
+
+        expect(result.executablePath).to.equal('/caller/azd');
+        expect(install.mock.callCount()).to.equal(0);
+    });
+
     it('should use the version range supplied by the caller over the tool default', async () => {
         const { installer, install } = createInstaller(new Map([['/tools/azd', '1.0.0']]));
         const service = createService(installer, '/tools/azd', ['/tools/azd']);
 
-        const result = await service.acquire({ ...userToolRequest('azd'), versionRange: '>=1.0.0' });
+        const result = await service.acquire(request({ versionRange: '>=1.0.0' }));
 
         expect(result.executablePath).to.equal('/tools/azd');
         expect(install.mock.callCount()).to.equal(0);
@@ -98,7 +127,7 @@ describe('ToolService (unit)', () => {
         const { installer, install } = createInstaller(new Map());
         const service = createService(installer);
 
-        await expect(service.acquire({ ...userToolRequest('azd'), existingPath: '/caller/azd' }))
+        await expect(service.acquire(request({ existingPath: '/caller/azd' })))
             .to.be.rejectedWith(/missing, or does not satisfy/);
         expect(install.mock.callCount()).to.equal(0);
     });
@@ -107,7 +136,7 @@ describe('ToolService (unit)', () => {
         const { installer } = createInstaller(new Map());
         const service = createService(installer);
 
-        await expect(service.acquire(userToolRequest('azd'))).to.be.rejectedWith(/Reload the window/);
+        await expect(service.acquire(request())).to.be.rejectedWith(/Reload the window/);
     });
 
     it('should report progress for each phase', async () => {
@@ -122,7 +151,7 @@ describe('ToolService (unit)', () => {
         const service = createService(installer, undefined, ['/tools/azd']);
         const progress = mock.fn();
 
-        await service.acquire({ ...userToolRequest('azd'), progress });
+        await service.acquire(request({ progress }));
 
         expect(progress.mock.callCount()).to.equal(3);
     });
@@ -139,13 +168,34 @@ describe('ToolService (unit)', () => {
         const { installer } = createInstaller(versions, { getKnownPaths: () => ['/tools/azd'], install });
         const service = createService(installer, undefined, ['/tools/azd']);
 
-        const first = service.acquire(userToolRequest('azd'));
-        const second = service.acquire(userToolRequest('azd'));
+        const first = service.acquire(request());
+        const second = service.acquire(request());
         await waitFor(() => finishInstall !== undefined);
         finishInstall?.();
 
         expect(await first).to.deep.equal(await second);
         expect(install.mock.callCount()).to.equal(1);
+    });
+
+    it('should not let a forced request share an unforced one', async () => {
+        const versions = new Map([['/tools/azd', '1.25.1']]);
+        const { installer, install } = createInstaller(versions);
+        const service = createService(installer, '/tools/azd', ['/tools/azd']);
+
+        const [unforced, forced] = await Promise.all([
+            service.acquire(request()),
+            service.acquire(request({ force: true })),
+        ]);
+
+        expect(unforced.executablePath).to.equal('/tools/azd');
+        expect(forced.executablePath).to.equal('/tools/azd');
+        expect(install.mock.callCount()).to.equal(1);
+    });
+});
+
+describe('userToolRequest (unit)', () => {
+    it('should force an install so a user-invoked command updates an existing tool', () => {
+        expect(userToolRequest('azd').force).to.be.true;
     });
 });
 
