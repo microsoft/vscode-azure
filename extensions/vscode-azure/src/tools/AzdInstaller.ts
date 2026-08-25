@@ -143,8 +143,7 @@ export class AzdInstaller implements ToolInstaller {
                 methods.push({
                     name: 'winget',
                     command: command('winget')
-                        .arg('install', 'microsoft.azd')
-                        .flagArg('--accept-source-agreements'),
+                        .arg('install', 'microsoft.azd', '--accept-source-agreements'),
                     verified: true,
                 });
             }
