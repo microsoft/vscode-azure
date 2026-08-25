@@ -380,21 +380,22 @@ describe('uiHelpers (unit)', () => {
             expect(cItem?.description).to.include('recently selected');
         });
 
-        describe('isActionItem', () => {
+        describe('shouldRememberItem', () => {
             const items = () => [{ label: 'A' }, { label: 'B' }, { label: 'Load More...' }];
             const isLoadMore = (item: { label: string }) => item.label === 'Load More...';
+            const rememberChoicesOnly = (item: { label: string }) => !isLoadMore(item);
 
             it('should not remember an action item as the recent choice', async () => {
                 const { ctx, mock } = createMockCodeContext();
 
                 respondToPrompts(mock, [{ pick: 'Load More...' }]);
-                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
 
                 // Restoring the action would open the picker with it
                 // pre-highlighted, so accepting the default would trigger it
                 // instead of choosing anything.
                 respondToPrompts(mock, [{ pick: 'A' }]);
-                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
 
                 const qp = mock.quickPicks[1];
                 expect(qp.items[0].label).to.equal('A');
@@ -405,14 +406,14 @@ describe('uiHelpers (unit)', () => {
                 const { ctx, mock } = createMockCodeContext();
 
                 respondToPrompts(mock, [{ pick: 'B' }]);
-                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
 
                 respondToPrompts(mock, [{ pick: 'Load More...' }]);
-                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
 
                 // Accepting the action must not clobber what the user last chose.
                 respondToPrompts(mock, [{ pick: 'A' }]);
-                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
 
                 const qp = mock.quickPicks[2];
                 expect(qp.items[0].label).to.equal('B');
@@ -423,10 +424,10 @@ describe('uiHelpers (unit)', () => {
                 const { ctx, mock } = createMockCodeContext();
 
                 respondToPrompts(mock, [{ pickMany: ['A', 'Load More...'] }]);
-                await showSmartQuickPick(ctx, items(), { canPickMany: true, isActionItem: isLoadMore });
+                await showSmartQuickPick(ctx, items(), { canPickMany: true, shouldRememberItem: rememberChoicesOnly });
 
                 respondToPrompts(mock, [{ pickMany: ['B'] }]);
-                await showSmartQuickPick(ctx, items(), { canPickMany: true, isActionItem: isLoadMore });
+                await showSmartQuickPick(ctx, items(), { canPickMany: true, shouldRememberItem: rememberChoicesOnly });
 
                 const qp = mock.quickPicks[1];
                 expect(qp.items.find(i => i.label === 'A')?.description).to.include('recently selected');

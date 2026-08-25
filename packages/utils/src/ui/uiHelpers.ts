@@ -99,16 +99,17 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
     readonly onDidChangeValue?: (value: string) => void;
 
     /**
-     * Marks items that act on the picker itself rather than being a choice --
-     * a "Load more..." row, for example.
+     * Whether an item takes part in the recently-picked memory. Defaults to
+     * remembering everything.
      *
-     * Such an item takes no part in the recently-picked memory: it is neither
+     * Return `false` for rows that act on the picker rather than being a choice
+     * -- a "Load more..." row, for example. Such an item is then neither
      * recorded when accepted nor restored on a later show. Remembering one
      * would clobber a genuinely-pickable recent choice and, worse, leave the
      * picker opening with the action pre-highlighted, so that accepting the
      * default triggers it instead of choosing anything.
      */
-    readonly isActionItem?: (item: TItem) => boolean;
+    readonly shouldRememberItem?: (item: TItem) => boolean;
 
     /**
      * Turns the quick pick into a combo box ("pick or enter"): builds a synthetic,
@@ -152,7 +153,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     const showBack = options?.showBack ?? false;
     const quickPick = ctx.code.window.createQuickPick<TItem>();
     const recentKey = quickPickRecentKey(items, options);
-    const isActionItem = options?.isActionItem ?? (() => false);
+    const shouldRememberItem = options?.shouldRememberItem ?? (() => true);
     quickPick.items = items;
 
     if (showBack) {
@@ -181,7 +182,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         // For single-select, try to pre-highlight a recently chosen item
         const recentLabels = ctx.extensionContext.workspaceState.get<string[]>(recentKey);
         if (recentLabels && recentLabels.length > 0) {
-            const recentItem = items.find(item => item.label === recentLabels[0] && !isActionItem(item));
+            const recentItem = items.find(item => item.label === recentLabels[0] && shouldRememberItem(item));
             if (recentItem) {
                 recentItem.description = recentItem.description ?
                     ctx.code.l10n.t('{0} (recently selected)', recentItem.description) :
@@ -199,7 +200,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         const recentLabels = ctx.extensionContext.workspaceState.get<string[]>(recentKey);
         if (recentLabels && recentLabels.length > 0) {
             const recentSet = new Set(recentLabels);
-            const recentItems = items.filter(item => recentSet.has(item.label) && !isActionItem(item));
+            const recentItems = items.filter(item => recentSet.has(item.label) && shouldRememberItem(item));
             for (const item of recentItems) {
                 item.description = item.description ?
                     ctx.code.l10n.t('{0} (recently selected)', item.description) :
@@ -275,7 +276,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                 const selected = [...quickPick.selectedItems];
                 if (selected.length > 0) {
                     finish(() => {
-                        void ctx.extensionContext.workspaceState.update(recentKey, selected.filter(item => !isActionItem(item)).map(s => s.label));
+                        void ctx.extensionContext.workspaceState.update(recentKey, selected.filter(item => shouldRememberItem(item)).map(s => s.label));
                         resolve(selected);
                     });
                 } else {
@@ -297,7 +298,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                         // would clobber a genuinely-pickable recent choice. An action
                         // item is excluded for the same reason, plus one worse
                         // consequence -- it would be pre-highlighted next time.
-                        if (selected !== syntheticItem && !isActionItem(selected)) {
+                        if (selected !== syntheticItem && shouldRememberItem(selected)) {
                             void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
                         }
                         resolve(selected);

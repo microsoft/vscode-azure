@@ -5,9 +5,9 @@
 
 import { AzureListingCache } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '@microsoft/vscode-azure-azutils/testing';
-import { collectAsync } from '@microsoft/vscode-azure-utils';
+import { collectAsync, collectPages } from '@microsoft/vscode-azure-utils';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { listReachableSubscriptions, listReachableTenants } from '../../../src/commands/auth/listReachableAuthNodes';
+import { listReachableSubscriptions, listReachableTenantPages } from '../../../src/commands/auth/listReachableAuthNodes';
 
 describe('listReachableAuthNodes (unit)', () => {
     function createCache(options: MockAzureListingFetcherOptions) {
@@ -125,8 +125,8 @@ describe('listReachableAuthNodes (unit)', () => {
         });
     });
 
-    describe('listReachableTenants', () => {
-        it('reads only the first page of each account, sorted by display name', async () => {
+    describe('listReachableTenantPages', () => {
+        it('yields one page per account, sorted by display name', async () => {
             const account = makeAccount({ id: 'acct-1' });
             const tenants = [
                 makeTenant({ tenantId: 'tenant-2', displayName: 'Zulu', accountId: account.id }),
@@ -135,34 +135,49 @@ describe('listReachableAuthNodes (unit)', () => {
             ];
             const { listings } = createCache({ accounts: [account], tenants, subscriptions: [], pageSize: 2 });
 
-            const reachable = await listReachableTenants(listings);
+            const [first] = await collectPages(listReachableTenantPages(listings));
 
             // Accounts can belong to hundreds of tenants, and this only seeds a
-            // combobox where any tenant id can be typed, so page two is never
-            // pulled.
-            expect(reachable.tenants.map(t => t.tenant.displayName)).to.deep.equal(['Alpha', 'Zulu']);
-            expect(reachable.tenants[0].account).to.equal(account);
-            // The page that was skipped is what the caller offers to load.
-            expect(reachable.hasMore).to.be.true;
+            // combobox where any tenant id can be typed, so page two waits to be
+            // asked for.
+            expect(first.items.map(t => t.tenant.displayName)).to.deep.equal(['Alpha', 'Zulu']);
+            expect(first.items[0].account).to.equal(account);
+            expect(first.hasMore).to.be.true;
         });
 
-        it('drains every page when asked for all of them', async () => {
-            const account = makeAccount({ id: 'acct-1' });
+        it('advances every account that still has more in one step', async () => {
+            const first = makeAccount({ id: 'acct-1' });
+            const second = makeAccount({ id: 'acct-2' });
             const tenants = [
-                makeTenant({ tenantId: 'tenant-2', displayName: 'Zulu', accountId: account.id }),
-                makeTenant({ tenantId: 'tenant-1', displayName: 'Alpha', accountId: account.id }),
-                makeTenant({ tenantId: 'tenant-3', displayName: 'Mike', accountId: account.id }),
+                makeTenant({ tenantId: 'tenant-2', displayName: 'Zulu', accountId: first.id }),
+                makeTenant({ tenantId: 'tenant-1', displayName: 'Alpha', accountId: first.id }),
+                makeTenant({ tenantId: 'tenant-4', displayName: 'Yankee', accountId: second.id }),
+                makeTenant({ tenantId: 'tenant-3', displayName: 'Bravo', accountId: second.id }),
             ];
-            const { listings } = createCache({ accounts: [account], tenants, subscriptions: [], pageSize: 2 });
+            const pulls: string[] = [];
+            const { listings } = createCache({
+                accounts: [first, second],
+                tenants,
+                subscriptions: [],
+                pageSize: 1,
+                onPagePulled: (listing, pageIndex) => { if (listing === 'tenants') { pulls.push(String(pageIndex)); } },
+            });
 
-            const reachable = await listReachableTenants(listings, 'all');
+            const pages = await collectPages(listReachableTenantPages(listings));
 
-            expect(reachable.tenants.map(t => t.tenant.displayName)).to.deep.equal(['Alpha', 'Mike', 'Zulu']);
-            // Nothing is left, so there is nothing to offer to load.
-            expect(reachable.hasMore).to.be.false;
+            // Both accounts advance together, so a user with several accounts
+            // waits one round trip per step rather than one per account.
+            expect(pulls).to.deep.equal(['0', '0', '1', '1']);
+            expect(pages.map(page => page.items.map(t => t.tenant.displayName))).to.deep.equal([
+                ['Yankee', 'Zulu'],
+                ['Alpha', 'Bravo', 'Yankee', 'Zulu'],
+            ]);
+            // Each page carries everything found so far, so a picker can show it
+            // directly instead of accumulating.
+            expect(pages.map(page => page.hasMore)).to.deep.equal([true, false]);
         });
 
-        it('resumes the listing rather than restarting it when the rest is asked for', async () => {
+        it('resumes the listing rather than restarting it on the next page', async () => {
             const account = makeAccount({ id: 'acct-1' });
             const tenants = ['tenant-1', 'tenant-2', 'tenant-3', 'tenant-4'].map(tenantId =>
                 makeTenant({ tenantId, displayName: tenantId, accountId: account.id }));
@@ -175,11 +190,13 @@ describe('listReachableAuthNodes (unit)', () => {
                 onPagePulled: (listing, pageIndex) => { if (listing === 'tenants') { pulls.push(pageIndex); } },
             });
 
-            await listReachableTenants(listings);
-            await listReachableTenants(listings, 'all');
+            // Read one page, abandon the walk, then start over and read on.
+            const iterator = listReachableTenantPages(listings)[Symbol.asyncIterator]();
+            await iterator.next();
+            await collectPages(listReachableTenantPages(listings));
 
-            // Page zero is replayed from the cache, so loading the rest costs
-            // only the pages the first read skipped.
+            // Page zero is replayed from the cache, so reading on costs only the
+            // page the first walk had not reached.
             expect(pulls).to.deep.equal([0, 1]);
         });
 
@@ -188,7 +205,10 @@ describe('listReachableAuthNodes (unit)', () => {
             const tenant = makeTenant({ tenantId: 'tenant-1', accountId: account.id });
             const { listings } = createCache({ accounts: [account], tenants: [tenant], subscriptions: [] });
 
-            expect((await listReachableTenants(listings)).hasMore).to.be.false;
+            const pages = await collectPages(listReachableTenantPages(listings));
+
+            expect(pages).to.have.length(1);
+            expect(pages[0].hasMore).to.be.false;
         });
 
         it('keeps the tenants of the accounts it could list when another fails', async () => {
@@ -204,15 +224,15 @@ describe('listReachableAuthNodes (unit)', () => {
 
             // Enumeration being blocked for one account is the very case that
             // sends a user to Sign In, so it must not empty the suggestions.
-            const reachable = await listReachableTenants(listings);
+            const pages = await collectPages(listReachableTenantPages(listings));
 
-            expect(reachable.tenants.map(t => t.tenant.displayName)).to.deep.equal(['Alpha']);
+            expect(pages[0].items.map(t => t.tenant.displayName)).to.deep.equal(['Alpha']);
         });
 
         it('returns nothing when no account is signed in', async () => {
             const { listings } = createCache({ accounts: [], tenants: [], subscriptions: [] });
 
-            expect(await listReachableTenants(listings)).to.deep.equal({ tenants: [], hasMore: false });
+            expect(await collectPages(listReachableTenantPages(listings))).to.deep.equal([]);
         });
     });
 });

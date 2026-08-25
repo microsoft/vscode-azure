@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { byAccount, ICredentialFactory, IAzureListingCache, VsCodeExtensionCredential, type AzureListingCache } from '@microsoft/vscode-azure-azutils';
-import { CaselessSet, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, ICodeContext, type Page, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { GuidPattern } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { addSignedInTenant } from '../../utils/signedInTenants';
 import type { ManagedCommand } from '../ManagedCommand';
-import { listReachableTenants, type ReachableTenant, type ReachableTenantsResult } from './listReachableAuthNodes';
+import { listReachableTenantPages, type ReachableTenant } from './listReachableAuthNodes';
 
 /**
  * Signs the user in to Azure, adapting to what they actually need.
@@ -27,9 +27,8 @@ import { listReachableTenants, type ReachableTenant, type ReachableTenantsResult
  *   specific tenant by ID instead.
  * - **Already signed in:** the user is signing in again to reach a tenant they
  *   can't yet see (for example one behind stricter MFA), so it shows a combobox
- *   of the first page of reachable tenants, which can be extended to the whole
- *   list on request, and also lets them type any tenant ID directly (see
- *   {@linkcode pickTenantOrEnterId}).
+ *   of reachable tenants, lets them load later pages on demand, and also lets
+ *   them type any tenant ID directly (see {@linkcode pickTenantOrEnterId}).
  *
  * After a successful sign-in it invalidates the resources tree so the freshly
  * added account or tenant appears, and touches the listing cache as little as
@@ -84,24 +83,7 @@ export class SignIn implements ManagedCommand {
         // Either the user is already signed in (signing in again to reach a
         // tenant they can't yet see) or default sign-in is not possible. Offer a
         // single combobox: pick a reachable tenant or type a tenant ID.
-        //
-        // Tolerate a listing failure: tenant listing can be blocked outright
-        // (e.g. conditional access), and the combobox still lets the user type a
-        // tenant ID, so a failure is treated as "no suggestions".
-        let listing: ReachableTenantsResult;
-        try {
-            listing = await listReachableTenants(this.listings);
-        } catch {
-            listing = { tenants: [], hasMore: false };
-        }
-        const pick = await pickTenantOrEnterId(
-            this.ctx,
-            listing.tenants,
-            // Only offer to load the rest when there is a rest to load. The
-            // drain resumes the same listing rather than restarting it, so it
-            // costs the pages the first read skipped and nothing more.
-            listing.hasMore ? async () => (await listReachableTenants(this.listings, 'all')).tenants : undefined,
-        );
+        const pick = await pickTenantOrEnterId(this.ctx, listReachableTenantPages(this.listings));
         const session = await this.signInToTenant(pick);
 
         // A tenant-targeted sign-in can surface an account that was not signed
@@ -248,12 +230,8 @@ interface TenantPick {
     readonly accountId?: string;
 }
 
-/** The picker's "load the rest of the tenants" row, which is an action rather than a choice. */
-type LoadMoreChoice = {
-    readonly kind: 'loadMore';
-    /** Pulls the tenants the first page left out. Carried by the row so it cannot be shown without one. */
-    readonly load: () => Promise<ReachableTenant[]>;
-};
+/** The picker's "load more tenants" row, which acts on the picker rather than being a choice. */
+type LoadMoreChoice = { readonly kind: 'loadMore' };
 
 /** What a row in the tenant picker resolves to: a tenant, or the request to list more of them. */
 type TenantChoice = { readonly kind: 'tenant'; readonly pick: TenantPick } | LoadMoreChoice;
@@ -261,65 +239,81 @@ type TenantChoice = { readonly kind: 'tenant'; readonly pick: TenantPick } | Loa
 /**
  * Show a combobox-style quick pick for choosing a tenant to sign in to.
  *
- * Behaves like a combo box: the {@linkcode tenants} are shown as suggestions,
- * but the user can also type any tenant ID directly. When the typed value does
- * not match a suggested tenant, a synthetic "sign in to tenant `<id>`" item is
+ * Behaves like a combo box: the reachable tenants are shown as suggestions, but
+ * the user can also type any tenant ID directly. When the typed value does not
+ * match a suggested tenant, a synthetic "sign in to tenant `<id>`" item is
  * offered, so the control works even when tenants cannot be listed at all (e.g.
  * conditional-access restrictions).
  *
- * The suggestions are normally only the first page, to avoid enumerating
- * accounts with hundreds of tenants. Passing {@linkcode loadMore} adds a "load
- * more tenants" row that replaces the suggestions with everything it returns,
- * so a user whose tenant fell on a later page can find it by name instead of
- * having to produce its ID from somewhere else. The row is offered once: after
- * it runs there is nothing further to load. Whatever the user had typed is
- * carried across, so a filter that matched nothing on the first page can match
- * on the full list without being retyped.
+ * The suggestions start at one page, to avoid enumerating accounts with hundreds
+ * of tenants on every sign-in. While {@linkcode tenantPages} reports more, a
+ * "load more tenants" row is offered that advances to the next page, so a user
+ * whose tenant fell on a later page can find it by name instead of having to
+ * produce its ID from somewhere else. Whatever the user had typed is carried
+ * across, so a filter that matched nothing on the pages read so far can match on
+ * the next one without being retyped.
  *
  * @param ctx - VS Code dependencies.
- * @param tenants - Suggested tenants to list (may be empty).
- * @param loadMore - Pulls the tenants that the first page left out. Pass it
- * only when there are some; its presence is what puts the row in the picker.
+ * @param tenantPages - Resumable pages of suggested tenants, each holding every
+ * tenant discovered so far. A page that cannot be read is treated as the end of
+ * the listing, leaving the suggestions already gathered in place.
  * @returns The chosen {@linkcode TenantPick}.
  * @throws {@linkcode CancellationError} if the user dismisses the quick pick.
  * @internal Exported only for tests.
  */
-export async function pickTenantOrEnterId(ctx: ICodeContext, tenants: ReachableTenant[], loadMore?: () => Promise<ReachableTenant[]>): Promise<TenantPick> {
+export async function pickTenantOrEnterId(ctx: ICodeContext, tenantPages: AsyncIterable<Page<ReachableTenant>>): Promise<TenantPick> {
     const code = ctx.code;
-    let suggestions = tenants;
-    let loadRest = loadMore;
+    const pages = tenantPages[Symbol.asyncIterator]();
     // The last filter the user typed, carried across a re-show.
     let value = '';
 
+    // Tolerate a listing failure: tenant listing can be blocked outright (e.g.
+    // conditional access), and the combobox still lets the user type a tenant
+    // ID, so a failure is treated as the end of the suggestions rather than an
+    // error. Whatever earlier pages produced is kept.
+    const advance = async (current: ReachableTenant[]): Promise<{ suggestions: ReachableTenant[]; hasMore: boolean }> => {
+        try {
+            const page = await pages.next();
+            if (!page.done) {
+                return { suggestions: page.value.items, hasMore: page.value.hasMore };
+            }
+        } catch {
+            // Deliberately ignored; see above.
+        }
+        return { suggestions: current, hasMore: false };
+    };
+
+    let listing = await advance([]);
+
     for (; ;) {
-        const items: QuickPickItemWithData<TenantChoice>[] = suggestions.map(item => ({
+        const items: QuickPickItemWithData<TenantChoice>[] = listing.suggestions.map(item => ({
             label: code.l10n.t('{0} ({1})', item.tenant.displayName, item.tenant.tenantId),
             description: code.l10n.t('Account: {0}', item.account.label),
             data: { kind: 'tenant', pick: { tenantId: item.tenant.tenantId, accountId: item.account.id } },
         }));
 
-        if (loadRest) {
+        if (listing.hasMore) {
             items.push({
                 label: code.l10n.t('Load More Tenants...'),
-                detail: code.l10n.t('Only the first page of tenants is listed. Load the rest to search them by name.'),
+                detail: code.l10n.t('Not every tenant is listed yet. Load more to search them by name.'),
                 // The row's whole purpose is to rescue a filter that matched
                 // nothing, so it has to survive that filter.
                 alwaysShow: true,
-                data: { kind: 'loadMore', load: loadRest },
+                data: { kind: 'loadMore' },
             });
         }
 
-        const knownTenantIds = new CaselessSet(suggestions.map(item => item.tenant.tenantId));
+        const knownTenantIds = new CaselessSet(listing.suggestions.map(item => item.tenant.tenantId));
 
         const picked = await showSmartQuickPick(ctx, items, {
             title: code.l10n.t('Sign in to a Tenant'),
-            placeHolder: suggestions.length > 0
+            placeHolder: listing.suggestions.length > 0
                 ? code.l10n.t('Select a tenant, or type a tenant ID to sign in to')
                 : code.l10n.t('Type the ID of the tenant to sign in to'),
             matchOnDescription: true,
             value,
             onDidChangeValue: typed => { value = typed; },
-            isActionItem: item => item.data.kind === 'loadMore',
+            shouldRememberItem: item => item.data.kind !== 'loadMore',
             // Combo box: offer a "sign in to <typed id>" item only when the value
             // is a tenant GUID that isn't already one of the suggestions. Users
             // paste tenant IDs rather than typing them, so any non-GUID value is a
@@ -339,11 +333,10 @@ export async function pickTenantOrEnterId(ctx: ICodeContext, tenants: ReachableT
             return picked.data.pick;
         }
 
-        suggestions = await withDelayedProgress(
+        listing = await withDelayedProgress(
             code,
             { location: code.ProgressLocation.Notification, title: code.l10n.t('Loading tenants...') },
-            picked.data.load(),
+            advance(listing.suggestions),
         );
-        loadRest = undefined;
     }
 }
