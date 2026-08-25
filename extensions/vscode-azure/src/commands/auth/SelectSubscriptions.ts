@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { IAzureListingCache, type AzureListingCache, type AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { CaselessSet, IActionContext, IActionExecutor, ICodeContext, showMessage, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
-import { IAzureViewDataTree } from '../../services';
 import { ICredentialOptionsScope } from '../../utils/CredentialOptionsScope';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -28,7 +27,7 @@ export class SelectSubscriptions implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(IAzureListingCache) private readonly listings: AzureListingCache,
         @inject(ICredentialOptionsScope) private readonly credentialOptions: ICredentialOptionsScope,
         @inject(IActionContext) private readonly actionContext: IActionContext,
     ) { }
@@ -45,7 +44,7 @@ export class SelectSubscriptions implements ManagedCommand {
         // un-authable tenant fails fast instead of interrupting the user.
         const { subscriptions: reachable, failures } = await this.credentialOptions.run(
             { sessionOptions: { silent: true } },
-            () => listReachableSubscriptions(this.cache),
+            () => listReachableSubscriptions(this.listings),
         );
 
         if (failures.length > 0) {
@@ -95,25 +94,51 @@ export class SelectSubscriptions implements ManagedCommand {
      * Log each discovery failure to the output channel (tenant id + error only,
      * no PII) and show a single non-blocking warning naming the tenants that may
      * be missing from the list.
+     *
+     * Tenants nobody has signed in to are the routine case and are logged at
+     * debug: an account with access to many tenants is *expected* to have
+     * unvisited ones, and warning about them every time would train the user to
+     * ignore the channel. The wording follows the same split -- "sign in to
+     * these" when that is all that happened, and only the fault wording when
+     * something actually went wrong.
      */
     private reportFailures(failures: UnreachableAuthNode[]): void {
         const code = this.ctx.code;
 
         for (const failure of failures) {
-            this.executor.output.warn(code.l10n.t('[selectSubscriptions] could not list subscriptions for tenant={0} account={1}: {2}', failure.tenant?.tenantId ?? '<all>', failure.account.id, stringifyError(failure.error)));
+            const message = code.l10n.t('[selectSubscriptions] could not list subscriptions for tenant={0} account={1}: {2}', failure.tenant?.tenantId ?? '<all>', failure.account.id, stringifyError(failure.error));
+            if (failure.reason === 'notSignedIn') {
+                this.executor.output.debug(message);
+            } else {
+                this.executor.output.warn(message);
+            }
         }
 
         const tenantNames = failures
             .map(failure => failure.tenant?.displayName)
             .filter((name): name is string => !!name);
         const detail = [...new Set(tenantNames)].join(', ');
+        const onlyNotSignedIn = failures.every(failure => failure.reason === 'notSignedIn');
 
         void showMessage(
             code,
-            detail
-                ? code.l10n.t('Some tenants could not be loaded and may be missing from this list: {0}. Sign in to those tenants to include their subscriptions.', detail)
-                : code.l10n.t('Some tenants could not be loaded and may be missing from this list. Sign in to those tenants to include their subscriptions.'),
-            { severity: 'warning' },
+            this.missingTenantsMessage(onlyNotSignedIn, detail),
+            { severity: onlyNotSignedIn ? 'info' : 'warning' },
         );
+    }
+
+    /** The toast text for tenants missing from the pick list. */
+    private missingTenantsMessage(onlyNotSignedIn: boolean, detail: string): string {
+        const code = this.ctx.code;
+
+        if (onlyNotSignedIn) {
+            return detail
+                ? code.l10n.t('Some tenants are not signed in and are missing from this list: {0}. Sign in to those tenants to include their subscriptions.', detail)
+                : code.l10n.t('Some tenants are not signed in and are missing from this list. Sign in to those tenants to include their subscriptions.');
+        }
+
+        return detail
+            ? code.l10n.t('Some tenants could not be loaded and may be missing from this list: {0}. Sign in to those tenants to include their subscriptions.', detail)
+            : code.l10n.t('Some tenants could not be loaded and may be missing from this list. Sign in to those tenants to include their subscriptions.');
     }
 }

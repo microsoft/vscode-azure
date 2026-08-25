@@ -4,14 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    AzureListingCache,
+    AzureListingFetcher,
     createDefaultCredentialFactory,
     DeploymentClient,
-    findSubscriptionById,
+    IAzureListingCache,
+    IAzureListingFetcher,
     ICredentialFactory,
     IDeploymentClientProvider,
     IResourceClientProvider,
     ISubscriptionClientProvider,
     ResourceClient,
+    findSubscriptionById,
     SubscriptionClient,
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
@@ -24,7 +28,7 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { IAzureViewDataTree, ISubscriptionResolver } from '../services';
+import { ISubscriptionResolver } from '../services';
 import {
     AzureAccountDataProvider,
     IAzureAccountDataProvider,
@@ -34,6 +38,7 @@ import { GenericAzureViewProvider } from '../tree/resources/GenericAzureViewProv
 import { IResourceSelector, ResourceSelector } from '../tree/resources/ResourceSelector';
 import { azdDetector } from '../tree/workspace/azd/AzdWorkspaceDataProvider';
 import { CredentialOptionsScope, ICredentialOptionsScope } from '../utils/CredentialOptionsScope';
+import { signedInTenantIdsFor } from '../utils/signedInTenants';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /**
@@ -53,11 +58,28 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
             );
         }).inSingletonScope();
 
+        container.bind(IAzureListingFetcher).toDynamicValue(context => {
+            return new AzureListingFetcher(
+                context.get(ICodeContext),
+                context.get(IActionExecutor),
+                context.get(ICredentialFactory),
+            );
+        }).inSingletonScope();
+
+        container.bind(IAzureListingCache).toDynamicValue(context => {
+            const code = context.get(IVsCode);
+            // Read on every listing rather than captured, so adding or removing a
+            // manually-entered tenant takes effect with nothing re-fetched.
+            return new AzureListingCache(
+                context.get(IAzureListingFetcher),
+                context.get(IActionExecutor),
+                { additionalTenantIds: account => signedInTenantIdsFor(code, account.id) },
+            );
+        }).inSingletonScope();
+
         container.bind(ISubscriptionResolver).toDynamicValue(context => {
-            const tree = context.get(IAzureViewDataTree);
-            return (subscriptionId: string, tenantId?: string, accountId?: string) => {
-                return findSubscriptionById(tree, subscriptionId, tenantId, accountId);
-            };
+            const cache = context.get(IAzureListingCache);
+            return (subscriptionId: string) => findSubscriptionById(cache, subscriptionId);
         }).inSingletonScope();
 
         container.bind(ISubscriptionClientProvider).toFactory(context => {

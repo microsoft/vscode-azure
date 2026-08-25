@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AzureSubscription, ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import type { AzureSubscriptionTarget, ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import type { DataProvider, ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import type { ManagedCommand } from '../commands/ManagedCommand';
@@ -69,11 +69,13 @@ export class ProductRegistrar {
      * Add the standard subscription-scoped Azure client provider binding.
      *
      * The client factory receives the shared action/code contexts, a credential
-     * scoped to the requested subscription, and the subscription itself.
+     * scoped to the requested subscription, and the subscription itself -- in
+     * whatever shape that provider's identifier declares (see
+     * {@linkcode AzureClientCreate}).
      */
-    public registerAzureClientProvider<TResult>(
-        providerId: ServiceIdentifier<(subscription: AzureSubscription) => TResult>,
-        create: AzureClientCreate<TResult>,
+    public registerAzureClientProvider<TResult, TSubscription extends AzureSubscriptionTarget>(
+        providerId: ServiceIdentifier<(subscription: TSubscription) => TResult>,
+        create: AzureClientCreate<TResult, TSubscription>,
     ): void {
         this.registerBinding(container => {
             bindAzureClientProvider(container, providerId, create);

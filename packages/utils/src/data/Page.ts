@@ -30,3 +30,18 @@ export async function* flattenPages<T>(pages: AsyncIterable<Page<T>>): AsyncIter
         yield* page.items;
     }
 }
+
+/**
+ * Drops the items a predicate rejects, preserving page boundaries and each
+ * page's `hasMore` flag so the reader's paging is unaffected by how many items a
+ * page lost. A page that loses every item is still yielded, because its
+ * `hasMore` is what tells the reader whether to keep going.
+ *
+ * Passing no predicate yields the pages unchanged, so "nothing is filtered" and
+ * "everything is admitted" are spelled the same way at a call site.
+ */
+export async function* filterPages<T>(pages: AsyncIterable<Page<T>>, predicate?: (item: T) => boolean): AsyncIterable<Page<T>> {
+    for await (const page of pages) {
+        yield predicate ? { items: page.items.filter(predicate), hasMore: page.hasMore } : page;
+    }
+}

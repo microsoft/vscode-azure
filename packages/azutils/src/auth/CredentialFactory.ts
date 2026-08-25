@@ -7,7 +7,7 @@ import type { TokenCredential } from '@azure/core-auth';
 import type { IOutputChannel, IVsCode, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import { isAzureSubscription, type AzureSubscription } from './AzureSubscription';
+import { isAzureSubscriptionTarget, type AzureSubscriptionTarget } from './AzureSubscription';
 import { VsCodeExtensionCredential } from './VsCodeExtensionCredential';
 
 export type { TokenCredential };
@@ -29,10 +29,10 @@ export interface CredentialFactoryOptions {
 
 /**
  * Input accepted by an {@linkcode ICredentialFactory}: either explicit
- * {@linkcode CredentialFactoryOptions}, or an {@linkcode AzureSubscription}
+ * {@linkcode CredentialFactoryOptions}, or an {@linkcode AzureSubscriptionTarget}
  * (whose `tenantId` and `accountId` are used to scope the credential).
  */
-export type CredentialFactoryInput = CredentialFactoryOptions | AzureSubscription;
+export type CredentialFactoryInput = CredentialFactoryOptions | AzureSubscriptionTarget;
 
 /**
  * Factory that produces a {@linkcode TokenCredential} for Azure requests. The
@@ -40,8 +40,8 @@ export type CredentialFactoryInput = CredentialFactoryOptions | AzureSubscriptio
  * determines the cloud / auth provider itself.
  *
  * Accepts either {@linkcode CredentialFactoryOptions} or an
- * {@linkcode AzureSubscription}; passing a subscription is shorthand for
- * `{ tenantId: subscription.tenantId, sessionOptions: { account: { id: subscription.accountId, label: '' } } }`.
+ * {@linkcode AzureSubscriptionTarget}; passing a target is shorthand for
+ * `{ tenantId: target.tenantId, sessionOptions: { account: { id: target.accountId, label: '' } } }`.
  *
  * The account `label` is intentionally empty: {@linkcode vscode.authentication.getSession getSession}
  * resolves the account by `id`, and `label` is a required-but-display-only field.
@@ -51,10 +51,22 @@ export type ICredentialFactory = SyncFactory<TokenCredential, [input?: Credentia
 /** DI identifier for the {@linkcode ICredentialFactory}. */
 export const ICredentialFactory: ServiceIdentifier<ICredentialFactory> = Symbol.for('ICredentialFactory');
 
-/** Normalizes a {@linkcode CredentialFactoryInput} to {@linkcode CredentialFactoryOptions}. */
+/**
+ * Normalizes a {@linkcode CredentialFactoryInput} to {@linkcode CredentialFactoryOptions}.
+ *
+ * A target with no `accountId` yields no `account` at all rather than an empty
+ * one, so `getSession` is free to answer with whichever signed-in account can
+ * reach the tenant. That is the right answer for a caller that knows the
+ * subscription and tenant but never enumerated accounts: the tenant already
+ * pins the authority, and the account only breaks a tie between two accounts
+ * that both reach it.
+ */
 function toCredentialFactoryOptions(input?: CredentialFactoryInput): CredentialFactoryOptions | undefined {
-    if (isAzureSubscription(input)) {
-        return { tenantId: input.tenantId, sessionOptions: { account: { id: input.accountId, label: '' } } };
+    if (isAzureSubscriptionTarget(input)) {
+        return {
+            tenantId: input.tenantId,
+            sessionOptions: input.accountId ? { account: { id: input.accountId, label: '' } } : undefined,
+        };
     }
     return input;
 }

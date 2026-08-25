@@ -3,13 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/**
+import type { AzureSubscription, AzureTenantFilter } from '@microsoft/vscode-azure-azutils';
+import { CaselessSet, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../constants';
+
+/*
  * Owns the format of the `vscode-azure.selectedSubscriptions` filter entries: a
  * `tenantId/subscriptionId` pair with both halves lowercased. Keeping the build
  * and parse sides in one place ensures the values written by the Select
- * Subscriptions command always round-trip with the filtering done by the view
- * provider (change the separator or casing here and both directions stay in
- * sync).
+ * Subscriptions command always round-trip with the filtering applied while the
+ * tree walks the listing cache (change the separator or casing here and both
+ * directions stay in sync).
  */
 
 /** The separator between the tenant id and subscription id in a filter key. */
@@ -39,4 +43,62 @@ export function subscriptionFilterKey(tenantId: string, subscriptionId: string):
 export function parseSubscriptionFilterKey(key: string): { readonly tenantId?: string; readonly subscriptionId?: string } {
     const [tenantId, subscriptionId] = key.toLowerCase().split(separator);
     return { tenantId: tenantId || undefined, subscriptionId: subscriptionId || undefined };
+}
+
+/**
+ * The two predicates described by `vscode-azure.selectedSubscriptions`.
+ *
+ * They are separate because they buy different things. Skipping a tenant avoids
+ * the expensive work -- a tenant-scoped token, then a subscription listing --
+ * so {@linkcode SelectedSubscriptionsFilter.admitsTenant admitsTenant} is
+ * handed to the listing cache to prune the walk. By the time a subscription is
+ * in hand its tenant has already been listed, so omitting it saves nothing and
+ * {@linkcode SelectedSubscriptionsFilter.admitsSubscription admitsSubscription}
+ * is purely about what the tree shows.
+ */
+export interface SelectedSubscriptionsFilter {
+    /** Whether the filter names this tenant at all. */
+    readonly admitsTenant: AzureTenantFilter;
+    /** Whether the filter names this exact `tenantId/subscriptionId` pair. */
+    readonly admitsSubscription: (subscription: AzureSubscription) => boolean;
+}
+
+/**
+ * Build the {@linkcode SelectedSubscriptionsFilter} described by
+ * `vscode-azure.selectedSubscriptions`, or `undefined` when the setting is
+ * empty.
+ *
+ * An empty setting means "no filtering", not "admit nothing" -- conflating the
+ * two shows an empty tree. Returning `undefined` (rather than predicates that
+ * happen to admit everything) keeps that distinction impossible to get wrong at
+ * a call site, since the unfiltered read is spelled the same way as the
+ * no-filter-configured one.
+ *
+ * A tenant is admitted when the filter names it at all; a subscription only when
+ * the filter names the exact `tenantId/subscriptionId` pair, because the same
+ * subscription reached through two tenants is two distinct nodes and the user
+ * may well have selected only one of them.
+ *
+ * @param code - Used to read the configuration.
+ */
+export function createSubscriptionFilter(code: IVsCode): SelectedSubscriptionsFilter | undefined {
+    const selected = code.workspace
+        .getConfiguration(ConfigurationSection)
+        .get<string[]>(SelectedSubscriptionsConfigurationKey, []);
+
+    if (selected.length === 0) {
+        return undefined;
+    }
+
+    const parsed = selected.map(parseSubscriptionFilterKey);
+    const tenants = new CaselessSet(parsed.map(entry => entry.tenantId).filter(id => id !== undefined));
+    const pairs = new CaselessSet(parsed.flatMap(entry =>
+        entry.tenantId !== undefined && entry.subscriptionId !== undefined
+            ? [subscriptionFilterKey(entry.tenantId, entry.subscriptionId)]
+            : []));
+
+    return {
+        admitsTenant: tenant => tenants.has(tenant.tenantId),
+        admitsSubscription: subscription => pairs.has(subscriptionFilterKey(subscription.tenantId, subscription.subscriptionId)),
+    };
 }

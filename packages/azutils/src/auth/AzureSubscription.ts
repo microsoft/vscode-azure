@@ -50,6 +50,11 @@ export interface AzureTenant extends WithRequired<TenantIdDescription, 'tenantId
  * owning account by id rather than by object embed, so callers must not
  * rely on reference equality against a shared {@linkcode AzureAccount} or
  * {@linkcode AzureTenant} instance.
+ *
+ * `tenantId` is the tenant the subscription was **listed through**, which is the
+ * tenant a credential for it must be scoped to. That is not always the tenant
+ * that owns the subscription, so the same subscription reached through two
+ * tenants is two distinct nodes.
  */
 export interface AzureSubscription extends WithRequired<Subscription, 'subscriptionId' | 'tenantId' | 'displayName'> {
     /** The Azure environment (cloud) to which this subscription belongs. */
@@ -62,6 +67,43 @@ export interface AzureSubscription extends WithRequired<Subscription, 'subscript
      * case-normalized on the object.
      */
     readonly accountId: string;
+}
+
+/**
+ * The least a caller must know to issue subscription-scoped ARM requests: which
+ * subscription, and which cloud's endpoint to send them to.
+ *
+ * Every {@linkcode AzureSubscription} is one. The looser shape exists for
+ * callers that never enumerated the hierarchy and so hold ids rather than
+ * listed objects -- an azd environment naming `AZURE_SUBSCRIPTION_ID` and
+ * `AZURE_TENANT_ID`, say.
+ *
+ * `tenantId` is what pins the token's authority, so a target without one gets a
+ * home-tenant token that ARM will reject for a subscription outside it. Supply
+ * it whenever it is known. `accountId` only disambiguates *which* signed-in
+ * account to use, and matters solely when two of them can reach the same
+ * tenant; without it VS Code picks.
+ */
+export interface AzureSubscriptionTarget {
+    readonly subscriptionId: string;
+    /** The Azure environment (cloud) whose ARM endpoint requests are sent to. */
+    readonly environment: EnvironmentLike;
+    /** The tenant to authenticate to. Omitted only when genuinely unknown. */
+    readonly tenantId?: string;
+    /** The owning account, when known. See the note on ambiguity above. */
+    readonly accountId?: string;
+}
+
+/**
+ * Defensive type guard that narrows an arbitrary value to an
+ * {@linkcode AzureSubscriptionTarget}.
+ *
+ * `subscriptionId` is the discriminator: it is what separates a target from the
+ * other shapes that reach the same call sites (a {@linkcode CredentialFactoryOptions}
+ * bag, an {@linkcode AzureAccount}, an {@linkcode AzureTenant}).
+ */
+export function isAzureSubscriptionTarget(value: unknown): value is AzureSubscriptionTarget {
+    return typeof value === 'object' && value !== null && 'subscriptionId' in value;
 }
 
 /**

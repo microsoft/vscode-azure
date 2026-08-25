@@ -52,6 +52,41 @@ export class Limiter<T> {
         });
     }
 
+    /**
+     * Map an async source through `factory`, running at most
+     * {@linkcode maxDegreeOfParallelism} tasks at once and yielding results in
+     * **source order**, not completion order.
+     *
+     * The source stays lazy: a new item is pulled only once a slot frees up, so
+     * at most {@linkcode maxDegreeOfParallelism} items are ever read ahead of
+     * the results the caller has consumed. That matters when merely *reading*
+     * the source costs something -- a paged listing, say -- and a caller that
+     * stops early must not have paid for work it never asked for.
+     *
+     * Tasks are submitted through {@linkcode queue}, so a limiter shared with
+     * other callers still bounds total concurrency across all of them.
+     *
+     * @remarks A caller that abandons the iteration early leaves the in-flight
+     * tasks unawaited. If `factory` can reject, it must settle its own failures
+     * (or the caller must consume to completion), or an abandoned task will
+     * surface as an unhandled rejection.
+     */
+    async *map<I>(source: AsyncIterable<I>, factory: (item: I) => Promise<T>): AsyncIterable<T> {
+        const inFlight: Array<Promise<T>> = [];
+
+        for await (const item of source) {
+            inFlight.push(this.queue(() => factory(item)));
+            while (inFlight.length >= this.maxDegreeOfParallelism) {
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                yield await inFlight.shift()!;
+            }
+        }
+
+        for (const pending of inFlight) {
+            yield await pending;
+        }
+    }
+
     private consume(): void {
         while (this.outstandingPromises.length && this.runningPromises < this.maxDegreeOfParallelism) {
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

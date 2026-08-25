@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { flattenPages, isAsyncIterable, type Page } from '../../src/data/Page';
+import { collectPages } from '../../src/index';
+import { filterPages, flattenPages, isAsyncIterable, type Page } from '../../src/data/Page';
 
 describe('Page (unit)', () => {
     describe('isAsyncIterable', () => {
@@ -57,6 +58,56 @@ describe('Page (unit)', () => {
             }
 
             expect(items).to.deep.equal([]);
+        });
+    });
+
+    describe('filterPages', () => {
+        function pages(): AsyncIterable<Page<string>> {
+            return toAsync<Page<string>>([
+                { items: ['a', 'b'], hasMore: true },
+                { items: ['c'], hasMore: false },
+            ]);
+        }
+
+        it('should drop rejected items without merging or dropping pages', async () => {
+            const result = await collectPages(filterPages(pages(), item => item !== 'b'));
+
+            expect(result).to.deep.equal([
+                { items: ['a'], hasMore: true },
+                { items: ['c'], hasMore: false },
+            ]);
+        });
+
+        it('should keep a page that lost every item, so hasMore still reaches the reader', async () => {
+            const result = await collectPages(filterPages(pages(), item => item === 'c'));
+
+            expect(result).to.deep.equal([
+                { items: [], hasMore: true },
+                { items: ['c'], hasMore: false },
+            ]);
+        });
+
+        it('should admit everything when no predicate is given', async () => {
+            const result = await collectPages(filterPages(pages()));
+
+            expect(result).to.deep.equal([
+                { items: ['a', 'b'], hasMore: true },
+                { items: ['c'], hasMore: false },
+            ]);
+        });
+
+        it('should pull only the pages the reader asks for', async () => {
+            const pulled: string[] = [];
+            async function* counting(): AsyncIterable<Page<string>> {
+                pulled.push('first');
+                yield await Promise.resolve({ items: ['a'], hasMore: true });
+                pulled.push('second');
+                yield await Promise.resolve({ items: ['b'], hasMore: false });
+            }
+
+            await filterPages(counting(), () => true)[Symbol.asyncIterator]().next();
+
+            expect(pulled).to.deep.equal(['first']);
         });
     });
 });
