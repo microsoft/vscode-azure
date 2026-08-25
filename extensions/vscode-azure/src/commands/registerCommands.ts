@@ -10,9 +10,9 @@ import type { ManagedCommandRegistration } from '../registration/ProductRegistra
 import { AzdDown } from './deploy/AzdDown';
 import { AzdUp } from './deploy/AzdUp';
 import { ClearActivities } from './deploy/ClearActivities';
+import { AcquireToolCommandId, userToolRequest } from '../tools/ToolService';
 import type { ManagedCommand } from './ManagedCommand';
-import { AcquireTool, AcquireToolCommandId } from './tools/AcquireTool';
-import { InstallAzd } from './tools/InstallAzd';
+import { AcquireTool } from './tools/AcquireTool';
 import { LoadMore } from './tree/LoadMore';
 import { RefreshWorkspaceView } from './tree/RefreshWorkspaceView';
 import { RevealInExplorer } from './tree/RevealInExplorer';
@@ -38,7 +38,7 @@ export function registerCommands(
     registerManagedCommand(container, AzdUpCommandId, AzdUp);
     registerManagedCommand(container, AzdDownCommandId, AzdDown);
     registerManagedCommand(container, AcquireToolCommandId, AcquireTool);
-    registerManagedCommand(container, 'vscode-azure/installAzd', InstallAzd);
+    registerManagedCommand(container, 'vscode-azure/installAzd', AcquireTool, userToolRequest('azd'));
 
     for (const command of productCommands) {
         registerManagedCommand(container, command.commandId, command.commandClass, ...command.prefixArgs);

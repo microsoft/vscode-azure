@@ -4,9 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    IToolAcquisitionService,
     setUpAzureSdkLogging,
-    ToolAcquisitionService,
 } from '@microsoft/vscode-azure-azutils';
 import {
     ActionExecutor,
@@ -34,6 +32,9 @@ import { registerCommands } from './commands/registerCommands';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
+import { AzdInstaller } from './tools/AzdInstaller';
+import { IToolInstaller } from './tools/ToolInstaller';
+import { IToolService, ToolService } from './tools/ToolService';
 import { registerTrees } from './tree/registerTrees';
 import { IWorkspaceIndexService, WorkspaceIndexService } from './utils/workspaceIndex/WorkspaceIndexService';
 
@@ -150,12 +151,8 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
         return new ProcessExecutor(context.get(IVsCode));
     }).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(IToolAcquisitionService).toDynamicValue(context => {
-        return new ToolAcquisitionService(
-            context.get(IVsCode),
-            context.get(IProcessExecutor),
-        );
-    }).inSingletonScope();
+    container.bind(IToolInstaller).to(AzdInstaller).inSingletonScope();
+    container.bind(IToolService).to(ToolService).inSingletonScope();
 
     container.bind(IWorkspaceIndexService).to(WorkspaceIndexService).inSingletonScope().onActivation(pushDisposable);
 

@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IToolAcquisitionService } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, isProcessError, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
+import { IToolService } from '../tools/ToolService';
 import { IAzdAuthServer } from './AzdAuthServer';
 
 export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdService');
@@ -103,7 +103,6 @@ export interface IAzdService {
      *   determined (e.g. azd not installed or version string is invalid).
      */
     checkVersion(minVersion?: string): Promise<boolean | undefined>;
-
 }
 
 /** An azd environment entry returned by `azd env list --output json`. */
@@ -163,7 +162,7 @@ export class AzdService implements IAzdService {
         @inject(IProcessExecutor) private readonly processExecutor: IProcessExecutor,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdAuthServer) private readonly authServer: IAzdAuthServer,
-        @inject(IToolAcquisitionService) private readonly toolAcquisition: IToolAcquisitionService,
+        @inject(IToolService) private readonly tools: IToolService,
     ) { }
 
     /** @inheritdoc */
@@ -410,7 +409,12 @@ export class AzdService implements IAzdService {
         });
     }
 
+    /**
+     * The `azd` executable to invoke: the absolute path found when the tool was
+     * last acquired, or the bare command name so a normal `PATH` install works
+     * without acquiring anything first.
+     */
     private getAzdCommand(): string {
-        return this.toolAcquisition.getResolvedPath('azd') ?? AzdCommand;
+        return this.tools.getResolvedPath('azd') ?? AzdCommand;
     }
 }

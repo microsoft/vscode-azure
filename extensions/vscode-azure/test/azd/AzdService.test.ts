@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IToolAcquisitionService } from '@microsoft/vscode-azure-azutils';
 import { ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
 import { MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
 import { AzdCommand, AzdService, MinAzdVersion } from '../../src/azd/AzdService';
+import type { IToolService } from '../../src/tools/ToolService';
 
 /**
  * A stand-in for {@linkcode IProcessExecutor.spawn} in tests. Intentionally
@@ -37,12 +37,12 @@ function createService(spawnFn?: SpawnMethod, acquiredPath?: string) {
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
     const processExecutor = { spawn: spawnMock } as unknown as IProcessExecutor;
     const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
-    const toolAcquisition: IToolAcquisitionService = {
+    const toolService: IToolService = {
         acquire: mock.fn(),
         getResolvedPath: mock.fn(() => acquiredPath),
     };
     const { executor } = createTestActionExecutor();
-    const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer, toolAcquisition);
+    const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer, toolService);
     return { service, spawnMock: spawnMock as unknown as ReturnType<typeof mock.fn>, fs: mockResult.fs, executor };
 }
 
@@ -416,12 +416,12 @@ describe('AzdService (unit)', () => {
                 isOnPath: mock.fn(() => false),
             } as unknown as IProcessExecutor;
             const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH: 'token' })) }; // eslint-disable-line @typescript-eslint/naming-convention
-            const toolAcquisition: IToolAcquisitionService = {
+            const toolService: IToolService = {
                 acquire: mock.fn(),
                 getResolvedPath: mock.fn(() => undefined),
             };
             const { executor } = createTestActionExecutor();
-            const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer, toolAcquisition);
+            const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer, toolService);
 
             await service.down(MockUri.file('/project'));
 

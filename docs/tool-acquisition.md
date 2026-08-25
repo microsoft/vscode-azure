@@ -1,72 +1,48 @@
 # Tool Acquisition
 
-Azure developer tools are resolved and installed through
-`IToolAcquisitionService` in `packages/azutils/src/tools`. The service is
-independent of command presentation: it reports neutral progress events while
-the extension decides whether to show a notification, write to the output
-channel, or remain silent.
+`IToolService` (in `extensions/vscode-azure/src/tools`) finds Azure developer
+tools that are already installed, and installs them when they are not.
 
 ## Public contract
 
-External extensions call the hidden `vscode-azure/acquireTool` command with one
-request object. The request includes:
+Other extensions call the `vscode-azure/acquireTool` command with a request
+object and get back an absolute path:
 
-- A supported tool identifier and its typed tool-specific options
-- The requesting extension ID
-- An optional semver range
-- An optional absolute executable path
-- An optional target architecture
-- Signature-verification policy
-- Optional cancellation and progress callbacks
+```ts
+const { executablePath } = await vscode.commands.executeCommand<AcquireToolResult>(
+    'vscode-azure/acquireTool',
+    { toolId: 'azd', requestingExtensionId: 'publisher.name', versionRange: '>=1.25.0' },
+);
+```
 
-The command returns the absolute executable path, resolved version, acquisition
-method, and whether installation occurred. It is not contributed to the Command
-Palette. User-facing commands, such as `vscode-azure/installAzd`, call this same
-command with notification progress enabled.
+The command is not contributed to the Command Palette, so an `onCommand`
+activation event keeps it callable before the extension has activated. Requests
+arriving from other extensions are validated field by field, and failures throw
+an `Error` whose message is meant to be read by a user.
 
-Programmatic requests are silent by default. Invalid input and acquisition
-failures reject with `ToolAcquisitionError`; user-facing commands translate
-those structured errors into localized messages and actions.
+The extension's own install commands are that same `AcquireTool` command
+registered with a `userToolRequest('<toolId>')` prefix argument, which asks for
+the tool's default version range with a progress notification and a revealed
+install task.
 
-## Resolution and installation
+## Resolution
 
-The coordinator checks candidates in this order:
+`acquire()` looks for a usable executable in order: the caller's `existingPath`,
+the `PATH`, then the locations the installer declares. Each candidate is
+version-checked by actually running it. Only if nothing acceptable is found does
+the tool get installed, after which the same search runs again -- package
+managers often install somewhere that is not on the current process's `PATH`, so
+re-checking known locations is what makes the tool usable without a reload.
+`getResolvedPath()` hands that path to callers such as `AzdService`.
 
-1. The request's explicit executable path
-2. The current process `PATH`
-3. Known locations declared by the tool definition
-4. The first applicable installation strategy
-
-`IProcessExecutor.resolveExecutable()` uses `@azure/core-process` to return an
-absolute path and supports Windows command shims. Every candidate is version
-probed before it is returned. After installation, the coordinator repeats PATH
-and known-location discovery so a package manager that updates PATH cannot
-cause a false failure in the current extension host.
-
-Equivalent in-flight requests are coalesced to avoid racing package managers.
-Each caller may stop waiting independently; the shared process is cancelled only
-after no callers remain. The initial implementation acquires tools for the
-extension host architecture and rejects a different requested architecture.
-
-When `requireSignature` is explicitly `true`, acquisition fails unless an
-applicable strategy provides signature verification or an equivalent trust
-guarantee. When the field is omitted, verified strategies remain preferred, but
-an unverifiable fallback may continue after reporting a warning.
+Concurrent requests for the same tool and version range share one install, so
+two callers cannot race the same package manager.
 
 ## Adding a tool
 
-Add the tool identifier and options to `ToolOptionsMap`, extend the centralized
-runtime validator, and register a `ToolDefinition`. A definition supplies:
-
-- Friendly metadata and executable name
-- Known executable locations
-- Version probing and parsing
-- Ordered, platform-aware installation strategies
-- Signature-verification metadata for each strategy
-
-The initial registry contains only Azure Developer CLI (`azd`). Additional tools
-should not require changes to the acquisition coordinator.
-
-Successful acquisition paths are retained by the service for the current
-extension-host lifetime. AZD command execution reads that path so an executable
-found outside the original process PATH remains usable after acquisition.
+Add the id to `ToolId`, implement `ToolInstaller`, and bind it to
+`IToolInstaller` in `extension.ts`. An installer owns its own known paths,
+version probe, and installation methods; nothing about *how* a tool installs
+reaches the API. Installers should prefer package managers, avoid installs
+requiring elevation, and treat `requireSignature` as a hard failure when only
+unverified methods are available.
