@@ -187,9 +187,7 @@ export class AzdService implements IAzdService {
             await this.processExecutor.spawn({
                 execution: 'background',
                 command: command(this.getAzdCommand())
-                    .arg('init')
-                    .flagArg('--minimal')
-                    .flagArg('--no-prompt'),
+                    .arg('init', '--minimal', '--no-prompt'),
                 cwd,
             });
         } catch (e) {
@@ -320,9 +318,7 @@ export class AzdService implements IAzdService {
             await this.processExecutor.spawn({
                 execution: 'foreground',
                 command: command(this.getAzdCommand())
-                    .arg('down')
-                    .flagArg('--force')
-                    .flagArg('--purge'),
+                    .arg('down', '--force', '--purge'),
                 cwd,
                 env: authEnv,
                 name: 'azd down',
