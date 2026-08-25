@@ -13,6 +13,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
+import { debugConfigurationPrefix } from '../../debug/staticWebApps/SwaDebugConfigurationProvider';
 import { IProcessTerminator } from '../../utils/ProcessTerminator';
 import { SwaTaskSource } from './SwaTaskProvider';
 
@@ -67,7 +68,13 @@ export class SwaTaskLifecycle implements Disposable {
     }
 
     private handleDebugTermination(session: vscode.DebugSession): void {
-        if (session.parentSession || !session.workspaceFolder) {
+        // The Functions attach session that startFunctionsDebugging launches is
+        // also top-level and also rooted in this workspace folder, so it shares
+        // the folder key. Match our own session by name or stopping the API
+        // debugger would kill the emulator under the still-running browser.
+        if (session.parentSession
+            || !session.workspaceFolder
+            || !session.name.startsWith(debugConfigurationPrefix)) {
             return;
         }
 

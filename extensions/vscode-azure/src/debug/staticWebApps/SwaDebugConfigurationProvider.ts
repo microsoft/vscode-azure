@@ -33,7 +33,14 @@ export const SwaDebugType = 'swa';
 /** Browser debugger used to launch the local SWA emulator. */
 export const PwaChromeDebugType = 'pwa-chrome';
 
-const debugConfigurationPrefix = 'SWA: Run ';
+/**
+ * Name prefix of every generated SWA browser debug configuration.
+ *
+ * The prefix is the only marker that identifies a session as ours once it has
+ * started, so anything reacting to session events has to match on it rather
+ * than on the workspace folder, which the Functions attach session shares.
+ */
+export const debugConfigurationPrefix = 'SWA: Run ';
 /**
  * Command contributed by the standalone Azure Functions extension that adds an
  * attach configuration to a Functions project. An optional integration: this

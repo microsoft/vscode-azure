@@ -74,12 +74,14 @@ describe('SwaTaskLifecycle (unit)', () => {
 
         mockResult.taskProcessStartEmitter.fire({ execution, processId: 1234 });
         mockResult.debugSessionTerminateEmitter.fire({
+            name: 'SWA: Run workspace',
             workspaceFolder: folder,
             parentSession: {} as vscode.DebugSession,
         } as vscode.DebugSession);
         expect(stop.mock.callCount()).to.equal(0);
 
         mockResult.debugSessionTerminateEmitter.fire({
+            name: 'SWA: Run workspace',
             workspaceFolder: folder,
             parentSession: undefined,
         } as unknown as vscode.DebugSession);
@@ -87,8 +89,54 @@ describe('SwaTaskLifecycle (unit)', () => {
         expect(stop.mock.calls[0].arguments[0]).to.equal(1234);
 
         mockResult.debugSessionTerminateEmitter.fire({
+            name: 'SWA: Run workspace',
             workspaceFolder: folder,
         } as vscode.DebugSession);
+        expect(stop.mock.callCount()).to.equal(1);
+        lifecycle.dispose();
+    });
+
+    it('should leave the emulator running when the Functions attach session ends', () => {
+        const mockResult = createMockVsCode();
+        const folder = {
+            uri: mockResult.vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        } as vscode.WorkspaceFolder;
+        const task = new mockResult.vscode.Task(
+            { ...SwaTaskDefinition },
+            folder,
+            'start workspace',
+            'swa',
+            new mockResult.vscode.ShellExecution('swa', ['start']),
+        );
+        const stop = mock.fn((_processId: number) => Promise.resolve());
+        const lifecycle = new SwaTaskLifecycle(
+            mockResult.vscode,
+            { stop },
+            new MockOutputChannel('test'),
+        );
+
+        mockResult.taskProcessStartEmitter.fire({
+            execution: { task } as vscode.TaskExecution,
+            processId: 1234,
+        });
+
+        // startFunctionsDebugging launches the attach with a bare
+        // startDebugging(folder, configuration), so it is top-level and shares
+        // this folder -- only the name tells it apart from the SWA session.
+        mockResult.debugSessionTerminateEmitter.fire({
+            name: 'Attach to Node Functions',
+            workspaceFolder: folder,
+            parentSession: undefined,
+        } as unknown as vscode.DebugSession);
+        expect(stop.mock.callCount()).to.equal(0);
+
+        mockResult.debugSessionTerminateEmitter.fire({
+            name: 'SWA: Run workspace',
+            workspaceFolder: folder,
+            parentSession: undefined,
+        } as unknown as vscode.DebugSession);
         expect(stop.mock.callCount()).to.equal(1);
         lifecycle.dispose();
     });
