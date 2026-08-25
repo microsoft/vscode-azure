@@ -108,7 +108,30 @@ describe('AzdInstaller (unit)', () => {
             await installer.install(installOptions());
 
             expect(installedWith(spawn)[0]).to.equal('powershell');
-            expect(output.warn.mock.callCount()).to.equal(1);
+            expect(output.warn.mock.callCount()).to.equal(0);
+        });
+
+        it('should verify the Windows install script is signed by Microsoft before running it', async () => {
+            setPlatform('win32');
+            const { installer, spawn } = createInstaller();
+
+            await installer.install(installOptions());
+
+            // The script path is only offered as a verified method because it
+            // performs this check itself; losing it would silently downgrade
+            // every `requireSignature` caller on a machine with no package manager.
+            const script = installedWith(spawn).join(' ');
+            expect(script).to.include('Get-AuthenticodeSignature');
+            expect(script).to.include('O=Microsoft Corporation');
+        });
+
+        it('should satisfy a required signature on Windows with no package manager', async () => {
+            setPlatform('win32');
+            const { installer, spawn } = createInstaller();
+
+            await installer.install(installOptions({ requireSignature: true }));
+
+            expect(installedWith(spawn)[0]).to.equal('powershell');
         });
 
         it('should prefer brew on macOS', async () => {
@@ -120,13 +143,14 @@ describe('AzdInstaller (unit)', () => {
             expect(installedWith(spawn)).to.deep.equal(['brew', 'install', 'azure/azd/azd']);
         });
 
-        it('should use the install script on Linux', async () => {
+        it('should use the install script on Linux, warning that it cannot be verified', async () => {
             setPlatform('linux');
-            const { installer, spawn } = createInstaller();
+            const { installer, spawn, output } = createInstaller();
 
             await installer.install(installOptions());
 
             expect(installedWith(spawn)[0]).to.equal('bash');
+            expect(output.warn.mock.callCount()).to.equal(1);
         });
 
         it('should refuse an unverified method when a signature is required', async () => {

@@ -23,15 +23,42 @@ interface AzdVersionResult {
 /**
  * One way of installing `azd`.
  *
- * `verified` records whether the method checks the authenticity of what it
- * downloads. Package managers do this on the extension's behalf; piping an
- * install script into a shell does not.
+ * `verified` records whether the method establishes that what it downloads
+ * really came from Microsoft. Package managers do this on the extension's
+ * behalf, and {@linkcode WindowsInstallScript} does it explicitly; piping a
+ * script into `bash` cannot.
  */
 interface AzdInstallMethod {
     readonly name: string;
     readonly command: CommandLineArgs;
     readonly verified: boolean;
 }
+
+/**
+ * Downloads the official Windows install script, checks it carries a valid
+ * Microsoft Authenticode signature, and only then runs it.
+ *
+ * The signature is checked here rather than being left to PowerShell's
+ * execution policy, because the policy cannot do this job: it does not apply to
+ * `-Command` at all, and for a script file `AllSigned` additionally requires
+ * the publisher be enrolled in the machine's `TrustedPublisher` store. Microsoft
+ * is not enrolled there by default -- a valid Microsoft signature alone only
+ * earns an "untrusted publisher" prompt, which a non-interactive task fails
+ * outright. Checking the signature directly both avoids that prompt and pins
+ * the signer, which the policy would not do.
+ *
+ * `-ExecutionPolicy Bypass` accompanies it for the same reason: the check above
+ * is the stronger one, and it has already passed by the time the script runs.
+ */
+const WindowsInstallScript = [
+    '$ErrorActionPreference = \'Stop\'',
+    '$file = Join-Path $env:TEMP ([guid]::NewGuid().ToString() + \'.ps1\')',
+    'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' -OutFile $file',
+    '$signature = Get-AuthenticodeSignature $file',
+    'if ($signature.Status -ne \'Valid\' -or $signature.SignerCertificate.Subject -notmatch \'O=Microsoft Corporation\') { Remove-Item $file -Force; throw \'The downloaded azd install script is not validly signed by Microsoft.\' }',
+    '& $file',
+    'Remove-Item $file -Force',
+].join('; ');
 
 /** Installs the Azure Developer CLI, preferring package managers over install scripts. */
 @injectable()
@@ -153,9 +180,10 @@ export class AzdInstaller implements ToolInstaller {
             methods.push({
                 name: 'install-azd.ps1',
                 command: command('powershell')
-                    .namedArg('-ExecutionPolicy', 'AllSigned')
-                    .arg('-c', 'Invoke-RestMethod \'https://aka.ms/install-azd.ps1\' | Invoke-Expression'),
-                verified: false,
+                    .namedArg('-ExecutionPolicy', 'Bypass')
+                    .arg('-Command')
+                    .quotedArg(WindowsInstallScript),
+                verified: true,
             });
         } else {
             if (process.platform === 'darwin' && this.processExecutor.isOnPath('brew')) {
