@@ -59,40 +59,83 @@ export interface ReachableSubscriptionsResult {
 }
 
 /**
- * Enumerate the first page of reachable tenants across all signed-in accounts.
+ * How far {@linkcode listReachableTenants} reads into each account's tenant
+ * listing.
  *
- * An account can have access to a very large number of tenants (hundreds), so
- * this deliberately reads only the first page of each account's tenants. The
- * result is intended to seed a combobox where the user can either pick a
- * suggested tenant or type any tenant ID directly, so an exhaustive list is
- * neither needed nor desirable.
+ * `firstPage` stops after one page per account, because an account can have
+ * access to hundreds of tenants and the result only seeds a combobox where any
+ * tenant id can be typed. `all` drains every page, for when the user has
+ * explicitly asked to see the rest.
+ */
+export type TenantListingDepth = 'firstPage' | 'all';
+
+/** The outcome of {@linkcode listReachableTenants}. */
+export interface ReachableTenantsResult {
+    /** The tenants that were listed, deduplicated and sorted by display name. */
+    readonly tenants: ReachableTenant[];
+
+    /**
+     * Whether at least one account reported further tenants that were
+     * deliberately not read. Only ever `true` for a `firstPage` listing, and it
+     * is what tells a caller there is something left to offer to load.
+     */
+    readonly hasMore: boolean;
+}
+
+/**
+ * Enumerate the tenants reachable across all signed-in accounts.
+ *
+ * Listing tenants is cheap relative to the rest of the auth walk -- one
+ * account-scoped token covers every page, and no per-tenant token is minted --
+ * so reading further is a matter of round trips rather than sign-in prompts.
+ * It is still {@linkcode TenantListingDepth.firstPage first page} by default,
+ * because most users never need the rest and an account with hundreds of
+ * tenants would pay for all of them on every sign-in.
  *
  * Read **unfiltered**: this feeds a flow that decides which tenants to sign in
  * to, and a list narrowed by the current filter could only ever narrow it
  * further.
+ *
+ * An account whose listing fails is skipped rather than failing the whole call,
+ * and tenants already gathered from it are kept. Enumeration being blocked
+ * outright (conditional access) is precisely the case that sends a user here,
+ * and collapsing the suggestions to nothing because one account of several
+ * refused -- or because page three of a drain did -- would take away the list
+ * they were reading.
  */
-export async function listFirstPageReachableTenants(listings: AzureListingCache): Promise<ReachableTenant[]> {
+export async function listReachableTenants(listings: AzureListingCache, depth: TenantListingDepth = 'firstPage'): Promise<ReachableTenantsResult> {
     const tenants = new CaselessMap<ReachableTenant>();
+    let hasMore = false;
 
     for (const account of await listings.listAccounts()) {
-        // First page only -- the loop breaks rather than draining the listing,
-        // so later pages are never pulled.
-        for await (const page of listings.listTenants(account)) {
-            for (const tenant of page.items) {
-                const key = `${account.id}/${tenant.tenantId}`;
-                if (!tenants.has(key)) {
-                    tenants.set(key, { account, tenant });
+        try {
+            for await (const page of listings.listTenants(account)) {
+                for (const tenant of page.items) {
+                    const key = `${account.id}/${tenant.tenantId}`;
+                    if (!tenants.has(key)) {
+                        tenants.set(key, { account, tenant });
+                    }
+                }
+
+                if (depth === 'firstPage') {
+                    // The loop breaks rather than draining the listing, so later
+                    // pages are never pulled.
+                    hasMore ||= page.hasMore;
+                    break;
                 }
             }
-            break;
+        } catch {
+            // Deliberately ignored; see above.
         }
     }
 
-    return [...tenants.values()].sort((a, b) => {
+    const sorted = [...tenants.values()].sort((a, b) => {
         return a.tenant.displayName.localeCompare(b.tenant.displayName)
             || a.tenant.tenantId.localeCompare(b.tenant.tenantId)
             || a.account.label.localeCompare(b.account.label);
     });
+
+    return { tenants: sorted, hasMore };
 }
 
 /**

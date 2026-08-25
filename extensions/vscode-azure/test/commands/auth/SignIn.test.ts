@@ -416,4 +416,63 @@ describe('pickTenantOrEnterId (unit)', () => {
         expect(pick.tenantId).to.equal('tenant-1');
         expect(pick.accountId).to.equal('acct-1');
     });
+
+    describe('loading the rest of the tenants', () => {
+        const loadMoreLabel = 'Load More Tenants...';
+        const onFirstPage = makeReachableTenant('tenant-1', 'Tenant One');
+        const onLaterPage = makeReachableTenant('tenant-2', 'Tenant Two');
+
+        it('should not offer to load more when there is nothing left to load', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+
+            const resultPromise = pickTenantOrEnterId(ctx, [onFirstPage]);
+
+            const qp = code.quickPicks[0];
+            expect(qp.items.map(item => item.label)).to.not.include(loadMoreLabel);
+
+            qp.activeItems = [qp.items[0]];
+            qp.accept();
+            await resultPromise;
+        });
+
+        it('should replace the suggestions with the full list once loading is asked for', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            const loadMore = mock.fn(() => Promise.resolve([onFirstPage, onLaterPage]));
+            respondToPrompts(code, [{ pick: loadMoreLabel }, { pick: 'Tenant Two (tenant-2)' }]);
+
+            const pick = await pickTenantOrEnterId(ctx, [onFirstPage], loadMore);
+
+            expect(loadMore.mock.callCount()).to.equal(1);
+            // The tenant the user could not otherwise have reached without
+            // producing its id by hand.
+            expect(pick.tenantId).to.equal('tenant-2');
+            expect(pick.accountId).to.equal('acct-1');
+        });
+
+        it('should not offer to load a second time', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            respondToPrompts(code, [{ pick: loadMoreLabel }, { pick: 'Tenant Two (tenant-2)' }]);
+
+            await pickTenantOrEnterId(ctx, [onFirstPage], () => Promise.resolve([onFirstPage, onLaterPage]));
+
+            const reshown = code.quickPicks[1];
+            expect(reshown.items.map(item => item.label)).to.deep.equal([
+                'Tenant One (tenant-1)',
+                'Tenant Two (tenant-2)',
+            ]);
+        });
+
+        it('should carry the typed filter across the reload', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            // 'Two' matches nothing on the first page, so the load-more row is
+            // the only thing left to accept -- which is exactly the situation
+            // the row exists for.
+            respondToPrompts(code, [{ value: 'Two' }, { pick: 'Tenant Two (tenant-2)' }]);
+
+            const pick = await pickTenantOrEnterId(ctx, [onFirstPage], () => Promise.resolve([onFirstPage, onLaterPage]));
+
+            expect(code.quickPicks[1].value).to.equal('Two');
+            expect(pick.tenantId).to.equal('tenant-2');
+        });
+    });
 });

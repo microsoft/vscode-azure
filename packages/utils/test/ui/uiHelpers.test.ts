@@ -380,6 +380,103 @@ describe('uiHelpers (unit)', () => {
             expect(cItem?.description).to.include('recently selected');
         });
 
+        describe('isActionItem', () => {
+            const items = () => [{ label: 'A' }, { label: 'B' }, { label: 'Load More...' }];
+            const isLoadMore = (item: { label: string }) => item.label === 'Load More...';
+
+            it('should not remember an action item as the recent choice', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ pick: 'Load More...' }]);
+                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+
+                // Restoring the action would open the picker with it
+                // pre-highlighted, so accepting the default would trigger it
+                // instead of choosing anything.
+                respondToPrompts(mock, [{ pick: 'A' }]);
+                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+
+                const qp = mock.quickPicks[1];
+                expect(qp.items[0].label).to.equal('A');
+                expect(qp.items.find(isLoadMore)?.description).to.be.undefined;
+            });
+
+            it('should leave a genuinely-pickable recent choice in place', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ pick: 'B' }]);
+                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+
+                respondToPrompts(mock, [{ pick: 'Load More...' }]);
+                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+
+                // Accepting the action must not clobber what the user last chose.
+                respondToPrompts(mock, [{ pick: 'A' }]);
+                await showSmartQuickPick(ctx, items(), { isActionItem: isLoadMore });
+
+                const qp = mock.quickPicks[2];
+                expect(qp.items[0].label).to.equal('B');
+                expect(qp.items[0].description).to.include('recently selected');
+            });
+
+            it('should not pre-check an action item in multi-select mode', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ pickMany: ['A', 'Load More...'] }]);
+                await showSmartQuickPick(ctx, items(), { canPickMany: true, isActionItem: isLoadMore });
+
+                respondToPrompts(mock, [{ pickMany: ['B'] }]);
+                await showSmartQuickPick(ctx, items(), { canPickMany: true, isActionItem: isLoadMore });
+
+                const qp = mock.quickPicks[1];
+                expect(qp.items.find(i => i.label === 'A')?.description).to.include('recently selected');
+                expect(qp.items.find(isLoadMore)?.description).to.be.undefined;
+            });
+        });
+
+        describe('onDidChangeValue', () => {
+            it('should report the raw typed value', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const seen: string[] = [];
+
+                const resultPromise = showSmartQuickPick(ctx, [{ label: 'A' }], {
+                    onDidChangeValue: value => seen.push(value),
+                });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('a');
+                qp.changeValue('a ');
+
+                // Untrimmed, so a caller can hand the value straight back as the
+                // preset filter of a follow-up pick.
+                expect(seen).to.deep.equal(['a', 'a ']);
+
+                qp.activeItems = [qp.items[0]];
+                qp.accept();
+                await resultPromise;
+            });
+
+            it('should report the value alongside a combo box factory', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const seen: string[] = [];
+
+                const resultPromise = showSmartQuickPick(ctx, [{ label: 'A' }], {
+                    onDidChangeValue: value => seen.push(value),
+                    createItemFromValue: value => value ? { label: `Use ${value}` } : undefined,
+                });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('custom');
+
+                expect(seen).to.deep.equal(['custom']);
+                expect(qp.items.map(i => i.label)).to.deep.equal(['A', 'Use custom']);
+
+                qp.accept();
+                const result = await resultPromise;
+                expect(result.label).to.equal('Use custom');
+            });
+        });
+
         it('should use isActiveItem to pre-highlight an item', async () => {
             const { ctx, mock } = createMockCodeContext();
 
