@@ -588,6 +588,28 @@ describe('uiHelpers (unit)', () => {
                 expect((await resultPromise).data).to.equal('typed-id');
             });
 
+            it('should list the synthetic item above an always-shown suggestion', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Load More...', data: 'more', alwaysShow: true },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('typed-id');
+
+                // An always-shown row survives the filter just as the synthetic
+                // item does, so listing it first would hand it the highlight and
+                // let Enter trigger it instead of using what the user typed.
+                expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Use typed-id', 'Load More...']);
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Use typed-id']);
+
+                qp.accept();
+                expect((await resultPromise).data).to.equal('typed-id');
+            });
+
             it('should keep a filter-matching suggestion active instead of the synthetic item', async () => {
                 const { ctx, mock } = createMockCodeContext();
                 const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;

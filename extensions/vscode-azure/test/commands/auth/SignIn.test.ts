@@ -492,6 +492,24 @@ describe('pickTenantOrEnterId (unit)', () => {
             expect(pick.tenantId).to.equal('tenant-1');
         });
 
+        it('should sign in to a pasted tenant GUID rather than loading more', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
+            respondToPrompts(code, [{ value: tenantId }]);
+
+            const pick = await pickTenantOrEnterId(ctx, tenantPages(
+                { items: [onFirstPage], hasMore: true },
+                { items: [onFirstPage, onLaterPage], hasMore: false },
+            ));
+
+            // A pasted GUID filters out every suggestion, leaving two rows that
+            // refuse to be filtered: the load-more action and the sign-in row
+            // the user's own typing produced. Enter has to take the latter, or
+            // pasting a tenant ID just pages the list instead.
+            expect(pick).to.deep.equal({ tenantId });
+            expect(code.quickPicks).to.have.length(1);
+        });
+
         it('should still allow a pasted tenant GUID when listing is blocked outright', async () => {
             const { ctx, mock: code } = createMockCodeContext();
             const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';

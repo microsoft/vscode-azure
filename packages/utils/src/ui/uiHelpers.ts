@@ -122,10 +122,13 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
      * the user never sees two identical-looking rows. Otherwise the synthetic item is
      * listed *after* the suggestions, so any real item matching the current filter is
      * shown -- and highlighted -- first, with the synthetic "use what I typed" entry as
-     * the fallback below them. When the user accepts the synthetic item, it is returned
-     * from {@linkcode showSmartQuickPick} like any other item, but is intentionally not
-     * stored as the "recently picked" choice (its label is not one of the suggestions,
-     * so it could never be restored).
+     * the fallback below them. It does, however, sit *above* any item the caller
+     * marked {@linkcode vscode.QuickPickItem.alwaysShow alwaysShow}: those survive
+     * every filter just as the synthetic item does, and of the rows still standing
+     * the one the user typed is the one that should be highlighted. When the user
+     * accepts the synthetic item, it is returned from {@linkcode showSmartQuickPick}
+     * like any other item, but is intentionally not stored as the "recently picked"
+     * choice (its label is not one of the suggestions, so it could never be restored).
      *
      * Ignored when {@linkcode vscode.QuickPickOptions.canPickMany} is `true` (combo box is single-select only).
      */
@@ -227,6 +230,13 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         // suggestion takes precedence and the synthetic is highlighted only when
         // nothing else matches (and a removed synthetic can never linger active).
         const baseItems = quickPick.items;
+        // Rows the caller marked alwaysShow (a "load more" action, say) survive
+        // every filter, and so does the synthetic item -- so with both present
+        // the one listed first is the one Enter takes. The user's own typing
+        // has to win over a row that merely refuses to be filtered out, so the
+        // synthetic goes above them and below everything filterable.
+        const filterable = baseItems.filter(item => !item.alwaysShow);
+        const sticky = baseItems.filter(item => item.alwaysShow);
         syncItems = (rawValue: string) => {
             const typedItem = createItemFromValue(rawValue.trim());
             // If the typed value resolves to a label that already matches a real
@@ -235,11 +245,10 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
             // identical-looking entries and lets the accepted choice be remembered.
             const existing = typedItem ? baseItems.find(item => item.label === typedItem.label) : undefined;
             if (typedItem && !existing) {
-                // List the synthetic item *after* the suggestions and mark it
-                // alwaysShow so it stays visible as a fallback below any real item
-                // that matches the current filter.
+                // Marked alwaysShow so it stays visible as a fallback below any
+                // real suggestion that matches the current filter.
                 syntheticItem = { ...typedItem, alwaysShow: true };
-                quickPick.items = [...baseItems, syntheticItem];
+                quickPick.items = [...filterable, syntheticItem, ...sticky];
             } else {
                 syntheticItem = undefined;
                 quickPick.items = baseItems;
