@@ -41,14 +41,16 @@ describe('FuncInstaller (unit)', () => {
 
             const paths = installer.getKnownPaths().map(p => p.toLowerCase());
 
-            expect(paths.some(p => p.includes('azure functions core tools') && p.endsWith('func.exe'))).to.be.true;
+            // Independent of the host's own environment, so this holds when the
+            // suite runs on Linux in CI.
+            expect(paths).to.include('c:\\program files\\microsoft\\azure functions core tools\\func.exe');
         });
 
         it('should include the npm global bin elsewhere', () => {
             setPlatform('linux');
             const { installer } = createInstaller();
 
-            expect(installer.getKnownPaths().length).to.be.greaterThan(0);
+            expect(installer.getKnownPaths()).to.include('/usr/local/bin/func');
         });
     });
 

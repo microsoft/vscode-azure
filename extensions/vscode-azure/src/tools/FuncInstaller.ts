@@ -12,7 +12,7 @@ import {
     getVersionFromOutput,
     npmGlobalBinPaths,
     npmInstallMethod,
-    pathUnder,
+    programFilesPaths,
     runInstallMethod,
     type ToolInstallMethod,
 } from './toolInstallerHelpers';
@@ -53,13 +53,10 @@ export class FuncInstaller implements ToolInstaller {
 
     /** @inheritdoc */
     public getKnownPaths(): readonly string[] {
-        const executable = process.platform === 'win32' ? 'func.exe' : FuncCommand;
-
         if (process.platform === 'win32') {
             return [
                 // Where the MSI (and the winget package wrapping it) installs.
-                ...pathUnder(process.env.ProgramFiles, 'Microsoft', 'Azure Functions Core Tools', executable),
-                ...pathUnder(process.env['ProgramFiles(x86)'], 'Microsoft', 'Azure Functions Core Tools', executable),
+                ...programFilesPaths('Microsoft', 'Azure Functions Core Tools', 'func.exe'),
                 ...npmGlobalBinPaths(FuncCommand),
             ];
         }

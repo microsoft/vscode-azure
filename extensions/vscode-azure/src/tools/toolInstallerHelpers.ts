@@ -41,6 +41,24 @@ export function pathUnder(root: string | undefined, ...segments: string[]): stri
 }
 
 /**
+ * Well-known Windows install roots, defaulting to the conventional locations
+ * when the environment does not name them.
+ *
+ * The fallbacks matter for more than tidiness: a test that fakes
+ * `process.platform` runs on a host whose environment has no `ProgramFiles`,
+ * and a Windows process can legitimately be missing `ProgramFiles(x86)`.
+ * Falling back keeps a known path from silently vanishing in either case.
+ */
+export function programFilesPaths(...segments: string[]): string[] {
+    const roots = [
+        process.env.ProgramFiles ?? 'C:\\Program Files',
+        process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)',
+    ];
+
+    return [...new Set(roots)].map(root => path.win32.join(root, ...segments));
+}
+
+/**
  * The directory npm installs global packages into, as far as it can be known
  * without running npm.
  *
@@ -51,7 +69,9 @@ export function pathUnder(root: string | undefined, ...segments: string[]): stri
 export function npmGlobalBinPaths(executableName: string): string[] {
     if (process.platform === 'win32') {
         // npm writes a `.cmd` shim beside the package on Windows.
-        return pathUnder(process.env.APPDATA, 'npm', `${executableName}.cmd`);
+        return process.env.APPDATA
+            ? [path.win32.join(process.env.APPDATA, 'npm', `${executableName}.cmd`)]
+            : [];
     }
 
     return [

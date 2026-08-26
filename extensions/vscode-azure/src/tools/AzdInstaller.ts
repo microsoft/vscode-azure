@@ -10,7 +10,7 @@ import type * as vscode from 'vscode';
 import { AzdCommand, getAzdVersion, MinAzdVersion } from '../azd/AzdService';
 import type { ToolId } from './ToolService';
 import type { ToolInstallOptions, ToolInstaller } from './ToolInstaller';
-import { pathUnder, runInstallMethod, type ToolInstallMethod } from './toolInstallerHelpers';
+import { pathUnder, programFilesPaths, runInstallMethod, type ToolInstallMethod } from './toolInstallerHelpers';
 
 /** Minimum `azd` version that supports the `azd update` command. */
 const MinAzdUpdateVersion = '1.23.14';
@@ -43,7 +43,7 @@ export class AzdInstaller implements ToolInstaller {
         if (process.platform === 'win32') {
             return [
                 ...pathUnder(process.env.LOCALAPPDATA, 'Programs', 'Azure Dev CLI', 'azd.exe'),
-                ...pathUnder(process.env.ProgramFiles, 'Azure Dev CLI', 'azd.exe'),
+                ...programFilesPaths('Azure Dev CLI', 'azd.exe'),
                 ...pathUnder(home, '.azd', 'bin', 'azd.exe'),
             ];
         }
