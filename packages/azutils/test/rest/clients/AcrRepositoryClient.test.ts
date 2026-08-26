@@ -71,6 +71,30 @@ describe('AcrRepositoryClient (unit)', () => {
         expect(result.map(entry => entry.repository)).to.deep.equal(['store/api']);
     });
 
+    it('should tolerate a manifest the service returns with no tags field at all', async () => {
+        // The per-platform children of a multi-arch image are untagged, and the
+        // service omits `tags` entirely rather than sending an empty array.
+        const httpClient = new MockHttpClient({
+            handler: req => {
+                if (req.url.includes('_manifests')) {
+                    return makeResponse(req, 200, JSON.stringify({
+                        registry: 'contoso.azurecr.io',
+                        imageName: 'store/api',
+                        manifests: [
+                            { digest: 'sha256:child', createdTime: '2026-01-01T00:00:00Z', lastUpdateTime: '2026-01-01T00:00:00Z' },
+                            { digest: 'sha256:index', tags: ['v1'], createdTime: '2026-01-01T00:00:00Z', lastUpdateTime: '2026-01-01T00:00:00Z' },
+                        ],
+                    }));
+                }
+                return makeResponse(req, 200, JSON.stringify({ repositories: ['store/api'] }));
+            },
+        });
+
+        const client = AcrRepositoryClient.create(makeCredential(), 'contoso.azurecr.io', AzurePublicCloud, { httpClient });
+
+        expect(await client.listRepositoryTags()).to.deep.equal([{ repository: 'store/api', tags: ['v1'] }]);
+    });
+
     it('should accept a login server that already carries a scheme', async () => {
         const httpClient = createHttpClient([], {});
 

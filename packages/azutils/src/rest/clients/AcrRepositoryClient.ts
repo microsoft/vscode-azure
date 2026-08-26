@@ -117,6 +117,11 @@ export class AcrRepositoryClient implements IAcrRepositoryClient {
             .getRepository(repository)
             .listManifestProperties({ order: 'LastUpdatedOnDescending' });
 
+        // An untagged manifest is ordinary -- the per-platform children of a
+        // multi-arch image carry no tags of their own -- and contributes
+        // nothing here. The SDK normalizes that case to an empty array
+        // (`toArtifactManifestProperties` does `tags: from.tags ?? []`), so
+        // this spread is safe without a further guard.
         for await (const manifest of manifests) {
             tags.push(...manifest.tags);
         }

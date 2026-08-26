@@ -487,7 +487,14 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
 export interface MockContainerAppsClientOptions {
     /** Ingress FQDN reported by `containerApps.get`. */
     readonly fqdn?: string;
-    /** ARM id of the hosting managed environment, returned as `environmentId`. */
+    /**
+     * ARM id of the hosting managed environment, returned as `environmentId` by
+     * `containerApps.get` and as the resource id by `managedEnvironments.get`.
+     *
+     * Defaults to a real id rather than `undefined`: every deployed container
+     * app has an environment, so a mock that omitted it would let a test pass
+     * while never exercising the app-to-environment relationship.
+     */
     readonly environmentId?: string;
     /** Provisioning state reported by `containerApps.get`. */
     readonly provisioningState?: string;
@@ -535,7 +542,7 @@ export function createMockContainerAppsClient(options?: MockContainerAppsClientO
                 name: 'MyApp',
                 type: 'Microsoft.App/containerApps',
                 location: 'eastus',
-                environmentId: options?.environmentId,
+                environmentId,
                 provisioningState: options?.provisioningState ?? 'Succeeded',
                 latestRevisionName: options?.latestRevisionName,
                 configuration: { ingress: { fqdn: options?.fqdn } },
