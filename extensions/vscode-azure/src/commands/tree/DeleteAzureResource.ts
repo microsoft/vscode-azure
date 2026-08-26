@@ -4,17 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    getNodeType,
     IResourceClientProvider,
     isGenericResource,
     isResourceGroup,
+    type ConcreteAzureNode,
     type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, ICodeContext, showMessage, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import { ICodeContext, showMessage, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { AzdEnvNameTag } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
+import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -41,8 +42,8 @@ export class DeleteAzureResource implements ManagedCommand {
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
-        @inject(IActionContext) private readonly context: IActionContext,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
+        @inject(IResourceSelector) private readonly selector: IResourceSelector,
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
         @inject(IGenericActivityDataProvider) private readonly activityProvider: IGenericActivityDataProvider,
     ) { }
@@ -53,8 +54,15 @@ export class DeleteAzureResource implements ManagedCommand {
      * @throws {@linkcode CancellationError} if the user backs out at any prompt.
      */
     public async execute(key?: string): Promise<void> {
-        const resource = this.resolve(key);
-        this.context.telemetry.properties.nodeType = getNodeType(resource);
+        const resource = this.selector.resolve({
+            key,
+            canHandle: isDeletable,
+            messages: {
+                missingKey: () => this.ctx.code.l10n.t('Select an Azure resource to delete.'),
+                missingNode: () => this.ctx.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'),
+                invalidNode: () => this.ctx.code.l10n.t('The selected item cannot be deleted.'),
+            },
+        });
 
         await this.confirm(resource);
 
@@ -73,24 +81,6 @@ export class DeleteAzureResource implements ManagedCommand {
         }
 
         this.dataTree.remove(resource);
-    }
-
-    /** Look up the selected node and confirm it is something we can delete. */
-    private resolve(key: string | undefined): GenericResource {
-        if (!key) {
-            throw new Error(this.ctx.code.l10n.t('Select an Azure resource to delete.'));
-        }
-
-        const resource = this.dataTree.get(key);
-        if (!resource) {
-            throw new Error(this.ctx.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'));
-        }
-
-        if (!isGenericResource(resource) && !isResourceGroup(resource)) {
-            throw new Error(this.ctx.code.l10n.t('The selected item cannot be deleted.'));
-        }
-
-        return resource;
     }
 
     /**
@@ -136,6 +126,15 @@ export class DeleteAzureResource implements ManagedCommand {
             ? client.resourceGroups.delete(resource.name)
             : client.resources.deleteById(resource.id, resource.type);
     }
+}
+
+/**
+ * Deletable targets: any ARM resource, plus resource groups, which are ARM
+ * resources too but are excluded from {@linkcode isGenericResource} because
+ * they are also a grouping concept in the tree.
+ */
+function isDeletable(node: ConcreteAzureNode): node is GenericResource {
+    return isGenericResource(node) || isResourceGroup(node);
 }
 
 function hasAzdEnvironmentTag(resource: GenericResource): boolean {
